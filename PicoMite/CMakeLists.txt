@@ -5,21 +5,21 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
 add_executable(PicoMite
-			Picomite.c
-            mmbasic.c
-            operators.c
-            custom.c
-            functions.c
-            commands.c
-            memory.c
-            FileIO.c
+			PicoMite.c
+            MMBasic.c
+            Operators.c
+            Custom.c
+            Functions.c
+            Commands.c
+            Memory.c
+            FileIo.c
             ff.c
             ffsystem.c
             ffunicode.c
             mmc_stm32.c
-            draw.c
-            editor.c
-            xmodem.c
+            Draw.c
+            Editor.c
+            XModem.c
             MM_Misc.c
             External.c
             MATHS.c
