@@ -34,6 +34,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "Custom.h"
 #include "Hardware_Includes.h"
 #include "hardware/flash.h"
+#include "Debugger.h"
 #ifndef PICOMITEWEB
 #include "pico/multicore.h"
 #endif
@@ -334,6 +335,18 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p) {
 
     while(1) {
         if(*p == 0) p++;                                            // step over the zero byte marking the beginning of a new element
+
+        if(MMDebug || (p==MMDebug_Brk_Pnt_Addr) || MMDebug_Level_Change==gosubindex ) {	// EDN added hook to get to the Debugger
+           if ( p < (unsigned char *) 0x20000000 ) {                // For right now, we only break point in the main program code.  
+                                                                    // Not the library code.
+			 WDTimer = 0;                                           // turn off the watchdog timer
+             ShowCursor(true);
+             p = Debugger( p );
+             if ( *p == 0)
+                p++;
+		   }
+        }
+
         if(*p == T_NEWLINE) {
             CurrentLinePtr = p;                                     // and pointer to the line for error reporting
             TraceBuff[TraceBuffIndex] = p;                          // used by TRACE LIST
@@ -3133,6 +3146,7 @@ void MIPS16 ClearRuntime(void) {
     InitHeap();
     m_alloc(M_VAR);
     ClearVars(0);
+    ClearDebugger();
     memset(datastore, 0, sizeof(struct sa_data) * MAXRESTORE);
     restorepointer = 0;
     varcnt = 0;

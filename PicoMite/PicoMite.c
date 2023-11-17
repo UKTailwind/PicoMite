@@ -84,12 +84,13 @@ int ListCnt;
 int MMCharPos;
 int busfault=0;
 int ExitMMBasicFlag = false;
-volatile int MMAbort = false;
+volatile int MMAbort = false, MMDebug=false, MMDebug_Level_Change=-1;
 unsigned int _excep_peek;
 void CheckAbort(void);
 void TryLoadProgram(void);
 unsigned char lastchar=0;
 unsigned char BreakKey = BREAK_KEY;                                          // defaults to CTRL-C.  Set to zero to disable the break function
+unsigned char DebugKey = DEBUG_KEY;                                          // defaults to CTRL-D.  Set to zero to disable the MMDebug feature
 volatile char ConsoleRxBuf[CONSOLE_RX_BUF_SIZE]={0};
 volatile int ConsoleRxBufHead = 0;
 volatile int ConsoleRxBufTail = 0;
@@ -292,6 +293,12 @@ void __not_in_flash_func(routinechecks)(void){
     if(tud_cdc_connected() && (Option.SerialConsole==0 || Option.SerialConsole>4) && Option.Telnet!=-1){
         while(( c=tud_cdc_read_char())!=-1){
             ConsoleRxBuf[ConsoleRxBufHead] = c;
+
+            if (DebugKey && c == DebugKey /* defaults to Ctrl-D */) {   // if the user wants to enter the debugger
+                MMDebug = true;                                         // set the flag that happened
+                ConsoleRxBufHead = ConsoleRxBufTail;                    // empty the buffer
+            } 
+
             if(BreakKey && ConsoleRxBuf[ConsoleRxBufHead] == BreakKey) {// if the user wants to stop the progran
                 MMAbort = true;                                        // set the flag for the interpreter to see
                 ConsoleRxBufHead = ConsoleRxBufTail;                    // empty the buffer
