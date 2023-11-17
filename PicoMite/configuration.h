@@ -110,13 +110,14 @@ extern "C" {
 #endif
 #define MAXPROMPTLEN        49                      // max length of a prompt incl the terminating null
 #define BREAK_KEY           3                       // the default value (CTRL-C) for the break key.  Reset at the command prompt.
+#define DEBUG_KEY           4                       // the default value (CTRL-D) for the debug key.  Reset at the command prompt.
 #define FNV_prime           16777619
 #define FNV_offset_basis    2166136261
 #define use_hash
 #define DISKCHECKRATE       500                    //check for removal of SDcard every 200mSec
 #define EDIT_BUFFER_SIZE    HEAP_MEMORY_SIZE-2048-3*HRes// this is the maximum RAM that we can get
-#define SCREENWIDTH     80
-#define SCREENHEIGHT    24                          // this is the default and it can be changed using the OPTION command
+#define SCREENWIDTH     145
+#define SCREENHEIGHT    45                          // this is the default and it can be changed using the OPTION command
 #define CONSOLE_BAUDRATE        115200               // only applies to the serial console
 #define MAXCFUNCTION	20
 #define SAVEDVARS_FLASH_SIZE 16384

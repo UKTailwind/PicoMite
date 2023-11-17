@@ -11,6 +11,8 @@ add_executable(PicoMite
     MMBasic.c
     Operators.c
     Custom.c
+    Debugger.c
+    Debugger-misc.c
     Functions.c
     Commands.c
     Memory.c

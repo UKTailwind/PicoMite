@@ -185,7 +185,9 @@ extern const char upper[256];
 
 extern int CommandTableSize, TokenTableSize;
 
-extern volatile int MMAbort;
+extern volatile int MMAbort, MMDebug, MMDebug_Level_Change;
+extern unsigned char *MMDebug_Brk_Pnt_Addr;;
+
 extern jmp_buf mark;                            // longjump to recover from an error
 extern unsigned char BreakKey;                           // console break key (defaults to CTRL-C)
 extern jmp_buf jmprun;

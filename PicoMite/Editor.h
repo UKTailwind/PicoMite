@@ -68,6 +68,7 @@ extern int editactive;
 #define NUM_ENT   ENTER
 #define SLOCK     0x8c
 #define ALT       0x8b
+#define MOUSE_CLICK 0x8c
 
 
 // definitions related to setting the tab spacing
