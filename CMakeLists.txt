@@ -401,6 +401,7 @@ target_include_directories(PicoMite PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}/io
 	${CMAKE_CURRENT_LIST_DIR}/graphics
 	${CMAKE_CURRENT_LIST_DIR}/core
+	${CMAKE_CURRENT_LIST_DIR}/net
 )
 
 # RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
@@ -906,7 +907,7 @@ if(IS_WEB)
 		endif()
 	endforeach()
 	target_compile_definitions(pico_mbedtls_headers INTERFACE
-		MBEDTLS_CONFIG_FILE="${CMAKE_CURRENT_LIST_DIR}/mbedtls_config.h"
+		MBEDTLS_CONFIG_FILE="${CMAKE_CURRENT_LIST_DIR}/net/mbedtls_config.h"
 	)
 endif()
 
