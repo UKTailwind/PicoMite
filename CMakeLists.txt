@@ -48,11 +48,11 @@ endmacro()
 
 set(COMMON_SOURCES
 	PicoMite.c
-	MMBasic.c
-	Operators.c
+	core/MMBasic.c
+	core/Operators.c
 	Custom.c
-	Functions.c
-	Commands.c
+	core/Functions.c
+	core/Commands.c
 	FileIO.c
 	third_party_mod/ff.c
 	third_party_mod/ffsystem.c
@@ -68,9 +68,9 @@ set(COMMON_SOURCES
 	graphics/FrameBuffer.c
 	Editor.c
 	XModem.c
-	MM_Misc.c
+	core/MM_Misc.c
 	External.c
-	MATHS.c
+	core/MATHS.c
 	io/Onewire.c
 	io/I2C.c
 	io/SPI.c
@@ -79,14 +79,14 @@ set(COMMON_SOURCES
 	graphics/BmpDecoder.c
 	io/GPS.c
 	io/Audio.c
-	CFunction.c
+	core/CFunction.c
 	third_party_mod/picojpeg.c
 	third_party_mod/lfs.c
 	third_party_mod/lfs_util.c
 	third_party_mod/hxcmod.c
 	io/VS1053.c
 	third_party_mod/aes.c
-	Memory.c
+	core/Memory.c
 	graphics/RGB121.c
 	third_party_mod/re.c
 )
@@ -131,7 +131,7 @@ set(OPTIMIZED_SOURCES
 	graphics/Turtle.c
 	third_party_mod/re.c
 	third_party_mod/hxcmod.c
-	MATHS.c
+	core/MATHS.c
 	Editor.c
 	third_party_mod/aes.c
 )
@@ -400,6 +400,7 @@ target_include_directories(PicoMite PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}/input
 	${CMAKE_CURRENT_LIST_DIR}/io
 	${CMAKE_CURRENT_LIST_DIR}/graphics
+	${CMAKE_CURRENT_LIST_DIR}/core
 )
 
 # RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
