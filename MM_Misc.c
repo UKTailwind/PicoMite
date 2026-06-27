@@ -1,0 +1,10322 @@
+/***********************************************************************************************************************
+PicoMite MMBasic
+
+MM_Misc.c
+
+<COPYRIGHT HOLDERS>  Geoff Graham, Peter Mather
+Copyright (c) 2021, <COPYRIGHT HOLDERS> All rights reserved.
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+1.	Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2.	Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer
+    in the documentation and/or other materials provided with the distribution.
+3.	The name MMBasic be used when referring to the interpreter in any documentation and promotional material and the original copyright message be displayed
+    on the console at startup (additional copyright messages may be added).
+4.	All advertising materials mentioning features or use of this software must display the following acknowledgement: This product includes software developed
+    by the <copyright holder>.
+5.	Neither the name of the <copyright holder> nor the names of its contributors may be used to endorse or promote products derived from this software
+    without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY <COPYRIGHT HOLDERS> AS IS AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDERS> BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+************************************************************************************************************************/
+
+#include "MMBasic_Includes.h"
+#include "Hardware_Includes.h"
+#include "pico/stdlib.h"
+#include "hardware/clocks.h"
+#include <time.h>
+// #include "upng.h"
+#include <complex.h>
+#include "pico/bootrom.h"
+#include "hardware/structs/systick.h"
+#include "hardware/structs/watchdog.h"
+#include "hardware/structs/pwm.h"
+#include "hardware/dma.h"
+#include "hardware/adc.h"
+#include "hardware/pwm.h"
+#include "hardware/flash.h"
+#include "hardware/spi.h"
+#include "hardware/pio.h"
+#include "hardware/pio_instructions.h"
+#include <malloc.h>
+#include "hardware/structs/pwm.h"
+#include "aes.h"
+#ifndef PICOMITEMIN
+#include "re.h"
+#endif
+#ifdef rp2350
+#include "pico/rand.h"
+#include "stepper.h"
+extern bool stepper_query_position_mm(char axis, float *pos_mm);
+extern int stepper_query_active(void);
+#endif
+#ifdef PICOMITEWEB
+#include "lwip/stats.h" /* lwip_stats.mem — TLS heap diagnostics (MEM_STATS) */
+#if defined(rp2350)
+extern uint32_t StackPeakBytes(void); /* core0 stack high-water (PicoMite.c) */
+#endif
+#endif
+#if PICOMITERP2350
+#include "pico/multicore.h"
+#include "VGA222.h"
+#endif
+#if !defined(USBKEYBOARD) && !defined(PICOMITEBT)
+#include "class/cdc/cdc_device.h"
+#endif
+
+#if defined(USBKEYBOARD)
+extern int caps_lock;
+extern int num_lock;
+extern int scroll_lock;
+extern int KeyDown[7];
+#else
+extern char *mouse0Interruptc;
+extern volatile int mouse0foundc;
+extern int PS2KeyDown[7];
+extern volatile char CapsLock;
+extern volatile char NumLock;
+#endif
+int64_t TimeOffsetToUptime = 1704067200;
+extern int last_adc;
+extern char banner[];
+extern char *pinsearch(int pin);
+extern uint8_t getrnd(void);
+extern unsigned int b64d_size(unsigned int in_size);
+extern unsigned int b64e_size(unsigned int in_size);
+extern unsigned int b64_encode(const unsigned char *in, unsigned int in_len, unsigned char *out);
+extern unsigned int b64_decode(const unsigned char *in, unsigned int in_len, unsigned char *out);
+uint64_t cdc_update_rate = 1000;
+void parselongAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint);
+#ifndef PICOMITEVGA
+extern int SSD1963data;
+#endif
+uint64_t get_cdc_interval(void)
+{
+    return cdc_update_rate;
+}
+uint32_t getTotalHeap(void)
+{
+    extern char __StackLimit, __bss_end__;
+
+    return &__StackLimit - &__bss_end__;
+}
+
+uint32_t getFreeHeap(void)
+{
+    struct mallinfo m = mallinfo();
+
+    return getTotalHeap() - m.uordblks;
+}
+
+uint32_t getProgramSize(void)
+{
+    extern char __flash_binary_start, __flash_binary_end;
+
+    return &__flash_binary_end - &__flash_binary_start;
+}
+
+uint32_t getFreeProgramSpace()
+{
+    return PICO_FLASH_SIZE_BYTES - getProgramSize();
+}
+extern int busfault;
+// #include "pico/stdio_usb/reset_interface.h"
+const char *OrientList[] = {"LANDSCAPE", "PORTRAIT", "RLANDSCAPE", "RPORTRAIT"};
+const char *KBrdList[] = {"", "US", "FR", "GR", "IT", "BE", "UK", "ES"};
+extern const void *const CallTable[];
+struct s_inttbl inttbl[NBRINTERRUPTS];
+unsigned char *InterruptReturn;
+extern const char *FErrorMsg[];
+uint8_t *buff320 = NULL;
+#ifdef PICOMITEWEB
+char *MQTTInterrupt = NULL;
+volatile bool MQTTComplete = false;
+char *UDPinterrupt = NULL;
+volatile bool UDPreceive = false;
+void setwifi(unsigned char *tp)
+{
+    getcsargs(&tp, 13);
+    if (!(argc == 3 || argc == 5 || argc == 7 || argc == 11 || argc == 13))
+        SyntaxError();
+    ;
+    if (CurrentLinePtr)
+        StandardError(10);
+    char *ssid = GetTempStrMemory();
+    char *password = GetTempStrMemory();
+    char *hostname = GetTempStrMemory();
+    char *ipaddress = GetTempStrMemory();
+    char *mask = GetTempStrMemory();
+    char *gateway = GetTempStrMemory();
+    strcpy(ssid, (char *)getCstring(argv[0]));
+    strcpy(password, (char *)getCstring(argv[2]));
+    if (strlen(ssid) > MAXKEYLEN - 1)
+        error("SSID too long, max 63 chars");
+    if (strlen(password) > MAXKEYLEN - 1)
+        error("Password too long, max 63 chars");
+    if (argc == 11 || argc == 13)
+    {
+        strcpy(ipaddress, (char *)getCstring(argv[6]));
+        strcpy(mask, (char *)getCstring(argv[8]));
+        strcpy(gateway, (char *)getCstring(argv[10]));
+        ip4_addr_t ipaddr;
+        if (!ip4addr_aton(ipaddress, &ipaddr))
+            error("Invalid IP address");
+        if (!ip4addr_aton(mask, &ipaddr))
+            error("Invalid mask address");
+        if (!ip4addr_aton(gateway, &ipaddr))
+            error("Invalid gateway address");
+    }
+    if (argc >= 5 && *argv[4])
+    {
+        strcpy(hostname, (char *)getCstring(argv[4]));
+        if (strlen(hostname) > 31)
+            error("Hostname too long, max 31 chars");
+    }
+    else
+    {
+        strcpy(hostname, "PICO");
+        strcat(hostname, id_out);
+    }
+    int country_idx = -1;
+    if (argc == 7 || argc == 13)
+    {
+        const char *country_str = (const char *)getCstring(argv[argc == 7 ? 6 : 12]);
+        country_idx = wifi_country_from_string(country_str);
+        if (country_idx < 0)
+            error("Invalid WiFi country code");
+    }
+    strcpy((char *)Option.SSID, ssid);
+    strcpy((char *)Option.PASSWORD, password);
+    if (argc == 11 || argc == 13)
+    {
+        strcpy(Option.ipaddress, ipaddress);
+        strcpy(Option.mask, mask);
+        strcpy(Option.gateway, gateway);
+    }
+    else
+    {
+        memset(Option.ipaddress, 0, 16);
+        memset(Option.mask, 0, 16);
+        memset(Option.gateway, 0, 16);
+    }
+    strcpy(Option.hostname, hostname);
+    if (country_idx >= 0)
+        Option.wifi_country_code = (unsigned char)country_idx;
+    SaveOptions();
+}
+#endif
+#ifdef PICOMITEVGA
+#ifndef HDMI
+void VGArecovery(int pin)
+{
+    ExtCurrentConfig[Option.VGA_BLUE] = EXT_BOOT_RESERVED;
+    ExtCurrentConfig[Option.VGA_HSYNC] = EXT_BOOT_RESERVED;
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 1]] = EXT_BOOT_RESERVED;
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 2]] = EXT_BOOT_RESERVED;
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 3]] = EXT_BOOT_RESERVED;
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_HSYNC].GPno + 1]] = EXT_BOOT_RESERVED;
+
+    if (pin)
+        StandardErrorParam2(27, pin, pin);
+#ifdef rp2350
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.VGA_BLUE].GPno);
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 1));
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 2));
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 3));
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.VGA_HSYNC].GPno);
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_HSYNC].GPno + 1));
+    if (Option.audio_i2s_bclk)
+    {
+        piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.audio_i2s_data].GPno);
+        piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.audio_i2s_bclk].GPno);
+        piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.audio_i2s_bclk].GPno + 1));
+    }
+#endif
+}
+#endif
+#endif
+extern const uint8_t *flash_target_contents;
+int TickPeriod[NBRSETTICKS] = {0};
+volatile int TickTimer[NBRSETTICKS] = {0};
+unsigned char *TickInt[NBRSETTICKS] = {NULL};
+volatile unsigned char TickActive[NBRSETTICKS] = {0};
+unsigned char *OnKeyGOSUB = NULL;
+unsigned char *OnPS2GOSUB = NULL;
+const char *daystrings[] = {"dummy", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
+const char *CaseList[] = {"", "LOWER", "UPPER"};
+int OptionErrorCheck;
+unsigned char EchoOption = true;
+unsigned long long int __attribute__((section(".my_section"))) saved_variable; //  __attribute__ ((persistent));  // and this is the address
+unsigned int CurrentCpuSpeed;
+unsigned int PeripheralBusSpeed;
+extern char *ADCInterrupt;
+extern volatile int ConsoleTxBufHead;
+extern volatile int ConsoleTxBufTail;
+extern char *LCDList[];
+extern volatile BYTE SDCardStat;
+extern uint64_t TIM12count;
+extern char id_out[12];
+extern void WriteComand(int cmd);
+extern void WriteData(int data);
+char *CSubInterrupt;
+MMFLOAT optionangle = 1.0;
+bool useoptionangle = false;
+bool optionfastaudio = false;
+bool optionfulltime = false;
+uint8_t screen320 = false;
+bool optionlogging = false;
+volatile bool CSubComplete = false;
+uint64_t timeroffset = 0;
+int SaveOptionErrorSkip = 0;
+char SaveErrorMessage[MAXERRMSG] = {0};
+int Saveerrno = 0;
+void integersort(int64_t *iarray, int n, long long *index, int flags, int startpoint)
+{
+    int i, j = n, s = 1;
+    int64_t t;
+    if ((flags & 1) == 0)
+    {
+        while (s)
+        {
+            s = 0;
+            for (i = 1; i < j; i++)
+            {
+                if (iarray[i] < iarray[i - 1])
+                {
+                    t = iarray[i];
+                    iarray[i] = iarray[i - 1];
+                    iarray[i - 1] = t;
+                    s = 1;
+                    if (index != NULL)
+                    {
+                        t = index[i - 1 + startpoint];
+                        index[i - 1 + startpoint] = index[i + startpoint];
+                        index[i + startpoint] = t;
+                    }
+                }
+            }
+            j--;
+        }
+    }
+    else
+    {
+        while (s)
+        {
+            s = 0;
+            for (i = 1; i < j; i++)
+            {
+                if (iarray[i] > iarray[i - 1])
+                {
+                    t = iarray[i];
+                    iarray[i] = iarray[i - 1];
+                    iarray[i - 1] = t;
+                    s = 1;
+                    if (index != NULL)
+                    {
+                        t = index[i - 1 + startpoint];
+                        index[i - 1 + startpoint] = index[i + startpoint];
+                        index[i + startpoint] = t;
+                    }
+                }
+            }
+            j--;
+        }
+    }
+}
+void floatsort(MMFLOAT *farray, int n, long long *index, int flags, int startpoint)
+{
+    int i, j = n, s = 1;
+    int64_t t;
+    MMFLOAT f;
+    if ((flags & 1) == 0)
+    {
+        while (s)
+        {
+            s = 0;
+            for (i = 1; i < j; i++)
+            {
+                if (farray[i] < farray[i - 1])
+                {
+                    f = farray[i];
+                    farray[i] = farray[i - 1];
+                    farray[i - 1] = f;
+                    s = 1;
+                    if (index != NULL)
+                    {
+                        t = index[i - 1 + startpoint];
+                        index[i - 1 + startpoint] = index[i + startpoint];
+                        index[i + startpoint] = t;
+                    }
+                }
+            }
+            j--;
+        }
+    }
+    else
+    {
+        while (s)
+        {
+            s = 0;
+            for (i = 1; i < j; i++)
+            {
+                if (farray[i] > farray[i - 1])
+                {
+                    f = farray[i];
+                    farray[i] = farray[i - 1];
+                    farray[i - 1] = f;
+                    s = 1;
+                    if (index != NULL)
+                    {
+                        t = index[i - 1 + startpoint];
+                        index[i - 1 + startpoint] = index[i + startpoint];
+                        index[i + startpoint] = t;
+                    }
+                }
+            }
+            j--;
+        }
+    }
+}
+
+void MIPS16 stringsort(unsigned char *sarray, int n, int offset, long long *index, int flags, int startpoint)
+{
+    int ii, i, s = 1, isave;
+    int k;
+    unsigned char *s1, *s2, *p1, *p2;
+    unsigned char temp;
+    int reverse = 1 - ((flags & 1) << 1);
+    while (s)
+    {
+        s = 0;
+        for (i = 1; i < n; i++)
+        {
+            s2 = i * offset + sarray;
+            s1 = (i - 1) * offset + sarray;
+            ii = *s1 < *s2 ? *s1 : *s2; // get the smaller  length
+            p1 = s1 + 1;
+            p2 = s2 + 1;
+            k = 0; // assume the strings match
+            while ((ii--) && (k == 0))
+            {
+                if (flags & 2)
+                {
+                    if (mytoupper(*p1) > mytoupper(*p2))
+                    {
+                        k = reverse; // earlier in the array is bigger
+                    }
+                    if (mytoupper(*p1) < mytoupper(*p2))
+                    {
+                        k = -reverse; // later in the array is bigger
+                    }
+                }
+                else
+                {
+                    if (*p1 > *p2)
+                    {
+                        k = reverse; // earlier in the array is bigger
+                    }
+                    if (*p1 < *p2)
+                    {
+                        k = -reverse; // later in the array is bigger
+                    }
+                }
+                p1++;
+                p2++;
+            }
+            // if up to this point the strings match
+            // make the decision based on which one is shorter
+            if (k == 0)
+            {
+                if (*s1 > *s2)
+                    k = reverse;
+                if (*s1 < *s2)
+                    k = -reverse;
+            }
+            if (k == 1)
+            {                               // if earlier is bigger swap them round
+                ii = *s1 > *s2 ? *s1 : *s2; // get the bigger length
+                ii++;
+                p1 = s1;
+                p2 = s2;
+                while (ii--)
+                {
+                    temp = *p1;
+                    *p1 = *p2;
+                    *p2 = temp;
+                    p1++;
+                    p2++;
+                }
+                s = 1;
+                if (index != NULL)
+                {
+                    isave = index[i - 1 + startpoint];
+                    index[i - 1 + startpoint] = index[i + startpoint];
+                    index[i + startpoint] = isave;
+                }
+            }
+        }
+    }
+    if ((flags & 5) == 5)
+    {
+        for (i = n - 1; i >= 0; i--)
+        {
+            s2 = i * offset + sarray;
+            if (*s2 != 0)
+                break;
+        }
+        i++;
+        if (i)
+        {
+            s2 = (n - i) * offset + sarray;
+            memmove(s2, sarray, offset * i);
+            memset(sarray, 0, offset * (n - i));
+            if (index != NULL)
+            {
+                long long int *newindex = (long long int *)GetTempMainMemory(n * sizeof(long long int));
+                memmove(&newindex[n - i], &index[startpoint], i * sizeof(long long int));
+                memmove(newindex, &index[startpoint + i], (n - i) * sizeof(long long int));
+                memmove(&index[startpoint], newindex, n * sizeof(long long int));
+            }
+        }
+    }
+    else if (flags & 4)
+    {
+        for (i = 0; i < n; i++)
+        {
+            s2 = i * offset + sarray;
+            if (*s2 != 0)
+                break;
+        }
+        if (i)
+        {
+            s2 = i * offset + sarray;
+            memmove(sarray, s2, offset * (n - i));
+            s2 = (n - i) * offset + sarray;
+            memset(s2, 0, offset * i);
+            if (index != NULL)
+            {
+                long long int *newindex = (long long int *)GetTempMainMemory(n * sizeof(long long int));
+                memmove(newindex, &index[startpoint + i], (n - i) * sizeof(long long int));
+                memmove(&newindex[n - i], &index[startpoint], i * sizeof(long long int));
+                memmove(&index[startpoint], newindex, n * sizeof(long long int));
+            }
+        }
+    }
+}
+
+void MIPS16 cmd_sort(void)
+{
+    MMFLOAT *a3float = NULL;
+    int64_t *a3int = NULL, *a4int = NULL;
+    unsigned char *a3str = NULL;
+    int i, size = 0, truesize, flags = 0, maxsize = 0, startpoint = 0;
+    getcsargs(&cmdline, 9);
+    size = parseany(argv[0], &a3float, &a3int, &a3str, &maxsize, true) - 1;
+    truesize = size;
+    if (argc >= 3 && *argv[2])
+    {
+        int card = parseintegerarray(argv[2], &a4int, 2, 1, NULL, true, NULL) - 1;
+        if (card != size)
+            StandardError(16);
+    }
+    if (argc >= 5 && *argv[4])
+        flags = getint(argv[4], 0, 7);
+    if (argc >= 7 && *argv[6])
+        startpoint = getint(argv[6], g_OptionBase, size + g_OptionBase);
+    size -= startpoint;
+    if (argc == 9)
+        size = getint(argv[8], 1, size + 1 + g_OptionBase) - 1;
+    if (startpoint)
+        startpoint -= g_OptionBase;
+    if (a3float != NULL)
+    {
+        a3float += startpoint;
+        if (a4int != NULL)
+            for (i = 0; i < truesize + 1; i++)
+                a4int[i] = i + g_OptionBase;
+        floatsort(a3float, size + 1, a4int, flags, startpoint);
+    }
+    else if (a3int != NULL)
+    {
+        a3int += startpoint;
+        if (a4int != NULL)
+            for (i = 0; i < truesize + 1; i++)
+                a4int[i] = i + g_OptionBase;
+        integersort(a3int, size + 1, a4int, flags, startpoint);
+    }
+    else if (a3str != NULL)
+    {
+        a3str += ((startpoint) * (maxsize + 1));
+        if (a4int != NULL)
+            for (i = 0; i < truesize + 1; i++)
+                a4int[i] = i + g_OptionBase;
+        stringsort(a3str, size + 1, maxsize + 1, a4int, flags, startpoint);
+    }
+}
+// this is invoked as a command (ie, TIMER = 0)
+// search through the line looking for the equals sign and step over it,
+// evaluate the rest of the command and save in the timer
+void cmd_timer(void)
+{
+    uint64_t mytime = time_us_64();
+    while (*cmdline && tokenfunction(*cmdline) != op_equal)
+        cmdline++;
+    if (!*cmdline)
+        SyntaxError();
+    ;
+    timeroffset = mytime - (uint64_t)getint(++cmdline, 0, mytime / 1000) * 1000;
+}
+// this is invoked as a function
+void __not_in_flash_func(fun_timer)(void)
+{
+    fret = (MMFLOAT)(time_us_64() - timeroffset) / 1000.0;
+    targ = T_NBR;
+}
+uint64_t gettimefromepoch(int *year, int *month, int *day, int *hour, int *minute, int *second)
+{
+    struct tm *tm;
+    struct tm tma;
+    tm = &tma;
+    uint64_t fulltime = time_us_64();
+    time_t epochnow = fulltime / 1000000 + TimeOffsetToUptime;
+    tm = gmtime(&epochnow);
+    *year = tm->tm_year + 1900;
+    *month = tm->tm_mon + 1;
+    *day = tm->tm_mday;
+    *hour = tm->tm_hour;
+    *minute = tm->tm_min;
+    *second = tm->tm_sec;
+    return fulltime;
+}
+void fun_datetime(void)
+{
+    sret = GetTempStrMemory(); // this will last for the life of the command
+    if (checkstring(ep, (unsigned char *)"NOW"))
+    {
+        int year, month, day, hour, minute, second;
+        gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+        IntToStrPad((char *)sret, day, '0', 2, 10);
+        sret[2] = '-';
+        IntToStrPad((char *)sret + 3, month, '0', 2, 10);
+        sret[5] = '-';
+        IntToStr((char *)sret + 6, year, 10);
+        sret[10] = ' ';
+        IntToStrPad((char *)sret + 11, hour, '0', 2, 10);
+        sret[13] = ':';
+        IntToStrPad((char *)sret + 14, minute, '0', 2, 10);
+        sret[16] = ':';
+        IntToStrPad((char *)sret + 17, second, '0', 2, 10);
+    }
+    else
+    {
+        struct tm *tm;
+        struct tm tma;
+        tm = &tma;
+        time_t timestamp = getinteger(ep); /* See README.md if your system lacks timegm(). */
+        tm = gmtime(&timestamp);
+        IntToStrPad((char *)sret, tm->tm_mday, '0', 2, 10);
+        sret[2] = '-';
+        IntToStrPad((char *)sret + 3, tm->tm_mon + 1, '0', 2, 10);
+        sret[5] = '-';
+        IntToStr((char *)sret + 6, tm->tm_year + 1900, 10);
+        sret[10] = ' ';
+        IntToStrPad((char *)sret + 11, tm->tm_hour, '0', 2, 10);
+        sret[13] = ':';
+        IntToStrPad((char *)sret + 14, tm->tm_min, '0', 2, 10);
+        sret[16] = ':';
+        IntToStrPad((char *)sret + 17, tm->tm_sec, '0', 2, 10);
+    }
+    CtoM(sret);
+    targ = T_STR;
+}
+time_t get_epoch(int year, int month, int day, int hour, int minute, int second)
+{
+    struct tm *tm;
+    struct tm tma;
+    tm = &tma;
+    tm->tm_year = year - 1900;
+    tm->tm_mon = month - 1;
+    tm->tm_mday = day;
+    tm->tm_hour = hour;
+    tm->tm_min = minute;
+    tm->tm_sec = second;
+    return timegm(tm);
+}
+
+void fun_epoch(void)
+{
+    unsigned char *arg;
+    struct tm *tm;
+    struct tm tma;
+    tm = &tma;
+    int d, m, y, h, min, s;
+    if (!checkstring(ep, (unsigned char *)"NOW"))
+    {
+        arg = getCstring(ep);
+        getargs(&arg, 11, (unsigned char *)"-/ :"); // this is a macro and must be the first executable stmt in a block
+        if (!(argc == 11))
+            SyntaxError();
+        ;
+        d = atoi((char *)argv[0]);
+        m = atoi((char *)argv[2]);
+        y = atoi((char *)argv[4]);
+        if (d > 1000)
+        {
+            int tmp = d;
+            d = y;
+            y = tmp;
+        }
+        if (y >= 0 && y < 100)
+            y += 2000;
+        if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1902 || y > 2999)
+            error("Invalid date");
+        h = atoi((char *)argv[6]);
+        min = atoi((char *)argv[8]);
+        s = atoi((char *)argv[10]);
+        if (h < 0 || h > 23 || min < 0 || min > 59 || s < 0 || s > 59)
+            error("Invalid time");
+        //            day = d;
+        //            month = m;
+        //            year = y;
+        tm->tm_year = y - 1900;
+        tm->tm_mon = m - 1;
+        tm->tm_mday = d;
+        tm->tm_hour = h;
+        tm->tm_min = min;
+        tm->tm_sec = s;
+    }
+    else
+    {
+        int year, month, day, hour, minute, second;
+        gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+        tm->tm_year = year - 1900;
+        tm->tm_mon = month - 1;
+        tm->tm_mday = day;
+        tm->tm_hour = hour;
+        tm->tm_min = minute;
+        tm->tm_sec = second;
+    }
+    time_t timestamp = timegm(tm); /* See README.md if your system lacks timegm(). */
+    iret = timestamp;
+    targ = T_INT;
+}
+
+void cmd_pause(void)
+{
+    static int interrupted = false;
+    MMFLOAT f;
+    static uint64_t PauseTimer, IntPauseTimer;
+    f = getnumber(cmdline) * 1000; // get the pulse width
+    if (f < 0)
+        StandardError(21);
+    if (f < 2)
+        return;
+
+    if (f < 1500)
+    {
+        PauseTimer = time_us_64() + (uint64_t)f;
+        while (time_us_64() < PauseTimer)
+        {
+        } // if less than 1.5mS do the pause right now
+        return; // and exit straight away
+    }
+
+    if (InterruptReturn == NULL)
+    {
+        // we are running pause in a normal program
+        // first check if we have reentered (from an interrupt) and only zero the timer if we have NOT been interrupted.
+        // This means an interrupted pause will resume from where it was when interrupted
+        if (!interrupted)
+            PauseTimer = time_us_64();
+        interrupted = false;
+
+        while (time_us_64() < FloatToInt32(f) + PauseTimer)
+        {
+            CheckAbort();
+            if (check_interrupt())
+            {
+                // if there is an interrupt fake the return point to the start of this stmt
+                // and return immediately to the program processor so that it can send us off
+                // to the interrupt routine.  When the interrupt routine finishes we should reexecute
+                // this stmt and because the variable interrupted is static we can see that we need to
+                // resume pausing rather than start a new pause time.
+                while (*cmdline && *cmdline != cmdtoken)
+                    cmdline--;             // step back to find the command token
+                InterruptReturn = cmdline; // point to it
+                interrupted = true;        // show that this stmt was interrupted
+                return;                    // and let the interrupt run
+            }
+        }
+        interrupted = false;
+    }
+    else
+    {
+        // we are running pause in an interrupt, this is much simpler but note that
+        // we use a different timer from the main pause code (above)
+        IntPauseTimer = time_us_64();
+        while (time_us_64() < FloatToInt32(f) + IntPauseTimer)
+            CheckAbort();
+    }
+}
+
+#ifdef rp2350
+void cmd_longString(void)
+#else
+void MIPS16 cmd_longString(void)
+#endif
+{
+    unsigned char *tp;
+    tp = checkstring(cmdline, (unsigned char *)"SETBYTE");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        int p = 0;
+        uint8_t *q = NULL;
+        int nbr;
+        int j = 0;
+        getcsargs(&tp, 5);
+        if (argc != 5)
+            StandardError(2);
+        j = (parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1) * 8 - 1;
+        q = (uint8_t *)&dest[1];
+        p = getint(argv[2], g_OptionBase, j - g_OptionBase);
+        nbr = getint(argv[4], 0, 255);
+        q[p - g_OptionBase] = nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"APPEND");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        char *p = NULL;
+        char *q = NULL;
+        int i, j, nbr;
+        getcsargs(&tp, 3);
+        if (argc != 3)
+            StandardError(2);
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1;
+        q = (char *)&dest[1];
+        q += dest[0];
+        p = (char *)getstring(argv[2]);
+        nbr = i = *p++;
+        if (j * 8 < dest[0] + i)
+            error("Integer array too small");
+        while (i--)
+            *q++ = *p++;
+        dest[0] += nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"TRIM");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        uint32_t trim;
+        char *p, *q = NULL;
+        int i;
+        getcsargs(&tp, 3);
+        if (argc != 3)
+            StandardError(2);
+        parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+        q = (char *)&dest[1];
+        trim = getint(argv[2], 1, dest[0]);
+        i = dest[0] - trim;
+        p = q + trim;
+        while (i--)
+            *q++ = *p++;
+        dest[0] -= trim;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"REPLACE");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        char *p = NULL;
+        char *q = NULL;
+        int i, nbr;
+        getcsargs(&tp, 5);
+        if (argc != 5)
+            StandardError(2);
+        parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+        q = (char *)&dest[1];
+        p = (char *)getstring(argv[2]);
+        nbr = getint(argv[4], 1, dest[0] - *p + 1);
+        q += nbr - 1;
+        i = *p++;
+        while (i--)
+            *q++ = *p++;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"LOAD");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        char *p;
+        char *q = NULL;
+        int i, j;
+        getcsargs(&tp, 5);
+        if (argc != 5)
+            StandardError(2);
+        int64_t nbr = getinteger(argv[2]);
+        i = nbr;
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1;
+        q = (char *)&dest[1];
+        dest[0] = 0;
+        p = (char *)getstring(argv[4]);
+        if (nbr > *p)
+            nbr = *p;
+        p++;
+        if (j * 8 < dest[0] + nbr)
+            error("Integer array too small");
+        while (i--)
+            *q++ = *p++;
+        dest[0] += nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"LEFT");
+    if (tp)
+    {
+        int64_t *dest = NULL, *src = NULL;
+        char *p = NULL;
+        char *q = NULL;
+        int i, j, nbr;
+        getcsargs(&tp, 5);
+        if (argc != 5)
+            StandardError(2);
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1;
+        q = (char *)&dest[1];
+        parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
+        p = (char *)&src[1];
+        nbr = i = getinteger(argv[4]);
+        if (nbr > src[0])
+            nbr = i = src[0];
+        if (j * 8 < i)
+            StandardError(23);
+        while (i--)
+            *q++ = *p++;
+        dest[0] = nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"RIGHT");
+    if (tp)
+    {
+        int64_t *dest = NULL, *src = NULL;
+        char *p = NULL;
+        char *q = NULL;
+        int i, j, nbr;
+        getcsargs(&tp, 5);
+        if (argc != 5)
+            StandardError(2);
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1;
+        q = (char *)&dest[1];
+        parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
+        p = (char *)&src[1];
+        nbr = i = getinteger(argv[4]);
+        if (nbr > src[0])
+        {
+            nbr = i = src[0];
+        }
+        else
+            p += (src[0] - nbr);
+        if (j * 8 < i)
+            StandardError(23);
+        while (i--)
+            *q++ = *p++;
+        dest[0] = nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"MID");
+    if (tp)
+    {
+        int64_t *dest = NULL, *src = NULL;
+        char *p = NULL;
+        char *q = NULL;
+        int i, j, nbr, start;
+        getcsargs(&tp, 7);
+        if (argc < 5)
+            StandardError(2);
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1;
+        q = (char *)&dest[1];
+        parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
+        p = (char *)&src[1];
+        start = getint(argv[4], 1, src[0]);
+        if (argc == 7)
+            nbr = getinteger(argv[6]);
+        else
+            nbr = src[0];
+        p += start - 1;
+        if (nbr + start > src[0])
+        {
+            nbr = src[0] - start + 1;
+        }
+        i = nbr;
+        if (j * 8 < nbr)
+            StandardError(23);
+        while (i--)
+            *q++ = *p++;
+        dest[0] = nbr;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"CLEAR");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        getcsargs(&tp, 1);
+        if (argc != 1)
+            StandardError(2);
+        parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+        dest[0] = 0;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"RESIZE");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        int j = 0;
+        getcsargs(&tp, 3);
+        if (argc != 3)
+            StandardError(2);
+        j = (parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1) * 8;
+        dest[0] = getint(argv[2], 0, j);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"UCASE");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        char *q = NULL;
+        int i;
+        getcsargs(&tp, 1);
+        if (argc != 1)
+            StandardError(2);
+        parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+        q = (char *)&dest[1];
+        i = dest[0];
+        while (i--)
+        {
+            if (*q >= 'a' && *q <= 'z')
+                *q -= 0x20;
+            q++;
+        }
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"PRINT");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        char *q = NULL;
+        int j, fnbr = 0;
+        bool docrlf = true;
+        getargs(&tp, 5, (unsigned char *)",;");
+        if (argc == 5)
+            SyntaxError();
+        ;
+        if (argc >= 3)
+        {
+            if (*argv[0] == '#')
+                argv[0]++;              // check if the first arg is a file number
+            fnbr = getinteger(argv[0]); // get the number
+            parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL);
+            if (argc == 4)
+                if (*argv[3] == ';')
+                    docrlf = false;
+        }
+        else
+        {
+            parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+            if (argc == 2)
+                if (*argv[1] == ';')
+                    docrlf = false;
+        }
+        q = (char *)&dest[1];
+        j = dest[0];
+        while (j--)
+        {
+            MMfputc(*q++, fnbr);
+        }
+        if (docrlf)
+            MMfputs((unsigned char *)"\2\r\n", fnbr);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"LCASE");
+    if (tp)
+    {
+        int64_t *dest = NULL;
+        char *q = NULL;
+        int i;
+        getcsargs(&tp, 1);
+        if (argc != 1)
+            StandardError(2);
+        parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+        q = (char *)&dest[1];
+        i = dest[0];
+        while (i--)
+        {
+            if (*q >= 'A' && *q <= 'Z')
+                *q += 0x20;
+            q++;
+        }
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"COPY");
+    if (tp)
+    {
+        int64_t *dest = NULL, *src = NULL;
+        char *p = NULL;
+        char *q = NULL;
+        int i = 0, j;
+        getcsargs(&tp, 3);
+        if (argc != 3)
+            StandardError(2);
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+        q = (char *)&dest[1];
+        dest[0] = 0;
+        parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
+        p = (char *)&src[1];
+        if (j * 8 < src[0])
+            StandardError(23);
+        i = src[0];
+        while (i--)
+            *q++ = *p++;
+        dest[0] = src[0];
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"CONCAT");
+    if (tp)
+    {
+        int64_t *dest = NULL, *src = NULL;
+        char *p = NULL;
+        char *q = NULL;
+        int i = 0, j, d = 0, s = 0;
+        getcsargs(&tp, 3);
+        if (argc != 3)
+            StandardError(2);
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1;
+        q = (char *)&dest[1];
+        d = dest[0];
+        parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
+        p = (char *)&src[1];
+        i = s = src[0];
+        if (j * 8 < (d + s))
+            StandardError(23);
+        q += d;
+        while (i--)
+            *q++ = *p++;
+        dest[0] += src[0];
+        return;
+    }
+    // unsigned char * parselongAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint)
+    tp = checkstring(cmdline, (unsigned char *)"AES128");
+    if (tp)
+    {
+        struct AES_ctx ctx;
+        unsigned char keyx[16];
+        unsigned char *p;
+        int64_t *dest = NULL, *src = NULL;
+        char *qq = NULL;
+        char *q = NULL;
+        // void parselongAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint){
+        if ((p = checkstring(tp, (unsigned char *)"ENCRYPT CBC")))
+        {
+            uint8_t iv[16];
+            for (int i = 0; i < 16; i++)
+                iv[i] = getrnd();
+            parselongAES(p, 16, &keyx[0], &iv[0], &src, &dest);
+            qq = (char *)&src[1];
+            q = (char *)&dest[1];
+            dest[0] = src[0] + 16;
+            memcpy(&q[16], qq, src[0]);
+            memcpy(q, iv, 16);
+            AES_init_ctx_iv(&ctx, keyx, iv);
+            AES_CBC_encrypt_buffer(&ctx, (unsigned char *)&q[16], src[0]);
+            return;
+        }
+        else if ((p = checkstring(tp, (unsigned char *)"DECRYPT CBC")))
+        {
+            uint8_t iv[16];
+            parselongAES(p, -16, &keyx[0], NULL, &src, &dest);
+            dest[0] = src[0] - 16;
+            qq = (char *)&src[1];
+            q = (char *)&dest[1];
+            memcpy(iv, qq, 16); // restore the IV
+            memcpy(q, &qq[16], dest[0]);
+            AES_init_ctx_iv(&ctx, keyx, iv);
+            AES_CBC_decrypt_buffer(&ctx, (unsigned char *)q, dest[0]);
+            return;
+        }
+        else if ((p = checkstring(tp, (unsigned char *)"ENCRYPT ECB")))
+        {
+            struct AES_ctx ctxcopy;
+            parselongAES(p, 0, &keyx[0], NULL, &src, &dest);
+            qq = (char *)&src[1];
+            q = (char *)&dest[1];
+            dest[0] = src[0];
+            memcpy(q, qq, src[0]);
+            AES_init_ctx(&ctxcopy, keyx);
+            for (int i = 0; i < src[0]; i += 16)
+            {
+                memcpy(&ctx, &ctxcopy, sizeof(ctx));
+                AES_ECB_encrypt(&ctx, (unsigned char *)&q[i]);
+            }
+            return;
+        }
+        else if ((p = checkstring(tp, (unsigned char *)"DECRYPT ECB")))
+        {
+            struct AES_ctx ctxcopy;
+            parselongAES(p, 0, &keyx[0], NULL, &src, &dest);
+            qq = (char *)&src[1];
+            q = (char *)&dest[1];
+            dest[0] = src[0];
+            memcpy(q, qq, src[0]);
+            AES_init_ctx(&ctxcopy, keyx);
+            for (int i = 0; i < src[0]; i += 16)
+            {
+                memcpy(&ctx, &ctxcopy, sizeof(ctx));
+                AES_ECB_decrypt(&ctx, (unsigned char *)&q[i]);
+            }
+            return;
+        }
+        else if ((p = checkstring(tp, (unsigned char *)"ENCRYPT CTR")))
+        {
+            uint8_t iv[16];
+            for (int i = 0; i < 16; i++)
+                iv[i] = getrnd();
+            parselongAES(p, 16, &keyx[0], &iv[0], &src, &dest);
+            qq = (char *)&src[1];
+            q = (char *)&dest[1];
+            dest[0] = src[0] + 16;
+            memcpy(&q[16], qq, src[0]);
+            memcpy(q, iv, 16);
+            AES_init_ctx_iv(&ctx, keyx, iv);
+            AES_CTR_xcrypt_buffer(&ctx, (unsigned char *)&q[16], src[0]);
+            return;
+        }
+        else if ((p = checkstring(tp, (unsigned char *)"DECRYPT CTR")))
+        {
+            uint8_t iv[16];
+            parselongAES(p, -16, &keyx[0], NULL, &src, &dest);
+            dest[0] = src[0] - 16;
+            qq = (char *)&src[1];
+            q = (char *)&dest[1];
+            memcpy(iv, qq, 16); // restore the IV
+            memcpy(q, &qq[16], dest[0]);
+            AES_init_ctx_iv(&ctx, keyx, iv);
+            AES_CTR_xcrypt_buffer(&ctx, (unsigned char *)q, dest[0]);
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"BASE64");
+    if (tp)
+    {
+        unsigned char *p;
+        if ((p = checkstring(tp, (unsigned char *)"ENCODE")))
+        {
+            int64_t *dest = NULL, *src = NULL;
+            unsigned char *qq = NULL;
+            unsigned char *q = NULL;
+            int j;
+            getcsargs(&p, 3);
+            if (argc != 3)
+                StandardError(2);
+            j = parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL) - 1;
+            q = (unsigned char *)&dest[1];
+            parseintegerarray(argv[0], &src, 1, 1, NULL, false, NULL);
+            qq = (unsigned char *)&src[1];
+            if (j * 8 < b64e_size(src[0]))
+                StandardError(23);
+            dest[0] = b64_encode(qq, src[0], q);
+            return;
+        }
+        else if ((p = checkstring(tp, (unsigned char *)"DECODE")))
+        {
+            int64_t *dest = NULL, *src = NULL;
+            unsigned char *qq = NULL;
+            unsigned char *q = NULL;
+            int j;
+            getcsargs(&p, 3);
+            if (argc != 3)
+                StandardError(2);
+            j = parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL) - 1;
+            q = (unsigned char *)&dest[1];
+            parseintegerarray(argv[0], &src, 1, 1, NULL, false, NULL);
+            qq = (unsigned char *)&src[1];
+            if (j * 8 < b64d_size(src[0]))
+                StandardError(23);
+            dest[0] = b64_decode(qq, src[0], q);
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    error("Invalid option");
+}
+void cmd_lmid(void)
+{
+    unsigned char *p;
+    int num = -1;
+    char *lsStart = NULL;
+    int64_t *dest = NULL;
+    getcsargs(&cmdline, 5);
+    if (!(argc == 5 || argc == 3))
+        StandardError(2);
+    int totalsize = (parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1) * 8; // size of the longsting in bytes
+    lsStart = (char *)&dest[1];
+    int currentlength = dest[0];
+    int start = getint(argv[2], 1, currentlength); // pick a starting point in the string
+    if (argc == 5)
+        num = getint(argv[4], 0, currentlength);
+    if (start + (num < 0 ? 0 : num - 1) - 1 > currentlength)
+        error("Selection exceeds length of string");
+    start--; // position 1 is the array position 0
+    while (*cmdline && tokenfunction(*cmdline) != op_equal)
+        cmdline++;
+    if (!*cmdline)
+        SyntaxError();
+    ;
+    ++cmdline;
+    if (!*cmdline)
+        SyntaxError();
+    ;
+    char *value = (char *)getstring(cmdline);
+    if (num == -1)
+        num = value[0];
+    p = (unsigned char *)&value[1];
+    if (num == value[0])
+        memcpy(&lsStart[start], p, num); // simple substitution
+    else
+    {
+        int change = value[0] - num;
+        if (currentlength + change > totalsize)
+            error("String too long");
+        // first move the original after the insertion to it's new position
+        memmove(&lsStart[start + value[0]], &lsStart[start + num], totalsize - (start + num - 1));
+        dest[0] += change;
+        memcpy(&lsStart[start], p, value[0]);
+    }
+}
+void parselongAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **inint, int64_t **outint)
+{
+    int64_t *a1int = NULL, *a2int = NULL, *a3int = NULL, *a4int = NULL;
+    unsigned char *a1str = NULL, *a4str = NULL;
+    MMFLOAT *a1float = NULL, *a4float = NULL;
+    int card1, card3;
+    getcsargs(&p, 7);
+    if (ivx == NULL)
+    {
+        if (argc != 5)
+            SyntaxError();
+        ;
+    }
+    else
+    {
+        if (argc < 5)
+            SyntaxError();
+        ;
+    }
+    *outint = NULL;
+    // first process the key
+    int length = 0;
+    card1 = parseany(argv[0], &a1float, &a1int, &a1str, &length, false);
+    if (card1 != 16)
+        error("Key must be 16 elements long");
+    if (a1int != NULL)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            if (a1int[i] < 0 || a1int[i] > 255)
+                error("Key number out of bounds 0-255");
+            keyx[i] = a1int[i];
+        }
+    }
+    else if (a1float != NULL)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            if (a1float[i] < 0 || a1float[i] > 255)
+                error("Key number out of bounds 0-255");
+            keyx[i] = a1float[i];
+        }
+    }
+    else if (a1str != NULL)
+    {
+        for (int i = 0; i < 16; i++)
+        {
+            keyx[i] = a1str[i + 1];
+        }
+    }
+    // next process the initialisation vector if any
+    if (argc == 7)
+    {
+        length = 0;
+        card1 = parseany(argv[6], &a4float, &a4int, &a4str, &length, false);
+        if (card1 != 16)
+            error("Initialisation vector must be 16 elements long");
+        if (a4int != NULL)
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                if (a4int[i] < 0 || a4int[i] > 255)
+                    error("Key number out of bounds 0-255");
+                ivx[i] = a4int[i];
+            }
+        }
+        else if (a4float != NULL)
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                if (a4float[i] < 0 || a4float[i] > 255)
+                    error("Key number out of bounds 0-255");
+                ivx[i] = a4float[i];
+            }
+        }
+        else if (a4str != NULL)
+        {
+            for (int i = 0; i < 16; i++)
+            {
+                ivx[i] = a4str[i + 1];
+            }
+        }
+    }
+    // now process the longstring used for input
+    parseintegerarray(argv[2], &a2int, 2, 1, NULL, false, NULL);
+    if (*a2int % 16)
+        error("input must be multiple of 16 elements long");
+    *inint = a2int;
+    card3 = parseintegerarray(argv[4], &a3int, 3, 1, NULL, false, NULL);
+    if ((card3 - 1) * 8 < *a2int + ivadd)
+        error("Output array too small");
+    *outint = a3int;
+}
+
+void fun_LGetStr(void)
+{
+    char *p;
+    char *s = NULL;
+    int64_t *src = NULL;
+    int start, nbr, j;
+    getcsargs(&ep, 5);
+    if (argc != 5)
+        StandardError(2);
+    j = (parseintegerarray(argv[0], &src, 2, 1, NULL, false, NULL) - 1) * 8;
+    start = getint(argv[2], 1, j);
+    nbr = getinteger(argv[4]);
+    if (nbr < 1 || nbr > MAXSTRLEN)
+        StandardError(21);
+    if (start + nbr > src[0])
+        nbr = src[0] - start + 1;
+    if (nbr < 0)
+        nbr = 0;               // start is beyond the end of the longstring: return an empty string
+    sret = GetTempStrMemory(); // this will last for the life of the command
+    s = (char *)&src[1];
+    s += (start - 1);
+    p = (char *)sret + 1;
+    *sret = nbr;
+    while (nbr--)
+        *p++ = *s++;
+    *p = 0;
+    targ = T_STR;
+}
+void fun_linputstr(void)
+{
+    int j, nbr, fnbr;
+    int64_t *dest = NULL;
+    uint8_t *q = NULL;
+    unsigned int read = 0;
+    getcsargs(&ep, 5);
+    if (argc != 5)
+        SyntaxError();
+    j = (parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1) * 8;
+    q = (uint8_t *)&dest[1];
+    nbr = getint(argv[4], g_OptionBase, j - g_OptionBase);
+    if (*argv[2] == '#')
+        argv[2]++;
+    fnbr = getinteger(argv[2]);
+    if (fnbr == 0)
+        SyntaxError();
+    if (fnbr < 1 || fnbr > MAXOPENFILES)
+        StandardError(18);
+    if (FileTable[fnbr].com == 0)
+        StandardError(19);
+    if (FileTable[fnbr].com <= MAXCOMPORTS)
+        error("Input from file only");
+    FileGetData(fnbr, q, nbr, &read);
+    dest[0] = read; // update the length of the string
+    iret = dest[0];
+    targ = T_INT;
+}
+
+void fun_LGetByte(void)
+{
+    uint8_t *s = NULL;
+    int64_t *src = NULL;
+    int start, j;
+    getcsargs(&ep, 3);
+    if (argc != 3)
+        StandardError(2);
+    j = (parseintegerarray(argv[0], &src, 2, 1, NULL, false, NULL) - 1) * 8;
+    s = (uint8_t *)&src[1];
+    start = getint(argv[2], g_OptionBase, j - g_OptionBase);
+    iret = s[start - g_OptionBase];
+    targ = T_INT;
+}
+
+void fun_LInstr(void)
+{
+    int64_t *src = NULL;
+    char srch[STRINGSIZE];
+    char *str = NULL;
+    int slen, found = 0, i, j, n;
+    getcsargs(&ep, 7);
+    if (argc < 3 || argc > 7)
+        StandardError(2);
+    int64_t start;
+    if (argc >= 5 && *argv[4])
+        start = getinteger(argv[4]) - 1;
+    else
+        start = 0;
+    j = (parseintegerarray(argv[0], &src, 2, 1, NULL, false, NULL) - 1);
+    str = (char *)&src[0];
+    if (argc < 7)
+    {
+        Mstrcpy((unsigned char *)srch, (unsigned char *)getstring(argv[2]));
+        slen = *srch;
+        iret = 0;
+        if (start > src[0] || start < 0 || slen == 0 || src[0] == 0 || slen > src[0] - start)
+            found = 1;
+        if (!found)
+        {
+            n = src[0] - slen - start;
+
+            for (i = start; i <= n + start; i++)
+            {
+                if (str[i + 8] == srch[1])
+                {
+                    for (j = 0; j < slen; j++)
+                        if (str[j + i + 8] != srch[j + 1])
+                            break;
+                    if (j == slen)
+                    {
+                        iret = i + 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else
+    { // search string is a regular expression
+#ifdef PICOMITEMIN
+        error("Regular expressions not supported on PICOMITEMIN");
+#else
+      // Alternate regex library as used in Armmite H7
+        int tmp = OptionEscape;
+        OptionEscape = 0;
+        Mstrcpy((unsigned char *)srch, (unsigned char *)getstring(argv[2]));
+        OptionEscape = tmp;
+        int match_length;
+        void *temp;
+        MMFLOAT *tempf = NULL;
+        int64_t *tempi = NULL;
+        MtoC((unsigned char *)srch);
+        temp = findvar(argv[6], V_FIND);
+        if (!(g_vartbl[g_VarIndex].type & (T_NBR | T_INT)))
+            error("Invalid variable");
+        if (g_vartbl[g_VarIndex].type & T_INT)
+            tempi = temp;
+        else
+            tempf = temp;
+        // re_match() scans a null-terminated C string, but the LongString data at
+        // &str[start+8] is only src[0] bytes long with no terminator. Copy the
+        // searchable tail into terminated temp memory so re_match can't run off the
+        // end of the array (a hard-fault once the buffer lives in PSRAM).
+        int hay_len = (int)src[0] - (int)start;
+        if (hay_len < 0)
+            hay_len = 0;
+        char *hay = (char *)GetTempMemory(hay_len + 1);
+        memcpy(hay, &str[start + 8], hay_len);
+        hay[hay_len] = 0;
+        int match_idx = re_match(srch, hay, &match_length);
+        if (match_idx != -1)
+        {
+            if (tempf)
+                *tempf = (MMFLOAT)(match_length);
+            else
+                *tempi = (int64_t)(match_length);
+            iret = match_idx + 1 + start;
+        }
+        else
+        {
+            iret = 0;
+            if (temp)
+            {
+                if (tempf)
+                    *tempf = 0.0;
+                else
+                    *tempi = 0;
+            }
+        }
+#endif
+    }
+    targ = T_INT;
+}
+
+void fun_LCompare(void)
+{
+    int64_t *dest, *src;
+    char *p = NULL;
+    char *q = NULL;
+    int d = 0, s = 0, found = 0;
+    getcsargs(&ep, 3);
+    if (argc != 3)
+        StandardError(2);
+    parseintegerarray(argv[0], &dest, 1, 1, NULL, false, NULL);
+    q = (char *)&dest[1];
+    d = dest[0];
+    parseintegerarray(argv[2], &src, 1, 1, NULL, false, NULL);
+    p = (char *)&src[1];
+    s = src[0];
+    while (!found)
+    {
+        if (d == 0 && s == 0)
+        {
+            found = 1;
+            iret = 0;
+        }
+        if (d == 0 && !found)
+        {
+            found = 1;
+            iret = -1;
+        }
+        if (s == 0 && !found)
+        {
+            found = 1;
+            iret = 1;
+        }
+        if (*q < *p && !found)
+        {
+            found = 1;
+            iret = -1;
+        }
+        if (*q > *p && !found)
+        {
+            found = 1;
+            iret = 1;
+        }
+        q++;
+        p++;
+        d--;
+        s--;
+    }
+    targ = T_INT;
+}
+
+void fun_LLen(void)
+{
+    int64_t *dest = NULL;
+    getcsargs(&ep, 1);
+    if (argc != 1)
+        StandardError(2);
+    parseintegerarray(argv[0], &dest, 1, 1, NULL, false, NULL);
+    iret = dest[0];
+    targ = T_INT;
+}
+
+/*void update_clock(void){
+    RTC_TimeTypeDef sTime;
+    RTC_DateTypeDef sDate;
+    sTime.Hours = hour;
+    sTime.Minutes = minute;
+    sTime.Seconds = second;
+    sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+    sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+    if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK)
+    {
+        error("RTC hardware error");
+    }
+    sDate.WeekDay = day_of_week;
+    sDate.Month = month;
+    sDate.Date = day;
+    sDate.Year = year-2000;
+
+    if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK)
+    {
+        error("RTC hardware error");
+    }
+}*/
+
+// this is invoked as a command (ie, date$ = "6/7/2010")
+// search through the line looking for the equals sign and step over it,
+// evaluate the rest of the command, split it up and save in the system counters
+void cmd_date(void)
+{
+    unsigned char *arg;
+    struct tm *tm;
+    struct tm tma;
+    tm = &tma;
+    int dd, mm, yy;
+    while (*cmdline && tokenfunction(*cmdline) != op_equal)
+        cmdline++;
+    if (!*cmdline)
+        SyntaxError();
+    ;
+    ++cmdline;
+    arg = getCstring(cmdline);
+    {
+        getargs(&arg, 5, (unsigned char *)"-/"); // this is a macro and must be the first executable stmt in a block
+        if (argc != 5)
+            SyntaxError();
+        ;
+        dd = atoi((char *)argv[0]);
+        mm = atoi((char *)argv[2]);
+        yy = atoi((char *)argv[4]);
+        if (dd > 1000)
+        {
+            int tmp = dd;
+            dd = yy;
+            yy = tmp;
+        }
+        if (yy >= 0 && yy < 100)
+            yy += 2000;
+        // check year
+        if (yy >= 1900 && yy <= 9999)
+        {
+            // check month
+            if (mm >= 1 && mm <= 12)
+            {
+                // check days
+                if ((dd >= 1 && dd <= 31) && (mm == 1 || mm == 3 || mm == 5 || mm == 7 || mm == 8 || mm == 10 || mm == 12))
+                {
+                }
+                else if ((dd >= 1 && dd <= 30) && (mm == 4 || mm == 6 || mm == 9 || mm == 11))
+                {
+                }
+                else if ((dd >= 1 && dd <= 28) && (mm == 2))
+                {
+                }
+                else if (dd == 29 && mm == 2 && (yy % 400 == 0 || (yy % 4 == 0 && yy % 100 != 0)))
+                {
+                }
+                else
+                    error("Day is invalid");
+            }
+            else
+            {
+                error("Month is not valid");
+            }
+        }
+        else
+        {
+            error("Year is not valid");
+        }
+        int year, month, day, hour, minute, second;
+        gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+        //		mT4IntEnable(0);       										// disable the timer interrupt to prevent any conflicts while updating
+        day = dd;
+        month = mm;
+        year = yy;
+        tm->tm_year = year - 1900;
+        tm->tm_mon = month - 1;
+        tm->tm_mday = day;
+        tm->tm_hour = hour;
+        tm->tm_min = minute;
+        tm->tm_sec = second;
+        time_t timestamp = timegm(tm); /* See README.md if your system lacks timegm(). */
+        tm = gmtime(&timestamp);
+        day_of_week = tm->tm_wday;
+        if (day_of_week == 0)
+            day_of_week = 7;
+        TimeOffsetToUptime = get_epoch(year, month, day, hour, minute, second) - time_us_64() / 1000000;
+        //		update_clock();
+        //		mT4IntEnable(1);       										// enable interrupt
+    }
+}
+
+// this is invoked as a function
+void fun_date(void)
+{
+    int year, month, day, hour, minute, second;
+    gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+    sret = GetTempStrMemory(); // this will last for the life of the command
+    IntToStrPad((char *)sret, day, '0', 2, 10);
+    sret[2] = '-';
+    IntToStrPad((char *)sret + 3, month, '0', 2, 10);
+    sret[5] = '-';
+    IntToStr((char *)sret + 6, year, 10);
+    CtoM(sret);
+    targ = T_STR;
+}
+
+// this is invoked as a function
+void fun_day(void)
+{
+    unsigned char *arg;
+    struct tm *tm;
+    struct tm tma;
+    tm = &tma;
+    time_t time_of_day;
+    int i;
+    sret = GetTempStrMemory(); // this will last for the life of the command
+    int d, m, y;
+    if (!checkstring(ep, (unsigned char *)"NOW"))
+    {
+        arg = getCstring(ep);
+        getargs(&arg, 5, (unsigned char *)"-/"); // this is a macro and must be the first executable stmt in a block
+        if (!(argc == 5))
+            SyntaxError();
+        ;
+        d = atoi((char *)argv[0]);
+        m = atoi((char *)argv[2]);
+        y = atoi((char *)argv[4]);
+        if (d > 1000)
+        {
+            int tmp = d;
+            d = y;
+            y = tmp;
+        }
+        if (y >= 0 && y < 100)
+            y += 2000;
+        if (d < 1 || d > 31 || m < 1 || m > 12 || y < 1902 || y > 2999)
+            error("Invalid date");
+        tm->tm_year = y - 1900;
+        tm->tm_mon = m - 1;
+        tm->tm_mday = d;
+        tm->tm_hour = 0;
+        tm->tm_min = 0;
+        tm->tm_sec = 0;
+        time_of_day = timegm(tm);
+        tm = gmtime(&time_of_day);
+        i = tm->tm_wday;
+        if (i == 0)
+            i = 7;
+        strcpy((char *)sret, daystrings[i]);
+    }
+    else
+    {
+        int year, month, day, hour, minute, second;
+        gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+        tm->tm_year = year - 1900;
+        tm->tm_mon = month - 1;
+        tm->tm_mday = day;
+        tm->tm_hour = 0;
+        tm->tm_min = 0;
+        tm->tm_sec = 0;
+        time_of_day = timegm(tm);
+        tm = gmtime(&time_of_day);
+        i = tm->tm_wday;
+        if (i == 0)
+            i = 7;
+        strcpy((char *)sret, daystrings[i]);
+    }
+    CtoM(sret);
+    targ = T_STR;
+}
+
+// this is invoked as a command (ie, time$ = "6:10:45")
+// search through the line looking for the equals sign and step over it,
+// evaluate the rest of the command, split it up and save in the system counters
+void cmd_time(void)
+{
+    unsigned char *arg;
+    int h = 0;
+    int m = 0;
+    int s = 0;
+    MMFLOAT f;
+    long long int i64;
+    unsigned char *ss;
+    int t = 0;
+    int offset;
+    while (*cmdline && tokenfunction(*cmdline) != op_equal)
+        cmdline++;
+    if (!*cmdline)
+        SyntaxError();
+    ;
+    ++cmdline;
+    evaluate(cmdline, &f, &i64, &ss, &t, false);
+    int year, month, day, hour, minute, second;
+    gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+    if (t & T_STR)
+    {
+        arg = getCstring(cmdline);
+        {
+            getargs(&arg, 5, (unsigned char *)":"); // this is a macro and must be the first executable stmt in a block
+            if (argc % 2 == 0)
+                SyntaxError();
+            ;
+            h = atoi((char *)argv[0]);
+            if (argc >= 3)
+                m = atoi((char *)argv[2]);
+            if (argc == 5)
+                s = atoi((char *)argv[4]);
+            if (h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59)
+                error("Invalid time");
+            //            mT4IntEnable(0);       										// disable the timer interrupt to prevent any conflicts while updating
+            hour = h;
+            minute = m;
+            second = s;
+            SecondsTimer = 0;
+            //		update_clock();
+            //            mT4IntEnable(1);       										// enable interrupt
+        }
+    }
+    else
+    {
+        struct tm *tm;
+        struct tm tma;
+        tm = &tma;
+        offset = getinteger(cmdline);
+        tm->tm_year = year - 1900;
+        tm->tm_mon = month - 1;
+        tm->tm_mday = day;
+        tm->tm_hour = hour;
+        tm->tm_min = minute;
+        tm->tm_sec = second;
+        time_t timestamp = timegm(tm); /* See README.md if your system lacks timegm(). */
+        timestamp += offset;
+        tm = gmtime(&timestamp);
+        //		mT4IntEnable(0);       										// disable the timer interrupt to prevent any conflicts while updating
+        hour = tm->tm_hour;
+        minute = tm->tm_min;
+        second = tm->tm_sec;
+        SecondsTimer = 0;
+        //		update_clock();
+        //    	mT4IntEnable(1);       										// enable interrupt
+    }
+    TimeOffsetToUptime = get_epoch(year, month, day, hour, minute, second) - time_us_64() / 1000000;
+}
+
+// this is invoked as a function
+void fun_time(void)
+{
+    int year, month, day, hour, minute, second;
+    sret = GetTempStrMemory(); // this will last for the life of the command
+    uint64_t fulltime = gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+    IntToStrPad((char *)sret, hour, '0', 2, 10);
+    sret[2] = ':';
+    IntToStrPad((char *)sret + 3, minute, '0', 2, 10);
+    sret[5] = ':';
+    IntToStrPad((char *)sret + 6, second, '0', 2, 10);
+    if (optionfulltime)
+    {
+        sret[8] = '.';
+        IntToStrPad((char *)sret + 9, (fulltime / 1000) % 1000, '0', 3, 10);
+    }
+    CtoM(sret);
+    targ = T_STR;
+}
+
+void cmd_ireturn(void)
+{
+    if (InterruptReturn == NULL)
+        error("Not in interrupt");
+    checkend(cmdline);
+    nextstmt = InterruptReturn;
+    InterruptReturn = NULL;
+    if (g_LocalIndex)
+        ClearVars(g_LocalIndex--, true); // delete any local variables
+    g_TempMemoryIsChanged = true;        // signal that temporary memory should be checked
+    *CurrentInterruptName = 0;           // for static vars we are not in an interrupt
+#ifdef GUICONTROLS
+    if (DelayedDrawKeyboard)
+    {
+        DrawKeyboard(1); // the pop-up GUI keyboard should be drawn AFTER the pen down interrupt
+        DelayedDrawKeyboard = false;
+    }
+    if (DelayedDrawFmtBox)
+    {
+        DrawFmtBox(1); // the pop-up GUI keyboard should be drawn AFTER the pen down interrupt
+        DelayedDrawFmtBox = false;
+    }
+#endif
+    if (SaveOptionErrorSkip > 0)
+        OptionErrorSkip = SaveOptionErrorSkip + 1;
+    else if (SaveOptionErrorSkip < 0)
+        OptionErrorSkip = SaveOptionErrorSkip; // Restore ON ERROR IGNORE (-1)
+    strcpy(MMErrMsg, SaveErrorMessage);
+    MMerrno = Saveerrno;
+}
+
+void MIPS16 cmd_library(void)
+{
+    unsigned char *tp;
+    /********************************************************************************************************************
+     ******* LIBRARY SAVE **********************************************************************************************/
+    if (checkstring(cmdline, (unsigned char *)"SAVE"))
+    {
+        unsigned char *p = NULL, *pp, *m, *MemBuff, *TempPtr;
+        unsigned short rem, tkn;
+        int i, j, k, InCFun, InQuote, CmdExpected;
+        unsigned int CFunDefAddr[100], *CFunHexAddr[100];
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (*ProgMemory != 0x01)
+            return;
+        checkend(p);
+        ClearRuntime(true);
+        TempPtr = m = MemBuff = GetTempMainMemory(EDIT_BUFFER_SIZE);
+
+        rem = GetCommandValue((unsigned char *)"Rem");
+        InQuote = InCFun = j = 0;
+        CmdExpected = true;
+        if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
+        {
+            uint32_t *c = (uint32_t *)(flash_progmemory - MAX_PROG_SIZE);
+            if (*c != 0xFFFFFFFF)
+                error("Flash Slot % already in use", MAXFLASHSLOTS);
+            ;
+        }
+        // first copy the current program code residing in the Library area to RAM
+        if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE)
+        {
+            p = ProgMemory - Option.LIBRARY_FLASH_SIZE;
+            while (!(p[0] == 0 && p[1] == 0))
+                *m++ = *p++;
+            *m++ = 0; // terminate the last line
+        }
+        // dump(m, 256);
+        //  then copy the current contents of the program memory to RAM
+
+        // MMPrintString("\r\n Size=1 ");PInt(m - MemBuff);
+        p = ProgMemory;
+        while (!(p[0] == 0xff && p[1] == 0xff))
+        {
+            //        while(*p != 0xff) {
+            if (p[0] == 0 && p[1] == 0)
+                break; // end of the program
+            if (*p == T_NEWLINE)
+            {
+                TempPtr = m;
+                CurrentLinePtr = p;
+                *m++ = *p++;
+                *m++ = *p++;        // Phase A1: copy skip byte
+                CmdExpected = true; // if true we can expect a command next (possibly a CFunction, etc)
+                if (*p == 0)
+                { // if this is an empty line we can skip it
+                    p++;
+                    if (*p == 0)
+                        break;   // end of the program or module
+                    m = TempPtr; // Phase A1: rewind past T_NEWLINE + skip byte
+                    continue;
+                }
+            }
+
+            if (*p == T_LINENBR)
+            {
+                //                TempPtr = m;
+                *m++ = *p++;
+                *m++ = *p++;
+                *m++ = *p++; // copy the line number
+                skipspace(p);
+            }
+
+            if (*p == T_LABEL)
+            {
+                for (i = p[1] + 2; i > 0; i--)
+                    *m++ = *p++; // copy the label
+                                 //                TempPtr = m;
+                skipspace(p);
+            }
+            tkn = commandtbl_decode(p);
+            // if(CmdExpected && ( *p == GetCommandValue("End CFunction") || *p == GetCommandValue("End CSub") || *p == GetCommandValue("End DefineFont"))) {
+            if (CmdExpected && (tkn == GetCommandValue((unsigned char *)"End CSub") || tkn == GetCommandValue((unsigned char *)"End DefineFont")))
+            {
+                InCFun = false; // found an  END CSUB or END DEFINEFONT token
+            }
+            if (InCFun)
+            {
+                skipline(p); // skip the body of a CFunction
+                m = TempPtr; // don't copy the new line
+                continue;
+            }
+
+            tkn = commandtbl_decode(p);
+            if (CmdExpected && (tkn == cmdCSUB || tkn == GetCommandValue((unsigned char *)"DefineFont")))
+            {                                       // found a  CSUB or DEFINEFONT token
+                CFunDefAddr[++j] = (unsigned int)m; // save its address so that the binary copy in the library can point to it
+                while (*p)
+                    *m++ = *p++; // copy the declaration
+                InCFun = true;
+            }
+
+            tkn = commandtbl_decode(p);
+            if (CmdExpected && tkn == rem)
+            { // found a REM token
+                skipline(p);
+                m = TempPtr; // don't copy the new line tokens
+                continue;
+            }
+
+            if (*p >= C_BASETOKEN || isnamestart(*p))
+                CmdExpected = false; // stop looking for a CFunction, etc on this line
+
+            if (*p == '"')
+                InQuote = !InQuote; // found the start/end of a string
+
+            if (*p == '\'' && !InQuote)
+            { // found a modern remark char
+                skipline(p);
+                // PIntHC(*(m-3)); PIntHC(*(m-2)); PIntHC(*(m-1)); PIntHC(*(m));
+                // MMPrintString("\r\n");
+                // if(*(m-3) == 0x01) {        //Original condition from Micromites (pre skip byte)
+                /* Check to see if comment is the first thing on the line or its only preceded by spaces.
+                Spaces have been reduced to a single space so we treat a comment with 1 space before it
+                as a comment line to be omitted.
+                With T_NEWLINE_HDR=2 the layout is: [T_NEWLINE(0x01)][skip_byte][optional space][']
+                so T_NEWLINE is at m-2 (no space) or m-3 (one space).
+                */
+                if ((*(m - 2) == 0x01) || ((*(m - 3) == 0x01) && (*(m - 1) == 0x20)))
+                {
+                    m = TempPtr; // if the comment was the only thing on the line don't copy the line at all
+                    continue;
+                }
+                else
+                    p--;
+            }
+
+            if (*p == ' ' && !InQuote)
+            { // found a space
+                if (*(m - 1) == ' ')
+                    m--; // don't copy the space if the preceeding char was a space
+            }
+
+            if (p[0] == 0 && p[1] == 0)
+                break; // end of the program
+            *m++ = *p++;
+        }
+
+        // MMPrintString("\r\n Size2= ");PInt(m - MemBuff);
+        // The picomite will have any fonts or CSUBs binary starting on a new 256 byte block so there can be many
+        // 0x00 bytes at the end of the program. We only need two of them .
+        // At the end of the program so get the two 0x00 bytes
+        *m++ = *p++;
+        *m++ = *p++;
+
+        // Recompute every skip byte in the output buffer.  Compression (stripping
+        // comments and collapsing spaces) shortened some lines, so the skip bytes
+        // that were copied verbatim from source now point past the actual next line.
+        // Walk line-by-line and write the correct byte offset from each T_NEWLINE
+        // to the following T_NEWLINE (or end-of-program marker).
+        {
+            unsigned char *fix = MemBuff;
+            while (*fix == T_NEWLINE)
+            {
+                unsigned char *next = fix + T_NEWLINE_HDR;
+                while (!(next[-1] == 0 && (next[0] == T_NEWLINE || next[0] == 0)))
+                    next++;
+                int dist = (int)(next - fix);
+                fix[1] = (dist >= 3 && dist <= 0xFD) ? (unsigned char)dist : T_NEWLINE_SKIP_NONE;
+                fix = next;
+            }
+        }
+
+        // Step the program memory up to the first 0xFF of the 4 that mark the beginning of the CSub binaries.
+        while (*p != 0xff)
+            p++;
+        p++;
+        p++;
+        p++;
+        p++; // step over the header of the four 0xff bytes
+
+        // step the memory to the next 4 word boundary
+        //  while((unsigned int)p & 0b11) p++;
+        while ((unsigned int)m & 0b11)
+            *m++ = 0x00; // step memory to the next word boundary
+        *m++ = 0xFF;
+        *m++ = 0xFF;
+        *m++ = 0xFF;
+        *m++ = 0xFF; // write 4 byte of the csub binary header
+
+        // now copy the CFunction/CSub/Font data
+        // =====================================
+        // the format of a CFunction in flash is:
+        //   Unsigned Int - Address of the CFunction/CSub/Font in program memory (points to the token).  For a font it is zero.
+        //   Unsigned Int - The length of the CFunction/CSub/Font in bytes including the Offset (see below)
+        //   Unsigned Int - The Offset (in words) to the main() function (ie, the entry point to the CFunction/CSub).  The specs for the font if it is a font.
+        //   word1..wordN - The CFunction code
+        // The next CFunction starts immediately following the last word of the previous CFunction
+
+        // first, copy any CFunctions residing in the library area to RAM
+        // MMPrintString("\r\n Copying CSUBS from library");
+        k = 0; // this is used to index CFunHexLibAddr[] for later adjustment of a CFun's address
+        if (CFunctionLibrary != NULL)
+        {
+            pp = (unsigned char *)CFunctionLibrary;
+            while (*(unsigned int *)pp != 0xffffffff)
+            {
+                //                CFunHexLibAddr[++k] = (unsigned int *)m;            // save the address for later adjustment
+                j = (*(unsigned int *)(pp + 4)) + 8; // calculate the total size of the CFunction
+                while (j--)
+                    *m++ = *pp++; // copy it into RAM
+            }
+        }
+
+        // then, copy any CFunctions in program memory to RAM
+
+        i = 0; // this is used to index CFunHexAddr[] for later adjustment of a CFun's address
+               // while(*(unsigned int *)p != 0xffffffff && (int)p < Option.PROG_FLASH_SIZE) {
+        while (*(unsigned int *)p != 0xffffffff)
+        {
+            CFunHexAddr[++i] = (unsigned int *)m; // save the address for later adjustment
+            j = (*(unsigned int *)(p + 4)) + 8;   // calculate the total size of the CFunction
+            while (j--)
+                *m++ = *p++; // copy it into RAM
+        }
+        // we have now copied all the CFunctions into RAM
+
+        // calculate the size of the library code  to  end on a word boundary
+        j = (((m - MemBuff) + (0x4 - 1)) & (~(0x4 - 1)));
+
+        // We only have reserved MAX_PROG_SIZE of flash for library code .
+        // Error if we try to use too much
+        if (j > MAX_PROG_SIZE)
+            error("Library too big");
+
+        TempPtr = (LibMemory);
+
+        // now adjust the addresses of the declaration in each CFunction header
+        // do not adjust a font who's "address" is  fontno-1.
+        // NO ADJUSTMENT REQUIRED FOR PICOMITE as ADDRESS is RELATIVE and LIBRARY is at a fixed location.
+        // first, CFunctions that were already in the library
+        // for(; k > 0; k--) {
+        // if ((*CFunHexLibAddr[k]>>31)==0)  *CFunHexLibAddr[k] -= ((unsigned int)( MAX_PROG_SIZE);
+        //}
+
+        // then, CFunctions that are being added to the library
+        for (; i > 0; i--)
+        {
+            if ((*CFunHexAddr[i] >> 31) == 0)
+                *CFunHexAddr[i] = (CFunDefAddr[i] - (unsigned int)MemBuff);
+        }
+
+        //******************************************************************************
+        // now write the library from ram to the library flash area
+        // initialise for writing to the flash
+        FlashWriteInit(LIBRARY_FLASH);
+        safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
+        i = MAX_PROG_SIZE / 4;
+
+        int *ppp = (int *)(flash_progmemory - MAX_PROG_SIZE);
+        while (i--)
+            if (*ppp++ != 0xFFFFFFFF)
+            {
+                enable_interrupts_pico();
+                error("Flash erase problem");
+            }
+
+        i = 0;
+        for (k = 0; k < m - MemBuff; k++)
+        { // write to the flash byte by byte
+            FlashWriteByte(MemBuff[k]);
+        }
+        FlashWriteClose();
+        Option.LIBRARY_FLASH_SIZE = MAX_PROG_SIZE;
+        SaveOptions();
+
+        if (MMCharPos > 1)
+            MMPrintString("\r\n"); // message should be on a new line
+        MMPrintString("Library Saved ");
+        IntToStr((char *)tknbuf, k, 10);
+        MMPrintString((char *)tknbuf);
+        MMPrintString(" bytes\r\n");
+#ifndef USBKEYBOARD
+        // fflush(stdout);
+        tud_cdc_write_flush();
+#endif
+        uSec(2000);
+
+        // Now call the new command that will clear the current program memory then
+        // write the library code at Option.ProgFlashSize by copying it from the windbond
+        // and return to the command prompt.
+        cmdline = (unsigned char *)"";
+        CurrentLinePtr = NULL; // keep the NEW command happy
+        cmd_new();             //  delete the program,add the library code and return to the command prompt
+    }
+    /********************************************************************************************************************
+    ******* LIBRARY DELETE **********************************************************************************************/
+
+    if (checkstring(cmdline, (unsigned char *)"DELETE"))
+    {
+        int i;
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
+            return;
+
+        FlashWriteInit(LIBRARY_FLASH);
+        safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
+        i = MAX_PROG_SIZE / 4;
+
+        int *ppp = (int *)(flash_progmemory - MAX_PROG_SIZE);
+        while (i--)
+            if (*ppp++ != 0xFFFFFFFF)
+            {
+                enable_interrupts_pico();
+                error("Flash erase problem");
+            }
+        enable_interrupts_pico();
+
+        Option.LIBRARY_FLASH_SIZE = 0;
+        SaveOptions();
+        return;
+        // Clear Program Memory and also the Library at the end.
+        //        cmdline = ""; CurrentLinePtr = NULL;    // keep the NEW command happy
+        //        cmd_new();                              //  delete any program,and the library code and return to the command prompt
+    }
+
+    /********************************************************************************************************************
+    ******* LIBRARY LIST **********************************************************************************************/
+
+    if (checkstring(cmdline, (unsigned char *)"LIST ALL"))
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
+            return;
+        ListProgram(ProgMemory - Option.LIBRARY_FLASH_SIZE, true);
+        return;
+    }
+    if (checkstring(cmdline, (unsigned char *)"LIST"))
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
+            return;
+        ListProgram(ProgMemory - Option.LIBRARY_FLASH_SIZE, false);
+        return;
+    }
+    if ((tp = checkstring(cmdline, (unsigned char *)"DISK SAVE")))
+    {
+        getcsargs(&tp, 1);
+        if (!(argc == 1))
+            SyntaxError();
+        ;
+        if (CurrentLinePtr)
+            StandardError(10);
+        int fnbr = FindFreeFileNbr();
+        if (!InitSDCard())
+            return;
+        if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
+            error("No library to store");
+        char *pp = (char *)getFstring(argv[0]);
+        AppendDefaultExtension((char *)pp, ".lib");
+        if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
+            return;
+        int i = 0;
+        // first count the normal program code residing in the Library
+        char *p = (char *)LibMemory;
+        while (!(p[0] == 0 && p[1] == 0))
+        {
+            p++;
+            i++;
+        }
+        while (*p == 0)
+        { // the end of the program can have multiple zeros -count them
+            p++;
+            i++;
+        }
+        p++;
+        i++; // get 0xFF that ends the program and count it
+        while ((unsigned int)p & 0b11)
+        { // count to the next word boundary
+            p++;
+            i++;
+        }
+
+        // Now add the binary used for CSUB and Fonts
+        if (CFunctionLibrary != NULL)
+        {
+            int j = 0;
+            unsigned int *pint = (unsigned int *)CFunctionLibrary;
+            while (*pint != 0xffffffff)
+            {
+                pint++;                                     // step over the address or Font No.
+                j += *pint + 8;                             // Read the size
+                pint += (*pint + 4) / sizeof(unsigned int); // set pointer to start of next CSUB/Font
+            }
+            i = i + j;
+        }
+        char *s = (char *)LibMemory;
+        //        int i=MAX_PROG_SIZE;
+        while (i--)
+        {
+            FilePutChar(*s++, fnbr);
+        }
+        FileClose(fnbr);
+        return;
+    }
+    if ((tp = checkstring(cmdline, (unsigned char *)"DISK LOAD")))
+    {
+        int fsize;
+        getcsargs(&tp, 1);
+        if (!(argc == 1))
+            SyntaxError();
+        ;
+        if (CurrentLinePtr)
+            StandardError(10);
+        int fnbr = FindFreeFileNbr();
+        if (!InitSDCard())
+            return;
+        char *pp = (char *)getFstring(argv[0]);
+        AppendDefaultExtension((char *)pp, ".lib");
+        fsize = FileSize((char *)pp);
+        if (!BasicFileOpen((char *)pp, fnbr, FA_READ))
+            return;
+        if (fsize > MAX_PROG_SIZE)
+            error("File size % should be % or less", fsize, MAX_PROG_SIZE);
+        FlashWriteInit(LIBRARY_FLASH);
+        safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
+        int i = MAX_PROG_SIZE / 4;
+        int *ppp = (int *)(flash_progmemory - MAX_PROG_SIZE);
+        while (i--)
+            if (*ppp++ != 0xFFFFFFFF)
+            {
+                enable_interrupts_pico();
+                error("Flash erase problem");
+            }
+        for (int k = 0; k < fsize; k++)
+        { // write to the flash byte by byte
+            FlashWriteByte(FileGetChar(fnbr));
+        }
+        FlashWriteClose();
+        Option.LIBRARY_FLASH_SIZE = MAX_PROG_SIZE;
+        SaveOptions();
+        FileClose(fnbr);
+        return;
+    }
+
+    SyntaxError();
+}
+
+// set up the tick interrupt
+void cmd_settick(void)
+{
+    int period;
+    int irq = 0;
+    ;
+    //    int pause=0;
+    char *s = GetTempStrMemory();
+    getcsargs(&cmdline, 5);
+    strcpy(s, (char *)argv[0]);
+    if (!(argc == 3 || argc == 5))
+        StandardError(2);
+    if (argc == 5)
+        irq = getint(argv[4], 1, NBRSETTICKS) - 1;
+    if (strcasecmp((char *)argv[0], "PAUSE") == 0)
+    {
+        TickActive[irq] = 0;
+        return;
+    }
+    else if (strcasecmp((char *)argv[0], "RESUME") == 0)
+    {
+        TickActive[irq] = 1;
+        return;
+    }
+    else
+        period = getint(argv[0], -1, INT_MAX);
+    if (period == 0)
+    {
+        TickInt[irq] = NULL; // turn off the interrupt
+        TickPeriod[irq] = 0;
+        TickTimer[irq] = 0; // set the timer running
+        TickActive[irq] = 0;
+    }
+    else
+    {
+        TickPeriod[irq] = period;
+        TickInt[irq] = GetIntAddress(argv[2]); // get a pointer to the interrupt routine
+        TickTimer[irq] = 0;                    // set the timer running
+        InterruptUsed = true;
+        TickActive[irq] = 1;
+    }
+}
+void PO(char *s)
+{
+    MMPrintString("OPTION ");
+    MMPrintString(s);
+    MMPrintString(" ");
+}
+
+void PO2Str(char *s1, const char *s2)
+{
+    PO(s1);
+    MMPrintString((char *)s2);
+    MMPrintString("\r\n");
+}
+void PO3Str(char *s1, const char *s2, const char *s3)
+{
+    PO(s1);
+    MMPrintString((char *)s2);
+    MMPrintString(", ");
+    MMPrintString((char *)s3);
+    MMPrintString("\r\n");
+}
+void PO2StrInt(char *s1, const char *s2, int s3)
+{
+    PO(s1);
+    MMPrintString((char *)s2);
+    MMPrintString(" @ ");
+    PInt(s3);
+    MMPrintString("KHz\r\n");
+}
+
+void PO2Int(char *s1, int n)
+{
+    PO(s1);
+    PInt(n);
+    MMPrintString("\r\n");
+}
+void PO2IntH(char *s1, int n)
+{
+    PO(s1);
+    PIntH(n);
+    MMPrintString("\r\n");
+}
+void PO3Int(char *s1, int n1, int n2)
+{
+    PO(s1);
+    PInt(n1);
+    PIntComma(n2);
+    MMPrintString("\r\n");
+}
+void PO4Int(char *s1, int n1, int n2, int n3)
+{
+    PO(s1);
+    PInt(n1);
+    PIntComma(n2);
+    PIntComma(n3);
+    MMPrintString("\r\n");
+}
+void PO5Int(char *s1, int n1, int n2, int n3, int n4)
+{
+    PO(s1);
+    PInt(n1);
+    PIntComma(n2);
+    PIntComma(n3);
+    PIntComma(n4);
+    MMPrintString("\r\n");
+}
+
+void MIPS16 printoptions(void)
+{
+    MMPrintString(banner);
+#ifndef PICOMITEVGA
+    int i = Option.DISPLAY_ORIENTATION;
+#endif
+
+    if (Option.SerialConsole)
+    {
+        MMPrintString("OPTION SERIAL CONSOLE COM");
+        MMputchar((Option.SerialConsole & 3) + 48, 1);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.SerialTX].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.SerialRX].pinname);
+        if (Option.SerialConsole & 4)
+            MMPrintString((char *)",BOTH");
+        PRet();
+    }
+#ifndef PICOMITEVGA
+    if (Option.SYSTEM_CLK)
+    {
+        PO("SYSTEM SPI");
+        MMPrintString((char *)PinDef[Option.SYSTEM_CLK].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.SYSTEM_MOSI].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.SYSTEM_MISO].pinname);
+        MMPrintString("\r\n");
+    }
+#if PICOMITERP2350
+    if (Option.LCD_CLK && !(Option.SYSTEM_CLK == Option.LCD_CLK))
+    {
+        PO("LCD SPI");
+        MMPrintString((char *)PinDef[Option.LCD_CLK].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.LCD_MOSI].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.LCD_MISO].pinname);
+        MMPrintString("\r\n");
+    }
+#endif
+#endif
+    if (Option.SYSTEM_I2C_SDA)
+    {
+        PO("SYSTEM I2C");
+        MMPrintString((char *)PinDef[Option.SYSTEM_I2C_SDA].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.SYSTEM_I2C_SCL].pinname);
+        if (Option.SYSTEM_I2C_SLOW)
+            MMPrintString(", SLOW\r\n");
+        else
+            PRet();
+    }
+    if (Option.Autorun)
+    {
+        PO("AUTORUN ");
+        if (Option.Autorun > 0 && Option.Autorun <= MAXFLASHSLOTS)
+            PInt(Option.Autorun);
+        else
+            MMPrintString("ON");
+        if (Option.NoReset)
+        {
+            MMPrintString(",NORESET");
+        }
+        PRet();
+    }
+    if (Option.Baudrate != CONSOLE_BAUDRATE)
+        PO2Int("BAUDRATE", Option.Baudrate);
+    if (Option.FlashSize != 2048 * 1024)
+        PO2Int("FLASH SIZE", Option.FlashSize);
+    if (MAX_PROG_SIZE == Option.LIBRARY_FLASH_SIZE)
+        PO2IntH("LIBRARY_FLASH_SIZE ", Option.LIBRARY_FLASH_SIZE);
+    if (Option.Invert == true)
+        PO2Str("CONSOLE", "INVERT");
+    if (Option.Invert == 2)
+        PO2Str("CONSOLE", "AUTO");
+    if (Option.ColourCode == true)
+        PO2Str("COLOURCODE", "ON");
+    if (Option.continuation)
+        PO2Str("CONTINUATION LINES", "ON");
+    if (Option.PWM == true)
+        PO2Str("POWER PWM", "ON");
+    if (Option.Listcase != CONFIG_TITLE)
+        PO2Str("CASE", CaseList[(int)Option.Listcase]);
+    if (Option.Tab != 2)
+        PO2Int("TAB", Option.Tab);
+    if (Option.DefaultFC != WHITE || Option.DefaultBC != BLACK)
+    {
+        PO("DEFAULT COLOURS");
+        if (Option.DefaultFC == WHITE)
+            MMPrintString("WHITE, ");
+        else if (Option.DefaultFC == YELLOW)
+            MMPrintString("YELLOW,");
+        else if (Option.DefaultFC == LILAC)
+            MMPrintString("LILAC,");
+        else if (Option.DefaultFC == BROWN)
+            MMPrintString("BROWN,");
+        else if (Option.DefaultFC == FUCHSIA)
+            MMPrintString("FUCHSIA,");
+        else if (Option.DefaultFC == RUST)
+            MMPrintString("RUST, ");
+        else if (Option.DefaultFC == MAGENTA)
+            MMPrintString("MAGENTA,");
+        else if (Option.DefaultFC == RED)
+            MMPrintString("RED,");
+        else if (Option.DefaultFC == CYAN)
+            MMPrintString("CYAN,");
+        else if (Option.DefaultFC == GREEN)
+            MMPrintString("GREEN,");
+        else if (Option.DefaultFC == CERULEAN)
+            MMPrintString("CERULEAN,");
+        else if (Option.DefaultFC == MIDGREEN)
+            MMPrintString("MIDGREEN,");
+        else if (Option.DefaultFC == COBALT)
+            MMPrintString("COBALT,");
+        else if (Option.DefaultFC == MYRTLE)
+            MMPrintString("MYRTLE,");
+        else if (Option.DefaultFC == BLUE)
+            MMPrintString("BLUE,");
+        else if (Option.DefaultFC == BLACK)
+            MMPrintString("BLACK,");
+        if (Option.DefaultBC == WHITE)
+            MMPrintString(" WHITE");
+        else if (Option.DefaultBC == YELLOW)
+            MMPrintString(" YELLOW");
+        else if (Option.DefaultBC == LILAC)
+            MMPrintString(" LILAC");
+        else if (Option.DefaultBC == BROWN)
+            MMPrintString(" BROWN");
+        else if (Option.DefaultBC == FUCHSIA)
+            MMPrintString(" FUCHSIA");
+        else if (Option.DefaultBC == RUST)
+            MMPrintString(" RUST");
+        else if (Option.DefaultBC == MAGENTA)
+            MMPrintString(" MAGENTA");
+        else if (Option.DefaultBC == RED)
+            MMPrintString(" RED");
+        else if (Option.DefaultBC == CYAN)
+            MMPrintString(" CYAN");
+        else if (Option.DefaultBC == GREEN)
+            MMPrintString(" GREEN");
+        else if (Option.DefaultBC == CERULEAN)
+            MMPrintString(" CERULEAN");
+        else if (Option.DefaultBC == MIDGREEN)
+            MMPrintString(" MIDGREEN");
+        else if (Option.DefaultBC == COBALT)
+            MMPrintString(" COBALT");
+        else if (Option.DefaultBC == MYRTLE)
+            MMPrintString(" MYRTLE");
+        else if (Option.DefaultBC == BLUE)
+            MMPrintString(" BLUE");
+        else if (Option.DefaultBC == BLACK)
+            MMPrintString(" BLACK");
+        PRet();
+    }
+#if defined(rp2350)
+    if (Option.special == 1)
+        PO2Str("PICO PLUS 2", "ON");
+#endif
+#if defined(USBKEYBOARD) || defined(PICOMITEBTH)
+    if (Option.mousespeed != 0.0f)
+    {
+        PO("MOUSE SENSITIVITY ");
+        PFlt(Option.mousespeed);
+        PRet();
+    }
+    if (!(Option.USBKeyboard == NO_KEYBOARD))
+    {
+        PO("KEYBOARD");
+        MMPrintString((char *)KBrdList[(int)Option.USBKeyboard]);
+        if (Option.capslock || Option.numlock != 1 || Option.RepeatStart != 600 || Option.RepeatRate != 150)
+        {
+            PIntComma(Option.capslock);
+            PIntComma(Option.numlock);
+            PIntComma(Option.RepeatStart);
+            PIntComma(Option.RepeatRate);
+        }
+        PRet();
+    }
+#else
+#if PICOMITERP2350
+    if (Option.LOCAL_KEYBOARD)
+        PO3Int("KEYBOARD REPEAT", Option.RepeatStart, Option.RepeatRate);
+#endif
+    if (!(Option.KeyboardConfig == NO_KEYBOARD || Option.KeyboardConfig >= CONFIG_I2C))
+    {
+        PO("KEYBOARD");
+        MMPrintString((char *)KBrdList[(int)Option.KeyboardConfig]);
+        if (Option.capslock || Option.numlock != 1 || Option.repeat != 0b00101100)
+        {
+            PIntComma(Option.capslock);
+            PIntComma(Option.numlock);
+            PIntComma(Option.repeat >> 5);
+            PIntComma(Option.repeat & 0x1f);
+        }
+        PRet();
+    }
+    if (!((Option.KEYBOARD_CLOCK == 11 && Option.KEYBOARD_DATA == 12) || (Option.KEYBOARD_CLOCK == 0 && Option.KEYBOARD_DATA == 0)) && Option.KeyboardConfig != NO_KEYBOARD)
+    {
+        PO("KEYBOARD PINS");
+        MMPrintString((char *)PinDef[Option.KEYBOARD_CLOCK].pinname);
+        MMputchar(',', 0);
+        MMPrintString((char *)PinDef[Option.KEYBOARD_DATA].pinname);
+        PRet();
+    }
+    if (Option.MOUSE_CLOCK)
+    {
+        PO("MOUSE");
+        MMPrintString((char *)PinDef[Option.MOUSE_CLOCK].pinname);
+        MMputchar(',', 0);
+        MMPrintString((char *)PinDef[Option.MOUSE_DATA].pinname);
+        PRet();
+    }
+#endif
+    if (Option.KeyboardConfig == CONFIG_I2C)
+        PO2Str("KEYBOARD", "I2C");
+    if (Option.KeyboardConfig == CONFIG_PICOCALC)
+        PO2Str("KEYBOARD", "PICOCALC");
+#ifdef rp2350
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    /* CYW43 builds: heartbeat LED is on the wireless chip, present on
+       both A and B packages, so don't gate the listing on rp2350a. */
+    if (Option.NoHeartbeat)
+        PO2Str("HEARTBEAT", "OFF");
+#else
+    if (Option.NoHeartbeat && rp2350a)
+        PO2Str("HEARTBEAT", "OFF");
+#endif
+#if defined(PICOMITE)
+    if (Option.LOCAL_KEYBOARD)
+        PO2Str("KEYBOARD", "LOCAL");
+#endif
+#else
+    if (Option.NoHeartbeat)
+        PO2Str("HEARTBEAT", "OFF");
+#endif
+    if (Option.AllPins)
+        PO2Str("PICO", "OFF");
+#ifdef PICOMITEVGA
+#ifdef HDMICUTDOWN
+    if (Option.Resolution == R640x480x8)
+        PO2StrInt("RESOLUTION", "640x480", Option.CPU_Speed);
+    else if (Option.Resolution == R720x400x8)
+        PO2StrInt("RESOLUTION", "720x400", Option.CPU_Speed);
+    else if (Option.Resolution == R800x600)
+        PO2StrInt("RESOLUTION", "800x600", Option.CPU_Speed);
+    else if (Option.Resolution == R848x480)
+        PO2StrInt("RESOLUTION", "848x480", Option.CPU_Speed);
+    else if (Option.Resolution == R800x480)
+        PO2StrInt("RESOLUTION", "800x480", Option.CPU_Speed);
+    else
+        PO2StrInt("RESOLUTION", "1024x600", Option.CPU_Speed);
+#else
+    if (Option.Resolution == R1280x720)
+        PO2StrInt("RESOLUTION", "1280x720", Option.CPU_Speed);
+    if (Option.Resolution == R1024x768)
+        PO2StrInt("RESOLUTION", "1024x768", Option.CPU_Speed);
+    if (Option.Resolution == R800x600)
+        PO2StrInt("RESOLUTION", "800x600", Option.CPU_Speed);
+    if (Option.Resolution == R848x480)
+        PO2StrInt("RESOLUTION", "848x480", Option.CPU_Speed);
+    if (Option.Resolution == R720x400)
+        PO2StrInt("RESOLUTION", "720x400", Option.CPU_Speed);
+    if (Option.Resolution == R1024x600)
+        PO2StrInt("RESOLUTION", "1024x600", Option.CPU_Speed);
+    if (Option.Resolution == R800x480)
+        PO2StrInt("RESOLUTION", "800x480", Option.CPU_Speed);
+    if (Option.Resolution == R640x480f315 || Option.Resolution == R640x480f252 || Option.Resolution == R640x480f378)
+        PO2StrInt("RESOLUTION", "640x480", Option.CPU_Speed);
+#endif
+    if (Option.DISPLAY_TYPE != SCREENMODE1)
+        PO2Int("DEFAULT MODE", Option.DISPLAY_TYPE - SCREENMODE1 + 1);
+    if (Option.Height != 40 || Option.Width != 80)
+        PO3Int("DISPLAY", Option.Height, Option.Width);
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+    /* Option.VRes_reserved is the stored / flash-backed value; the runtime
+       working copy lives in OptionVResreserved. Report the stored one so
+       OPTION LIST reflects what the user actually configured. Append the
+       ", M" multi-touch flag when set so the printed line round-trips
+       back to a valid OPTION SCREEN KEYBOARD command. */
+    if (Option.VRes_reserved)
+    {
+        PO("Screen Keyboard");
+        PInt(Option.VRes_reserved);
+        if (Option.Multi)
+            MMPrintString(", M");
+        MMPrintString("\r\n");
+    }
+#endif
+#ifdef HDMI
+    if (Option.HDMIclock != 2 || Option.HDMId0 != 0 || Option.HDMId1 != 6 || Option.HDMId2 != 4)
+    {
+        PO("HDMI PINS ");
+        PInt(Option.HDMIclock);
+        PIntComma(Option.HDMId0);
+        PIntComma(Option.HDMId1);
+        PIntComma(Option.HDMId2);
+        PRet();
+    }
+#endif
+#else
+    PO2Int("CPUSPEED (KHz)", Option.CPU_Speed);
+    if (Option.DISPLAY_CONSOLE == true)
+    {
+        PO("LCDPANEL CONSOLE");
+        if (Option.DefaultFont != (Option.DISPLAY_TYPE == SCREENMODE2 ? (6 << 4) | 1 : 0x01))
+            PInt((Option.DefaultFont >> 4) + 1);
+        else if (!(Option.DefaultFC == WHITE && Option.DefaultBC == BLACK && Option.BackLightLevel == 100 && Option.NoScroll == 0))
+            MMputchar(',', 1);
+        if (Option.DefaultFC != WHITE)
+            PIntHC(Option.DefaultFC);
+        else if (!(Option.DefaultBC == BLACK && Option.BackLightLevel == 100 && Option.NoScroll == 0))
+            MMputchar(',', 1);
+        if (Option.DefaultBC != BLACK)
+            PIntHC(Option.DefaultBC);
+        else if (!(Option.BackLightLevel == 100 && Option.NoScroll == 0))
+            MMputchar(',', 1);
+        if (Option.BackLightLevel != 100)
+            PIntComma(Option.BackLightLevel);
+        else if (!(Option.BackLightLevel == 100 && Option.NoScroll == 0))
+            MMputchar(',', 1);
+        if (Option.NoScroll != 0)
+            MMPrintString(",NOSCROLL");
+        PRet();
+    }
+    if (Option.Height != 24 || Option.Width != 80)
+        PO3Int("DISPLAY", Option.Height, Option.Width);
+    if (Option.DISPLAY_TYPE == DISP_USER)
+        PO3Int("LCDPANEL USER", HRes, VRes);
+#if PICOMITERP2350
+    if (Option.DISPLAY_TYPE > I2C_PANEL && (Option.DISPLAY_TYPE < DISP_USER || (Option.DISPLAY_TYPE >= NEXTGEN && Option.DISPLAY_TYPE < SSD1963_5_12BUFF)))
+    {
+#else
+    if (Option.DISPLAY_TYPE > I2C_PANEL && Option.DISPLAY_TYPE < DISP_USER)
+    {
+#endif
+        i = Option.DISPLAY_ORIENTATION;
+        if (Option.DISPLAY_TYPE == ST7789 || Option.DISPLAY_TYPE == ST7789A)
+            i = (i + 2) % 4;
+        PO("LCDPANEL");
+        MMPrintString((char *)display_details[Option.DISPLAY_TYPE].name);
+        MMPrintString(", ");
+        MMPrintString((char *)OrientList[(int)i - 1]);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.LCD_CD].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.LCD_Reset].pinname);
+        if (Option.DISPLAY_TYPE != ST7920)
+        {
+            MMputchar(',', 1);
+            ;
+            MMPrintString((char *)PinDef[Option.LCD_CS].pinname);
+        }
+#if PICOMITERP2350
+        if (!(Option.DISPLAY_TYPE <= I2C_PANEL || (Option.DISPLAY_TYPE >= BufferedPanel && Option.DISPLAY_TYPE < NEXTGEN)) && Option.DISPLAY_BL)
+        {
+#else
+        if (!(Option.DISPLAY_TYPE <= I2C_PANEL || Option.DISPLAY_TYPE >= BufferedPanel) && Option.DISPLAY_BL)
+        {
+#endif
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.DISPLAY_BL].pinname);
+        }
+        else if (Option.BGR)
+            MMputchar(',', 1);
+#if PICOMITERP2350
+        if (!(Option.DISPLAY_TYPE <= I2C_PANEL || (Option.DISPLAY_TYPE >= BufferedPanel && Option.DISPLAY_TYPE < NEXTGEN)) && Option.BGR)
+        {
+#else
+        if (!(Option.DISPLAY_TYPE <= I2C_PANEL || Option.DISPLAY_TYPE >= BufferedPanel) && Option.BGR)
+        {
+#endif
+            MMputchar(',', 1);
+            MMPrintString((char *)"INVERT");
+        }
+        if (Option.DISPLAY_TYPE == SSD1306SPI && Option.I2Coffset)
+            PIntComma(Option.I2Coffset);
+        if (Option.DISPLAY_TYPE == N5110 && Option.LCDVOP != 0xC8)
+            PIntComma(Option.LCDVOP);
+        MMPrintString("\r\n");
+    }
+    if (Option.DISPLAY_TYPE > 0 && Option.DISPLAY_TYPE <= I2C_PANEL)
+    {
+        PO("LCDPANEL");
+        MMPrintString((char *)display_details[Option.DISPLAY_TYPE].name);
+        MMPrintString(", ");
+        MMPrintString((char *)OrientList[(int)i - 1]);
+        if (Option.DISPLAY_TYPE == SSD1306I2C && Option.I2Coffset)
+            PIntComma(Option.I2Coffset);
+        MMPrintString("\r\n");
+    }
+#if PICOMITERP2350
+    if ((Option.DISPLAY_TYPE >= SSDPANEL && Option.DISPLAY_TYPE < VIRTUAL) || Option.DISPLAY_TYPE >= SSD1963_5_12BUFF)
+#else
+    if ((Option.DISPLAY_TYPE >= SSDPANEL && Option.DISPLAY_TYPE < VIRTUAL))
+#endif
+    {
+        PO("LCDPANEL");
+        MMPrintString((char *)display_details[Option.DISPLAY_TYPE].name);
+        MMPrintString(", ");
+        MMPrintString((char *)OrientList[(int)i - 1]);
+        if (Option.DISPLAY_BL)
+        {
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.DISPLAY_BL].pinname);
+        }
+#if PICOMITERP2350
+        else if (Option.SSD_DC != (Option.DISPLAY_TYPE > SSD_PANEL_8 && Option.DISPLAY_TYPE < SSD1963_5_12BUFF ? 16 : 13) || Option.SSD_RESET != (Option.DISPLAY_TYPE > SSD_PANEL_8 && Option.DISPLAY_TYPE < SSD1963_5_12BUFF ? 19 : 16) || (Option.SSD_DATA != 1))
+#else
+        else if (Option.SSD_DC != (Option.DISPLAY_TYPE > SSD_PANEL_8 ? 16 : 13) || Option.SSD_RESET != (Option.DISPLAY_TYPE > SSD_PANEL_8 ? 19 : 16) || (Option.SSD_DATA != 1))
+#endif
+            MMputchar(',', 1);
+#if PICOMITERP2350
+        if (Option.SSD_DC != (Option.DISPLAY_TYPE > SSD_PANEL_8 && Option.DISPLAY_TYPE < SSD1963_5_12BUFF ? 16 : 13))
+#else
+        if (Option.SSD_DC != (Option.DISPLAY_TYPE > SSD_PANEL_8 ? 16 : 13))
+#endif
+        {
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[PINMAP[Option.SSD_DC]].pinname);
+        }
+#if PICOMITERP2350
+        else if (Option.SSD_RESET != (Option.DISPLAY_TYPE > SSD_PANEL_8 && Option.DISPLAY_TYPE < SSD1963_5_12BUFF ? 19 : 16) || (Option.SSD_DATA != 1))
+#else
+        else if (Option.SSD_RESET != (Option.DISPLAY_TYPE > SSD_PANEL_8 ? 19 : 16) || (Option.SSD_DATA != 1))
+#endif
+            MMputchar(',', 1);
+        if (Option.SSD_RESET == -1)
+        {
+            MMputchar(',', 1);
+            MMPrintString("NORESET");
+        }
+        else if ((Option.SSD_DATA != 1 || Option.BGR))
+            MMputchar(',', 1);
+        if (Option.BGR)
+        {
+            MMputchar(',', 1);
+            MMPrintString("INVERT");
+        }
+        else if ((Option.SSD_DATA != 1))
+            MMputchar(',', 1);
+        if (Option.SSD_DATA != 1)
+        {
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.SSD_DATA].pinname);
+        }
+        PRet();
+    }
+#if PICOMITERP2350
+    if (Option.DISPLAY_TYPE >= VIRTUAL && Option.DISPLAY_TYPE < NEXTGEN)
+    {
+#else
+    if (Option.DISPLAY_TYPE >= VIRTUAL)
+    {
+#endif
+        PO("LCDPANEL");
+        MMPrintString((char *)display_details[Option.DISPLAY_TYPE].name);
+#if PICOMITERP2350
+        if (Option.DISPLAY_TYPE >= VGA222)
+        {
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.VGA_HSYNC].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.VGA_BLUE].pinname);
+        }
+#endif
+        PRet();
+    }
+    if (strcmp((char *)Option.platform, "PicoCalc") == 0)
+    {
+        if (Option.BACKLIGHT_KBD)
+            PO2Int("BACKLIGHT KBD", Option.BACKLIGHT_KBD); // *EB*
+        if (Option.BACKLIGHT_LCD)
+            PO2Int("BACKLIGHT LCD", Option.BACKLIGHT_LCD); // *EB*
+    }
+    else
+    {
+        if (Option.BackLightLevel != 100)
+            PO2Int("LCD BACKLIGHT", Option.BackLightLevel);
+    }
+
+    if (Option.TOUCH_CS)
+    {
+        PO("TOUCH");
+        if (Option.TOUCH_CAP == 1)
+            (MMPrintString("FT6336 "));
+        else if (Option.TOUCH_CAP == 2)
+            (MMPrintString("GT911 "));
+        MMPrintString((char *)PinDef[Option.TOUCH_CAP ? Option.TOUCH_IRQ : Option.TOUCH_CS].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.TOUCH_CAP ? Option.TOUCH_CS : Option.TOUCH_IRQ].pinname);
+        if (Option.TOUCH_Click)
+        {
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.TOUCH_Click].pinname);
+        }
+        else if (Option.TOUCH_CAP)
+            MMputchar(',', 1);
+        if (Option.TOUCH_CAP)
+        {
+            MMputchar(',', 1);
+            PInt(Option.THRESHOLD_CAP);
+        }
+        MMPrintString("\r\n");
+        if (Option.TOUCH_XZERO != 0 || Option.TOUCH_YZERO != 0)
+        {
+            MMPrintString("GUI CALIBRATE ");
+            PInt(Option.TOUCH_SWAPXY);
+            PIntComma(Option.TOUCH_XZERO);
+            PIntComma(Option.TOUCH_YZERO);
+            PIntComma(Option.TOUCH_XSCALE * 10000);
+            PIntComma(Option.TOUCH_YSCALE * 10000);
+            MMPrintString("\r\n");
+        }
+    }
+#endif
+#ifdef PICOMITEWEB
+    /* WIFI / TCP / UDP / TELNET / TFTP listing — shared across every WEB
+       build. Emitted here (after the PICOMITEVGA/#else split rejoins) rather
+       than inside the non-VGA branch so HDMIWEB (PICOMITEVGA + PICOMITEWEB)
+       lists them too, mirroring the GUI CONTROLS fix below. */
+    if (*Option.SSID)
+    {
+        char password[] = "****************************************************************";
+        password[strlen((char *)Option.PASSWORD)] = 0;
+        PO("WIFI");
+        MMPrintString((char *)Option.SSID);
+        MMputchar(',', 1);
+        MMputchar(' ', 1);
+        MMPrintString(password);
+        MMputchar(',', 1);
+        MMputchar(' ', 1);
+        MMPrintString(Option.hostname);
+        if (*Option.ipaddress)
+        {
+            MMputchar(',', 1);
+            MMputchar(' ', 1);
+            MMPrintString(Option.ipaddress);
+            MMputchar(',', 1);
+            MMputchar(' ', 1);
+            MMPrintString(Option.mask);
+            MMputchar(',', 1);
+            MMputchar(' ', 1);
+            MMPrintString(Option.gateway);
+        }
+        if (Option.wifi_country_code)
+        {
+            MMputchar(',', 1);
+            MMputchar(' ', 1);
+            MMPrintString((char *)wifi_country_to_string(Option.wifi_country_code));
+        }
+        PRet();
+    }
+    if (Option.TCP_PORT && Option.ServerResponceTime != 5000)
+        PO3Int("TCP SERVER PORT", Option.TCP_PORT, Option.ServerResponceTime);
+    if (Option.TCP_PORT && Option.ServerResponceTime == 5000)
+        PO2Int("TCP SERVER PORT", Option.TCP_PORT);
+    if (Option.UDP_PORT && Option.UDPServerResponceTime != 5000)
+        PO3Int("UDP SERVER PORT", Option.UDP_PORT, Option.UDPServerResponceTime);
+    if (Option.UDP_PORT && Option.UDPServerResponceTime == 5000)
+        PO2Int("UDP SERVER PORT", Option.UDP_PORT);
+    if (Option.Telnet == 1)
+        PO2Str("TELNET", "CONSOLE ON");
+    if (Option.Telnet == -1)
+        PO2Str("TELNET", "CONSOLE ONLY");
+    if (Option.disabletftp == 1)
+        PO2Str("TFTP", "OFF");
+#endif
+#ifdef GUICONTROLS
+    /* Report GUI CONTROLS count on every build that compiles the
+       feature in — including PICOMITEVGA (VGA/HDMI RP2350), which
+       previously skipped this line because the print sat inside the
+       non-VGA branch above. */
+    if (Option.MaxCtrls)
+        PO2Int("GUI CONTROLS", Option.MaxCtrls - 1);
+#endif
+#ifndef PICOMITEVGA
+    if (Option.SD_CS)
+    {
+        PO("SDCARD");
+        MMPrintString((char *)PinDef[Option.SD_CS].pinname);
+        if (Option.SD_CLK_PIN)
+        {
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SD_CLK_PIN].pinname);
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SD_MOSI_PIN].pinname);
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SD_MISO_PIN].pinname);
+        }
+        MMPrintString("\r\n");
+    }
+#else
+    if (Option.SD_CS)
+    {
+        PO("SDCARD");
+        MMPrintString((char *)PinDef[Option.SD_CS].pinname);
+        if (Option.SD_CLK_PIN)
+        {
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SD_CLK_PIN].pinname);
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SD_MOSI_PIN].pinname);
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SD_MISO_PIN].pinname);
+        }
+        else
+        {
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SYSTEM_CLK].pinname);
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SYSTEM_MOSI].pinname);
+            MMPrintString(", ");
+            MMPrintString((char *)PinDef[Option.SYSTEM_MISO].pinname);
+        }
+        MMPrintString("\r\n");
+    }
+#ifndef HDMI
+    if (Option.VGA_BLUE != 24 || Option.VGA_HSYNC != 21)
+    {
+        PO("VGA PINS");
+        MMPrintString((char *)PinDef[Option.VGA_HSYNC].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.VGA_BLUE].pinname);
+        PRet();
+    }
+#endif
+#endif
+    if (Option.CombinedCS)
+        PO2Str("SDCARD", "COMBINED CS");
+#ifdef USBKEYBOARD
+    if (!(Option.RepeatStart == 600 && Option.RepeatRate == 150))
+    {
+        char buff[40] = {0};
+        sprintf(buff, "OPTION KEYBOARD REPEAT %d,%d\r\n", Option.RepeatStart, Option.RepeatRate);
+        MMPrintString(buff);
+    }
+#endif
+    if (Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk)
+    {
+        PO("AUDIO");
+        if (Option.AUDIO_L)
+        {
+            MMPrintString((char *)PinDef[Option.AUDIO_L].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_R].pinname);
+        }
+        else if (Option.audio_i2s_data)
+        {
+            MMPrintString((char *)"I2S ");
+            MMPrintString((char *)PinDef[Option.audio_i2s_bclk].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.audio_i2s_data].pinname);
+        }
+#if !defined(PICOMITEMIN)
+        else if (
+            Option.AUDIO_DCS_PIN && Option.AUDIO_MISO_PIN)
+        {
+            MMPrintString((char *)"VS1053 ");
+            MMPrintString((char *)PinDef[Option.AUDIO_CLK_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_MOSI_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_MISO_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_CS_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_DCS_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_DREQ_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_RESET_PIN].pinname);
+        }
+
+        else
+        {
+            MMPrintString((char *)"SPI ");
+            MMPrintString((char *)PinDef[Option.AUDIO_CS_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_CLK_PIN].pinname);
+            MMputchar(',', 1);
+            MMPrintString((char *)PinDef[Option.AUDIO_MOSI_PIN].pinname);
+        }
+#endif
+        MMPrintString("', ON PWM CHANNEL ");
+        PInt(Option.AUDIO_SLICE);
+        MMPrintString("\r\n");
+    }
+    if (Option.RTC)
+        PO2Str("RTC AUTO", "ENABLE");
+
+    if (Option.INT1pin != 9 || Option.INT2pin != 10 || Option.INT3pin != 11 || Option.INT4pin != 12)
+    {
+        PO("COUNT");
+        MMPrintString((char *)PinDef[Option.INT1pin].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.INT2pin].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.INT3pin].pinname);
+        MMputchar(',', 1);
+        ;
+        MMPrintString((char *)PinDef[Option.INT4pin].pinname);
+        PRet();
+    }
+    if (Option.GPSTX)
+    {
+        MMPrintString("OPTION GPS ");
+        MMPrintString((char *)PinDef[Option.GPSTX].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.GPSRX].pinname);
+        if (Option.GPSBaud != 9600)
+            PIntComma(Option.GPSBaud);
+        PRet();
+    }
+
+    if (Option.modbuff)
+    {
+        PO("MODBUFF ENABLE ");
+        if (Option.modbuffsize != 128)
+            PInt(Option.modbuffsize);
+        PRet();
+    }
+    if (*Option.F1key)
+        PO2Str("F1", (const char *)Option.F1key);
+    if (*Option.F5key)
+        PO2Str("F5", (const char *)Option.F5key);
+    if (*Option.F6key)
+        PO2Str("F6", (const char *)Option.F6key);
+    if (*Option.F7key)
+        PO2Str("F7", (const char *)Option.F7key);
+    if (*Option.F8key)
+        PO2Str("F8", (const char *)Option.F8key);
+    if (*Option.F9key)
+        PO2Str("F9", (const char *)Option.F9key);
+    if (*Option.platform && *Option.platform != 0xFF)
+        PO2Str("PLATFORM", (const char *)Option.platform);
+    if (Option.DefaultFont != 1)
+        PO3Int("DEFAULT FONT", (Option.DefaultFont >> 4) + 1, Option.DefaultFont & 0xF);
+#ifdef rp2350
+    if (Option.PSRAM_CS_PIN != 0)
+        PO2Str("PSRAM PIN", PinDef[Option.PSRAM_CS_PIN].pinname);
+#endif
+#if !(defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+    /* CYW43 builds have no GPIO heartbeat (LED is on the wireless chip)
+       so never report a HEARTBEAT PIN, even for legacy saved options
+       that still hold the old GP25 default. */
+    if ((Option.heartbeatpin != 43 && !Option.NoHeartbeat)
+#ifdef rp2350
+        || (Option.heartbeatpin == 43 && !rp2350a && !Option.NoHeartbeat)
+#endif
+    )
+        PO2Str("HEARTBEAT PIN", PinDef[Option.heartbeatpin].pinname);
+#endif
+}
+
+int MIPS16 checkslice(int pin1, int pin2, int ignore)
+{
+    if ((PinDef[pin1].slice & 0xf) != (PinDef[pin2].slice & 0xf))
+        error("Pins not on same PWM slice");
+    if (!ignore)
+    {
+        if (!((PinDef[pin1].slice - PinDef[pin2].slice == 128) || (PinDef[pin2].slice - PinDef[pin1].slice == 128)))
+            error("Pins both same channel");
+    }
+    return PinDef[pin1].slice & 0xf;
+}
+
+/*  setterminal(height, width)
+ *  ---------------------------
+ *  Emit the VT100/xterm "resize window" escape sequence (CSI 8 ; H ; W t) on the
+ *  serial console so that an attached terminal emulator (Tera Term, PuTTY,
+ *  xterm, etc.) is asked to resize its window to `height` rows by `width`
+ *  columns. This is purely advisory: a real serial terminal will honour it,
+ *  the embedded LCD console ignores it.
+ *
+ *  Note: this function ensures the terminal is in autowrap mode (DECAWM
+ *  on, CSI ?7h) because the command-line editor (`EditInputLine`) relies
+ *  on natural autowrap when long lines are entered on a serial console.
+ *  Callers that need autowrap *disabled* (the full-screen editor / FM)
+ *  must emit their own CSI ?7l on entry and CSI ?7h on exit.
+ *
+ *  Call sites:
+ *    - OPTION LCDPANEL NOCONSOLE  : reset terminal back to 80x24 default.
+ *    - OPTION LCDPANEL CONSOLE    : grow terminal to LCD console size if >80x24.
+ *    - OPTION DISPLAY DISABLE     : reset terminal back to 80x24 default.
+ *    - OPTION DISPLAY h,w         : resize terminal to match new console size.
+ *    - EDIT / EDITFILE entry      : grow terminal to fit the editor.
+ *    - FM (file manager) entry    : grow terminal to fit FM.
+ */
+void MIPS16 setterminal(int height, int width)
+{
+    char sp[20] = {0};
+    strcpy(sp, "\033[8;");
+    IntToStr(&sp[strlen(sp)], height, 10);
+    strcat(sp, ";");
+    IntToStr(&sp[strlen(sp)], width, 10);
+    strcat(sp, "t");
+    SSPrintString(sp);         //
+    SSPrintString("\033[?7h"); // ensure autowrap (DECAWM) is enabled - command-line editor needs it
+}
+#ifdef USBKEYBOARD
+void fun_keydown(void)
+{
+    int i, n = getint(ep, 0, 8);
+    iret = 0;
+    while (getConsole() != -1)
+        ; // clear anything in the input buffer
+    if (n == 8)
+    {
+        iret = (caps_lock ? 1 : 0) |
+               (num_lock ? 2 : 0) |
+               (scroll_lock ? 4 : 0);
+    }
+    else if (n)
+    {
+        iret = KeyDown[n - 1]; // this is the character
+    }
+    else
+    {
+        for (i = 0; i < 6; i++)
+        {
+            if (KeyDown[i])
+                iret++;
+        }
+    }
+    targ = T_INT;
+}
+#else
+void fun_keydown(void)
+{
+    int i, n = getint(ep, 0, 8);
+    iret = 0;
+    while (getConsole() != -1)
+        ; // clear anything in the input buffer
+    if (n == 8)
+    {
+        iret = (CapsLock ? 1 : 0) |
+               (NumLock ? 2 : 0);
+    }
+    else if (n)
+    {
+        iret = PS2KeyDown[n - 1];
+    }
+    else
+    {
+        for (i = 0; i < 6; i++)
+        {
+            if (PS2KeyDown[i])
+                iret++;
+        }
+    }
+    targ = T_INT;
+}
+void MIPS16 cmd_update(void)
+{
+    uint gpio_mask = 0u;
+#ifdef PICOMITEBT
+    /* No USB CDC interface in BT build — nothing to disable, just reboot. */
+    reset_usb_boot(gpio_mask, 0u);
+#else
+    reset_usb_boot(gpio_mask, PICO_STDIO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK);
+#endif
+}
+#endif
+void MIPS16 disable_systemspi(void)
+{
+    if (!IsInvalidPin(Option.SYSTEM_MOSI))
+        ExtCurrentConfig[Option.SYSTEM_MOSI] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_MISO))
+        ExtCurrentConfig[Option.SYSTEM_MISO] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_CLK))
+        ExtCurrentConfig[Option.SYSTEM_CLK] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_MOSI))
+        ExtCfg(Option.SYSTEM_MOSI, EXT_NOT_CONFIG, 0);
+    if (!IsInvalidPin(Option.SYSTEM_MISO))
+        ExtCfg(Option.SYSTEM_MISO, EXT_NOT_CONFIG, 0);
+    if (!IsInvalidPin(Option.SYSTEM_CLK))
+        ExtCfg(Option.SYSTEM_CLK, EXT_NOT_CONFIG, 0);
+#if PICOMITERP2350
+    if (Option.LCD_CLK == Option.SYSTEM_CLK)
+    {
+        Option.LCD_MOSI = 0;
+        Option.LCD_MISO = 0;
+        Option.LCD_CLK = 0;
+    }
+#endif
+    Option.SYSTEM_MOSI = 0;
+    Option.SYSTEM_MISO = 0;
+    Option.SYSTEM_CLK = 0;
+}
+#if PICOMITERP2350
+void MIPS16 disable_lcdspi(void)
+{
+    if (!IsInvalidPin(Option.LCD_MOSI))
+        ExtCurrentConfig[Option.LCD_MOSI] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.LCD_MISO))
+        ExtCurrentConfig[Option.LCD_MISO] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.LCD_CLK))
+        ExtCurrentConfig[Option.LCD_CLK] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.LCD_MOSI))
+        ExtCfg(Option.LCD_MOSI, EXT_NOT_CONFIG, 0);
+    if (!IsInvalidPin(Option.LCD_MISO))
+        ExtCfg(Option.LCD_MISO, EXT_NOT_CONFIG, 0);
+    if (!IsInvalidPin(Option.LCD_CLK))
+        ExtCfg(Option.LCD_CLK, EXT_NOT_CONFIG, 0);
+    Option.LCD_MOSI = Option.SYSTEM_MOSI ? Option.SYSTEM_MOSI : 0;
+    Option.LCD_MISO = Option.SYSTEM_MISO ? Option.SYSTEM_MISO : 0;
+    Option.LCD_CLK = Option.SYSTEM_CLK ? Option.SYSTEM_CLK : 0;
+}
+#endif
+void MIPS16 disable_systemi2c(void)
+{
+    if (!IsInvalidPin(Option.SYSTEM_I2C_SCL))
+        ExtCurrentConfig[Option.SYSTEM_I2C_SCL] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_I2C_SDA))
+        ExtCurrentConfig[Option.SYSTEM_I2C_SDA] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_I2C_SCL))
+        ExtCfg(Option.SYSTEM_I2C_SCL, EXT_NOT_CONFIG, 0);
+    if (!IsInvalidPin(Option.SYSTEM_I2C_SDA))
+        ExtCfg(Option.SYSTEM_I2C_SDA, EXT_NOT_CONFIG, 0);
+    Option.SYSTEM_I2C_SCL = 0;
+    Option.SYSTEM_I2C_SDA = 0;
+}
+void MIPS16 disable_sd(void)
+{
+    if (!IsInvalidPin(Option.SD_CS))
+        ExtCurrentConfig[Option.SD_CS] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SD_CS))
+        ExtCfg(Option.SD_CS, EXT_NOT_CONFIG, 0);
+    Option.SD_CS = 0;
+    if (!IsInvalidPin(Option.SD_CLK_PIN))
+        ExtCurrentConfig[Option.SD_CLK_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SD_CLK_PIN))
+        ExtCfg(Option.SD_CLK_PIN, EXT_NOT_CONFIG, 0);
+    Option.SD_CLK_PIN = 0;
+    if (!IsInvalidPin(Option.SD_MOSI_PIN))
+        ExtCurrentConfig[Option.SD_MOSI_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SD_MOSI_PIN))
+        ExtCfg(Option.SD_MOSI_PIN, EXT_NOT_CONFIG, 0);
+    Option.SD_MOSI_PIN = 0;
+    if (!IsInvalidPin(Option.SD_MISO_PIN))
+        ExtCurrentConfig[Option.SD_MISO_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SD_MISO_PIN))
+        ExtCfg(Option.SD_MISO_PIN, EXT_NOT_CONFIG, 0);
+    Option.SD_MISO_PIN = 0;
+    Option.CombinedCS = 0;
+#ifdef PICOMITEVGA
+    if (!IsInvalidPin(Option.SYSTEM_CLK))
+        ExtCurrentConfig[Option.SYSTEM_CLK] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_CLK))
+        ExtCfg(Option.SYSTEM_CLK, EXT_NOT_CONFIG, 0);
+    Option.SYSTEM_CLK = 0;
+    if (!IsInvalidPin(Option.SYSTEM_MISO))
+        ExtCurrentConfig[Option.SYSTEM_MISO] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_MISO))
+        ExtCfg(Option.SYSTEM_MISO, EXT_NOT_CONFIG, 0);
+    Option.SYSTEM_MISO = 0;
+    if (!IsInvalidPin(Option.SYSTEM_MOSI))
+        ExtCurrentConfig[Option.SYSTEM_MOSI] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.SYSTEM_MOSI))
+        ExtCfg(Option.SYSTEM_MOSI, EXT_NOT_CONFIG, 0);
+    Option.SYSTEM_MOSI = 0;
+#endif
+}
+void MIPS16 disable_audio(void)
+{
+    if (!IsInvalidPin(Option.AUDIO_L))
+        ExtCurrentConfig[Option.AUDIO_L] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_L))
+        ExtCfg(Option.AUDIO_L, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_R))
+        ExtCurrentConfig[Option.AUDIO_R] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_R))
+        ExtCfg(Option.AUDIO_R, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_CLK_PIN))
+        ExtCurrentConfig[Option.AUDIO_CLK_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_CLK_PIN))
+        ExtCfg(Option.AUDIO_CLK_PIN, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_CS_PIN))
+        ExtCurrentConfig[Option.AUDIO_CS_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_CS_PIN))
+        ExtCfg(Option.AUDIO_CS_PIN, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_DCS_PIN))
+        ExtCurrentConfig[Option.AUDIO_DCS_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_DCS_PIN))
+        ExtCfg(Option.AUDIO_DCS_PIN, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_DREQ_PIN))
+        ExtCurrentConfig[Option.AUDIO_DREQ_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_DREQ_PIN))
+        ExtCfg(Option.AUDIO_DREQ_PIN, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_MOSI_PIN))
+        ExtCurrentConfig[Option.AUDIO_MOSI_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_MOSI_PIN))
+        ExtCfg(Option.AUDIO_MOSI_PIN, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_MISO_PIN))
+        ExtCurrentConfig[Option.AUDIO_MISO_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_MISO_PIN))
+        ExtCfg(Option.AUDIO_MISO_PIN, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.AUDIO_RESET_PIN))
+        ExtCurrentConfig[Option.AUDIO_RESET_PIN] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.AUDIO_RESET_PIN))
+        ExtCfg(Option.AUDIO_RESET_PIN, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.audio_i2s_bclk))
+        ExtCurrentConfig[Option.audio_i2s_bclk] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.audio_i2s_bclk))
+        ExtCfg(Option.audio_i2s_bclk, EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(PINMAP[PinDef[Option.audio_i2s_bclk].GPno + 1]))
+        ExtCurrentConfig[PINMAP[PinDef[Option.audio_i2s_bclk].GPno + 1]] = EXT_DIG_IN;
+    if (!IsInvalidPin(PINMAP[PinDef[Option.audio_i2s_bclk].GPno + 1]))
+        ExtCfg(PINMAP[PinDef[Option.audio_i2s_bclk].GPno + 1], EXT_NOT_CONFIG, 0);
+
+    if (!IsInvalidPin(Option.audio_i2s_data))
+        ExtCurrentConfig[Option.audio_i2s_data] = EXT_DIG_IN;
+    if (!IsInvalidPin(Option.audio_i2s_data))
+        ExtCfg(Option.audio_i2s_data, EXT_NOT_CONFIG, 0);
+
+    Option.AUDIO_L = 0;
+    Option.AUDIO_R = 0;
+    Option.AUDIO_CLK_PIN = 0;
+    Option.AUDIO_CS_PIN = 0;
+    Option.AUDIO_DCS_PIN = 0;
+    Option.AUDIO_DREQ_PIN = 0;
+    Option.AUDIO_RESET_PIN = 0;
+    Option.AUDIO_MOSI_PIN = 0;
+    Option.AUDIO_MISO_PIN = 0;
+    Option.audio_i2s_bclk = 0;
+    Option.audio_i2s_data = 0;
+    Option.AUDIO_SLICE = 99;
+}
+#ifndef PICOMITEVGA
+void DrawBufferUser(int x1, int y1, int x2, int y2, unsigned char *c)
+{
+    for (int y = y1; y <= y2 && y < VRes; y++)
+    {
+        for (int x = x1; x <= x2 && x < HRes; x++)
+        {
+            int colour = *c++;
+            colour |= ((*c++) << 8);
+            colour |= ((*c++) << 16);
+            DrawRectangle(x, y, x, y, colour);
+        }
+    }
+}
+void MIPS16 ConfigDisplayUser(unsigned char *tp)
+{
+    getcsargs(&tp, 13);
+    if (checkstring(argv[0], (unsigned char *)"USER"))
+    {
+        if (argc != 5)
+            SyntaxError();
+        if (Option.DISPLAY_TYPE)
+            error("Display already configured");
+        if (argc != 5)
+            StandardError(2);
+        HRes = DisplayHRes = getint(argv[2], 1, 10000);
+        VRes = DisplayVRes = getint(argv[4], 1, 10000);
+        Option.DISPLAY_TYPE = DISP_USER;
+        // setup the pointers to the drawing primitives
+        DrawRectangle = DrawRectangleUser;
+        DrawBitmap = DrawBitmapUser;
+        DrawPixel = DrawPixelNormal;
+        DrawBuffer = DrawBufferUser;
+        return;
+    }
+}
+void MIPS16 clear320(void)
+{
+#if PICOMITERP2350
+    if (Option.DISPLAY_TYPE >= SSD1963_5_12BUFF)
+    {
+        screen320 = 0;
+        HRes = 400;
+        return;
+    }
+#endif
+    if (SPI480)
+    {
+        if (Option.DISPLAY_ORIENTATION & 1)
+        {
+            HRes = DisplayHRes;
+            VRes = DisplayVRes;
+        }
+        else
+        {
+            HRes = DisplayVRes;
+            VRes = DisplayHRes;
+        }
+        return;
+    }
+    screen320 = 0;
+    DrawRectangle = DrawRectangleSSD1963;
+    DrawBitmap = DrawBitmapSSD1963;
+    DrawBuffer = DrawBufferSSD1963;
+    ReadBuffer = ReadBufferSSD1963;
+    if (SSD16TYPE || Option.DISPLAY_TYPE == IPS_4_16)
+    {
+        DrawBLITBuffer = DrawBLITBufferSSD1963;
+        ReadBLITBuffer = ReadBLITBufferSSD1963;
+    }
+    else
+    {
+        DrawBLITBuffer = DrawBufferSSD1963;
+        ReadBLITBuffer = ReadBufferSSD1963;
+    }
+    if (Option.DISPLAY_TYPE != SSD1963_4_16)
+    {
+        if (Option.DISPLAY_ORIENTATION & 1)
+        {
+            HRes = 800;
+            VRes = 480;
+        }
+        else
+        {
+            HRes = 480;
+            VRes = 800;
+        }
+    }
+    else
+    {
+        if (Option.DISPLAY_ORIENTATION & 1)
+        {
+            HRes = 480;
+            VRes = 272;
+        }
+        else
+        {
+            HRes = 272;
+            VRes = 480;
+        }
+    }
+    FreeMemorySafe((void **)&buff320);
+    return;
+}
+
+#endif
+bool MIPS16 testMODBUFF(bool proposed, int proposedsize, bool noask)
+{
+    if (!((Option.modbuff == proposed && Option.modbuffsize == proposedsize) || noask))
+    {
+        MMPrintString("\r\nThis erases everything in flash including the A: drive - are you sure (Y/N) ? ");
+        int i;
+        while ((i = MMInkey()) == -1)
+        {
+        };
+        putConsole(i, 1);
+        if (mytoupper(i) != 'Y')
+        {
+            memset(inpbuf, 0, STRINGSIZE);
+            longjmp(mark, 1);
+        }
+        else
+        {
+            ResetAllFlash();
+            Option.modbuff = proposed;
+            Option.modbuffsize = proposedsize;
+            return true;
+        }
+    }
+    ResetOptions(true);
+    Option.modbuff = proposed;
+    Option.modbuffsize = proposedsize;
+    return false;
+}
+void doreset(int format)
+{
+    SoftReset(format == 2 ? RESET_PICOCALCINIT : (format ? RESET_FLASHSTORAGE : SOFT_RESET));
+}
+void MIPS16 configure(unsigned char *p, bool noask)
+{
+    bool format = false;
+    if (!*p)
+    {
+        format = testMODBUFF(false, 0, false);
+        doreset(format);
+    }
+    else
+    {
+        if (checkstring(p, (unsigned char *)"LIST"))
+        {
+#ifdef rp2350
+            MMPrintString("PICO COMPUTER 3\r\n");
+#endif
+#ifdef PICOMITEVGA
+#ifndef HDMI
+#ifdef USBKEYBOARD
+            MMPrintString("CMM1.5\r\n");
+#else
+            MMPrintString("PICOMITEVGA V1.1\r\n");
+            MMPrintString("PICOMITEVGA V1.0\r\n");
+            MMPrintString("VGA Design 1\r\n");
+            MMPrintString("VGA Design 2\r\n");
+            MMPrintString("SWEETIEPI\r\n");
+            MMPrintString("VGA Basic\r\n");
+#endif
+#else
+#ifdef USBKEYBOARD
+            MMPrintString("HDMIUSB\r\n");
+            MMPrintString("OLIMEX USB\r\n");
+            MMPrintString("PICO COMPUTER\r\n");
+            MMPrintString("HDMIUSBI2S\r\n");
+
+            MMPrintString("OLIMEX\r\n");
+            MMPrintString("HDMIBasic\r\n");
+#endif
+#endif
+#endif
+#if defined(PICOMITE) || defined(PICOMITEWEB)
+#if defined(rp2350)
+            MMPrintString("Palm Pico\r\n");
+#endif
+#ifndef USBKEYBOARD
+            MMPrintString("Game*Mite\r\n");
+            MMPrintString("Pico-ResTouch-LCD-3.5\r\n");
+            MMPrintString("Pico-ResTouch-LCD-2.8\r\n");
+            MMPrintString("PICO BACKPACK\r\n");
+            MMPrintString("PicoCalc\r\n");
+#ifndef PICOMITEWEB
+            MMPrintString("RP2040-LCD-1.28\r\n");
+            MMPrintString("RP2040LCD-0.96\r\n");
+            MMPrintString("RP2040-GEEK\r\n");
+#endif
+#else
+            MMPrintString("USB Edition V1.0\r\n");
+#endif
+#endif
+            return;
+        }
+#ifdef rp2350
+        if (checkstring(p, (unsigned char *)"PICO COMPUTER 3"))
+        {
+            if (rp2350a)
+                error("RP350B chips only");
+            format = testMODBUFF(true, 512, false);
+            strcpy((char *)Option.platform, "PICO COMPUTER 3");
+#if !(defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH) || defined(PICOMITEHDMIWEB))
+            Option.heartbeatpin = PINMAP[25];
+#endif
+            Option.NoHeartbeat = false;
+            Option.ColourCode = 1;
+            Option.audio_i2s_bclk = PINMAP[10];
+            Option.audio_i2s_data = PINMAP[22];
+            Option.AUDIO_SLICE = 11;
+            Option.SD_CS = PINMAP[33];
+            Option.SD_CLK_PIN = PINMAP[30];
+            Option.SD_MOSI_PIN = PINMAP[31];
+            Option.SD_MISO_PIN = PINMAP[28];
+            Option.SYSTEM_I2C_SDA = PINMAP[20];
+            Option.SYSTEM_I2C_SCL = PINMAP[21];
+            Option.RTC = true;
+#ifdef HDMI
+            Option.HDMIclock = 1;
+            Option.HDMId0 = 3;
+            Option.HDMId1 = 5;
+            Option.HDMId2 = 7;
+#endif
+#if defined PICOMITEVGA && !defined(HDMI)
+            Option.VGA_HSYNC = PINMAP[0];
+            Option.VGA_BLUE = PINMAP[2];
+#endif
+#ifdef USBKEYBOARD
+            Option.SerialTX = PINMAP[8];
+            Option.SerialRX = PINMAP[9];
+            Option.SerialConsole = 2;
+#else
+#endif
+            Option.PSRAM_CS_PIN = PINMAP[47];
+            Option.INT1pin = PINMAP[34];
+            Option.INT2pin = PINMAP[35];
+            Option.INT3pin = PINMAP[36];
+            Option.INT4pin = PINMAP[37];
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
+#ifdef PICOMITEVGA
+#ifndef HDMI
+#ifdef USBKEYBOARD
+        if (checkstring(p, (unsigned char *)"CMM1.5"))
+        {
+            format = testMODBUFF(true, 512, false);
+            Option.CPU_Speed = CPUFreqs[R640x480f252];
+            Option.AllPins = 1;
+            Option.ColourCode = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[14];
+            Option.SYSTEM_I2C_SCL = PINMAP[15];
+            Option.RTC = true;
+            Option.SD_CS = PINMAP[13];
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[12];
+            Option.VGA_HSYNC = PINMAP[23];
+            Option.VGA_BLUE = PINMAP[18];
+            Option.AUDIO_L = PINMAP[16];
+            Option.AUDIO_R = PINMAP[17];
+            Option.modbuffsize = 512;
+            Option.modbuff = true;
+            Option.AUDIO_SLICE = checkslice(PINMAP[16], PINMAP[17], 0);
+            strcpy((char *)Option.platform, "CMM1.5");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#else
+        if (checkstring(p, (unsigned char *)"PICOMITEVGA V1.1"))
+        {
+            format = testMODBUFF(true, 512, false);
+            Option.CPU_Speed = CPUFreqs[R640x480f252];
+            Option.AllPins = 1;
+            Option.ColourCode = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[14];
+            Option.SYSTEM_I2C_SCL = PINMAP[15];
+            Option.RTC = true;
+            Option.SD_CS = PINMAP[13];
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[12];
+            Option.VGA_HSYNC = PINMAP[16];
+            Option.VGA_BLUE = PINMAP[18];
+            Option.AUDIO_CS_PIN = PINMAP[24];
+            Option.AUDIO_CLK_PIN = PINMAP[22];
+            Option.AUDIO_MOSI_PIN = PINMAP[23];
+            Option.AUDIO_SLICE = checkslice(PINMAP[22], PINMAP[22], 1);
+            strcpy((char *)Option.platform, "PICOMITEVGA V1.1");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"PICOMITEVGA V1.0"))
+        {
+            format = testMODBUFF(true, 512, false);
+            Option.CPU_Speed = CPUFreqs[R640x480f252];
+            Option.AllPins = 1;
+            Option.ColourCode = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[14];
+            Option.SYSTEM_I2C_SCL = PINMAP[15];
+            Option.RTC = true;
+            Option.SD_CS = PINMAP[13];
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[12];
+            Option.VGA_HSYNC = PINMAP[16];
+            Option.VGA_BLUE = PINMAP[18];
+            Option.AUDIO_L = PINMAP[22];
+            Option.AUDIO_R = PINMAP[23];
+            Option.AUDIO_SLICE = checkslice(PINMAP[22], PINMAP[23], 0);
+            strcpy((char *)Option.platform, "PICOMITEVGA V1.0");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"VGA DESIGN 1"))
+        {
+            format = testMODBUFF(false, 0, false);
+            Option.CPU_Speed = CPUFreqs[R640x480f252];
+            Option.ColourCode = 1;
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[12];
+            Option.SD_CS = PINMAP[13];
+            Option.VGA_HSYNC = PINMAP[16];
+            Option.VGA_BLUE = PINMAP[18];
+            strcpy((char *)Option.platform, "VGA Design 1");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"VGA DESIGN 2"))
+        {
+            format = testMODBUFF(true, 192, false);
+            Option.CPU_Speed = CPUFreqs[R640x480f252];
+            Option.ColourCode = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[14];
+            Option.SYSTEM_I2C_SCL = PINMAP[15];
+            Option.RTC = true;
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[12];
+            Option.SD_CS = PINMAP[13];
+            Option.VGA_HSYNC = PINMAP[16];
+            Option.VGA_BLUE = PINMAP[18];
+            Option.AUDIO_L = PINMAP[6];
+            Option.AUDIO_R = PINMAP[7];
+            Option.AUDIO_SLICE = checkslice(PINMAP[6], PINMAP[7], 0);
+            strcpy((char *)Option.platform, "VGA Design 2");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        /*OPTION PLATFORM "SWEETIEPI"
+        OPTION CPUSPEED 252000
+        OPTION PICO OFF
+        OPTION SYSTEM I2C GP0, GP1
+        OPTION SDCARD GP29, GP3, GP4, GP2
+        OPTION AUDIO SPI GP5, GP6, GP7
+        OPTION VGA PINS GP14, GP10*/
+        if (checkstring(p, (unsigned char *)"SWEETIEPI"))
+        {
+            format = testMODBUFF(true, 192, false);
+            Option.AllPins = 1;
+            Option.ColourCode = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[0];
+            Option.SYSTEM_I2C_SCL = PINMAP[1];
+            Option.SD_CS = PINMAP[29];
+            Option.SD_CLK_PIN = PINMAP[3];
+            Option.SD_MOSI_PIN = PINMAP[4];
+            Option.SD_MISO_PIN = PINMAP[2];
+            Option.VGA_HSYNC = PINMAP[14];
+            Option.VGA_BLUE = PINMAP[10];
+            Option.AUDIO_CS_PIN = PINMAP[5];
+            Option.AUDIO_CLK_PIN = PINMAP[6];
+            Option.AUDIO_MOSI_PIN = PINMAP[7];
+            Option.AUDIO_SLICE = checkslice(PINMAP[6], PINMAP[6], 1);
+            strcpy((char *)Option.platform, "SWEETIEPI");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        /*OPTION PLATFORM VGA BASIC
+
+        option reset
+        option vga pins GP16, GP18
+        option sdcard GP14,  GP13, GP15, GP12
+        option audio GP6, GP7
+        option system i2c GP26, GP27*/
+        if (checkstring(p, (unsigned char *)"VGA BASIC"))
+        {
+            format = testMODBUFF(true, 192, false);
+            Option.ColourCode = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[0];
+            Option.SYSTEM_I2C_SCL = PINMAP[1];
+            Option.SD_CS = PINMAP[14];
+            Option.SD_CLK_PIN = PINMAP[13];
+            Option.SD_MOSI_PIN = PINMAP[15];
+            Option.SD_MISO_PIN = PINMAP[12];
+            Option.VGA_HSYNC = PINMAP[16];
+            Option.VGA_BLUE = PINMAP[18];
+            Option.AUDIO_L = PINMAP[6];
+            Option.AUDIO_R = PINMAP[7];
+            Option.AUDIO_SLICE = checkslice(PINMAP[6], PINMAP[7], 0);
+            strcpy((char *)Option.platform, "VGA BASIC");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
+#else
+#ifdef USBKEYBOARD
+        /*
+        OPTION SERIAL CONSOLE COM2,GP8,GP9
+        OPTION SYSTEM I2C GP20,GP21
+        OPTION FLASH SIZE 4194304
+        OPTION COLOURCODE ON
+        OPTION KEYBOARD US
+        OPTION CPUSPEED (KHz) 315000
+        OPTION SDCARD GP22, GP26, GP27, GP28
+        OPTION AUDIO GP10,GP11', ON PWM CHANNEL 5
+        OPTION RTC AUTO ENABLE
+        OPTION MODBUFF ENABLE  192
+        OPTION PLATFORM HDMIUSB
+        */
+        if (checkstring(p, (unsigned char *)"HDMIUSB") || checkstring(p, (unsigned char *)"PICO COMPUTER"))
+        {
+            format = testMODBUFF(true, 192, false);
+            if (checkstring(p, (unsigned char *)"HDMIUSB"))
+                strcpy((char *)Option.platform, "HDMIUSB");
+            else
+                strcpy((char *)Option.platform, "PICO COMPUTER");
+            Option.ColourCode = 1;
+            Option.CPU_Speed = Freq480P;
+            Option.SD_CS = PINMAP[22];
+            Option.SD_CLK_PIN = PINMAP[26];
+            Option.SD_MOSI_PIN = PINMAP[27];
+            Option.SD_MISO_PIN = PINMAP[28];
+            Option.AUDIO_L = PINMAP[10];
+            Option.AUDIO_R = PINMAP[11];
+            Option.AUDIO_SLICE = checkslice(PINMAP[10], PINMAP[11], 0);
+            Option.SYSTEM_I2C_SDA = PINMAP[20];
+            Option.SYSTEM_I2C_SCL = PINMAP[21];
+            Option.RTC = true;
+            Option.SerialTX = PINMAP[8];
+            Option.SerialRX = PINMAP[9];
+            Option.SerialConsole = 2;
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"HDMIUSBI2S"))
+        {
+            if (rp2350a)
+                error("RP350B chips only");
+            format = testMODBUFF(true, 512, false);
+            strcpy((char *)Option.platform, "HDMIUSBI2S");
+            Option.heartbeatpin = PINMAP[25];
+            Option.NoHeartbeat = false;
+            Option.ColourCode = 1;
+            Option.audio_i2s_bclk = PINMAP[10];
+            Option.audio_i2s_data = PINMAP[22];
+            Option.AUDIO_SLICE = 11;
+            Option.SD_CS = PINMAP[29];
+            Option.SD_CLK_PIN = PINMAP[30];
+            Option.SD_MOSI_PIN = PINMAP[31];
+            Option.SD_MISO_PIN = PINMAP[32];
+            Option.SYSTEM_I2C_SDA = PINMAP[20];
+            Option.SYSTEM_I2C_SCL = PINMAP[21];
+            Option.RTC = true;
+            Option.HDMIclock = 1;
+            Option.HDMId0 = 3;
+            Option.HDMId1 = 5;
+            Option.HDMId2 = 7;
+            Option.SerialTX = PINMAP[8];
+            Option.SerialRX = PINMAP[9];
+            Option.SerialConsole = 2;
+            //            Option.PSRAM_CS_PIN=PINMAP[47];
+            Option.INT1pin = PINMAP[0];
+            Option.INT2pin = PINMAP[1];
+            Option.INT3pin = PINMAP[2];
+            Option.INT4pin = PINMAP[3];
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+
+        {
+            format = testMODBUFF(true, 192, false);
+            strcpy((char *)Option.platform, "OLIMEX USB");
+            Option.ColourCode = 1;
+            Option.AUDIO_L = PINMAP[26];
+            Option.AUDIO_R = PINMAP[27];
+            Option.AUDIO_SLICE = checkslice(PINMAP[26], PINMAP[27], 0);
+            Option.SD_CS = PINMAP[22];
+            Option.SD_CLK_PIN = PINMAP[6];
+            Option.SD_MOSI_PIN = PINMAP[7];
+            Option.SD_MISO_PIN = PINMAP[4];
+            Option.HDMIclock = 1;
+            Option.HDMId0 = 3;
+            Option.HDMId1 = 7;
+            Option.HDMId2 = 5;
+            Option.SerialTX = PINMAP[0];
+            Option.SerialRX = PINMAP[1];
+            Option.SerialConsole = 1;
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+
+#else
+        if (checkstring(p, (unsigned char *)"HDMIBASIC"))
+        {
+            format = testMODBUFF(false, 0, false);
+            strcpy((char *)Option.platform, "HDMIbasic");
+            Option.ColourCode = 1;
+            Option.SD_CS = 7;
+            Option.SD_CLK_PIN = 4;
+            Option.SD_MOSI_PIN = 5;
+            Option.SD_MISO_PIN = 6;
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"OLIMEX"))
+        {
+            format = testMODBUFF(true, 192, false);
+            strcpy((char *)Option.platform, "OLIMEX");
+            Option.ColourCode = 1;
+            Option.AUDIO_L = PINMAP[26];
+            Option.AUDIO_R = PINMAP[27];
+            Option.AUDIO_SLICE = checkslice(PINMAP[26], PINMAP[27], 0);
+            Option.SD_CS = PINMAP[22];
+            Option.SD_CLK_PIN = PINMAP[6];
+            Option.SD_MOSI_PIN = PINMAP[7];
+            Option.SD_MISO_PIN = PINMAP[4];
+            Option.HDMIclock = 1;
+            Option.HDMId0 = 3;
+            Option.HDMId1 = 7;
+            Option.HDMId2 = 5;
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
+#endif
+#endif
+#if defined(PICOMITE) || defined(PICOMITEWEB)
+#if PICOMITERP2350
+        if (checkstring(p, (unsigned char *)"PALM PICO"))
+        {
+            format = testMODBUFF(false, 0, false);
+            Option.CPU_Speed = 360000;
+            Option.ColourCode = 1;
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[42];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[43];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[44];
+            Option.AllPins = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[20];
+            Option.SYSTEM_I2C_SCL = PINMAP[21];
+            Option.RTC = true;
+            Option.DISPLAY_ORIENTATION = LANDSCAPE;
+            Option.DISPLAY_TYPE = SSD1963_5_BUFF;
+            Option.BackLightLevel = 100;
+            Option.SSD_RESET = -1;
+            Option.SSD_DATA = 1;
+            Option.SSD_DC = 16;
+            Option.SSD_WR = 17;
+            Option.SSD_RD = 18;
+            Option.TOUCH_CS = PINMAP[19];
+            Option.TOUCH_IRQ = PINMAP[46];
+            Option.BGR = 1;
+            Option.SD_CS = PINMAP[41];
+            Option.audio_i2s_bclk = PINMAP[22];
+            Option.audio_i2s_data = PINMAP[24];
+            Option.AUDIO_SLICE = 11;
+            Option.PSRAM_CS_PIN = PINMAP[47];
+            Option.LOCAL_KEYBOARD = 1;
+            Option.NoHeartbeat = 0;
+            Option.heartbeatpin = PINMAP[25];
+            Option.DISPLAY_CONSOLE = 1;
+            //            Option.continuation = '_';
+            Option.LCD_CD = Option.LCD_Reset = Option.LCD_CS = 0;
+            Option.TOUCH_SWAPXY = 1;
+            Option.TOUCH_XZERO = 163;
+            Option.TOUCH_YZERO = 293;
+            Option.TOUCH_XSCALE = 0.1058;
+            Option.TOUCH_YSCALE = 0.0650;
+            Option.RepeatStart = 400;
+            Option.RepeatRate = 25;
+            strcpy((char *)Option.platform, "PALM PICO");
+            SaveOptions();
+            OptionConsole = 1;
+            printoptions();
+            uSec(1000000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"PICO PALM"))
+        {
+            format = testMODBUFF(false, 0, false);
+            Option.CPU_Speed = 360000;
+            Option.ColourCode = 1;
+            Option.SYSTEM_CLK = PINMAP[6];
+            Option.SYSTEM_MOSI = PINMAP[7];
+            Option.SYSTEM_MISO = PINMAP[4];
+            Option.LCD_CLK = PINMAP[10];
+            Option.LCD_MOSI = PINMAP[11];
+            Option.LCD_MISO = PINMAP[12];
+            Option.AllPins = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[20];
+            Option.SYSTEM_I2C_SCL = PINMAP[21];
+            Option.RTC = true;
+            Option.SerialTX = PINMAP[8];
+            Option.SerialRX = PINMAP[9];
+            Option.SerialConsole = 2;
+            Option.DISPLAY_ORIENTATION = 2;
+            Option.DISPLAY_TYPE = ST7796SPBUFF;
+            Option.LCD_CD = PINMAP[1];
+            Option.LCD_Reset = PINMAP[2];
+            Option.LCD_CS = PINMAP[3];
+            Option.DISPLAY_BL = PINMAP[18];
+            Option.BGR = 1;
+            Option.SD_CS = PINMAP[5];
+            Option.audio_i2s_bclk = PINMAP[13];
+            Option.audio_i2s_data = PINMAP[15];
+            Option.AUDIO_SLICE = 11;
+            Option.PSRAM_CS_PIN = PINMAP[0];
+            Option.LOCAL_KEYBOARD = 1;
+            Option.NoHeartbeat = 0;
+            Option.heartbeatpin = PINMAP[25];
+            Option.KeyboardBrightness = 10;
+            Option.BackLightLevel = 60;
+            Option.DISPLAY_CONSOLE = 1;
+            Option.continuation = '_';
+            strcpy((char *)Option.platform, "PALM PICO");
+            SaveOptions();
+            OptionConsole = 1;
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
+#ifndef USBKEYBOARD
+        if (checkstring(p, (unsigned char *)"PICOCALC"))
+        {
+            format = testMODBUFF(true, 192, noask);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = 14;
+            Option.LCD_MOSI = 15;
+            Option.LCD_MISO = 16;
+#else
+            Option.SYSTEM_CLK = 14;
+            Option.SYSTEM_MOSI = 15;
+            Option.SYSTEM_MISO = 16;
+#endif
+            Option.DISPLAY_TYPE = ST7365P;
+            Option.AUDIO_L = 31;
+            Option.AUDIO_R = 32;
+            Option.LCD_CD = 19;
+            Option.LCD_Reset = 20;
+            Option.LCD_CS = 17;
+            Option.SD_CS = 22;
+            Option.SD_CLK_PIN = 24;
+            Option.SD_MOSI_PIN = 25;
+            Option.SD_MISO_PIN = 21;
+            Option.DISPLAY_ORIENTATION = PORTRAIT;
+            Option.AUDIO_SLICE = checkslice(31, 32, 0);
+            Option.SYSTEM_I2C_SDA = 9;
+            Option.SYSTEM_I2C_SCL = 10;
+            Option.SYSTEM_I2C_SLOW = 1;
+            Option.DISPLAY_CONSOLE = 1;
+            Option.DefaultFC = GREEN;
+            Option.KEYBOARD_CLOCK = 0;
+            Option.KEYBOARD_DATA = 0;
+            Option.KeyboardConfig = CONFIG_PICOCALC;
+            Option.ColourCode = 1;
+            Option.BACKLIGHT_KBD = 0;  // Keyboard backlight           // *EB*
+            Option.BACKLIGHT_LCD = 30; // LCD backlight                // *EB*
+            strcpy((char *)Option.platform, "PicoCalc");
+            SaveOptions();
+            if (!noask)
+                printoptions();
+            uSec(100000);
+            doreset(noask ? 2 : format);
+        }
+        if (checkstring(p, (unsigned char *)"GAMEMITE"))
+        {
+            format = testMODBUFF(true, 192, false);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[6];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[3];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[4];
+#else
+            Option.SYSTEM_CLK = PINMAP[6];
+            Option.SYSTEM_MOSI = PINMAP[3];
+            Option.SYSTEM_MISO = PINMAP[4];
+#endif
+            Option.AUDIO_L = PINMAP[20];
+            Option.AUDIO_R = PINMAP[21];
+            Option.DISPLAY_TYPE = ILI9341;
+            Option.LCD_CD = PINMAP[2];
+            Option.LCD_Reset = PINMAP[1];
+            Option.LCD_CS = PINMAP[0];
+            Option.TOUCH_CS = PINMAP[5];
+            Option.TOUCH_IRQ = PINMAP[7];
+            Option.SD_CS = PINMAP[22];
+            Option.DISPLAY_ORIENTATION = 3;
+            Option.AUDIO_SLICE = checkslice(PINMAP[20], PINMAP[21], 0);
+            Option.TOUCH_SWAPXY = 0;
+            Option.TOUCH_XZERO = 407;
+            Option.TOUCH_YZERO = 267;
+            Option.TOUCH_XSCALE = 0.0897;
+            Option.TOUCH_YSCALE = 0.0677;
+            strcpy((char *)Option.platform, "Game*Mite");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"PICORESTOUCHLCD3.5"))
+        {
+            format = testMODBUFF(true, 192, false);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[10];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[11];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[12];
+#else
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[12];
+#endif
+            Option.DISPLAY_TYPE = ILI9488W;
+            Option.LCD_CD = PINMAP[8];
+            Option.LCD_Reset = PINMAP[15];
+            Option.LCD_CS = PINMAP[9];
+            Option.TOUCH_CS = PINMAP[16];
+            Option.TOUCH_IRQ = PINMAP[17];
+            Option.SD_CS = PINMAP[22];
+            Option.DISPLAY_BL = PINMAP[13];
+            Option.DISPLAY_ORIENTATION = 1;
+            Option.TOUCH_SWAPXY = 0;
+            Option.TOUCH_XZERO = 3963;
+            Option.TOUCH_YZERO = 216;
+            Option.TOUCH_XSCALE = -0.1285;
+            Option.TOUCH_YSCALE = 0.0859;
+            strcpy((char *)Option.platform, "Pico-ResTouch-LCD-3.5");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"PICO BACKPACK"))
+        {
+            format = testMODBUFF(false, 0, false);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[18];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[19];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[16];
+#else
+            Option.SYSTEM_CLK = PINMAP[18];
+            Option.SYSTEM_MOSI = PINMAP[19];
+            Option.SYSTEM_MISO = PINMAP[16];
+#endif
+            Option.DISPLAY_TYPE = ILI9341;
+            Option.LCD_CD = PINMAP[20];
+            Option.LCD_Reset = PINMAP[21];
+            Option.LCD_CS = PINMAP[17];
+            Option.TOUCH_CS = PINMAP[14];
+            Option.TOUCH_IRQ = PINMAP[15];
+            Option.SD_CS = PINMAP[22];
+            Option.DISPLAY_ORIENTATION = 1;
+            Option.TOUCH_SWAPXY = 0;
+            Option.TOUCH_XZERO = 3963;
+            Option.TOUCH_YZERO = 216;
+            Option.TOUCH_XSCALE = -0.1285;
+            Option.TOUCH_YSCALE = 0.0859;
+            strcpy((char *)Option.platform, "Pico Backpack");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"PICORESTOUCHLCD2.8"))
+        {
+            format = testMODBUFF(true, 192, false);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[10];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[11];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[12];
+#else
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[12];
+#endif
+            Option.DISPLAY_TYPE = ST7789B;
+            Option.LCD_CD = PINMAP[8];
+            Option.LCD_Reset = PINMAP[15];
+            Option.LCD_CS = PINMAP[9];
+            Option.TOUCH_CS = PINMAP[16];
+            Option.TOUCH_IRQ = PINMAP[17];
+            Option.SD_CS = PINMAP[22];
+            Option.DISPLAY_BL = PINMAP[13];
+            Option.DISPLAY_ORIENTATION = 1;
+            Option.TOUCH_SWAPXY = 0;
+            Option.TOUCH_XZERO = 373;
+            Option.TOUCH_YZERO = 3859;
+            Option.TOUCH_XSCALE = 0.0894;
+            Option.TOUCH_YSCALE = -0.0657;
+            strcpy((char *)Option.platform, "Pico-ResTouch-LCD-2.8");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#ifndef PICOMITEWEB
+        if (checkstring(p, (unsigned char *)"RP2040LCD1.28"))
+        {
+            format = testMODBUFF(false, 0, false);
+            Option.CPU_Speed = 252000;
+            Option.AllPins = 1;
+            Option.ColourCode = 1;
+            Option.NoHeartbeat = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[10];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[11];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[28];
+#else
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[28];
+#endif
+            Option.DISPLAY_TYPE = GC9A01;
+            Option.LCD_CD = PINMAP[8];
+            Option.LCD_Reset = PINMAP[12];
+            Option.LCD_CS = PINMAP[9];
+            Option.DISPLAY_BL = PINMAP[25];
+            Option.DISPLAY_ORIENTATION = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[6];
+            Option.SYSTEM_I2C_SCL = PINMAP[7];
+            strcpy((char *)Option.platform, "RP2040-LCD-1.28");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"RP2040LCD0.96"))
+        {
+            format = testMODBUFF(false, 0, false);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+            Option.NoHeartbeat = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[10];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[11];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[28];
+#else
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[28];
+#endif
+            Option.DISPLAY_TYPE = ST7735S;
+            Option.LCD_CD = PINMAP[8];
+            Option.LCD_Reset = PINMAP[12];
+            Option.LCD_CS = PINMAP[9];
+            Option.DISPLAY_BL = PINMAP[25];
+            Option.DISPLAY_ORIENTATION = 1;
+            strcpy((char *)Option.platform, "RP2040-LCD-0.96");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+        if (checkstring(p, (unsigned char *)"RP2040GEEK"))
+        {
+            format = testMODBUFF(false, 0, false);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+            Option.NoHeartbeat = 1;
+            Option.AllPins = 1;
+#if defined(rp2350) && defined(PICOMITE)
+            Option.LCD_CLK = Option.SYSTEM_CLK = PINMAP[10];
+            Option.LCD_MOSI = Option.SYSTEM_MOSI = PINMAP[11];
+            Option.LCD_MISO = Option.SYSTEM_MISO = PINMAP[24];
+#else
+            Option.SYSTEM_CLK = PINMAP[10];
+            Option.SYSTEM_MOSI = PINMAP[11];
+            Option.SYSTEM_MISO = PINMAP[24];
+#endif
+            Option.DISPLAY_TYPE = ST7789A;
+            Option.LCD_CD = PINMAP[8];
+            Option.LCD_Reset = PINMAP[12];
+            Option.LCD_CS = PINMAP[9];
+            Option.SD_CS = PINMAP[23];
+            Option.SD_CLK_PIN = PINMAP[18];
+            Option.SD_MOSI_PIN = PINMAP[19];
+            Option.SD_MISO_PIN = PINMAP[20];
+            Option.DISPLAY_BL = PINMAP[25];
+            Option.DISPLAY_ORIENTATION = 1;
+            strcpy((char *)Option.platform, "RP2040-GEEK");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
+#else
+        if (checkstring(p, (unsigned char *)"USB Edition V1.0"))
+        {
+            format = testMODBUFF(true, 512, false);
+            Option.CPU_Speed = 252000;
+            Option.ColourCode = 1;
+            Option.NoHeartbeat = 1;
+            Option.AllPins = 1;
+            Option.SYSTEM_I2C_SDA = PINMAP[24];
+            Option.SYSTEM_I2C_SCL = PINMAP[25];
+            Option.RTC = true;
+            Option.TOUCH_CS = PINMAP[21];
+            Option.TOUCH_IRQ = PINMAP[19];
+            Option.SYSTEM_CLK = PINMAP[22];
+            Option.SYSTEM_MOSI = PINMAP[23];
+            Option.SYSTEM_MISO = PINMAP[20];
+            Option.AUDIO_L = PINMAP[26];
+            Option.AUDIO_R = PINMAP[27];
+            Option.SerialTX = PINMAP[28];
+            Option.SerialRX = PINMAP[29];
+            Option.SerialConsole = 1;
+            Option.CombinedCS = 1;
+            Option.SD_CS = 0;
+            Option.AUDIO_SLICE = checkslice(PINMAP[26], PINMAP[27], 0);
+            strcpy((char *)Option.platform, "USB Edition V1.0");
+            SaveOptions();
+            printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
+#endif
+        error("Invalid board for this firmware");
+    }
+}
+void cmd_configure(void)
+{
+    configure(cmdline, false);
+}
+#ifndef PICOMITEMIN
+/* ===========================================================================
+ * Portable option backup ("OPTION DISK SAVE/LOAD")
+ * ---------------------------------------------------------------------------
+ * Instead of dumping the raw, packed, #ifdef-riddled struct option_s (whose
+ * field offsets shift between firmware builds/variants), we save only the
+ * options the user has CHANGED from this build's factory defaults, as a flat
+ * "NAME=VALUE" text file. On restore we start from the current build's
+ * defaults and overlay the saved values BY NAME. So a config moved to a build
+ * with a different struct layout still restores every field whose name the new
+ * build recognises; unknown names are skipped, missing names keep their
+ * default. The ONLY thing that must be kept in step with the struct is the
+ * name list in OptionMap[] below - offsets/sizes are taken automatically with
+ * offsetof()/sizeof(), so reordering the struct needs no change here.
+ *
+ * Excluded on purpose: Magic/version (build identity), FlashSize (auto-probed
+ * from the chip) and the memory-layout fields PROG_FLASH_SIZE / HEAP_SIZE /
+ * LIBRARY_FLASH_SIZE (these must follow the new build, never the saved file),
+ * the BLE bond store bt_tlv, and CFunction scratch byte-arrays.
+ * =========================================================================== */
+enum optmap_type
+{
+    OPT_U8,
+    OPT_I8,
+    OPT_U16,
+    OPT_I16,
+    OPT_U32,
+    OPT_I32,
+    OPT_FLT,
+    OPT_STR
+};
+struct optmap_s
+{
+    const char *name;
+    uint8_t type;
+    uint16_t off;
+    uint16_t size;
+};
+#define OPT(field, t) {#field, t, (uint16_t)offsetof(struct option_s, field), (uint16_t)sizeof(((struct option_s *)0)->field)}
+static const struct optmap_s OptionMap[] = {
+    OPT(Autorun, OPT_I8),
+    OPT(Tab, OPT_I8),
+    OPT(Invert, OPT_I8),
+    OPT(Listcase, OPT_I8),
+#ifndef PICOMITEVGA
+    OPT(Height, OPT_I8),
+    OPT(Width, OPT_I8),
+#else
+    OPT(Height, OPT_I16),
+    OPT(Width, OPT_I16),
+#endif
+    OPT(DISPLAY_TYPE, OPT_U8),
+    OPT(DISPLAY_ORIENTATION, OPT_I8),
+    OPT(PIN, OPT_I32),
+    OPT(Baudrate, OPT_I32),
+    OPT(ColourCode, OPT_I8),
+    OPT(MOUSE_CLOCK, OPT_U8),
+    OPT(MOUSE_DATA, OPT_U8),
+    OPT(CPU_Speed, OPT_I32),
+    OPT(DefaultFC, OPT_I32),
+    OPT(DefaultBC, OPT_I32),
+    OPT(KEYBOARD_CLOCK, OPT_U8),
+    OPT(KEYBOARD_DATA, OPT_U8),
+    OPT(continuation, OPT_U8),
+    OPT(LOCAL_KEYBOARD, OPT_U8),
+    OPT(KeyboardBrightness, OPT_U8),
+    OPT(special, OPT_U8),
+    OPT(DefaultFont, OPT_U8),
+    OPT(KeyboardConfig, OPT_U8),
+    OPT(RTC_Clock, OPT_U8),
+    OPT(RTC_Data, OPT_U8),
+#if PICOMITERP2350
+    OPT(LCD_CLK, OPT_U8),
+    OPT(LCD_MOSI, OPT_U8),
+    OPT(LCD_MISO, OPT_U8),
+#endif
+#ifdef PICOMITEWEB
+    OPT(TCP_PORT, OPT_U16),
+    OPT(ServerResponceTime, OPT_U16),
+#endif
+#ifdef PICOMITEVGA
+    OPT(X_TILE, OPT_I16),
+    OPT(Y_TILE, OPT_I16),
+#endif
+    OPT(LCD_CD, OPT_U8),
+    OPT(LCD_CS, OPT_U8),
+    OPT(LCD_Reset, OPT_U8),
+    OPT(TOUCH_CS, OPT_U8),
+    OPT(TOUCH_IRQ, OPT_U8),
+    OPT(TOUCH_SWAPXY, OPT_I8),
+    OPT(repeat, OPT_U8),
+    OPT(disabletftp, OPT_I8),
+#ifndef PICOMITEVGA
+    OPT(TOUCH_XZERO, OPT_I32),
+    OPT(TOUCH_YZERO, OPT_I32),
+    OPT(TOUCH_XSCALE, OPT_FLT),
+    OPT(TOUCH_YSCALE, OPT_FLT),
+#endif
+#if !defined(GUICONTROLS) || defined(PICOMITEVGA)
+    OPT(HDMIclock, OPT_U8),
+    OPT(HDMId0, OPT_U8),
+    OPT(HDMId1, OPT_U8),
+    OPT(HDMId2, OPT_U8),
+#endif
+    OPT(SD_CS, OPT_U8),
+    OPT(SYSTEM_MOSI, OPT_U8),
+    OPT(SYSTEM_MISO, OPT_U8),
+    OPT(SYSTEM_CLK, OPT_U8),
+    OPT(DISPLAY_BL, OPT_U8),
+    OPT(DISPLAY_CONSOLE, OPT_U8),
+    OPT(TOUCH_Click, OPT_U8),
+    OPT(LCD_RD, OPT_I8),
+    OPT(AUDIO_L, OPT_U8),
+    OPT(AUDIO_R, OPT_U8),
+    OPT(AUDIO_SLICE, OPT_U8),
+    OPT(SDspeed, OPT_U8),
+    OPT(TOUCH_CAP, OPT_U8),
+    OPT(SSD_DATA, OPT_U8),
+    OPT(THRESHOLD_CAP, OPT_U8),
+    OPT(audio_i2s_data, OPT_U8),
+    OPT(audio_i2s_bclk, OPT_U8),
+    OPT(LCDVOP, OPT_I8),
+    OPT(I2Coffset, OPT_I8),
+    OPT(NoHeartbeat, OPT_U8),
+    OPT(Refresh, OPT_I8),
+    OPT(SYSTEM_I2C_SDA, OPT_U8),
+    OPT(SYSTEM_I2C_SCL, OPT_U8),
+    OPT(RTC, OPT_U8),
+    OPT(PWM, OPT_I8),
+    OPT(INT1pin, OPT_U8),
+    OPT(INT2pin, OPT_U8),
+    OPT(INT3pin, OPT_U8),
+    OPT(INT4pin, OPT_U8),
+    OPT(SD_CLK_PIN, OPT_U8),
+    OPT(SD_MOSI_PIN, OPT_U8),
+    OPT(SD_MISO_PIN, OPT_U8),
+    OPT(SerialConsole, OPT_U8),
+    OPT(SerialTX, OPT_U8),
+    OPT(SerialRX, OPT_U8),
+    OPT(numlock, OPT_U8),
+    OPT(capslock, OPT_U8),
+    OPT(AUDIO_CLK_PIN, OPT_U8),
+    OPT(AUDIO_MOSI_PIN, OPT_U8),
+    OPT(SYSTEM_I2C_SLOW, OPT_U8),
+    OPT(AUDIO_CS_PIN, OPT_U8),
+#ifdef PICOMITEWEB
+    OPT(UDP_PORT, OPT_U16),
+    OPT(UDPServerResponceTime, OPT_U16),
+    OPT(hostname, OPT_STR),
+    OPT(ipaddress, OPT_STR),
+    OPT(mask, OPT_STR),
+    OPT(gateway, OPT_STR),
+#else
+    OPT(mousespeed, OPT_FLT),
+#endif
+    OPT(GPSBaudx, OPT_U16),
+    OPT(GPSRX, OPT_U8),
+    OPT(GPSTX, OPT_U8),
+    OPT(heartbeatpin, OPT_U8),
+    OPT(PSRAM_CS_PIN, OPT_U8),
+    OPT(BGR, OPT_U8),
+    OPT(NoScroll, OPT_U8),
+    OPT(CombinedCS, OPT_U8),
+    OPT(USBKeyboard, OPT_U8),
+    OPT(VGA_HSYNC, OPT_U8),
+    OPT(VGA_BLUE, OPT_U8),
+    OPT(AUDIO_MISO_PIN, OPT_U8),
+    OPT(AUDIO_DCS_PIN, OPT_U8),
+    OPT(AUDIO_DREQ_PIN, OPT_U8),
+    OPT(AUDIO_RESET_PIN, OPT_U8),
+    OPT(SSD_DC, OPT_U8),
+    OPT(SSD_WR, OPT_U8),
+    OPT(SSD_RD, OPT_U8),
+    OPT(SSD_RESET, OPT_I8),
+    OPT(BackLightLevel, OPT_U8),
+    OPT(NoReset, OPT_U8),
+    OPT(AllPins, OPT_U8),
+    OPT(modbuff, OPT_U8),
+    OPT(RepeatStart, OPT_I16),
+    OPT(RepeatRate, OPT_I16),
+    OPT(modbuffsize, OPT_I32),
+    OPT(F1key, OPT_STR),
+    OPT(F5key, OPT_STR),
+    OPT(F6key, OPT_STR),
+    OPT(F7key, OPT_STR),
+    OPT(F8key, OPT_STR),
+    OPT(F9key, OPT_STR),
+    OPT(SSID, OPT_STR),
+    OPT(PASSWORD, OPT_STR),
+    OPT(BACKLIGHT_KBD, OPT_U8),
+    OPT(BACKLIGHT_LCD, OPT_U8),
+    OPT(GPSBaud, OPT_U32),
+    OPT(wifi_country_code, OPT_U8),
+    OPT(MaxCtrls, OPT_U8),
+    OPT(Resolution, OPT_U8),
+    OPT(Multi, OPT_U8),
+};
+#define OPTIONMAP_COUNT (sizeof(OptionMap) / sizeof(OptionMap[0]))
+
+static int64_t OptGetInt(const struct option_s *o, const struct optmap_s *m)
+{
+    const void *p = (const char *)o + m->off;
+    switch (m->type)
+    {
+    case OPT_U8:
+        return *(const uint8_t *)p;
+    case OPT_I8:
+        return *(const int8_t *)p;
+    case OPT_U16:
+        return *(const uint16_t *)p;
+    case OPT_I16:
+        return *(const int16_t *)p;
+    case OPT_U32:
+        return *(const uint32_t *)p;
+    case OPT_I32:
+        return *(const int32_t *)p;
+    default:
+        return 0;
+    }
+}
+static void OptSetInt(struct option_s *o, const struct optmap_s *m, int64_t v)
+{
+    void *p = (char *)o + m->off;
+    switch (m->type)
+    {
+    case OPT_U8:
+        *(uint8_t *)p = (uint8_t)v;
+        break;
+    case OPT_I8:
+        *(int8_t *)p = (int8_t)v;
+        break;
+    case OPT_U16:
+        *(uint16_t *)p = (uint16_t)v;
+        break;
+    case OPT_I16:
+        *(int16_t *)p = (int16_t)v;
+        break;
+    case OPT_U32:
+        *(uint32_t *)p = (uint32_t)v;
+        break;
+    case OPT_I32:
+        *(int32_t *)p = (int32_t)v;
+        break;
+    default:
+        break;
+    }
+}
+static int OptHexVal(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    return -1;
+}
+/* Escape an option string field into dst as a printable, single-line token.
+   src is read up to maxsrc bytes or the first NUL. dst must hold 4*maxsrc+1. */
+static void OptEscape(char *dst, const char *src, int maxsrc)
+{
+    static const char hx[] = "0123456789ABCDEF";
+    int n = 0;
+    for (int i = 0; i < maxsrc && src[i]; i++)
+    {
+        unsigned char c = (unsigned char)src[i];
+        switch (c)
+        {
+        case '"':
+            dst[n++] = '\\';
+            dst[n++] = '"';
+            break;
+        case '\\':
+            dst[n++] = '\\';
+            dst[n++] = '\\';
+            break;
+        case '\r':
+            dst[n++] = '\\';
+            dst[n++] = 'r';
+            break;
+        case '\n':
+            dst[n++] = '\\';
+            dst[n++] = 'n';
+            break;
+        case '\t':
+            dst[n++] = '\\';
+            dst[n++] = 't';
+            break;
+        default:
+            if (c < 0x20 || c >= 0x7f)
+            {
+                dst[n++] = '\\';
+                dst[n++] = 'x';
+                dst[n++] = hx[c >> 4];
+                dst[n++] = hx[c & 15];
+            }
+            else
+                dst[n++] = c;
+        }
+    }
+    dst[n] = 0;
+}
+/* Decode the escapes produced by OptEscape, in place. Returns new length. */
+static int OptUnescape(char *s)
+{
+    char *o = s, *p = s;
+    while (*p)
+    {
+        if (*p == '\\' && p[1])
+        {
+            p++;
+            switch (*p)
+            {
+            case 'r':
+                *o++ = '\r';
+                break;
+            case 'n':
+                *o++ = '\n';
+                break;
+            case 't':
+                *o++ = '\t';
+                break;
+            case 'x':
+            {
+                int hi = OptHexVal(p[1]), lo = OptHexVal(p[2]);
+                if (hi >= 0 && lo >= 0)
+                {
+                    *o++ = (char)((hi << 4) | lo);
+                    p += 2;
+                }
+                break;
+            }
+            default:
+                *o++ = *p; // covers \" and \\ and any stray escape
+                break;
+            }
+            p++;
+        }
+        else
+            *o++ = *p++;
+    }
+    *o = 0;
+    return (int)(o - s);
+}
+static void OptPutLine(int fnbr, const char *s) { FilePutData((char *)s, fnbr, strlen(s)); }
+
+/* Write every option that differs from this build's factory defaults. */
+static void OptionSaveText(int fnbr)
+{
+    struct option_s *def = (struct option_s *)GetMemory(sizeof(struct option_s));
+    BuildDefaultOptions(def);
+    char line[400];
+    OptPutLine(fnbr, "# PicoMite option configuration\r\n");
+    OptPutLine(fnbr, "# Restored by name onto factory defaults; safe across firmware versions.\r\n");
+    for (unsigned i = 0; i < OPTIONMAP_COUNT; i++)
+    {
+        const struct optmap_s *m = &OptionMap[i];
+        if (memcmp((char *)&Option + m->off, (char *)def + m->off, m->size) == 0)
+            continue;
+        if (m->type == OPT_STR)
+        {
+            char esc[4 * 64 + 1];
+            OptEscape(esc, (char *)&Option + m->off, m->size);
+            snprintf(line, sizeof(line), "%s=\"%s\"\r\n", m->name, esc);
+        }
+        else if (m->type == OPT_FLT)
+        {
+            char fb[40];
+            double v = *(float *)((char *)&Option + m->off);
+            FloatToStr(fb, v, 0, STR_AUTO_PRECISION, ' '); // pico printf %g is broken; use MMBasic's formatter
+            snprintf(line, sizeof(line), "%s=%s\r\n", m->name, fb + (v >= 0 ? 1 : 0));
+        }
+        else
+        {
+            snprintf(line, sizeof(line), "%s=%lld\r\n", m->name, (long long)OptGetInt(&Option, m));
+        }
+        OptPutLine(fnbr, line);
+    }
+    FreeMemory((void *)def);
+}
+
+/* Overlay one "NAME=VALUE" line onto *o. Returns 1 if NAME was unknown to this
+   build (so the caller can warn), 0 otherwise (applied, blank or comment). */
+static int OptionApplyLine(struct option_s *o, char *line)
+{
+    while (*line == ' ' || *line == '\t')
+        line++;
+    if (*line == '#' || *line == 0 || *line == '\r' || *line == '\n')
+        return 0;
+    char *eq = strchr(line, '=');
+    if (!eq)
+        return 0;
+    *eq = 0;
+    char *name = line, *val = eq + 1;
+    char *e = eq - 1; // trim trailing blanks from name
+    while (e >= name && (*e == ' ' || *e == '\t'))
+        *e-- = 0;
+    while (*val == ' ' || *val == '\t')
+        val++;
+    const struct optmap_s *m = NULL;
+    for (unsigned i = 0; i < OPTIONMAP_COUNT; i++)
+        if (strcmp(name, OptionMap[i].name) == 0)
+        {
+            m = &OptionMap[i];
+            break;
+        }
+    if (!m)
+        return 1; // option not present in this build - skip
+    if (m->type == OPT_STR)
+    {
+        if (*val == '"')
+        {
+            val++;
+            char *q = strrchr(val, '"');
+            if (q)
+                *q = 0;
+        }
+        OptUnescape(val);
+        char *dst = (char *)o + m->off;
+        memset(dst, 0, m->size);
+        strncpy(dst, val, m->size - 1);
+    }
+    else if (m->type == OPT_FLT)
+        *(float *)((char *)o + m->off) = (float)atof(val);
+    else
+        OptSetInt(o, m, (int64_t)strtoll(val, NULL, 0));
+    return 0;
+}
+
+/* Reset to this build's defaults then overlay the flat-text file held in buf. */
+static void OptionLoadText(char *buf)
+{
+    struct option_s *def = (struct option_s *)GetMemory(sizeof(struct option_s));
+    BuildDefaultOptions(def);
+    memcpy(&Option, def, sizeof(struct option_s));
+    FreeMemory((void *)def);
+    int unknown = 0;
+    char *p = buf;
+    while (*p)
+    {
+        char *nl = strchr(p, '\n');
+        if (nl)
+            *nl = 0;
+        unknown += OptionApplyLine(&Option, p);
+        if (!nl)
+            break;
+        p = nl + 1;
+    }
+    Option.Magic = MagicKey;
+    Option.version = hashversion();
+    if (unknown)
+    {
+        int state = OptionConsole;
+        OptionConsole = 1;
+        MMPrintString("Warning: some saved options are not used by this firmware and were ignored\r\n");
+        OptionConsole = state;
+    }
+}
+#endif
+void MIPS16 cmd_option(void)
+{
+    unsigned char *tp;
+
+    tp = checkstring(cmdline, (unsigned char *)"NOCHECK");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            OptionNoCheck = true;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            OptionNoCheck = false;
+            return;
+        }
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"BASE");
+    if (tp)
+    {
+        if (g_DimUsed)
+            error("Must be before DIM or LOCAL");
+        g_OptionBase = getint(tp, 0, 1);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"LOCAL VARIABLES");
+    if (tp)
+    {
+        cmd_localvars(tp);
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"EXPLICIT");
+    if (tp)
+    {
+        OptionExplicit = true;
+        return;
+    }
+#ifdef CACHE
+    tp = checkstring(cmdline, (unsigned char *)"TRACECACHE");
+    if (tp)
+    {
+        unsigned char *tp2 = checkstring(tp, (unsigned char *)"ON");
+        if (tp2)
+        {
+            /* OPTION TRACECACHE ON [size [, flags]]
+             * size  : slot count (power-of-two, default 64)
+             * flags : TCF_* bitmask 0..63 (default TCF_ALL = 0x3F)         */
+            getcsargs(&tp2, 3);
+            uint8_t new_flags = TCF_ALL;
+            int size = TRACE_CACHE_SIZE_DEFAULT;
+            if (argc >= 1)
+                size = getint(argv[0], TRACE_CACHE_SIZE_MIN, TRACE_CACHE_SIZE_MAX);
+            if (argc == 3)
+                new_flags = (uint8_t)getint(argv[2], 0, TCF_ALL);
+            TraceCacheSetSize(size);
+            g_trace_cache_flags = new_flags;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            g_trace_cache_flags = 0;
+            TraceCacheFree();
+            return;
+        }
+        error((char *)"Syntax");
+    }
+    /* OPTION CACHE DEBUG ON|OFF - print first ~60 chars of every LET that
+     * fails to compile, prefixed with the enclosing sub name.  Useful for
+     * finding out why coverage is low.                                       */
+    tp = checkstring(cmdline, (unsigned char *)"CACHE DEBUG");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            g_trace_debug_bad = 1;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            g_trace_debug_bad = 0;
+            return;
+        }
+        error((char *)"Syntax");
+    }
+    /* OPTION CACHE SUB OFF                  - clear opt-in list (cache everywhere)
+     * OPTION CACHE SUB name [, name]*       - add named sub/funcs to opt-in list
+     *                                         (only LETs in those will be cached) */
+    tp = checkstring(cmdline, (unsigned char *)"CACHE SUB");
+    if (tp)
+    {
+        unsigned char *off = checkstring(tp, (unsigned char *)"OFF");
+        if (off)
+        {
+            TraceCacheOptInClear();
+            return;
+        }
+        getargs(&tp, 31, (unsigned char *)",");
+        if ((argc & 1) == 0)
+            error((char *)"Syntax");
+        for (int i = 0; i < argc; i += 2)
+        {
+            unsigned char *np = argv[i];
+            skipspace(np);
+            int sidx = FindSubFun(np, 0); /* try SUB */
+            if (sidx < 0)
+                sidx = FindSubFun(np, 1); /* try FUNCTION */
+            if (sidx < 0)
+                error((char *)"Sub/function not found");
+            TraceCacheOptInAdd(sidx);
+        }
+        return;
+    }
+#endif
+    /* OPTION PROFILING ON|OFF - gates the [PERF] reports printed by END.   */
+    /* ON allocates the per-cmd / per-sub counter arrays from heap; OFF     */
+    /* frees them.  All counter increments are gated on these pointers     */
+    /* (or on g_option_profiling) so disabled profiling is zero-overhead.  */
+    tp = checkstring(cmdline, (unsigned char *)"PROFILING");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            ProfilingAlloc();
+            g_option_profiling = 1;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            g_option_profiling = 0;
+            ProfilingFree();
+            return;
+        }
+        error((char *)"Syntax");
+    }
+    tp = checkstring(cmdline, (unsigned char *)"ANGLE");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"DEGREES"))
+        {
+            optionangle = RADCONV;
+            useoptionangle = true;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"RADIANS"))
+        {
+            optionangle = 1.0;
+            useoptionangle = false;
+            return;
+        }
+    }
+    tp = checkstring(cmdline, (unsigned char *)"FAST AUDIO");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            optionfastaudio = 0;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            optionfastaudio = 1;
+            return;
+        }
+    }
+    tp = checkstring(cmdline, (unsigned char *)"MILLISECONDS");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            optionfulltime = 0;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            optionfulltime = 1;
+            return;
+        }
+    }
+
+#ifndef PICOMITEVGA
+    tp = checkstring(cmdline, (unsigned char *)"LCD320");
+    if (tp)
+    {
+#if PICOMITERP2350
+        if (!((SSD16TYPE || Option.DISPLAY_TYPE >= SSD1963_5_12BUFF) && (Option.DISPLAY_ORIENTATION == LANDSCAPE || Option.DISPLAY_ORIENTATION == RLANDSCAPE)))
+#else
+        if (!(SSD16TYPE && (Option.DISPLAY_ORIENTATION == LANDSCAPE || Option.DISPLAY_ORIENTATION == RLANDSCAPE)))
+#endif
+            error("Invalid for this display");
+        if ((SSD16TYPE || Option.DISPLAY_TYPE == IPS_4_16))
+        {
+            if (checkstring(tp, (unsigned char *)"OFF"))
+            {
+                clear320();
+            }
+            else if (checkstring(tp, (unsigned char *)"ON"))
+            {
+                screen320 = 1;
+                DrawRectangle = DrawRectangle320;
+                DrawBitmap = DrawBitmap320;
+                DrawBuffer = DrawBuffer320;
+                ReadBuffer = ReadBuffer320;
+                DrawBLITBuffer = DrawBLITBuffer320;
+                ReadBLITBuffer = ReadBLITBuffer320;
+                HRes = 320;
+                VRes = 240;
+                buff320 = GetMemory(320 * 6);
+                return;
+            }
+            else
+                SyntaxError();
+            ;
+        }
+#if PICOMITERP2350
+        else if (Option.DISPLAY_TYPE >= SSD1963_5_12BUFF)
+        {
+            ClearScreen(gui_bcolour);
+            multicore_fifo_push_blocking(6);
+            multicore_fifo_push_blocking((uint32_t)low_x | (high_x << 16));
+            multicore_fifo_push_blocking((uint32_t)low_y | (high_y << 16));
+            multicore_fifo_push_blocking((uint32_t)ScrollStart);
+            low_x = low_y = silly_low;
+            high_x = high_y = silly_high;
+            HRes = 320;
+            screen320 = 40;
+            return;
+        }
+#endif
+        else
+            error("Invalid display type");
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"ESCAPE");
+    if (tp)
+    {
+        OptionEscape = true;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"CONSOLE");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"BOTH"))
+            OptionConsole = 3;
+        else if (checkstring(tp, (unsigned char *)"SERIAL"))
+            OptionConsole = 1;
+        else if (checkstring(tp, (unsigned char *)"SCREEN"))
+            OptionConsole = 2;
+        else if (checkstring(tp, (unsigned char *)"NONE"))
+            OptionConsole = 0;
+        else
+            SyntaxError();
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"CDC POLL RATE");
+    if (tp)
+    {
+        cdc_update_rate = getint(tp, 50, 2000);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"DEFAULT");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"INTEGER"))
+        {
+            DefaultType = T_INT;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"FLOAT"))
+        {
+            DefaultType = T_NBR;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"STRING"))
+        {
+            DefaultType = T_STR;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"NONE"))
+        {
+            DefaultType = T_NOTYPE;
+            return;
+        }
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"LOGGING");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            optionlogging = 0;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            optionlogging = 1;
+            return;
+        }
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"BREAK");
+    if (tp)
+    {
+        BreakKey = getinteger(tp);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"F1");
+    if (tp)
+    {
+        char p[STRINGSIZE];
+        strcpy(p, (char *)getCstring(tp));
+        if (strlen(p) >= sizeof(Option.F1key))
+            StandardErrorParam(33, MAXKEYLEN - 1);
+        else
+            strcpy((char *)Option.F1key, p);
+        SaveOptions();
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"F5");
+    if (tp)
+    {
+        char p[STRINGSIZE];
+        strcpy(p, (char *)getCstring(tp));
+        if (strlen(p) >= sizeof(Option.F5key))
+            StandardErrorParam(33, MAXKEYLEN - 1);
+        else
+            strcpy((char *)Option.F5key, p);
+        SaveOptions();
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"F6");
+    if (tp)
+    {
+        char p[STRINGSIZE];
+        strcpy(p, (char *)getCstring(tp));
+        if (strlen(p) >= sizeof(Option.F6key))
+            StandardErrorParam(33, MAXKEYLEN - 1);
+        else
+            strcpy((char *)Option.F6key, p);
+        SaveOptions();
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"F7");
+    if (tp)
+    {
+        char p[STRINGSIZE];
+        strcpy(p, (char *)getCstring(tp));
+        if (strlen(p) >= sizeof(Option.F7key))
+            StandardErrorParam(33, MAXKEYLEN - 1);
+        else
+            strcpy((char *)Option.F7key, p);
+        SaveOptions();
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"F8");
+    if (tp)
+    {
+        char p[STRINGSIZE];
+        strcpy(p, (char *)getCstring(tp));
+        if (strlen(p) >= sizeof(Option.F8key))
+            StandardErrorParam(33, MAXKEYLEN - 1);
+        else
+            strcpy((char *)Option.F8key, p);
+        SaveOptions();
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"F9");
+    if (tp)
+    {
+        char p[STRINGSIZE];
+        strcpy(p, (char *)getCstring(tp));
+        if (strlen(p) >= sizeof(Option.F9key))
+            StandardErrorParam(33, MAXKEYLEN - 1);
+        else
+            strcpy((char *)Option.F9key, p);
+        SaveOptions();
+        return;
+    }
+#if defined(rp2350)
+    tp = checkstring(cmdline, (unsigned char *)"PICO PLUS 2");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            Option.NoHeartbeat = true;
+            Option.special = 0;
+            Option.PSRAM_CS_PIN = 0;
+        }
+        else if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            if (rp2350a)
+                error("Invalid for RP2350A");
+            if (ExtCurrentConfig[58] != EXT_NOT_CONFIG)
+                error("Pin | is in use", 58);
+            if (ExtCurrentConfig[43] != EXT_NOT_CONFIG)
+                error("Pin | is in use", PINMAP[25]);
+            if (ExtCurrentConfig[PINMAP[47]] != EXT_NOT_CONFIG)
+                error("Pin | is in use", PINMAP[47]);
+            Option.NoHeartbeat = false;
+            Option.heartbeatpin = PINMAP[25];
+            Option.PSRAM_CS_PIN = PINMAP[47];
+            Option.special = 1;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+        else
+            SyntaxError();
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"PLATFORM");
+    if (tp)
+    {
+        char p[STRINGSIZE];
+        strcpy(p, (char *)getCstring(tp));
+        if (strlen(p) >= sizeof(Option.platform))
+            StandardErrorParam(33, sizeof(Option.platform) - 1);
+        else
+        {
+            if (checkstring((unsigned char *)p, (unsigned char *)"GAMEMITE"))
+                strcpy((char *)Option.platform, "Game*Mite");
+            else
+                strcpy((char *)Option.platform, p);
+        }
+        SaveOptions();
+        return;
+    }
+#ifdef rp2350
+#ifdef HDMI
+    tp = checkstring(cmdline, (unsigned char *)"HDMI PINS");
+    if (tp)
+    {
+        getcsargs(&tp, 7);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (argc != 7)
+            SyntaxError();
+        ;
+        uint8_t clock = getint(argv[0], 0, 7);
+        uint8_t d0 = getint(argv[2], 0, 7);
+        uint8_t d1 = getint(argv[4], 0, 7);
+        uint8_t d2 = getint(argv[6], 0, 7);
+        if ((clock & 0x6) == (d0 & 0x6) || (clock & 0x6) == (d1 & 0x6) || (clock & 0x6) == (d2 & 0x6) || (d0 & 0x6) == (d1 & 0x6) || (d0 & 0x6) == (d2 & 0x6) || (d1 & 0x6) == (d2 & 0x6))
+            error("Channels not unique");
+        Option.HDMIclock = clock;
+        Option.HDMId0 = d0;
+        Option.HDMId1 = d1;
+        Option.HDMId2 = d2;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#endif
+#if PICOMITERP2350
+    tp = checkstring(cmdline, (unsigned char *)"LOCAL KEYBOARD");
+    if (tp)
+    {
+        if (Option.KEYBOARD_CLOCK)
+            error("Keyboard must be disabled to set up local keyboard");
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            Option.LOCAL_KEYBOARD = 0;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            Option.LOCAL_KEYBOARD = 1;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"PSRAM PIN");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.PSRAM_CS_PIN = 0;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+        int pin1;
+        getcsargs(&tp, 1);
+        if (CurrentLinePtr)
+            StandardError(10);
+        pin1 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            error("Pin | is in use", pin1);
+        if (!(pin1 == 1 || pin1 == 11 || pin1 == 25 || pin1 == 62))
+            error("Invalid pin for PSRAM chip select (GP0,GP8,GP19,GP47)");
+        if (Option.CPU_Speed > 384000)
+            error("PSRAM cannot be enabled when CPUSPEED exceeds 384000 KHz");
+        Option.PSRAM_CS_PIN = pin1;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#endif
+#if defined(USBKEYBOARD) || defined(PICOMITEBTH)
+    tp = checkstring(cmdline, (unsigned char *)"KEYBOARD REPEAT");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        Option.RepeatStart = getint(argv[0], 100, 2000);
+        Option.RepeatRate = getint(argv[2], 25, 2000);
+        SaveOptions();
+        return;
+    }
+#endif
+#ifdef USBKEYBOARD
+    tp = checkstring(cmdline, (unsigned char *)"MOUSE SENSITIVITY");
+    if (tp)
+    {
+        float sens = (float)getnumber((unsigned char *)tp), was = Option.mousespeed;
+        if (sens < 0.0f || sens > 1000.0f)
+            error("Value is invalid (valid is 0.0 to 1000.0)", sens);
+        Option.mousespeed = sens;
+        SaveOptions();
+        if ((was == 0.0f && Option.mousespeed != 0.0f) || (was != 0.0f && Option.mousespeed == 0.0f))
+        {
+            SoftReset(SOFT_RESET);
+        }
+        return;
+    }
+
+#else
+#if PICOMITERP2350
+    tp = checkstring(cmdline, (unsigned char *)"KEYBOARD REPEAT");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        if (!Option.LOCAL_KEYBOARD)
+            SyntaxError();
+        ;
+        Option.RepeatStart = getint(argv[0], 100, 2000);
+        Option.RepeatRate = getint(argv[2], 25, 2000);
+        SaveOptions();
+        return;
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"PS2 PINS");
+    if (tp == NULL)
+        tp = checkstring(cmdline, (unsigned char *)"KEYBOARD PINS");
+    if (tp)
+    {
+        int pin1, pin2;
+        getcsargs(&tp, 3);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (Option.KEYBOARD_CLOCK)
+            error("Keyboard must be disabled to change pins");
+        if (argc != 3)
+            SyntaxError();
+        ;
+        pin1 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin1, pin1);
+        pin2 = getpinarg(argv[2]);
+        if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin2, pin2);
+        Option.KEYBOARD_CLOCK = pin1;
+        Option.KEYBOARD_DATA = pin2;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"MOUSE");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.MOUSE_CLOCK = 0;
+            Option.MOUSE_DATA = 0;
+        }
+        else
+        {
+            int pin1, pin2;
+            getcsargs(&tp, 3);
+            if (Option.MOUSE_CLOCK)
+                error("Mouse must be disabled to change pins");
+            if (argc != 3)
+                SyntaxError();
+            ;
+            pin1 = getpinarg(argv[0]);
+            if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin1, pin1);
+            pin2 = getpinarg(argv[2]);
+            if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin2, pin2);
+            Option.MOUSE_CLOCK = pin1;
+            Option.MOUSE_DATA = pin2;
+        }
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"KEYBOARD");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+/* PICOMITEBTH takes the same code path as USBKEYBOARD here: the BLE
+   HID host accepts the same set of layout names, and stores the
+   selection in Option.USBKeyboard. The PS/2-specific clock/data pin
+   plumbing is not applicable to either of those transports. */
+#if !defined(USBKEYBOARD) && !defined(PICOMITEBTH)
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.KeyboardConfig = NO_KEYBOARD;
+            Option.capslock = 0;
+            Option.numlock = 0;
+            Option.KEYBOARD_CLOCK = 0;
+            Option.KEYBOARD_DATA = 0;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+        }
+        else
+        {
+#endif
+            getcsargs(&tp, 9);
+#if !defined(USBKEYBOARD) && !defined(PICOMITEBTH)
+            if (!Option.KEYBOARD_CLOCK)
+            {
+                Option.KEYBOARD_CLOCK = KEYBOARDCLOCK;
+                Option.KEYBOARD_DATA = KEYBOARDDATA;
+            }
+            if (ExtCurrentConfig[Option.KEYBOARD_CLOCK] != EXT_NOT_CONFIG && Option.KeyboardConfig == NO_KEYBOARD)
+                StandardErrorParam2(27, Option.KEYBOARD_CLOCK, Option.KEYBOARD_CLOCK);
+            if (ExtCurrentConfig[Option.KEYBOARD_DATA] != EXT_NOT_CONFIG && Option.KeyboardConfig == NO_KEYBOARD)
+                StandardErrorParam2(27, Option.KEYBOARD_DATA, Option.KEYBOARD_DATA);
+
+            if (checkstring(argv[0], (unsigned char *)"US"))
+                Option.KeyboardConfig = CONFIG_US;
+            else if (checkstring(argv[0], (unsigned char *)"FR"))
+                Option.KeyboardConfig = CONFIG_FR;
+            else if (checkstring(argv[0], (unsigned char *)"GR"))
+                Option.KeyboardConfig = CONFIG_GR;
+            else if (checkstring(argv[0], (unsigned char *)"IT"))
+                Option.KeyboardConfig = CONFIG_IT;
+            else if (checkstring(argv[0], (unsigned char *)"UK"))
+                Option.KeyboardConfig = CONFIG_UK;
+            else if (checkstring(argv[0], (unsigned char *)"ES"))
+                Option.KeyboardConfig = CONFIG_ES;
+            else if (checkstring(argv[0], (unsigned char *)"BE"))
+                Option.KeyboardConfig = CONFIG_BE;
+            else if (checkstring(argv[0], (unsigned char *)"BR"))
+                Option.KeyboardConfig = CONFIG_BR;
+            else if (checkstring(argv[0], (unsigned char *)"I2C"))
+                Option.KeyboardConfig = CONFIG_I2C;
+            else if (checkstring(argv[0], (unsigned char *)"PICOCALC"))
+                Option.KeyboardConfig = CONFIG_PICOCALC;
+#else
+        if (checkstring(argv[0], (unsigned char *)"US"))
+            Option.USBKeyboard = CONFIG_US;
+        else if (checkstring(argv[0], (unsigned char *)"FR"))
+            Option.USBKeyboard = CONFIG_FR;
+        else if (checkstring(argv[0], (unsigned char *)"GR"))
+            Option.USBKeyboard = CONFIG_GR;
+        else if (checkstring(argv[0], (unsigned char *)"IT"))
+            Option.USBKeyboard = CONFIG_IT;
+        else if (checkstring(argv[0], (unsigned char *)"UK"))
+            Option.USBKeyboard = CONFIG_UK;
+        else if (checkstring(argv[0], (unsigned char *)"ES"))
+            Option.USBKeyboard = CONFIG_ES;
+#endif
+            else
+                SyntaxError();
+            ;
+            Option.capslock = 0;
+            Option.numlock = 1;
+#if !defined(USBKEYBOARD) && !defined(PICOMITEBTH)
+            int rs = 0b00100000;
+            int rr = 0b00001100;
+            if (Option.KeyboardConfig < CONFIG_I2C)
+            {
+                if (argc >= 3 && *argv[2])
+                    Option.capslock = getint(argv[2], 0, 1);
+                if (argc >= 5 && *argv[4])
+                    Option.numlock = getint(argv[4], 0, 1);
+                if (argc >= 7 && *argv[6])
+                    rs = getint(argv[6], 0, 3) << 5;
+                if (argc == 9 && *argv[8])
+                    rr = getint(argv[8], 0, 31);
+                Option.repeat = rs | rr;
+            }
+            else
+            {
+                if (!Option.SYSTEM_I2C_SCL)
+                    error("Option System I2C not set");
+            }
+#else
+        if (argc >= 3 && *argv[2])
+            Option.capslock = getint(argv[2], 0, 1);
+        if (argc >= 5 && *argv[4])
+            Option.numlock = getint(argv[4], 0, 1);
+        if (argc >= 7 && *argv[6])
+            Option.RepeatStart = getint(argv[6], 100, 2000);
+        if (argc >= 9 && *argv[8])
+            Option.RepeatRate = getint(argv[8], 25, 2000);
+#endif
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+        }
+#if !defined(USBKEYBOARD) && !defined(PICOMITEBTH)
+    }
+#endif
+
+    tp = checkstring(cmdline, (unsigned char *)"BAUDRATE");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        int i;
+        i = getint(tp, Option.CPU_Speed * 1000 / 16 / 65535, 921600);
+        if (i < 100)
+            StandardError(21);
+        Option.Baudrate = i;
+        SaveOptions();
+        if (!Option.SerialConsole)
+            MMPrintString("Value saved but Serial Console not enabled");
+        else
+            MMPrintString("Restart to activate"); // set the console baud rate
+        return;
+    }
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+    tp = checkstring(cmdline, (unsigned char *)"SCREEN KEYBOARD");
+    if (tp)
+    {
+        /* Option.VRes_reserved is the stored value; OptionVResreserved is
+           the runtime working copy used by the editor / prompt. Keep both
+           in sync so the new value takes effect immediately and survives
+           a reboot. */
+        getcsargs(&tp, 3);
+        Option.VRes_reserved = getint(argv[0], 0, 50);
+        OptionVResreserved = Option.VRes_reserved;
+        Option.Multi = 0;
+        if (argc == 3 && mytoupper(*argv[2]) == 'M')
+            Option.Multi = true;
+        SaveOptions();
+        return;
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"SERIAL CONSOLE");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        //        unsigned char *p=NULL;
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.SerialTX = 0;
+            Option.SerialRX = 0;
+            Option.SerialConsole = 0;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+        else
+        {
+            int pin, pin2;
+            getcsargs(&tp, 5);
+            if (!(argc == 3 || argc == 5))
+                SyntaxError();
+            ;
+            pin = getpinarg(argv[0]);
+            pin2 = getpinarg(argv[2]);
+            if (ExtCurrentConfig[pin] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin, pin);
+            if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin2, pin2);
+            if (PinDef[pin].mode & UART0TX)
+                Option.SerialTX = pin;
+            else if (PinDef[pin].mode & UART0RX)
+                Option.SerialRX = pin;
+            else
+                goto checkcom2;
+            if (PinDef[pin2].mode & UART0TX)
+                Option.SerialTX = pin2;
+            else if (PinDef[pin2].mode & UART0RX)
+                Option.SerialRX = pin2;
+            else
+                StandardError(8);
+            if (Option.SerialTX == Option.SerialRX)
+                StandardError(8);
+            if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART0TX))
+                error("UART0 in use for GPS");
+            Option.SerialConsole = 1;
+            if (argc == 5)
+                Option.SerialConsole = ((checkstring(argv[4], (unsigned char *)"B") || checkstring(argv[4], (unsigned char *)"BOTH")) ? 5 : 1);
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        checkcom2:
+            if (PinDef[pin].mode & UART1TX)
+                Option.SerialTX = pin;
+            else if (PinDef[pin].mode & UART1RX)
+                Option.SerialRX = pin;
+            else
+                StandardError(8);
+            if (PinDef[pin2].mode & UART1TX)
+                Option.SerialTX = pin2;
+            else if (PinDef[pin2].mode & UART1RX)
+                Option.SerialRX = pin2;
+            else
+                StandardError(8);
+            if (Option.SerialTX == Option.SerialRX)
+                StandardError(8);
+            if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART1TX))
+                error("UART1 in use for GPS");
+            Option.SerialConsole = 2;
+            if (argc == 5)
+                Option.SerialConsole = (checkstring(argv[4], (unsigned char *)"B") ? 6 : 2);
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+        }
+    }
+    tp = checkstring(cmdline, (unsigned char *)"GPS");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        //        unsigned char *p=NULL;
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.GPSTX = 0;
+            Option.GPSRX = 0;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+        else
+        {
+            int pin, pin2;
+            getcsargs(&tp, 5);
+            if (!(argc == 3 || argc == 5))
+                SyntaxError();
+            if (argc == 5)
+            {
+                int i = getint(argv[4], Option.CPU_Speed * 1000 / 16 / 65535, 921600);
+                if (i < 100)
+                    StandardError(21);
+                Option.GPSBaud = i;
+            }
+            else
+                Option.GPSBaud = 9600;
+            pin = getpinarg(argv[0]);
+            pin2 = getpinarg(argv[2]);
+            if (ExtCurrentConfig[pin] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin, pin);
+            if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin2, pin2);
+            if (PinDef[pin].mode & UART0TX)
+                Option.GPSTX = pin;
+            else if (PinDef[pin].mode & UART0RX)
+                Option.GPSRX = pin;
+            else
+                goto GPScheckcom2;
+            if (PinDef[pin2].mode & UART0TX)
+                Option.GPSTX = pin2;
+            else if (PinDef[pin2].mode & UART0RX)
+                Option.GPSRX = pin2;
+            else
+                StandardError(8);
+            if (Option.GPSTX == Option.GPSRX)
+                StandardError(8);
+            if (Option.SerialConsole && (Option.SerialConsole & 3) == 1)
+                error("UART0 in use for Console");
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        GPScheckcom2:
+            if (PinDef[pin].mode & UART1TX)
+                Option.GPSTX = pin;
+            else if (PinDef[pin].mode & UART1RX)
+                Option.GPSRX = pin;
+            else
+                StandardError(8);
+            if (PinDef[pin2].mode & UART1TX)
+                Option.GPSTX = pin2;
+            else if (PinDef[pin2].mode & UART1RX)
+                Option.GPSRX = pin2;
+            else
+                StandardError(8);
+            if (Option.GPSTX == Option.GPSRX)
+                StandardError(8);
+            if (Option.SerialConsole && (Option.SerialConsole & 3) == 2)
+                error("UART1 in use for Console");
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+        }
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"AUTORUN");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        Option.NoReset = 0;
+        if (argc == 3)
+        {
+            if (checkstring(argv[2], (unsigned char *)"NORESET"))
+                Option.NoReset = 1;
+            else
+                SyntaxError();
+            ;
+        }
+        if (checkstring(argv[0], (unsigned char *)"OFF"))
+        {
+            Option.Autorun = 0;
+            SaveOptions();
+            return;
+        }
+        if (checkstring(argv[0], (unsigned char *)"ON"))
+        {
+            Option.Autorun = MAXFLASHSLOTS + 1;
+            SaveOptions();
+            return;
+        }
+        Option.Autorun = getint(argv[0], 0, MAXFLASHSLOTS);
+        SaveOptions();
+        return;
+    }
+#ifndef PICOMITEWEB
+    tp = checkstring(cmdline, (unsigned char *)"PICO");
+    if (tp)
+    {
+#ifdef rp2350
+        if (!rp2350a)
+            error("Invalid for RP2350B");
+#endif
+        if (checkstring(tp, (unsigned char *)"OFF") || checkstring(tp, (unsigned char *)"DISABLE"))
+            Option.AllPins = 1;
+        else if (checkstring(tp, (unsigned char *)"ON") || checkstring(tp, (unsigned char *)"ENABLE"))
+            Option.AllPins = 0;
+        else
+            SyntaxError();
+        ;
+        SaveOptions();
+        if (Option.AllPins == 0)
+        {
+            if (CheckPin(41, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+                ExtCfg(41, EXT_DIG_OUT, Option.PWM);
+            if (CheckPin(42, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+                ExtCfg(42, EXT_DIG_IN, 0);
+            if (CheckPin(44, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+                ExtCfg(44, EXT_ANA_IN, 0);
+        }
+        else
+        {
+            if (CheckPin(41, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+                ExtCfg(41, EXT_NOT_CONFIG, 0);
+            if (CheckPin(42, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+                ExtCfg(42, EXT_NOT_CONFIG, 0);
+            if (CheckPin(44, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+                ExtCfg(44, EXT_NOT_CONFIG, 0);
+        }
+        return;
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"DEFAULT COLOURS");
+    if (tp == NULL)
+        tp = checkstring(cmdline, (unsigned char *)"DEFAULT COLORS");
+    if (tp)
+    {
+        int DefaultFC = WHITE;
+        int DefaultBC = BLACK;
+        getcsargs(&tp, 3);
+        if (checkstring(argv[0], (unsigned char *)"WHITE"))
+        {
+            DefaultFC = WHITE;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"YELLOW"))
+        {
+            DefaultFC = YELLOW;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"LILAC"))
+        {
+            DefaultFC = LILAC;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"BROWN"))
+        {
+            DefaultFC = BROWN;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"FUCHSIA"))
+        {
+            DefaultFC = FUCHSIA;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"RUST"))
+        {
+            DefaultFC = RUST;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"MAGENTA"))
+        {
+            DefaultFC = MAGENTA;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"RED"))
+        {
+            DefaultFC = RED;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"CYAN"))
+        {
+            DefaultFC = CYAN;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"GREEN"))
+        {
+            DefaultFC = GREEN;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"CERULEAN"))
+        {
+            DefaultFC = CERULEAN;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"MIDGREEN"))
+        {
+            DefaultFC = MIDGREEN;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"COBALT"))
+        {
+            DefaultFC = COBALT;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"MYRTLE"))
+        {
+            DefaultFC = MYRTLE;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"BLUE"))
+        {
+            DefaultFC = BLUE;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"BLACK"))
+        {
+            DefaultFC = BLACK;
+        }
+        else
+            error("Invalid colour: $", argv[0]);
+        if (argc == 3)
+        {
+            if (checkstring(argv[2], (unsigned char *)"WHITE"))
+            {
+                DefaultBC = WHITE;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"YELLOW"))
+            {
+                DefaultBC = YELLOW;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"LILAC"))
+            {
+                DefaultBC = LILAC;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"BROWN"))
+            {
+                DefaultBC = BROWN;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"FUCHSIA"))
+            {
+                DefaultBC = FUCHSIA;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"RUST"))
+            {
+                DefaultBC = RUST;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"MAGENTA"))
+            {
+                DefaultBC = MAGENTA;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"RED"))
+            {
+                DefaultBC = RED;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"CYAN"))
+            {
+                DefaultBC = CYAN;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"GREEN"))
+            {
+                DefaultBC = GREEN;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"CERULEAN"))
+            {
+                DefaultBC = CERULEAN;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"MIDGREEN"))
+            {
+                DefaultBC = MIDGREEN;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"COBALT"))
+            {
+                DefaultBC = COBALT;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"MYRTLE"))
+            {
+                DefaultBC = MYRTLE;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"BLUE"))
+            {
+                DefaultBC = BLUE;
+            }
+            else if (checkstring(argv[2], (unsigned char *)"BLACK"))
+            {
+                DefaultBC = BLACK;
+            }
+            else
+                error("Invalid colour: $", argv[2]);
+        }
+        if (DefaultBC == DefaultFC)
+            error("Foreground and Background colours are the same");
+        Option.DefaultBC = DefaultBC;
+        Option.DefaultFC = DefaultFC;
+        SaveOptions();
+        ResetDisplay();
+        if (Option.DISPLAY_TYPE != SCREENMODE1)
+            ClearScreen(gui_bcolour);
+        CurrentX = CurrentY = 0;
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"HEARTBEAT");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"OFF") || checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.NoHeartbeat = 1;
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+            /* CYW43 builds skip the pin-reconfigure path below (which is
+               where the non-CYW43 OFF path saves), so save here or the
+               option is lost on reboot. No GPIO heartbeat on these
+               builds, so keep heartbeatpin clear. */
+            Option.heartbeatpin = 0;
+            SaveOptions();
+            return;
+#endif
+        }
+        else
+        {
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+            /* CYW43-bearing builds — the heartbeat LED is on the
+               wireless chip, not a GPIO, so OPTION HEARTBEAT ON/OFF
+               only toggles Option.NoHeartbeat. The polling functions
+               (ProcessWeb / bt_keyboard_poll / bt_console_poll) honour
+               that flag and either drive the chip LED or leave it
+               dark. No pin to reconfigure; clear heartbeatpin so
+               OPTION LIST doesn't report a phantom HEARTBEAT PIN. */
+            if (checkstring(tp, (unsigned char *)"ON") || checkstring(tp, (unsigned char *)"ENABLE"))
+            {
+                Option.NoHeartbeat = 0;
+                Option.heartbeatpin = 0;
+            }
+            else
+                SyntaxError();
+            ;
+            SaveOptions();
+            return;
+        }
+#else
+            unsigned char *p = NULL;
+            p = checkstring(tp, (unsigned char *)"ON");
+            if (p == NULL)
+                p = checkstring(tp, (unsigned char *)"ENABLE");
+            if (p)
+            {
+                getcsargs(&p, 1);
+                if (argc)
+                {
+                    unsigned char pin1;
+                    pin1 = getpinarg(p);
+                    if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+                        StandardErrorParam2(27, pin1, pin1);
+                    Option.NoHeartbeat = 0;
+                    Option.heartbeatpin = pin1;
+                    SaveOptions();
+                    SoftReset(SOFT_RESET);
+                }
+                else
+                    Option.NoHeartbeat = 0;
+            }
+            else
+                SyntaxError();
+            ;
+        }
+        SaveOptions();
+        if (CheckPin(HEARTBEATpin, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+        {
+            if (Option.NoHeartbeat == 0)
+            {
+                gpio_init(PinDef[HEARTBEATpin].GPno);
+                gpio_set_dir(PinDef[HEARTBEATpin].GPno, GPIO_OUT);
+                ExtCurrentConfig[PinDef[HEARTBEATpin].pin] = EXT_HEARTBEAT;
+            }
+            else
+                ExtCfg(HEARTBEATpin, EXT_NOT_CONFIG, 0);
+        }
+        else
+            error("Pin %/| is reserved", HEARTBEATpin, HEARTBEATpin);
+#endif
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"LCDPANEL NOCONSOLE");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        Option.Height = SCREENHEIGHT;
+        Option.Width = SCREENWIDTH;
+        Option.DISPLAY_CONSOLE = 0;
+        Option.DefaultFC = WHITE;
+        Option.DefaultBC = BLACK;
+        SetFont((Option.DefaultFont = (Option.DISPLAY_TYPE == SCREENMODE2 ? (6 << 4) | 1 : 0x01)));
+        Option.BackLightLevel = 100;
+        Option.NoScroll = 0;
+        Option.Height = SCREENHEIGHT;
+        Option.Width = SCREENWIDTH;
+        SaveOptions();
+        // OPTION LCDPANEL NOCONSOLE: console reverts to the LCD panel, so
+        // shrink any attached serial terminal back to the 80x24 default.
+        setterminal(Option.Height, Option.Width);
+        ClearScreen(Option.DefaultBC);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"LCDPANEL CONSOLE");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        Option.NoScroll = 0;
+        if (!(Option.DISPLAY_TYPE == ST7365P || Option.DISPLAY_TYPE == ST7789B || Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ST7365P || Option.DISPLAY_TYPE == ST7796SP || Option.DISPLAY_TYPE == ST7796S || Option.DISPLAY_TYPE == ILI9488P || Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE >= VGADISPLAY))
+            Option.NoScroll = 1;
+        if (!(Option.DISPLAY_ORIENTATION == DISPLAY_LANDSCAPE) && Option.DISPLAY_TYPE == SSDTYPE)
+            error("Landscape only");
+        skipspace(tp);
+        Option.DefaultFC = WHITE;
+        Option.DefaultBC = BLACK;
+        int font;
+        Option.BackLightLevel = 100;
+        if (!(*tp == 0 || *tp == '\''))
+        {
+            getcsargs(&tp, 9); // this is a macro and must be the first executable stmt in a block
+            if (argc > 0)
+            {
+                if (*argv[0] == '#')
+                    argv[0]++; // skip the hash if used
+                font = (((getint(argv[0], 1, FONT_BUILTIN_NBR) - 1) << 4) | 1);
+                if (FontTable[font >> 4][0] * 29 > HRes)
+                    error("Font too wide for console mode");
+                Option.DefaultFont = font;
+            }
+            if (argc > 2 && *argv[2])
+                Option.DefaultFC = getint(argv[2], BLACK, WHITE);
+            if (argc > 4 && *argv[4])
+                Option.DefaultBC = getint(argv[4], BLACK, WHITE);
+            if (Option.DefaultFC == Option.DefaultBC)
+                error("Same colours");
+            if (argc > 6 && *argv[6])
+            {
+                if (!Option.DISPLAY_BL)
+                    error("Backlight not available on this display");
+                Option.BackLightLevel = getint(argv[6], 0, 100);
+            }
+            if (argc == 9)
+            {
+                if (checkstring(argv[8], (unsigned char *)"NOSCROLL"))
+                {
+                    if (!FASTSCROLL)
+                        Option.NoScroll = 1;
+                    else
+                        error("Invalid for this display");
+                }
+                else
+                    SyntaxError();
+                ;
+            }
+        }
+        if (Option.DISPLAY_BL)
+        {
+            MMFLOAT frequency = 1000.0, duty = Option.BackLightLevel;
+            int wrap = (Option.CPU_Speed * 1000) / frequency;
+            int high = (int)((MMFLOAT)Option.CPU_Speed / frequency * duty * 10.0);
+            int div = 1;
+            while (wrap > 65535)
+            {
+                wrap >>= 1;
+                if (duty >= 0.0)
+                    high >>= 1;
+                div <<= 1;
+            }
+            wrap--;
+            if (div != 1)
+                pwm_set_clkdiv(BacklightSlice, (float)div);
+            pwm_set_wrap(BacklightSlice, wrap);
+            pwm_set_chan_level(BacklightSlice, BacklightChannel, high);
+        }
+#ifdef PICOMITEVGA
+#ifdef HDMI
+        int fcolour = (FullColour ? RGB555(Option.DefaultFC) : RGB332(Option.DefaultFC));
+        int bcolour = (FullColour ? RGB555(Option.DefaultBC) : RGB332(Option.DefaultBC));
+#else
+        int fcolour = RGB121pack(Option.DefaultFC);
+        int bcolour = RGB121pack(Option.DefaultBC);
+#endif
+        for (int xp = 0; xp < X_TILE; xp++)
+        {
+            for (int yp = 0; yp < Y_TILE; yp++)
+            {
+#ifdef HDMI
+                if (FullColour)
+                {
+#endif
+                    if (fcolour != 0xFFFFFFFF)
+                        tilefcols[yp * X_TILE + xp] = (uint16_t)fcolour;
+                    if (bcolour != 0xFFFFFFFF)
+                        tilebcols[yp * X_TILE + xp] = (uint16_t)bcolour;
+#ifdef HDMI
+                }
+                else
+                {
+                    if (fcolour != 0xFFFFFFFF)
+                        tilefcols_w[yp * X_TILE + xp] = (uint8_t)fcolour;
+                    if (bcolour != 0xFFFFFFFF)
+                        tilebcols_w[yp * X_TILE + xp] = (uint8_t)bcolour;
+                }
+#endif
+            }
+        }
+#endif
+        Option.DISPLAY_CONSOLE = true;
+        if (!CurrentLinePtr)
+        {
+            ResetDisplay();
+            // Only setterminal if console is bigger than 80*24
+            if (Option.Width > SCREENWIDTH || Option.Height > SCREENHEIGHT)
+            {
+                setterminal((Option.Height > SCREENHEIGHT) ? Option.Height : SCREENHEIGHT, (Option.Width >= SCREENWIDTH) ? Option.Width : SCREENWIDTH); // or height is > 24
+            }
+            SaveOptions();
+            if (!(Option.DISPLAY_TYPE == SCREENMODE1 || Option.DISPLAY_TYPE == SCREENMODE2))
+                ClearScreen(Option.DefaultBC);
+        }
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"LEGACY");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            CMM1 = 0;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            CMM1 = 1;
+            return;
+        }
+        SyntaxError();
+        ;
+    }
+#if PICOCALC // *EB*
+    if (strcmp((char *)Option.platform, "PicoCalc") == 0)
+    {                                                                // *EB*
+        tp = checkstring(cmdline, (unsigned char *)"BACKLIGHT KBD"); // *EB*
+        if (tp)
+        {                                                       // *EB*
+            getargs(&tp, 1, (unsigned char *)",");              // *EB*
+            if (argc > 0)                                       // *EB*
+            {                                                   // *EB*
+                Option.BACKLIGHT_KBD = getint(argv[0], 0, 255); // *EB*
+                set_kbd_backlight(Option.BACKLIGHT_KBD);        // *EB*
+                SaveOptions();                                  // *EB*
+                return;                                         // *EB*
+            } // *EB*
+            else                         // *EB*
+            {                            // *EB*
+                error("Invalid syntax"); // *EB*
+            } // *EB*
+        } // *EB*
+        tp = checkstring(cmdline, (unsigned char *)"BACKLIGHT LCD"); // *EB*
+        if (tp)
+        {                                                       // *EB*
+            getargs(&tp, 1, (unsigned char *)",");              // *EB*
+            if (argc > 0)                                       // *EB*
+            {                                                   // *EB*
+                Option.BACKLIGHT_LCD = getint(argv[0], 0, 255); // *EB*
+                set_lcd_backlight(Option.BACKLIGHT_LCD);        // *EB*
+                SaveOptions();                                  // *EB*
+                return;                                         // *EB*
+            } // *EB*
+            else                         // *EB*
+            {                            // *EB*
+                error("Invalid syntax"); // *EB*
+            } // *EB*
+        } // *EB*
+    } // *EB*
+#endif // *EB*
+
+#ifdef PICOMITEWEB
+    tp = checkstring(cmdline, (unsigned char *)"WEB MESSAGES");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            optionsuppressstatus = 1;
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            optionsuppressstatus = 0;
+            return;
+        }
+    }
+    tp = checkstring(cmdline, (unsigned char *)"WIFI");
+    if (tp)
+    {
+        setwifi(tp);
+        SoftReset(SOFT_RESET);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"TCP SERVER PORT");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        if (CurrentLinePtr)
+            StandardError(10);
+        Option.TCP_PORT = getint(argv[0], 0, 65535);
+        Option.ServerResponceTime = 5000;
+        if (argc == 3)
+            Option.ServerResponceTime = getint(argv[2], 1000, 20000);
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"UDP SERVER PORT");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        if (CurrentLinePtr)
+            StandardError(10);
+        Option.UDP_PORT = getint(argv[0], 0, 65535);
+        Option.UDPServerResponceTime = 5000;
+        if (argc == 3)
+            Option.UDPServerResponceTime = getint(argv[2], 1000, 20000);
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"TELNET CONSOLE");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (checkstring(tp, (unsigned char *)"OFF"))
+            Option.Telnet = 0;
+        else if (checkstring(tp, (unsigned char *)"ON"))
+            Option.Telnet = 1;
+        else if (checkstring(tp, (unsigned char *)"ONLY"))
+            Option.Telnet = -1;
+        else
+            SyntaxError();
+        ;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"TFTP");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (checkstring(tp, (unsigned char *)"OFF"))
+            Option.disabletftp = 1;
+        else if (checkstring(tp, (unsigned char *)"ON"))
+            Option.disabletftp = 0;
+        else if (checkstring(tp, (unsigned char *)"ENABLE"))
+            Option.disabletftp = 0;
+        else if (checkstring(tp, (unsigned char *)"DISABLE"))
+            Option.disabletftp = 1;
+        else
+            SyntaxError();
+        ;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+
+#endif
+
+#ifdef PICOMITEVGA
+#ifdef HDMICUTDOWN
+    /* HDMIBTH/HDMIWEB: set the default (boot) resolution. Three 8-bit
+       resolutions are available: 640x480 (takes the same optional
+       252000/315000/378000 CPU speed as the full HDMI build; bare 640
+       defaults to 252000), 720x400 (fixed 283200) and 1024x600 (fixed
+       252000). Saved and rebooted exactly like the full build's OPTION
+       RESOLUTION; the RESOLUTION command performs the same switch live
+       (not saved). */
+    tp = checkstring(cmdline, (unsigned char *)"RESOLUTION");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (argc != 1 && argc != 3)
+            SyntaxError();
+        if (checkstring(argv[0], (unsigned char *)"640") || checkstring(argv[0], (unsigned char *)"640x480"))
+        {
+            Option.Resolution = R640x480x8;
+            Option.CPU_Speed = Freq252P;
+            if (argc == 3)
+            {
+                int i = getint(argv[2], Freq252P, Freq378P);
+                if (!(i == Freq252P || i == Freq480P || i == Freq378P))
+                    error("Invalid speed");
+                Option.CPU_Speed = i;
+            }
+        }
+        else if (checkstring(argv[0], (unsigned char *)"720") || checkstring(argv[0], (unsigned char *)"720x400"))
+        {
+            if (argc == 3)
+                SyntaxError(); // 720x400 has a single fixed timing (283.2 MHz)
+            Option.Resolution = R720x400x8;
+            Option.CPU_Speed = Freq400;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"800") || checkstring(argv[0], (unsigned char *)"800x600"))
+        {
+            if (argc == 3)
+                SyntaxError(); // single fixed timing
+            Option.Resolution = R800x600;
+            Option.CPU_Speed = FreqSVGA;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"848") || checkstring(argv[0], (unsigned char *)"848x480"))
+        {
+            if (argc == 3)
+                SyntaxError(); // single fixed timing
+            Option.Resolution = R848x480;
+            Option.CPU_Speed = Freq848;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"800x480"))
+        {
+            if (argc == 3)
+                SyntaxError(); // single fixed timing
+            Option.Resolution = R800x480;
+            Option.CPU_Speed = FreqY;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"1024") || checkstring(argv[0], (unsigned char *)"1024x600"))
+        {
+            if (argc == 3)
+                SyntaxError(); // the speed argument only applies to 640x480
+            Option.Resolution = R1024x600;
+            Option.CPU_Speed = Freq252P;
+        }
+        else
+            SyntaxError();
+        Option.DefaultFont = 1;
+        Option.DISPLAY_TYPE = SCREENMODE1;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#else
+    tp = checkstring(cmdline, (unsigned char *)"RESOLUTION");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if ((checkstring(argv[0], (unsigned char *)"640")) || (checkstring(argv[0], (unsigned char *)"640x480")))
+        {
+            if (argc == 3)
+            {
+                int i = getint(argv[2], Freq252P, Freq378P);
+                if (!(i == Freq252P || i == Freq480P || i == Freq378P))
+                    error("Invalid speed");
+                if (i == Freq252P)
+                    Option.Resolution = R640x480f252;
+                else if (i == Freq480P)
+                    Option.Resolution = R640x480f315;
+                else
+                    Option.Resolution = R640x480f378;
+            }
+            else
+                Option.Resolution = R640x480f252;
+
+            Option.DefaultFont = 1;
+        }
+#ifdef HDMI
+        else if (checkstring(argv[0], (unsigned char *)"1280") || checkstring(argv[0], (unsigned char *)"1280x720"))
+        {
+            Option.Resolution = R1280x720;
+            Option.DefaultFont = (2 << 4) | 1;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"1024") || checkstring(argv[0], (unsigned char *)"1024x768"))
+        {
+            Option.Resolution = R1024x768;
+            Option.DefaultFont = (2 << 4) | 1;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"1024x600"))
+        {
+            Option.Resolution = R1024x600;
+            Option.DefaultFont = 1;
+        }
+        else if (checkstring(argv[0], (unsigned char *)"800x480"))
+        {
+            Option.Resolution = R800x480;
+            Option.DefaultFont = 1;
+        }
+#endif
+#ifdef rp2350
+        else if (checkstring(argv[0], (unsigned char *)"800") || checkstring(argv[0], (unsigned char *)"800x600"))
+        {
+            Option.Resolution = R800x600;
+            Option.DefaultFont = 1;
+        }
+
+        else if (checkstring(argv[0], (unsigned char *)"848") || checkstring(argv[0], (unsigned char *)"848x480"))
+        {
+            Option.Resolution = R848x480;
+            Option.DefaultFont = 1;
+        }
+#endif
+        else if (checkstring(argv[0], (unsigned char *)"720") || checkstring(argv[0], (unsigned char *)"720x400"))
+        {
+            Option.Resolution = R720x400;
+            Option.DefaultFont = 1;
+        }
+        else
+            SyntaxError();
+        ;
+#ifndef HDMI
+        Option.X_TILE = (Option.Resolution == R848x480 ? 106 : Option.Resolution == R720x400 ? 90
+                                                           : Option.Resolution == R800x600   ? 100
+                                                                                             : 80);
+        Option.Y_TILE = (Option.Resolution == R720x400 ? 33 : Option.Resolution == R800x600 ? 50
+                                                                                            : 40);
+#endif
+        Option.DISPLAY_TYPE = SCREENMODE1;
+        Option.CPU_Speed = CPUFreqs[Option.Resolution];
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#endif /* HDMICUTDOWN / full OPTION RESOLUTION variants */
+#ifndef HDMI
+    tp = checkstring(cmdline, (unsigned char *)"VGA PINS");
+    if (tp)
+    {
+        int pin1, pin2, testpin;
+        getcsargs(&tp, 3);
+        if (CurrentLinePtr)
+            StandardError(10);
+        pin1 = getpinarg(argv[0]);
+        pin2 = getpinarg(argv[2]);
+        // now de-allocate the existing VGA pins temporarily
+        ExtCurrentConfig[Option.VGA_BLUE] = EXT_NOT_CONFIG;
+        ExtCurrentConfig[Option.VGA_HSYNC] = EXT_NOT_CONFIG;
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 1]] = EXT_NOT_CONFIG;
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 2]] = EXT_NOT_CONFIG;
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 3]] = EXT_NOT_CONFIG;
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_HSYNC].GPno + 1]] = EXT_NOT_CONFIG;
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            VGArecovery(pin1);
+        if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+            VGArecovery(pin2);
+        testpin = PINMAP[PinDef[pin1].GPno + 1];
+        if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
+            VGArecovery(testpin);
+        testpin = PINMAP[PinDef[pin2].GPno + 1];
+        if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
+            VGArecovery(testpin);
+        testpin = PINMAP[PinDef[pin2].GPno + 2];
+        if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
+            VGArecovery(testpin);
+        testpin = PINMAP[PinDef[pin2].GPno + 3];
+        if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
+            VGArecovery(testpin);
+#ifdef rp2350
+        uint64_t map = 0;
+        if (Option.audio_i2s_bclk)
+        {
+            map |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.audio_i2s_data].GPno);
+            map |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.audio_i2s_bclk].GPno);
+            map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.audio_i2s_bclk].GPno + 1));
+        }
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[pin2].GPno);
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 1));
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 2));
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 3));
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[pin1].GPno);
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin1].GPno + 1));
+        if ((map & (uint64_t)0xFFFF) && (map & (uint64_t)0xFFFF00000000))
+            error("Attempt to define incompatible PIO pins");
+#endif
+        Option.VGA_HSYNC = pin1;
+        Option.VGA_BLUE = pin2;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+
+#endif
+
+    tp = checkstring(cmdline, (unsigned char *)"DEFAULT MODE");
+    if (tp)
+    {
+#ifdef rp2350
+        int mode = getint(tp, 1, MAXMODES);
+#ifdef HDMICUTDOWN
+        /* The special RGB332 640x480 / 720x400 (the factory default, also
+           reachable via a live RESOLUTION 640/720 which restartHDMI mirrors
+           into Option.Resolution) only implement modes 1, 2 and 5. Without
+           this guard mode 3 would be accepted, saved AND applied live —
+           HDMIloopBTH640 has no SCREENMODE3 case, so the display goes
+           blank now and again at every boot. Same check as setmode(). */
+        if ((Option.Resolution == R640x480x8 || Option.Resolution == R720x400x8) && (mode == 3 || mode == 4))
+            error("Mode not available in this resolution");
+        /* The RGB332 medium resolutions (HDMIloop3) offer only modes 1 and 2;
+           mode 3/5 framebuffers overflow the 96000-byte cut-down pool. Same
+           check as setmode(). */
+        if ((Option.Resolution == R800x600 || Option.Resolution == R848x480 || Option.Resolution == R800x480) && (mode == 3 || mode == 5))
+            error("Mode not available in this resolution");
+#endif
+        if (mode == 3)
+        {
+            Option.DISPLAY_TYPE = SCREENMODE3;
+            Option.DefaultFont = 1;
+#ifdef HDMI
+        }
+        else if (mode == 4)
+        {
+            if (!(FullColour))
+                error("Mode not available in this resolution");
+            Option.DISPLAY_TYPE = SCREENMODE4;
+            Option.DefaultFont = (6 << 4) | 1;
+        }
+        else if (mode == 5)
+        {
+            Option.DISPLAY_TYPE = SCREENMODE5;
+            Option.DefaultFont = (6 << 4) | 1;
+#endif
+        }
+        else if (mode == 2)
+        {
+            Option.DISPLAY_TYPE = SCREENMODE2;
+            Option.DefaultFont = (6 << 4) | 1;
+        }
+        else
+        {
+            Option.DISPLAY_TYPE = SCREENMODE1;
+            Option.DefaultFont = 1;
+        }
+#else
+        int mode = getint(tp, 1, MAXMODES);
+        if (mode == 2)
+        {
+            Option.DISPLAY_TYPE = SCREENMODE2;
+            Option.DefaultFont = (6 << 4) | 1;
+        }
+        else
+        {
+            Option.DISPLAY_TYPE = SCREENMODE1;
+            Option.DefaultFont = 1;
+        }
+#endif
+        SaveOptions();
+        DISPLAY_TYPE = Option.DISPLAY_TYPE;
+        memset((void *)WriteBuf, 0, ScreenSize);
+        ResetDisplay();
+        CurrentX = CurrentY = 0;
+        if (Option.DISPLAY_TYPE != SCREENMODE1)
+            ClearScreen(Option.DefaultBC);
+        SetFont(Option.DefaultFont);
+        return;
+    }
+#else
+    tp = checkstring(cmdline, (unsigned char *)"CPUSPEED");
+    if (tp)
+    {
+        uint32_t speed = 0;
+        if (CurrentLinePtr)
+            StandardError(10);
+        speed = getint(tp, MIN_CPU, MAX_CPU);
+        if (speed > 384000 && Option.PSRAM_CS_PIN != 0)
+            error("CPUSPEED cannot exceed 384000 KHz when PSRAM is enabled");
+        uint vco, postdiv1, postdiv2;
+        if (!check_sys_clock_khz(speed, &vco, &postdiv1, &postdiv2))
+            error("Invalid clock speed");
+        Option.CPU_Speed = speed;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"AUTOREFRESH");
+    if (tp)
+    {
+        if ((Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE == ILI9163 || Option.DISPLAY_TYPE == ST7735 || Option.DISPLAY_TYPE == ST7789 || Option.DISPLAY_TYPE == ST7789A))
+            error("Not valid for this display");
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            Option.Refresh = 1;
+            Display_Refresh();
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            Option.Refresh = 0;
+            return;
+        }
+        SyntaxError();
+        ;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"LCDPANEL");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            if (CurrentLinePtr)
+                StandardError(10);
+            Option.LCD_CD = Option.LCD_CS = Option.LCD_Reset = Option.DISPLAY_TYPE = Option.SSD_DATA = HRes = VRes = 0;
+            Option.SSD_DC = Option.SSD_WR = Option.SSD_RD = SSD1963data = 0;
+            Option.TOUCH_XZERO = Option.TOUCH_YZERO = 0; // record the touch feature as not calibrated
+            Option.SSD_RESET = -1;
+            if (Option.DISPLAY_CONSOLE)
+            {
+                Option.Height = SCREENHEIGHT;
+                Option.Width = SCREENWIDTH;
+                // OPTION DISPLAY DISABLE while the LCD console was active:
+                // restore the serial terminal to the 80x24 default.
+                setterminal(Option.Height, Option.Width);
+            }
+            DrawRectangle = (void (*)(int, int, int, int, int))DisplayNotSet;
+            DrawBitmap = (void (*)(int, int, int, int, int, int, int, unsigned char *))DisplayNotSet;
+            ScrollLCD = (void (*)(int))DisplayNotSet;
+            DrawBuffer = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
+            ReadBuffer = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
+            Option.DISPLAY_CONSOLE = false;
+        }
+        else
+        {
+            if (Option.DISPLAY_TYPE && !CurrentLinePtr)
+                error("Display already configured");
+            ConfigDisplayUser(tp);
+            if (Option.DISPLAY_TYPE)
+                return;
+            if (CurrentLinePtr)
+                StandardError(10);
+            if (!Option.DISPLAY_TYPE)
+                ConfigDisplaySPI(tp);
+#if PICOMITERP2350
+            if (!Option.DISPLAY_TYPE)
+                ConfigDisplay222(tp);
+#endif
+            if (!Option.DISPLAY_TYPE)
+                ConfigDisplayVirtual(tp);
+            if (!Option.DISPLAY_TYPE)
+                ConfigDisplaySSD(tp);
+            if (!Option.DISPLAY_TYPE)
+                ConfigDisplayI2C(tp);
+            if (!Option.DISPLAY_TYPE)
+                SyntaxError();
+        }
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"TOUCH");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            if (Option.CombinedCS)
+                error("Touch CS in use for SDcard");
+            Option.TOUCH_Click = Option.TOUCH_CS = Option.TOUCH_IRQ = false;
+        }
+        else
+        {
+            if (Option.TOUCH_CS)
+                error("Touch already configured");
+            ConfigTouch(tp);
+        }
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"DISPLAY");
+    if (tp)
+    {
+        getcsargs(&tp, 3);
+        if (Option.DISPLAY_CONSOLE && argc > 0)
+            error("Cannot change LCD console");
+        if (argc >= 1)
+            Option.Height = getint(argv[0], 5, 100);
+        if (argc == 3)
+            Option.Width = getint(argv[2], 37, 240);
+        if (Option.DISPLAY_CONSOLE)
+        {
+            // LCD console is active: ensure attached serial terminal is at
+            // least 80x24, growing it if the LCD console is larger.
+            setterminal((Option.Height > SCREENHEIGHT) ? Option.Height : SCREENHEIGHT, (Option.Width > SCREENWIDTH) ? Option.Width : SCREENWIDTH); // or height is > 24
+        }
+        else
+        {
+            // No LCD console: resize the serial terminal to exactly the
+            // requested dimensions.
+            setterminal(Option.Height, Option.Width);
+        }
+        if (argc >= 1)
+            SaveOptions(); // Only save if necessary
+        return;
+    }
+#ifdef GUICONTROLS
+    tp = checkstring(cmdline, (unsigned char *)"GUI CONTROLS");
+    if (tp)
+    {
+        getcsargs(&tp, 1);
+        if (CurrentLinePtr)
+            StandardError(10);
+        Option.MaxCtrls = getint(argv[0], 0, MAXCONTROLS - 1);
+        if (Option.MaxCtrls)
+            Option.MaxCtrls++;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"CASE");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"LOWER"))
+        {
+            Option.Listcase = CONFIG_LOWER;
+            SaveOptions();
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"UPPER"))
+        {
+            Option.Listcase = CONFIG_UPPER;
+            SaveOptions();
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"TITLE"))
+        {
+            Option.Listcase = CONFIG_TITLE;
+            SaveOptions();
+            return;
+        }
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"TAB");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"2"))
+        {
+            Option.Tab = 2;
+            SaveOptions();
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"3"))
+        {
+            Option.Tab = 3;
+            SaveOptions();
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"4"))
+        {
+            Option.Tab = 4;
+            SaveOptions();
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"8"))
+        {
+            Option.Tab = 8;
+            SaveOptions();
+            return;
+        }
+    }
+    tp = checkstring(cmdline, (unsigned char *)"VCC");
+    if (tp)
+    {
+        MMFLOAT f;
+        f = getnumber(tp);
+        if (f > 3.6)
+            error("VCC too high");
+        if (f < 1.8)
+            error("VCC too low");
+        VCC = f;
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"PIN");
+    if (tp)
+    {
+        int i;
+        i = getint(tp, 0, 99999999);
+        Option.PIN = i;
+        SaveOptions();
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"POWER");
+    if (tp)
+    {
+#ifdef rp2350
+        if (!rp2350a)
+            error("Invalid for RP2350B");
+#endif
+        if (Option.AllPins)
+            error("OPTION PICO set");
+        if (checkstring(tp, (unsigned char *)"PWM"))
+            Option.PWM = true;
+        if (checkstring(tp, (unsigned char *)"PFM"))
+            Option.PWM = false;
+        SaveOptions();
+        if (Option.PWM)
+        {
+            gpio_init(23);
+            gpio_put(23, GPIO_PIN_SET);
+            gpio_set_dir(23, GPIO_OUT);
+        }
+        else
+        {
+            gpio_init(23);
+            gpio_put(23, GPIO_PIN_RESET);
+            gpio_set_dir(23, GPIO_OUT);
+        }
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"COLOURCODE");
+    if (tp == NULL)
+        tp = checkstring(cmdline, (unsigned char *)"COLORCODE");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            Option.ColourCode = true;
+            SaveOptions();
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            Option.ColourCode = false;
+            SaveOptions();
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"RTC AUTO");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"ENABLE"))
+        {
+            Option.RTC = true;
+            SaveOptions();
+            RtcGetTime(0);
+            return;
+        }
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.RTC = false;
+            SaveOptions();
+            return;
+        }
+    }
+    tp = checkstring(cmdline, (unsigned char *)"CONTINUATION LINES");
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"ENABLE"))
+        {
+            Option.continuation = '_';
+            SaveOptions();
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            Option.continuation = false;
+            SaveOptions();
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"ON"))
+        {
+            Option.continuation = '_';
+            SaveOptions();
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"OFF"))
+        {
+            Option.continuation = false;
+            SaveOptions();
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"MODBUFF");
+    if (tp)
+    {
+        unsigned char *p = NULL;
+        int i, size = 0;
+        if (CurrentLinePtr)
+            StandardError(10);
+        if ((p = checkstring(tp, (unsigned char *)"ENABLE")))
+        {
+            if (!Option.modbuff)
+            {
+                getcsargs(&p, 1);
+                if (argc)
+                {
+                    size = getint(argv[0], 16, (Option.FlashSize - RoundUpK4(TOP_OF_SYSTEM_FLASH)) / 1024 - 132);
+                    if (size & 3)
+                        error("Must be a multiple of 4");
+                }
+                MMPrintString("\r\nThis erases everything in flash including the A: drive - are you sure (Y/N) ? ");
+                while ((i = MMInkey()) == -1)
+                {
+                };
+                putConsole(i, 1);
+                if (mytoupper(i) != 'Y')
+                {
+                    PRet();
+                    memset(inpbuf, 0, STRINGSIZE);
+                    longjmp(mark, 1);
+                }
+                if (argc)
+                    Option.modbuffsize = size;
+                else
+                    Option.modbuffsize = 128;
+                Option.modbuff = true;
+                SaveOptions();
+                ResetFlashStorage(1);
+                modbuff = (char *)(XIP_BASE + RoundUpK4(TOP_OF_SYSTEM_FLASH));
+                SoftReset(SOFT_RESET);
+            }
+            else
+                error("Already enabled");
+        }
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            if (Option.modbuff)
+            {
+                MMPrintString("\r\nThis erases everything in flash including the A: drive - are you sure (Y/N) ? ");
+                while ((i = MMInkey()) == -1)
+                {
+                };
+                putConsole(i, 1);
+                if (mytoupper(i) != 'Y')
+                {
+                    memset(inpbuf, 0, STRINGSIZE);
+                    longjmp(mark, 1);
+                }
+                Option.modbuff = false;
+                Option.modbuffsize = 0;
+                SaveOptions();
+                ResetFlashStorage(1);
+                modbuff = NULL;
+                PRet();
+                SoftReset(SOFT_RESET);
+            }
+            else
+                error("Not enabled");
+        }
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"LIST");
+    if (tp)
+    {
+        printoptions();
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"AUDIO");
+    if (tp)
+    {
+        int pin1, pin2, slice;
+        unsigned char *p;
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            disable_audio();
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return; // this will restart the processor ? only works when not in debug
+        }
+#if !defined(PICOMITEMIN)
+        if ((p = checkstring(tp, (unsigned char *)"VS1053")))
+        {
+            int pin1, pin2, pin3, pin4, pin5, pin6, pin7;
+            getcsargs(&p, 13);
+            if (argc != 13)
+                SyntaxError();
+            ;
+            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L)
+                error("Audio already configured");
+            //
+            pin1 = getpinarg(argv[0]);
+            if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin1, pin1);
+            //
+            pin2 = getpinarg(argv[2]);
+            if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin2, pin2);
+            //
+            pin3 = getpinarg(argv[4]);
+            if (ExtCurrentConfig[pin3] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin3, pin3);
+            //
+            pin4 = getpinarg(argv[6]);
+            if (ExtCurrentConfig[pin4] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin4, pin4);
+            //
+            pin5 = getpinarg(argv[8]);
+            if (ExtCurrentConfig[pin5] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin5, pin5);
+            //
+            pin6 = getpinarg(argv[10]);
+            if (ExtCurrentConfig[pin6] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin6, pin6);
+            //
+            pin7 = getpinarg(argv[12]);
+            if (ExtCurrentConfig[pin7] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin7, pin7);
+            //
+            if (!(PinDef[pin1].mode & SPI0SCK && PinDef[pin2].mode & SPI0TX && PinDef[pin3].mode & SPI0RX) &&
+                !(PinDef[pin1].mode & SPI1SCK && PinDef[pin2].mode & SPI1TX && PinDef[pin3].mode & SPI1RX))
+                error("Not valid SPI pins");
+            if (PinDef[pin1].mode & SPI0SCK && SPI0locked)
+                error("SPI channel already configured for System SPI");
+            if (PinDef[pin1].mode & SPI1SCK && SPI1locked)
+                error("SPI channel already configured for System SPI");
+            Option.AUDIO_CLK_PIN = pin1;
+            Option.AUDIO_MOSI_PIN = pin2;
+            Option.AUDIO_MISO_PIN = pin3;
+            Option.AUDIO_CS_PIN = pin4;
+            Option.AUDIO_DCS_PIN = pin5;
+            Option.AUDIO_DREQ_PIN = pin6;
+            Option.AUDIO_RESET_PIN = pin7;
+            slice = checkslice(pin2, pin2, 1);
+            if ((PinDef[Option.DISPLAY_BL].slice & 0x7f) == slice)
+                error("Channel in use for backlight");
+            Option.AUDIO_SLICE = slice;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+
+        if ((p = checkstring(tp, (unsigned char *)"SPI")))
+        {
+            int pin1, pin2, pin3;
+            getcsargs(&p, 5);
+            if (argc != 5)
+                SyntaxError();
+            ;
+            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L)
+                error("Audio already configured");
+            //
+            pin1 = getpinarg(argv[0]);
+            if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin1, pin1);
+            //
+            pin2 = getpinarg(argv[2]);
+            if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin2, pin2);
+            //
+            pin3 = getpinarg(argv[4]);
+            if (ExtCurrentConfig[pin3] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin3, pin3);
+            //
+            if (!(PinDef[pin2].mode & SPI0SCK && PinDef[pin3].mode & SPI0TX) &&
+                !(PinDef[pin2].mode & SPI1SCK && PinDef[pin3].mode & SPI1TX))
+                error("Not valid SPI pins");
+            Option.AUDIO_CS_PIN = pin1;
+            Option.AUDIO_CLK_PIN = pin2;
+            Option.AUDIO_MOSI_PIN = pin3;
+#ifdef rp2350
+            if (rp2350a)
+                slice = 11;
+            else
+#endif
+                slice = checkslice(pin2, pin2, 1);
+            if ((PinDef[Option.DISPLAY_BL].slice & 0x7f) == slice)
+                error("Channel in use for backlight");
+            Option.AUDIO_SLICE = slice;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+#endif
+        if ((p = checkstring(tp, (unsigned char *)"I2S")))
+        {
+            int pin1, pin2, pin3;
+            getcsargs(&p, 3);
+            if (argc != 3)
+                SyntaxError();
+            ;
+            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || Option.audio_i2s_bclk)
+                error("Audio already configured");
+            //
+            pin1 = getpinarg(argv[0]);
+            if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin1, pin1);
+            //
+            pin3 = PINMAP[PinDef[pin1].GPno + 1];
+            if (IsInvalidPin(pin3))
+                StandardError(9);
+            if (ExtCurrentConfig[pin3] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin3, pin3);
+            //
+            pin2 = getpinarg(argv[2]);
+            if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG || pin2 == pin1 || pin2 == pin3)
+                StandardErrorParam2(27, pin2, pin2);
+
+//
+#ifdef rp2350
+#if defined(PICOMITEVGA) && !defined(HDMI)
+            int pio = QVGA_PIO_NUM;
+#else
+            int pio = 2;
+#endif
+            uint64_t map = piomap[pio];
+            map |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[pin2].GPno);
+            map |= ((uint64_t)1 << (uint64_t)PinDef[pin1].GPno);
+            map |= ((uint64_t)1 << (uint64_t)(PinDef[pin1].GPno + 1));
+            if ((map & (uint64_t)0xFFFF) && (map & (uint64_t)0xFFFF00000000))
+                error("Attempt to define incompatible PIO pins");
+            if (rp2350a)
+                slice = 11;
+            else
+#endif
+                slice = checkslice(pin1, pin1, 1);
+            Option.audio_i2s_bclk = pin1;
+            Option.audio_i2s_data = pin2;
+            if ((PinDef[Option.DISPLAY_BL].slice & 0x7f) == slice)
+                error("Channel in use for backlight");
+            Option.AUDIO_SLICE = slice;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+        getcsargs(&tp, 3);
+        if (argc != 3)
+            SyntaxError();
+        ;
+        if (Option.AUDIO_CLK_PIN || Option.AUDIO_L)
+            error("Audio already configured");
+        pin1 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin1, pin1);
+        pin2 = getpinarg(argv[2]);
+        if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin2, pin2);
+        slice = checkslice(pin1, pin2, 0);
+        if ((PinDef[Option.DISPLAY_BL].slice & 0x7f) == slice)
+            error("Channel in use for backlight");
+        Option.AUDIO_L = pin1;
+        Option.AUDIO_R = pin2;
+        Option.AUDIO_SLICE = slice;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"SYSTEM I2C");
+    if (tp)
+    {
+        int pin1, pin2, channel = -1;
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            if (CurrentLinePtr)
+                StandardError(10);
+#ifdef PICOMITEVGA
+            if (Option.RTC_Clock || Option.RTC_Data)
+                error("In use");
+#else
+            if (Option.DISPLAY_TYPE == SSD1306I2C || Option.DISPLAY_TYPE == SSD1306I2C32 || Option.RTC_Clock || Option.RTC_Data)
+                error("In use");
+#endif
+            disable_systemi2c();
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return; // this will restart the processor ? only works when not in debug
+        }
+        getcsargs(&tp, 5);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (argc == 1)                                              // *EB*
+        {                                                           // *EB*
+            if (checkstring(argv[0], (unsigned char *)"SLOW"))      // *EB*
+                Option.SYSTEM_I2C_SLOW = 1;                         // *EB*
+            else if (checkstring(argv[0], (unsigned char *)"FAST")) // *EB*
+                Option.SYSTEM_I2C_SLOW = 0;                         // *EB*
+            else                                                    // *EB*
+                SyntaxError();                                      // *EB*
+            SaveOptions();                                          // *EB*
+            SoftReset(SOFT_RESET);                                  // *EB*
+            return;                                                 // *EB*
+        } // *EB*
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (argc < 3)
+            SyntaxError();
+        ;
+        if (Option.SYSTEM_I2C_SCL)
+            error("I2C already configured");
+        pin1 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin1, pin1);
+        pin2 = getpinarg(argv[2]);
+        if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin2, pin2);
+        if (PinDef[pin1].mode & I2C0SDA && PinDef[pin2].mode & I2C0SCL)
+            channel = 0;
+        if (PinDef[pin1].mode & I2C1SDA && PinDef[pin2].mode & I2C1SCL)
+            channel = 1;
+        if (channel == -1)
+            error("Invalid I2C pins");
+        Option.SYSTEM_I2C_SLOW = 0;
+        if (argc == 5)
+        {
+            if (checkstring(argv[4], (unsigned char *)"SLOW"))
+                Option.SYSTEM_I2C_SLOW = 1;
+            else if (checkstring(argv[4], (unsigned char *)"FAST"))
+                Option.SYSTEM_I2C_SLOW = 0;
+            else
+                SyntaxError();
+            ;
+        }
+        Option.SYSTEM_I2C_SDA = pin1;
+        Option.SYSTEM_I2C_SCL = pin2;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"COUNT");
+    if (tp)
+    {
+        int pin1, pin2, pin3, pin4;
+        if (CallBackEnabled == 2)
+            gpio_set_irq_enabled_with_callback(PinDef[Option.INT1pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, &gpio_callback);
+        else if (CallBackEnabled & 2)
+        {
+            gpio_set_irq_enabled(PinDef[Option.INT1pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+            CallBackEnabled &= (~2);
+        }
+        if (CallBackEnabled == 4)
+            gpio_set_irq_enabled_with_callback(PinDef[Option.INT2pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, &gpio_callback);
+        else if (CallBackEnabled & 4)
+        {
+            gpio_set_irq_enabled(PinDef[Option.INT2pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+            CallBackEnabled &= (~4);
+        }
+        if (CallBackEnabled == 8)
+            gpio_set_irq_enabled_with_callback(PinDef[Option.INT3pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, &gpio_callback);
+        else if (CallBackEnabled & 8)
+        {
+            gpio_set_irq_enabled(PinDef[Option.INT3pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+            CallBackEnabled &= (~8);
+        }
+        if (CallBackEnabled == 16)
+            gpio_set_irq_enabled_with_callback(PinDef[Option.INT4pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, &gpio_callback);
+        else if (CallBackEnabled & 16)
+        {
+            gpio_set_irq_enabled(PinDef[Option.INT4pin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+            CallBackEnabled &= (~16);
+        }
+        getcsargs(&tp, 7);
+        if (argc != 7)
+            SyntaxError();
+        ;
+        pin1 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin1, pin1);
+        pin2 = getpinarg(argv[2]);
+        if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin2, pin2);
+        pin3 = getpinarg(argv[4]);
+        if (ExtCurrentConfig[pin3] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin3, pin3);
+        pin4 = getpinarg(argv[6]);
+        if (ExtCurrentConfig[pin4] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin4, pin4);
+        if (pin1 == pin2 || pin1 == pin3 || pin1 == pin4 || pin2 == pin3 || pin2 == pin4 || pin3 == pin4)
+            error("Pins must be unique");
+        Option.INT1pin = pin1;
+        Option.INT2pin = pin2;
+        Option.INT3pin = pin3;
+        Option.INT4pin = pin4;
+        SaveOptions();
+        return;
+    }
+#ifndef PICOMITEVGA
+    tp = checkstring(cmdline, (unsigned char *)"SYSTEM SPI");
+    if (tp)
+    {
+        int pin1, pin2, pin3;
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            if (CurrentLinePtr)
+                StandardError(10);
+            if ((Option.SD_CS && Option.SD_CLK_PIN == 0) || Option.TOUCH_CS || Option.LCD_CS || Option.CombinedCS)
+                error("In use");
+            disable_systemspi();
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return; // this will restart the processor ? only works when not in debug
+        }
+        getcsargs(&tp, 5);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (argc != 5)
+            SyntaxError();
+        ;
+        if (Option.SYSTEM_CLK)
+            error("SYSTEM SPI already configured");
+        pin1 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin1, pin1);
+        pin2 = getpinarg(argv[2]);
+        if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin2, pin2);
+        pin3 = getpinarg(argv[4]);
+        if (ExtCurrentConfig[pin3] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin3, pin3);
+        if (!(PinDef[pin1].mode & SPI0SCK && PinDef[pin2].mode & SPI0TX && PinDef[pin3].mode & SPI0RX) &&
+            !(PinDef[pin1].mode & SPI1SCK && PinDef[pin2].mode & SPI1TX && PinDef[pin3].mode & SPI1RX))
+            error("Not valid SPI pins");
+        if (PinDef[pin1].mode & SPI0SCK && SPI0locked)
+            error("SPI channel already configured");
+        if (PinDef[pin1].mode & SPI1SCK && SPI1locked)
+            error("SPI channel already configured");
+        Option.SYSTEM_CLK = pin1;
+        Option.SYSTEM_MOSI = pin2;
+        Option.SYSTEM_MISO = pin3;
+#if PICOMITERP2350
+        if (!Option.LCD_CLK)
+        {
+            Option.LCD_CLK = Option.SYSTEM_CLK;
+            Option.LCD_MOSI = Option.SYSTEM_MOSI;
+            Option.LCD_MISO = Option.SYSTEM_MISO;
+        }
+#endif
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#if PICOMITERP2350
+    tp = checkstring(cmdline, (unsigned char *)"LCD SPI");
+    if (tp)
+    {
+        int pin1, pin2, pin3;
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            if (CurrentLinePtr)
+                StandardError(10);
+            if (Option.LCD_CS)
+                error("In use");
+            disable_lcdspi();
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return; // this will restart the processor ? only works when not in debug
+        }
+        getcsargs(&tp, 5);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (argc != 5)
+            SyntaxError();
+        ;
+        if (Option.LCD_CLK && !(Option.LCD_CLK == Option.SYSTEM_CLK))
+            error("LCD SPI already configured");
+        pin1 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin1, pin1);
+        pin2 = getpinarg(argv[2]);
+        if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin2, pin2);
+        pin3 = getpinarg(argv[4]);
+        if (ExtCurrentConfig[pin3] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin3, pin3);
+        if (!(PinDef[pin1].mode & SPI0SCK && PinDef[pin2].mode & SPI0TX && PinDef[pin3].mode & SPI0RX) &&
+            !(PinDef[pin1].mode & SPI1SCK && PinDef[pin2].mode & SPI1TX && PinDef[pin3].mode & SPI1RX))
+            error("Not valid SPI pins");
+        if (PinDef[pin1].mode & SPI0SCK && SPI0locked)
+            error("SPI channel already configured");
+        if (PinDef[pin1].mode & SPI1SCK && SPI1locked)
+            error("SPI channel already configured");
+        Option.LCD_CLK = pin1;
+        Option.LCD_MOSI = pin2;
+        Option.LCD_MISO = pin3;
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#endif
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"SDCARD");
+    int pin1, pin2, pin3, pin4;
+    if (CurrentLinePtr)
+        StandardError(10);
+    if (tp)
+    {
+        if (checkstring(tp, (unsigned char *)"DISABLE"))
+        {
+            FatFSFileSystem = 0;
+            disable_sd();
+            SaveOptions();
+            return; // this will restart the processor ? only works when not in debug
+        }
+#ifndef PICOMITEVGA
+        if (checkstring(tp, (unsigned char *)"COMBINED CS"))
+        {
+            if (Option.SD_CS || Option.CombinedCS)
+                error("SDcard already configured");
+            if (!Option.SYSTEM_CLK)
+                StandardError(45);
+            if (!Option.TOUCH_CS)
+                error("Touch CS pin not configured");
+            Option.CombinedCS = 1;
+            Option.SD_CS = 0;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+#endif
+        getcsargs(&tp, 7);
+#ifdef PICOMITEVGA
+        if (!(argc == 7))
+            SyntaxError();
+        ;
+#else
+        if (!(argc == 1 || argc == 7))
+            SyntaxError();
+        ;
+#endif
+        if (Option.SD_CS || Option.CombinedCS)
+            error("SDcard already configured");
+        if (argc == 1 && !Option.SYSTEM_CLK)
+            StandardError(45);
+        pin4 = getpinarg(argv[0]);
+        if (ExtCurrentConfig[pin4] != EXT_NOT_CONFIG)
+            StandardErrorParam2(27, pin4, pin4);
+        Option.SD_CS = pin4;
+        Option.SDspeed = 12;
+        Option.SD_CLK_PIN = 0;
+        Option.SD_MOSI_PIN = 0;
+        Option.SD_MISO_PIN = 0;
+        if (argc > 1)
+        {
+            pin1 = getpinarg(argv[2]);
+            if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin1, pin1);
+            pin2 = getpinarg(argv[4]);
+            if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin2, pin2);
+            pin3 = getpinarg(argv[6]);
+            if (ExtCurrentConfig[pin3] != EXT_NOT_CONFIG)
+                StandardErrorParam2(27, pin3, pin3);
+#ifdef PICOMITEVGA
+            if (PinDef[pin1].mode & SPI0SCK && PinDef[pin2].mode & SPI0TX && PinDef[pin3].mode & SPI0RX && !Option.SYSTEM_CLK)
+            {
+                Option.SYSTEM_CLK = pin1;
+                Option.SYSTEM_MOSI = pin2;
+                Option.SYSTEM_MISO = pin3;
+                MMPrintString("SPI channel 0 in use for SDcard\r\n");
+            }
+            else if (PinDef[pin1].mode & SPI1SCK && PinDef[pin2].mode & SPI1TX && PinDef[pin3].mode & SPI1RX && !Option.SYSTEM_CLK)
+            {
+                Option.SYSTEM_CLK = pin1;
+                Option.SYSTEM_MOSI = pin2;
+                Option.SYSTEM_MISO = pin3;
+                MMPrintString("SPI channel 1 in use for SDcard\r\n");
+            }
+            else
+            {
+#endif
+                Option.SD_CLK_PIN = pin1;
+                Option.SD_MOSI_PIN = pin2;
+                Option.SD_MISO_PIN = pin3;
+#ifdef PICOMITEVGA
+            }
+#endif
+        }
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#ifndef PICOMITEMIN
+    tp = checkstring(cmdline, (unsigned char *)"DISK SAVE");
+    if (tp)
+    {
+        getcsargs(&tp, 1);
+        if (!(argc == 1))
+            SyntaxError();
+        ;
+        if (CurrentLinePtr)
+            StandardError(10);
+        int fnbr = FindFreeFileNbr();
+        if (!InitSDCard())
+            return;
+        char *pp = (char *)getFstring(argv[0]);
+        AppendDefaultExtension((char *)pp, ".opt");
+        if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
+            return;
+        OptionSaveText(fnbr); // portable flat-text "NAME=VALUE" of changed-from-default options
+        FileClose(fnbr);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"DISK LOAD");
+    if (tp)
+    {
+        getcsargs(&tp, 1);
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (!(argc == 1))
+            SyntaxError();
+        ;
+        int fnbr = FindFreeFileNbr();
+        int fsize;
+        if (!InitSDCard())
+            return;
+        char *pp = (char *)getFstring(argv[0]);
+        AppendDefaultExtension((char *)pp, ".opt");
+        fsize = FileSize((char *)pp);
+        if (!BasicFileOpen((char *)pp, fnbr, FA_READ))
+            return;
+        char *buf = (char *)GetMemory(fsize + 1);
+        for (int k = 0; k < fsize; k++)
+            buf[k] = FileGetChar(fnbr);
+        buf[fsize] = 0;
+        FileClose(fnbr);
+        /* Distinguish the new flat-text format from a legacy raw binary dump. A
+           legacy dump is EXACTLY sizeof(Option) or sizeof(Option)-128 bytes and is
+           never a text file; new text files always begin with '#'. (We can't sniff
+           on the first byte alone: a legacy dump starts with the low byte of Magic,
+           which is an ASCII letter for several builds.) */
+        int looksBinary = (fsize == (int)sizeof(Option) || fsize == (int)sizeof(Option) - 128) && buf[0] != '#';
+        if (!looksBinary)
+        {
+            /* New portable flat-text format: start from this build's defaults and
+               overlay the saved options by name (see OptionMap[] above). */
+            OptionLoadText(buf);
+        }
+        else
+        {
+            /* Legacy raw binary dump from an identical build. */
+            memcpy((char *)&Option, buf, fsize);
+            Option.Magic = MagicKey; // improves the chance of an older config working in a new build
+            if (Option.version != hashversion())
+            {
+                int state = OptionConsole;
+                OptionConsole = 1;
+                MMPrintString("Warning: Version has changed - check options are correct\r\n");
+                OptionConsole = state;
+            }
+        }
+        FreeMemory((void *)buf);
+        uSec(100000);
+        disable_interrupts_pico();
+        safe_flash_range_erase(FLASH_TARGET_OFFSET, FLASH_ERASE_SIZE);
+        enable_interrupts_pico();
+        uSec(10000);
+        disable_interrupts_pico();
+        safe_flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t *)&Option, sizeof(struct option_s));
+        enable_interrupts_pico();
+        SoftReset(SOFT_RESET);
+    }
+#endif
+    tp = checkstring(cmdline, (unsigned char *)"RESET");
+    if (tp)
+    {
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE)
+        {
+            uint32_t j = FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + ((MAXFLASHSLOTS - 1) * MAX_PROG_SIZE);
+            uSec(250000);
+            disable_interrupts_pico();
+            safe_flash_range_erase(j, MAX_PROG_SIZE);
+            enable_interrupts_pico();
+        }
+        configure(tp, false);
+        return;
+    }
+    error("Invalid Option");
+}
+
+void MIPS16 fun_device(void)
+{
+    sret = GetTempStrMemory(); // this will last for the life of the command
+#ifdef PICOMITEVGA
+#ifdef USBKEYBOARD
+#ifdef HDMI
+#ifdef PICOMITEHDMIBTH
+    strcpy((char *)sret, "PicoMiteHDMIBTH");
+#elif defined(PICOMITEHDMIWEB)
+    strcpy((char *)sret, "PicoMiteHDMIWEB");
+#else
+    strcpy((char *)sret, "PicoMiteHDMIUSB");
+#endif
+#else
+    strcpy((char *)sret, "PicoMiteVGAUSB");
+#endif
+#else
+#ifdef HDMI
+    strcpy((char *)sret, "PicoMiteHDMI");
+#else
+    strcpy((char *)sret, "PicoMiteVGA");
+#endif
+#endif
+#endif
+#ifdef PICOMITE
+#ifdef USBKEYBOARD
+    strcpy((char *)sret, "PicoMiteUSB");
+#elif defined(PICOMITEBT)
+    strcpy((char *)sret, "PicoMiteBT");
+#elif defined(PICOMITEBTH)
+    strcpy((char *)sret, "PicoMiteBTH");
+#else
+    strcpy((char *)sret, "PicoMite");
+#endif
+#endif
+#ifdef PICOMITEWEB
+    strcpy((char *)sret, "WebMite");
+#endif
+#ifdef rp2350
+    if (rp2350a)
+        strcat((char *)sret, " RP2350A");
+    else
+        strcat((char *)sret, " RP2350B");
+#endif
+    CtoM(sret);
+    targ = T_STR;
+}
+
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+/* KEYBOARD ON  — draws the on-screen keyboard in the bottom reserved strip
+                  and routes taps to the console RX path.
+   KEYBOARD OFF — erases the OSK and stops routing.
+   Requires OptionVResreserved > 0 (set via OPTION SCREEN OFFSET).
+   Outside a running program the OSK is managed automatically by the prompt,
+   so this command is intended for use inside RUNning code. */
+void MIPS16 cmd_keyboard(void)
+{
+    unsigned char *tp;
+    tp = checkstring(cmdline, (unsigned char *)"ON");
+    if (tp)
+    {
+        checkend(tp);
+        OSK_SetProgramActive(true);
+        return;
+    }
+    tp = checkstring(cmdline, (unsigned char *)"OFF");
+    if (tp)
+    {
+        checkend(tp);
+        OSK_SetProgramActive(false);
+        return;
+    }
+    error("Syntax");
+}
+#endif
+
+void MIPS16 fun_info(void)
+{
+    unsigned char *tp;
+    sret = GetTempStrMemory(); // this will last for the life of the command
+#if PICOCALC
+    if (strcmp((char *)Option.platform, "PicoCalc") == 0)
+    {
+        if ((tp = checkstring(ep, (unsigned char *)"BATTERY")))
+        {
+            iret = (read_battery() >> 8) & 0x7f;
+            targ = T_INT;
+            return;
+            //@@ implemented MM.INFO(BIOS) to show BIOS version, requires compatible bios
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"BIOS")))
+        {                            // *EB*
+            static int biosver = -1; // *EB*
+            if (biosver < 0)
+            {                                 // *EB*
+                biosver = read_biosversion(); // *EB*
+                if (biosver < 0)
+                    biosver = 0; // *EB*
+            } // *EB*
+            sprintf((char *)sret, "%d.%d", (biosver >> 12) & 0x0f, (biosver >> 8) & 0x0f); // *EB*
+            CtoM(sret);                                                                    // *EB*
+            targ = T_STR;                                                                  // *EB*
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"CHARGING")))
+        {
+            iret = (read_battery() >> 15);
+            targ = T_INT;
+            return;
+        }
+    }
+#endif
+    if (checkstring(ep, (unsigned char *)"AUTORUN"))
+    {
+        if (Option.Autorun == false)
+            strcpy((char *)sret, "Off");
+        else
+            strcpy((char *)sret, "On");
+        CtoM(sret);
+        targ = T_STR;
+        return;
+#ifdef PICOMITEVGA
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"TILE HEIGHT")))
+    {
+        iret = ytileheight;
+        targ = T_INT;
+        return;
+#endif
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+    }
+    else if (checkstring(ep, (unsigned char *)"KEYBOARD"))
+    {
+        strcpy((char *)sret, OSK_IsProgramActive() ? "On" : "Off");
+        CtoM(sret);
+        targ = T_STR;
+        return;
+#endif
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"ADC DMA")))
+    {
+        targ = T_INT;
+        iret = ADCDualBuffering | dmarunning;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"ADC")))
+    {
+        targ = T_INT;
+        iret = ((adcint == adcint1 && adcint) ? 1 : ((adcint == adcint2 && adcint) ? 2 : 0));
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"BCOLOUR") || checkstring(ep, (unsigned char *)"BCOLOR"))
+    {
+        iret = gui_bcolour;
+        targ = T_INT;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"BOOT COUNT"))
+    {
+        int boot_count;
+        int FatFSFileSystemSave = FatFSFileSystem;
+        FatFSFileSystem = 0;
+        int fnbr = FindFreeFileNbr();
+        BasicFileOpen("a:/bootcount", fnbr, FA_READ);
+        FSerror = lfs_file_read(&lfs, FileTable[fnbr].lfsptr, &boot_count, sizeof(boot_count));
+        if (FSerror > 0)
+            FSerror = 0;
+        ErrorCheck(fnbr);
+        FileClose(fnbr);
+        FatFSFileSystem = FatFSFileSystemSave;
+        iret = boot_count;
+        targ = T_INT;
+    }
+    else if (checkstring(ep, (unsigned char *)"BOOT"))
+    {
+        if (restart_reason == 0xFFFFFFFF)
+            strcpy((char *)sret, "Restart");
+        else if (restart_reason == 0xFFFFFFFE)
+            strcpy((char *)sret, "S/W Watchdog");
+        else if (restart_reason == 0xFFFFFFFD)
+            strcpy((char *)sret, "H/W Watchdog");
+        else if (restart_reason == 0xFFFFFFFC)
+            strcpy((char *)sret, "Firmware update");
+#ifdef rp2350
+        else if (restart_reason & 0x30000)
+            strcpy((char *)sret, "Power On");
+        else if (restart_reason & 0x40000)
+            strcpy((char *)sret, "Reset Switch");
+        else if (restart_reason & 0x280000)
+            strcpy((char *)sret, "Debug");
+#else
+        else if (restart_reason == 0x100)
+            strcpy((char *)sret, "Power On");
+        else if (restart_reason == 0x10000)
+            strcpy((char *)sret, "Reset Switch");
+        else if (restart_reason == 0x100000)
+            strcpy((char *)sret, "Debug");
+#endif
+        else
+            sprintf((char *)sret, "Unknown code %X", (unsigned int)restart_reason);
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+    else if (*ep == 'c' || *ep == 'C')
+    {
+        if (checkstring(ep, (unsigned char *)"CALLTABLE"))
+        {
+            iret = (int64_t)(uint32_t)CallTable;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"CPUSPEED"))
+        {
+            IntToStr((char *)sret, Option.CPU_Speed * 1000, 10);
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"CURRENT"))
+        {
+            if (ProgMemory[0] == T_NEWLINE && ProgMemory[T_NEWLINE_HDR] == '\'' && ProgMemory[T_NEWLINE_HDR + 1] == '#')
+            {
+                strcpy((char *)sret, (char *)&ProgMemory[T_NEWLINE_HDR + 2]);
+            }
+            else
+                strcpy((char *)sret, "NONE");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+#ifdef PICOMITEWEB
+        else if (checkstring(ep, (unsigned char *)"CHEAPMAX"))
+        {
+            /* Peak C-heap extent (high-water of sbrk). With MEM_LIBC_MALLOC=1
+               mbedtls allocates its TLS record buffers (~IN 8 KB + OUT 2 KB)
+               and cert-parse working memory from the C heap during each
+               handshake, then frees them — so this captures the transient TLS
+               spike that SYSTEM HEAP (steady-state free) hides. Compare against
+               CHEAPTOTAL; if it approaches that, the handshake is near
+               exhausting the heap (PICO_MALLOC_PANIC -> hang). */
+            struct mallinfo mi = mallinfo();
+            iret = (int64_t)(uint32_t)mi.arena;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"CHEAPTOTAL"))
+        {
+            /* Total C-heap region available (__StackLimit - __bss_end__). */
+            iret = (int64_t)(uint32_t)getTotalHeap();
+            targ = T_INT;
+            return;
+        }
+#endif
+        else
+            SyntaxError();
+        ;
+    }
+    else if (*ep == 'd' || *ep == 'D')
+    {
+        if (checkstring(ep, (unsigned char *)"DEVICE"))
+        {
+            fun_device();
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"DRIVE")))
+        {
+            strcpy((char *)sret,
+                   FatFSFileSystem == 0 ? "A:" :
+#if HAS_USB_MSC
+                                        (FatFSFileSystem == 1 ? "B:" : "C:")
+#else
+                                        "B:"
+#endif
+            );
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"DEBUG")))
+        {
+            iret = abs(time_us_64() - mSecTimer * 1000);
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"DISK SIZE"))
+        {
+            if (FatFSFileSystem)
+            {
+                if (!InitSDCard())
+                    error((char *)FErrorMsg[20]); // setup the SD card
+                FATFS *fs;
+                DWORD fre_clust;
+                /* Query the current FatFS volume (B: for SD, C: for USB) */
+                const char *vol = (FatFSFileSystem == 2) ? "C:" : "B:";
+                f_getfree(vol, &fre_clust, &fs);
+                /* Get total sectors and free sectors */
+                iret = (uint64_t)(fs->n_fatent - 2) * (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
+            }
+            else
+            {
+                iret = (Option.FlashSize - (Option.modbuff ? 1024 * Option.modbuffsize : 0) - RoundUpK4(TOP_OF_SYSTEM_FLASH));
+            }
+            targ = T_INT;
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    else if (*ep == 'e' || *ep == 'E')
+    {
+        if (checkstring(ep, (unsigned char *)"ERRNO"))
+        {
+            iret = MMerrno;
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"EXISTS DIR")))
+        {
+            char dir[FF_MAX_LFN] = {0};
+            char *p = (char *)getFstring(tp);
+            int filesystem;
+            targ = T_INT;
+            iret = ExistsDir(p, dir, &filesystem);
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"EXISTS FILE")))
+        {
+            char *p = (char *)getFstring(tp);
+            iret = ExistsFile(p);
+            if (iret == 0)
+            {
+                char dir[FF_MAX_LFN] = {0};
+                int filesystem;
+                iret = ExistsDir(p, dir, &filesystem);
+                if (iret)
+                    iret = -1;
+            }
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"ERRMSG"))
+        {
+            int i = OptionFileErrorAbort;
+            strcpy((char *)sret, MMErrMsg);
+            CtoM(sret);
+            targ = T_STR;
+            OptionFileErrorAbort = i;
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    else if (*ep == 'f' || *ep == 'F')
+    {
+        if ((tp = checkstring(ep, (unsigned char *)"FONT POINTER")))
+        {
+            iret = (int64_t)((uint32_t)&FontTable[getint(tp, 1, FONT_TABLE_SIZE) - 1]);
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"FONT ADDRESS")))
+        {
+            iret = (int64_t)((uint32_t)FontTable[getint(tp, 1, FONT_TABLE_SIZE) - 1]);
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"FLASH ADDRESS")))
+        {
+            iret = (int64_t)(unsigned int)(flash_target_contents + (getint(tp, 1, MAXFLASHSLOTS) - 1) * MAX_PROG_SIZE);
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"FILESIZE")))
+        {
+            char *p = (char *)getFstring(tp);
+            iret = FileSize(p);
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"FREE SPACE"))
+        {
+            if (FatFSFileSystem)
+            {
+                if (!InitSDCard())
+                    error((char *)FErrorMsg[20]); // setup the SD card
+                FATFS *fs;
+                DWORD fre_clust;
+                /* Query the current FatFS volume (B: for SD, C: for USB) */
+                const char *vol = (FatFSFileSystem == 2) ? "C:" : "B:";
+                f_getfree(vol, &fre_clust, &fs);
+                /* Get total sectors and free sectors */
+                iret = (uint64_t)fre_clust * (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
+            }
+            else
+            {
+                iret = Option.FlashSize - (Option.modbuff ? 1024 * Option.modbuffsize : 0) - RoundUpK4(TOP_OF_SYSTEM_FLASH) - lfs_fs_size(&lfs) * 4096;
+            }
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"FLASHTOP"))
+        {
+            iret = (int64_t)(uint32_t)TOP_OF_SYSTEM_FLASH;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"FONTWIDTH"))
+        {
+            iret = FontTable[gui_font >> 4][0] * (gui_font & 0b1111);
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"FLASH"))
+        {
+            iret = FlashLoad;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"FCOLOUR") || checkstring(ep, (unsigned char *)"FCOLOR"))
+        {
+            iret = gui_fcolour;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"FONT"))
+        {
+            iret = (gui_font >> 4) + 1;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"FONTHEIGHT"))
+        {
+            iret = FontTable[gui_font >> 4][1] * (gui_font & 0b1111);
+            targ = T_INT;
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    else if (*ep == 'h' || *ep == 'H')
+    {
+        if (checkstring(ep, (unsigned char *)"HEAPEND"))
+        {
+            iret = heapend;
+            targ = T_INT;
+            return;
+        }
+        if (checkstring(ep, (unsigned char *)"HEAP"))
+        {
+            iret = FreeSpaceOnHeap();
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"HPOS"))
+        {
+            iret = CurrentX;
+            targ = T_INT;
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    else if (checkstring(ep, (unsigned char *)"ID"))
+    {
+        strcpy((char *)sret, id_out);
+        CtoM(sret);
+        targ = T_STR;
+        return;
+#ifdef PICOMITEWEB
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"TCP REQUEST")))
+    {
+        int i = getint(tp, 1, MaxPcb) - 1;
+        iret = TCPstate->inttrig[i];
+        targ = T_INT;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"TCP PORT")))
+    {
+        iret = Option.TCP_PORT;
+        targ = T_INT;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"UDP PORT")))
+    {
+        iret = Option.UDP_PORT;
+        targ = T_INT;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"IP ADDRESS"))
+    {
+        strcpy((char *)sret, ip4addr_ntoa(netif_ip4_addr(netif_list)));
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"MAX CONNECTIONS"))
+    {
+        iret = MaxPcb;
+        targ = T_INT;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"WIFI STATUS"))
+    {
+        int live = cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA);
+        if (live < 0)
+            iret = live;
+        else if (WIFIconnected)
+            iret = live;
+        else
+            iret = LastWifiErr ? LastWifiErr : live;
+        targ = T_INT;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"TCPIP STATUS"))
+    {
+        iret = cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA);
+        targ = T_INT;
+        return;
+#endif
+    }
+#ifndef rp2350
+    else if (checkstring(ep, (unsigned char *)"INTERRUPTS"))
+    {
+        iret = (int64_t)(uint32_t)*((io_rw_32 *)(PPB_BASE + M0PLUS_NVIC_ISER_OFFSET));
+        targ = T_INT;
+        return;
+    }
+#endif
+#ifndef PICOMITEVGA
+    else if (checkstring(ep, (unsigned char *)"LCD320"))
+    {
+        iret = (SSD16TYPE || Option.DISPLAY_TYPE == IPS_4_16);
+        targ = T_INT;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"LCDPANEL"))
+    {
+        strcpy((char *)sret, display_details[Option.DISPLAY_TYPE].name);
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+#else
+    else if (checkstring(ep, (unsigned char *)"LCDPANEL"))
+    {
+        strcpy((char *)sret, display_details[DISPLAY_TYPE].name);
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+#endif
+#ifdef USBKEYBOARD
+    else if ((tp = checkstring(ep, (unsigned char *)"USB VID")))
+    {
+        int n = getint((unsigned char *)tp, 1, 4);
+        iret = HID[n - 1].vid;
+        targ = T_INT;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"USB PID")))
+    {
+        int n = getint((unsigned char *)tp, 1, 4);
+        iret = HID[n - 1].pid;
+        targ = T_INT;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"USB")))
+    {
+        int n = getint((unsigned char *)tp, 0, 4);
+        if (n == 0)
+            iret = Current_USB_devices;
+        else
+            iret = HID[n - 1].Device_type;
+        targ = T_INT;
+        return;
+    }
+#endif
+    else if (checkstring(ep, (unsigned char *)"LINE"))
+    {
+        if (!CurrentLinePtr)
+        {
+            strcpy((char *)sret, "UNKNOWN");
+        }
+        else if (CurrentLinePtr >= ProgMemory + MAX_PROG_SIZE)
+        {
+            strcpy((char *)sret, "LIBRARY");
+        }
+        else
+        {
+            sprintf((char *)sret, "%d", CountLines(CurrentLinePtr) + 1);
+        }
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"MAX VARS")))
+    {
+        iret = MAXVARS;
+        targ = T_INT;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"MODBUFF ADDRESS")))
+    {
+        iret = (int64_t)((uint32_t)(char *)(XIP_BASE + RoundUpK4(TOP_OF_SYSTEM_FLASH)));
+        targ = T_INT;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"MODIFIED")))
+    {
+        //		int i,j;
+        DIR djd;
+        FILINFO fnod;
+        sret = GetTempStrMemory(); // this will last for the life of the command
+        targ = T_STR;
+        memset(&djd, 0, sizeof(DIR));
+        memset(&fnod, 0, sizeof(FILINFO));
+        char *p = (char *)getFstring(tp);
+        char q[FF_MAX_LFN] = {0};
+        int waste = 0, t = FatFSFileSystem + 1;
+        t = drivecheck(p, &waste);
+        p += waste;
+        getfullfilename(p, q);
+        FatFSFileSystem = t - 1;
+        if (FatFSFileSystem == 0)
+        {
+            int dt;
+            FSerror = lfs_getattr(&lfs, q, 'A', &dt, 4);
+            if (FSerror != 4)
+                return;
+            else
+            {
+                WORD *p = (WORD *)&dt;
+                fnod.fdate = (WORD)p[1];
+                fnod.ftime = (WORD)p[0];
+            }
+        }
+        else
+        {
+            if (!InitSDCard())
+            {
+                iret = -1;
+                return;
+            }
+            FSerror = f_stat(p, &fnod);
+            if (FSerror != FR_OK)
+                return;
+        }
+        IntToStr((char *)sret, ((fnod.fdate >> 9) & 0x7F) + 1980, 10);
+        sret[4] = '-';
+        IntToStrPad((char *)sret + 5, (fnod.fdate >> 5) & 0xF, '0', 2, 10);
+        sret[7] = '-';
+        IntToStrPad((char *)sret + 8, fnod.fdate & 0x1F, '0', 2, 10);
+        sret[10] = ' ';
+        IntToStrPad((char *)sret + 11, (fnod.ftime >> 11) & 0x1F, '0', 2, 10);
+        sret[13] = ':';
+        IntToStrPad((char *)sret + 14, (fnod.ftime >> 5) & 0x3F, '0', 2, 10);
+        sret[16] = ':';
+        IntToStrPad((char *)sret + 17, (fnod.ftime & 0x1F) * 2, '0', 2, 10);
+        FatFSFileSystem = FatFSFileSystemSave;
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"ONEWIRE")))
+    {
+        fun_mmOW();
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"OPTION")))
+    {
+        if (checkstring(tp, (unsigned char *)"AUTORUN"))
+        {
+            if (Option.Autorun == false)
+                strcpy((char *)sret, "Off");
+            else if (Option.Autorun == MAXFLASHSLOTS + 1)
+                strcpy((char *)sret, "On");
+            else
+            {
+                char b[10];
+                IntToStr(b, Option.Autorun, 10);
+                strcpy((char *)sret, b);
+            }
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"BASE"))
+        {
+            if (g_OptionBase == 1)
+                iret = 1;
+            else
+                iret = 0;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"AUDIO"))
+        {
+            if (Option.AUDIO_L)
+                strcpy((char *)sret, "PWM");
+#if !defined(PICOMITEMIN)
+            else if (Option.AUDIO_MISO_PIN)
+                strcpy((char *)sret, "VS1053");
+#endif
+            else if (Option.AUDIO_CLK_PIN)
+                strcpy((char *)sret, "SPI");
+            else if (Option.audio_i2s_bclk)
+                strcpy((char *)sret, "I2S");
+            else
+                strcpy((char *)sret, "NONE");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"BREAK"))
+        {
+            iret = BreakKey;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"AUTOREFRESH"))
+        {
+            if (Option.Refresh)
+                strcpy((char *)sret, "ON");
+            else
+                strcpy((char *)sret, "OFF");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"ANGLE"))
+        {
+            if (optionangle == 1.0)
+                strcpy((char *)sret, "RADIANS");
+            else
+                strcpy((char *)sret, "DEGREES");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"DEFAULT"))
+        {
+            if (DefaultType == T_INT)
+                strcpy((char *)sret, "Integer");
+            else if (DefaultType == T_NBR)
+                strcpy((char *)sret, "Float");
+            else if (DefaultType == T_STR)
+                strcpy((char *)sret, "String");
+            else
+                strcpy((char *)sret, "None");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"KEYBOARD"))
+        {
+#if defined(USBKEYBOARD) || defined(PICOMITEBTH)
+            strcpy((char *)sret, (char *)KBrdList[(int)Option.USBKeyboard]);
+#else
+            strcpy((char *)sret, (char *)KBrdList[(int)Option.KeyboardConfig]);
+#endif
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"EXPLICIT"))
+        {
+            if (OptionExplicit == false)
+                strcpy((char *)sret, "Off");
+            else
+                strcpy((char *)sret, "On");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"FLASH SIZE"))
+        {
+            uint8_t txbuf[4] = {0x9f};
+            uint8_t rxbuf[4] = {0};
+            disable_interrupts_pico();
+            flash_do_cmd(txbuf, rxbuf, 4);
+            enable_interrupts_pico();
+            iret = 1 << rxbuf[3];
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"HEIGHT"))
+        {
+            iret = Option.Height;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"CONSOLE"))
+        {
+            if (Option.DISPLAY_CONSOLE)
+                strcpy((char *)sret, "Both");
+            else
+                strcpy((char *)sret, "Serial");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(tp, (unsigned char *)"WIDTH"))
+        {
+            iret = Option.Width;
+            targ = T_INT;
+            return;
+#ifdef PICOMITEWEB
+        }
+        else if (checkstring(tp, (unsigned char *)"SSID"))
+        {
+            strcpy((char *)sret, (char *)Option.SSID);
+            CtoM(sret);
+            targ = T_STR;
+            return;
+#endif
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    else if (*ep == 'p' || *ep == 'P')
+    {
+        if ((tp = checkstring(ep, (unsigned char *)"PINNO")))
+        {
+            int pin;
+            MMFLOAT f;
+            long long int i64;
+            unsigned char *ss;
+            int t = 0;
+            char code, *ptr;
+            char *string = GetTempStrMemory();
+            skipspace(tp);
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+            iret = 0;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '2' && tp[3] == '3')
+                iret = 41;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '2' && tp[3] == '4')
+                iret = 42;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '2' && tp[3] == '5')
+                iret = 43;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '2' && tp[3] == '9')
+                iret = 44;
+            if (iret)
+            {
+                targ = T_INT;
+                return;
+            }
+#endif
+#ifdef HDMI
+            iret = 0;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '2')
+                iret = 16;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '3')
+                iret = 17;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '4')
+                iret = 19;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '5')
+                iret = 20;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '6')
+                iret = 21;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '7')
+                iret = 22;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '8')
+                iret = 24;
+            if ((tp[0] == 'G' || tp[0] == 'g') && (tp[1] == 'P' || tp[1] == 'p') && tp[2] == '1' && tp[3] == '9')
+                iret = 25;
+            if (iret)
+            {
+                targ = T_INT;
+                return;
+            }
+#endif
+            if (codecheck(tp))
+                evaluate(tp, &f, &i64, &ss, &t, false);
+            if (t & T_STR)
+            {
+                ptr = (char *)getCstring(tp);
+                strcpy(string, ptr);
+            }
+            else
+            {
+                strcpy(string, (char *)tp);
+            }
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+            iret = 0;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '2' && string[3] == '3')
+                iret = 41;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '2' && string[3] == '4')
+                iret = 42;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '2' && string[3] == '5')
+                iret = 43;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '2' && string[3] == '9')
+                iret = 44;
+            if (iret)
+            {
+                targ = T_INT;
+                return;
+            }
+#endif
+#ifdef HDMI
+            iret = 0;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '2')
+                iret = 16;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '3')
+                iret = 17;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '4')
+                iret = 19;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '5')
+                iret = 20;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '6')
+                iret = 21;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '7')
+                iret = 22;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '8')
+                iret = 24;
+            if ((string[0] == 'G' || string[0] == 'g') && (string[1] == 'P' || string[1] == 'p') && string[2] == '1' && string[3] == '9')
+                iret = 25;
+            if (iret)
+            {
+                targ = T_INT;
+                return;
+            }
+#endif
+            if (!(code = codecheck((unsigned char *)string)))
+                string += 2;
+            else
+                SyntaxError();
+            ;
+            pin = getinteger((unsigned char *)string);
+            if (!code)
+                pin = codemap(pin);
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+            /* GP23/24/25/29 are CYW43-wireless on every cyw43-bearing
+               variant (Pico W / Pico 2 W / Pimoroni Pico Plus 2W).
+               Previously only PICOMITEWEB matched, so MM.INFO(PIN n)
+               on those pins returned "invalid" on BT/BTH/HDMIBTH even
+               though the pins are reserved there too. */
+            if (pin >= 41 && pin <= 44)
+            {
+                iret = pin;
+                targ = T_INT;
+                return;
+            }
+#endif
+            if (IsInvalidPin(pin))
+                StandardError(9);
+            iret = pin;
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"PERSISTENT")))
+        {
+            iret = _persistent;
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"PIO RX DMA")))
+        {
+            iret = dma_channel_is_busy(dma_rx_chan);
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"PIO TX DMA")))
+        {
+            iret = dma_channel_is_busy(dma_tx_chan);
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"PWM COUNT")))
+        {
+#ifdef rp2350
+            int channel = getint(tp, 0, rp2350a ? 7 : 11);
+#else
+            int channel = getint(tp, 0, 7);
+#endif
+            iret = pwm_hw->slice[channel].top;
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"PWM DUTY")))
+        {
+            getcsargs(&tp, 3);
+            if (argc != 3)
+                SyntaxError();
+            ;
+#ifdef rp2350
+            int channel = getint(argv[0], 0, rp2350a ? 7 : 11);
+#else
+            int channel = getint(argv[0], 0, 7);
+#endif
+            int AorB = getint(argv[2], 0, 1);
+            if (AorB)
+                iret = ((pwm_hw->slice[channel].cc) >> 16);
+            else
+                iret = (pwm_hw->slice[channel].cc & 0xFFFF);
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"PWM SLICE")))
+        {
+            int pin = getpinarg(tp);
+            if (IsInvalidPin(pin))
+                StandardError(9);
+            if (PinDef[pin].slice == 99)
+                error("Pin has no PWM capability");
+            int slice = PinDef[pin].slice;
+            if (slice >= 128)
+                slice -= 128;
+            iret = slice;
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"PIN")))
+        {
+            int pin;
+            {
+                // Wrap getpinarg in OptionErrorSkip so that invalid pins
+                // (e.g. HDMI-reserved, CYW43-reserved, or genuinely invalid)
+                // are caught here instead of aborting. The raw pin number is
+                // preserved in g_pinarg_result for subsequent range checks.
+                int saved = OptionErrorSkip;
+                OptionErrorSkip = 1;
+                if (setjmp(ErrNext) == 0)
+                {
+                    pin = getpinarg(tp);
+                }
+                else
+                {
+                    pin = g_pinarg_result; // retrieve the raw pin before validation failed
+                    MMerrno = 0;           // clear the error since we handled it
+                }
+                OptionErrorSkip = saved;
+            }
+#ifdef HDMI
+            if (pin >= 16 && pin <= 25)
+            {
+                strcpy((char *)sret, "Boot Reserved : HDMI");
+                CtoM(sret);
+                targ = T_STR;
+                return;
+            }
+#endif
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+            /* Same widening as the iret block above — CYW43 pins are
+               reserved on every cyw43-bearing variant. */
+            if (pin >= 41 && pin <= 44)
+            {
+                strcpy((char *)sret, "Boot Reserved : CYW43");
+                CtoM(sret);
+                targ = T_STR;
+                return;
+            }
+#endif
+            if (IsInvalidPin(pin))
+            {
+                strcpy((char *)sret, "Invalid");
+            }
+            else
+            {
+                strcpy((char *)sret, PinFunction[ExtCurrentConfig[pin] & 0xFF]);
+                if (ExtCurrentConfig[pin] & EXT_BOOT_RESERVED)
+                {
+                    strcpy((char *)sret, "Boot Reserved : ");
+                    strcat((char *)sret, pinsearch(pin));
+                }
+                if (ExtCurrentConfig[pin] & EXT_COM_RESERVED)
+                    strcat((char *)sret, ": Reserved for function");
+                if (ExtCurrentConfig[pin] & EXT_DS18B20_RESERVED)
+                    strcat((char *)sret, ": In use for DS18B20");
+            }
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"PROGRAM"))
+        {
+            iret = (int64_t)(uint32_t)ProgMemory;
+            targ = T_INT;
+            return;
+#ifndef USBKEYBOARD
+        }
+        else if (checkstring(ep, (unsigned char *)"PS2"))
+        {
+            iret = (int64_t)(uint32_t)PS2code;
+            targ = T_INT;
+            return;
+#endif
+        }
+        else if (checkstring(ep, (unsigned char *)"PATH"))
+        {
+            //            strcpy((char *)sret,GetCWD());
+            //            if(sret[strlen((char *)sret)-1]!='/')strcat((char *)sret,"/");
+            if (ProgMemory[0] == T_NEWLINE && ProgMemory[T_NEWLINE_HDR] == '\'' && ProgMemory[T_NEWLINE_HDR + 1] == '#')
+            {
+                strcpy((char *)sret, (char *)&ProgMemory[T_NEWLINE_HDR + 2]);
+                for (int i = strlen((char *)sret) - 1; i > 0; i--)
+                {
+                    if (sret[i] != '/')
+                        sret[i] = 0;
+                    else
+                        break;
+                }
+            }
+            else
+                strcpy((char *)sret, "NONE");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"PLATFORM"))
+        {
+            strcpy((char *)sret, (char *)Option.platform);
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"PSRAM SIZE"))
+#ifdef rp2350
+        {
+            iret = PSRAMsize;
+            targ = T_INT;
+            return;
+        }
+#else
+        {
+            iret = 0;
+            targ = T_INT;
+            return;
+        }
+#endif
+        else
+            SyntaxError();
+        ;
+    }
+    else if (*ep == 's' || *ep == 'S')
+    {
+        if (checkstring(ep, (unsigned char *)"SDCARD"))
+        {
+            int i = OptionFileErrorAbort;
+            OptionFileErrorAbort = 0;
+            FatFSFileSystemSave = FatFSFileSystem;
+            FatFSFileSystem = 1;
+            if (!(Option.SD_CS || Option.CombinedCS))
+                strcpy((char *)sret, "Not Configured");
+            else if (!InitSDCard())
+                strcpy((char *)sret, "Not present");
+            else
+                strcpy((char *)sret, "Ready");
+            CtoM(sret);
+            targ = T_STR;
+            OptionFileErrorAbort = i;
+            FatFSFileSystem = FatFSFileSystemSave;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"SYSTEM I2C"))
+        {
+            if (!Option.SYSTEM_I2C_SDA)
+                strcpy((char *)sret, "Not set");
+            else if (I2C0locked)
+                strcpy((char *)sret, "I2C");
+            else
+                strcpy((char *)sret, "I2C2");
+            CtoM(sret);
+            targ = T_STR;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"SPI SPEED"))
+        {
+            SPISpeedSet(Option.DISPLAY_TYPE);
+            if (PinDef[Option.SYSTEM_CLK].mode & SPI0SCK)
+            {
+                iret = spi_get_baudrate(spi0);
+            }
+            else if (PinDef[Option.SYSTEM_CLK].mode & SPI1SCK)
+            {
+                iret = spi_get_baudrate(spi1);
+            }
+            else
+                StandardError(45);
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"STACK"))
+        {
+            iret = (int64_t)((uint32_t)__get_MSP());
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"SYSTICK")))
+        {
+            iret = (int64_t)(uint32_t)systick_hw->cvr;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"SYSTEM HEAP"))
+        {
+            iret = (int64_t)(uint32_t)getFreeHeap();
+            targ = T_INT;
+            return;
+        }
+#if defined(PICOMITEWEB) && defined(rp2350)
+        /* STACKPEAK is an 'S' keyword so it belongs in this 'S' group. The
+           TLSHEAP* queries start with 'T' and live in the 'T' group below —
+           fun_info dispatches by first letter, so a 'T' keyword placed here
+           would never be reached. */
+        else if (checkstring(ep, (unsigned char *)"STACKPEAK"))
+        {
+            /* Peak core0 stack bytes ever used (high-water). Compare against
+               PICO_CORE0_STACK_SIZE; a value approaching 8192 means the stack
+               reached the end of SCRATCH and is spilling into main RAM. */
+            iret = (int64_t)(uint32_t)StackPeakBytes();
+            targ = T_INT;
+            return;
+        }
+#endif
+        else if (checkstring(ep, (unsigned char *)"SOUND"))
+        {
+            strcpy((char *)sret, PlayingStr[CurrentlyPlaying]);
+            CtoM(sret);
+            targ = T_STR;
+            return;
+#if PICOMITERP2350
+        }
+        else if (checkstring(ep, (unsigned char *)"SCROLL"))
+        {
+            iret = ScrollStart;
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"SCREENBUFF"))
+        {
+            iret = (int64_t)(uint32_t)ScreenBuffer;
+            targ = T_INT;
+            return;
+#endif
+        }
+        else
+            SyntaxError();
+        ;
+    }
+#ifndef PICOMITEVGA
+    else if (checkstring(ep, (unsigned char *)"TOUCH"))
+    {
+        if (Option.TOUCH_CS == false)
+            strcpy((char *)sret, "Disabled");
+        else if (Option.TOUCH_XZERO == TOUCH_NOT_CALIBRATED)
+            strcpy((char *)sret, "Not calibrated");
+        else
+            strcpy((char *)sret, "Ready");
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+#endif
+    else if (checkstring(ep, (unsigned char *)"TRACK"))
+    {
+        if (CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_MIDI)
+            strcpy((char *)sret, WAVfilename);
+        else
+            strcpy((char *)sret, "OFF");
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+#ifdef PICOMITEWEB
+    /* TLS-heap diagnostics. Kept as flat else-if checkstring tests (like
+       TOUCH / TRACK above) rather than a `*ep=='t'` letter group — fun_info's
+       other 'T' keywords (TILE HEIGHT, TCP PORT/REQUEST, TOUCH, TRACK) are not
+       all in one group, so a swallowing 't' group here would shadow any T
+       keyword that followed it. */
+    else if (checkstring(ep, (unsigned char *)"TLSHEAPMAX"))
+    {
+        /* Peak bytes used in the lwIP MEM_SIZE heap — the pool mbedtls
+           allocates the TLS in/out buffers and cert transients from.
+           Compare against MEM_SIZE (40960). */
+        iret = (int64_t)(uint32_t)lwip_stats.mem.max;
+        targ = T_INT;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"TLSHEAPERR"))
+    {
+        /* Count of failed lwIP MEM_SIZE allocations — non-zero means the
+           TLS heap was exhausted (a handshake would have failed). */
+        iret = (int64_t)(uint32_t)lwip_stats.mem.err;
+        targ = T_INT;
+        return;
+    }
+    else if (checkstring(ep, (unsigned char *)"TLSHEAP"))
+    {
+        /* Current (live) bytes in use in the lwIP MEM_SIZE heap. */
+        iret = (int64_t)(uint32_t)lwip_stats.mem.used;
+        targ = T_INT;
+        return;
+    }
+#endif
+    else if (*ep == 'v' || *ep == 'V')
+    {
+        if (checkstring(ep, (unsigned char *)"VARCNT"))
+        {
+            iret = (int64_t)((uint32_t)g_varcnt);
+            targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"VERSION"))
+        {
+            fun_version();
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"VPOS"))
+        {
+            iret = CurrentY;
+            targ = T_INT;
+            return;
+        }
+        else if ((tp = checkstring(ep, (unsigned char *)"VALID CPUSPEED")))
+        {
+            iret = 1;
+            uint32_t speed = getint(tp, MIN_CPU, MAX_CPU);
+            uint vco, postdiv1, postdiv2;
+            if (!check_sys_clock_khz(speed, &vco, &postdiv1, &postdiv2))
+                iret = 0;
+            targ = T_INT;
+            return;
+        }
+        else
+            SyntaxError();
+        ;
+    }
+    else if (checkstring(ep, (unsigned char *)"WRITEBUFF"))
+    {
+        iret = (int64_t)((uint32_t)WriteBuf);
+        targ = T_INT;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"UPTIME")))
+    {
+        fret = (MMFLOAT)time_us_64() / 1000000.0;
+        targ = T_NBR;
+        return;
+    }
+    else if ((tp = checkstring(ep, (unsigned char *)"MAX GP")))
+    {
+#ifdef rp2350
+        iret = (rp2350a ? 29 : 47);
+#else
+        iret = 29;
+#endif
+        targ = T_INT;
+        return;
+    }
+    else
+        SyntaxError();
+    ;
+}
+
+void cmd_watchdog(void)
+{
+    int i;
+    unsigned char *p;
+
+    if ((p = checkstring(cmdline, (unsigned char *)"HW")))
+    {
+        if (checkstring(p, (unsigned char *)"OFF") != NULL)
+        {
+            hw_clear_bits(&watchdog_hw->ctrl, WATCHDOG_CTRL_ENABLE_BITS);
+            _excep_code = 0;
+        }
+        else
+        {
+            i = getint(p, 1, 8331);
+            watchdog_enable(i, 1);
+            _excep_code = POSSIBLE_WATCHDOG;
+        }
+    }
+    else if (checkstring(cmdline, (unsigned char *)"OFF") != NULL)
+    {
+        WDTimer = 0;
+    }
+    else
+    {
+        i = getinteger(cmdline);
+        if (i < 1)
+            SyntaxError();
+        WDTimer = i;
+    }
+}
+
+void fun_restart(void)
+{
+    iret = WatchdogSet;
+    targ = T_INT;
+}
+
+void MIPS16 cmd_cpu(void)
+{
+    unsigned char *p;
+    if ((p = checkstring(cmdline, (unsigned char *)"RESTART")))
+    {
+        //        while(ConsoleTxBufTail != ConsoleTxBufHead);
+        uSec(10000);
+        SoftReset(SOFT_RESET); // this will restart the processor ? only works when not in debug
+    }
+    else if ((p = checkstring(cmdline, (unsigned char *)"SLEEP")))
+    {
+        //        	int pullup=0;
+        MMFLOAT totalseconds;
+        getcsargs(&p, 3);
+        totalseconds = getnumber(p);
+        if (totalseconds <= 0.0)
+            error("Invalid period");
+        sleep_us(totalseconds * 1000000);
+    }
+    else if ((p = checkstring(cmdline, (unsigned char *)"SPEED")))
+    {
+#ifdef PICOMITEVGA
+        /* VGA/HDMI builds drive the pixel clock from clk_sys, so the CPU
+           speed cannot be set independently of the display - it is tied to
+           the resolution. (The full HDMI builds DO move clk_sys at runtime,
+           but only as part of the live RESOLUTION switch, which re-times
+           the scanout to match.) */
+        error("Not available on this version");
+#else
+        uint32_t speed = getint(p, MIN_CPU, MAX_CPU);
+        if (speed > 384000 && Option.PSRAM_CS_PIN != 0)
+            error("CPUSPEED cannot exceed 384000 KHz when PSRAM is enabled");
+        if (UserPIOActive())
+            error("Invalid while PIO in use");
+        if (CPUSpeedRuntime(speed))
+            error("Invalid clock speed");
+#endif
+    }
+    else
+        SyntaxError();
+    ;
+}
+void cmd_csubinterrupt(void)
+{
+    getcsargs(&cmdline, 1);
+    if (argc != 0)
+    {
+        if (checkstring(argv[0], (unsigned char *)"0"))
+        {
+            CSubInterrupt = NULL;
+            CSubComplete = 0;
+        }
+        else
+        {
+            CSubInterrupt = (char *)GetIntAddress(argv[0]);
+            CSubComplete = 0;
+            InterruptUsed = true;
+        }
+    }
+    else
+        CSubComplete = 1;
+}
+void cmd_cfunction(void)
+{
+    unsigned char *p;
+    unsigned short EndToken;
+    CommandToken tkn;
+    EndToken = GetCommandValue((unsigned char *)"End DefineFont"); // this terminates a DefineFont
+    if (cmdtoken == cmdCSUB)
+        EndToken = GetCommandValue((unsigned char *)"End CSub"); // this terminates a CSUB
+    p = cmdline;
+    while (*p != 0xff)
+    {
+        if (*p == 0)
+            p++; // if it is at the end of an element skip the zero marker
+        if (*p == 0)
+            error("Missing END declaration"); // end of the program
+        if (*p == T_NEWLINE)
+            p += T_NEWLINE_HDR; // skip over newline + skip byte
+        if (*p == T_LINENBR)
+            p += 3; // skip over the line number
+        skipspace(p);
+        if (*p == T_LABEL)
+        {
+            p += p[1] + 2; // skip over the label
+            skipspace(p);  // and any following spaces
+        }
+        tkn = commandtbl_decode(p);
+        if (tkn == EndToken)
+        { // found an END token
+            nextstmt = (unsigned char *)p;
+            skipelement(nextstmt);
+            return;
+        }
+        p++;
+    }
+}
+
+// utility function used by cmd_poke() to validate an address
+unsigned int GetPokeAddr(unsigned char *p)
+{
+    unsigned int i;
+    i = getinteger(p);
+    //    if(!POKERANGE(i)) error("Address");
+    return i;
+}
+
+void cmd_poke(void)
+{
+    unsigned char *p, *q;
+    void *pp;
+    if ((p = checkstring(cmdline, (unsigned char *)"DISPLAY")))
+    {
+        CheckDisplay();
+        if ((q = checkstring(p, (unsigned char *)"HRES")))
+        {
+            HRes = getint(q, 0, 1920);
+            return;
+        }
+        else if ((q = checkstring(p, (unsigned char *)"VRES")))
+        {
+            VRes = getint(q, 0, 1200);
+            return;
+#ifndef PICOMITEVGA
+        }
+        else
+        {
+            getcsargs(&p, (MAX_ARG_COUNT * 2) - 3);
+            if (!argc)
+                return;
+            if (Option.DISPLAY_TYPE >= SSDPANEL && Option.DISPLAY_TYPE < VIRTUAL)
+            {
+                WriteComand(getinteger(argv[0]));
+                for (int i = 2; i < argc; i += 2)
+                {
+                    WriteData(getinteger(argv[i]));
+                }
+                return;
+            }
+            else if (Option.DISPLAY_TYPE > I2C_PANEL && Option.DISPLAY_TYPE < ST7920)
+            {
+                spi_write_command(getinteger(argv[0]));
+                for (int i = 2; i < argc; i += 2)
+                {
+                    spi_write_data(getinteger(argv[i]));
+                }
+                return;
+            }
+            else if (Option.DISPLAY_TYPE <= I2C_PANEL)
+            {
+                if (argc > 1)
+                    error("UNsupported command");
+                I2C_Send_Command(getinteger(argv[0]), 1);
+                return;
+            }
+            else
+                error("Display not supported");
+#endif
+        }
+        SyntaxError();
+        ;
+    }
+    else
+    {
+        getcsargs(&cmdline, 5);
+        if ((p = checkstring(argv[0], (unsigned char *)"BYTE")))
+        {
+            if (argc != 3)
+                StandardError(2);
+            uint32_t a = GetPokeAddr(p);
+            uint8_t *padd = (uint8_t *)(a);
+            *padd = getinteger(argv[2]);
+            return;
+        }
+        if ((p = checkstring(argv[0], (unsigned char *)"SHORT")))
+        {
+            if (argc != 3)
+                StandardError(2);
+            uint32_t a = GetPokeAddr(p);
+            if (a % 2)
+                error("Address not divisible by 2");
+            uint16_t *padd = (uint16_t *)(a);
+            *padd = getinteger(argv[2]);
+            return;
+        }
+
+        if ((p = checkstring(argv[0], (unsigned char *)"WORD")))
+        {
+            if (argc != 3)
+                StandardError(2);
+            uint32_t a = GetPokeAddr(p);
+            if (a % 4)
+                error("Address not divisible by 4");
+            uint32_t *padd = (uint32_t *)(a);
+            *padd = getinteger(argv[2]);
+            return;
+        }
+
+        if ((p = checkstring(argv[0], (unsigned char *)"INTEGER")))
+        {
+            if (argc != 3)
+                StandardError(2);
+            uint32_t a = GetPokeAddr(p);
+            if (a % 8)
+                error("Address not divisible by 8");
+            uint64_t *padd = (uint64_t *)(a);
+            *padd = getinteger(argv[2]);
+            return;
+        }
+        if ((p = checkstring(argv[0], (unsigned char *)"FLOAT")))
+        {
+            if (argc != 3)
+                StandardError(2);
+            uint32_t a = GetPokeAddr(p);
+            if (a % 8)
+                error("Address not divisible by 8");
+            MMFLOAT *padd = (MMFLOAT *)(a);
+            *padd = getnumber(argv[2]);
+            return;
+        }
+
+        if (argc != 5)
+            StandardError(2);
+
+        if (checkstring(argv[0], (unsigned char *)"VARTBL"))
+        {
+            *((char *)g_vartbl + (unsigned int)getinteger(argv[2])) = getinteger(argv[4]);
+            return;
+        }
+        if ((p = checkstring(argv[0], (unsigned char *)"VAR")))
+        {
+            pp = findvar(p, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+            if (g_vartbl[g_VarIndex].type & T_CONST)
+                StandardError(22);
+            *((char *)pp + (unsigned int)getinteger(argv[2])) = getinteger(argv[4]);
+            return;
+        }
+        // the default is the old syntax of:   POKE hiaddr, loaddr, byte
+        *(char *)(((int)getinteger(argv[0]) << 16) + (int)getinteger(argv[2])) = getinteger(argv[4]);
+    }
+}
+
+// function to find a CFunction
+// only used by fun_peek() below
+unsigned int GetCFunAddr(int *ip, int i, unsigned char *offset)
+{
+    while (*ip != 0xffffffff)
+    {
+        // if(*ip++ == (unsigned int)(subfun[i]-ProgMemory)) {                      // if we have a match
+        if (*ip++ == (unsigned int)(subfun[i] - offset))
+        {                                  // if we have a match
+            ip++;                          // step over the size word
+            i = *ip++;                     // get the offset
+            return (unsigned int)(ip + i); // return the entry point
+        }
+        ip += (*ip + 4) / sizeof(unsigned int);
+    }
+    return 0;
+}
+
+// utility function used by fun_peek() to validate an address
+unsigned int __not_in_flash_func(GetPeekAddr)(unsigned char *p)
+{
+    unsigned int i;
+    i = getinteger(p);
+    //    if(!PEEKRANGE(i)) error("Address");
+    return i;
+}
+
+#define SPIsend(a)              \
+    {                           \
+        uint8_t b = a;          \
+        xmit_byte_multi(&b, 1); \
+    }
+#define SPIsend2(a) \
+    {               \
+        SPIsend(0); \
+        SPIsend(a); \
+    }
+
+// Will return a byte within the PIC32 virtual memory space.
+void fun_peek(void)
+{
+    unsigned char *p;
+    void *pp;
+    getcsargs(&ep, 3);
+    if ((p = checkstring(argv[0], (unsigned char *)"INT8")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        iret = *(unsigned char *)GetPeekAddr(p);
+        targ = T_INT;
+        return;
+    }
+
+    if ((p = checkstring(argv[0], (unsigned char *)"VARADDR")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        pp = findvar(p, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+        iret = (unsigned int)pp;
+        targ = T_INT;
+        return;
+    }
+
+    if ((p = checkstring(argv[0], (unsigned char *)"BP")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        findvar(p, V_FIND | V_NOFIND_ERR);
+        if (!(g_vartbl[g_VarIndex].type & T_INT))
+            error("Not integer variable");
+        iret = *(unsigned char *)(uint32_t)g_vartbl[g_VarIndex].val.i;
+        g_vartbl[g_VarIndex].val.i++;
+        targ = T_INT;
+        return;
+    }
+    if ((p = checkstring(argv[0], (unsigned char *)"WP")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        findvar(p, V_FIND | V_NOFIND_ERR);
+        if (!(g_vartbl[g_VarIndex].type & T_INT))
+            error("Not integer variable");
+        if (g_vartbl[g_VarIndex].val.i & 3)
+            error("Not on word boundary");
+        iret = *(unsigned int *)(uint32_t)g_vartbl[g_VarIndex].val.i;
+        g_vartbl[g_VarIndex].val.i += 4;
+        targ = T_INT;
+        return;
+    }
+    if ((p = checkstring(argv[0], (unsigned char *)"SP")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        findvar(p, V_FIND | V_NOFIND_ERR);
+        if (!(g_vartbl[g_VarIndex].type & T_INT))
+            error("Not integer variable");
+        if (g_vartbl[g_VarIndex].val.i & 1)
+            error("Not on short boundary");
+        iret = *(unsigned short *)(uint32_t)g_vartbl[g_VarIndex].val.i;
+        g_vartbl[g_VarIndex].val.i += 2;
+        targ = T_INT;
+        return;
+    }
+    if ((p = checkstring(argv[0], (unsigned char *)"VAR")))
+    {
+        pp = findvar(p, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+        iret = *((char *)pp + (int)getinteger(argv[2]));
+        targ = T_INT;
+        return;
+    }
+
+    if ((p = checkstring(argv[0], (unsigned char *)"VARHEADER")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        pp = findvar(p, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+        iret = (unsigned int)&g_vartbl[g_VarIndex].name[0];
+        targ = T_INT;
+        return;
+    }
+
+    if ((p = checkstring(argv[0], (unsigned char *)"CFUNADDR")))
+    {
+        int i, j;
+        if (argc != 1)
+            SyntaxError();
+        ;
+        i = FindSubFun(p, true); // search for a function first
+        if (i == -1)
+            i = FindSubFun(p, false); // and if not found try for a subroutine
+        if (i == -1)
+        {
+            skipspace(p);
+            getcsargs(&p, 1);
+            if (argc != 1)
+                SyntaxError();
+            ;
+            unsigned char *q = getCstring(argv[0]);
+            i = FindSubFun(q, true); // search for a function first
+            if (i == -1)
+                i = FindSubFun(q, false); // and if not found try for a subroutine
+        }
+        if (i == -1 || !(commandtbl_decode(subfun[i]) == cmdCSUB))
+            SyntaxError();
+        // search through program flash and the library looking for a match to the function being called
+        j = GetCFunAddr((int *)CFunctionFlash, i, ProgMemory);
+        if (!j)
+            j = GetCFunAddr((int *)CFunctionLibrary, i, LibMemory); // Check the library
+        if (!j)
+            error("Internal fault 6(sorry)");
+        iret = (unsigned int)j; // return the entry point
+        targ = T_INT;
+        return;
+    }
+
+    if ((p = checkstring(argv[0], (unsigned char *)"WORD")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        iret = *(unsigned int *)(GetPeekAddr(p) & 0b11111111111111111111111111111100);
+        targ = T_INT;
+        return;
+    }
+    if ((p = checkstring(argv[0], (unsigned char *)"SHORT")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        iret = (unsigned long long int)(*(unsigned short *)(GetPeekAddr(p) & 0b11111111111111111111111111111110));
+        targ = T_INT;
+        return;
+    }
+    if ((p = checkstring(argv[0], (unsigned char *)"INTEGER")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        iret = *(uint64_t *)(GetPeekAddr(p) & 0xFFFFFFF8);
+        targ = T_INT;
+        return;
+    }
+
+    if ((p = checkstring(argv[0], (unsigned char *)"FLOAT")))
+    {
+        if (argc != 1)
+            SyntaxError();
+        ;
+        fret = *(MMFLOAT *)(GetPeekAddr(p) & 0xFFFFFFF8);
+        targ = T_NBR;
+        return;
+    }
+
+#ifdef rp2350
+    if ((p = checkstring(argv[0], (unsigned char *)"STEPPER")))
+    {
+        if (argc != 1)
+            SyntaxError();
+
+        if (checkstring(p, (unsigned char *)"ACTIVE"))
+        {
+            iret = stepper_query_active();
+            targ = T_INT;
+            return;
+        }
+
+        if (checkstring(p, (unsigned char *)"STATUS"))
+        {
+            iret = stepper_query_status_bitmap();
+            targ = T_INT;
+            return;
+        }
+
+        if (checkstring(p, (unsigned char *)"BUFFER"))
+        {
+            iret = stepper_query_buffer_free();
+            targ = T_INT;
+            return;
+        }
+
+        float pos_mm = 0.0f;
+        char axis = 0;
+        if (checkstring(p, (unsigned char *)"X"))
+            axis = 'X';
+        else if (checkstring(p, (unsigned char *)"Y"))
+            axis = 'Y';
+        else if (checkstring(p, (unsigned char *)"Z"))
+            axis = 'Z';
+        else if (checkstring(p, (unsigned char *)"A"))
+            axis = 'A';
+        else
+            error("Expected X, Y, Z, A, ACTIVE, STATUS, or BUFFER");
+
+        if (!stepper_query_position_mm(axis, &pos_mm))
+            error("Stepper axis not configured");
+
+        fret = (MMFLOAT)pos_mm;
+        targ = T_NBR;
+        return;
+    }
+#endif
+
+    if (argc != 3)
+        SyntaxError();
+    ;
+
+    if ((checkstring(argv[0], (unsigned char *)"PROGMEM")))
+    {
+        iret = *((char *)ProgMemory + (int)getinteger(argv[2]));
+        targ = T_INT;
+        return;
+    }
+
+    if ((checkstring(argv[0], (unsigned char *)"VARTBL")))
+    {
+        iret = *((char *)g_vartbl + (int)getinteger(argv[2]));
+        targ = T_INT;
+        return;
+    }
+
+    // default action is the old syntax of  b = PEEK(hiaddr, loaddr)
+    iret = *(char *)(((int)getinteger(argv[0]) << 16) + (int)getinteger(argv[2]));
+    targ = T_INT;
+}
+// corrected decimal exponent of a non-zero magnitude (libm log10 can be a hair
+// off at exact powers of ten, so nudge it back into [10^X, 10^(X+1)) )
+static int format_decexp(double av)
+{
+    int X = (int)floor(log10(av));
+    double p10 = pow(10.0, (double)X);
+    if (av < p10)
+        X--;
+    else if (av >= p10 * 10.0)
+        X++;
+    return X;
+}
+
+// strip trailing zeros (and a bare trailing '.') from a fixed-notation string
+static void format_striptz(char *s)
+{
+    char *dot = strchr(s, '.');
+    char *e;
+    if (!dot)
+        return;
+    e = s + strlen(s);
+    while (e > dot + 1 && e[-1] == '0')
+        e--;
+    if (e == dot + 1)
+        e--; // drop the '.' as well
+    *e = '\0';
+}
+
+// render 'val' in exponential form "<mantissa>e<sign><exp>" with 'mantdec'
+// mantissa decimals, using FloatToStr for the mantissa (its exponent handling is
+// correct at powers of ten, unlike pico printf).  Optionally trims the mantissa.
+static void format_exp(char *num, double val, int mantdec, int trimz)
+{
+    double av = fabs(val);
+    int X = (av == 0.0) ? 0 : format_decexp(av);
+    double mant = (av == 0.0) ? 0.0 : val / pow(10.0, (double)X);
+    char *d;
+    FloatToStr(num, mant, 0, mantdec, ' ');
+    d = (num[0] == '-') ? num + 1 : num;
+    if (d[0] == '1' && d[1] == '0') // rounding pushed |mantissa| up to 10.x
+    {
+        X++;
+        mant = val / pow(10.0, (double)X);
+        FloatToStr(num, mant, 0, mantdec, ' ');
+    }
+    if (trimz)
+        format_striptz(num);
+    num += strlen(num);
+    *num++ = 'e';
+    IntToStrPad(num, X, '0', -3, 10); // sign + at least 2 exponent digits, e.g. "+05"
+}
+
+// Render a floating point value per a printf-style spec, using the in-built
+// FloatToStr (NOT pico printf, whose float conversions are broken).  Handles
+// %f/%e/%g (and E/G uppercase), the -, 0, + and space flags, field width,
+// precision (default 4 per the manual) and any literal text around the
+// specifier.  'fmt' is validated by the caller to contain exactly one specifier.
+static void format_float(char *out, const unsigned char *fmt, double val)
+{
+    const unsigned char *pct = (const unsigned char *)strchr((const char *)fmt, '%');
+    const unsigned char *q;
+    char flagbuf[8], num[80], body[88];
+    int nf = 0, width = 0, prec = 4, type, upper, bl, pad; // manual: default precision is 4
+
+    // copy any literal text before the '%'
+    size_t pre = (size_t)(pct - fmt);
+    memcpy(out, fmt, pre);
+    out += pre;
+
+    // parse the specifier:  %[flags][width][.prec][length]<type>
+    q = pct + 1;
+    while (*q == '-' || *q == '+' || *q == ' ' || *q == '#' || *q == '0')
+    {
+        if (nf < 7)
+            flagbuf[nf++] = (char)*q;
+        q++;
+    }
+    flagbuf[nf] = '\0';
+    while (*q >= '0' && *q <= '9')
+        width = width * 10 + (*q++ - '0');
+    if (*q == '.')
+    {
+        q++;
+        prec = 0;
+        while (*q >= '0' && *q <= '9')
+            prec = prec * 10 + (*q++ - '0');
+    }
+    while (*q == 'l' || *q == 'L' || *q == 'h')
+        q++;
+    type = *q;
+    upper = (type == 'E' || type == 'G' || type == 'F');
+    if (q[0])
+        q++; // step past the conversion char; q now points at any trailing literal text
+    if (prec > 30)
+        prec = 30; // keep the result inside num[] (double has ~17 significant digits)
+    if (width > 250)
+        width = 250; // keep the result inside the caller's STRINGSIZE buffer
+
+    // generate the core number string (FloatToStr emits '-' for negatives and no
+    // leading character for positives; flags/width are applied afterwards)
+    if (type == 'e' || type == 'E')
+    {
+        format_exp(num, val, prec, 0);
+    }
+    else if (type == 'g' || type == 'G')
+    {
+        int P = prec ? prec : 1;
+        double av = fabs(val);
+        int X = (av == 0.0) ? 0 : format_decexp(av);
+        if (X >= -4 && X < P) // fixed notation, trimmed
+        {
+            int dec = P - 1 - X;
+            if (dec < 0)
+                dec = 0;
+            FloatToStr(num, val, 0, dec, ' ');
+            format_striptz(num);
+        }
+        else // exponential notation, trimmed
+            format_exp(num, val, P - 1, 1);
+    }
+    else // 'f' / 'F'
+    {
+        FloatToStr(num, val, 0, prec, ' ');
+    }
+
+    if (upper)
+        for (char *s = num; *s; s++)
+            if (*s == 'e')
+                *s = 'E';
+
+    // sign: FloatToStr already emitted '-' for negatives; add '+'/' ' for positives
+    {
+        char esign = 0;
+        if (num[0] != '-')
+            esign = strchr(flagbuf, '+') ? '+' : (strchr(flagbuf, ' ') ? ' ' : 0);
+        if (esign)
+        {
+            body[0] = esign;
+            strcpy(body + 1, num);
+        }
+        else
+            strcpy(body, num);
+    }
+
+    // apply field width
+    bl = (int)strlen(body);
+    pad = width - bl;
+    if (pad > 0 && strchr(flagbuf, '-') == NULL)
+    {
+        if (strchr(flagbuf, '0'))
+        {
+            int sgn = (body[0] == '+' || body[0] == '-' || body[0] == ' ') ? 1 : 0;
+            memcpy(out, body, (size_t)sgn);
+            memset(out + sgn, '0', (size_t)pad);
+            strcpy(out + sgn + pad, body + sgn);
+            out += bl + pad;
+        }
+        else
+        {
+            memset(out, ' ', (size_t)pad);
+            strcpy(out + pad, body);
+            out += bl + pad;
+        }
+    }
+    else if (pad > 0)
+    {
+        strcpy(out, body);
+        memset(out + bl, ' ', (size_t)pad);
+        out += bl + pad;
+    }
+    else
+    {
+        strcpy(out, body);
+        out += bl;
+    }
+
+    // copy any literal text after the specifier
+    strcpy(out, (const char *)q);
+}
+
+void fun_format(void)
+{
+    unsigned char *p, *fmt;
+    int inspec;
+    getcsargs(&ep, 3);
+    if (argc % 2 == 0)
+        SyntaxError();
+    if (argc == 3)
+        fmt = getCstring(argv[2]);
+    else
+        fmt = (unsigned char *)"%g";
+
+    // check the format string for errors that might crash the CPU
+    for (inspec = 0, p = fmt; *p; p++)
+    {
+        if (*p == '%')
+        {
+            inspec++;
+            if (inspec > 1)
+                error("Only one format specifier (%) allowed");
+            continue;
+        }
+
+        if (inspec == 1 && (*p == 'g' || *p == 'G' || *p == 'f' || *p == 'e' || *p == 'E' || *p == 'l'))
+            inspec++;
+
+        if (inspec == 1 && !(IsDigitinline(*p) || *p == '+' || *p == '-' || *p == '.' || *p == ' '))
+            error("Illegal character in format specification");
+    }
+    if (inspec != 2)
+        error("Format specification not found");
+    sret = GetTempStrMemory(); // this will last for the life of the command
+    // Render the value with the in-built FloatToStr rather than pico printf,
+    // whose float conversions are broken (wrong normalisation at powers of ten).
+    format_float((char *)sret, fmt, getnumber(argv[0]));
+    CtoM(sret);
+    targ = T_STR;
+}
+
+/***********************************************************************************************
+interrupt check
+
+The priority of interrupts (highest to low) is:
+Touch (MM+ only)
+CFunction Interrupt
+ON KEY
+I2C Slave Rx
+I2C Slave Tx
+COM1
+COM2
+COM3 (MM+ only)
+COM4 (MM+ only)
+GUI Int Down (MM+ only)
+GUI Int Up (MM+ only)
+WAV Finished (MM+ only)
+IR Receive
+I/O Pin Interrupts in order of definition
+Tick Interrupts (1 to 4 in that order)
+
+************************************************************************************************/
+
+// check if an interrupt has occured and if so, set the next command to the interrupt routine
+// will return true if interrupt detected or false if not
+int checkdetailinterrupts(void)
+{
+    int i, v;
+    char *intaddr;
+    static char rti[2];
+    for (int i = 1; i <= MAXPID; i++)
+    {
+        if (PIDchannels[i].interrupt != NULL && time_us_64() > PIDchannels[i].timenext && PIDchannels[i].active)
+        {
+            PIDchannels[i].timenext = time_us_64() + (PIDchannels[i].PIDparams->T * 1000000);
+            intaddr = (char *)PIDchannels[i].interrupt;
+            goto GotAnInterrupt;
+        }
+    }
+
+    // check for an  ON KEY loc  interrupt
+    if (KeyInterrupt != NULL && Keycomplete)
+    {
+        Keycomplete = false;
+        intaddr = KeyInterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+
+    if (OnKeyGOSUB && kbhitConsole())
+    {
+        intaddr = (char *)OnKeyGOSUB; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+#ifndef USBKEYBOARD
+    if (OnPS2GOSUB && PS2int)
+    {
+        intaddr = (char *)OnPS2GOSUB; // set the next stmt to the interrupt location
+        PS2int = false;
+        goto GotAnInterrupt;
+    }
+#endif
+    if (piointerrupt)
+    { // have any PIO interrupts been set
+        for (int pio = 0; pio < PIOMAX; pio++)
+        {
+#ifdef rp2350
+            PIO pioinuse = (pio == 0 ? pio0 : (pio == 1 ? pio1 : pio2));
+#else
+            PIO pioinuse = (pio == 0 ? pio0 : pio1);
+#endif
+            for (int sm = 0; sm < 4; sm++)
+            {
+                int TXlevel = pio_sm_get_tx_fifo_level(pioinuse, sm);
+                int RXlevel = pio_sm_get_rx_fifo_level(pioinuse, sm);
+                if (RXlevel && pioRXinterrupts[sm][pio])
+                { // is there a character in the buffer and has an interrupt been set?
+                    intaddr = pioRXinterrupts[sm][pio];
+                    goto GotAnInterrupt;
+                }
+                if (TXlevel && pioTXinterrupts[sm][pio])
+                {
+                    int full = (pioinuse->sm->shiftctrl & (1 << 30)) ? 8 : 4;
+                    if (TXlevel != full && pioTXlast[sm][pio] == full)
+                    { // was the buffer full last time and not now and is an interrupt set?
+                        intaddr = pioTXinterrupts[sm][pio];
+                        pioTXlast[sm][pio] = TXlevel;
+                        goto GotAnInterrupt;
+                    }
+                }
+                pioTXlast[sm][pio] = TXlevel;
+            }
+        }
+    }
+    if (DMAinterruptRX)
+    {
+        if (!dma_channel_is_busy(dma_rx_chan))
+        {
+            PIO pio = (dma_rx_pio ? pio1 : pio0);
+            intaddr = (char *)DMAinterruptRX;
+            DMAinterruptRX = NULL;
+            pio_sm_set_enabled(pio, dma_rx_sm, false);
+            goto GotAnInterrupt;
+        }
+    }
+    if (DMAinterruptTX)
+    {
+        if (!dma_channel_is_busy(dma_tx_chan))
+        {
+            PIO pio = (dma_tx_pio ? pio1 : pio0);
+            if ((pio->flevel >> (dma_tx_sm * 8) & 0xf) == 0)
+            {
+                intaddr = (char *)DMAinterruptTX;
+                DMAinterruptTX = NULL;
+                pio_sm_set_enabled(pio, dma_tx_sm, false);
+                goto GotAnInterrupt;
+            }
+        }
+    }
+
+#ifdef GUICONTROLS
+    if (Ctrl != NULL)
+    {
+        if (gui_int_down && GuiIntDownVector)
+        {                               // interrupt on pen down
+            intaddr = GuiIntDownVector; // get a pointer to the interrupt routine
+            gui_int_down = false;
+            goto GotAnInterrupt;
+        }
+
+        if (gui_int_up && GuiIntUpVector)
+        {
+            intaddr = GuiIntUpVector; // get a pointer to the interrupt routine
+            gui_int_up = false;
+            goto GotAnInterrupt;
+        }
+    }
+#endif
+
+    if (COLLISIONInterrupt != NULL && CollisionFound)
+    {
+        CollisionFound = false;
+        intaddr = (char *)COLLISIONInterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if (STCollisionInterrupt != NULL && STCollisionFound)
+    {
+        STCollisionFound = false;
+        intaddr = (char *)STCollisionInterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+#ifdef PICOMITEWEB
+    if (TCPreceived && TCPreceiveInterrupt)
+    {
+        intaddr = (char *)TCPreceiveInterrupt; // get a pointer to the interrupt routine
+        TCPreceived = 0;
+        goto GotAnInterrupt;
+    }
+    if (MQTTComplete && MQTTInterrupt != NULL)
+    {
+        MQTTComplete = false;
+        intaddr = (char *)MQTTInterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if (UDPreceive && UDPinterrupt != NULL)
+    {
+        UDPreceive = false;
+        intaddr = (char *)UDPinterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+#endif
+    for (int i = 0; i < 6; i++)
+    {
+        if (nunInterruptc[i] != NULL && nunfoundc[i])
+        {
+            nunfoundc[i] = false;
+            intaddr = nunInterruptc[i];
+            goto GotAnInterrupt;
+        }
+    }
+    if (ADCInterrupt && dmarunning)
+    {
+        if (!dma_channel_is_busy(ADC_dma_chan))
+        {
+            __compiler_memory_barrier();
+            adc_run(false);
+            adc_fifo_drain();
+            int k = 0;
+            for (int i = 0; i < ADCmax; i++)
+            {
+                for (int j = 0; j < ADCopen; j++)
+                {
+                    if (j == 0)
+                        *a1float++ = (MMFLOAT)ADCbuffer[k++] * ADCscale[0] + ADCbottom[0];
+                    if (j == 1)
+                        *a2float++ = (MMFLOAT)ADCbuffer[k++] * ADCscale[1] + ADCbottom[1];
+                    if (j == 2)
+                        *a3float++ = (MMFLOAT)ADCbuffer[k++] * ADCscale[2] + ADCbottom[2];
+                    if (j == 3)
+                        *a4float++ = (MMFLOAT)ADCbuffer[k++] * ADCscale[3] + ADCbottom[3];
+                }
+            }
+            intaddr = ADCInterrupt; // get a pointer to the interrupt routine
+            dmarunning = false;
+            adc_init();
+            last_adc = 99;
+            FreeMemory((void *)ADCbuffer);
+            goto GotAnInterrupt;
+        }
+    }
+    if (ADCInterrupt && ADCDualBuffering)
+    {
+        ADCDualBuffering = false;
+        intaddr = ADCInterrupt;
+        goto GotAnInterrupt;
+    }
+
+    if ((I2C_Status & I2C_Status_Slave_Receive_Rdy))
+    {
+        I2C_Status &= ~I2C_Status_Slave_Receive_Rdy; // clear completed flag
+        intaddr = I2C_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if ((I2C_Status & I2C_Status_Slave_Send_Rdy))
+    {
+        I2C_Status &= ~I2C_Status_Slave_Send_Rdy; // clear completed flag
+        intaddr = I2C_Slave_Send_IntLine;         // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if ((I2C2_Status & I2C_Status_Slave_Receive_Rdy))
+    {
+        I2C2_Status &= ~I2C_Status_Slave_Receive_Rdy; // clear completed flag
+        intaddr = I2C2_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if ((I2C2_Status & I2C_Status_Slave_Send_Rdy))
+    {
+        I2C2_Status &= ~I2C_Status_Slave_Send_Rdy; // clear completed flag
+        intaddr = I2C2_Slave_Send_IntLine;         // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if (WAVInterrupt != NULL && WAVcomplete)
+    {
+        WAVcomplete = false;
+        intaddr = WAVInterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+
+    // interrupt routines for the serial ports
+    if (com1_interrupt != NULL && SerialRxStatus(1) >= com1_ilevel)
+    {                             // do we need to interrupt?
+        intaddr = com1_interrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if (com2_interrupt != NULL && SerialRxStatus(2) >= com2_ilevel)
+    {                             // do we need to interrupt?
+        intaddr = com2_interrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+#ifdef USBKEYBOARD
+    if (com3_interrupt != NULL && SerialRxStatus(3) >= com3_ilevel)
+    {                             // do we need to interrupt?
+        intaddr = com3_interrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if (com4_interrupt != NULL && SerialRxStatus(4) >= com4_ilevel)
+    {                             // do we need to interrupt?
+        intaddr = com4_interrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if (com5_interrupt != NULL && SerialRxStatus(5) >= com5_ilevel)
+    {                             // do we need to interrupt?
+        intaddr = com5_interrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+    if (com6_interrupt != NULL && SerialRxStatus(6) >= com6_ilevel)
+    {                             // do we need to interrupt?
+        intaddr = com6_interrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+#endif
+    if (IrGotMsg && IrInterrupt != NULL)
+    {
+        IrGotMsg = false;
+        intaddr = (char *)IrInterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+
+    if (KeypadInterrupt != NULL && KeypadCheck())
+    {
+        intaddr = (char *)KeypadInterrupt; // set the next stmt to the interrupt location
+        goto GotAnInterrupt;
+    }
+
+    if (CSubInterrupt != NULL && CSubComplete)
+    {
+        intaddr = CSubInterrupt; // set the next stmt to the interrupt location
+        CSubComplete = 0;
+        goto GotAnInterrupt;
+    }
+
+    for (i = 0; i < NBRINTERRUPTS; i++)
+    { // scan through the interrupt table
+        if (inttbl[i].pin != 0)
+        {                              // if this entry has an interrupt pin set
+            v = ExtInp(inttbl[i].pin); // get the current value of the pin
+            // check if interrupt occured
+            if ((inttbl[i].lohi == T_HILO && v < inttbl[i].last) || (inttbl[i].lohi == T_LOHI && v > inttbl[i].last) || (inttbl[i].lohi == T_BOTH && v != inttbl[i].last))
+            {
+                intaddr = inttbl[i].intp; // set the next stmt to the interrupt location
+                inttbl[i].last = v;       // save the new pin value
+                goto GotAnInterrupt;
+            }
+            else
+                inttbl[i].last = v; // no interrupt, just update the pin value
+        }
+    }
+
+    // check if one of the tick interrupts is enabled and if it has occured
+    for (i = 0; i < NBRSETTICKS; i++)
+    {
+        if (TickInt[i] != NULL && TickTimer[i] > TickPeriod[i])
+        {
+            // reset for the next tick but skip any ticks completely missed
+            while (TickTimer[i] > TickPeriod[i])
+                TickTimer[i] -= TickPeriod[i];
+            intaddr = (char *)TickInt[i];
+            if (intaddr)
+                goto GotAnInterrupt;
+        }
+    }
+
+    // if no interrupt was found then return having done nothing
+    return 0;
+
+    // an interrupt was found if we jumped to here
+GotAnInterrupt:
+    g_LocalIndex++; // IRETURN will decrement this
+    if (OptionErrorSkip != 0)
+        SaveOptionErrorSkip = OptionErrorSkip;
+    else
+        SaveOptionErrorSkip = 0;
+    OptionErrorSkip = 0;
+    strcpy(SaveErrorMessage, MMErrMsg);
+    Saveerrno = MMerrno;
+    *MMErrMsg = 0;
+    MMerrno = 0;
+    InterruptReturn = nextstmt; // for when IRETURN is executed
+    // if the interrupt is pointing to a SUB token we need to call a subroutine
+    CommandToken tkn = commandtbl_decode((const unsigned char *)intaddr);
+    if (tkn == cmdSUB)
+    {
+        strncpy(CurrentInterruptName, intaddr + 2, MAXVARLEN);
+        rti[0] = (cmdIRET & 0x7f) + C_BASETOKEN;
+        rti[1] = (cmdIRET >> 7) + C_BASETOKEN; // tokens can be 14-bit
+        if (gosubindex >= MAXGOSUB)
+            error("Too many SUBs for interrupt");
+        errorstack[gosubindex] = CurrentLinePtr;
+        gosubstack[gosubindex++] = (unsigned char *)rti; // return from the subroutine to the dummy IRETURN command
+        g_LocalIndex++;                                  // return from the subroutine will decrement g_LocalIndex
+        skipelement(intaddr);                            // point to the body of the subroutine
+    }
+    nextstmt = (unsigned char *)intaddr; // the next command will be in the interrupt routine
+    return 1;
+}
+int __not_in_flash_func(check_interrupt)(void)
+{
+#ifdef GUICONTROLS
+    if (Ctrl != NULL)
+    {
+        if (!(DelayedDrawKeyboard || DelayedDrawFmtBox || calibrate))
+            ProcessTouch();
+        if (CheckGuiFlag)
+            CheckGui(); // This implements a LED flash
+    }
+#if defined(USBKEYBOARD) && defined(PICOMITEVGA)
+    else if (OSK_IsActive() && !calibrate)
+    {
+        /* OSK is drawn but the user has not allocated GUI controls, so the
+           normal ProcessTouch gate (Ctrl != NULL) is closed. Run it anyway
+           so OSK taps reach the dispatcher. */
+        ProcessTouch();
+    }
+#endif
+#endif
+    /* Cursor refresh lives in routinechecks() — it fires from the
+       prompt's getchar loop too, so the cursor tracks the mouse even
+       when no program is running. */
+    if (!InterruptUsed)
+        return 0; // quick exit if there are no interrupts set
+    if (InterruptReturn != NULL || CurrentLinePtr == NULL)
+        return 0; // skip if we are in an interrupt or in immediate mode
+    return checkdetailinterrupts();
+}
+
+// get the address for a MMBasic interrupt
+// this will handle a line number, a label or a subroutine
+// all areas of MMBasic that can generate an interrupt use this function
+unsigned char *GetIntAddress(unsigned char *p)
+{
+    int i;
+    if (isnamestart((uint8_t)*p))
+    {                         // if it starts with a valid name char
+        i = FindSubFun(p, 0); // try to find a matching subroutine
+        if (i == -1)
+            return findlabel(p); // if a subroutine was NOT found it must be a label
+        else
+            return subfun[i]; // if a subroutine was found, return the address of the sub
+    }
+
+    return findline(getinteger(p), true); // otherwise try for a line number
+}

@@ -1,0 +1,84 @@
+{
+  "name": "mmbasic-support",
+  "displayName": "MMBasic Support",
+  "description": "MMBasic language support with PicoMite editor colours (keywords, comments, strings, numbers).",
+  "version": "0.0.7",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Programming Languages", "Themes"],
+  "main": "./extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "mmbasic",
+        "aliases": ["MMBasic", "mmbasic"],
+        "extensions": [".bas", ".mmb", ".mmba"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "snippets": [
+      {
+        "language": "mmbasic",
+        "path": "./snippets/mmbasic.code-snippets"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "mmbasic",
+        "scopeName": "source.mmbasic",
+        "path": "./syntaxes/mmbasic.tmLanguage.json"
+      }
+    ],
+    "themes": [
+      {
+        "label": "MMBasic Editor",
+        "uiTheme": "vs-dark",
+        "path": "./themes/mmbasic-color-theme.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mmbasic.sendToPicoMite",
+        "title": "MMBasic: Send To PicoMite"
+      },
+      {
+        "command": "mmbasic.openConsole",
+        "title": "MMBasic: Open Console"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "mmbasic.sendToPicoMite",
+        "key": "ctrl+alt+u",
+        "mac": "cmd+alt+u",
+        "when": "editorTextFocus && editorLangId == 'mmbasic'"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "MMBasic",
+      "properties": {
+        "mmbasicUploader.baud": {
+          "type": "number",
+          "default": 115200,
+          "description": "Serial baud rate for PicoMite upload"
+        },
+        "mmbasicUploader.lineDelayMs": {
+          "type": "number",
+          "default": 5,
+          "description": "Delay in milliseconds between lines when sending"
+        }
+      }
+    }
+  },
+  "keywords": ["MMBasic", "PicoMite", "Pico", "Basic", "syntax"],
+  "dependencies": {
+    "serialport": "^12.0.0"
+  },
+  "repository": {
+    "type": "local",
+    "url": "d:/Dropbox/PicoMite/PicoMite/vscode-mmbasic"
+  }
+}

@@ -1,0 +1,888 @@
+{
+  "name": "MMBasic",
+  "scopeName": "source.mmbasic",
+  "patterns": [
+    {
+      "include": "#comments"
+    },
+    {
+      "include": "#strings"
+    },
+    {
+      "include": "#numbers"
+    },
+    {
+      "include": "#subcommands"
+    },
+    {
+      "include": "#keywords"
+    },
+    {
+      "include": "#functions"
+    }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.block.mmbasic",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.mmbasic"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.comment.mmbasic"
+            }
+          }
+        },
+        {
+          "name": "comment.line.apostrophe.mmbasic",
+          "match": "'.*$"
+        },
+        {
+          "name": "comment.line.rem.mmbasic",
+          "match": "(?i)^\\s*REM\\b.*$"
+        }
+      ]
+    },
+    "strings": {
+      "name": "string.quoted.double.mmbasic",
+      "begin": "\"",
+      "end": "\"",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.mmbasic"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.mmbasic"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.mmbasic",
+          "match": "\"\""
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.mmbasic constant.numeric",
+          "match": "(?i)(?:\\b[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?\\b|&[hH][0-9a-f]+|&[bB][01]+|&[oO][0-7]+)"
+        }
+      ]
+    },
+    "subcommands": {
+      "patterns": [
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bDim\\s+)(LOCAL|STATIC)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bPlay\\s+)(ARRAY|CLOSE|CONTINUE|FLAC|HALT|LOAD\\\\s+SOUND|MIDI|MIDIFILE|MODFILE|MODSAMPLE|MP3|NEXT|NOTE|PAUSE|PREVIOUS|RELEASE|RESUME|SAMPLE|SOUND|STOP|STREAM|TONE|VOLUME|WAV)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bList\\s+)(ALL|COMMANDS|FUNCTIONS|OPTIONS|PINS|SYSTEM\\\\s+I2C|TYPE|VARIABLES)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bContinue\\s+)(DO)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bTrace\\s+)(LIST|OFF|ON)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bFrame\\s+)(BOX|CLEAR|CLOSE|CLS|COLOUR|CREATE|CURSOR|DESTROY|HIDE|HLINE|INPUT|OVERLAY|PANEL|PRINT|SCROLL|SHOW|TITLE|VBUF|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bReDim\\s+)(PRESERVE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bRead\\s+)(RESTORE|SAVE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bOn\\s+)(ERROR|KEY|PS2)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bStruct\\s+)(CLEAR|COPY|EXTRACT|INSERT|LOAD|PRINT|SAVE|SORT|SWAP)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bPIO\\s+)(ASSEMBLE|CLEAR|CONFIGURE|DMA\\\\s+RX|DMA\\\\s+TX|DMA\\\\s+TX\\\\s+TABLE|EXECUTE|INIT\\\\s+MACHINE|INTERRUPT|MAKE\\\\s+RING\\\\s+BUFFER|PROGRAM|PROGRAM\\\\s+LINE|READ|SET\\\\s+BASE|START|STOP|SYNC|WRITE|WRITEFIFO)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bWEB\\s+)(CONNECT|NTP|SCAN|UDP)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bGUI\\s+)(BEEP|BITMAP|CALIBRATE|RESET|TEST)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bLine\\s+)(AA|GRAPH|PLOT)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bTriangle\\s+)(RESTORE|SAVE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bBlit\\\\s+Memory\\s+)(COMPRESSED|FLASH|FRAMEBUFFER)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bSprite\\s+)(CLOSE|CLOSE\\\\s+ALL|COPY|HIDE|HIDE\\\\s+ALL|HIDE\\\\s+SAFE|INTERRUPT|LOAD|LOADARRAY|LOADBMP|LOADPNG|MOVE|NEXT|NOINTERRUPT|NOSTINTERRUPT|READ|RESTORE|SCROLL|SET\\\\s+TRANSPARENT|SHOW|SHOW\\\\s+SAFE|STATIC|STATIC\\\\s+CLEAR|STINTERRUPT|SWAP|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bFRAMEBUFFER\\s+)(CLOSE|COPY|CREATE|CREATE\\\\s+2|LAYER|LAYER\\\\s+TOP|MERGE|SYNC|WAIT|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bBlit\\s+)(CLOSE|LOAD|LOADBMP|MERGE|READ|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMap\\(\\s+)(GRAYSCALE|MAXIMITE|RESET|SET)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMap\\s+)(GRAYSCALE|MAXIMITE|RESET|SET)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMap\\(\\s+)(GRAYSCALE|MAXIMITE|RESET|SET)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMap\\s+)(GRAYSCALE|MAXIMITE|RESET|SET)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bTILE\\s+)(HEIGHT|RESET)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bDraw3D\\s+)(CAMERA|CLOSE|CLOSE\\\\s+ALL|CREATE|DIAGNOSE|HIDE|HIDE\\\\s+ALL|LIGHT|RESET|RESTORE|ROTATE|SET\\\\s+FLAGS|SHOW|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bIR\\s+)(CLOSE|SEND)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bPWM\\s+)(SYNC)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bKeypad\\s+)(CLOSE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bLCD\\s+)(CLEAR|CLOSE|CMD|INIT)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bI2CLCD\\s+)(BACKLIGHT|CLEAR|CLOSE|CMD|CREATECHAR|CURSOR|INIT)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bDevice\\s+)(BITSTREAM|CAMERA|GAMEPAD|HUMID|KEYPAD|LCD|MOUSE|NUNCHUCK|SERIALRX|SERIALTX|WII|WII\\\\s+CLASSIC|WS2812)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bADC\\s+)(CLOSE|FREQUENCY|OPEN|RUN|START)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bRam\\s+)(CHAIN|ERASE|ERASE\\\\s+ALL|FILE\\\\s+LOAD|LIST|LOAD|OVERWRITE|RUN|SAVE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bFlash\\s+)(CHAIN|DISK\\\\s+LOAD|ERASE|ERASE\\\\s+ALL|LIST|LOAD|LOAD\\\\s+IMAGE|MODBUFF\\\\s+LOAD|OVERWRITE|RUN|SAVE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bSave\\s+)(COMPRESSED\\\\s+IMAGE|CONTEXT|DATA|IMAGE|PERSISTENT)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bLoad\\s+)(BMP|CONTEXT|DATA|IMAGE|JPG|PNG)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bCopy\\s+)(A2A|A2B|B2A|B2B)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bAutosave\\s+)(APPEND)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bVAR\\s+)(CLEAR|RESTORE|SAVE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bGUI\\s+)(AREA|BARGAUGE|BUTTON|CAPTION|CHECKBOX|DELETE|DISABLE|DISPLAYBOX|ENABLE|FCOLOUR|FORMATBOX|FRAME|GAUGE|HIDE|INTERRUPT|LED|NUMBERBOX|PAGE|RADIO|REDRAW|RESTORE|SETUP|SHOW|SPINBOX|SWITCH|TEXTBOX)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bI2C\\s+)(CHECK|CLOSE|OPEN|READ|SLAVE\\\\s+CLOSE|SLAVE\\\\s+OPEN|SLAVE\\\\s+READ|SLAVE\\\\s+WRITE|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bI2C2\\s+)(CHECK|CLOSE|OPEN|READ|SLAVE\\\\s+CLOSE|SLAVE\\\\s+OPEN|SLAVE\\\\s+READ|SLAVE\\\\s+WRITE|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bRTC\\s+)(GETREG|GETTIME|SETREG|SETTIME)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bWii\\\\s+Nunchuck\\s+)(CLOSE|OPEN)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bWii\\\\s+Classic\\s+)(CLOSE|OPEN)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bWii\\s+)(CLOSE|OPEN)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bCamera\\s+)(CAPTURE|CHANGE|CLOSE|OPEN|REGISTER|TEST)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMath\\s+)(ADD|AES128|C_ADD|C_AND|C_DIV|C_MUL|C_MULT|C_OR|C_SUB|C_XOR|FFT|INSERT|INTERPOLATE|M_INVERSE|M_MULT|M_PRINT|M_TRANSPOSE|PID|POWER|Q_CREATE|Q_EULER|Q_INVERT|Q_MULT|Q_ROTATE|Q_VECTOR|RANDOMIZE|SCALE|SENSORFUSION|SET|SHIFT|SINC|SLICE|V_CROSS|V_MULT|V_NORMALISE|V_PRINT|V_ROTATE|WINDOW)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMemory\\s+)(COPY|INPUT|PACK|PRINT|SET|UNPACK)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bLongString\\s+)(AES128|APPEND|BASE64|CLEAR|CONCAT|COPY|LCASE|LEFT|LOAD|MID|PRINT|REPLACE|RESIZE|RIGHT|SETBYTE|TRIM|UCASE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bLibrary\\s+)(DELETE|DISK\\\\s+LOAD|DISK\\\\s+SAVE|LIST|LIST\\\\s+ALL|SAVE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bOption\\s+)(ANGLE|AUDIO|AUTOREFRESH|AUTORUN|BASE|BAUDRATE|BREAK|CASE|CDC\\\\s+POLL\\\\s+RATE|COLORCODE|COLOURCODE|CONSOLE|CONTINUATION\\\\s+LINES|COUNT|CPUSPEED|DEFAULT|DEFAULT\\\\s+COLORS|DEFAULT\\\\s+COLOURS|DEFAULT\\\\s+MODE|DISK\\\\s+LOAD|DISK\\\\s+SAVE|DISPLAY|ESCAPE|EXPLICIT|F1|F5|F6|F7|F8|F9|FAST\\\\s+AUDIO|GPS|GUI\\\\s+CONTROLS|HDMI\\\\s+PINS|HEARTBEAT|KEYBOARD|KEYBOARD\\\\s+PINS|KEYBOARD\\\\s+REPEAT|LCD\\\\s+SPI|LCD320|LCDPANEL|LCDPANEL\\\\s+CONSOLE|LCDPANEL\\\\s+NOCONSOLE|LEGACY|LIST|LOCAL\\\\s+KEYBOARD|LOCAL\\\\s+VARIABLES|LOGGING|MILLISECONDS|MODBUFF|MOUSE|MOUSE\\\\s+SENSITIVITY|NOCHECK|PICO|PICO\\\\s+PLUS\\\\s+2|PIN|PLATFORM|POWER|PS2\\\\s+PINS|PSRAM\\\\s+PIN|RESET|RESOLUTION|RTC\\\\s+AUTO|SDCARD|SERIAL\\\\s+CONSOLE|SYSTEM\\\\s+I2C|SYSTEM\\\\s+SPI|TAB|TCP\\\\s+SERVER\\\\s+PORT|TELNET\\\\s+CONSOLE|TFTP|TOUCH|UDP\\\\s+SERVER\\\\s+PORT|VCC|VGA\\\\s+PINS|WEB\\\\s+MESSAGES|WIFI)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bWatchDog\\s+)(HW|OFF)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bCPU\\s+)(RESTART|SLEEP)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bPoke\\s+)(DISPLAY)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMouse\\s+)(CLOSE|INTERRUPT\\\\s+DISABLE|INTERRUPT\\\\s+ENABLE|OPEN|SET)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bOneWire\\s+)(READ|RESET|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bRay\\s+)(CAMERA|CAST|CELL|CLOSE|COLOR|COLOUR|DEFINE|DOOR|MAP|MINIMAP|MOVE|RENDER|SPRITE|TURN)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bSPI\\s+)(CLOSE|OPEN|READ|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bSPI2\\s+)(CLOSE|OPEN|READ|WRITE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMODE\\s+)(400|800)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bMode\\s+)(400|800)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bStepper\\s+)(ARC|AXIS|BUFFER|CLEAR|CLOSE|ENABLE|ESTOP|GC|GCODE|HWLIMITS|INIT|INVERT|JERK|LIMITS|POSITION|RECOVER|RESET|RUN|SCURVE|SPINDLE|STATUS)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bTurtle\\s+)(ARC|ARCL|ARCR|ARECTANGLE|BACK|BEGIN\\\\s+FILL|BEZIER|CIRCLE|CURSOR\\\\s+COLOUR|CURSOR\\\\s+SIZE|DOT|END\\\\s+FILL|FCIRCLE|FILL\\\\s+COLOUR|FILL\\\\s+PATTERN|FORWARD|FRECTANGLE|HIDE\\\\s+TURTLE|HOME|LEFT|NOFILL|PEN\\\\s+COLOUR|PEN\\\\s+DOWN|PEN\\\\s+UP|PEN\\\\s+WIDTH|POP|PUSH|RESET|RIGHT|SET\\\\s+HEADING|SET\\\\s+X|SET\\\\s+XY|SET\\\\s+Y|SHOW\\\\s+TURTLE|STAMP|WEDGE)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        },
+        {
+          "name": "meta.subcommand.mmbasic",
+          "match": "(?i)(\\bGamepad\\s+)(COLOUR|CONFIGURE|HAPTIC|INTERRUPT\\\\s+DISABLE|INTERRUPT\\\\s+ENABLE|MONITOR|MONITOR\\\\s+SILENT)",
+          "captures": {
+            "1": {
+              "name": "keyword.control.mmbasic"
+            },
+            "2": {
+              "name": "support.constant.mmbasic.subcommand"
+            }
+          }
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "storage.type.mmbasic storage.type",
+          "match": "(?i)\\b(?:INTEGER|FLOAT|STRING)\\b"
+        },
+        {
+          "name": "keyword.control.mmbasic",
+          "match": "(?i)\\b(?:\\*/|/\\*|ADC|Arc|Array\\\\s+Add|Array\\\\s+Insert|Array\\\\s+Set|Array\\\\s+Slice|Astro|Autosave|Backlight|Bezier|Bit\\(|Bitstream|Blit|Blit\\\\s+Memory|Box|Byte\\(|CLS|CMM2\\\\s+Load|CMM2\\\\s+Run|CPU|CSub|Call|Camera|Case|Case\\\\s+Else|Cat|Chain|Chdir|Circle|Clear|Close|Color|Colour|Colour\\\\s+Map|Configure|Const|Continue|Copy|CtrlVal\\(|Data|Date\\$|DefineFont|Device|Dim|Do|Draw3D|Drive|Edit|Edit\\\\s+File|Else|Else\\\\s+If|ElseIf|End|End\\\\s+CSub|End\\\\s+DefineFont|End\\\\s+Function|End\\\\s+If|End\\\\s+Select|End\\\\s+Sub|End\\\\s+Type|EndIf|Erase|Error|Execute|Exit|Exit\\\\s+Do|Exit\\\\s+For|Exit\\\\s+Function|Exit\\\\s+Sub|FRAMEBUFFER|Files|Fill|Flag\\(|Flags|Flash|Flush|Font|For|Frame|Function|GUI|Gamepad|GoSub|GoTo|Help|Humid|I2C|I2C2|I2CLCD|IR|IRQ|IRQ\\\\s+CLEAR|IRQ\\\\s+NEXT|IRQ\\\\s+NOWAIT|IRQ\\\\s+PREV|IRQ\\\\s+SET|IRQ\\\\s+WAIT|IReturn|If|In|Inc|Input|Interrupt|Jmp|Keypad|Kill|LCD|LMid\\(|Let|Library|Line|Line\\\\s+Input|List|Load|Local|Location|LongString|Loop|MID\\$\\(|MODE|Map|Map\\(|Math|Memory|Mkdir|Mode|Mouse|Mov|New|Next|Nop|On|OneWire|Open|Option|Out|PIO|PWM|Pause|Pin\\(|Pixel|Play|Poke|Polygon|Port\\(|Print|Pull|Pulse|Push|RBox|RTC|Ram|Randomize|Ray|ReDim|Read|Refresh|Rem|Rename|Restore|Return|Rmdir|Run|SPI|SPI2|SYNC|Save|Seek|Select\\\\s+Case|Servo|Set|SetPin|SetTick|Sort|Sprite|Star|Static|Stepper|Struct|Sub|TEMPR\\\\s+START|TILE|Text|Time\\$|Timer|Trace|Triangle|Turtle|Type|Update\\\\s+Firmware|VAR|WEB|WS2812|Wait|WatchDog|While|Wii|Wii\\\\s+Classic|Wii\\\\s+Nunchuck|XModem|YModem|_end\\\\s+program|_label|_line|_program|_side\\\\s+set|_wrap|_wrap\\\\s+target)\\b"
+        }
+      ]
+    },
+    "functions": {
+      "patterns": [
+        {
+          "name": "support.function.mmbasic",
+          "match": "(?i)\\b(?:ACos\\(|ASin\\(|Abs\\(|And|As|Asc\\(|Atan2\\(|Atn\\(|Bin\\$\\(|Bin2str\\$\\(|Bit\\(|Bound\\(|Byte\\(|Call\\(|Choice\\(|Chr\\$\\(|Cint\\(|Cos\\(|CtrlVal\\(|Cwd\\$|DEVICE\\(|DRAW3D\\(|Date\\$|DateTime\\$\\(|Day\\$\\(|Deg\\(|Dir\\$\\(|Distance\\(|Else|Eof\\(|Epoch\\(|Eval\\(|Exp\\(|Field\\$\\(|Fix\\(|Flag\\(|For|Format\\$\\(|Frame\\(|GPS\\(|GetScanLine|GoSub|GoTo|Hex\\$\\(|INV|Inkey\\$|Input\\$\\(|Instr\\(|Int\\(|Json\\$\\(|KeyDown\\(|LCase\\$\\(|LCompare\\(|LGetByte\\(|LGetStr\\$\\(|LInStr\\(|LInput\\(|LLen\\(|Left\\$\\(|Len\\(|Loc\\(|Lof\\(|Log\\(|MM\\.Info\\(|Map\\(|Math\\(|Max\\(|Mid\\$\\(|Min\\(|Mod|MsgBox\\(|Not|Oct\\$\\(|Or|Peek\\(|Pi|Pin\\(|Pio\\(|Pixel\\(|Port\\(|Pos|Pulsin\\(|RGB\\(|Rad\\(|Ray\\(|Right\\$\\(|Rnd|Rnd\\(|SPI\\(|SPI2\\(|Sgn\\(|Sin\\(|Space\\$\\(|Sqr\\(|Step|Str\\$\\(|Str2bin\\(|String\\$\\(|Struct\\(|TEMPR\\(|Tab\\(|Tan\\(|Then|Time\\$|Timer|To|Touch\\(|Trim\\$\\(|UCase\\$\\(|Until|Val\\(|While|Xor|sprite\\()\\b"
+        }
+      ]
+    }
+  }
+}
+
+

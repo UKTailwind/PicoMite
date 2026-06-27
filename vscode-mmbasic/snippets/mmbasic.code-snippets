@@ -1,0 +1,6127 @@
+{
+  "cmd: Call": {
+    "prefix": "call",
+    "body": [
+      "Call"
+    ],
+    "description": "Command Call"
+  },
+  "cmd: Clear": {
+    "prefix": "clear",
+    "body": [
+      "Clear"
+    ],
+    "description": "Command Clear"
+  },
+  "cmd: Continue": {
+    "prefix": "continue",
+    "body": [
+      "Continue"
+    ],
+    "description": "Command Continue"
+  },
+  "cmd: Continue DO": {
+    "prefix": "continue do",
+    "body": [
+      "Continue DO"
+    ],
+    "description": "Command Continue DO"
+  },
+  "cmd: Data": {
+    "prefix": "data",
+    "body": [
+      "Data"
+    ],
+    "description": "Command Data"
+  },
+  "cmd: Dim": {
+    "prefix": "dim",
+    "body": [
+      "Dim"
+    ],
+    "description": "Command Dim"
+  },
+  "cmd: Do": {
+    "prefix": "do",
+    "body": [
+      "Do"
+    ],
+    "description": "Command Do"
+  },
+  "cmd: Else If": {
+    "prefix": "else if",
+    "body": [
+      "Else If"
+    ],
+    "description": "Command Else If"
+  },
+  "cmd: End If": {
+    "prefix": "end if",
+    "body": [
+      "End If"
+    ],
+    "description": "Command End If"
+  },
+  "cmd: Exit Do": {
+    "prefix": "exit do",
+    "body": [
+      "Exit Do"
+    ],
+    "description": "Command Exit Do"
+  },
+  "cmd: ElseIf": {
+    "prefix": "elseif",
+    "body": [
+      "ElseIf"
+    ],
+    "description": "Command ElseIf"
+  },
+  "cmd: Case Else": {
+    "prefix": "case else",
+    "body": [
+      "Case Else"
+    ],
+    "description": "Command Case Else"
+  },
+  "cmd: Else": {
+    "prefix": "else",
+    "body": [
+      "Else"
+    ],
+    "description": "Command Else"
+  },
+  "cmd: Select Case": {
+    "prefix": "select case",
+    "body": [
+      "Select Case"
+    ],
+    "description": "Command Select Case"
+  },
+  "cmd: End Select": {
+    "prefix": "end select",
+    "body": [
+      "End Select"
+    ],
+    "description": "Command End Select"
+  },
+  "cmd: Case": {
+    "prefix": "case",
+    "body": [
+      "Case"
+    ],
+    "description": "Command Case"
+  },
+  "cmd: EndIf": {
+    "prefix": "endif",
+    "body": [
+      "EndIf"
+    ],
+    "description": "Command EndIf"
+  },
+  "cmd: End Function": {
+    "prefix": "end function",
+    "body": [
+      "End Function"
+    ],
+    "description": "Command End Function"
+  },
+  "cmd: End Sub": {
+    "prefix": "end sub",
+    "body": [
+      "End Sub"
+    ],
+    "description": "Command End Sub"
+  },
+  "cmd: End": {
+    "prefix": "end",
+    "body": [
+      "End"
+    ],
+    "description": "Command End"
+  },
+  "cmd: Erase": {
+    "prefix": "erase",
+    "body": [
+      "Erase"
+    ],
+    "description": "Command Erase"
+  },
+  "cmd: Error": {
+    "prefix": "error",
+    "body": [
+      "Error"
+    ],
+    "description": "Command Error"
+  },
+  "cmd: Exit For": {
+    "prefix": "exit for",
+    "body": [
+      "Exit For"
+    ],
+    "description": "Command Exit For"
+  },
+  "cmd: Exit Sub": {
+    "prefix": "exit sub",
+    "body": [
+      "Exit Sub"
+    ],
+    "description": "Command Exit Sub"
+  },
+  "cmd: Exit Function": {
+    "prefix": "exit function",
+    "body": [
+      "Exit Function"
+    ],
+    "description": "Command Exit Function"
+  },
+  "cmd: Exit": {
+    "prefix": "exit",
+    "body": [
+      "Exit"
+    ],
+    "description": "Command Exit"
+  },
+  "cmd: For": {
+    "prefix": "for",
+    "body": [
+      "For"
+    ],
+    "description": "Command For"
+  },
+  "cmd: Function": {
+    "prefix": "function",
+    "body": [
+      "Function"
+    ],
+    "description": "Command Function"
+  },
+  "cmd: GoSub": {
+    "prefix": "gosub",
+    "body": [
+      "GoSub"
+    ],
+    "description": "Command GoSub"
+  },
+  "cmd: GoTo": {
+    "prefix": "goto",
+    "body": [
+      "GoTo"
+    ],
+    "description": "Command GoTo"
+  },
+  "cmd: Inc": {
+    "prefix": "inc",
+    "body": [
+      "Inc"
+    ],
+    "description": "Command Inc"
+  },
+  "cmd: If": {
+    "prefix": "if",
+    "body": [
+      "If"
+    ],
+    "description": "Command If"
+  },
+  "cmd: Line Input": {
+    "prefix": "line input",
+    "body": [
+      "Line Input"
+    ],
+    "description": "Command Line Input"
+  },
+  "cmd: Input": {
+    "prefix": "input",
+    "body": [
+      "Input"
+    ],
+    "description": "Command Input"
+  },
+  "cmd: Let": {
+    "prefix": "let",
+    "body": [
+      "Let"
+    ],
+    "description": "Command Let"
+  },
+  "cmd: List": {
+    "prefix": "list",
+    "body": [
+      "List"
+    ],
+    "description": "Command List"
+  },
+  "cmd: List ALL": {
+    "prefix": "list all",
+    "body": [
+      "List ALL"
+    ],
+    "description": "Command List ALL"
+  },
+  "cmd: List COMMANDS": {
+    "prefix": "list commands",
+    "body": [
+      "List COMMANDS"
+    ],
+    "description": "Command List COMMANDS"
+  },
+  "cmd: List FUNCTIONS": {
+    "prefix": "list functions",
+    "body": [
+      "List FUNCTIONS"
+    ],
+    "description": "Command List FUNCTIONS"
+  },
+  "cmd: List OPTIONS": {
+    "prefix": "list options",
+    "body": [
+      "List OPTIONS"
+    ],
+    "description": "Command List OPTIONS"
+  },
+  "cmd: List PINS": {
+    "prefix": "list pins",
+    "body": [
+      "List PINS"
+    ],
+    "description": "Command List PINS"
+  },
+  "cmd: List SYSTEM I2C": {
+    "prefix": "list system i2c",
+    "body": [
+      "List SYSTEM I2C"
+    ],
+    "description": "Command List SYSTEM I2C"
+  },
+  "cmd: List TYPE": {
+    "prefix": "list type",
+    "body": [
+      "List TYPE"
+    ],
+    "description": "Command List TYPE"
+  },
+  "cmd: List VARIABLES": {
+    "prefix": "list variables",
+    "body": [
+      "List VARIABLES"
+    ],
+    "description": "Command List VARIABLES"
+  },
+  "cmd: Load": {
+    "prefix": "load",
+    "body": [
+      "Load"
+    ],
+    "description": "Command Load"
+  },
+  "cmd: Load BMP": {
+    "prefix": "load bmp",
+    "body": [
+      "Load BMP"
+    ],
+    "description": "Command Load BMP"
+  },
+  "cmd: Load CONTEXT": {
+    "prefix": "load context",
+    "body": [
+      "Load CONTEXT"
+    ],
+    "description": "Command Load CONTEXT"
+  },
+  "cmd: Load DATA": {
+    "prefix": "load data",
+    "body": [
+      "Load DATA"
+    ],
+    "description": "Command Load DATA"
+  },
+  "cmd: Load IMAGE": {
+    "prefix": "load image",
+    "body": [
+      "Load IMAGE"
+    ],
+    "description": "Command Load IMAGE"
+  },
+  "cmd: Load JPG": {
+    "prefix": "load jpg",
+    "body": [
+      "Load JPG"
+    ],
+    "description": "Command Load JPG"
+  },
+  "cmd: Load PNG": {
+    "prefix": "load png",
+    "body": [
+      "Load PNG"
+    ],
+    "description": "Command Load PNG"
+  },
+  "cmd: Local": {
+    "prefix": "local",
+    "body": [
+      "Local"
+    ],
+    "description": "Command Local"
+  },
+  "cmd: Loop": {
+    "prefix": "loop",
+    "body": [
+      "Loop"
+    ],
+    "description": "Command Loop"
+  },
+  "cmd: Next": {
+    "prefix": "next",
+    "body": [
+      "Next"
+    ],
+    "description": "Command Next"
+  },
+  "cmd: On": {
+    "prefix": "on",
+    "body": [
+      "On"
+    ],
+    "description": "Command On"
+  },
+  "cmd: On ERROR": {
+    "prefix": "on error",
+    "body": [
+      "On ERROR"
+    ],
+    "description": "Command On ERROR"
+  },
+  "cmd: On KEY": {
+    "prefix": "on key",
+    "body": [
+      "On KEY"
+    ],
+    "description": "Command On KEY"
+  },
+  "cmd: On PS2": {
+    "prefix": "on ps2",
+    "body": [
+      "On PS2"
+    ],
+    "description": "Command On PS2"
+  },
+  "cmd: Print": {
+    "prefix": "print",
+    "body": [
+      "Print"
+    ],
+    "description": "Command Print"
+  },
+  "cmd: Read": {
+    "prefix": "read",
+    "body": [
+      "Read"
+    ],
+    "description": "Command Read"
+  },
+  "cmd: Read RESTORE": {
+    "prefix": "read restore",
+    "body": [
+      "Read RESTORE"
+    ],
+    "description": "Command Read RESTORE"
+  },
+  "cmd: Read SAVE": {
+    "prefix": "read save",
+    "body": [
+      "Read SAVE"
+    ],
+    "description": "Command Read SAVE"
+  },
+  "cmd: Rem": {
+    "prefix": "rem",
+    "body": [
+      "Rem"
+    ],
+    "description": "Command Rem"
+  },
+  "cmd: Restore": {
+    "prefix": "restore",
+    "body": [
+      "Restore"
+    ],
+    "description": "Command Restore"
+  },
+  "cmd: Return": {
+    "prefix": "return",
+    "body": [
+      "Return"
+    ],
+    "description": "Command Return"
+  },
+  "cmd: Run": {
+    "prefix": "run",
+    "body": [
+      "Run"
+    ],
+    "description": "Command Run"
+  },
+  "cmd: Save": {
+    "prefix": "save",
+    "body": [
+      "Save"
+    ],
+    "description": "Command Save"
+  },
+  "cmd: Save COMPRESSED IMAGE": {
+    "prefix": "save compressed image",
+    "body": [
+      "Save COMPRESSED IMAGE"
+    ],
+    "description": "Command Save COMPRESSED IMAGE"
+  },
+  "cmd: Save CONTEXT": {
+    "prefix": "save context",
+    "body": [
+      "Save CONTEXT"
+    ],
+    "description": "Command Save CONTEXT"
+  },
+  "cmd: Save DATA": {
+    "prefix": "save data",
+    "body": [
+      "Save DATA"
+    ],
+    "description": "Command Save DATA"
+  },
+  "cmd: Save IMAGE": {
+    "prefix": "save image",
+    "body": [
+      "Save IMAGE"
+    ],
+    "description": "Command Save IMAGE"
+  },
+  "cmd: Save PERSISTENT": {
+    "prefix": "save persistent",
+    "body": [
+      "Save PERSISTENT"
+    ],
+    "description": "Command Save PERSISTENT"
+  },
+  "cmd: Static": {
+    "prefix": "static",
+    "body": [
+      "Static"
+    ],
+    "description": "Command Static"
+  },
+  "cmd: Sub": {
+    "prefix": "sub",
+    "body": [
+      "Sub"
+    ],
+    "description": "Command Sub"
+  },
+  "cmd: Trace": {
+    "prefix": "trace",
+    "body": [
+      "Trace"
+    ],
+    "description": "Command Trace"
+  },
+  "cmd: Trace LIST": {
+    "prefix": "trace list",
+    "body": [
+      "Trace LIST"
+    ],
+    "description": "Command Trace LIST"
+  },
+  "cmd: Trace OFF": {
+    "prefix": "trace off",
+    "body": [
+      "Trace OFF"
+    ],
+    "description": "Command Trace OFF"
+  },
+  "cmd: Trace ON": {
+    "prefix": "trace on",
+    "body": [
+      "Trace ON"
+    ],
+    "description": "Command Trace ON"
+  },
+  "cmd: While": {
+    "prefix": "while",
+    "body": [
+      "While"
+    ],
+    "description": "Command While"
+  },
+  "cmd: Const": {
+    "prefix": "const",
+    "body": [
+      "Const"
+    ],
+    "description": "Command Const"
+  },
+  "cmd: Execute": {
+    "prefix": "execute",
+    "body": [
+      "Execute"
+    ],
+    "description": "Command Execute"
+  },
+  "cmd: MID$(": {
+    "prefix": "mid$(",
+    "body": [
+      "MID$("
+    ],
+    "description": "Command MID$("
+  },
+  "cmd: /*": {
+    "prefix": "/*",
+    "body": [
+      "/*"
+    ],
+    "description": "Command /*"
+  },
+  "cmd: */": {
+    "prefix": "*/",
+    "body": [
+      "*/"
+    ],
+    "description": "Command */"
+  },
+  "cmd: Open": {
+    "prefix": "open",
+    "body": [
+      "Open"
+    ],
+    "description": "Command Open"
+  },
+  "cmd: Close": {
+    "prefix": "close",
+    "body": [
+      "Close"
+    ],
+    "description": "Command Close"
+  },
+  "cmd: Kill": {
+    "prefix": "kill",
+    "body": [
+      "Kill"
+    ],
+    "description": "Command Kill"
+  },
+  "cmd: Rmdir": {
+    "prefix": "rmdir",
+    "body": [
+      "Rmdir"
+    ],
+    "description": "Command Rmdir"
+  },
+  "cmd: Chdir": {
+    "prefix": "chdir",
+    "body": [
+      "Chdir"
+    ],
+    "description": "Command Chdir"
+  },
+  "cmd: Mkdir": {
+    "prefix": "mkdir",
+    "body": [
+      "Mkdir"
+    ],
+    "description": "Command Mkdir"
+  },
+  "cmd: Copy": {
+    "prefix": "copy",
+    "body": [
+      "Copy"
+    ],
+    "description": "Command Copy"
+  },
+  "cmd: Copy A2A": {
+    "prefix": "copy a2a",
+    "body": [
+      "Copy A2A"
+    ],
+    "description": "Command Copy A2A"
+  },
+  "cmd: Copy A2B": {
+    "prefix": "copy a2b",
+    "body": [
+      "Copy A2B"
+    ],
+    "description": "Command Copy A2B"
+  },
+  "cmd: Copy B2A": {
+    "prefix": "copy b2a",
+    "body": [
+      "Copy B2A"
+    ],
+    "description": "Command Copy B2A"
+  },
+  "cmd: Copy B2B": {
+    "prefix": "copy b2b",
+    "body": [
+      "Copy B2B"
+    ],
+    "description": "Command Copy B2B"
+  },
+  "cmd: Rename": {
+    "prefix": "rename",
+    "body": [
+      "Rename"
+    ],
+    "description": "Command Rename"
+  },
+  "cmd: Seek": {
+    "prefix": "seek",
+    "body": [
+      "Seek"
+    ],
+    "description": "Command Seek"
+  },
+  "cmd: Flash": {
+    "prefix": "flash",
+    "body": [
+      "Flash"
+    ],
+    "description": "Command Flash"
+  },
+  "cmd: Flash CHAIN": {
+    "prefix": "flash chain",
+    "body": [
+      "Flash CHAIN"
+    ],
+    "description": "Command Flash CHAIN"
+  },
+  "cmd: Flash DISK LOAD": {
+    "prefix": "flash disk load",
+    "body": [
+      "Flash DISK LOAD"
+    ],
+    "description": "Command Flash DISK LOAD"
+  },
+  "cmd: Flash ERASE": {
+    "prefix": "flash erase",
+    "body": [
+      "Flash ERASE"
+    ],
+    "description": "Command Flash ERASE"
+  },
+  "cmd: Flash ERASE ALL": {
+    "prefix": "flash erase all",
+    "body": [
+      "Flash ERASE ALL"
+    ],
+    "description": "Command Flash ERASE ALL"
+  },
+  "cmd: Flash LIST": {
+    "prefix": "flash list",
+    "body": [
+      "Flash LIST"
+    ],
+    "description": "Command Flash LIST"
+  },
+  "cmd: Flash LOAD": {
+    "prefix": "flash load",
+    "body": [
+      "Flash LOAD"
+    ],
+    "description": "Command Flash LOAD"
+  },
+  "cmd: Flash LOAD IMAGE": {
+    "prefix": "flash load image",
+    "body": [
+      "Flash LOAD IMAGE"
+    ],
+    "description": "Command Flash LOAD IMAGE"
+  },
+  "cmd: Flash MODBUFF LOAD": {
+    "prefix": "flash modbuff load",
+    "body": [
+      "Flash MODBUFF LOAD"
+    ],
+    "description": "Command Flash MODBUFF LOAD"
+  },
+  "cmd: Flash OVERWRITE": {
+    "prefix": "flash overwrite",
+    "body": [
+      "Flash OVERWRITE"
+    ],
+    "description": "Command Flash OVERWRITE"
+  },
+  "cmd: Flash RUN": {
+    "prefix": "flash run",
+    "body": [
+      "Flash RUN"
+    ],
+    "description": "Command Flash RUN"
+  },
+  "cmd: Flash SAVE": {
+    "prefix": "flash save",
+    "body": [
+      "Flash SAVE"
+    ],
+    "description": "Command Flash SAVE"
+  },
+  "cmd: VAR": {
+    "prefix": "var",
+    "body": [
+      "VAR"
+    ],
+    "description": "Command VAR"
+  },
+  "cmd: VAR CLEAR": {
+    "prefix": "var clear",
+    "body": [
+      "VAR CLEAR"
+    ],
+    "description": "Command VAR CLEAR"
+  },
+  "cmd: VAR RESTORE": {
+    "prefix": "var restore",
+    "body": [
+      "VAR RESTORE"
+    ],
+    "description": "Command VAR RESTORE"
+  },
+  "cmd: VAR SAVE": {
+    "prefix": "var save",
+    "body": [
+      "VAR SAVE"
+    ],
+    "description": "Command VAR SAVE"
+  },
+  "cmd: Flush": {
+    "prefix": "flush",
+    "body": [
+      "Flush"
+    ],
+    "description": "Command Flush"
+  },
+  "cmd: Drive": {
+    "prefix": "drive",
+    "body": [
+      "Drive"
+    ],
+    "description": "Command Drive"
+  },
+  "cmd: Play": {
+    "prefix": "play",
+    "body": [
+      "Play"
+    ],
+    "description": "Command Play"
+  },
+  "cmd: Play ARRAY": {
+    "prefix": "play array",
+    "body": [
+      "Play ARRAY"
+    ],
+    "description": "Command Play ARRAY"
+  },
+  "cmd: Play CLOSE": {
+    "prefix": "play close",
+    "body": [
+      "Play CLOSE"
+    ],
+    "description": "Command Play CLOSE"
+  },
+  "cmd: Play CONTINUE": {
+    "prefix": "play continue",
+    "body": [
+      "Play CONTINUE"
+    ],
+    "description": "Command Play CONTINUE"
+  },
+  "cmd: Play FLAC": {
+    "prefix": "play flac",
+    "body": [
+      "Play FLAC"
+    ],
+    "description": "Command Play FLAC"
+  },
+  "cmd: Play HALT": {
+    "prefix": "play halt",
+    "body": [
+      "Play HALT"
+    ],
+    "description": "Command Play HALT"
+  },
+  "cmd: Play LOAD SOUND": {
+    "prefix": "play load sound",
+    "body": [
+      "Play LOAD SOUND"
+    ],
+    "description": "Command Play LOAD SOUND"
+  },
+  "cmd: Play MIDI": {
+    "prefix": "play midi",
+    "body": [
+      "Play MIDI"
+    ],
+    "description": "Command Play MIDI"
+  },
+  "cmd: Play MIDIFILE": {
+    "prefix": "play midifile",
+    "body": [
+      "Play MIDIFILE"
+    ],
+    "description": "Command Play MIDIFILE"
+  },
+  "cmd: Play MODFILE": {
+    "prefix": "play modfile",
+    "body": [
+      "Play MODFILE"
+    ],
+    "description": "Command Play MODFILE"
+  },
+  "cmd: Play MODSAMPLE": {
+    "prefix": "play modsample",
+    "body": [
+      "Play MODSAMPLE"
+    ],
+    "description": "Command Play MODSAMPLE"
+  },
+  "cmd: Play MP3": {
+    "prefix": "play mp3",
+    "body": [
+      "Play MP3"
+    ],
+    "description": "Command Play MP3"
+  },
+  "cmd: Play NEXT": {
+    "prefix": "play next",
+    "body": [
+      "Play NEXT"
+    ],
+    "description": "Command Play NEXT"
+  },
+  "cmd: Play NOTE": {
+    "prefix": "play note",
+    "body": [
+      "Play NOTE"
+    ],
+    "description": "Command Play NOTE"
+  },
+  "cmd: Play PAUSE": {
+    "prefix": "play pause",
+    "body": [
+      "Play PAUSE"
+    ],
+    "description": "Command Play PAUSE"
+  },
+  "cmd: Play PREVIOUS": {
+    "prefix": "play previous",
+    "body": [
+      "Play PREVIOUS"
+    ],
+    "description": "Command Play PREVIOUS"
+  },
+  "cmd: Play RELEASE": {
+    "prefix": "play release",
+    "body": [
+      "Play RELEASE"
+    ],
+    "description": "Command Play RELEASE"
+  },
+  "cmd: Play RESUME": {
+    "prefix": "play resume",
+    "body": [
+      "Play RESUME"
+    ],
+    "description": "Command Play RESUME"
+  },
+  "cmd: Play SAMPLE": {
+    "prefix": "play sample",
+    "body": [
+      "Play SAMPLE"
+    ],
+    "description": "Command Play SAMPLE"
+  },
+  "cmd: Play SOUND": {
+    "prefix": "play sound",
+    "body": [
+      "Play SOUND"
+    ],
+    "description": "Command Play SOUND"
+  },
+  "cmd: Play STOP": {
+    "prefix": "play stop",
+    "body": [
+      "Play STOP"
+    ],
+    "description": "Command Play STOP"
+  },
+  "cmd: Play STREAM": {
+    "prefix": "play stream",
+    "body": [
+      "Play STREAM"
+    ],
+    "description": "Command Play STREAM"
+  },
+  "cmd: Play TONE": {
+    "prefix": "play tone",
+    "body": [
+      "Play TONE"
+    ],
+    "description": "Command Play TONE"
+  },
+  "cmd: Play VOLUME": {
+    "prefix": "play volume",
+    "body": [
+      "Play VOLUME"
+    ],
+    "description": "Command Play VOLUME"
+  },
+  "cmd: Play WAV": {
+    "prefix": "play wav",
+    "body": [
+      "Play WAV"
+    ],
+    "description": "Command Play WAV"
+  },
+  "cmd: PIO": {
+    "prefix": "pio",
+    "body": [
+      "PIO"
+    ],
+    "description": "Command PIO"
+  },
+  "cmd: PIO ASSEMBLE": {
+    "prefix": "pio assemble",
+    "body": [
+      "PIO ASSEMBLE"
+    ],
+    "description": "Command PIO ASSEMBLE"
+  },
+  "cmd: PIO CLEAR": {
+    "prefix": "pio clear",
+    "body": [
+      "PIO CLEAR"
+    ],
+    "description": "Command PIO CLEAR"
+  },
+  "cmd: PIO CONFIGURE": {
+    "prefix": "pio configure",
+    "body": [
+      "PIO CONFIGURE"
+    ],
+    "description": "Command PIO CONFIGURE"
+  },
+  "cmd: PIO DMA RX": {
+    "prefix": "pio dma rx",
+    "body": [
+      "PIO DMA RX"
+    ],
+    "description": "Command PIO DMA RX"
+  },
+  "cmd: PIO DMA TX": {
+    "prefix": "pio dma tx",
+    "body": [
+      "PIO DMA TX"
+    ],
+    "description": "Command PIO DMA TX"
+  },
+  "cmd: PIO DMA TX TABLE": {
+    "prefix": "pio dma tx table",
+    "body": [
+      "PIO DMA TX TABLE"
+    ],
+    "description": "Command PIO DMA TX TABLE"
+  },
+  "cmd: PIO EXECUTE": {
+    "prefix": "pio execute",
+    "body": [
+      "PIO EXECUTE"
+    ],
+    "description": "Command PIO EXECUTE"
+  },
+  "cmd: PIO INIT MACHINE": {
+    "prefix": "pio init machine",
+    "body": [
+      "PIO INIT MACHINE"
+    ],
+    "description": "Command PIO INIT MACHINE"
+  },
+  "cmd: PIO INTERRUPT": {
+    "prefix": "pio interrupt",
+    "body": [
+      "PIO INTERRUPT"
+    ],
+    "description": "Command PIO INTERRUPT"
+  },
+  "cmd: PIO MAKE RING BUFFER": {
+    "prefix": "pio make ring buffer",
+    "body": [
+      "PIO MAKE RING BUFFER"
+    ],
+    "description": "Command PIO MAKE RING BUFFER"
+  },
+  "cmd: PIO PROGRAM": {
+    "prefix": "pio program",
+    "body": [
+      "PIO PROGRAM"
+    ],
+    "description": "Command PIO PROGRAM"
+  },
+  "cmd: PIO PROGRAM LINE": {
+    "prefix": "pio program line",
+    "body": [
+      "PIO PROGRAM LINE"
+    ],
+    "description": "Command PIO PROGRAM LINE"
+  },
+  "cmd: PIO READ": {
+    "prefix": "pio read",
+    "body": [
+      "PIO READ"
+    ],
+    "description": "Command PIO READ"
+  },
+  "cmd: PIO SET BASE": {
+    "prefix": "pio set base",
+    "body": [
+      "PIO SET BASE"
+    ],
+    "description": "Command PIO SET BASE"
+  },
+  "cmd: PIO START": {
+    "prefix": "pio start",
+    "body": [
+      "PIO START"
+    ],
+    "description": "Command PIO START"
+  },
+  "cmd: PIO STOP": {
+    "prefix": "pio stop",
+    "body": [
+      "PIO STOP"
+    ],
+    "description": "Command PIO STOP"
+  },
+  "cmd: PIO SYNC": {
+    "prefix": "pio sync",
+    "body": [
+      "PIO SYNC"
+    ],
+    "description": "Command PIO SYNC"
+  },
+  "cmd: PIO WRITE": {
+    "prefix": "pio write",
+    "body": [
+      "PIO WRITE"
+    ],
+    "description": "Command PIO WRITE"
+  },
+  "cmd: PIO WRITEFIFO": {
+    "prefix": "pio writefifo",
+    "body": [
+      "PIO WRITEFIFO"
+    ],
+    "description": "Command PIO WRITEFIFO"
+  },
+  "cmd: New": {
+    "prefix": "new",
+    "body": [
+      "New"
+    ],
+    "description": "Command New"
+  },
+  "cmd: Pixel": {
+    "prefix": "pixel",
+    "body": [
+      "Pixel"
+    ],
+    "description": "Command Pixel"
+  },
+  "cmd: Circle": {
+    "prefix": "circle",
+    "body": [
+      "Circle"
+    ],
+    "description": "Command Circle"
+  },
+  "cmd: Line": {
+    "prefix": "line",
+    "body": [
+      "Line"
+    ],
+    "description": "Command Line"
+  },
+  "cmd: Line AA": {
+    "prefix": "line aa",
+    "body": [
+      "Line AA"
+    ],
+    "description": "Command Line AA"
+  },
+  "cmd: Line GRAPH": {
+    "prefix": "line graph",
+    "body": [
+      "Line GRAPH"
+    ],
+    "description": "Command Line GRAPH"
+  },
+  "cmd: Line PLOT": {
+    "prefix": "line plot",
+    "body": [
+      "Line PLOT"
+    ],
+    "description": "Command Line PLOT"
+  },
+  "cmd: Box": {
+    "prefix": "box",
+    "body": [
+      "Box"
+    ],
+    "description": "Command Box"
+  },
+  "cmd: RBox": {
+    "prefix": "rbox",
+    "body": [
+      "RBox"
+    ],
+    "description": "Command RBox"
+  },
+  "cmd: CLS": {
+    "prefix": "cls",
+    "body": [
+      "CLS"
+    ],
+    "description": "Command CLS"
+  },
+  "cmd: Font": {
+    "prefix": "font",
+    "body": [
+      "Font"
+    ],
+    "description": "Command Font"
+  },
+  "cmd: Triangle": {
+    "prefix": "triangle",
+    "body": [
+      "Triangle"
+    ],
+    "description": "Command Triangle"
+  },
+  "cmd: Triangle RESTORE": {
+    "prefix": "triangle restore",
+    "body": [
+      "Triangle RESTORE"
+    ],
+    "description": "Command Triangle RESTORE"
+  },
+  "cmd: Triangle SAVE": {
+    "prefix": "triangle save",
+    "body": [
+      "Triangle SAVE"
+    ],
+    "description": "Command Triangle SAVE"
+  },
+  "cmd: Arc": {
+    "prefix": "arc",
+    "body": [
+      "Arc"
+    ],
+    "description": "Command Arc"
+  },
+  "cmd: Polygon": {
+    "prefix": "polygon",
+    "body": [
+      "Polygon"
+    ],
+    "description": "Command Polygon"
+  },
+  "cmd: FRAMEBUFFER": {
+    "prefix": "framebuffer",
+    "body": [
+      "FRAMEBUFFER"
+    ],
+    "description": "Command FRAMEBUFFER"
+  },
+  "cmd: FRAMEBUFFER CLOSE": {
+    "prefix": "framebuffer close",
+    "body": [
+      "FRAMEBUFFER CLOSE"
+    ],
+    "description": "Command FRAMEBUFFER CLOSE"
+  },
+  "cmd: FRAMEBUFFER COPY": {
+    "prefix": "framebuffer copy",
+    "body": [
+      "FRAMEBUFFER COPY"
+    ],
+    "description": "Command FRAMEBUFFER COPY"
+  },
+  "cmd: FRAMEBUFFER CREATE": {
+    "prefix": "framebuffer create",
+    "body": [
+      "FRAMEBUFFER CREATE"
+    ],
+    "description": "Command FRAMEBUFFER CREATE"
+  },
+  "cmd: FRAMEBUFFER CREATE 2": {
+    "prefix": "framebuffer create 2",
+    "body": [
+      "FRAMEBUFFER CREATE 2"
+    ],
+    "description": "Command FRAMEBUFFER CREATE 2"
+  },
+  "cmd: FRAMEBUFFER LAYER": {
+    "prefix": "framebuffer layer",
+    "body": [
+      "FRAMEBUFFER LAYER"
+    ],
+    "description": "Command FRAMEBUFFER LAYER"
+  },
+  "cmd: FRAMEBUFFER LAYER TOP": {
+    "prefix": "framebuffer layer top",
+    "body": [
+      "FRAMEBUFFER LAYER TOP"
+    ],
+    "description": "Command FRAMEBUFFER LAYER TOP"
+  },
+  "cmd: FRAMEBUFFER MERGE": {
+    "prefix": "framebuffer merge",
+    "body": [
+      "FRAMEBUFFER MERGE"
+    ],
+    "description": "Command FRAMEBUFFER MERGE"
+  },
+  "cmd: FRAMEBUFFER SYNC": {
+    "prefix": "framebuffer sync",
+    "body": [
+      "FRAMEBUFFER SYNC"
+    ],
+    "description": "Command FRAMEBUFFER SYNC"
+  },
+  "cmd: FRAMEBUFFER WAIT": {
+    "prefix": "framebuffer wait",
+    "body": [
+      "FRAMEBUFFER WAIT"
+    ],
+    "description": "Command FRAMEBUFFER WAIT"
+  },
+  "cmd: FRAMEBUFFER WRITE": {
+    "prefix": "framebuffer write",
+    "body": [
+      "FRAMEBUFFER WRITE"
+    ],
+    "description": "Command FRAMEBUFFER WRITE"
+  },
+  "cmd: Sprite": {
+    "prefix": "sprite",
+    "body": [
+      "Sprite"
+    ],
+    "description": "Command Sprite"
+  },
+  "cmd: Sprite CLOSE": {
+    "prefix": "sprite close",
+    "body": [
+      "Sprite CLOSE"
+    ],
+    "description": "Command Sprite CLOSE"
+  },
+  "cmd: Sprite CLOSE ALL": {
+    "prefix": "sprite close all",
+    "body": [
+      "Sprite CLOSE ALL"
+    ],
+    "description": "Command Sprite CLOSE ALL"
+  },
+  "cmd: Sprite COPY": {
+    "prefix": "sprite copy",
+    "body": [
+      "Sprite COPY"
+    ],
+    "description": "Command Sprite COPY"
+  },
+  "cmd: Sprite HIDE": {
+    "prefix": "sprite hide",
+    "body": [
+      "Sprite HIDE"
+    ],
+    "description": "Command Sprite HIDE"
+  },
+  "cmd: Sprite HIDE ALL": {
+    "prefix": "sprite hide all",
+    "body": [
+      "Sprite HIDE ALL"
+    ],
+    "description": "Command Sprite HIDE ALL"
+  },
+  "cmd: Sprite HIDE SAFE": {
+    "prefix": "sprite hide safe",
+    "body": [
+      "Sprite HIDE SAFE"
+    ],
+    "description": "Command Sprite HIDE SAFE"
+  },
+  "cmd: Sprite INTERRUPT": {
+    "prefix": "sprite interrupt",
+    "body": [
+      "Sprite INTERRUPT"
+    ],
+    "description": "Command Sprite INTERRUPT"
+  },
+  "cmd: Sprite LOAD": {
+    "prefix": "sprite load",
+    "body": [
+      "Sprite LOAD"
+    ],
+    "description": "Command Sprite LOAD"
+  },
+  "cmd: Sprite LOADARRAY": {
+    "prefix": "sprite loadarray",
+    "body": [
+      "Sprite LOADARRAY"
+    ],
+    "description": "Command Sprite LOADARRAY"
+  },
+  "cmd: Sprite LOADBMP": {
+    "prefix": "sprite loadbmp",
+    "body": [
+      "Sprite LOADBMP"
+    ],
+    "description": "Command Sprite LOADBMP"
+  },
+  "cmd: Sprite LOADPNG": {
+    "prefix": "sprite loadpng",
+    "body": [
+      "Sprite LOADPNG"
+    ],
+    "description": "Command Sprite LOADPNG"
+  },
+  "cmd: Sprite MOVE": {
+    "prefix": "sprite move",
+    "body": [
+      "Sprite MOVE"
+    ],
+    "description": "Command Sprite MOVE"
+  },
+  "cmd: Sprite NEXT": {
+    "prefix": "sprite next",
+    "body": [
+      "Sprite NEXT"
+    ],
+    "description": "Command Sprite NEXT"
+  },
+  "cmd: Sprite NOINTERRUPT": {
+    "prefix": "sprite nointerrupt",
+    "body": [
+      "Sprite NOINTERRUPT"
+    ],
+    "description": "Command Sprite NOINTERRUPT"
+  },
+  "cmd: Sprite NOSTINTERRUPT": {
+    "prefix": "sprite nostinterrupt",
+    "body": [
+      "Sprite NOSTINTERRUPT"
+    ],
+    "description": "Command Sprite NOSTINTERRUPT"
+  },
+  "cmd: Sprite READ": {
+    "prefix": "sprite read",
+    "body": [
+      "Sprite READ"
+    ],
+    "description": "Command Sprite READ"
+  },
+  "cmd: Sprite RESTORE": {
+    "prefix": "sprite restore",
+    "body": [
+      "Sprite RESTORE"
+    ],
+    "description": "Command Sprite RESTORE"
+  },
+  "cmd: Sprite SCROLL": {
+    "prefix": "sprite scroll",
+    "body": [
+      "Sprite SCROLL"
+    ],
+    "description": "Command Sprite SCROLL"
+  },
+  "cmd: Sprite SET TRANSPARENT": {
+    "prefix": "sprite set transparent",
+    "body": [
+      "Sprite SET TRANSPARENT"
+    ],
+    "description": "Command Sprite SET TRANSPARENT"
+  },
+  "cmd: Sprite SHOW": {
+    "prefix": "sprite show",
+    "body": [
+      "Sprite SHOW"
+    ],
+    "description": "Command Sprite SHOW"
+  },
+  "cmd: Sprite SHOW SAFE": {
+    "prefix": "sprite show safe",
+    "body": [
+      "Sprite SHOW SAFE"
+    ],
+    "description": "Command Sprite SHOW SAFE"
+  },
+  "cmd: Sprite STATIC": {
+    "prefix": "sprite static",
+    "body": [
+      "Sprite STATIC"
+    ],
+    "description": "Command Sprite STATIC"
+  },
+  "cmd: Sprite STATIC CLEAR": {
+    "prefix": "sprite static clear",
+    "body": [
+      "Sprite STATIC CLEAR"
+    ],
+    "description": "Command Sprite STATIC CLEAR"
+  },
+  "cmd: Sprite STINTERRUPT": {
+    "prefix": "sprite stinterrupt",
+    "body": [
+      "Sprite STINTERRUPT"
+    ],
+    "description": "Command Sprite STINTERRUPT"
+  },
+  "cmd: Sprite SWAP": {
+    "prefix": "sprite swap",
+    "body": [
+      "Sprite SWAP"
+    ],
+    "description": "Command Sprite SWAP"
+  },
+  "cmd: Sprite WRITE": {
+    "prefix": "sprite write",
+    "body": [
+      "Sprite WRITE"
+    ],
+    "description": "Command Sprite WRITE"
+  },
+  "cmd: Blit": {
+    "prefix": "blit",
+    "body": [
+      "Blit"
+    ],
+    "description": "Command Blit"
+  },
+  "cmd: Blit CLOSE": {
+    "prefix": "blit close",
+    "body": [
+      "Blit CLOSE"
+    ],
+    "description": "Command Blit CLOSE"
+  },
+  "cmd: Blit LOAD": {
+    "prefix": "blit load",
+    "body": [
+      "Blit LOAD"
+    ],
+    "description": "Command Blit LOAD"
+  },
+  "cmd: Blit LOADBMP": {
+    "prefix": "blit loadbmp",
+    "body": [
+      "Blit LOADBMP"
+    ],
+    "description": "Command Blit LOADBMP"
+  },
+  "cmd: Blit MERGE": {
+    "prefix": "blit merge",
+    "body": [
+      "Blit MERGE"
+    ],
+    "description": "Command Blit MERGE"
+  },
+  "cmd: Blit READ": {
+    "prefix": "blit read",
+    "body": [
+      "Blit READ"
+    ],
+    "description": "Command Blit READ"
+  },
+  "cmd: Blit WRITE": {
+    "prefix": "blit write",
+    "body": [
+      "Blit WRITE"
+    ],
+    "description": "Command Blit WRITE"
+  },
+  "cmd: Edit File": {
+    "prefix": "edit file",
+    "body": [
+      "Edit File"
+    ],
+    "description": "Command Edit File"
+  },
+  "cmd: Edit": {
+    "prefix": "edit",
+    "body": [
+      "Edit"
+    ],
+    "description": "Command Edit"
+  },
+  "cmd: ADC": {
+    "prefix": "adc",
+    "body": [
+      "ADC"
+    ],
+    "description": "Command ADC"
+  },
+  "cmd: ADC CLOSE": {
+    "prefix": "adc close",
+    "body": [
+      "ADC CLOSE"
+    ],
+    "description": "Command ADC CLOSE"
+  },
+  "cmd: ADC FREQUENCY": {
+    "prefix": "adc frequency",
+    "body": [
+      "ADC FREQUENCY"
+    ],
+    "description": "Command ADC FREQUENCY"
+  },
+  "cmd: ADC OPEN": {
+    "prefix": "adc open",
+    "body": [
+      "ADC OPEN"
+    ],
+    "description": "Command ADC OPEN"
+  },
+  "cmd: ADC RUN": {
+    "prefix": "adc run",
+    "body": [
+      "ADC RUN"
+    ],
+    "description": "Command ADC RUN"
+  },
+  "cmd: ADC START": {
+    "prefix": "adc start",
+    "body": [
+      "ADC START"
+    ],
+    "description": "Command ADC START"
+  },
+  "cmd: Pin(": {
+    "prefix": "pin(",
+    "body": [
+      "Pin("
+    ],
+    "description": "Command Pin("
+  },
+  "cmd: SetPin": {
+    "prefix": "setpin",
+    "body": [
+      "SetPin"
+    ],
+    "description": "Command SetPin"
+  },
+  "cmd: Pulse": {
+    "prefix": "pulse",
+    "body": [
+      "Pulse"
+    ],
+    "description": "Command Pulse"
+  },
+  "cmd: Port(": {
+    "prefix": "port(",
+    "body": [
+      "Port("
+    ],
+    "description": "Command Port("
+  },
+  "cmd: IR": {
+    "prefix": "ir",
+    "body": [
+      "IR"
+    ],
+    "description": "Command IR"
+  },
+  "cmd: IR CLOSE": {
+    "prefix": "ir close",
+    "body": [
+      "IR CLOSE"
+    ],
+    "description": "Command IR CLOSE"
+  },
+  "cmd: IR SEND": {
+    "prefix": "ir send",
+    "body": [
+      "IR SEND"
+    ],
+    "description": "Command IR SEND"
+  },
+  "cmd: Blit Memory": {
+    "prefix": "blit memory",
+    "body": [
+      "Blit Memory"
+    ],
+    "description": "Command Blit Memory"
+  },
+  "cmd: Blit Memory COMPRESSED": {
+    "prefix": "blit memory compressed",
+    "body": [
+      "Blit Memory COMPRESSED"
+    ],
+    "description": "Command Blit Memory COMPRESSED"
+  },
+  "cmd: Blit Memory FLASH": {
+    "prefix": "blit memory flash",
+    "body": [
+      "Blit Memory FLASH"
+    ],
+    "description": "Command Blit Memory FLASH"
+  },
+  "cmd: Blit Memory FRAMEBUFFER": {
+    "prefix": "blit memory framebuffer",
+    "body": [
+      "Blit Memory FRAMEBUFFER"
+    ],
+    "description": "Command Blit Memory FRAMEBUFFER"
+  },
+  "cmd: GUI": {
+    "prefix": "gui",
+    "body": [
+      "GUI"
+    ],
+    "description": "Command GUI"
+  },
+  "cmd: GUI AREA": {
+    "prefix": "gui area",
+    "body": [
+      "GUI AREA"
+    ],
+    "description": "Command GUI AREA"
+  },
+  "cmd: GUI BARGAUGE": {
+    "prefix": "gui bargauge",
+    "body": [
+      "GUI BARGAUGE"
+    ],
+    "description": "Command GUI BARGAUGE"
+  },
+  "cmd: GUI BUTTON": {
+    "prefix": "gui button",
+    "body": [
+      "GUI BUTTON"
+    ],
+    "description": "Command GUI BUTTON"
+  },
+  "cmd: GUI CAPTION": {
+    "prefix": "gui caption",
+    "body": [
+      "GUI CAPTION"
+    ],
+    "description": "Command GUI CAPTION"
+  },
+  "cmd: GUI CHECKBOX": {
+    "prefix": "gui checkbox",
+    "body": [
+      "GUI CHECKBOX"
+    ],
+    "description": "Command GUI CHECKBOX"
+  },
+  "cmd: GUI DELETE": {
+    "prefix": "gui delete",
+    "body": [
+      "GUI DELETE"
+    ],
+    "description": "Command GUI DELETE"
+  },
+  "cmd: GUI DISABLE": {
+    "prefix": "gui disable",
+    "body": [
+      "GUI DISABLE"
+    ],
+    "description": "Command GUI DISABLE"
+  },
+  "cmd: GUI DISPLAYBOX": {
+    "prefix": "gui displaybox",
+    "body": [
+      "GUI DISPLAYBOX"
+    ],
+    "description": "Command GUI DISPLAYBOX"
+  },
+  "cmd: GUI ENABLE": {
+    "prefix": "gui enable",
+    "body": [
+      "GUI ENABLE"
+    ],
+    "description": "Command GUI ENABLE"
+  },
+  "cmd: GUI FCOLOUR": {
+    "prefix": "gui fcolour",
+    "body": [
+      "GUI FCOLOUR"
+    ],
+    "description": "Command GUI FCOLOUR"
+  },
+  "cmd: GUI FORMATBOX": {
+    "prefix": "gui formatbox",
+    "body": [
+      "GUI FORMATBOX"
+    ],
+    "description": "Command GUI FORMATBOX"
+  },
+  "cmd: GUI FRAME": {
+    "prefix": "gui frame",
+    "body": [
+      "GUI FRAME"
+    ],
+    "description": "Command GUI FRAME"
+  },
+  "cmd: GUI GAUGE": {
+    "prefix": "gui gauge",
+    "body": [
+      "GUI GAUGE"
+    ],
+    "description": "Command GUI GAUGE"
+  },
+  "cmd: GUI HIDE": {
+    "prefix": "gui hide",
+    "body": [
+      "GUI HIDE"
+    ],
+    "description": "Command GUI HIDE"
+  },
+  "cmd: GUI INTERRUPT": {
+    "prefix": "gui interrupt",
+    "body": [
+      "GUI INTERRUPT"
+    ],
+    "description": "Command GUI INTERRUPT"
+  },
+  "cmd: GUI LED": {
+    "prefix": "gui led",
+    "body": [
+      "GUI LED"
+    ],
+    "description": "Command GUI LED"
+  },
+  "cmd: GUI NUMBERBOX": {
+    "prefix": "gui numberbox",
+    "body": [
+      "GUI NUMBERBOX"
+    ],
+    "description": "Command GUI NUMBERBOX"
+  },
+  "cmd: GUI PAGE": {
+    "prefix": "gui page",
+    "body": [
+      "GUI PAGE"
+    ],
+    "description": "Command GUI PAGE"
+  },
+  "cmd: GUI RADIO": {
+    "prefix": "gui radio",
+    "body": [
+      "GUI RADIO"
+    ],
+    "description": "Command GUI RADIO"
+  },
+  "cmd: GUI REDRAW": {
+    "prefix": "gui redraw",
+    "body": [
+      "GUI REDRAW"
+    ],
+    "description": "Command GUI REDRAW"
+  },
+  "cmd: GUI RESTORE": {
+    "prefix": "gui restore",
+    "body": [
+      "GUI RESTORE"
+    ],
+    "description": "Command GUI RESTORE"
+  },
+  "cmd: GUI SETUP": {
+    "prefix": "gui setup",
+    "body": [
+      "GUI SETUP"
+    ],
+    "description": "Command GUI SETUP"
+  },
+  "cmd: GUI SHOW": {
+    "prefix": "gui show",
+    "body": [
+      "GUI SHOW"
+    ],
+    "description": "Command GUI SHOW"
+  },
+  "cmd: GUI SPINBOX": {
+    "prefix": "gui spinbox",
+    "body": [
+      "GUI SPINBOX"
+    ],
+    "description": "Command GUI SPINBOX"
+  },
+  "cmd: GUI SWITCH": {
+    "prefix": "gui switch",
+    "body": [
+      "GUI SWITCH"
+    ],
+    "description": "Command GUI SWITCH"
+  },
+  "cmd: GUI TEXTBOX": {
+    "prefix": "gui textbox",
+    "body": [
+      "GUI TEXTBOX"
+    ],
+    "description": "Command GUI TEXTBOX"
+  },
+  "cmd: GUI BEEP": {
+    "prefix": "gui beep",
+    "body": [
+      "GUI BEEP"
+    ],
+    "description": "Command GUI BEEP"
+  },
+  "cmd: GUI BITMAP": {
+    "prefix": "gui bitmap",
+    "body": [
+      "GUI BITMAP"
+    ],
+    "description": "Command GUI BITMAP"
+  },
+  "cmd: GUI CALIBRATE": {
+    "prefix": "gui calibrate",
+    "body": [
+      "GUI CALIBRATE"
+    ],
+    "description": "Command GUI CALIBRATE"
+  },
+  "cmd: GUI RESET": {
+    "prefix": "gui reset",
+    "body": [
+      "GUI RESET"
+    ],
+    "description": "Command GUI RESET"
+  },
+  "cmd: GUI TEST": {
+    "prefix": "gui test",
+    "body": [
+      "GUI TEST"
+    ],
+    "description": "Command GUI TEST"
+  },
+  "cmd: Device": {
+    "prefix": "device",
+    "body": [
+      "Device"
+    ],
+    "description": "Command Device"
+  },
+  "cmd: Device BITSTREAM": {
+    "prefix": "device bitstream",
+    "body": [
+      "Device BITSTREAM"
+    ],
+    "description": "Command Device BITSTREAM"
+  },
+  "cmd: Device CAMERA": {
+    "prefix": "device camera",
+    "body": [
+      "Device CAMERA"
+    ],
+    "description": "Command Device CAMERA"
+  },
+  "cmd: Device GAMEPAD": {
+    "prefix": "device gamepad",
+    "body": [
+      "Device GAMEPAD"
+    ],
+    "description": "Command Device GAMEPAD"
+  },
+  "cmd: Device HUMID": {
+    "prefix": "device humid",
+    "body": [
+      "Device HUMID"
+    ],
+    "description": "Command Device HUMID"
+  },
+  "cmd: Device KEYPAD": {
+    "prefix": "device keypad",
+    "body": [
+      "Device KEYPAD"
+    ],
+    "description": "Command Device KEYPAD"
+  },
+  "cmd: Device LCD": {
+    "prefix": "device lcd",
+    "body": [
+      "Device LCD"
+    ],
+    "description": "Command Device LCD"
+  },
+  "cmd: Device MOUSE": {
+    "prefix": "device mouse",
+    "body": [
+      "Device MOUSE"
+    ],
+    "description": "Command Device MOUSE"
+  },
+  "cmd: Device NUNCHUCK": {
+    "prefix": "device nunchuck",
+    "body": [
+      "Device NUNCHUCK"
+    ],
+    "description": "Command Device NUNCHUCK"
+  },
+  "cmd: Device SERIALRX": {
+    "prefix": "device serialrx",
+    "body": [
+      "Device SERIALRX"
+    ],
+    "description": "Command Device SERIALRX"
+  },
+  "cmd: Device SERIALTX": {
+    "prefix": "device serialtx",
+    "body": [
+      "Device SERIALTX"
+    ],
+    "description": "Command Device SERIALTX"
+  },
+  "cmd: Device WII": {
+    "prefix": "device wii",
+    "body": [
+      "Device WII"
+    ],
+    "description": "Command Device WII"
+  },
+  "cmd: Device WII CLASSIC": {
+    "prefix": "device wii classic",
+    "body": [
+      "Device WII CLASSIC"
+    ],
+    "description": "Command Device WII CLASSIC"
+  },
+  "cmd: Device WS2812": {
+    "prefix": "device ws2812",
+    "body": [
+      "Device WS2812"
+    ],
+    "description": "Command Device WS2812"
+  },
+  "cmd: PWM": {
+    "prefix": "pwm",
+    "body": [
+      "PWM"
+    ],
+    "description": "Command PWM"
+  },
+  "cmd: PWM SYNC": {
+    "prefix": "pwm sync",
+    "body": [
+      "PWM SYNC"
+    ],
+    "description": "Command PWM SYNC"
+  },
+  "cmd: CSub": {
+    "prefix": "csub",
+    "body": [
+      "CSub"
+    ],
+    "description": "Command CSub"
+  },
+  "cmd: End CSub": {
+    "prefix": "end csub",
+    "body": [
+      "End CSub"
+    ],
+    "description": "Command End CSub"
+  },
+  "cmd: SYNC": {
+    "prefix": "sync",
+    "body": [
+      "SYNC"
+    ],
+    "description": "Command SYNC"
+  },
+  "cmd: I2C": {
+    "prefix": "i2c",
+    "body": [
+      "I2C"
+    ],
+    "description": "Command I2C"
+  },
+  "cmd: I2C CHECK": {
+    "prefix": "i2c check",
+    "body": [
+      "I2C CHECK"
+    ],
+    "description": "Command I2C CHECK"
+  },
+  "cmd: I2C CLOSE": {
+    "prefix": "i2c close",
+    "body": [
+      "I2C CLOSE"
+    ],
+    "description": "Command I2C CLOSE"
+  },
+  "cmd: I2C OPEN": {
+    "prefix": "i2c open",
+    "body": [
+      "I2C OPEN"
+    ],
+    "description": "Command I2C OPEN"
+  },
+  "cmd: I2C READ": {
+    "prefix": "i2c read",
+    "body": [
+      "I2C READ"
+    ],
+    "description": "Command I2C READ"
+  },
+  "cmd: I2C SLAVE CLOSE": {
+    "prefix": "i2c slave close",
+    "body": [
+      "I2C SLAVE CLOSE"
+    ],
+    "description": "Command I2C SLAVE CLOSE"
+  },
+  "cmd: I2C SLAVE OPEN": {
+    "prefix": "i2c slave open",
+    "body": [
+      "I2C SLAVE OPEN"
+    ],
+    "description": "Command I2C SLAVE OPEN"
+  },
+  "cmd: I2C SLAVE READ": {
+    "prefix": "i2c slave read",
+    "body": [
+      "I2C SLAVE READ"
+    ],
+    "description": "Command I2C SLAVE READ"
+  },
+  "cmd: I2C SLAVE WRITE": {
+    "prefix": "i2c slave write",
+    "body": [
+      "I2C SLAVE WRITE"
+    ],
+    "description": "Command I2C SLAVE WRITE"
+  },
+  "cmd: I2C WRITE": {
+    "prefix": "i2c write",
+    "body": [
+      "I2C WRITE"
+    ],
+    "description": "Command I2C WRITE"
+  },
+  "cmd: I2C2": {
+    "prefix": "i2c2",
+    "body": [
+      "I2C2"
+    ],
+    "description": "Command I2C2"
+  },
+  "cmd: I2C2 CHECK": {
+    "prefix": "i2c2 check",
+    "body": [
+      "I2C2 CHECK"
+    ],
+    "description": "Command I2C2 CHECK"
+  },
+  "cmd: I2C2 CLOSE": {
+    "prefix": "i2c2 close",
+    "body": [
+      "I2C2 CLOSE"
+    ],
+    "description": "Command I2C2 CLOSE"
+  },
+  "cmd: I2C2 OPEN": {
+    "prefix": "i2c2 open",
+    "body": [
+      "I2C2 OPEN"
+    ],
+    "description": "Command I2C2 OPEN"
+  },
+  "cmd: I2C2 READ": {
+    "prefix": "i2c2 read",
+    "body": [
+      "I2C2 READ"
+    ],
+    "description": "Command I2C2 READ"
+  },
+  "cmd: I2C2 SLAVE CLOSE": {
+    "prefix": "i2c2 slave close",
+    "body": [
+      "I2C2 SLAVE CLOSE"
+    ],
+    "description": "Command I2C2 SLAVE CLOSE"
+  },
+  "cmd: I2C2 SLAVE OPEN": {
+    "prefix": "i2c2 slave open",
+    "body": [
+      "I2C2 SLAVE OPEN"
+    ],
+    "description": "Command I2C2 SLAVE OPEN"
+  },
+  "cmd: I2C2 SLAVE READ": {
+    "prefix": "i2c2 slave read",
+    "body": [
+      "I2C2 SLAVE READ"
+    ],
+    "description": "Command I2C2 SLAVE READ"
+  },
+  "cmd: I2C2 SLAVE WRITE": {
+    "prefix": "i2c2 slave write",
+    "body": [
+      "I2C2 SLAVE WRITE"
+    ],
+    "description": "Command I2C2 SLAVE WRITE"
+  },
+  "cmd: I2C2 WRITE": {
+    "prefix": "i2c2 write",
+    "body": [
+      "I2C2 WRITE"
+    ],
+    "description": "Command I2C2 WRITE"
+  },
+  "cmd: RTC": {
+    "prefix": "rtc",
+    "body": [
+      "RTC"
+    ],
+    "description": "Command RTC"
+  },
+  "cmd: RTC GETREG": {
+    "prefix": "rtc getreg",
+    "body": [
+      "RTC GETREG"
+    ],
+    "description": "Command RTC GETREG"
+  },
+  "cmd: RTC GETTIME": {
+    "prefix": "rtc gettime",
+    "body": [
+      "RTC GETTIME"
+    ],
+    "description": "Command RTC GETTIME"
+  },
+  "cmd: RTC SETREG": {
+    "prefix": "rtc setreg",
+    "body": [
+      "RTC SETREG"
+    ],
+    "description": "Command RTC SETREG"
+  },
+  "cmd: RTC SETTIME": {
+    "prefix": "rtc settime",
+    "body": [
+      "RTC SETTIME"
+    ],
+    "description": "Command RTC SETTIME"
+  },
+  "cmd: Math": {
+    "prefix": "math",
+    "body": [
+      "Math"
+    ],
+    "description": "Command Math"
+  },
+  "cmd: Math ADD": {
+    "prefix": "math add",
+    "body": [
+      "Math ADD"
+    ],
+    "description": "Command Math ADD"
+  },
+  "cmd: Math AES128": {
+    "prefix": "math aes128",
+    "body": [
+      "Math AES128"
+    ],
+    "description": "Command Math AES128"
+  },
+  "cmd: Math C_ADD": {
+    "prefix": "math c_add",
+    "body": [
+      "Math C_ADD"
+    ],
+    "description": "Command Math C_ADD"
+  },
+  "cmd: Math C_AND": {
+    "prefix": "math c_and",
+    "body": [
+      "Math C_AND"
+    ],
+    "description": "Command Math C_AND"
+  },
+  "cmd: Math C_DIV": {
+    "prefix": "math c_div",
+    "body": [
+      "Math C_DIV"
+    ],
+    "description": "Command Math C_DIV"
+  },
+  "cmd: Math C_MUL": {
+    "prefix": "math c_mul",
+    "body": [
+      "Math C_MUL"
+    ],
+    "description": "Command Math C_MUL"
+  },
+  "cmd: Math C_MULT": {
+    "prefix": "math c_mult",
+    "body": [
+      "Math C_MULT"
+    ],
+    "description": "Command Math C_MULT"
+  },
+  "cmd: Math C_OR": {
+    "prefix": "math c_or",
+    "body": [
+      "Math C_OR"
+    ],
+    "description": "Command Math C_OR"
+  },
+  "cmd: Math C_SUB": {
+    "prefix": "math c_sub",
+    "body": [
+      "Math C_SUB"
+    ],
+    "description": "Command Math C_SUB"
+  },
+  "cmd: Math C_XOR": {
+    "prefix": "math c_xor",
+    "body": [
+      "Math C_XOR"
+    ],
+    "description": "Command Math C_XOR"
+  },
+  "cmd: Math FFT": {
+    "prefix": "math fft",
+    "body": [
+      "Math FFT"
+    ],
+    "description": "Command Math FFT"
+  },
+  "cmd: Math INSERT": {
+    "prefix": "math insert",
+    "body": [
+      "Math INSERT"
+    ],
+    "description": "Command Math INSERT"
+  },
+  "cmd: Math INTERPOLATE": {
+    "prefix": "math interpolate",
+    "body": [
+      "Math INTERPOLATE"
+    ],
+    "description": "Command Math INTERPOLATE"
+  },
+  "cmd: Math M_INVERSE": {
+    "prefix": "math m_inverse",
+    "body": [
+      "Math M_INVERSE"
+    ],
+    "description": "Command Math M_INVERSE"
+  },
+  "cmd: Math M_MULT": {
+    "prefix": "math m_mult",
+    "body": [
+      "Math M_MULT"
+    ],
+    "description": "Command Math M_MULT"
+  },
+  "cmd: Math M_PRINT": {
+    "prefix": "math m_print",
+    "body": [
+      "Math M_PRINT"
+    ],
+    "description": "Command Math M_PRINT"
+  },
+  "cmd: Math M_TRANSPOSE": {
+    "prefix": "math m_transpose",
+    "body": [
+      "Math M_TRANSPOSE"
+    ],
+    "description": "Command Math M_TRANSPOSE"
+  },
+  "cmd: Math PID": {
+    "prefix": "math pid",
+    "body": [
+      "Math PID"
+    ],
+    "description": "Command Math PID"
+  },
+  "cmd: Math POWER": {
+    "prefix": "math power",
+    "body": [
+      "Math POWER"
+    ],
+    "description": "Command Math POWER"
+  },
+  "cmd: Math Q_CREATE": {
+    "prefix": "math q_create",
+    "body": [
+      "Math Q_CREATE"
+    ],
+    "description": "Command Math Q_CREATE"
+  },
+  "cmd: Math Q_EULER": {
+    "prefix": "math q_euler",
+    "body": [
+      "Math Q_EULER"
+    ],
+    "description": "Command Math Q_EULER"
+  },
+  "cmd: Math Q_INVERT": {
+    "prefix": "math q_invert",
+    "body": [
+      "Math Q_INVERT"
+    ],
+    "description": "Command Math Q_INVERT"
+  },
+  "cmd: Math Q_MULT": {
+    "prefix": "math q_mult",
+    "body": [
+      "Math Q_MULT"
+    ],
+    "description": "Command Math Q_MULT"
+  },
+  "cmd: Math Q_ROTATE": {
+    "prefix": "math q_rotate",
+    "body": [
+      "Math Q_ROTATE"
+    ],
+    "description": "Command Math Q_ROTATE"
+  },
+  "cmd: Math Q_VECTOR": {
+    "prefix": "math q_vector",
+    "body": [
+      "Math Q_VECTOR"
+    ],
+    "description": "Command Math Q_VECTOR"
+  },
+  "cmd: Math RANDOMIZE": {
+    "prefix": "math randomize",
+    "body": [
+      "Math RANDOMIZE"
+    ],
+    "description": "Command Math RANDOMIZE"
+  },
+  "cmd: Math SCALE": {
+    "prefix": "math scale",
+    "body": [
+      "Math SCALE"
+    ],
+    "description": "Command Math SCALE"
+  },
+  "cmd: Math SENSORFUSION": {
+    "prefix": "math sensorfusion",
+    "body": [
+      "Math SENSORFUSION"
+    ],
+    "description": "Command Math SENSORFUSION"
+  },
+  "cmd: Math SET": {
+    "prefix": "math set",
+    "body": [
+      "Math SET"
+    ],
+    "description": "Command Math SET"
+  },
+  "cmd: Math SHIFT": {
+    "prefix": "math shift",
+    "body": [
+      "Math SHIFT"
+    ],
+    "description": "Command Math SHIFT"
+  },
+  "cmd: Math SINC": {
+    "prefix": "math sinc",
+    "body": [
+      "Math SINC"
+    ],
+    "description": "Command Math SINC"
+  },
+  "cmd: Math SLICE": {
+    "prefix": "math slice",
+    "body": [
+      "Math SLICE"
+    ],
+    "description": "Command Math SLICE"
+  },
+  "cmd: Math V_CROSS": {
+    "prefix": "math v_cross",
+    "body": [
+      "Math V_CROSS"
+    ],
+    "description": "Command Math V_CROSS"
+  },
+  "cmd: Math V_MULT": {
+    "prefix": "math v_mult",
+    "body": [
+      "Math V_MULT"
+    ],
+    "description": "Command Math V_MULT"
+  },
+  "cmd: Math V_NORMALISE": {
+    "prefix": "math v_normalise",
+    "body": [
+      "Math V_NORMALISE"
+    ],
+    "description": "Command Math V_NORMALISE"
+  },
+  "cmd: Math V_PRINT": {
+    "prefix": "math v_print",
+    "body": [
+      "Math V_PRINT"
+    ],
+    "description": "Command Math V_PRINT"
+  },
+  "cmd: Math V_ROTATE": {
+    "prefix": "math v_rotate",
+    "body": [
+      "Math V_ROTATE"
+    ],
+    "description": "Command Math V_ROTATE"
+  },
+  "cmd: Math WINDOW": {
+    "prefix": "math window",
+    "body": [
+      "Math WINDOW"
+    ],
+    "description": "Command Math WINDOW"
+  },
+  "cmd: Memory": {
+    "prefix": "memory",
+    "body": [
+      "Memory"
+    ],
+    "description": "Command Memory"
+  },
+  "cmd: Memory COPY": {
+    "prefix": "memory copy",
+    "body": [
+      "Memory COPY"
+    ],
+    "description": "Command Memory COPY"
+  },
+  "cmd: Memory INPUT": {
+    "prefix": "memory input",
+    "body": [
+      "Memory INPUT"
+    ],
+    "description": "Command Memory INPUT"
+  },
+  "cmd: Memory PACK": {
+    "prefix": "memory pack",
+    "body": [
+      "Memory PACK"
+    ],
+    "description": "Command Memory PACK"
+  },
+  "cmd: Memory PRINT": {
+    "prefix": "memory print",
+    "body": [
+      "Memory PRINT"
+    ],
+    "description": "Command Memory PRINT"
+  },
+  "cmd: Memory SET": {
+    "prefix": "memory set",
+    "body": [
+      "Memory SET"
+    ],
+    "description": "Command Memory SET"
+  },
+  "cmd: Memory UNPACK": {
+    "prefix": "memory unpack",
+    "body": [
+      "Memory UNPACK"
+    ],
+    "description": "Command Memory UNPACK"
+  },
+  "cmd: Option": {
+    "prefix": "option",
+    "body": [
+      "Option"
+    ],
+    "description": "Command Option"
+  },
+  "cmd: Option ANGLE": {
+    "prefix": "option angle",
+    "body": [
+      "Option ANGLE"
+    ],
+    "description": "Command Option ANGLE"
+  },
+  "cmd: Option AUDIO": {
+    "prefix": "option audio",
+    "body": [
+      "Option AUDIO"
+    ],
+    "description": "Command Option AUDIO"
+  },
+  "cmd: Option AUTOREFRESH": {
+    "prefix": "option autorefresh",
+    "body": [
+      "Option AUTOREFRESH"
+    ],
+    "description": "Command Option AUTOREFRESH"
+  },
+  "cmd: Option AUTORUN": {
+    "prefix": "option autorun",
+    "body": [
+      "Option AUTORUN"
+    ],
+    "description": "Command Option AUTORUN"
+  },
+  "cmd: Option BASE": {
+    "prefix": "option base",
+    "body": [
+      "Option BASE"
+    ],
+    "description": "Command Option BASE"
+  },
+  "cmd: Option BAUDRATE": {
+    "prefix": "option baudrate",
+    "body": [
+      "Option BAUDRATE"
+    ],
+    "description": "Command Option BAUDRATE"
+  },
+  "cmd: Option BREAK": {
+    "prefix": "option break",
+    "body": [
+      "Option BREAK"
+    ],
+    "description": "Command Option BREAK"
+  },
+  "cmd: Option CASE": {
+    "prefix": "option case",
+    "body": [
+      "Option CASE"
+    ],
+    "description": "Command Option CASE"
+  },
+  "cmd: Option CDC POLL RATE": {
+    "prefix": "option cdc poll rate",
+    "body": [
+      "Option CDC POLL RATE"
+    ],
+    "description": "Command Option CDC POLL RATE"
+  },
+  "cmd: Option COLORCODE": {
+    "prefix": "option colorcode",
+    "body": [
+      "Option COLORCODE"
+    ],
+    "description": "Command Option COLORCODE"
+  },
+  "cmd: Option COLOURCODE": {
+    "prefix": "option colourcode",
+    "body": [
+      "Option COLOURCODE"
+    ],
+    "description": "Command Option COLOURCODE"
+  },
+  "cmd: Option CONSOLE": {
+    "prefix": "option console",
+    "body": [
+      "Option CONSOLE"
+    ],
+    "description": "Command Option CONSOLE"
+  },
+  "cmd: Option CONTINUATION LINES": {
+    "prefix": "option continuation lines",
+    "body": [
+      "Option CONTINUATION LINES"
+    ],
+    "description": "Command Option CONTINUATION LINES"
+  },
+  "cmd: Option COUNT": {
+    "prefix": "option count",
+    "body": [
+      "Option COUNT"
+    ],
+    "description": "Command Option COUNT"
+  },
+  "cmd: Option CPUSPEED": {
+    "prefix": "option cpuspeed",
+    "body": [
+      "Option CPUSPEED"
+    ],
+    "description": "Command Option CPUSPEED"
+  },
+  "cmd: Option DEFAULT": {
+    "prefix": "option default",
+    "body": [
+      "Option DEFAULT"
+    ],
+    "description": "Command Option DEFAULT"
+  },
+  "cmd: Option DEFAULT COLORS": {
+    "prefix": "option default colors",
+    "body": [
+      "Option DEFAULT COLORS"
+    ],
+    "description": "Command Option DEFAULT COLORS"
+  },
+  "cmd: Option DEFAULT COLOURS": {
+    "prefix": "option default colours",
+    "body": [
+      "Option DEFAULT COLOURS"
+    ],
+    "description": "Command Option DEFAULT COLOURS"
+  },
+  "cmd: Option DEFAULT MODE": {
+    "prefix": "option default mode",
+    "body": [
+      "Option DEFAULT MODE"
+    ],
+    "description": "Command Option DEFAULT MODE"
+  },
+  "cmd: Option DISK LOAD": {
+    "prefix": "option disk load",
+    "body": [
+      "Option DISK LOAD"
+    ],
+    "description": "Command Option DISK LOAD"
+  },
+  "cmd: Option DISK SAVE": {
+    "prefix": "option disk save",
+    "body": [
+      "Option DISK SAVE"
+    ],
+    "description": "Command Option DISK SAVE"
+  },
+  "cmd: Option DISPLAY": {
+    "prefix": "option display",
+    "body": [
+      "Option DISPLAY"
+    ],
+    "description": "Command Option DISPLAY"
+  },
+  "cmd: Option ESCAPE": {
+    "prefix": "option escape",
+    "body": [
+      "Option ESCAPE"
+    ],
+    "description": "Command Option ESCAPE"
+  },
+  "cmd: Option EXPLICIT": {
+    "prefix": "option explicit",
+    "body": [
+      "Option EXPLICIT"
+    ],
+    "description": "Command Option EXPLICIT"
+  },
+  "cmd: Option F1": {
+    "prefix": "option f1",
+    "body": [
+      "Option F1"
+    ],
+    "description": "Command Option F1"
+  },
+  "cmd: Option F5": {
+    "prefix": "option f5",
+    "body": [
+      "Option F5"
+    ],
+    "description": "Command Option F5"
+  },
+  "cmd: Option F6": {
+    "prefix": "option f6",
+    "body": [
+      "Option F6"
+    ],
+    "description": "Command Option F6"
+  },
+  "cmd: Option F7": {
+    "prefix": "option f7",
+    "body": [
+      "Option F7"
+    ],
+    "description": "Command Option F7"
+  },
+  "cmd: Option F8": {
+    "prefix": "option f8",
+    "body": [
+      "Option F8"
+    ],
+    "description": "Command Option F8"
+  },
+  "cmd: Option F9": {
+    "prefix": "option f9",
+    "body": [
+      "Option F9"
+    ],
+    "description": "Command Option F9"
+  },
+  "cmd: Option FAST AUDIO": {
+    "prefix": "option fast audio",
+    "body": [
+      "Option FAST AUDIO"
+    ],
+    "description": "Command Option FAST AUDIO"
+  },
+  "cmd: Option GPS": {
+    "prefix": "option gps",
+    "body": [
+      "Option GPS"
+    ],
+    "description": "Command Option GPS"
+  },
+  "cmd: Option GUI CONTROLS": {
+    "prefix": "option gui controls",
+    "body": [
+      "Option GUI CONTROLS"
+    ],
+    "description": "Command Option GUI CONTROLS"
+  },
+  "cmd: Option HDMI PINS": {
+    "prefix": "option hdmi pins",
+    "body": [
+      "Option HDMI PINS"
+    ],
+    "description": "Command Option HDMI PINS"
+  },
+  "cmd: Option HEARTBEAT": {
+    "prefix": "option heartbeat",
+    "body": [
+      "Option HEARTBEAT"
+    ],
+    "description": "Command Option HEARTBEAT"
+  },
+  "cmd: Option KEYBOARD": {
+    "prefix": "option keyboard",
+    "body": [
+      "Option KEYBOARD"
+    ],
+    "description": "Command Option KEYBOARD"
+  },
+  "cmd: Option KEYBOARD PINS": {
+    "prefix": "option keyboard pins",
+    "body": [
+      "Option KEYBOARD PINS"
+    ],
+    "description": "Command Option KEYBOARD PINS"
+  },
+  "cmd: Option KEYBOARD REPEAT": {
+    "prefix": "option keyboard repeat",
+    "body": [
+      "Option KEYBOARD REPEAT"
+    ],
+    "description": "Command Option KEYBOARD REPEAT"
+  },
+  "cmd: Option LCD SPI": {
+    "prefix": "option lcd spi",
+    "body": [
+      "Option LCD SPI"
+    ],
+    "description": "Command Option LCD SPI"
+  },
+  "cmd: Option LCD320": {
+    "prefix": "option lcd320",
+    "body": [
+      "Option LCD320"
+    ],
+    "description": "Command Option LCD320"
+  },
+  "cmd: Option LCDPANEL": {
+    "prefix": "option lcdpanel",
+    "body": [
+      "Option LCDPANEL"
+    ],
+    "description": "Command Option LCDPANEL"
+  },
+  "cmd: Option LCDPANEL CONSOLE": {
+    "prefix": "option lcdpanel console",
+    "body": [
+      "Option LCDPANEL CONSOLE"
+    ],
+    "description": "Command Option LCDPANEL CONSOLE"
+  },
+  "cmd: Option LCDPANEL NOCONSOLE": {
+    "prefix": "option lcdpanel noconsole",
+    "body": [
+      "Option LCDPANEL NOCONSOLE"
+    ],
+    "description": "Command Option LCDPANEL NOCONSOLE"
+  },
+  "cmd: Option LEGACY": {
+    "prefix": "option legacy",
+    "body": [
+      "Option LEGACY"
+    ],
+    "description": "Command Option LEGACY"
+  },
+  "cmd: Option LIST": {
+    "prefix": "option list",
+    "body": [
+      "Option LIST"
+    ],
+    "description": "Command Option LIST"
+  },
+  "cmd: Option LOCAL KEYBOARD": {
+    "prefix": "option local keyboard",
+    "body": [
+      "Option LOCAL KEYBOARD"
+    ],
+    "description": "Command Option LOCAL KEYBOARD"
+  },
+  "cmd: Option LOCAL VARIABLES": {
+    "prefix": "option local variables",
+    "body": [
+      "Option LOCAL VARIABLES"
+    ],
+    "description": "Command Option LOCAL VARIABLES"
+  },
+  "cmd: Option LOGGING": {
+    "prefix": "option logging",
+    "body": [
+      "Option LOGGING"
+    ],
+    "description": "Command Option LOGGING"
+  },
+  "cmd: Option MILLISECONDS": {
+    "prefix": "option milliseconds",
+    "body": [
+      "Option MILLISECONDS"
+    ],
+    "description": "Command Option MILLISECONDS"
+  },
+  "cmd: Option MODBUFF": {
+    "prefix": "option modbuff",
+    "body": [
+      "Option MODBUFF"
+    ],
+    "description": "Command Option MODBUFF"
+  },
+  "cmd: Option MOUSE": {
+    "prefix": "option mouse",
+    "body": [
+      "Option MOUSE"
+    ],
+    "description": "Command Option MOUSE"
+  },
+  "cmd: Option MOUSE SENSITIVITY": {
+    "prefix": "option mouse sensitivity",
+    "body": [
+      "Option MOUSE SENSITIVITY"
+    ],
+    "description": "Command Option MOUSE SENSITIVITY"
+  },
+  "cmd: Option NOCHECK": {
+    "prefix": "option nocheck",
+    "body": [
+      "Option NOCHECK"
+    ],
+    "description": "Command Option NOCHECK"
+  },
+  "cmd: Option PICO": {
+    "prefix": "option pico",
+    "body": [
+      "Option PICO"
+    ],
+    "description": "Command Option PICO"
+  },
+  "cmd: Option PICO PLUS 2": {
+    "prefix": "option pico plus 2",
+    "body": [
+      "Option PICO PLUS 2"
+    ],
+    "description": "Command Option PICO PLUS 2"
+  },
+  "cmd: Option PIN": {
+    "prefix": "option pin",
+    "body": [
+      "Option PIN"
+    ],
+    "description": "Command Option PIN"
+  },
+  "cmd: Option PLATFORM": {
+    "prefix": "option platform",
+    "body": [
+      "Option PLATFORM"
+    ],
+    "description": "Command Option PLATFORM"
+  },
+  "cmd: Option POWER": {
+    "prefix": "option power",
+    "body": [
+      "Option POWER"
+    ],
+    "description": "Command Option POWER"
+  },
+  "cmd: Option PS2 PINS": {
+    "prefix": "option ps2 pins",
+    "body": [
+      "Option PS2 PINS"
+    ],
+    "description": "Command Option PS2 PINS"
+  },
+  "cmd: Option PSRAM PIN": {
+    "prefix": "option psram pin",
+    "body": [
+      "Option PSRAM PIN"
+    ],
+    "description": "Command Option PSRAM PIN"
+  },
+  "cmd: Option RESET": {
+    "prefix": "option reset",
+    "body": [
+      "Option RESET"
+    ],
+    "description": "Command Option RESET"
+  },
+  "cmd: Option RESOLUTION": {
+    "prefix": "option resolution",
+    "body": [
+      "Option RESOLUTION"
+    ],
+    "description": "Command Option RESOLUTION"
+  },
+  "cmd: Option RTC AUTO": {
+    "prefix": "option rtc auto",
+    "body": [
+      "Option RTC AUTO"
+    ],
+    "description": "Command Option RTC AUTO"
+  },
+  "cmd: Option SDCARD": {
+    "prefix": "option sdcard",
+    "body": [
+      "Option SDCARD"
+    ],
+    "description": "Command Option SDCARD"
+  },
+  "cmd: Option SERIAL CONSOLE": {
+    "prefix": "option serial console",
+    "body": [
+      "Option SERIAL CONSOLE"
+    ],
+    "description": "Command Option SERIAL CONSOLE"
+  },
+  "cmd: Option SYSTEM I2C": {
+    "prefix": "option system i2c",
+    "body": [
+      "Option SYSTEM I2C"
+    ],
+    "description": "Command Option SYSTEM I2C"
+  },
+  "cmd: Option SYSTEM SPI": {
+    "prefix": "option system spi",
+    "body": [
+      "Option SYSTEM SPI"
+    ],
+    "description": "Command Option SYSTEM SPI"
+  },
+  "cmd: Option TAB": {
+    "prefix": "option tab",
+    "body": [
+      "Option TAB"
+    ],
+    "description": "Command Option TAB"
+  },
+  "cmd: Option TCP SERVER PORT": {
+    "prefix": "option tcp server port",
+    "body": [
+      "Option TCP SERVER PORT"
+    ],
+    "description": "Command Option TCP SERVER PORT"
+  },
+  "cmd: Option TELNET CONSOLE": {
+    "prefix": "option telnet console",
+    "body": [
+      "Option TELNET CONSOLE"
+    ],
+    "description": "Command Option TELNET CONSOLE"
+  },
+  "cmd: Option TFTP": {
+    "prefix": "option tftp",
+    "body": [
+      "Option TFTP"
+    ],
+    "description": "Command Option TFTP"
+  },
+  "cmd: Option TOUCH": {
+    "prefix": "option touch",
+    "body": [
+      "Option TOUCH"
+    ],
+    "description": "Command Option TOUCH"
+  },
+  "cmd: Option UDP SERVER PORT": {
+    "prefix": "option udp server port",
+    "body": [
+      "Option UDP SERVER PORT"
+    ],
+    "description": "Command Option UDP SERVER PORT"
+  },
+  "cmd: Option VCC": {
+    "prefix": "option vcc",
+    "body": [
+      "Option VCC"
+    ],
+    "description": "Command Option VCC"
+  },
+  "cmd: Option VGA PINS": {
+    "prefix": "option vga pins",
+    "body": [
+      "Option VGA PINS"
+    ],
+    "description": "Command Option VGA PINS"
+  },
+  "cmd: Option WEB MESSAGES": {
+    "prefix": "option web messages",
+    "body": [
+      "Option WEB MESSAGES"
+    ],
+    "description": "Command Option WEB MESSAGES"
+  },
+  "cmd: Option WIFI": {
+    "prefix": "option wifi",
+    "body": [
+      "Option WIFI"
+    ],
+    "description": "Command Option WIFI"
+  },
+  "cmd: Pause": {
+    "prefix": "pause",
+    "body": [
+      "Pause"
+    ],
+    "description": "Command Pause"
+  },
+  "cmd: Timer": {
+    "prefix": "timer",
+    "body": [
+      "Timer"
+    ],
+    "description": "Command Timer"
+  },
+  "cmd: Date$": {
+    "prefix": "date$",
+    "body": [
+      "Date$"
+    ],
+    "description": "Command Date$"
+  },
+  "cmd: Time$": {
+    "prefix": "time$",
+    "body": [
+      "Time$"
+    ],
+    "description": "Command Time$"
+  },
+  "cmd: IReturn": {
+    "prefix": "ireturn",
+    "body": [
+      "IReturn"
+    ],
+    "description": "Command IReturn"
+  },
+  "cmd: Poke": {
+    "prefix": "poke",
+    "body": [
+      "Poke"
+    ],
+    "description": "Command Poke"
+  },
+  "cmd: Poke DISPLAY": {
+    "prefix": "poke display",
+    "body": [
+      "Poke DISPLAY"
+    ],
+    "description": "Command Poke DISPLAY"
+  },
+  "cmd: SetTick": {
+    "prefix": "settick",
+    "body": [
+      "SetTick"
+    ],
+    "description": "Command SetTick"
+  },
+  "cmd: WatchDog": {
+    "prefix": "watchdog",
+    "body": [
+      "WatchDog"
+    ],
+    "description": "Command WatchDog"
+  },
+  "cmd: WatchDog HW": {
+    "prefix": "watchdog hw",
+    "body": [
+      "WatchDog HW"
+    ],
+    "description": "Command WatchDog HW"
+  },
+  "cmd: WatchDog OFF": {
+    "prefix": "watchdog off",
+    "body": [
+      "WatchDog OFF"
+    ],
+    "description": "Command WatchDog OFF"
+  },
+  "cmd: CPU": {
+    "prefix": "cpu",
+    "body": [
+      "CPU"
+    ],
+    "description": "Command CPU"
+  },
+  "cmd: CPU RESTART": {
+    "prefix": "cpu restart",
+    "body": [
+      "CPU RESTART"
+    ],
+    "description": "Command CPU RESTART"
+  },
+  "cmd: CPU SLEEP": {
+    "prefix": "cpu sleep",
+    "body": [
+      "CPU SLEEP"
+    ],
+    "description": "Command CPU SLEEP"
+  },
+  "cmd: Sort": {
+    "prefix": "sort",
+    "body": [
+      "Sort"
+    ],
+    "description": "Command Sort"
+  },
+  "cmd: DefineFont": {
+    "prefix": "definefont",
+    "body": [
+      "DefineFont"
+    ],
+    "description": "Command DefineFont"
+  },
+  "cmd: End DefineFont": {
+    "prefix": "end definefont",
+    "body": [
+      "End DefineFont"
+    ],
+    "description": "Command End DefineFont"
+  },
+  "cmd: LongString": {
+    "prefix": "longstring",
+    "body": [
+      "LongString"
+    ],
+    "description": "Command LongString"
+  },
+  "cmd: LongString AES128": {
+    "prefix": "longstring aes128",
+    "body": [
+      "LongString AES128"
+    ],
+    "description": "Command LongString AES128"
+  },
+  "cmd: LongString APPEND": {
+    "prefix": "longstring append",
+    "body": [
+      "LongString APPEND"
+    ],
+    "description": "Command LongString APPEND"
+  },
+  "cmd: LongString BASE64": {
+    "prefix": "longstring base64",
+    "body": [
+      "LongString BASE64"
+    ],
+    "description": "Command LongString BASE64"
+  },
+  "cmd: LongString CLEAR": {
+    "prefix": "longstring clear",
+    "body": [
+      "LongString CLEAR"
+    ],
+    "description": "Command LongString CLEAR"
+  },
+  "cmd: LongString CONCAT": {
+    "prefix": "longstring concat",
+    "body": [
+      "LongString CONCAT"
+    ],
+    "description": "Command LongString CONCAT"
+  },
+  "cmd: LongString COPY": {
+    "prefix": "longstring copy",
+    "body": [
+      "LongString COPY"
+    ],
+    "description": "Command LongString COPY"
+  },
+  "cmd: LongString LCASE": {
+    "prefix": "longstring lcase",
+    "body": [
+      "LongString LCASE"
+    ],
+    "description": "Command LongString LCASE"
+  },
+  "cmd: LongString LEFT": {
+    "prefix": "longstring left",
+    "body": [
+      "LongString LEFT"
+    ],
+    "description": "Command LongString LEFT"
+  },
+  "cmd: LongString LOAD": {
+    "prefix": "longstring load",
+    "body": [
+      "LongString LOAD"
+    ],
+    "description": "Command LongString LOAD"
+  },
+  "cmd: LongString MID": {
+    "prefix": "longstring mid",
+    "body": [
+      "LongString MID"
+    ],
+    "description": "Command LongString MID"
+  },
+  "cmd: LongString PRINT": {
+    "prefix": "longstring print",
+    "body": [
+      "LongString PRINT"
+    ],
+    "description": "Command LongString PRINT"
+  },
+  "cmd: LongString REPLACE": {
+    "prefix": "longstring replace",
+    "body": [
+      "LongString REPLACE"
+    ],
+    "description": "Command LongString REPLACE"
+  },
+  "cmd: LongString RESIZE": {
+    "prefix": "longstring resize",
+    "body": [
+      "LongString RESIZE"
+    ],
+    "description": "Command LongString RESIZE"
+  },
+  "cmd: LongString RIGHT": {
+    "prefix": "longstring right",
+    "body": [
+      "LongString RIGHT"
+    ],
+    "description": "Command LongString RIGHT"
+  },
+  "cmd: LongString SETBYTE": {
+    "prefix": "longstring setbyte",
+    "body": [
+      "LongString SETBYTE"
+    ],
+    "description": "Command LongString SETBYTE"
+  },
+  "cmd: LongString TRIM": {
+    "prefix": "longstring trim",
+    "body": [
+      "LongString TRIM"
+    ],
+    "description": "Command LongString TRIM"
+  },
+  "cmd: LongString UCASE": {
+    "prefix": "longstring ucase",
+    "body": [
+      "LongString UCASE"
+    ],
+    "description": "Command LongString UCASE"
+  },
+  "cmd: Interrupt": {
+    "prefix": "interrupt",
+    "body": [
+      "Interrupt"
+    ],
+    "description": "Command Interrupt"
+  },
+  "cmd: Library": {
+    "prefix": "library",
+    "body": [
+      "Library"
+    ],
+    "description": "Command Library"
+  },
+  "cmd: Library DELETE": {
+    "prefix": "library delete",
+    "body": [
+      "Library DELETE"
+    ],
+    "description": "Command Library DELETE"
+  },
+  "cmd: Library DISK LOAD": {
+    "prefix": "library disk load",
+    "body": [
+      "Library DISK LOAD"
+    ],
+    "description": "Command Library DISK LOAD"
+  },
+  "cmd: Library DISK SAVE": {
+    "prefix": "library disk save",
+    "body": [
+      "Library DISK SAVE"
+    ],
+    "description": "Command Library DISK SAVE"
+  },
+  "cmd: Library LIST": {
+    "prefix": "library list",
+    "body": [
+      "Library LIST"
+    ],
+    "description": "Command Library LIST"
+  },
+  "cmd: Library LIST ALL": {
+    "prefix": "library list all",
+    "body": [
+      "Library LIST ALL"
+    ],
+    "description": "Command Library LIST ALL"
+  },
+  "cmd: Library SAVE": {
+    "prefix": "library save",
+    "body": [
+      "Library SAVE"
+    ],
+    "description": "Command Library SAVE"
+  },
+  "cmd: OneWire": {
+    "prefix": "onewire",
+    "body": [
+      "OneWire"
+    ],
+    "description": "Command OneWire"
+  },
+  "cmd: OneWire READ": {
+    "prefix": "onewire read",
+    "body": [
+      "OneWire READ"
+    ],
+    "description": "Command OneWire READ"
+  },
+  "cmd: OneWire RESET": {
+    "prefix": "onewire reset",
+    "body": [
+      "OneWire RESET"
+    ],
+    "description": "Command OneWire RESET"
+  },
+  "cmd: OneWire WRITE": {
+    "prefix": "onewire write",
+    "body": [
+      "OneWire WRITE"
+    ],
+    "description": "Command OneWire WRITE"
+  },
+  "cmd: TEMPR START": {
+    "prefix": "tempr start",
+    "body": [
+      "TEMPR START"
+    ],
+    "description": "Command TEMPR START"
+  },
+  "cmd: SPI": {
+    "prefix": "spi",
+    "body": [
+      "SPI"
+    ],
+    "description": "Command SPI"
+  },
+  "cmd: SPI CLOSE": {
+    "prefix": "spi close",
+    "body": [
+      "SPI CLOSE"
+    ],
+    "description": "Command SPI CLOSE"
+  },
+  "cmd: SPI OPEN": {
+    "prefix": "spi open",
+    "body": [
+      "SPI OPEN"
+    ],
+    "description": "Command SPI OPEN"
+  },
+  "cmd: SPI READ": {
+    "prefix": "spi read",
+    "body": [
+      "SPI READ"
+    ],
+    "description": "Command SPI READ"
+  },
+  "cmd: SPI WRITE": {
+    "prefix": "spi write",
+    "body": [
+      "SPI WRITE"
+    ],
+    "description": "Command SPI WRITE"
+  },
+  "cmd: SPI2": {
+    "prefix": "spi2",
+    "body": [
+      "SPI2"
+    ],
+    "description": "Command SPI2"
+  },
+  "cmd: SPI2 CLOSE": {
+    "prefix": "spi2 close",
+    "body": [
+      "SPI2 CLOSE"
+    ],
+    "description": "Command SPI2 CLOSE"
+  },
+  "cmd: SPI2 OPEN": {
+    "prefix": "spi2 open",
+    "body": [
+      "SPI2 OPEN"
+    ],
+    "description": "Command SPI2 OPEN"
+  },
+  "cmd: SPI2 READ": {
+    "prefix": "spi2 read",
+    "body": [
+      "SPI2 READ"
+    ],
+    "description": "Command SPI2 READ"
+  },
+  "cmd: SPI2 WRITE": {
+    "prefix": "spi2 write",
+    "body": [
+      "SPI2 WRITE"
+    ],
+    "description": "Command SPI2 WRITE"
+  },
+  "cmd: Colour Map": {
+    "prefix": "colour map",
+    "body": [
+      "Colour Map"
+    ],
+    "description": "Command Colour Map"
+  },
+  "cmd: Cat": {
+    "prefix": "cat",
+    "body": [
+      "Cat"
+    ],
+    "description": "Command Cat"
+  },
+  "cmd: Color": {
+    "prefix": "color",
+    "body": [
+      "Color"
+    ],
+    "description": "Command Color"
+  },
+  "cmd: Files": {
+    "prefix": "files",
+    "body": [
+      "Files"
+    ],
+    "description": "Command Files"
+  },
+  "cmd: Text": {
+    "prefix": "text",
+    "body": [
+      "Text"
+    ],
+    "description": "Command Text"
+  },
+  "cmd: Autosave": {
+    "prefix": "autosave",
+    "body": [
+      "Autosave"
+    ],
+    "description": "Command Autosave"
+  },
+  "cmd: Autosave APPEND": {
+    "prefix": "autosave append",
+    "body": [
+      "Autosave APPEND"
+    ],
+    "description": "Command Autosave APPEND"
+  },
+  "cmd: WS2812": {
+    "prefix": "ws2812",
+    "body": [
+      "WS2812"
+    ],
+    "description": "Command WS2812"
+  },
+  "cmd: Keypad": {
+    "prefix": "keypad",
+    "body": [
+      "Keypad"
+    ],
+    "description": "Command Keypad"
+  },
+  "cmd: Keypad CLOSE": {
+    "prefix": "keypad close",
+    "body": [
+      "Keypad CLOSE"
+    ],
+    "description": "Command Keypad CLOSE"
+  },
+  "cmd: Humid": {
+    "prefix": "humid",
+    "body": [
+      "Humid"
+    ],
+    "description": "Command Humid"
+  },
+  "cmd: LCD": {
+    "prefix": "lcd",
+    "body": [
+      "LCD"
+    ],
+    "description": "Command LCD"
+  },
+  "cmd: LCD CLEAR": {
+    "prefix": "lcd clear",
+    "body": [
+      "LCD CLEAR"
+    ],
+    "description": "Command LCD CLEAR"
+  },
+  "cmd: LCD CLOSE": {
+    "prefix": "lcd close",
+    "body": [
+      "LCD CLOSE"
+    ],
+    "description": "Command LCD CLOSE"
+  },
+  "cmd: LCD CMD": {
+    "prefix": "lcd cmd",
+    "body": [
+      "LCD CMD"
+    ],
+    "description": "Command LCD CMD"
+  },
+  "cmd: LCD INIT": {
+    "prefix": "lcd init",
+    "body": [
+      "LCD INIT"
+    ],
+    "description": "Command LCD INIT"
+  },
+  "cmd: Wii Classic": {
+    "prefix": "wii classic",
+    "body": [
+      "Wii Classic"
+    ],
+    "description": "Command Wii Classic"
+  },
+  "cmd: Wii Classic CLOSE": {
+    "prefix": "wii classic close",
+    "body": [
+      "Wii Classic CLOSE"
+    ],
+    "description": "Command Wii Classic CLOSE"
+  },
+  "cmd: Wii Classic OPEN": {
+    "prefix": "wii classic open",
+    "body": [
+      "Wii Classic OPEN"
+    ],
+    "description": "Command Wii Classic OPEN"
+  },
+  "cmd: Wii Nunchuck": {
+    "prefix": "wii nunchuck",
+    "body": [
+      "Wii Nunchuck"
+    ],
+    "description": "Command Wii Nunchuck"
+  },
+  "cmd: Wii Nunchuck CLOSE": {
+    "prefix": "wii nunchuck close",
+    "body": [
+      "Wii Nunchuck CLOSE"
+    ],
+    "description": "Command Wii Nunchuck CLOSE"
+  },
+  "cmd: Wii Nunchuck OPEN": {
+    "prefix": "wii nunchuck open",
+    "body": [
+      "Wii Nunchuck OPEN"
+    ],
+    "description": "Command Wii Nunchuck OPEN"
+  },
+  "cmd: Wii": {
+    "prefix": "wii",
+    "body": [
+      "Wii"
+    ],
+    "description": "Command Wii"
+  },
+  "cmd: Wii CLOSE": {
+    "prefix": "wii close",
+    "body": [
+      "Wii CLOSE"
+    ],
+    "description": "Command Wii CLOSE"
+  },
+  "cmd: Wii OPEN": {
+    "prefix": "wii open",
+    "body": [
+      "Wii OPEN"
+    ],
+    "description": "Command Wii OPEN"
+  },
+  "cmd: Servo": {
+    "prefix": "servo",
+    "body": [
+      "Servo"
+    ],
+    "description": "Command Servo"
+  },
+  "cmd: Mouse": {
+    "prefix": "mouse",
+    "body": [
+      "Mouse"
+    ],
+    "description": "Command Mouse"
+  },
+  "cmd: Mouse CLOSE": {
+    "prefix": "mouse close",
+    "body": [
+      "Mouse CLOSE"
+    ],
+    "description": "Command Mouse CLOSE"
+  },
+  "cmd: Mouse INTERRUPT DISABLE": {
+    "prefix": "mouse interrupt disable",
+    "body": [
+      "Mouse INTERRUPT DISABLE"
+    ],
+    "description": "Command Mouse INTERRUPT DISABLE"
+  },
+  "cmd: Mouse INTERRUPT ENABLE": {
+    "prefix": "mouse interrupt enable",
+    "body": [
+      "Mouse INTERRUPT ENABLE"
+    ],
+    "description": "Command Mouse INTERRUPT ENABLE"
+  },
+  "cmd: Mouse OPEN": {
+    "prefix": "mouse open",
+    "body": [
+      "Mouse OPEN"
+    ],
+    "description": "Command Mouse OPEN"
+  },
+  "cmd: Mouse SET": {
+    "prefix": "mouse set",
+    "body": [
+      "Mouse SET"
+    ],
+    "description": "Command Mouse SET"
+  },
+  "cmd: Chain": {
+    "prefix": "chain",
+    "body": [
+      "Chain"
+    ],
+    "description": "Command Chain"
+  },
+  "cmd: _wrap target": {
+    "prefix": "_wrap target",
+    "body": [
+      "_wrap target"
+    ],
+    "description": "Command _wrap target"
+  },
+  "cmd: _wrap": {
+    "prefix": "_wrap",
+    "body": [
+      "_wrap"
+    ],
+    "description": "Command _wrap"
+  },
+  "cmd: _line": {
+    "prefix": "_line",
+    "body": [
+      "_line"
+    ],
+    "description": "Command _line"
+  },
+  "cmd: _program": {
+    "prefix": "_program",
+    "body": [
+      "_program"
+    ],
+    "description": "Command _program"
+  },
+  "cmd: _end program": {
+    "prefix": "_end program",
+    "body": [
+      "_end program"
+    ],
+    "description": "Command _end program"
+  },
+  "cmd: _side set": {
+    "prefix": "_side set",
+    "body": [
+      "_side set"
+    ],
+    "description": "Command _side set"
+  },
+  "cmd: _label": {
+    "prefix": "_label",
+    "body": [
+      "_label"
+    ],
+    "description": "Command _label"
+  },
+  "cmd: Jmp": {
+    "prefix": "jmp",
+    "body": [
+      "Jmp"
+    ],
+    "description": "Command Jmp"
+  },
+  "cmd: Wait": {
+    "prefix": "wait",
+    "body": [
+      "Wait"
+    ],
+    "description": "Command Wait"
+  },
+  "cmd: In": {
+    "prefix": "in",
+    "body": [
+      "In"
+    ],
+    "description": "Command In"
+  },
+  "cmd: Out": {
+    "prefix": "out",
+    "body": [
+      "Out"
+    ],
+    "description": "Command Out"
+  },
+  "cmd: Push": {
+    "prefix": "push",
+    "body": [
+      "Push"
+    ],
+    "description": "Command Push"
+  },
+  "cmd: Pull": {
+    "prefix": "pull",
+    "body": [
+      "Pull"
+    ],
+    "description": "Command Pull"
+  },
+  "cmd: Mov": {
+    "prefix": "mov",
+    "body": [
+      "Mov"
+    ],
+    "description": "Command Mov"
+  },
+  "cmd: Nop": {
+    "prefix": "nop",
+    "body": [
+      "Nop"
+    ],
+    "description": "Command Nop"
+  },
+  "cmd: IRQ SET": {
+    "prefix": "irq set",
+    "body": [
+      "IRQ SET"
+    ],
+    "description": "Command IRQ SET"
+  },
+  "cmd: IRQ WAIT": {
+    "prefix": "irq wait",
+    "body": [
+      "IRQ WAIT"
+    ],
+    "description": "Command IRQ WAIT"
+  },
+  "cmd: IRQ CLEAR": {
+    "prefix": "irq clear",
+    "body": [
+      "IRQ CLEAR"
+    ],
+    "description": "Command IRQ CLEAR"
+  },
+  "cmd: IRQ NOWAIT": {
+    "prefix": "irq nowait",
+    "body": [
+      "IRQ NOWAIT"
+    ],
+    "description": "Command IRQ NOWAIT"
+  },
+  "cmd: IRQ PREV": {
+    "prefix": "irq prev",
+    "body": [
+      "IRQ PREV"
+    ],
+    "description": "Command IRQ PREV"
+  },
+  "cmd: IRQ NEXT": {
+    "prefix": "irq next",
+    "body": [
+      "IRQ NEXT"
+    ],
+    "description": "Command IRQ NEXT"
+  },
+  "cmd: IRQ": {
+    "prefix": "irq",
+    "body": [
+      "IRQ"
+    ],
+    "description": "Command IRQ"
+  },
+  "cmd: Set": {
+    "prefix": "set",
+    "body": [
+      "Set"
+    ],
+    "description": "Command Set"
+  },
+  "cmd: Byte(": {
+    "prefix": "byte(",
+    "body": [
+      "Byte("
+    ],
+    "description": "Command Byte("
+  },
+  "cmd: Flag(": {
+    "prefix": "flag(",
+    "body": [
+      "Flag("
+    ],
+    "description": "Command Flag("
+  },
+  "cmd: TILE": {
+    "prefix": "tile",
+    "body": [
+      "TILE"
+    ],
+    "description": "Command TILE"
+  },
+  "cmd: TILE HEIGHT": {
+    "prefix": "tile height",
+    "body": [
+      "TILE HEIGHT"
+    ],
+    "description": "Command TILE HEIGHT"
+  },
+  "cmd: TILE RESET": {
+    "prefix": "tile reset",
+    "body": [
+      "TILE RESET"
+    ],
+    "description": "Command TILE RESET"
+  },
+  "cmd: MODE": {
+    "prefix": "mode",
+    "body": [
+      "MODE"
+    ],
+    "description": "Command MODE"
+  },
+  "cmd: MODE 400": {
+    "prefix": "mode 400",
+    "body": [
+      "MODE 400"
+    ],
+    "description": "Command MODE 400"
+  },
+  "cmd: MODE 800": {
+    "prefix": "mode 800",
+    "body": [
+      "MODE 800"
+    ],
+    "description": "Command MODE 800"
+  },
+  "cmd: Map(": {
+    "prefix": "map(",
+    "body": [
+      "Map("
+    ],
+    "description": "Command Map("
+  },
+  "cmd: Map( GRAYSCALE": {
+    "prefix": "map( grayscale",
+    "body": [
+      "Map( GRAYSCALE"
+    ],
+    "description": "Command Map( GRAYSCALE"
+  },
+  "cmd: Map( MAXIMITE": {
+    "prefix": "map( maximite",
+    "body": [
+      "Map( MAXIMITE"
+    ],
+    "description": "Command Map( MAXIMITE"
+  },
+  "cmd: Map( RESET": {
+    "prefix": "map( reset",
+    "body": [
+      "Map( RESET"
+    ],
+    "description": "Command Map( RESET"
+  },
+  "cmd: Map( SET": {
+    "prefix": "map( set",
+    "body": [
+      "Map( SET"
+    ],
+    "description": "Command Map( SET"
+  },
+  "cmd: Map": {
+    "prefix": "map",
+    "body": [
+      "Map"
+    ],
+    "description": "Command Map"
+  },
+  "cmd: Map GRAYSCALE": {
+    "prefix": "map grayscale",
+    "body": [
+      "Map GRAYSCALE"
+    ],
+    "description": "Command Map GRAYSCALE"
+  },
+  "cmd: Map MAXIMITE": {
+    "prefix": "map maximite",
+    "body": [
+      "Map MAXIMITE"
+    ],
+    "description": "Command Map MAXIMITE"
+  },
+  "cmd: Map RESET": {
+    "prefix": "map reset",
+    "body": [
+      "Map RESET"
+    ],
+    "description": "Command Map RESET"
+  },
+  "cmd: Map SET": {
+    "prefix": "map set",
+    "body": [
+      "Map SET"
+    ],
+    "description": "Command Map SET"
+  },
+  "cmd: Camera": {
+    "prefix": "camera",
+    "body": [
+      "Camera"
+    ],
+    "description": "Command Camera"
+  },
+  "cmd: Camera CAPTURE": {
+    "prefix": "camera capture",
+    "body": [
+      "Camera CAPTURE"
+    ],
+    "description": "Command Camera CAPTURE"
+  },
+  "cmd: Camera CHANGE": {
+    "prefix": "camera change",
+    "body": [
+      "Camera CHANGE"
+    ],
+    "description": "Command Camera CHANGE"
+  },
+  "cmd: Camera CLOSE": {
+    "prefix": "camera close",
+    "body": [
+      "Camera CLOSE"
+    ],
+    "description": "Command Camera CLOSE"
+  },
+  "cmd: Camera OPEN": {
+    "prefix": "camera open",
+    "body": [
+      "Camera OPEN"
+    ],
+    "description": "Command Camera OPEN"
+  },
+  "cmd: Camera REGISTER": {
+    "prefix": "camera register",
+    "body": [
+      "Camera REGISTER"
+    ],
+    "description": "Command Camera REGISTER"
+  },
+  "cmd: Camera TEST": {
+    "prefix": "camera test",
+    "body": [
+      "Camera TEST"
+    ],
+    "description": "Command Camera TEST"
+  },
+  "cmd: Refresh": {
+    "prefix": "refresh",
+    "body": [
+      "Refresh"
+    ],
+    "description": "Command Refresh"
+  },
+  "cmd: CtrlVal(": {
+    "prefix": "ctrlval(",
+    "body": [
+      "CtrlVal("
+    ],
+    "description": "Command CtrlVal("
+  },
+  "cmd: Backlight": {
+    "prefix": "backlight",
+    "body": [
+      "Backlight"
+    ],
+    "description": "Command Backlight"
+  },
+  "cmd: WEB": {
+    "prefix": "web",
+    "body": [
+      "WEB"
+    ],
+    "description": "Command WEB"
+  },
+  "cmd: WEB CONNECT": {
+    "prefix": "web connect",
+    "body": [
+      "WEB CONNECT"
+    ],
+    "description": "Command WEB CONNECT"
+  },
+  "cmd: WEB NTP": {
+    "prefix": "web ntp",
+    "body": [
+      "WEB NTP"
+    ],
+    "description": "Command WEB NTP"
+  },
+  "cmd: WEB SCAN": {
+    "prefix": "web scan",
+    "body": [
+      "WEB SCAN"
+    ],
+    "description": "Command WEB SCAN"
+  },
+  "cmd: WEB UDP": {
+    "prefix": "web udp",
+    "body": [
+      "WEB UDP"
+    ],
+    "description": "Command WEB UDP"
+  },
+  "cmd: Draw3D": {
+    "prefix": "draw3d",
+    "body": [
+      "Draw3D"
+    ],
+    "description": "Command Draw3D"
+  },
+  "cmd: Draw3D CAMERA": {
+    "prefix": "draw3d camera",
+    "body": [
+      "Draw3D CAMERA"
+    ],
+    "description": "Command Draw3D CAMERA"
+  },
+  "cmd: Draw3D CLOSE": {
+    "prefix": "draw3d close",
+    "body": [
+      "Draw3D CLOSE"
+    ],
+    "description": "Command Draw3D CLOSE"
+  },
+  "cmd: Draw3D CLOSE ALL": {
+    "prefix": "draw3d close all",
+    "body": [
+      "Draw3D CLOSE ALL"
+    ],
+    "description": "Command Draw3D CLOSE ALL"
+  },
+  "cmd: Draw3D CREATE": {
+    "prefix": "draw3d create",
+    "body": [
+      "Draw3D CREATE"
+    ],
+    "description": "Command Draw3D CREATE"
+  },
+  "cmd: Draw3D DIAGNOSE": {
+    "prefix": "draw3d diagnose",
+    "body": [
+      "Draw3D DIAGNOSE"
+    ],
+    "description": "Command Draw3D DIAGNOSE"
+  },
+  "cmd: Draw3D HIDE": {
+    "prefix": "draw3d hide",
+    "body": [
+      "Draw3D HIDE"
+    ],
+    "description": "Command Draw3D HIDE"
+  },
+  "cmd: Draw3D HIDE ALL": {
+    "prefix": "draw3d hide all",
+    "body": [
+      "Draw3D HIDE ALL"
+    ],
+    "description": "Command Draw3D HIDE ALL"
+  },
+  "cmd: Draw3D LIGHT": {
+    "prefix": "draw3d light",
+    "body": [
+      "Draw3D LIGHT"
+    ],
+    "description": "Command Draw3D LIGHT"
+  },
+  "cmd: Draw3D RESET": {
+    "prefix": "draw3d reset",
+    "body": [
+      "Draw3D RESET"
+    ],
+    "description": "Command Draw3D RESET"
+  },
+  "cmd: Draw3D RESTORE": {
+    "prefix": "draw3d restore",
+    "body": [
+      "Draw3D RESTORE"
+    ],
+    "description": "Command Draw3D RESTORE"
+  },
+  "cmd: Draw3D ROTATE": {
+    "prefix": "draw3d rotate",
+    "body": [
+      "Draw3D ROTATE"
+    ],
+    "description": "Command Draw3D ROTATE"
+  },
+  "cmd: Draw3D SET FLAGS": {
+    "prefix": "draw3d set flags",
+    "body": [
+      "Draw3D SET FLAGS"
+    ],
+    "description": "Command Draw3D SET FLAGS"
+  },
+  "cmd: Draw3D SHOW": {
+    "prefix": "draw3d show",
+    "body": [
+      "Draw3D SHOW"
+    ],
+    "description": "Command Draw3D SHOW"
+  },
+  "cmd: Draw3D WRITE": {
+    "prefix": "draw3d write",
+    "body": [
+      "Draw3D WRITE"
+    ],
+    "description": "Command Draw3D WRITE"
+  },
+  "cmd: Update Firmware": {
+    "prefix": "update firmware",
+    "body": [
+      "Update Firmware"
+    ],
+    "description": "Command Update Firmware"
+  },
+  "cmd: Gamepad": {
+    "prefix": "gamepad",
+    "body": [
+      "Gamepad"
+    ],
+    "description": "Command Gamepad"
+  },
+  "cmd: Gamepad COLOUR": {
+    "prefix": "gamepad colour",
+    "body": [
+      "Gamepad COLOUR"
+    ],
+    "description": "Command Gamepad COLOUR"
+  },
+  "cmd: Gamepad CONFIGURE": {
+    "prefix": "gamepad configure",
+    "body": [
+      "Gamepad CONFIGURE"
+    ],
+    "description": "Command Gamepad CONFIGURE"
+  },
+  "cmd: Gamepad HAPTIC": {
+    "prefix": "gamepad haptic",
+    "body": [
+      "Gamepad HAPTIC"
+    ],
+    "description": "Command Gamepad HAPTIC"
+  },
+  "cmd: Gamepad INTERRUPT DISABLE": {
+    "prefix": "gamepad interrupt disable",
+    "body": [
+      "Gamepad INTERRUPT DISABLE"
+    ],
+    "description": "Command Gamepad INTERRUPT DISABLE"
+  },
+  "cmd: Gamepad INTERRUPT ENABLE": {
+    "prefix": "gamepad interrupt enable",
+    "body": [
+      "Gamepad INTERRUPT ENABLE"
+    ],
+    "description": "Command Gamepad INTERRUPT ENABLE"
+  },
+  "cmd: Gamepad MONITOR": {
+    "prefix": "gamepad monitor",
+    "body": [
+      "Gamepad MONITOR"
+    ],
+    "description": "Command Gamepad MONITOR"
+  },
+  "cmd: Gamepad MONITOR SILENT": {
+    "prefix": "gamepad monitor silent",
+    "body": [
+      "Gamepad MONITOR SILENT"
+    ],
+    "description": "Command Gamepad MONITOR SILENT"
+  },
+  "cmd: Configure": {
+    "prefix": "configure",
+    "body": [
+      "Configure"
+    ],
+    "description": "Command Configure"
+  },
+  "cmd: Colour": {
+    "prefix": "colour",
+    "body": [
+      "Colour"
+    ],
+    "description": "Command Colour"
+  },
+  "cmd: CMM2 Load": {
+    "prefix": "cmm2 load",
+    "body": [
+      "CMM2 Load"
+    ],
+    "description": "Command CMM2 Load"
+  },
+  "cmd: CMM2 Run": {
+    "prefix": "cmm2 run",
+    "body": [
+      "CMM2 Run"
+    ],
+    "description": "Command CMM2 Run"
+  },
+  "cmd: Randomize": {
+    "prefix": "randomize",
+    "body": [
+      "Randomize"
+    ],
+    "description": "Command Randomize"
+  },
+  "cmd: Ram": {
+    "prefix": "ram",
+    "body": [
+      "Ram"
+    ],
+    "description": "Command Ram"
+  },
+  "cmd: Ram CHAIN": {
+    "prefix": "ram chain",
+    "body": [
+      "Ram CHAIN"
+    ],
+    "description": "Command Ram CHAIN"
+  },
+  "cmd: Ram ERASE": {
+    "prefix": "ram erase",
+    "body": [
+      "Ram ERASE"
+    ],
+    "description": "Command Ram ERASE"
+  },
+  "cmd: Ram ERASE ALL": {
+    "prefix": "ram erase all",
+    "body": [
+      "Ram ERASE ALL"
+    ],
+    "description": "Command Ram ERASE ALL"
+  },
+  "cmd: Ram FILE LOAD": {
+    "prefix": "ram file load",
+    "body": [
+      "Ram FILE LOAD"
+    ],
+    "description": "Command Ram FILE LOAD"
+  },
+  "cmd: Ram LIST": {
+    "prefix": "ram list",
+    "body": [
+      "Ram LIST"
+    ],
+    "description": "Command Ram LIST"
+  },
+  "cmd: Ram LOAD": {
+    "prefix": "ram load",
+    "body": [
+      "Ram LOAD"
+    ],
+    "description": "Command Ram LOAD"
+  },
+  "cmd: Ram OVERWRITE": {
+    "prefix": "ram overwrite",
+    "body": [
+      "Ram OVERWRITE"
+    ],
+    "description": "Command Ram OVERWRITE"
+  },
+  "cmd: Ram RUN": {
+    "prefix": "ram run",
+    "body": [
+      "Ram RUN"
+    ],
+    "description": "Command Ram RUN"
+  },
+  "cmd: Ram SAVE": {
+    "prefix": "ram save",
+    "body": [
+      "Ram SAVE"
+    ],
+    "description": "Command Ram SAVE"
+  },
+  "cmd: Bit(": {
+    "prefix": "bit(",
+    "body": [
+      "Bit("
+    ],
+    "description": "Command Bit("
+  },
+  "cmd: Flags": {
+    "prefix": "flags",
+    "body": [
+      "Flags"
+    ],
+    "description": "Command Flags"
+  },
+  "cmd: Help": {
+    "prefix": "help",
+    "body": [
+      "Help"
+    ],
+    "description": "Command Help"
+  },
+  "cmd: Array Slice": {
+    "prefix": "array slice",
+    "body": [
+      "Array Slice"
+    ],
+    "description": "Command Array Slice"
+  },
+  "cmd: Array Insert": {
+    "prefix": "array insert",
+    "body": [
+      "Array Insert"
+    ],
+    "description": "Command Array Insert"
+  },
+  "cmd: Array Add": {
+    "prefix": "array add",
+    "body": [
+      "Array Add"
+    ],
+    "description": "Command Array Add"
+  },
+  "cmd: Array Set": {
+    "prefix": "array set",
+    "body": [
+      "Array Set"
+    ],
+    "description": "Command Array Set"
+  },
+  "cmd: Mode": {
+    "prefix": "mode",
+    "body": [
+      "Mode"
+    ],
+    "description": "Command Mode"
+  },
+  "cmd: Mode 400": {
+    "prefix": "mode 400",
+    "body": [
+      "Mode 400"
+    ],
+    "description": "Command Mode 400"
+  },
+  "cmd: Mode 800": {
+    "prefix": "mode 800",
+    "body": [
+      "Mode 800"
+    ],
+    "description": "Command Mode 800"
+  },
+  "cmd: Fill": {
+    "prefix": "fill",
+    "body": [
+      "Fill"
+    ],
+    "description": "Command Fill"
+  },
+  "cmd: YModem": {
+    "prefix": "ymodem",
+    "body": [
+      "YModem"
+    ],
+    "description": "Command YModem"
+  },
+  "cmd: Turtle": {
+    "prefix": "turtle",
+    "body": [
+      "Turtle"
+    ],
+    "description": "Command Turtle"
+  },
+  "cmd: Turtle ARC": {
+    "prefix": "turtle arc",
+    "body": [
+      "Turtle ARC"
+    ],
+    "description": "Command Turtle ARC"
+  },
+  "cmd: Turtle ARCL": {
+    "prefix": "turtle arcl",
+    "body": [
+      "Turtle ARCL"
+    ],
+    "description": "Command Turtle ARCL"
+  },
+  "cmd: Turtle ARCR": {
+    "prefix": "turtle arcr",
+    "body": [
+      "Turtle ARCR"
+    ],
+    "description": "Command Turtle ARCR"
+  },
+  "cmd: Turtle ARECTANGLE": {
+    "prefix": "turtle arectangle",
+    "body": [
+      "Turtle ARECTANGLE"
+    ],
+    "description": "Command Turtle ARECTANGLE"
+  },
+  "cmd: Turtle BACK": {
+    "prefix": "turtle back",
+    "body": [
+      "Turtle BACK"
+    ],
+    "description": "Command Turtle BACK"
+  },
+  "cmd: Turtle BEGIN FILL": {
+    "prefix": "turtle begin fill",
+    "body": [
+      "Turtle BEGIN FILL"
+    ],
+    "description": "Command Turtle BEGIN FILL"
+  },
+  "cmd: Turtle BEZIER": {
+    "prefix": "turtle bezier",
+    "body": [
+      "Turtle BEZIER"
+    ],
+    "description": "Command Turtle BEZIER"
+  },
+  "cmd: Turtle CIRCLE": {
+    "prefix": "turtle circle",
+    "body": [
+      "Turtle CIRCLE"
+    ],
+    "description": "Command Turtle CIRCLE"
+  },
+  "cmd: Turtle CURSOR COLOUR": {
+    "prefix": "turtle cursor colour",
+    "body": [
+      "Turtle CURSOR COLOUR"
+    ],
+    "description": "Command Turtle CURSOR COLOUR"
+  },
+  "cmd: Turtle CURSOR SIZE": {
+    "prefix": "turtle cursor size",
+    "body": [
+      "Turtle CURSOR SIZE"
+    ],
+    "description": "Command Turtle CURSOR SIZE"
+  },
+  "cmd: Turtle DOT": {
+    "prefix": "turtle dot",
+    "body": [
+      "Turtle DOT"
+    ],
+    "description": "Command Turtle DOT"
+  },
+  "cmd: Turtle END FILL": {
+    "prefix": "turtle end fill",
+    "body": [
+      "Turtle END FILL"
+    ],
+    "description": "Command Turtle END FILL"
+  },
+  "cmd: Turtle FCIRCLE": {
+    "prefix": "turtle fcircle",
+    "body": [
+      "Turtle FCIRCLE"
+    ],
+    "description": "Command Turtle FCIRCLE"
+  },
+  "cmd: Turtle FILL COLOUR": {
+    "prefix": "turtle fill colour",
+    "body": [
+      "Turtle FILL COLOUR"
+    ],
+    "description": "Command Turtle FILL COLOUR"
+  },
+  "cmd: Turtle FILL PATTERN": {
+    "prefix": "turtle fill pattern",
+    "body": [
+      "Turtle FILL PATTERN"
+    ],
+    "description": "Command Turtle FILL PATTERN"
+  },
+  "cmd: Turtle FORWARD": {
+    "prefix": "turtle forward",
+    "body": [
+      "Turtle FORWARD"
+    ],
+    "description": "Command Turtle FORWARD"
+  },
+  "cmd: Turtle FRECTANGLE": {
+    "prefix": "turtle frectangle",
+    "body": [
+      "Turtle FRECTANGLE"
+    ],
+    "description": "Command Turtle FRECTANGLE"
+  },
+  "cmd: Turtle HIDE TURTLE": {
+    "prefix": "turtle hide turtle",
+    "body": [
+      "Turtle HIDE TURTLE"
+    ],
+    "description": "Command Turtle HIDE TURTLE"
+  },
+  "cmd: Turtle HOME": {
+    "prefix": "turtle home",
+    "body": [
+      "Turtle HOME"
+    ],
+    "description": "Command Turtle HOME"
+  },
+  "cmd: Turtle LEFT": {
+    "prefix": "turtle left",
+    "body": [
+      "Turtle LEFT"
+    ],
+    "description": "Command Turtle LEFT"
+  },
+  "cmd: Turtle NOFILL": {
+    "prefix": "turtle nofill",
+    "body": [
+      "Turtle NOFILL"
+    ],
+    "description": "Command Turtle NOFILL"
+  },
+  "cmd: Turtle PEN COLOUR": {
+    "prefix": "turtle pen colour",
+    "body": [
+      "Turtle PEN COLOUR"
+    ],
+    "description": "Command Turtle PEN COLOUR"
+  },
+  "cmd: Turtle PEN DOWN": {
+    "prefix": "turtle pen down",
+    "body": [
+      "Turtle PEN DOWN"
+    ],
+    "description": "Command Turtle PEN DOWN"
+  },
+  "cmd: Turtle PEN UP": {
+    "prefix": "turtle pen up",
+    "body": [
+      "Turtle PEN UP"
+    ],
+    "description": "Command Turtle PEN UP"
+  },
+  "cmd: Turtle PEN WIDTH": {
+    "prefix": "turtle pen width",
+    "body": [
+      "Turtle PEN WIDTH"
+    ],
+    "description": "Command Turtle PEN WIDTH"
+  },
+  "cmd: Turtle POP": {
+    "prefix": "turtle pop",
+    "body": [
+      "Turtle POP"
+    ],
+    "description": "Command Turtle POP"
+  },
+  "cmd: Turtle PUSH": {
+    "prefix": "turtle push",
+    "body": [
+      "Turtle PUSH"
+    ],
+    "description": "Command Turtle PUSH"
+  },
+  "cmd: Turtle RESET": {
+    "prefix": "turtle reset",
+    "body": [
+      "Turtle RESET"
+    ],
+    "description": "Command Turtle RESET"
+  },
+  "cmd: Turtle RIGHT": {
+    "prefix": "turtle right",
+    "body": [
+      "Turtle RIGHT"
+    ],
+    "description": "Command Turtle RIGHT"
+  },
+  "cmd: Turtle SET HEADING": {
+    "prefix": "turtle set heading",
+    "body": [
+      "Turtle SET HEADING"
+    ],
+    "description": "Command Turtle SET HEADING"
+  },
+  "cmd: Turtle SET X": {
+    "prefix": "turtle set x",
+    "body": [
+      "Turtle SET X"
+    ],
+    "description": "Command Turtle SET X"
+  },
+  "cmd: Turtle SET XY": {
+    "prefix": "turtle set xy",
+    "body": [
+      "Turtle SET XY"
+    ],
+    "description": "Command Turtle SET XY"
+  },
+  "cmd: Turtle SET Y": {
+    "prefix": "turtle set y",
+    "body": [
+      "Turtle SET Y"
+    ],
+    "description": "Command Turtle SET Y"
+  },
+  "cmd: Turtle SHOW TURTLE": {
+    "prefix": "turtle show turtle",
+    "body": [
+      "Turtle SHOW TURTLE"
+    ],
+    "description": "Command Turtle SHOW TURTLE"
+  },
+  "cmd: Turtle STAMP": {
+    "prefix": "turtle stamp",
+    "body": [
+      "Turtle STAMP"
+    ],
+    "description": "Command Turtle STAMP"
+  },
+  "cmd: Turtle WEDGE": {
+    "prefix": "turtle wedge",
+    "body": [
+      "Turtle WEDGE"
+    ],
+    "description": "Command Turtle WEDGE"
+  },
+  "cmd: LMid(": {
+    "prefix": "lmid(",
+    "body": [
+      "LMid("
+    ],
+    "description": "Command LMid("
+  },
+  "cmd: ReDim": {
+    "prefix": "redim",
+    "body": [
+      "ReDim"
+    ],
+    "description": "Command ReDim"
+  },
+  "cmd: ReDim PRESERVE": {
+    "prefix": "redim preserve",
+    "body": [
+      "ReDim PRESERVE"
+    ],
+    "description": "Command ReDim PRESERVE"
+  },
+  "cmd: Bezier": {
+    "prefix": "bezier",
+    "body": [
+      "Bezier"
+    ],
+    "description": "Command Bezier"
+  },
+  "cmd: Star": {
+    "prefix": "star",
+    "body": [
+      "Star"
+    ],
+    "description": "Command Star"
+  },
+  "cmd: Astro": {
+    "prefix": "astro",
+    "body": [
+      "Astro"
+    ],
+    "description": "Command Astro"
+  },
+  "cmd: Location": {
+    "prefix": "location",
+    "body": [
+      "Location"
+    ],
+    "description": "Command Location"
+  },
+  "cmd: Stepper": {
+    "prefix": "stepper",
+    "body": [
+      "Stepper"
+    ],
+    "description": "Command Stepper"
+  },
+  "cmd: Stepper ARC": {
+    "prefix": "stepper arc",
+    "body": [
+      "Stepper ARC"
+    ],
+    "description": "Command Stepper ARC"
+  },
+  "cmd: Stepper AXIS": {
+    "prefix": "stepper axis",
+    "body": [
+      "Stepper AXIS"
+    ],
+    "description": "Command Stepper AXIS"
+  },
+  "cmd: Stepper BUFFER": {
+    "prefix": "stepper buffer",
+    "body": [
+      "Stepper BUFFER"
+    ],
+    "description": "Command Stepper BUFFER"
+  },
+  "cmd: Stepper CLEAR": {
+    "prefix": "stepper clear",
+    "body": [
+      "Stepper CLEAR"
+    ],
+    "description": "Command Stepper CLEAR"
+  },
+  "cmd: Stepper CLOSE": {
+    "prefix": "stepper close",
+    "body": [
+      "Stepper CLOSE"
+    ],
+    "description": "Command Stepper CLOSE"
+  },
+  "cmd: Stepper ENABLE": {
+    "prefix": "stepper enable",
+    "body": [
+      "Stepper ENABLE"
+    ],
+    "description": "Command Stepper ENABLE"
+  },
+  "cmd: Stepper ESTOP": {
+    "prefix": "stepper estop",
+    "body": [
+      "Stepper ESTOP"
+    ],
+    "description": "Command Stepper ESTOP"
+  },
+  "cmd: Stepper GC": {
+    "prefix": "stepper gc",
+    "body": [
+      "Stepper GC"
+    ],
+    "description": "Command Stepper GC"
+  },
+  "cmd: Stepper GCODE": {
+    "prefix": "stepper gcode",
+    "body": [
+      "Stepper GCODE"
+    ],
+    "description": "Command Stepper GCODE"
+  },
+  "cmd: Stepper HWLIMITS": {
+    "prefix": "stepper hwlimits",
+    "body": [
+      "Stepper HWLIMITS"
+    ],
+    "description": "Command Stepper HWLIMITS"
+  },
+  "cmd: Stepper INIT": {
+    "prefix": "stepper init",
+    "body": [
+      "Stepper INIT"
+    ],
+    "description": "Command Stepper INIT"
+  },
+  "cmd: Stepper INVERT": {
+    "prefix": "stepper invert",
+    "body": [
+      "Stepper INVERT"
+    ],
+    "description": "Command Stepper INVERT"
+  },
+  "cmd: Stepper JERK": {
+    "prefix": "stepper jerk",
+    "body": [
+      "Stepper JERK"
+    ],
+    "description": "Command Stepper JERK"
+  },
+  "cmd: Stepper LIMITS": {
+    "prefix": "stepper limits",
+    "body": [
+      "Stepper LIMITS"
+    ],
+    "description": "Command Stepper LIMITS"
+  },
+  "cmd: Stepper POSITION": {
+    "prefix": "stepper position",
+    "body": [
+      "Stepper POSITION"
+    ],
+    "description": "Command Stepper POSITION"
+  },
+  "cmd: Stepper RECOVER": {
+    "prefix": "stepper recover",
+    "body": [
+      "Stepper RECOVER"
+    ],
+    "description": "Command Stepper RECOVER"
+  },
+  "cmd: Stepper RESET": {
+    "prefix": "stepper reset",
+    "body": [
+      "Stepper RESET"
+    ],
+    "description": "Command Stepper RESET"
+  },
+  "cmd: Stepper RUN": {
+    "prefix": "stepper run",
+    "body": [
+      "Stepper RUN"
+    ],
+    "description": "Command Stepper RUN"
+  },
+  "cmd: Stepper SCURVE": {
+    "prefix": "stepper scurve",
+    "body": [
+      "Stepper SCURVE"
+    ],
+    "description": "Command Stepper SCURVE"
+  },
+  "cmd: Stepper SPINDLE": {
+    "prefix": "stepper spindle",
+    "body": [
+      "Stepper SPINDLE"
+    ],
+    "description": "Command Stepper SPINDLE"
+  },
+  "cmd: Stepper STATUS": {
+    "prefix": "stepper status",
+    "body": [
+      "Stepper STATUS"
+    ],
+    "description": "Command Stepper STATUS"
+  },
+  "cmd: Frame": {
+    "prefix": "frame",
+    "body": [
+      "Frame"
+    ],
+    "description": "Command Frame"
+  },
+  "cmd: Frame BOX": {
+    "prefix": "frame box",
+    "body": [
+      "Frame BOX"
+    ],
+    "description": "Command Frame BOX"
+  },
+  "cmd: Frame CLEAR": {
+    "prefix": "frame clear",
+    "body": [
+      "Frame CLEAR"
+    ],
+    "description": "Command Frame CLEAR"
+  },
+  "cmd: Frame CLOSE": {
+    "prefix": "frame close",
+    "body": [
+      "Frame CLOSE"
+    ],
+    "description": "Command Frame CLOSE"
+  },
+  "cmd: Frame CLS": {
+    "prefix": "frame cls",
+    "body": [
+      "Frame CLS"
+    ],
+    "description": "Command Frame CLS"
+  },
+  "cmd: Frame COLOUR": {
+    "prefix": "frame colour",
+    "body": [
+      "Frame COLOUR"
+    ],
+    "description": "Command Frame COLOUR"
+  },
+  "cmd: Frame CREATE": {
+    "prefix": "frame create",
+    "body": [
+      "Frame CREATE"
+    ],
+    "description": "Command Frame CREATE"
+  },
+  "cmd: Frame CURSOR": {
+    "prefix": "frame cursor",
+    "body": [
+      "Frame CURSOR"
+    ],
+    "description": "Command Frame CURSOR"
+  },
+  "cmd: Frame DESTROY": {
+    "prefix": "frame destroy",
+    "body": [
+      "Frame DESTROY"
+    ],
+    "description": "Command Frame DESTROY"
+  },
+  "cmd: Frame HIDE": {
+    "prefix": "frame hide",
+    "body": [
+      "Frame HIDE"
+    ],
+    "description": "Command Frame HIDE"
+  },
+  "cmd: Frame HLINE": {
+    "prefix": "frame hline",
+    "body": [
+      "Frame HLINE"
+    ],
+    "description": "Command Frame HLINE"
+  },
+  "cmd: Frame INPUT": {
+    "prefix": "frame input",
+    "body": [
+      "Frame INPUT"
+    ],
+    "description": "Command Frame INPUT"
+  },
+  "cmd: Frame OVERLAY": {
+    "prefix": "frame overlay",
+    "body": [
+      "Frame OVERLAY"
+    ],
+    "description": "Command Frame OVERLAY"
+  },
+  "cmd: Frame PANEL": {
+    "prefix": "frame panel",
+    "body": [
+      "Frame PANEL"
+    ],
+    "description": "Command Frame PANEL"
+  },
+  "cmd: Frame PRINT": {
+    "prefix": "frame print",
+    "body": [
+      "Frame PRINT"
+    ],
+    "description": "Command Frame PRINT"
+  },
+  "cmd: Frame SCROLL": {
+    "prefix": "frame scroll",
+    "body": [
+      "Frame SCROLL"
+    ],
+    "description": "Command Frame SCROLL"
+  },
+  "cmd: Frame SHOW": {
+    "prefix": "frame show",
+    "body": [
+      "Frame SHOW"
+    ],
+    "description": "Command Frame SHOW"
+  },
+  "cmd: Frame TITLE": {
+    "prefix": "frame title",
+    "body": [
+      "Frame TITLE"
+    ],
+    "description": "Command Frame TITLE"
+  },
+  "cmd: Frame VBUF": {
+    "prefix": "frame vbuf",
+    "body": [
+      "Frame VBUF"
+    ],
+    "description": "Command Frame VBUF"
+  },
+  "cmd: Frame WRITE": {
+    "prefix": "frame write",
+    "body": [
+      "Frame WRITE"
+    ],
+    "description": "Command Frame WRITE"
+  },
+  "cmd: Ray": {
+    "prefix": "ray",
+    "body": [
+      "Ray"
+    ],
+    "description": "Command Ray"
+  },
+  "cmd: Ray CAMERA": {
+    "prefix": "ray camera",
+    "body": [
+      "Ray CAMERA"
+    ],
+    "description": "Command Ray CAMERA"
+  },
+  "cmd: Ray CAST": {
+    "prefix": "ray cast",
+    "body": [
+      "Ray CAST"
+    ],
+    "description": "Command Ray CAST"
+  },
+  "cmd: Ray CELL": {
+    "prefix": "ray cell",
+    "body": [
+      "Ray CELL"
+    ],
+    "description": "Command Ray CELL"
+  },
+  "cmd: Ray CLOSE": {
+    "prefix": "ray close",
+    "body": [
+      "Ray CLOSE"
+    ],
+    "description": "Command Ray CLOSE"
+  },
+  "cmd: Ray COLOR": {
+    "prefix": "ray color",
+    "body": [
+      "Ray COLOR"
+    ],
+    "description": "Command Ray COLOR"
+  },
+  "cmd: Ray COLOUR": {
+    "prefix": "ray colour",
+    "body": [
+      "Ray COLOUR"
+    ],
+    "description": "Command Ray COLOUR"
+  },
+  "cmd: Ray DEFINE": {
+    "prefix": "ray define",
+    "body": [
+      "Ray DEFINE"
+    ],
+    "description": "Command Ray DEFINE"
+  },
+  "cmd: Ray DOOR": {
+    "prefix": "ray door",
+    "body": [
+      "Ray DOOR"
+    ],
+    "description": "Command Ray DOOR"
+  },
+  "cmd: Ray MAP": {
+    "prefix": "ray map",
+    "body": [
+      "Ray MAP"
+    ],
+    "description": "Command Ray MAP"
+  },
+  "cmd: Ray MINIMAP": {
+    "prefix": "ray minimap",
+    "body": [
+      "Ray MINIMAP"
+    ],
+    "description": "Command Ray MINIMAP"
+  },
+  "cmd: Ray MOVE": {
+    "prefix": "ray move",
+    "body": [
+      "Ray MOVE"
+    ],
+    "description": "Command Ray MOVE"
+  },
+  "cmd: Ray RENDER": {
+    "prefix": "ray render",
+    "body": [
+      "Ray RENDER"
+    ],
+    "description": "Command Ray RENDER"
+  },
+  "cmd: Ray SPRITE": {
+    "prefix": "ray sprite",
+    "body": [
+      "Ray SPRITE"
+    ],
+    "description": "Command Ray SPRITE"
+  },
+  "cmd: Ray TURN": {
+    "prefix": "ray turn",
+    "body": [
+      "Ray TURN"
+    ],
+    "description": "Command Ray TURN"
+  },
+  "cmd: Type": {
+    "prefix": "type",
+    "body": [
+      "Type"
+    ],
+    "description": "Command Type"
+  },
+  "cmd: End Type": {
+    "prefix": "end type",
+    "body": [
+      "End Type"
+    ],
+    "description": "Command End Type"
+  },
+  "cmd: Struct": {
+    "prefix": "struct",
+    "body": [
+      "Struct"
+    ],
+    "description": "Command Struct"
+  },
+  "cmd: Struct CLEAR": {
+    "prefix": "struct clear",
+    "body": [
+      "Struct CLEAR"
+    ],
+    "description": "Command Struct CLEAR"
+  },
+  "cmd: Struct COPY": {
+    "prefix": "struct copy",
+    "body": [
+      "Struct COPY"
+    ],
+    "description": "Command Struct COPY"
+  },
+  "cmd: Struct EXTRACT": {
+    "prefix": "struct extract",
+    "body": [
+      "Struct EXTRACT"
+    ],
+    "description": "Command Struct EXTRACT"
+  },
+  "cmd: Struct INSERT": {
+    "prefix": "struct insert",
+    "body": [
+      "Struct INSERT"
+    ],
+    "description": "Command Struct INSERT"
+  },
+  "cmd: Struct LOAD": {
+    "prefix": "struct load",
+    "body": [
+      "Struct LOAD"
+    ],
+    "description": "Command Struct LOAD"
+  },
+  "cmd: Struct PRINT": {
+    "prefix": "struct print",
+    "body": [
+      "Struct PRINT"
+    ],
+    "description": "Command Struct PRINT"
+  },
+  "cmd: Struct SAVE": {
+    "prefix": "struct save",
+    "body": [
+      "Struct SAVE"
+    ],
+    "description": "Command Struct SAVE"
+  },
+  "cmd: Struct SORT": {
+    "prefix": "struct sort",
+    "body": [
+      "Struct SORT"
+    ],
+    "description": "Command Struct SORT"
+  },
+  "cmd: Struct SWAP": {
+    "prefix": "struct swap",
+    "body": [
+      "Struct SWAP"
+    ],
+    "description": "Command Struct SWAP"
+  },
+  "cmd: XModem": {
+    "prefix": "xmodem",
+    "body": [
+      "XModem"
+    ],
+    "description": "Command XModem"
+  },
+  "cmd: I2CLCD": {
+    "prefix": "i2clcd",
+    "body": [
+      "I2CLCD"
+    ],
+    "description": "Command I2CLCD"
+  },
+  "cmd: I2CLCD BACKLIGHT": {
+    "prefix": "i2clcd backlight",
+    "body": [
+      "I2CLCD BACKLIGHT"
+    ],
+    "description": "Command I2CLCD BACKLIGHT"
+  },
+  "cmd: I2CLCD CLEAR": {
+    "prefix": "i2clcd clear",
+    "body": [
+      "I2CLCD CLEAR"
+    ],
+    "description": "Command I2CLCD CLEAR"
+  },
+  "cmd: I2CLCD CLOSE": {
+    "prefix": "i2clcd close",
+    "body": [
+      "I2CLCD CLOSE"
+    ],
+    "description": "Command I2CLCD CLOSE"
+  },
+  "cmd: I2CLCD CMD": {
+    "prefix": "i2clcd cmd",
+    "body": [
+      "I2CLCD CMD"
+    ],
+    "description": "Command I2CLCD CMD"
+  },
+  "cmd: I2CLCD CREATECHAR": {
+    "prefix": "i2clcd createchar",
+    "body": [
+      "I2CLCD CREATECHAR"
+    ],
+    "description": "Command I2CLCD CREATECHAR"
+  },
+  "cmd: I2CLCD CURSOR": {
+    "prefix": "i2clcd cursor",
+    "body": [
+      "I2CLCD CURSOR"
+    ],
+    "description": "Command I2CLCD CURSOR"
+  },
+  "cmd: I2CLCD INIT": {
+    "prefix": "i2clcd init",
+    "body": [
+      "I2CLCD INIT"
+    ],
+    "description": "Command I2CLCD INIT"
+  },
+  "cmd: Bitstream": {
+    "prefix": "bitstream",
+    "body": [
+      "Bitstream"
+    ],
+    "description": "Command Bitstream"
+  },
+  "fun: Not": {
+    "prefix": "not",
+    "body": [
+      "Not"
+    ],
+    "description": "Function Not"
+  },
+  "fun: INV": {
+    "prefix": "inv",
+    "body": [
+      "INV"
+    ],
+    "description": "Function INV"
+  },
+  "fun: Mod": {
+    "prefix": "mod",
+    "body": [
+      "Mod"
+    ],
+    "description": "Function Mod"
+  },
+  "fun: And": {
+    "prefix": "and",
+    "body": [
+      "And"
+    ],
+    "description": "Function And"
+  },
+  "fun: Or": {
+    "prefix": "or",
+    "body": [
+      "Or"
+    ],
+    "description": "Function Or"
+  },
+  "fun: Xor": {
+    "prefix": "xor",
+    "body": [
+      "Xor"
+    ],
+    "description": "Function Xor"
+  },
+  "fun: ACos(": {
+    "prefix": "acos(",
+    "body": [
+      "ACos("
+    ],
+    "description": "Function ACos("
+  },
+  "fun: Abs(": {
+    "prefix": "abs(",
+    "body": [
+      "Abs("
+    ],
+    "description": "Function Abs("
+  },
+  "fun: Asc(": {
+    "prefix": "asc(",
+    "body": [
+      "Asc("
+    ],
+    "description": "Function Asc("
+  },
+  "fun: ASin(": {
+    "prefix": "asin(",
+    "body": [
+      "ASin("
+    ],
+    "description": "Function ASin("
+  },
+  "fun: Atn(": {
+    "prefix": "atn(",
+    "body": [
+      "Atn("
+    ],
+    "description": "Function Atn("
+  },
+  "fun: Atan2(": {
+    "prefix": "atan2(",
+    "body": [
+      "Atan2("
+    ],
+    "description": "Function Atan2("
+  },
+  "fun: Bin$(": {
+    "prefix": "bin$(",
+    "body": [
+      "Bin$("
+    ],
+    "description": "Function Bin$("
+  },
+  "fun: Bound(": {
+    "prefix": "bound(",
+    "body": [
+      "Bound("
+    ],
+    "description": "Function Bound("
+  },
+  "fun: Choice(": {
+    "prefix": "choice(",
+    "body": [
+      "Choice("
+    ],
+    "description": "Function Choice("
+  },
+  "fun: Chr$(": {
+    "prefix": "chr$(",
+    "body": [
+      "Chr$("
+    ],
+    "description": "Function Chr$("
+  },
+  "fun: Cint(": {
+    "prefix": "cint(",
+    "body": [
+      "Cint("
+    ],
+    "description": "Function Cint("
+  },
+  "fun: Cos(": {
+    "prefix": "cos(",
+    "body": [
+      "Cos("
+    ],
+    "description": "Function Cos("
+  },
+  "fun: Deg(": {
+    "prefix": "deg(",
+    "body": [
+      "Deg("
+    ],
+    "description": "Function Deg("
+  },
+  "fun: Exp(": {
+    "prefix": "exp(",
+    "body": [
+      "Exp("
+    ],
+    "description": "Function Exp("
+  },
+  "fun: Field$(": {
+    "prefix": "field$(",
+    "body": [
+      "Field$("
+    ],
+    "description": "Function Field$("
+  },
+  "fun: Fix(": {
+    "prefix": "fix(",
+    "body": [
+      "Fix("
+    ],
+    "description": "Function Fix("
+  },
+  "fun: Hex$(": {
+    "prefix": "hex$(",
+    "body": [
+      "Hex$("
+    ],
+    "description": "Function Hex$("
+  },
+  "fun: Inkey$": {
+    "prefix": "inkey$",
+    "body": [
+      "Inkey$"
+    ],
+    "description": "Function Inkey$"
+  },
+  "fun: Instr(": {
+    "prefix": "instr(",
+    "body": [
+      "Instr("
+    ],
+    "description": "Function Instr("
+  },
+  "fun: Int(": {
+    "prefix": "int(",
+    "body": [
+      "Int("
+    ],
+    "description": "Function Int("
+  },
+  "fun: LCase$(": {
+    "prefix": "lcase$(",
+    "body": [
+      "LCase$("
+    ],
+    "description": "Function LCase$("
+  },
+  "fun: Left$(": {
+    "prefix": "left$(",
+    "body": [
+      "Left$("
+    ],
+    "description": "Function Left$("
+  },
+  "fun: Len(": {
+    "prefix": "len(",
+    "body": [
+      "Len("
+    ],
+    "description": "Function Len("
+  },
+  "fun: Log(": {
+    "prefix": "log(",
+    "body": [
+      "Log("
+    ],
+    "description": "Function Log("
+  },
+  "fun: Mid$(": {
+    "prefix": "mid$(",
+    "body": [
+      "Mid$("
+    ],
+    "description": "Function Mid$("
+  },
+  "fun: TEMPR(": {
+    "prefix": "tempr(",
+    "body": [
+      "TEMPR("
+    ],
+    "description": "Function TEMPR("
+  },
+  "fun: SPI(": {
+    "prefix": "spi(",
+    "body": [
+      "SPI("
+    ],
+    "description": "Function SPI("
+  },
+  "fun: Oct$(": {
+    "prefix": "oct$(",
+    "body": [
+      "Oct$("
+    ],
+    "description": "Function Oct$("
+  },
+  "fun: Pi": {
+    "prefix": "pi",
+    "body": [
+      "Pi"
+    ],
+    "description": "Function Pi"
+  },
+  "fun: Pos": {
+    "prefix": "pos",
+    "body": [
+      "Pos"
+    ],
+    "description": "Function Pos"
+  },
+  "fun: Rad(": {
+    "prefix": "rad(",
+    "body": [
+      "Rad("
+    ],
+    "description": "Function Rad("
+  },
+  "fun: Right$(": {
+    "prefix": "right$(",
+    "body": [
+      "Right$("
+    ],
+    "description": "Function Right$("
+  },
+  "fun: Rnd(": {
+    "prefix": "rnd(",
+    "body": [
+      "Rnd("
+    ],
+    "description": "Function Rnd("
+  },
+  "fun: Rnd": {
+    "prefix": "rnd",
+    "body": [
+      "Rnd"
+    ],
+    "description": "Function Rnd"
+  },
+  "fun: Sgn(": {
+    "prefix": "sgn(",
+    "body": [
+      "Sgn("
+    ],
+    "description": "Function Sgn("
+  },
+  "fun: Sin(": {
+    "prefix": "sin(",
+    "body": [
+      "Sin("
+    ],
+    "description": "Function Sin("
+  },
+  "fun: Space$(": {
+    "prefix": "space$(",
+    "body": [
+      "Space$("
+    ],
+    "description": "Function Space$("
+  },
+  "fun: Sqr(": {
+    "prefix": "sqr(",
+    "body": [
+      "Sqr("
+    ],
+    "description": "Function Sqr("
+  },
+  "fun: Str$(": {
+    "prefix": "str$(",
+    "body": [
+      "Str$("
+    ],
+    "description": "Function Str$("
+  },
+  "fun: String$(": {
+    "prefix": "string$(",
+    "body": [
+      "String$("
+    ],
+    "description": "Function String$("
+  },
+  "fun: Tab(": {
+    "prefix": "tab(",
+    "body": [
+      "Tab("
+    ],
+    "description": "Function Tab("
+  },
+  "fun: Tan(": {
+    "prefix": "tan(",
+    "body": [
+      "Tan("
+    ],
+    "description": "Function Tan("
+  },
+  "fun: UCase$(": {
+    "prefix": "ucase$(",
+    "body": [
+      "UCase$("
+    ],
+    "description": "Function UCase$("
+  },
+  "fun: Val(": {
+    "prefix": "val(",
+    "body": [
+      "Val("
+    ],
+    "description": "Function Val("
+  },
+  "fun: Eval(": {
+    "prefix": "eval(",
+    "body": [
+      "Eval("
+    ],
+    "description": "Function Eval("
+  },
+  "fun: Max(": {
+    "prefix": "max(",
+    "body": [
+      "Max("
+    ],
+    "description": "Function Max("
+  },
+  "fun: Min(": {
+    "prefix": "min(",
+    "body": [
+      "Min("
+    ],
+    "description": "Function Min("
+  },
+  "fun: Bin2str$(": {
+    "prefix": "bin2str$(",
+    "body": [
+      "Bin2str$("
+    ],
+    "description": "Function Bin2str$("
+  },
+  "fun: Str2bin(": {
+    "prefix": "str2bin(",
+    "body": [
+      "Str2bin("
+    ],
+    "description": "Function Str2bin("
+  },
+  "fun: Call(": {
+    "prefix": "call(",
+    "body": [
+      "Call("
+    ],
+    "description": "Function Call("
+  },
+  "fun: For": {
+    "prefix": "for",
+    "body": [
+      "For"
+    ],
+    "description": "Function For"
+  },
+  "fun: Else": {
+    "prefix": "else",
+    "body": [
+      "Else"
+    ],
+    "description": "Function Else"
+  },
+  "fun: GoSub": {
+    "prefix": "gosub",
+    "body": [
+      "GoSub"
+    ],
+    "description": "Function GoSub"
+  },
+  "fun: GoTo": {
+    "prefix": "goto",
+    "body": [
+      "GoTo"
+    ],
+    "description": "Function GoTo"
+  },
+  "fun: Step": {
+    "prefix": "step",
+    "body": [
+      "Step"
+    ],
+    "description": "Function Step"
+  },
+  "fun: Then": {
+    "prefix": "then",
+    "body": [
+      "Then"
+    ],
+    "description": "Function Then"
+  },
+  "fun: To": {
+    "prefix": "to",
+    "body": [
+      "To"
+    ],
+    "description": "Function To"
+  },
+  "fun: Until": {
+    "prefix": "until",
+    "body": [
+      "Until"
+    ],
+    "description": "Function Until"
+  },
+  "fun: While": {
+    "prefix": "while",
+    "body": [
+      "While"
+    ],
+    "description": "Function While"
+  },
+  "fun: Eof(": {
+    "prefix": "eof(",
+    "body": [
+      "Eof("
+    ],
+    "description": "Function Eof("
+  },
+  "fun: Loc(": {
+    "prefix": "loc(",
+    "body": [
+      "Loc("
+    ],
+    "description": "Function Loc("
+  },
+  "fun: Lof(": {
+    "prefix": "lof(",
+    "body": [
+      "Lof("
+    ],
+    "description": "Function Lof("
+  },
+  "fun: Cwd$": {
+    "prefix": "cwd$",
+    "body": [
+      "Cwd$"
+    ],
+    "description": "Function Cwd$"
+  },
+  "fun: As": {
+    "prefix": "as",
+    "body": [
+      "As"
+    ],
+    "description": "Function As"
+  },
+  "fun: Input$(": {
+    "prefix": "input$(",
+    "body": [
+      "Input$("
+    ],
+    "description": "Function Input$("
+  },
+  "fun: Dir$(": {
+    "prefix": "dir$(",
+    "body": [
+      "Dir$("
+    ],
+    "description": "Function Dir$("
+  },
+  "fun: Pio(": {
+    "prefix": "pio(",
+    "body": [
+      "Pio("
+    ],
+    "description": "Function Pio("
+  },
+  "fun: RGB(": {
+    "prefix": "rgb(",
+    "body": [
+      "RGB("
+    ],
+    "description": "Function RGB("
+  },
+  "fun: Pixel(": {
+    "prefix": "pixel(",
+    "body": [
+      "Pixel("
+    ],
+    "description": "Function Pixel("
+  },
+  "fun: SPI2(": {
+    "prefix": "spi2(",
+    "body": [
+      "SPI2("
+    ],
+    "description": "Function SPI2("
+  },
+  "fun: DEVICE(": {
+    "prefix": "device(",
+    "body": [
+      "DEVICE("
+    ],
+    "description": "Function DEVICE("
+  },
+  "fun: Pin(": {
+    "prefix": "pin(",
+    "body": [
+      "Pin("
+    ],
+    "description": "Function Pin("
+  },
+  "fun: Port(": {
+    "prefix": "port(",
+    "body": [
+      "Port("
+    ],
+    "description": "Function Port("
+  },
+  "fun: Distance(": {
+    "prefix": "distance(",
+    "body": [
+      "Distance("
+    ],
+    "description": "Function Distance("
+  },
+  "fun: Pulsin(": {
+    "prefix": "pulsin(",
+    "body": [
+      "Pulsin("
+    ],
+    "description": "Function Pulsin("
+  },
+  "fun: GPS(": {
+    "prefix": "gps(",
+    "body": [
+      "GPS("
+    ],
+    "description": "Function GPS("
+  },
+  "fun: Byte(": {
+    "prefix": "byte(",
+    "body": [
+      "Byte("
+    ],
+    "description": "Function Byte("
+  },
+  "fun: Math(": {
+    "prefix": "math(",
+    "body": [
+      "Math("
+    ],
+    "description": "Function Math("
+  },
+  "fun: Timer": {
+    "prefix": "timer",
+    "body": [
+      "Timer"
+    ],
+    "description": "Function Timer"
+  },
+  "fun: LInStr(": {
+    "prefix": "linstr(",
+    "body": [
+      "LInStr("
+    ],
+    "description": "Function LInStr("
+  },
+  "fun: LCompare(": {
+    "prefix": "lcompare(",
+    "body": [
+      "LCompare("
+    ],
+    "description": "Function LCompare("
+  },
+  "fun: LLen(": {
+    "prefix": "llen(",
+    "body": [
+      "LLen("
+    ],
+    "description": "Function LLen("
+  },
+  "fun: LGetStr$(": {
+    "prefix": "lgetstr$(",
+    "body": [
+      "LGetStr$("
+    ],
+    "description": "Function LGetStr$("
+  },
+  "fun: LGetByte(": {
+    "prefix": "lgetbyte(",
+    "body": [
+      "LGetByte("
+    ],
+    "description": "Function LGetByte("
+  },
+  "fun: Date$": {
+    "prefix": "date$",
+    "body": [
+      "Date$"
+    ],
+    "description": "Function Date$"
+  },
+  "fun: Day$(": {
+    "prefix": "day$(",
+    "body": [
+      "Day$("
+    ],
+    "description": "Function Day$("
+  },
+  "fun: Peek(": {
+    "prefix": "peek(",
+    "body": [
+      "Peek("
+    ],
+    "description": "Function Peek("
+  },
+  "fun: Time$": {
+    "prefix": "time$",
+    "body": [
+      "Time$"
+    ],
+    "description": "Function Time$"
+  },
+  "fun: sprite(": {
+    "prefix": "sprite(",
+    "body": [
+      "sprite("
+    ],
+    "description": "Function sprite("
+  },
+  "fun: Flag(": {
+    "prefix": "flag(",
+    "body": [
+      "Flag("
+    ],
+    "description": "Function Flag("
+  },
+  "fun: Epoch(": {
+    "prefix": "epoch(",
+    "body": [
+      "Epoch("
+    ],
+    "description": "Function Epoch("
+  },
+  "fun: DateTime$(": {
+    "prefix": "datetime$(",
+    "body": [
+      "DateTime$("
+    ],
+    "description": "Function DateTime$("
+  },
+  "fun: MM.Info(": {
+    "prefix": "mm.info(",
+    "body": [
+      "MM.Info("
+    ],
+    "description": "Function MM.Info("
+  },
+  "fun: Format$(": {
+    "prefix": "format$(",
+    "body": [
+      "Format$("
+    ],
+    "description": "Function Format$("
+  },
+  "fun: KeyDown(": {
+    "prefix": "keydown(",
+    "body": [
+      "KeyDown("
+    ],
+    "description": "Function KeyDown("
+  },
+  "fun: DRAW3D(": {
+    "prefix": "draw3d(",
+    "body": [
+      "DRAW3D("
+    ],
+    "description": "Function DRAW3D("
+  },
+  "fun: GetScanLine": {
+    "prefix": "getscanline",
+    "body": [
+      "GetScanLine"
+    ],
+    "description": "Function GetScanLine"
+  },
+  "fun: Map(": {
+    "prefix": "map(",
+    "body": [
+      "Map("
+    ],
+    "description": "Function Map("
+  },
+  "fun: Touch(": {
+    "prefix": "touch(",
+    "body": [
+      "Touch("
+    ],
+    "description": "Function Touch("
+  },
+  "fun: Json$(": {
+    "prefix": "json$(",
+    "body": [
+      "Json$("
+    ],
+    "description": "Function Json$("
+  },
+  "fun: MsgBox(": {
+    "prefix": "msgbox(",
+    "body": [
+      "MsgBox("
+    ],
+    "description": "Function MsgBox("
+  },
+  "fun: CtrlVal(": {
+    "prefix": "ctrlval(",
+    "body": [
+      "CtrlVal("
+    ],
+    "description": "Function CtrlVal("
+  },
+  "fun: Bit(": {
+    "prefix": "bit(",
+    "body": [
+      "Bit("
+    ],
+    "description": "Function Bit("
+  },
+  "fun: Trim$(": {
+    "prefix": "trim$(",
+    "body": [
+      "Trim$("
+    ],
+    "description": "Function Trim$("
+  },
+  "fun: LInput(": {
+    "prefix": "linput(",
+    "body": [
+      "LInput("
+    ],
+    "description": "Function LInput("
+  },
+  "fun: Struct(": {
+    "prefix": "struct(",
+    "body": [
+      "Struct("
+    ],
+    "description": "Function Struct("
+  },
+  "fun: Frame(": {
+    "prefix": "frame(",
+    "body": [
+      "Frame("
+    ],
+    "description": "Function Frame("
+  },
+  "fun: Ray(": {
+    "prefix": "ray(",
+    "body": [
+      "Ray("
+    ],
+    "description": "Function Ray("
+  }
+}

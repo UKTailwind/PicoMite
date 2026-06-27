@@ -1,0 +1,59 @@
+{
+  "$schema": "vscode://schemas/color-theme",
+  "name": "MMBasic Editor",
+  "type": "dark",
+  "semanticHighlighting": false,
+  "colors": {
+    "editor.background": "#000000",
+    "editor.foreground": "#FFFFFF",
+    "editorCursor.foreground": "#00FFFF",
+    "editor.selectionBackground": "#00304080",
+    "editor.inactiveSelectionBackground": "#00253080",
+    "editorLineNumber.foreground": "#FF00FF",
+    "editorLineNumber.activeForeground": "#FFFFFF",
+    "statusBar.background": "#000000",
+    "statusBar.foreground": "#FFFFFF"
+  },
+  "tokenColors": [
+    {
+      "scope": ["comment", "punctuation.definition.comment"],
+      "settings": {
+        "foreground": "#FFFF00"
+      }
+    },
+    {
+      "scope": ["string", "punctuation.definition.string"],
+      "settings": {
+        "foreground": "#FF00FF"
+      }
+    },
+    {
+      "scope": ["constant.numeric", "constant.numeric.mmbasic"],
+      "settings": {
+        "foreground": "#00FF00"
+      }
+    },
+    {
+      "scope": [
+        "keyword",
+        "storage.type",
+        "storage.modifier",
+        "keyword.control.mmbasic",
+        "support.function.mmbasic",
+        "support.constant.mmbasic.option",
+        "support.constant.mmbasic.gui",
+        "support.constant.mmbasic.subcommand"
+      ],
+      "settings": {
+        "foreground": "#00FFFF",
+        "fontStyle": "bold"
+      }
+    },
+    {
+      "scope": ["variable", "identifier"],
+      "settings": {
+        "foreground": "#FFFFFF"
+      }
+    }
+  ]
+}

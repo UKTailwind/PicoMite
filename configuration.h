@@ -1,0 +1,778 @@
+/*
+ * @cond
+ * The following section will be excluded from the documentation.
+ */
+/* *********************************************************************************************************************
+PicoMite MMBasic
+
+configuration.h
+
+<COPYRIGHT HOLDERS>  Geoff Graham, Peter Mather
+Copyright (c) 2021, <COPYRIGHT HOLDERS> All rights reserved.
+Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer
+   in the documentation and/or other materials provided with the distribution.
+3. The name MMBasic be used when referring to the interpreter in any documentation and promotional material and the original copyright message be displayed
+   on the console at startup (additional copyright messages may be added).
+4. All advertising materials mentioning features or use of this software must display the following acknowledgement: This product includes software developed
+   by the <copyright holder>.
+5. Neither the name of the <copyright holder> nor the names of its contributors may be used to endorse or promote products derived from this software
+   without specific prior written permission.
+THIS SOFTWARE IS PROVIDED BY <COPYRIGHT HOLDERS> AS IS AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDERS> BE LIABLE FOR ANY DIRECT,
+INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+************************************************************************************************************************/
+
+#ifndef __CONFIGURATION_H
+#define __CONFIGURATION_H
+
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+#define CALCPROMPT
+
+/* ============================================================================
+ * Cut-down HDMI display builds
+ * ----------------------------------------------------------------------------
+ * HDMICUTDOWN marks the HDMI variants that use the reduced scanout pipeline:
+ * the 96000-byte framebuffer pool (vs 153600), the limited resolution set,
+ * the RGB332 R640x480x8 special mode, and the live (no-reboot) RESOLUTION
+ * switch. Currently HDMIBTH and HDMIWEB. This is purely the *display* concern;
+ * the BLE-HID-host concern stays gated separately on
+ * (PICOMITEBTH || PICOMITEHDMIBTH) so HDMIWEB (WiFi, no Bluetooth) does not
+ * drag in btstack.
+ *
+ * HDMICUTDOWN is defined via target_compile_definitions in CMakeLists.txt
+ * (NOT here) so it is a global -D visible to every translation unit regardless
+ * of include order — AllCommands.h, for one, is pulled in before this file.
+ * ============================================================================ */
+
+/* ============================================================================
+ * Platform-specific configuration - PICOMITEVGA
+ * ============================================================================ */
+#ifdef PICOMITEVGA
+
+   /* RP2350 configuration */
+#ifdef rp2350
+#define MAXSUBFUN 512
+#define MAXGLOBALVARS 480 // Configurable split
+#define MAXLOCALVARS 256
+#define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
+
+#ifdef HDMI // RP2350 HDMI
+#define MAXMODES 5
+#define MAX_CPU Freq378P
+#define MIN_CPU FreqX
+#ifdef USBKEYBOARD
+#ifdef PICOMITEHDMIBTH
+   /* HDMIBTH: HDMIUSB-style display stack + CYW43 wireless + BLE HID
+      host. The CYW43 firmware blob (~220 KB linked via the IS_BTH
+      block) pushes the firmware image well past HDMIUSB's 1056 KB
+      limit, so FLASH_TARGET_OFFSET matches PICOMITEBTH's 1408 KB.
+      HEAP_MEMORY_SIZE = 180 KB — reclaimed from the framebuffer-pool
+      shrink (HDMIBTH only needs 96000 B vs HDMIUSB's 153600 B). Leaves
+      ~11 KB RAM margin after BSS + PICO_HEAP_SIZE (0x4000) + stack
+      (0x4000); shrink if a future BSS bump narrows it further
+      (see [[heap-bss-overlap-on-rp2350]]). Bump MagicKey when Option
+      layout or defaults change. */
+#define FLASH_TARGET_OFFSET (1392 * 1024)
+#define HEAP_MEMORY_SIZE (180 * 1024)
+#define MagicKey 0x4DB1F60E
+#elif defined(PICOMITEHDMIWEB)
+   /* HDMIWEB: HDMIUSB-style display stack + USB host + WebMite WiFi /
+      lwIP / mbedtls TLS (no Bluetooth). The cyw43 WiFi firmware blob plus
+      the lwIP + mbedtls code push the firmware image past HDMIUSB's 1072 KB
+      limit, so FLASH_TARGET_OFFSET is set well above it (16 KB-aligned per
+      [[flash-target-offset-16-kb-alignment]]). HEAP_MEMORY_SIZE is smaller
+      than HDMIBTH's 180 KB because the lwIP MEM_SIZE pool + mbedtls cert
+      transients + USB host buffers all live in BSS alongside the GUICONTROLS
+      Ctrl[] array. HDMIWEB reuses HDMIBTH's shrunk 96000-byte framebuffer
+      pool (FRAMEBUFFER_POOL_SIZE below). Both FLASH_TARGET_OFFSET and
+      HEAP_MEMORY_SIZE are provisional — tune against build_limits.txt /
+      GetHighestHexAddress.py. Bump MagicKey when Option layout/defaults
+      change so stale cached options get rewritten. */
+#define FLASH_TARGET_OFFSET (1504 * 1024)
+   /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
+      kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
+      pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
+      transiently mallocs ~28-35 KB from the C heap (SSL in/out buffers + RSA
+      cert-chain parse; MEM_LIBC_MALLOC=1) which competes for the RAM between
+      __bss_end__ and the stack — long RSA chains (www.microsoft.com) can overrun
+      it. Do NOT shrink this to "fix" TLS; instead route mbedtls to PSRAM and/or
+      make malloc-fail graceful (see [[hdmiweb-build]]). Watch
+      [[heap-bss-overlap-on-rp2350]]. */
+#define HEAP_MEMORY_SIZE (144 * 1024)
+   /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
+      changed from 1024x600 to 640x480@315000 so existing devices pick up
+      the new default via ResetOptions on first boot. */
+#define MagicKey 0x57EB1A45
+#else
+#define FLASH_TARGET_OFFSET (1088 * 1024)
+#define HEAP_MEMORY_SIZE (156 * 1024)
+#define MagicKey 0xD340BBCD
+#endif
+#else
+#define MagicKey 0xD1F6F86C
+#define FLASH_TARGET_OFFSET (1024 * 1024)
+#define HEAP_MEMORY_SIZE (160 * 1024)
+#endif
+#else // rp2350 VGA
+#define MAXMODES 3
+#define MAX_CPU 378000
+#define MIN_CPU 252000
+#ifdef USBKEYBOARD
+#define FLASH_TARGET_OFFSET (1056 * 1024)
+#define HEAP_MEMORY_SIZE (164 * 1024)
+#define MagicKey 0x4C73A942
+#else
+#define FLASH_TARGET_OFFSET (1008 * 1024)
+#define HEAP_MEMORY_SIZE (168 * 1024)
+#define MagicKey 0xDAEA58BA
+#endif
+#endif
+
+/* RP2040 configuration */
+#else
+#define MAXSUBFUN 256
+#define MAXGLOBALVARS 240 // Configurable split
+#define MAXLOCALVARS 240
+#define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
+#define MAXMODES 2
+#define MAX_CPU 378000
+#define MIN_CPU 252000
+#ifdef USBKEYBOARD
+#define FLASH_TARGET_OFFSET (832 * 1024)
+#define MagicKey 0xCD8778E7
+#define HEAP_MEMORY_SIZE (100 * 1024)
+#else
+#define FLASH_TARGET_OFFSET (800 * 1024)
+#define HEAP_MEMORY_SIZE (100 * 1024)
+#define MagicKey 0x3193CA54
+#endif
+
+#endif
+
+/* VGA display mode definitions - Standard (640x480) */
+#define MODE_H_S_ACTIVE_PIXELS 640
+#define MODE_V_S_ACTIVE_LINES 480
+#define MODE1SIZE_S (MODE_H_S_ACTIVE_PIXELS * MODE_V_S_ACTIVE_LINES / 8)
+#define MODE2SIZE_S ((MODE_H_S_ACTIVE_PIXELS / 2) * (MODE_V_S_ACTIVE_LINES / 2) / 2)
+#define MODE3SIZE_S ((MODE_H_S_ACTIVE_PIXELS) * (MODE_V_S_ACTIVE_LINES) / 2)
+#define MODE4SIZE_S ((MODE_H_S_ACTIVE_PIXELS / 2) * (MODE_V_S_ACTIVE_LINES / 2) * 2)
+#define MODE5SIZE_S ((MODE_H_S_ACTIVE_PIXELS / 2) * (MODE_V_S_ACTIVE_LINES / 2))
+
+/* VGA display mode definitions - 720x400 */
+#define MODE_H_4_ACTIVE_PIXELS 720
+#define MODE_V_4_ACTIVE_LINES 400
+#define MODE1SIZE_4 (MODE_H_4_ACTIVE_PIXELS * MODE_V_4_ACTIVE_LINES / 8)
+#define MODE2SIZE_4 ((MODE_H_4_ACTIVE_PIXELS / 2) * (MODE_V_4_ACTIVE_LINES / 2) / 2)
+#define MODE3SIZE_4 ((MODE_H_4_ACTIVE_PIXELS) * (MODE_V_4_ACTIVE_LINES) / 2)
+#define MODE4SIZE_4 ((MODE_H_4_ACTIVE_PIXELS / 2) * (MODE_V_4_ACTIVE_LINES / 2) * 2)
+#define MODE5SIZE_4 ((MODE_H_4_ACTIVE_PIXELS / 2) * (MODE_V_4_ACTIVE_LINES / 2))
+
+/* VGA display mode definitions - 1280x720 */
+#define MODE_H_W_ACTIVE_PIXELS 1280
+#define MODE_V_W_ACTIVE_LINES 720
+#define MODE1SIZE_W (MODE_H_W_ACTIVE_PIXELS * MODE_V_W_ACTIVE_LINES / 8)
+#define MODE2SIZE_W ((MODE_H_W_ACTIVE_PIXELS / 4) * (MODE_V_W_ACTIVE_LINES / 4) / 2)
+#define MODE3SIZE_W ((MODE_H_W_ACTIVE_PIXELS / 2) * (MODE_V_W_ACTIVE_LINES / 2) / 2)
+#define MODE5SIZE_W ((MODE_H_W_ACTIVE_PIXELS / 4) * (MODE_V_W_ACTIVE_LINES / 4))
+
+/* VGA display mode definitions - 848x480 */
+#define MODE_H_8_ACTIVE_PIXELS 848
+#define MODE_V_8_ACTIVE_LINES 480
+#define MODE1SIZE_8 (MODE_H_8_ACTIVE_PIXELS * MODE_V_8_ACTIVE_LINES / 8)
+#define MODE2SIZE_8 ((MODE_H_8_ACTIVE_PIXELS / 2) * (MODE_V_8_ACTIVE_LINES / 2) / 2)
+#define MODE3SIZE_8 ((MODE_H_8_ACTIVE_PIXELS) * (MODE_V_8_ACTIVE_LINES) / 2)
+#define MODE5SIZE_8 ((MODE_H_8_ACTIVE_PIXELS / 2) * (MODE_V_8_ACTIVE_LINES / 2))
+
+/* VGA display mode definitions - 1024x768 (XGA) */
+#define MODE_H_L_ACTIVE_PIXELS 1024
+#define MODE_V_L_ACTIVE_LINES 768
+#define MODE1SIZE_L (MODE_H_L_ACTIVE_PIXELS * MODE_V_L_ACTIVE_LINES / 8)
+#define MODE2SIZE_L ((MODE_H_L_ACTIVE_PIXELS / 4) * (MODE_V_L_ACTIVE_LINES / 4) / 2)
+#define MODE3SIZE_L ((MODE_H_L_ACTIVE_PIXELS / 2) * (MODE_V_L_ACTIVE_LINES / 2) / 2)
+#define MODE5SIZE_L ((MODE_H_L_ACTIVE_PIXELS / 4) * (MODE_V_L_ACTIVE_LINES / 4))
+
+/* VGA display mode definitions - 800x600 (SVGA) */
+#define MODE_H_V_ACTIVE_PIXELS 800
+#define MODE_V_V_ACTIVE_LINES 600
+#define MODE1SIZE_V (MODE_H_V_ACTIVE_PIXELS * MODE_V_V_ACTIVE_LINES / 8)
+#define MODE2SIZE_V ((MODE_H_V_ACTIVE_PIXELS / 2) * (MODE_V_V_ACTIVE_LINES / 2) / 2)
+#define MODE3SIZE_V ((MODE_H_V_ACTIVE_PIXELS) * (MODE_V_V_ACTIVE_LINES) / 2)
+#define MODE5SIZE_V ((MODE_H_V_ACTIVE_PIXELS / 2) * (MODE_V_V_ACTIVE_LINES / 2))
+
+/* VGA display mode definitions - 1024x600 */
+#define MODE_H_X_ACTIVE_PIXELS 1024
+#define MODE_V_X_ACTIVE_LINES 600
+#define MODE1SIZE_X (MODE_H_X_ACTIVE_PIXELS * MODE_V_X_ACTIVE_LINES / 8)
+#define MODE2SIZE_X ((MODE_H_X_ACTIVE_PIXELS / 4) * (MODE_V_X_ACTIVE_LINES / 4) / 2)
+#define MODE3SIZE_X ((MODE_H_X_ACTIVE_PIXELS / 2) * (MODE_V_X_ACTIVE_LINES / 2) / 2)
+#define MODE5SIZE_X ((MODE_H_X_ACTIVE_PIXELS / 4) * (MODE_V_X_ACTIVE_LINES / 4))
+
+#ifdef HDMICUTDOWN
+/* Permanent framebuffer pool extension inside AllMemory[]. Sized to
+   the largest layout the build can produce in mode 1: the
+   1024x600x1bpp bitmap (MODE1SIZE_X = 76800) plus the tilefcols_w
+   and tilebcols_w arrays that settiles() writes immediately after
+   the framebuffer (1 byte per 8x8 cell, two arrays = 2 * 128 * 75 =
+   19200). Total = 96000 bytes vs. 153600 for the default HDMI pool.
+   HDMIWEB reuses the same shrunk pool to claw back RAM for the WiFi /
+   lwIP / TLS stack. */
+#define FRAMEBUFFER_POOL_SIZE \
+   (MODE1SIZE_X + 2 * ((MODE_H_X_ACTIVE_PIXELS / 8) * (MODE_V_X_ACTIVE_LINES / 8)))
+#endif
+
+/* VGA display mode definitions - 800x480 */
+#define MODE_H_Y_ACTIVE_PIXELS 800
+#define MODE_V_Y_ACTIVE_LINES 480
+#define MODE1SIZE_Y (MODE_H_Y_ACTIVE_PIXELS * MODE_V_Y_ACTIVE_LINES / 8)
+#define MODE2SIZE_Y ((MODE_H_Y_ACTIVE_PIXELS / 2) * (MODE_V_Y_ACTIVE_LINES / 2) / 2)
+#define MODE3SIZE_Y ((MODE_H_Y_ACTIVE_PIXELS) * (MODE_V_Y_ACTIVE_LINES) / 2)
+#define MODE5SIZE_Y ((MODE_H_Y_ACTIVE_PIXELS / 2) * (MODE_V_Y_ACTIVE_LINES / 2))
+
+/* CPU frequency definitions */
+#define Freq720P 372000
+#define Freq480P 315000
+#define Freq252P 252000
+#define Freq378P 378000
+#define FreqXGA 375000
+#define FreqSVGA 360000
+#define Freq848 336000
+#define Freq400 283200
+#define FreqY 333000
+#define FreqX 252000
+#define FreqDefault 200000
+   typedef enum
+   {
+      R0 = 0,
+      R1280x720 = 1,
+      R640x480f315 = 2,
+      R640x480f252 = 3,
+      R640x480f378 = 4,
+      R1024x768 = 5,
+      R800x600 = 6,
+      R848x480 = 7,
+      R720x400 = 8,
+      R800x480 = 9,
+      R1024x600 = 10,
+#ifdef HDMICUTDOWN
+      /* HDMIBTH/HDMIWEB-only: a "special" 640x480 that is RGB332 (8-bit)
+         rather than the normal full-colour RGB555 640x480. It shares the
+         1024x600 8-bit tile pipeline so it costs no extra framebuffer
+         and is deliberately kept OUT of the FullColour macro. Selected
+         at runtime by the RESOLUTION command (no reboot). */
+      R640x480x8 = 11,
+      /* HDMIBTH/HDMIWEB-only: the RGB332 (8-bit) 720x400, the sibling of
+         R640x480x8. Kept as its own enum (rather than reusing the full
+         build's RGB555 R720x400 = 8) so it stays OUT of FullColour and is
+         driven by the same 8-bit tile pipeline / HDMIloopBTH640. Runs at
+         283.2 MHz (Freq400); selected by OPTION/RESOLUTION. */
+      R720x400x8 = 12,
+#endif
+   } Resolution_TypeDef;
+   static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq378P, FreqXGA, FreqSVGA, Freq848, Freq400, FreqY, FreqX};
+/* Display capability macros */
+#define FullColour (Option.Resolution == R640x480f252 || Option.Resolution == R640x480f378 || \
+                    Option.Resolution == R640x480f315 || Option.Resolution == R720x400)
+#ifdef HDMICUTDOWN
+/* R640x480x8 behaves like 1024x600 (8-bit/RGB332, tile-based) so it is
+   treated as a MediumRes mode for font/tile-height selection. */
+#define MediumRes (Option.Resolution == R800x600 || Option.Resolution == R848x480 ||  \
+                   Option.Resolution == R800x480 || Option.Resolution == R1024x600 || \
+                   Option.Resolution == R640x480x8 || Option.Resolution == R720x400x8)
+#else
+#define MediumRes (Option.Resolution == R800x600 || Option.Resolution == R848x480 || \
+                   Option.Resolution == R800x480 || Option.Resolution == R1024x600)
+#endif
+
+#endif /* PICOMITEVGA */
+
+/* ============================================================================
+ * Platform-specific configuration - PICOMITEWEB
+ * ============================================================================ */
+#ifdef PICOMITEWEB
+#define MaxPcb 8
+
+/* HDMIWEB also defines PICOMITEWEB (it reuses the entire WEB networking
+   layer) but it is fundamentally a PICOMITEVGA/HDMI build: the display
+   block above already owns MAX_CPU/MIN_CPU, MAXSUBFUN/MAXVARS, MagicKey,
+   HEAP_MEMORY_SIZE and FLASH_TARGET_OFFSET. Skip the WebMite budget here
+   so the two definitions don't collide; MaxPcb and the lwipopts include
+   below are still shared. */
+#ifndef PICOMITEHDMIWEB
+#define MAX_CPU 396000
+#define MIN_CPU 126000
+
+#ifdef rp2350
+#define MagicKey 0xBB91433A
+#define MAXSUBFUN 512
+#define MAXGLOBALVARS 512 // Configurable split
+#define MAXLOCALVARS 256
+#define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
+/* TLS (mbedtls) is enabled for ALL WiFi variants (RP2350 and RP2040) — see
+   the IS_WEB block in CMakeLists.txt. The handshake working set (~20 KB at
+   IN_CONTENT_LEN=8192) comes from this MMBasic heap, not static RAM (static
+   footprint ~140 B with AES tables in ROM). RP2350 uses a 16 KB record buffer
+   and has PSRAM as a heap fallback; RP2040 uses 8 KB and has no PSRAM, so the
+   transient must fit the 88 KB heap below.
+   PICOMITEWEB_TLS itself is set via target_compile_definitions in CMakeLists.txt
+   so it's visible to every TU (including lwIP's altcp_tls_mbedtls.c which doesn't
+   include configuration.h). Defining it here too would produce a redefine
+   warning because -D and #define without a body resolve to different bodies. */
+#define HEAP_MEMORY_SIZE (256 * 1024)
+#define FLASH_TARGET_OFFSET (1440 * 1024)
+#else
+#define MagicKey 0x6AA79987
+#define MAXSUBFUN 256
+#define MAXGLOBALVARS 240 // Configurable split
+#define MAXLOCALVARS 240
+#define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
+#define HEAP_MEMORY_SIZE (88 * 1024)
+#define FLASH_TARGET_OFFSET (1280 * 1024)
+#endif
+#endif /* !PICOMITEHDMIWEB */
+
+#include "lwipopts_examples_common.h"
+
+#endif /* PICOMITEWEB */
+
+/* ============================================================================
+ * Platform-specific configuration - PICOMITE
+ * ============================================================================ */
+#ifdef PICOMITE
+
+#define MIN_CPU 48000
+
+#ifdef rp2350
+#define MAXGLOBALVARS 512 // Configurable split
+#define MAXLOCALVARS 240
+#define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
+#define MAX_CPU 420000
+#define MAXSUBFUN 512
+
+#ifdef USBKEYBOARD
+#define MagicKey 0x029A7245
+#define FLASH_TARGET_OFFSET (1120 * 1024)
+   /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
+      from the cursor module (~650 bytes for user_cursor.pixels +
+      state) and the click/cursor ownership tracking. Heap and BSS
+      share the same SRAM block; growing BSS past the boundary
+      silently corrupts heap-adjacent statics (see memory note
+      "heap-bss-overlap-on-rp2350"). */
+#define HEAP_MEMORY_SIZE (300 * 1024)
+#elif defined(PICOMITEBT)
+   /* PICOMITEBT replaces USB CDC console with BLE Nordic UART Service over
+      CYW43439. The CYW43 + btstack stack can't reliably keep up at very
+      low CPU speeds during heavy bidirectional traffic (AutoSave, large
+      pastes); enforce 200 MHz as the practical floor and cap at 396 MHz
+      which is well within RP2350-A overclocking headroom. Bump MagicKey
+      whenever default Option layout or CPU bounds change so cached
+      options from older firmware get rewritten on next boot via
+      ResetOptions(). */
+#undef MIN_CPU
+#define MIN_CPU 200000
+#undef MAX_CPU
+#define MAX_CPU 396000
+#define MagicKey 0x90E5E945
+#define FLASH_TARGET_OFFSET (1376 * 1024)
+#define HEAP_MEMORY_SIZE (272 * 1024)
+#elif defined(PICOMITEBTH)
+   /* PICOMITEBTH = PicoMite + USB CDC console + BLE HID host. Same CYW43
+      + btstack memory pressure as PICOMITEBT, so mirror its CPU floor and
+      flash/heap split. Distinct MagicKey ensures cached options from
+      PICOMITEBT (or any earlier firmware) get rewritten on first boot. */
+#undef MIN_CPU
+#define MIN_CPU 200000
+#undef MAX_CPU
+#define MAX_CPU 396000
+#define MagicKey 0x6FACAA50
+#define FLASH_TARGET_OFFSET (1408 * 1024)
+#define HEAP_MEMORY_SIZE (256 * 1024)
+#else
+#define FLASH_TARGET_OFFSET (1088 * 1024)
+   /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
+#define HEAP_MEMORY_SIZE (300 * 1024)
+#define MagicKey 0x29672F8B
+#endif
+
+#else                     // RP2040
+#define MAXGLOBALVARS 256 // Configurable split
+#define MAXLOCALVARS 240
+#define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
+#define MAX_CPU 420000
+#define MAXSUBFUN 256
+
+#ifdef USBKEYBOARD
+#define MagicKey 0xEE897110
+#define FLASH_TARGET_OFFSET (912 * 1024)
+#define HEAP_MEMORY_SIZE (132 * 1024)
+#else
+#ifdef PICOMITEMIN
+#define FLASH_TARGET_OFFSET (688 * 1024)
+#define MagicKey 0x452EC40A
+#define HEAP_MEMORY_SIZE (128 * 1024)
+#else
+#define HEAP_MEMORY_SIZE (120 * 1024)
+#define FLASH_TARGET_OFFSET (912 * 1024)
+#define MagicKey 0x5E503A67
+#endif
+#endif
+#endif
+
+#endif /* PICOMITE */
+
+/* ============================================================================
+ * Type definitions - Float types
+ * ============================================================================ */
+#define MMFLOAT double
+#define FLOAT3D float
+#define sqrt3d sqrtf
+#define round3d roundf
+#define fabs3d fabsf
+
+/* ============================================================================
+ * Memory configuration
+ * ============================================================================ */
+#if defined(PICOMITE) && !defined(rp2350)
+#define MAX_PROG_SIZE (120 * 1024) // Maximum program size in bytes (adjust as needed     )
+#else
+#define MAX_PROG_SIZE HEAP_MEMORY_SIZE
+#endif
+#define SAVEDVARS_FLASH_SIZE 16384
+#define FLASH_ERASE_SIZE 4096
+#define MAXFLASHSLOTS 3
+#define MAXRAMSLOTS 5
+#define MAXVARHASH MAXLOCALVARS // Hash range for local variables
+
+/* ============================================================================
+ * Static memory allocations
+ * ============================================================================ */
+#define MAXFORLOOPS 20      // Each entry uses 17 bytes
+#define MAXDOLOOPS 20       // Each entry uses 12 bytes
+#define MAXGOSUB 50         // Each entry uses 4 bytes
+#define MAX_MULTILINE_IF 20 // Each entry uses 8 bytes
+#define MAXTEMPSTRINGS 64   // Each entry takes up 4 bytes
+
+/* ============================================================================
+ * Operating characteristics - Strings and variables
+ * ============================================================================ */
+#define MAXVARLEN 32   // Maximum length of a variable name
+#define MAXSTRLEN 255  // Maximum length of a string
+#define STRINGSIZE 256 // Must be 1 more than MAXSTRLEN
+
+   /* ============================================================================
+    * Operating characteristics - Structures
+    * Enable structures on platforms with sufficient memory (currently RP2350)
+    * ============================================================================ */
+
+#ifdef STRUCTENABLED
+#define MAX_STRUCT_TYPES 32     // Maximum number of structure type definitions
+#define MAX_STRUCT_MEMBERS 16   // Maximum members per structure
+#define MAX_STRUCT_NEST_DEPTH 8 // Maximum nesting depth for nested structures
+#endif
+
+/* ============================================================================
+ * Operating characteristics - Files and I/O
+ * ============================================================================ */
+#define MAXOPENFILES 10 // Maximum number of open files
+#ifdef USBKEYBOARD
+#define MAXCOMPORTS 6 // Maximum number of COM ports (COM1-2 = UART, COM3-6 = USB CDC host)
+#else
+#define MAXCOMPORTS 2 // Maximum number of COM ports
+#endif
+
+#ifdef rp2350
+#define MAXDIM 5 // Maximum number of dimensions to an array
+#define PSRAMCSPIN PSRAMpin
+   extern uint8_t PSRAMpin;
+#else
+#define MAXDIM 6 // Maximum number of dimensions to an array
+#endif
+
+/* Console buffer sizes */
+#ifdef PICOMITEWEB
+#define CONSOLE_RX_BUF_SIZE TCP_MSS
+#else
+#ifdef rp2350
+#define CONSOLE_RX_BUF_SIZE 1024
+#else
+#define CONSOLE_RX_BUF_SIZE 256
+#endif
+#endif
+#define CONSOLE_TX_BUF_SIZE 256
+
+/* ============================================================================
+ * Operating characteristics - Limits and maximums
+ * ============================================================================ */
+#define MAXERRMSG 64               // Max error msg size (MM.ErrMsg$ is truncated to this)
+#define MAXSOUNDS 4                // Maximum simultaneous sounds
+#define MAXKEYLEN 64               // Maximum key length
+#define MAXPID 8                   // Maximum PIDs
+#define MAX_ARG_COUNT 75           // Max arguments to PRINT, INPUT, WRITE, ON, DIM, ERASE, DATA, READ
+#define MAXCFUNCTION 20            // Maximum C functions
+#define MAX3D 8                    // Maximum 3D objects
+#define MAXCAM 3                   // Maximum cameras
+#define MAX_3D_POLYGON_VERTICES 20 // Maximum vertices in a polygon
+#define MAXBLITBUF 64              // Maximum blit buffers
+#define MAXRESTORE 8               // Maximum restore points
+#define MAXCOLLISIONS 4            // Maximum collision checks
+#define MAXLAYER 4                 // Maximum layers
+#define MAXCONTROLS 201            // Maximum GUI controls
+#define MAXDEFINES 16              // Maximum defines
+
+/* ============================================================================
+ * Operating characteristics - Number formatting
+ * ============================================================================ */
+#define STR_AUTO_PRECISION 999  // Auto precision for numbers
+#define STR_FLOAT_PRECISION 998 // Float precision indicator
+#define STR_SIG_DIGITS 9        // Significant digits when converting MMFLOAT to string
+#define STR_FLOAT_DIGITS 6      // Float digits when converting MMFLOAT to string
+
+/* ============================================================================
+ * Operating characteristics - Hardware
+ * ============================================================================ */
+#define NBRSETTICKS 4 // Number of SETTICK interrupts available
+
+#ifdef rp2350
+#define PIOMAX 3
+#define NBRPINS 62
+#define PSRAMbase 0x11000000
+#define PSRAMblock (PSRAMbase + PSRAMsize + 0x60000)
+#define PSRAMblocksize 0x1C0000
+#else
+#ifndef PICOMITEWEB
+#define PIOMAX 2
+#define NBRPINS 44
+#else
+#define PIOMAX 2
+#define NBRPINS 40
+#endif
+#endif
+
+/* ============================================================================
+ * Operating characteristics - Display and console
+ * ============================================================================ */
+#define MAXPROMPTLEN 49         // Max length of a prompt including terminating null
+#define SCREENWIDTH 80          // Default screen width
+#define SCREENHEIGHT 24         // Default screen height (can be changed with OPTION)
+#define CONSOLE_BAUDRATE 115200 // Serial console baud rate
+
+/* ============================================================================
+ * Operating characteristics - Miscellaneous
+ * ============================================================================ */
+#define BREAK_KEY 3 // Default value (CTRL-C) for the break key
+#define FNV_prime 16777619
+#define FNV_offset_basis 2166136261
+#define DISKCHECKRATE 500 // Check for SD card removal every 500ms
+#define EDIT_BUFFER_SIZE (heap_memory_size - 3072 - 3 * HRes)
+
+#ifdef rp2350
+#define FreqDefault 200000
+#define FAST_TIMER_PIN 2
+#else
+#define FreqDefault 200000
+#endif
+
+/* ============================================================================
+ * Operating characteristics - Display configuration
+ * ============================================================================ */
+#define CONFIG_TITLE 0
+#define CONFIG_LOWER 1
+#define CONFIG_UPPER 2
+
+#define silly_low 2000
+#define silly_high -1
+
+/* ============================================================================
+ * Pin capability flags (bit flags)
+ * ============================================================================ */
+#define UNUSED (1 << 0)
+#define ANALOG_IN (1 << 1)
+#define DIGITAL_IN (1 << 2)
+#define DIGITAL_OUT (1 << 3)
+#define UART1TX (1 << 4)
+#define UART1RX (1 << 5)
+#define UART0TX (1 << 6)
+#define UART0RX (1 << 7)
+#define I2C0SDA (1 << 8)
+#define I2C0SCL (1 << 9)
+#define I2C1SDA (1 << 10)
+#define I2C1SCL (1 << 11)
+#define SPI0RX (1 << 12)
+#define SPI0TX (1 << 13)
+#define SPI0SCK (1 << 14)
+#define SPI1RX (1 << 15)
+#define SPI1TX (1 << 16)
+#define SPI1SCK (1 << 17)
+#define PWM0A (1 << 18)
+#define PWM0B (1 << 19)
+#define PWM1A (1 << 20)
+#define PWM1B (1 << 21)
+#define PWM2A (1 << 22)
+#define PWM2B (1 << 23)
+#define PWM3A (1 << 24)
+#define PWM3B (1 << 25)
+#define PWM4A (1 << 26)
+#define PWM4B (1 << 27)
+#define PWM5A (1 << 28)
+#define PWM5B (1 << 29)
+#define PWM6A (1 << 30)
+#define PWM6B 2147483648ULL
+#define PWM7A 4294967296ULL
+#define PWM7B 8589934592ULL
+
+#ifdef rp2350
+#define PWM8A 17179869184ULL
+#define PWM8B 34359738368ULL
+#define PWM9A 68719476736ULL
+#define PWM9B 137438953472ULL
+#define PWM10A 274877906944ULL
+#define PWM10B 549755813888ULL
+#define PWM11A 1099511627776ULL
+#define PWM11B 2199023255552ULL
+#define FAST_TIMER 4398046511104ULL
+#endif
+
+/* ============================================================================
+ * Hardware configuration macros
+ * ============================================================================ */
+#define HEARTBEATpin Option.heartbeatpin
+#define PATH_MAX 1024
+
+/* ============================================================================
+ * QVGA PIO and state machine configuration
+ * ============================================================================ */
+#define QVGA_PIO_NUM 0
+
+#ifdef rp2350
+#define QVGA_PIO (QVGA_PIO_NUM == 0 ? pio0 : (QVGA_PIO_NUM == 1 ? pio1 : pio2))
+#define ScreenBuffer FRAMEBUFFER
+#else
+#define QVGA_PIO (QVGA_PIO_NUM == 0 ? pio0 : pio1)
+#endif
+
+#define QVGA_SM 0     // QVGA state machine
+#define QVGA_I2S_SM 1 // I2S state machine when running VGA
+
+/* ============================================================================
+ * Compiler optimization attributes
+ * ============================================================================ */
+#define MIPS16 __attribute__((optimize("-Os")))
+#define MIPS32 __attribute__((optimize("-O2")))
+#define MIPS64 __attribute__((optimize("-O3")))
+
+/* ============================================================================
+ * DMA channel assignments
+ * ============================================================================ */
+#define QVGA_DMA_CB 0  // DMA control block of base layer
+#define QVGA_DMA_PIO 1 // DMA copy data to PIO (raises IRQ0 on quiet)
+#define ADC_DMA 2
+#define PIO_TX_DMA 4
+#define PIO_TX_DMA2 5
+#define PIO_TX_DMA3 6
+#define ADC_DMA2 7
+#define PIO_RX_DMA 8
+#define PIO_RX_DMA2 9
+#define SHARE_DMA_DATA 10
+#define SHARE_DMA_CTRL 11
+
+/* ============================================================================
+ * Timing and frequency configuration
+ * ============================================================================ */
+#define LOCALKEYSCANRATE 10
+#define ADC_CLK_SPEED (Option.CPU_Speed * 500)
+
+/* ============================================================================
+ * Flash memory layout
+ * ============================================================================ */
+#define PROGSTART (FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + \
+                   ((MAXFLASHSLOTS) * MAX_PROG_SIZE))
+#define TOP_OF_SYSTEM_FLASH (FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + \
+                             ((MAXFLASHSLOTS + 1) * MAX_PROG_SIZE))
+
+/* ============================================================================
+ * Utility macros
+ * ============================================================================ */
+#define RoundUpK4(a) (((a) + (4096 - 1)) & (~(4096 - 1))) // Round up to nearest page size
+#define use_hash
+
+#ifndef likely
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+#endif
+
+/* ============================================================================
+ * Platform detection macros
+ * ============================================================================ */
+#define LOWRAM (!defined(rp2350) && (defined(PICOMITEVGA) || defined(PICOMITEWEB)))
+#define PICOMITERP2350 (defined(PICOMITE) && defined(rp2350))
+#define WEBRP2350 (defined(rp2350) && defined(PICOMITEWEB))
+#define BTRP2350 (defined(rp2350) && defined(PICOMITEBT))
+#define PICOCALC ((defined(PICOMITE) || defined(PICOMITEWEB)) && !defined(USBKEYBOARD))
+/* BLIT MEMORY332 (the RGB332 count+value RLE blitter) is only meaningful where
+ * there is an RGB332 display: the RP2350 SPI-display PicoMite builds (PICO /
+ * PICOUSB / PICOBT / PICOBTH RP2350, via the NEXTGEN buffered RGB332 panels)
+ * and the HDMI builds (the R640x480x8 RGB332 mode). It does NOT apply to any
+ * RP2040 build, to the VGA builds, or to WEBRP2350, so the command, its decoder
+ * and its dispatch are compiled out on those. NEXTGEN itself is only defined
+ * when PICOMITERP2350, which is exactly the non-VGA half of this gate. */
+#define BLITMEMORY332 (PICOMITERP2350 || (defined(PICOMITEVGA) && defined(HDMI)))
+   /* ============================================================================
+    * Type definitions - MM operations enum
+    * ============================================================================ */
+   typedef enum
+   {
+      MMHRES,
+      MMVRES,
+      MMVER,
+      MMI2C,
+      MMFONTHEIGHT,
+      MMFONTWIDTH,
+#ifndef USBKEYBOARD
+      MMPS2,
+#else
+   MMUSB,
+#endif
+      MMHPOS,
+      MMVPOS,
+      MMONEWIRE,
+      MMERRNO,
+      MMERRMSG,
+      MMWATCHDOG,
+      MMDEVICE,
+      MMCMDLINE,
+#ifdef PICOMITEWEB
+      MMMESSAGE,
+      MMADDRESS,
+      MMTOPIC,
+#endif
+      MMFLAG,
+      MMDISPLAY,
+      MMWIDTH,
+      MMHEIGHT,
+      MMPERSISTENT,
+      MMCODE,
+#ifndef PICOMITEWEB
+      MMSUPPLY,
+#endif
+      MMEND
+   } Operation;
+
+   /* ============================================================================
+    * External variables
+    * ============================================================================ */
+   extern const char *overlaid_functions[];
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* __CONFIGURATION_H */
+
+/*  @endcond */

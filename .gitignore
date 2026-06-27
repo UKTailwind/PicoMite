@@ -1,0 +1,50 @@
+# ---- Build trees (CMake out-of-source dirs reused across variants) ----
+build/
+buildRP2040L/
+buildRP2350L/
+_tmp/
+CMakeFiles/
+CMakeCache.txt
+
+# ---- Firmware build artifacts ----
+*.uf2
+*.zip
+*.elf
+*.bin
+*.hex
+*.map
+*.dis
+
+# ---- Python ----
+__pycache__/
+*.pyc
+.venv/
+.venv-1/
+
+# ---- Node (VS Code extension) ----
+vscode-mmbasic/node_modules/
+
+# ---- Generated docs / extracts ----
+doxygen/html/
+*.pdf
+_docx_extract/
+
+# ---- Packaged VS Code extension builds ----
+*.vsix
+
+# ---- Video-converter sample/generated media (badapple/) keep .py/.bas/.md ----
+badapple/*.mp4
+badapple/*.332
+badapple/*.r332
+badapple/*.r332c
+badapple/*.121
+badapple/*.vid
+badapple/*.aud
+badapple/*.vc
+
+# ---- Editor / OS / Office temp & manual backups ----
+~$*
+*.bak_*
+*.pdf.bak*
+*.tmp
+dist/
