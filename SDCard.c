@@ -1,7 +1,7 @@
 /***********************************************************************************************************************
 PicoMite MMBasic
 
-mmc_stm32.c
+SDCard.c  (SD card / FatFs disk-IO driver; formerly mmc_stm32.c)
 
 <COPYRIGHT HOLDERS>  Geoff Graham, Peter Mather
 Copyright (c) 2021, <COPYRIGHT HOLDERS> All rights reserved.

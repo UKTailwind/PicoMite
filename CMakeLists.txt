@@ -54,10 +54,10 @@ set(COMMON_SOURCES
 	Functions.c
 	Commands.c
 	FileIO.c
-	ff.c
-	ffsystem.c
-	ffunicode.c
-	mmc_stm32.c
+	third_party_mod/ff.c
+	third_party_mod/ffsystem.c
+	third_party_mod/ffunicode.c
+	SDCard.c
 	Draw.c
 	Draw3D.c
 	DrawFill.c
@@ -80,15 +80,15 @@ set(COMMON_SOURCES
 	GPS.c
 	Audio.c
 	CFunction.c
-	picojpeg.c
-	lfs.c
-	lfs_util.c
-	hxcmod.c
+	third_party_mod/picojpeg.c
+	third_party_mod/lfs.c
+	third_party_mod/lfs_util.c
+	third_party_mod/hxcmod.c
 	VS1053.c
-	aes.c
+	third_party_mod/aes.c
 	Memory.c
 	RGB121.c
-	re.c
+	third_party_mod/re.c
 )
 set(CACHE_SOURCES
 	MMtrace.c
@@ -99,20 +99,20 @@ set(DISPLAY_SOURCES
 )
 
 set(WEB_SOURCES
-	cJSON.c
-	mqtt.c
+	third_party_mod/cJSON.c
+	third_party_mod/mqtt.c
 	MMMqtt.c
 	MMTCPclient.c
 	MMtelnet.c
 	MMntp.c
 	MMtcpserver.c
-	tftp.c
+	third_party_mod/tftp.c
 	MMtftp.c
 	MMudp.c
 )
 
 set(OPTIMIZED_SOURCES
-	ff.c
+	third_party_mod/ff.c
 	GUI.c
 	BmpDecoder.c
 	Draw.c
@@ -126,14 +126,14 @@ set(OPTIMIZED_SOURCES
 	Raycaster.c
 	GPS.c
 	I2C.c
-	lfs.c
-	picojpeg.c
+	third_party_mod/lfs.c
+	third_party_mod/picojpeg.c
 	Turtle.c
-	re.c
-	hxcmod.c
+	third_party_mod/re.c
+	third_party_mod/hxcmod.c
 	MATHS.c
 	Editor.c
-	aes.c
+	third_party_mod/aes.c
 )
 
 set(FULL_RP2040_VARIANTS
@@ -318,7 +318,7 @@ option(MMBASIC_ENABLE_FM "Enable FM command and file manager runtime" ON)
 
 if(IS_PICOMIN)
 	list(REMOVE_ITEM COMMON_SOURCES VS1053.c)
-	list(REMOVE_ITEM COMMON_SOURCES re.c)
+	list(REMOVE_ITEM COMMON_SOURCES third_party_mod/re.c)
 	list(REMOVE_ITEM DISPLAY_SOURCES SSD1963.c)
 	list(APPEND COMMON_SOURCES SSD1963min.c)
 endif()
@@ -393,7 +393,11 @@ add_executable(PicoMite ${COMMON_SOURCES})
 # local header already sits next to the .c that includes it — but it becomes
 # load-bearing once files move into per-subsystem folders. The earlier
 # WEB/USB-host-scoped target_include_directories calls remain for clarity.
-target_include_directories(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+target_include_directories(PicoMite PRIVATE
+	${CMAKE_CURRENT_LIST_DIR}
+	${CMAKE_CURRENT_LIST_DIR}/fonts
+	${CMAKE_CURRENT_LIST_DIR}/third_party_mod
+)
 
 # RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
 # via .data. Keep libm in FLASH to reduce RAM usage (e.g. complex math funcs).
@@ -419,7 +423,7 @@ endif()
 
 if(IS_WEB)
 	target_sources(PicoMite PRIVATE ${WEB_SOURCES})
-	set_source_files_properties(cJSON.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(third_party_mod/cJSON.c PROPERTIES COMPILE_FLAGS -Os)
 	target_include_directories(PicoMite PRIVATE
 		${CMAKE_CURRENT_LIST_DIR}
 		${CMAKE_CURRENT_LIST_DIR}/..
@@ -469,7 +473,7 @@ else()
 endif()
 
 if(USES_UPNG)
-	target_sources(PicoMite PRIVATE upng.c)
+	target_sources(PicoMite PRIVATE third_party_mod/upng.c)
 endif()
 
 if(USES_TURTLE)
