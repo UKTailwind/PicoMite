@@ -71,20 +71,20 @@ set(COMMON_SOURCES
 	MM_Misc.c
 	External.c
 	MATHS.c
-	Onewire.c
-	I2C.c
-	SPI.c
-	Serial.c
+	io/Onewire.c
+	io/I2C.c
+	io/SPI.c
+	io/Serial.c
 	SPI-LCD.c
 	BmpDecoder.c
-	GPS.c
-	Audio.c
+	io/GPS.c
+	io/Audio.c
 	CFunction.c
 	third_party_mod/picojpeg.c
 	third_party_mod/lfs.c
 	third_party_mod/lfs_util.c
 	third_party_mod/hxcmod.c
-	VS1053.c
+	io/VS1053.c
 	third_party_mod/aes.c
 	Memory.c
 	RGB121.c
@@ -124,8 +124,8 @@ set(OPTIMIZED_SOURCES
 	Blit.c
 	FrameBuffer.c
 	Raycaster.c
-	GPS.c
-	I2C.c
+	io/GPS.c
+	io/I2C.c
 	third_party_mod/lfs.c
 	third_party_mod/picojpeg.c
 	Turtle.c
@@ -317,7 +317,7 @@ compile_is_in(IS_BTH ${BTH_VARIANTS})
 option(MMBASIC_ENABLE_FM "Enable FM command and file manager runtime" ON)
 
 if(IS_PICOMIN)
-	list(REMOVE_ITEM COMMON_SOURCES VS1053.c)
+	list(REMOVE_ITEM COMMON_SOURCES io/VS1053.c)
 	list(REMOVE_ITEM COMMON_SOURCES third_party_mod/re.c)
 	list(REMOVE_ITEM DISPLAY_SOURCES SSD1963.c)
 	list(APPEND COMMON_SOURCES SSD1963min.c)
@@ -397,6 +397,8 @@ target_include_directories(PicoMite PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}
 	${CMAKE_CURRENT_LIST_DIR}/fonts
 	${CMAKE_CURRENT_LIST_DIR}/third_party_mod
+	${CMAKE_CURRENT_LIST_DIR}/input
+	${CMAKE_CURRENT_LIST_DIR}/io
 )
 
 # RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
@@ -408,8 +410,8 @@ pico_set_linker_script(PicoMite ${CMAKE_CURRENT_BINARY_DIR}/memmap_default_keep_
 
 if(IS_RP2350)
 	target_sources(PicoMite PRIVATE
-		psram.c
-		stepper.c
+		io/psram.c
+		io/stepper.c
 	)
 endif()
 
@@ -460,15 +462,15 @@ endif()
 # HID host or BLE HID host (HOG). Skipped for headless / PS/2-only
 # variants — they use Keyboard.c instead.
 if(USES_USB_HOST OR IS_BTH)
-	target_sources(PicoMite PRIVATE KeyboardMap.c)
+	target_sources(PicoMite PRIVATE input/KeyboardMap.c)
 endif()
 
 if(USES_USB_HOST)
-	target_sources(PicoMite PRIVATE USBKeyboard.c)
+	target_sources(PicoMite PRIVATE input/USBKeyboard.c)
 else()
 	target_sources(PicoMite PRIVATE
-		Keyboard.c
-		mouse.c
+		input/Keyboard.c
+		input/mouse.c
 	)
 endif()
 
@@ -497,10 +499,10 @@ endforeach()
 pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/PicoMiteI2S.pio)
 
 if(IS_FULL_RP2040)
-	set_source_files_properties(Mouse.c PROPERTIES COMPILE_FLAGS -Os)
-	set_source_files_properties(Keyboard.c PROPERTIES COMPILE_FLAGS -Os)
-	set_source_files_properties(Audio.c PROPERTIES COMPILE_FLAGS -Os)
-	set_source_files_properties(Serial.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(input/mouse.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(input/Keyboard.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(io/Audio.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(io/Serial.c PROPERTIES COMPILE_FLAGS -Os)
 	set_source_files_properties(SSD1963.c PROPERTIES COMPILE_FLAGS -Os)
 	set_source_files_properties(Custom.c PROPERTIES COMPILE_FLAGS -Os)
 
