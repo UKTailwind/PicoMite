@@ -500,7 +500,7 @@ foreach(source IN LISTS OPTIMIZED_SOURCES)
 	set_source_files_properties(${source} PROPERTIES COMPILE_FLAGS -Os)
 endforeach()
 
-pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/PicoMiteI2S.pio)
+pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/io/PicoMiteI2S.pio)
 
 if(IS_FULL_RP2040)
 	set_source_files_properties(input/mouse.c PROPERTIES COMPILE_FLAGS -Os)
@@ -516,7 +516,7 @@ if(IS_FULL_RP2040)
 endif()
 
 if(USES_VGA_PIO)
-	pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/PicoMiteVGA.pio)
+	pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio)
 endif()
 
 if(USES_USB_HOST)
