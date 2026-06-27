@@ -211,7 +211,7 @@ nmake || exit /b 1
 if exist "%filename%%fixed_string%%extension%" del "%filename%%fixed_string%%extension%"
 copy "%artifact%" "%directory%%filename%%fixed_string%%extension%" >nul || exit /b 1
 echo "%directory%%filename%%fixed_string%%extension%"
-python ../GetHighestHexAddress.py "%hexfile%" "%mapfile%" || exit /b 1
+python ../tools/GetHighestHexAddress.py "%hexfile%" "%mapfile%" || exit /b 1
 echo.
 exit /b 0
 
