@@ -101,14 +101,14 @@ set(DISPLAY_SOURCES
 set(WEB_SOURCES
 	third_party_mod/cJSON.c
 	third_party_mod/mqtt.c
-	MMMqtt.c
-	MMTCPclient.c
-	MMtelnet.c
-	MMntp.c
-	MMtcpserver.c
+	net/MMMqtt.c
+	net/MMTCPclient.c
+	net/MMtelnet.c
+	net/MMntp.c
+	net/MMtcpserver.c
 	third_party_mod/tftp.c
-	MMtftp.c
-	MMudp.c
+	net/MMtftp.c
+	net/MMudp.c
 )
 
 set(OPTIMIZED_SOURCES
