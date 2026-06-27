@@ -201,24 +201,7 @@ uint8_t PSRAMpin;
 #endif
 #include "PicoMiteVGA.pio.h"
 #include "PicoMiteI2S.pio.h"
-
-// ---- QVGA display configuration (VGA scanout) ----
-#define QVGA_GPIO_FIRST PinDef[Option.VGA_BLUE].GPno
-#define QVGA_GPIO_NUM 4
-#define QVGA_GPIO_LAST (QVGA_GPIO_FIRST + QVGA_GPIO_NUM - 1)
-#define QVGA_GPIO_HSYNC PinDef[Option.VGA_HSYNC].GPno
-#define QVGA_GPIO_VSYNC (QVGA_GPIO_HSYNC + 1)
-// QVGA horizontal timing (126 MHz clock); HSYNC inverted (negative SYNC=LOW=0x80)
-#define QVGA_TOTAL_F 4000
-#define QVGA_HSYNC_F 480
-#define QVGA_BP_F 240
-#define QVGA_FP_F 80
-// QVGA vertical timing
-#define QVGA_VTOT_F 525
-#define QVGA_VSYNC_F 2
-#define QVGA_VBACK_F 33
-#define QVGA_VACT_F 480
-#define QVGA_VFRONT_F 10
+/* QVGA scanout config (QVGA_GPIO_*, QVGA_*_F) moved to graphics/Screens.h */
 #endif
 #ifdef USBKEYBOARD
 #ifdef HDMI
