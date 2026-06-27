@@ -91,7 +91,7 @@ set(COMMON_SOURCES
 	third_party_mod/re.c
 )
 set(CACHE_SOURCES
-	MMtrace.c
+	core/MMtrace.c
 )
 set(DISPLAY_SOURCES
 	graphics/SSD1963.c
@@ -491,7 +491,7 @@ endif()
 if(USES_CACHE)
 	target_sources(PicoMite PRIVATE ${CACHE_SOURCES})
 	target_compile_definitions(PicoMite PRIVATE CACHE)
-	set_source_files_properties(MMtrace.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(core/MMtrace.c PROPERTIES COMPILE_FLAGS -Os)
 endif()
 
 foreach(source IN LISTS OPTIMIZED_SOURCES)
