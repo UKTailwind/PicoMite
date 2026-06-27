@@ -439,11 +439,11 @@ if(COMPILE STREQUAL "PICOUSBRP2350" OR COMPILE STREQUAL "PICORP2350" OR COMPILE 
 endif()
 
 if(IS_BT)
-	target_sources(PicoMite PRIVATE BTConsole.c)
+	target_sources(PicoMite PRIVATE bluetooth/BTConsole.c)
 	# pico_btstack_make_gatt_header compiles nus_gatt.gatt to a C header
 	# (nus_gatt.h in the build dir) listing the GATT attribute database.
 	pico_btstack_make_gatt_header(PicoMite PRIVATE
-		${CMAKE_CURRENT_LIST_DIR}/nus_gatt.gatt)
+		${CMAKE_CURRENT_LIST_DIR}/bluetooth/nus_gatt.gatt)
 endif()
 
 if(IS_BTH)
@@ -452,7 +452,7 @@ if(IS_BTH)
 	# (BT is an input source, not a console replacement). BTKeyboard.c
 	# pumps btstack and feeds incoming HID reports into the same
 	# process_kbd_report path the USB HID host uses.
-	target_sources(PicoMite PRIVATE BTKeyboard.c)
+	target_sources(PicoMite PRIVATE bluetooth/BTKeyboard.c)
 endif()
 
 # KeyboardMap.c contains the shared HID keyboard keymap + report decoder
@@ -765,8 +765,9 @@ if(IS_BT)
 		PICO_CORE0_STACK_SIZE=0x4000
 		GUICONTROLS
 	)
-	# btstack_config.h lives at project root.
-	target_include_directories(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+	# btstack_config.h lives in bluetooth/ (the btstack library includes it
+	# by bare name, so that dir must be on the include path for BT builds).
+	target_include_directories(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR}/bluetooth)
 endif()
 
 if(IS_BTH)
@@ -779,8 +780,9 @@ if(IS_BTH)
 		PICO_CORE0_STACK_SIZE=0x4000
 		GUICONTROLS
 	)
-	# btstack_config.h lives at project root.
-	target_include_directories(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+	# btstack_config.h lives in bluetooth/ (the btstack library includes it
+	# by bare name, so that dir must be on the include path for BT builds).
+	target_include_directories(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR}/bluetooth)
 
 	# PICOMITEBTH-specific build identity: keep this gated so HDMIBTH
 	# does NOT get the PICOMITEBTH define (HDMIBTH has its own marker
