@@ -387,6 +387,14 @@ pico_sdk_init()
 
 add_executable(PicoMite ${COMMON_SOURCES})
 
+# Project root on the include path so source files can be relocated into
+# subdirectories without rewriting their bare-filename includes
+# (#include "Custom.h" etc.). Harmless for the current flat layout — every
+# local header already sits next to the .c that includes it — but it becomes
+# load-bearing once files move into per-subsystem folders. The earlier
+# WEB/USB-host-scoped target_include_directories calls remain for clarity.
+target_include_directories(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR})
+
 # RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
 # via .data. Keep libm in FLASH to reduce RAM usage (e.g. complex math funcs).
 file(READ ${PICO_LINKER_SCRIPT_PATH}/memmap_default.ld PICO_LINKER_SCRIPT_CONTENT)
