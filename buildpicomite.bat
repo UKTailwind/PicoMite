@@ -8,7 +8,7 @@ echo.
 
 set "fixed_string=V6.03.00"
 set "extension=.uf2"
-set "directory=../"
+set "directory=../uf2/"
 set "generator=NMake Makefiles"
 set "artifact=PicoMite.uf2"
 set "mapfile=PicoMite.elf.map"
@@ -208,7 +208,8 @@ echo ========================================
 cmake -G "%generator%" -DCOMPILE=%compile% .. || exit /b 1
 nmake || exit /b 1
 
-if exist "%filename%%fixed_string%%extension%" del "%filename%%fixed_string%%extension%"
+if not exist "..\uf2\" mkdir "..\uf2"
+if exist "%directory%%filename%%fixed_string%%extension%" del "%directory%%filename%%fixed_string%%extension%"
 copy "%artifact%" "%directory%%filename%%fixed_string%%extension%" >nul || exit /b 1
 echo "%directory%%filename%%fixed_string%%extension%"
 python ../tools/GetHighestHexAddress.py "%hexfile%" "%mapfile%" || exit /b 1
