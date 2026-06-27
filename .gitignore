@@ -42,6 +42,9 @@ badapple/*.vid
 badapple/*.aud
 badapple/*.vc
 
+# ---- find_static_globals.py accumulate cache ----
+.static_scan.json
+
 # ---- Editor / OS / Office temp & manual backups ----
 ~$*
 *.bak_*

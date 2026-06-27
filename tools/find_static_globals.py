@@ -82,6 +82,16 @@ OBJ_SUBDIR = Path("CMakeFiles") / "PicoMite.dir"
 VAR_TYPES = set("DBRCGSV")   # data / bss / rodata / common / small-data / weak-object
 FUNC_TYPES = set("TW")       # text (function) / weak
 
+# Variants buildpicomite.bat can build, grouped by platform (used by --build-all).
+# HDMIBTH is valid in CMake but absent from the bat's target lists, so it is not
+# covered by --build-all (build+scan it manually if you need it in the union).
+RP2040_VARIANTS = ["PICO", "PICOUSB", "PICOMIN", "VGA", "VGAUSB", "WEB"]
+RP2350_VARIANTS = ["PICORP2350", "PICOUSBRP2350", "VGARP2350", "VGAUSBRP2350",
+                   "WEBRP2350", "HDMI", "HDMIUSB", "HDMIWEB",
+                   "PICOBTRP2350", "PICOBTHRP2350"]
+ALL_VARIANTS = RP2040_VARIANTS + RP2350_VARIANTS
+DEFAULT_CACHE = ".static_scan.json"
+
 # `<value> <type> <name>` then an optional tab/space-separated `file:line` (nm -l).
 NM_LINE = re.compile(
     r"^(?P<val>[0-9a-fA-F]*)\s+(?P<type>[A-Za-z?-])\s+(?P<name>\S+)(?:[ \t]+(?P<loc>\S.*))?$"
@@ -244,10 +254,94 @@ def safe_from_tables(defined, external, loc):
     return out
 
 
+def find_dir_for_variant(variant):
+    """Locate the persistent build dir whose last build matches `variant`."""
+    for n in ("buildRP2040L", "buildRP2350L", "build"):
+        d = PROJECT_ROOT / n
+        if (d / OBJ_SUBDIR).is_dir() and variant_of(d) == variant:
+            return d
+    return None
+
+
+def run_build_all(nm, variants, cache_path, bat, include_tp, want_funcs):
+    """Build each variant via buildpicomite.bat, scanning+accumulating after each.
+
+    Reusing the batch file is deliberate: it already handles the build-dir
+    rename dance (buildRP2040L/buildRP2350L <-> build), its file-lock retries
+    and stray-`build` recovery, and it confirms each variant actually builds.
+    A build-all is a complete authoritative sweep, so it starts a FRESH cache.
+    """
+    if os.name != "nt":
+        sys.exit("error: --build-all drives buildpicomite.bat (Windows); not supported on this OS.")
+    bat_path = bat if Path(bat).is_absolute() else str(PROJECT_ROOT / bat)
+    if not Path(bat_path).is_file():
+        sys.exit(f"error: build script not found: {bat_path}")
+
+    cache = {"defined": {}, "external": {}, "loc": {}}
+    built, failed = [], []
+    for i, v in enumerate(variants, 1):
+        print(f"\n========== [{i}/{len(variants)}] building {v} ==========", flush=True)
+        r = subprocess.run(["cmd", "/c", bat_path, v], cwd=str(PROJECT_ROOT))
+        if r.returncode != 0:
+            print(f"  !! build FAILED for {v} (exit {r.returncode}) - not scanned", file=sys.stderr)
+            failed.append(v)
+            continue
+        bd = find_dir_for_variant(v)
+        if not bd:
+            print(f"  !! cannot locate built objects for {v} - not scanned", file=sys.stderr)
+            failed.append(v)
+            continue
+        variant, cands, dproj, ext, nobjs = classify_build(nm, bd, include_tp, want_funcs)
+        merge_into_cache(cache, variant, cands, dproj, ext)
+        Path(cache_path).write_text(json.dumps(cache, indent=1, sort_keys=True))  # save as we go
+        built.append(v)
+        print(f"  scanned {bd.name} variant={variant} objects={nobjs} candidates={len(cands)}")
+
+    print(f"\nbuild-all done: built {len(built)}/{len(variants)} "
+          f"[{', '.join(built)}]" + (f"; FAILED: {', '.join(failed)}" if failed else ""))
+    if failed:
+        print("WARNING: variants above failed to build and were not scanned; the SAFE list may "
+              "miss external references that only exist in those variants.", file=sys.stderr)
+    return cache
+
+
+def report_and_apply(safe, variants_seen, cache_note, do_apply):
+    # Flag candidates that also have an `extern` declaration in a header.
+    headers = load_headers()
+    by_file = defaultdict(list)
+    for name, ((src, ln, t), dvariants) in sorted(safe.items()):
+        externs = find_extern_decls(name, headers)
+        by_file[src].append((ln or 0, name, kind_of(t), externs, dvariants))
+
+    total = sum(len(v) for v in by_file.values())
+    print()
+    print(f"=== {total} global symbol(s) safe to mark static "
+          f"(across variants: {', '.join(variants_seen) or 'none'}) ===")
+    if cache_note:
+        print(f"    (judged from cache {cache_note}; the more variants scanned, the safer this list)")
+    print("    NOTE: a candidate is only safe if EVERY variant that compiles its file was scanned.")
+    print()
+    for src in sorted(by_file, key=lambda s: rel(s)):
+        items = sorted(by_file[src])
+        print(f"{rel(src)}  ({len(items)})")
+        for ln, name, kind, externs, dvariants in items:
+            tag = f"  [extern in {', '.join(externs)} - remove it too]" if externs else ""
+            where = "" if len(dvariants) > 1 else f"  (only in {dvariants[0]})"
+            print(f"    {kind:9s} {name:32s} line {ln or '?'}{where}{tag}")
+        print()
+
+    if do_apply:
+        apply_static(by_file)
+    elif total:
+        print("Re-run with --apply to add `static` to these definitions "
+              "(then rebuild and review `git diff`).")
+    return 0
+
+
 def main(argv):
     ap = argparse.ArgumentParser(description="Find globals that can be made static.")
     ap.add_argument("build_dirs", nargs="*",
-                    help="build dirs to analyse (default: auto-detect build/ buildRP2040L/ buildRP2350L/)")
+                    help="build dirs to analyse (default: auto-detect build/ buildRP2040L/ buildRP2350/)")
     ap.add_argument("--functions", action="store_true",
                     help="also report unreferenced global functions, not just variables")
     ap.add_argument("--include-third-party", action="store_true",
@@ -256,13 +350,30 @@ def main(argv):
                     help="merge this run into a JSON cache and judge SAFE across all runs so far")
     ap.add_argument("--report-only", action="store_true",
                     help="with --accumulate: do not analyse, just report from the existing cache")
+    ap.add_argument("--build-all", nargs="*", metavar="VARIANT", default=None,
+                    help="build each variant (default: all bat-supported) via buildpicomite.bat, "
+                         "scanning+accumulating after each into a FRESH cache (--accumulate path "
+                         "or .static_scan.json). Slow, but yields a trustworthy SAFE list. "
+                         "Optionally name a subset, e.g. --build-all PICOMIN HDMIWEB WEB.")
+    ap.add_argument("--bat", default="buildpicomite.bat",
+                    help="build batch file used by --build-all (default: buildpicomite.bat)")
     ap.add_argument("--apply", action="store_true",
                     help="edit sources to add `static` to SAFE candidates (review git diff after!)")
     args = ap.parse_args(argv)
 
     nm = find_nm()
 
-    # Pick build dirs.
+    # ---- --build-all: drive the variant builds, fresh cache, then report ----
+    if args.build_all is not None:
+        variants = args.build_all if args.build_all else ALL_VARIANTS
+        cache_path = args.accumulate or str(PROJECT_ROOT / DEFAULT_CACHE)
+        cache = run_build_all(nm, variants, cache_path, args.bat,
+                              args.include_third_party, args.functions)
+        safe = safe_from_tables(cache["defined"], cache["external"], cache["loc"])
+        variants_seen = sorted({v for vs in cache["defined"].values() for v in vs})
+        return report_and_apply(safe, variants_seen, cache_path, args.apply)
+
+    # ---- analyse existing build dirs (optionally accumulating) ----
     if args.build_dirs:
         build_dirs = [Path(d) if Path(d).is_absolute() else (PROJECT_ROOT / d)
                       for d in args.build_dirs]
@@ -289,11 +400,11 @@ def main(argv):
             if args.accumulate:
                 merge_into_cache(cache, variant, cands, dproj, ext)
 
-    # Build the SAFE table either from the cache (accumulate) or from this run's union.
     if args.accumulate:
         Path(args.accumulate).write_text(json.dumps(cache, indent=1, sort_keys=True))
         safe = safe_from_tables(cache["defined"], cache["external"], cache["loc"])
         variants_seen = sorted({v for vs in cache["defined"].values() for v in vs})
+        cache_note = args.accumulate
     else:
         defined, external, loc = {}, {}, {}
         for variant, cands, dproj, ext in analysed:
@@ -305,40 +416,9 @@ def main(argv):
                 loc.setdefault(name, [src, ln, t])
         safe = safe_from_tables(defined, external, loc)
         variants_seen = sorted({v for v, *_ in analysed})
+        cache_note = None
 
-    # Flag candidates that also have an `extern` declaration in a header.
-    headers = load_headers()
-
-    # Group SAFE candidates by source file.
-    by_file = defaultdict(list)
-    for name, ((src, ln, t), dvariants) in sorted(safe.items()):
-        externs = find_extern_decls(name, headers)
-        by_file[src].append((ln or 0, name, kind_of(t), externs, dvariants))
-
-    total = sum(len(v) for v in by_file.values())
-    print()
-    print(f"=== {total} global symbol(s) safe to mark static "
-          f"(across variants: {', '.join(variants_seen) or 'none'}) ===")
-    if args.accumulate:
-        print(f"    (judged from accumulate cache {args.accumulate}; "
-              f"the more variants you build+scan into it, the safer this list)")
-    print("    NOTE: a candidate is only safe if EVERY variant that compiles its file was scanned.")
-    print()
-    for src in sorted(by_file, key=lambda s: rel(s)):
-        items = sorted(by_file[src])
-        print(f"{rel(src)}  ({len(items)})")
-        for ln, name, kind, externs, dvariants in items:
-            tag = f"  [extern in {', '.join(externs)} - remove it too]" if externs else ""
-            where = "" if len(dvariants) > 1 else f"  (only in {dvariants[0]})"
-            print(f"    {kind:9s} {name:32s} line {ln or '?'}{where}{tag}")
-        print()
-
-    if args.apply:
-        apply_static(by_file)
-    elif total:
-        print("Re-run with --apply to add `static` to these definitions "
-              "(then rebuild and review `git diff`).")
-    return 0
+    return report_and_apply(safe, variants_seen, cache_note, args.apply)
 
 
 def rel(path: str) -> str:
