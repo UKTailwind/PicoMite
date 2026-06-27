@@ -170,7 +170,55 @@ uint8_t PSRAMpin;
 #endif
 
 #ifndef HDMI
-#include "Include.h"
+/* Hardware headers, PIO programs and the QVGA/VGA scanout configuration that
+   used to live in the (non-HDMI-only) Include.h. Include.h's generic type and
+   attribute macros (Bool/True/False/INLINE/WEAK/nop/cb/BIT/...) were dead - the
+   firmware uses <stdbool.h> bool/true/false. configuration.h is already
+   included above, and we are already inside #ifndef HDMI so the PIO headers
+   need no further guard. */
+#include <stdio.h>
+#include <string.h>
+#include "pico/stdlib.h"
+#include "pico/multicore.h"
+#include "pico/binary_info.h"
+#include "pico/bootrom.h"
+#include "pico/unique_id.h"
+#include "hardware/adc.h"
+#include "hardware/clocks.h"
+#include "hardware/divider.h"
+#include "hardware/dma.h"
+#include "hardware/exception.h"
+#include "hardware/flash.h"
+#include "hardware/gpio.h"
+#include "hardware/irq.h"
+#include "hardware/pio.h"
+#include "hardware/vreg.h"
+#include "hardware/watchdog.h"
+#include "hardware/structs/scb.h"
+#include "hardware/structs/systick.h"
+#ifndef USBKEYBOARD
+#include "class/cdc/cdc_device.h"
+#endif
+#include "PicoMiteVGA.pio.h"
+#include "PicoMiteI2S.pio.h"
+
+// ---- QVGA display configuration (VGA scanout) ----
+#define QVGA_GPIO_FIRST PinDef[Option.VGA_BLUE].GPno
+#define QVGA_GPIO_NUM 4
+#define QVGA_GPIO_LAST (QVGA_GPIO_FIRST + QVGA_GPIO_NUM - 1)
+#define QVGA_GPIO_HSYNC PinDef[Option.VGA_HSYNC].GPno
+#define QVGA_GPIO_VSYNC (QVGA_GPIO_HSYNC + 1)
+// QVGA horizontal timing (126 MHz clock); HSYNC inverted (negative SYNC=LOW=0x80)
+#define QVGA_TOTAL_F 4000
+#define QVGA_HSYNC_F 480
+#define QVGA_BP_F 240
+#define QVGA_FP_F 80
+// QVGA vertical timing
+#define QVGA_VTOT_F 525
+#define QVGA_VSYNC_F 2
+#define QVGA_VBACK_F 33
+#define QVGA_VACT_F 480
+#define QVGA_VFRONT_F 10
 #endif
 #ifdef USBKEYBOARD
 #ifdef HDMI
