@@ -49,9 +49,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifdef PICOMITEWEB
 #include "pico/cyw43_arch.h"
 #endif
-#ifdef PICOMITEVGA
-#include "Include.h"
-#endif
 #include "VS1053.h"
 #if defined(PICOMITEMIN)
 #define AUDIO_USES_VS1053 0

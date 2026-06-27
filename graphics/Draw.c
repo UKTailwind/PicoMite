@@ -79,11 +79,6 @@ void DrawCircleRingLineByLine(int x, int y, int r1, int r2, int c, MMFLOAT aspec
 #include "ArialNumFontPlus.h"
 #include "Font_8x6.h"
 #include "arial_bold.h"
-#ifdef PICOMITEVGA
-#ifndef HDMI
-#include "Include.h"
-#endif
-#endif
 #include "smallfont.h"
 #include "font-8x10.h"
 
