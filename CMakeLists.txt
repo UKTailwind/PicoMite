@@ -50,14 +50,14 @@ set(COMMON_SOURCES
 	PicoMite.c
 	core/MMBasic.c
 	core/Operators.c
-	Custom.c
+	misc/Custom.c
 	core/Functions.c
 	core/Commands.c
-	FileIO.c
+	misc/FileIO.c
 	third_party_mod/ff.c
 	third_party_mod/ffsystem.c
 	third_party_mod/ffunicode.c
-	SDCard.c
+	misc/SDCard.c
 	graphics/Draw.c
 	graphics/Draw3D.c
 	graphics/DrawFill.c
@@ -66,10 +66,10 @@ set(COMMON_SOURCES
 	graphics/Sprite.c
 	graphics/Blit.c
 	graphics/FrameBuffer.c
-	Editor.c
-	XModem.c
+	misc/Editor.c
+	misc/XModem.c
 	core/MM_Misc.c
-	External.c
+	misc/External.c
 	core/MATHS.c
 	io/Onewire.c
 	io/I2C.c
@@ -132,7 +132,7 @@ set(OPTIMIZED_SOURCES
 	third_party_mod/re.c
 	third_party_mod/hxcmod.c
 	core/MATHS.c
-	Editor.c
+	misc/Editor.c
 	third_party_mod/aes.c
 )
 
@@ -402,6 +402,7 @@ target_include_directories(PicoMite PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}/graphics
 	${CMAKE_CURRENT_LIST_DIR}/core
 	${CMAKE_CURRENT_LIST_DIR}/net
+	${CMAKE_CURRENT_LIST_DIR}/misc
 )
 
 # RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
@@ -507,7 +508,7 @@ if(IS_FULL_RP2040)
 	set_source_files_properties(io/Audio.c PROPERTIES COMPILE_FLAGS -Os)
 	set_source_files_properties(io/Serial.c PROPERTIES COMPILE_FLAGS -Os)
 	set_source_files_properties(graphics/SSD1963.c PROPERTIES COMPILE_FLAGS -Os)
-	set_source_files_properties(Custom.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(misc/Custom.c PROPERTIES COMPILE_FLAGS -Os)
 
 	pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
 	target_compile_definitions(slower_boot2 PRIVATE PICO_FLASH_SPI_CLKDIV=4)
