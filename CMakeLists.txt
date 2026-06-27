@@ -58,14 +58,14 @@ set(COMMON_SOURCES
 	third_party_mod/ffsystem.c
 	third_party_mod/ffunicode.c
 	SDCard.c
-	Draw.c
-	Draw3D.c
-	DrawFill.c
-	TileMap.c
-	Pointer.c
-	Sprite.c
-	Blit.c
-	FrameBuffer.c
+	graphics/Draw.c
+	graphics/Draw3D.c
+	graphics/DrawFill.c
+	graphics/TileMap.c
+	graphics/Pointer.c
+	graphics/Sprite.c
+	graphics/Blit.c
+	graphics/FrameBuffer.c
 	Editor.c
 	XModem.c
 	MM_Misc.c
@@ -75,8 +75,8 @@ set(COMMON_SOURCES
 	io/I2C.c
 	io/SPI.c
 	io/Serial.c
-	SPI-LCD.c
-	BmpDecoder.c
+	graphics/SPI-LCD.c
+	graphics/BmpDecoder.c
 	io/GPS.c
 	io/Audio.c
 	CFunction.c
@@ -87,15 +87,15 @@ set(COMMON_SOURCES
 	io/VS1053.c
 	third_party_mod/aes.c
 	Memory.c
-	RGB121.c
+	graphics/RGB121.c
 	third_party_mod/re.c
 )
 set(CACHE_SOURCES
 	MMtrace.c
 )
 set(DISPLAY_SOURCES
-	SSD1963.c
-	Touch.c
+	graphics/SSD1963.c
+	graphics/Touch.c
 )
 
 set(WEB_SOURCES
@@ -113,22 +113,22 @@ set(WEB_SOURCES
 
 set(OPTIMIZED_SOURCES
 	third_party_mod/ff.c
-	GUI.c
-	BmpDecoder.c
-	Draw.c
-	Draw3D.c
-	DrawFill.c
-	TileMap.c
-	Pointer.c
-	Sprite.c
-	Blit.c
-	FrameBuffer.c
-	Raycaster.c
+	graphics/GUI.c
+	graphics/BmpDecoder.c
+	graphics/Draw.c
+	graphics/Draw3D.c
+	graphics/DrawFill.c
+	graphics/TileMap.c
+	graphics/Pointer.c
+	graphics/Sprite.c
+	graphics/Blit.c
+	graphics/FrameBuffer.c
+	graphics/Raycaster.c
 	io/GPS.c
 	io/I2C.c
 	third_party_mod/lfs.c
 	third_party_mod/picojpeg.c
-	Turtle.c
+	graphics/Turtle.c
 	third_party_mod/re.c
 	third_party_mod/hxcmod.c
 	MATHS.c
@@ -319,8 +319,8 @@ option(MMBASIC_ENABLE_FM "Enable FM command and file manager runtime" ON)
 if(IS_PICOMIN)
 	list(REMOVE_ITEM COMMON_SOURCES io/VS1053.c)
 	list(REMOVE_ITEM COMMON_SOURCES third_party_mod/re.c)
-	list(REMOVE_ITEM DISPLAY_SOURCES SSD1963.c)
-	list(APPEND COMMON_SOURCES SSD1963min.c)
+	list(REMOVE_ITEM DISPLAY_SOURCES graphics/SSD1963.c)
+	list(APPEND COMMON_SOURCES graphics/SSD1963min.c)
 endif()
 
 set(USES_FM ${MMBASIC_ENABLE_FM})
@@ -399,6 +399,7 @@ target_include_directories(PicoMite PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}/third_party_mod
 	${CMAKE_CURRENT_LIST_DIR}/input
 	${CMAKE_CURRENT_LIST_DIR}/io
+	${CMAKE_CURRENT_LIST_DIR}/graphics
 )
 
 # RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
@@ -433,11 +434,11 @@ if(IS_WEB)
 endif()
 
 if(HAS_GUI OR IS_HDMI OR (IS_VGA AND IS_RP2350))
-	target_sources(PicoMite PRIVATE GUI.c)
+	target_sources(PicoMite PRIVATE graphics/GUI.c)
 endif()
 
 if(COMPILE STREQUAL "PICOUSBRP2350" OR COMPILE STREQUAL "PICORP2350" OR COMPILE STREQUAL "PICOBTRP2350" OR COMPILE STREQUAL "PICOBTHRP2350")
-	target_sources(PicoMite PRIVATE VGA222.c)
+	target_sources(PicoMite PRIVATE graphics/VGA222.c)
 endif()
 
 if(IS_BT)
@@ -479,11 +480,11 @@ if(USES_UPNG)
 endif()
 
 if(USES_TURTLE)
-	target_sources(PicoMite PRIVATE Turtle.c)
+	target_sources(PicoMite PRIVATE graphics/Turtle.c)
 endif()
 
 if(USES_RAYCASTER)
-	target_sources(PicoMite PRIVATE Raycaster.c)
+	target_sources(PicoMite PRIVATE graphics/Raycaster.c)
 endif()
 
 if(USES_CACHE)
@@ -503,7 +504,7 @@ if(IS_FULL_RP2040)
 	set_source_files_properties(input/Keyboard.c PROPERTIES COMPILE_FLAGS -Os)
 	set_source_files_properties(io/Audio.c PROPERTIES COMPILE_FLAGS -Os)
 	set_source_files_properties(io/Serial.c PROPERTIES COMPILE_FLAGS -Os)
-	set_source_files_properties(SSD1963.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(graphics/SSD1963.c PROPERTIES COMPILE_FLAGS -Os)
 	set_source_files_properties(Custom.c PROPERTIES COMPILE_FLAGS -Os)
 
 	pico_define_boot_stage2(slower_boot2 ${PICO_DEFAULT_BOOT_STAGE2_FILE})
