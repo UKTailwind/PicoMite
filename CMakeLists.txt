@@ -27,7 +27,7 @@ set(VALID_COMPILE_VARIANTS
 # Guard restored: without it, this set() shadows the -DCOMPILE=X passed
 # by buildpicomite.bat and every variant silently builds as the default.
 if(NOT DEFINED COMPILE)
-	set(COMPILE PICORP2350)
+	set(COMPILE HDMIWEB)
 endif()
 
 list(FIND VALID_COMPILE_VARIANTS "${COMPILE}" COMPILE_INDEX)
@@ -691,7 +691,7 @@ if(COMPILE STREQUAL "HDMIBTH")
 	# the HDMIBTH-specific identity.
 	target_compile_definitions(PicoMite PRIVATE
 		PICOMITEHDMIBTH
-		CYW43_HOST_NAME=\"PicoMiteHDMIBTH\"
+		CYW43_HOST_NAME="PicoMiteHDMIBTH"
 	)
 endif()
 
@@ -723,11 +723,11 @@ if(IS_WEB)
 		# 144 KB MMBasic heap shrank the gap by 8 KB and hung mid-handshake.
 		target_compile_definitions(PicoMite PRIVATE
 			PICOMITEHDMIWEB
-			CYW43_HOST_NAME=\"PicoMiteHDMIWEB\"
+			CYW43_HOST_NAME="PicoMiteHDMIWEB"
 		)
 	else()
 		target_compile_definitions(PicoMite PRIVATE
-			CYW43_HOST_NAME=\"WebMite\"
+			CYW43_HOST_NAME="WebMite"
 		)
 	endif()
 endif()
@@ -761,7 +761,7 @@ if(IS_BT)
 		PICOMITEBT
 		CYW43_ENABLE_BLUETOOTH=1
 		CYW43_PIO_CLOCK_DIV_DYNAMIC=1
-		CYW43_HOST_NAME=\"PicoMiteBT\"
+		CYW43_HOST_NAME="PicoMiteBT"
 		# 16 KB each for heap and stack — matches WEB build. Adequate
 		# given the MIN_CPU=200 MHz floor set in configuration.h
 		# (below ~150 MHz the BLE stack call depth + IRQ stacking
@@ -797,7 +797,7 @@ if(IS_BTH)
 	if(COMPILE STREQUAL "PICOBTHRP2350")
 		target_compile_definitions(PicoMite PRIVATE
 			PICOMITEBTH
-			CYW43_HOST_NAME=\"PicoMiteBTH\"
+			CYW43_HOST_NAME="PicoMiteBTH"
 		)
 	endif()
 endif()

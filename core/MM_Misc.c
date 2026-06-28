@@ -3775,8 +3775,8 @@ void MIPS16 configure(unsigned char *p, bool noask)
             Option.HDMId2 = 7;
 #endif
 #if defined PICOMITEVGA && !defined(HDMI)
-            Option.VGA_HSYNC = PINMAP[0];
-            Option.VGA_BLUE = PINMAP[2];
+            Option.VGA_HSYNC = PINMAP[12];
+            Option.VGA_BLUE = PINMAP[14];
 #endif
 #ifdef USBKEYBOARD
             Option.SerialTX = PINMAP[8];

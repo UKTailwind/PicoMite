@@ -160,61 +160,6 @@ extern "C"
 /* VGA/HDMI display mode / framebuffer-size config -> graphics/Screens.h */
 #include "Screens.h"
 
-/* CPU frequency definitions */
-#define Freq720P 372000
-#define Freq480P 315000
-#define Freq252P 252000
-#define Freq378P 378000
-#define FreqXGA 375000
-#define FreqSVGA 360000
-#define Freq848 336000
-#define Freq400 283200
-#define FreqY 333000
-#define FreqX 252000
-#define FreqDefault 200000
-   typedef enum
-   {
-      R0 = 0,
-      R1280x720 = 1,
-      R640x480f315 = 2,
-      R640x480f252 = 3,
-      R640x480f378 = 4,
-      R1024x768 = 5,
-      R800x600 = 6,
-      R848x480 = 7,
-      R720x400 = 8,
-      R800x480 = 9,
-      R1024x600 = 10,
-#ifdef HDMICUTDOWN
-      /* HDMIBTH/HDMIWEB-only: a "special" 640x480 that is RGB332 (8-bit)
-         rather than the normal full-colour RGB555 640x480. It shares the
-         1024x600 8-bit tile pipeline so it costs no extra framebuffer
-         and is deliberately kept OUT of the FullColour macro. Selected
-         at runtime by the RESOLUTION command (no reboot). */
-      R640x480x8 = 11,
-      /* HDMIBTH/HDMIWEB-only: the RGB332 (8-bit) 720x400, the sibling of
-         R640x480x8. Kept as its own enum (rather than reusing the full
-         build's RGB555 R720x400 = 8) so it stays OUT of FullColour and is
-         driven by the same 8-bit tile pipeline / HDMIloopBTH640. Runs at
-         283.2 MHz (Freq400); selected by OPTION/RESOLUTION. */
-      R720x400x8 = 12,
-#endif
-   } Resolution_TypeDef;
-   static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq378P, FreqXGA, FreqSVGA, Freq848, Freq400, FreqY, FreqX};
-/* Display capability macros */
-#define FullColour (Option.Resolution == R640x480f252 || Option.Resolution == R640x480f378 || \
-                    Option.Resolution == R640x480f315 || Option.Resolution == R720x400)
-#ifdef HDMICUTDOWN
-/* R640x480x8 behaves like 1024x600 (8-bit/RGB332, tile-based) so it is
-   treated as a MediumRes mode for font/tile-height selection. */
-#define MediumRes (Option.Resolution == R800x600 || Option.Resolution == R848x480 ||  \
-                   Option.Resolution == R800x480 || Option.Resolution == R1024x600 || \
-                   Option.Resolution == R640x480x8 || Option.Resolution == R720x400x8)
-#else
-#define MediumRes (Option.Resolution == R800x600 || Option.Resolution == R848x480 || \
-                   Option.Resolution == R800x480 || Option.Resolution == R1024x600)
-#endif
-
 #endif /* PICOMITEVGA */
 
 /* ============================================================================
