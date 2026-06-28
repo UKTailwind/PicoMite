@@ -636,6 +636,8 @@ if(IS_PICOMIN)
 endif()
 
 if(IS_VGA)
+	# PIO VGA (QVGA) core1 scanout split out of PicoMite.c (graphics/VGA.c).
+	target_sources(PicoMite PRIVATE graphics/VGA.c)
 	target_compile_definitions(PicoMite PRIVATE
 		PICOMITEVGA
 		PICO_HEAP_SIZE=0x800
