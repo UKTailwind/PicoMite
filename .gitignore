@@ -35,15 +35,15 @@ _docx_extract/
 # ---- Packaged VS Code extension builds ----
 *.vsix
 
-# ---- Video-converter sample/generated media (badapple/) keep .py/.bas/.md ----
-badapple/*.mp4
-badapple/*.332
-badapple/*.r332
-badapple/*.r332c
-badapple/*.121
-badapple/*.vid
-badapple/*.aud
-badapple/*.vc
+# ---- Video-converter sample/generated media (video/) keep .py/.bas/.md ----
+video/*.mp4
+video/*.332
+video/*.r332
+video/*.r332c
+video/*.121
+video/*.vid
+video/*.aud
+video/*.vc
 
 # ---- find_static_globals.py / find_dead_globals.py accumulate caches ----
 .static_scan.json
