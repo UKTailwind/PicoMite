@@ -101,6 +101,7 @@ set(DISPLAY_SOURCES
 set(WEB_SOURCES
 	third_party_mod/cJSON.c
 	third_party_mod/mqtt.c
+	net/WiFi.c
 	net/MMMqtt.c
 	net/MMTCPclient.c
 	net/MMtelnet.c
