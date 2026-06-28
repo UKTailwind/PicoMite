@@ -649,6 +649,8 @@ if(IS_VGA)
 endif()
 
 if(IS_HDMI)
+	# HDMI/DVI core1 scanout split out of PicoMite.c (graphics/HDMI.c).
+	target_sources(PicoMite PRIVATE graphics/HDMI.c)
 	# HDMI is RP2350-only.
 	# PICO_HEAP_SIZE / PICO_CORE0_STACK_SIZE are set per-variant below
 	# — HDMIBTH and HDMIWEB need 0x4000 each like PICOMITEBT/BTH (cyw43
