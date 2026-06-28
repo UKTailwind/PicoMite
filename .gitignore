@@ -1,3 +1,6 @@
+# ---- Claude Code personal/local config (paths, command allowlist) ----
+.claude/settings.local.json
+
 # ---- Build trees (CMake out-of-source dirs reused across variants) ----
 build/
 buildRP2040L/
