@@ -388,7 +388,79 @@
 
 
 /* ---- WEB command handler + WiFi scan (cmd_web), moved from misc/Custom.c ---- */
-extern void setwifi(unsigned char *tp);     // defined in core/MM_Misc.c
+/* ---- OPTION WIFI parser (setwifi), moved from core/MM_Misc.c ---- */
+void setwifi(unsigned char *tp)
+{
+    getcsargs(&tp, 13);
+    if (!(argc == 3 || argc == 5 || argc == 7 || argc == 11 || argc == 13))
+        SyntaxError();
+    ;
+    if (CurrentLinePtr)
+        StandardError(10);
+    char *ssid = GetTempStrMemory();
+    char *password = GetTempStrMemory();
+    char *hostname = GetTempStrMemory();
+    char *ipaddress = GetTempStrMemory();
+    char *mask = GetTempStrMemory();
+    char *gateway = GetTempStrMemory();
+    strcpy(ssid, (char *)getCstring(argv[0]));
+    strcpy(password, (char *)getCstring(argv[2]));
+    if (strlen(ssid) > MAXKEYLEN - 1)
+        error("SSID too long, max 63 chars");
+    if (strlen(password) > MAXKEYLEN - 1)
+        error("Password too long, max 63 chars");
+    if (argc == 11 || argc == 13)
+    {
+        strcpy(ipaddress, (char *)getCstring(argv[6]));
+        strcpy(mask, (char *)getCstring(argv[8]));
+        strcpy(gateway, (char *)getCstring(argv[10]));
+        ip4_addr_t ipaddr;
+        if (!ip4addr_aton(ipaddress, &ipaddr))
+            error("Invalid IP address");
+        if (!ip4addr_aton(mask, &ipaddr))
+            error("Invalid mask address");
+        if (!ip4addr_aton(gateway, &ipaddr))
+            error("Invalid gateway address");
+    }
+    if (argc >= 5 && *argv[4])
+    {
+        strcpy(hostname, (char *)getCstring(argv[4]));
+        if (strlen(hostname) > 31)
+            error("Hostname too long, max 31 chars");
+    }
+    else
+    {
+        strcpy(hostname, "PICO");
+        strcat(hostname, id_out);
+    }
+    int country_idx = -1;
+    if (argc == 7 || argc == 13)
+    {
+        const char *country_str = (const char *)getCstring(argv[argc == 7 ? 6 : 12]);
+        country_idx = wifi_country_from_string(country_str);
+        if (country_idx < 0)
+            error("Invalid WiFi country code");
+    }
+    strcpy((char *)Option.SSID, ssid);
+    strcpy((char *)Option.PASSWORD, password);
+    if (argc == 11 || argc == 13)
+    {
+        strcpy(Option.ipaddress, ipaddress);
+        strcpy(Option.mask, mask);
+        strcpy(Option.gateway, gateway);
+    }
+    else
+    {
+        memset(Option.ipaddress, 0, 16);
+        memset(Option.mask, 0, 16);
+        memset(Option.gateway, 0, 16);
+    }
+    strcpy(Option.hostname, hostname);
+    if (country_idx >= 0)
+        Option.wifi_country_code = (unsigned char)country_idx;
+    SaveOptions();
+}
+
 char *scan_dest = NULL;
 volatile char *scan_dups = NULL;
 volatile int scan_size;

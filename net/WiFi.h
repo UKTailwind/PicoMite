@@ -20,5 +20,9 @@ void web_async_set_error(const char *msg);
 void web_async_check_error(void);
 int wifi_country_from_string(const char *iso);
 
+/* OPTION WIFI parser — sets the WiFi Option fields then triggers a soft reset.
+   Called from core/MM_Misc.c (the OPTION command), defined in net/WiFi.c. */
+void setwifi(unsigned char *tp);
+
 #endif // PICOMITEWEB
 #endif // WIFI_H

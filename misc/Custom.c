@@ -159,7 +159,6 @@ bool PIO0 = true;
 bool PIO1 = false;
 bool PIO2 = false;
 #endif
-extern void setwifi(unsigned char *tp);
 volatile bool TCPreceived = false;
 char *TCPreceiveInterrupt = NULL;
 #endif
