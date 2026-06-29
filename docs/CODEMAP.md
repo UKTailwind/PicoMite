@@ -95,7 +95,7 @@ and gated by macros: `PICOMITEVGA`, `HDMI`, `HDMICUTDOWN`, `PICOMITEWEB`,
 
 | File | Contents |
 |---|---|
-| `WiFi.c/.h` | WiFi / lwIP / web runtime: `ProcessWeb` (lwIP poll pump), `WebConnect`, deferred async-error helpers, TLS/NTP time handling. |
+| `WiFi.c/.h` | WiFi / lwIP / web runtime: the `WEB` command handler (`cmd_web`) and its WiFi-scan callback, `ProcessWeb` (lwIP poll pump), `WebConnect`, deferred async-error helpers, TLS/NTP time handling. |
 | `MMTCPclient.c` | `WEB TCP CLIENT` commands (incl. TLS via altcp). |
 | `MMtcpserver.c` | `WEB TCP SERVER` commands. |
 | `MMMqtt.c` | MQTT BASIC commands (wraps the lwIP MQTT app). |
