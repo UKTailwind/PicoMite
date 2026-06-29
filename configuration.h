@@ -249,7 +249,7 @@ extern "C"
 #undef MAX_CPU
 #define MAX_CPU 396000
 #define MagicKey 0x90E5E945
-#define FLASH_TARGET_OFFSET (1376 * 1024)
+#define FLASH_TARGET_OFFSET (1392 * 1024)
 #define HEAP_MEMORY_SIZE (272 * 1024)
 #elif defined(PICOMITEBTH)
    /* PICOMITEBTH = PicoMite + USB CDC console + BLE HID host. Same CYW43
@@ -261,7 +261,7 @@ extern "C"
 #undef MAX_CPU
 #define MAX_CPU 396000
 #define MagicKey 0x6FACAA50
-#define FLASH_TARGET_OFFSET (1408 * 1024)
+#define FLASH_TARGET_OFFSET (1424 * 1024)
 #define HEAP_MEMORY_SIZE (256 * 1024)
 #else
 #define FLASH_TARGET_OFFSET (1088 * 1024)
@@ -279,7 +279,7 @@ extern "C"
 
 #ifdef USBKEYBOARD
 #define MagicKey 0xEE897110
-#define FLASH_TARGET_OFFSET (912 * 1024)
+#define FLASH_TARGET_OFFSET (928 * 1024)
 #define HEAP_MEMORY_SIZE (132 * 1024)
 #else
 #ifdef PICOMITEMIN
