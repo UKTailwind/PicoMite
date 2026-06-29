@@ -386,4 +386,154 @@
         }
     }
 
+
+/* ---- WEB command handler + WiFi scan (cmd_web), moved from misc/Custom.c ---- */
+extern void setwifi(unsigned char *tp);     // defined in core/MM_Misc.c
+char *scan_dest = NULL;
+volatile char *scan_dups = NULL;
+volatile int scan_size;
+static int scan_result(void *env, const cyw43_ev_scan_result_t *result)
+{
+        if (result)
+        {
+                Timer4 = 5000;
+                char buff[STRINGSIZE] = {0};
+                //        int found=0;
+                if (scan_dups == NULL)
+                        return 0;
+                for (int i = 0; i < scan_dups[32 * 100]; i++)
+                {
+                        if (strcmp((char *)result->ssid, (char *)&scan_dups[32 * i]) == 0)
+                                return 0;
+                }
+                for (int i = 0; i < 100; i++)
+                {
+                        if (scan_dups[32 * i] == 0)
+                        {
+                                strcpy((char *)&scan_dups[32 * i], (char *)result->ssid);
+                                scan_dups[32 * 100]++;
+                                break;
+                        }
+                }
+                sprintf(buff, "ssid: %-32s rssi: %4d chan: %3d mac: %02x:%02x:%02x:%02x:%02x:%02x sec: %u\r\n",
+                        result->ssid, result->rssi, result->channel,
+                        result->bssid[0], result->bssid[1], result->bssid[2], result->bssid[3], result->bssid[4], result->bssid[5],
+                        result->auth_mode);
+                if (scan_dest != NULL)
+                {
+                        if (strlen((char *)&scan_dest[8]) + strlen(buff) > (size_t)scan_size)
+                        {
+                                FreeMemorySafe((void **)&scan_dups);
+                                scan_dest = NULL;
+                                web_async_set_error("Array too small");
+                                return 0;
+                        }
+                        if (scan_dest[8] == 0)
+                                strcpy(&scan_dest[8], buff);
+                        else
+                                strcat(&scan_dest[8], buff);
+                }
+                else
+                        MMPrintString(buff);
+        }
+        return 0;
+}
+/*  @endcond */
+void cmd_web(void)
+{
+        unsigned char *tp;
+        tp = checkstring(cmdline, (unsigned char *)"CONNECT");
+        if (tp)
+        {
+                if (*tp)
+                {
+                        setwifi(tp);
+                        WebConnect();
+                }
+                else
+                {
+                        if (cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA) < 0)
+                        {
+                                WebConnect();
+                        }
+                }
+                return;
+        }
+        tp = checkstring(cmdline, (unsigned char *)"SCAN");
+        if (tp)
+        {
+                void *ptr1 = NULL;
+                if (*tp)
+                {
+                        ptr1 = findvar(tp, V_FIND | V_EMPTY_OK);
+                        CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
+                        if (g_vartbl[g_VarIndex].type & T_INT)
+                        {
+                                if (g_vartbl[g_VarIndex].dims[1] != 0)
+                                        StandardError(6);
+                                if (g_vartbl[g_VarIndex].dims[0] <= 0)
+                                { // Not an array
+                                        StandardError(35);
+                                }
+                                scan_size = (g_vartbl[g_VarIndex].dims[0] - g_OptionBase) * 8;
+                                scan_dest = (char *)ptr1;
+                                scan_dest[8] = 0;
+                        }
+                        else
+                                StandardError(35);
+                }
+                scan_dups = GetMemory(32 * 100 + 1);
+                cyw43_wifi_scan_options_t scan_options = {0};
+                int err = cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, scan_result);
+                if (err == 0)
+                {
+                        MMPrintString("\nPerforming wifi scan\r\n");
+                }
+                else
+                {
+                        char buff[STRINGSIZE] = {0};
+                        sprintf(buff, "Failed to start scan: %d\r\n", err);
+                        MMPrintString(buff);
+                }
+                Timer4 = 500;
+                while (Timer4)
+                        if (startupcomplete)
+                                ProcessWeb(0);
+                if (scan_dest)
+                {
+                        uint64_t *p = (uint64_t *)scan_dest;
+                        *p = strlen(&scan_dest[8]);
+                }
+                scan_dest = NULL;
+                FreeMemorySafe((void **)&scan_dups);
+                return;
+        }
+        if (!(WIFIconnected && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) == CYW43_LINK_UP))
+                error("WIFI not connected");
+        tp = checkstring(cmdline, (unsigned char *)"NTP");
+        if (tp)
+        {
+                cmd_ntp(tp);
+                return;
+        }
+        tp = checkstring(cmdline, (unsigned char *)"UDP");
+        if (tp)
+        {
+                cmd_udp(tp);
+                return;
+        }
+        if (cmd_mqtt())
+                return;
+        if (cmd_tcpclient())
+                return;
+        if (cmd_tcpserver())
+                return;
+#ifdef PICOMITEWEB_TLS
+        if (cmd_tls())
+                return;
+#endif
+        SyntaxError();
+        ;
+}
+
 #endif // PICOMITEWEB
