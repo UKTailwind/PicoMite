@@ -1865,6 +1865,11 @@ void cmd_ireturn(void)
         DrawFmtBox(1); // the pop-up GUI keyboard should be drawn AFTER the pen down interrupt
         DelayedDrawFmtBox = false;
     }
+    if (DelayedDrawListbox)
+    {
+        DrawListBoxPopup(1); // the pop-up listbox should be drawn AFTER the pen down interrupt
+        DelayedDrawListbox = false;
+    }
 #endif
     if (SaveOptionErrorSkip > 0)
         OptionErrorSkip = SaveOptionErrorSkip + 1;
@@ -10211,7 +10216,7 @@ int __not_in_flash_func(check_interrupt)(void)
 #ifdef GUICONTROLS
     if (Ctrl != NULL)
     {
-        if (!(DelayedDrawKeyboard || DelayedDrawFmtBox || calibrate))
+        if (!(DelayedDrawKeyboard || DelayedDrawFmtBox || DelayedDrawListbox || calibrate))
             ProcessTouch();
         if (CheckGuiFlag)
             CheckGui(); // This implements a LED flash

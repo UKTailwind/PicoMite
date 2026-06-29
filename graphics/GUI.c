@@ -75,6 +75,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #define CTRL_AREA 13
 #define CTRL_GAUGE 14
 #define CTRL_BARGAUGE 15
+#define CTRL_LISTBOX 16
+#define CTRL_SLIDER 17
 
 #define MAX_PAGES 32 // the number of pages that can be specifies (this must not exceed 32)
 extern void cmd_guiMX170(void);
@@ -87,6 +89,25 @@ struct s_GaugeS
     MMFLOAT ta, tb, tc;
     int c1, c2, c3, c4;
     int laststrlen, cval, csaved, lastfc, lastbc;
+};
+
+/* The LISTBOX control stores this header in its allocated string space
+   (Ctrl[r].s, MAXSTRLEN bytes) exactly as the GAUGE stores s_GaugeS.
+   It binds LIVE to a BASIC string array: 'items' points into the
+   variable's storage so the array must remain in scope (module-level /
+   STATIC) for the life of the control. The selected index lives in
+   Ctrl[r].value; 'top' is the first visible row (scroll window). */
+struct s_ListBoxS
+{
+    unsigned char *items; // live pointer to the BASIC string array's data
+    int stride;           // bytes per element (str_size + 1, MMBasic layout)
+    int count;            // number of items (array cardinality)
+    int top;              // index of the first visible row while scrolling
+    int maxrows;          // popup row cap (0 = as many as fit on screen)
+    short pop_x1, pop_y1, pop_x2, pop_y2; // popup rect while open (hit-test/erase)
+    short vis_rows;       // DATA rows currently shown in the open popup
+    short pend;           // item index touched on pen-down (commit on pen-up), -1 = none
+    unsigned char arrows; // 1 if scroll-arrow rows are drawn above/below the data
 };
 
 int SetupPage;
@@ -173,6 +194,8 @@ bool gui_int_up = false;                   // true if the release of the touch h
 char *GuiIntUpVector = NULL;               // address of the interrupt routine or NULL if no interrupt
 volatile bool DelayedDrawKeyboard = false; // a flag to indicate that the pop-up keyboard should be drawn AFTER the pen down interrupt
 volatile bool DelayedDrawFmtBox = false;   // a flag to indicate that the pop-up formatted keyboard should be drawn AFTER the pen down interrupt
+volatile bool DelayedDrawListbox = false;  // a flag to indicate that the pop-up listbox should be drawn AFTER the pen down interrupt
+volatile bool ListBoxArrowRepeat = false;  // set by the listbox popup when a scroll arrow is held so ProcessTouch arms auto-repeat
 
 // struct s_ctrl *Ctrl;                    // list of the controls
 
@@ -208,6 +231,9 @@ void UpdateControl(int r);
 void SetCtrlState(int r, int state, int err);
 void DoCallback(int InvokingCtrl, char *key);
 void DrawFmtBox(int mode);
+void DrawListBox(int r);
+void DrawListBoxPopup(int mode);
+void DrawSlider(int r);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 //
@@ -328,6 +354,25 @@ int GetCtrlParams(int type, unsigned char *p)
         }
     }
 
+    if (type == CTRL_LISTBOX)
+    {
+        // bind to the BASIC string array given as the second argument
+        // store the binding in the control's string space (like the GAUGE)
+        struct s_ListBoxS *lb = (struct s_ListBoxS *)Ctrl[r].s;
+        unsigned char str_size = 0;
+#ifdef rp2350
+        int dims[MAXDIM] = {0};
+#else
+        short dims[MAXDIM] = {0};
+#endif
+        a += 2;
+        memset(lb, 0, sizeof(struct s_ListBoxS));
+        lb->count = parsestringarray(argv[a], &lb->items, 2, 1, dims, false, &str_size);
+        lb->stride = (int)str_size + 1;
+        lb->top = 0;
+        lb->maxrows = 0;
+    }
+
     // get x1 and y1 - all controls require these
     Ctrl[r].x1 = getint(argv[a += 2], 0, HRes);
     if (argc < a)
@@ -370,6 +415,8 @@ int GetCtrlParams(int type, unsigned char *p)
         case CTRL_DISPLAYBOX:
         case CTRL_SPINNER:
         case CTRL_AREA:
+        case CTRL_LISTBOX:
+        case CTRL_SLIDER:
         case CTRL_BARGAUGE: // these all need the height in addition to the width
             if (argc > a + 2)
                 if (*argv[a += 2] != 0)
@@ -416,6 +463,8 @@ int GetCtrlParams(int type, unsigned char *p)
     case CTRL_FMTBOX:
     case CTRL_NBRBOX:
     case CTRL_DISPLAYBOX:
+    case CTRL_LISTBOX:
+    case CTRL_SLIDER:
         if (argc > a + 2)
             if (*argv[a += 2] != 0)
                 last_bcolour = Ctrl[r].bc = getint(argv[a], 0, WHITE);
@@ -439,6 +488,32 @@ int GetCtrlParams(int type, unsigned char *p)
                 last_min = Ctrl[r].min = getnumber(argv[a]);
         if (argc > a + 2)
             last_max = Ctrl[r].max = getnumber(argv[a += 2]);
+    }
+
+    if (type == CTRL_LISTBOX)
+    {
+        // optional maxrows: cap how many rows the popup shows before scrolling
+        struct s_ListBoxS *lb = (struct s_ListBoxS *)Ctrl[r].s;
+        if (argc > a + 2)
+            if (*argv[a += 2] != 0)
+                lb->maxrows = getint(argv[a], 1, 100);
+    }
+
+    if (type == CTRL_SLIDER)
+    {
+        // optional min, max and increment (default 0..100, continuous)
+        Ctrl[r].min = 0;
+        Ctrl[r].max = 100;
+        Ctrl[r].inc = 0;
+        if (argc > a + 2)
+            if (*argv[a += 2] != 0)
+                Ctrl[r].min = getnumber(argv[a]);
+        if (argc > a + 2)
+            if (*argv[a += 2] != 0)
+                Ctrl[r].max = getnumber(argv[a]);
+        if (argc > a + 2)
+            if (*argv[a += 2] != 0)
+                Ctrl[r].inc = getnumber(argv[a]);
     }
 
     if (type == CTRL_GAUGE || type == CTRL_BARGAUGE)
@@ -502,9 +577,14 @@ int GetCtrlParams(int type, unsigned char *p)
     if (argc > a + 1)
         StandardError(2);
     Ctrl[r].type = type;
-    if (type == CTRL_GAUGE || type == CTRL_BARGAUGE)
+    if (type == CTRL_GAUGE || type == CTRL_BARGAUGE || type == CTRL_SLIDER)
     {
         Ctrl[r].value = Ctrl[r].min;
+    }
+    else if (type == CTRL_LISTBOX)
+    {
+        // default selection is the first item, or none if the array is empty
+        Ctrl[r].value = (((struct s_ListBoxS *)Ctrl[r].s)->count > 0) ? 0 : -1;
     }
     else
     {
@@ -632,6 +712,25 @@ void cmd_gui(void)
         return;
     }
 
+    if ((p = checkstring(cmdline, (unsigned char *)"LISTBOX")))
+    {
+        if ((checkstring(p, (unsigned char *)"CANCEL")))
+        {
+            // dismiss an open listbox popup without changing the selection
+            if (!Option.MaxCtrls)
+                StandardError(13);
+            if (!InvokingCtrl || Ctrl[InvokingCtrl].type != CTRL_LISTBOX)
+                return;
+            DrawListBoxPopup(KEY_KEY_CANCEL);
+        }
+        else
+        {
+            r = GetCtrlParams(CTRL_LISTBOX, p);
+            UpdateControl(r); // draw the collapsed box showing the initial selection
+        }
+        return;
+    }
+
     if ((p = checkstring(cmdline, (unsigned char *)"CAPTION")))
     {
         r = GetCtrlParams(CTRL_CAPTION, p);
@@ -653,6 +752,13 @@ void cmd_gui(void)
     if ((p = checkstring(cmdline, (unsigned char *)"AREA")))
     {
         r = GetCtrlParams(CTRL_AREA, p);
+        return;
+    }
+
+    if ((p = checkstring(cmdline, (unsigned char *)"SLIDER")))
+    {
+        r = GetCtrlParams(CTRL_SLIDER, p);
+        UpdateControl(r); // draw the track and thumb at the initial value
         return;
     }
 
@@ -1838,6 +1944,366 @@ void DrawDisplayBox(int r)
         SpecialPrintString(Ctrl[r].x1 + (Ctrl[r].x2 - Ctrl[r].x1) / 2, Ctrl[r].y1 + (Ctrl[r].y2 - Ctrl[r].y1) / 2, JUSTIFY_CENTER, JUSTIFY_MIDDLE, ORIENT_NORMAL, fc, bc, (char *)Ctrl[r].s, Ctrl[r].state);
 }
 
+/* ============================================================================
+ * LISTBOX control
+ *
+ * Collapsed control (DrawListBox) shows the selected item as one line with a
+ * drop-down marker. Tapping it opens a modal popup (DrawListBoxPopup) listing
+ * a scrollable window of the bound BASIC string array. The popup clones the
+ * keyboard's pattern: modal touch capture via InvokingCtrl, draw-after-pen-
+ * down via DelayedDrawListbox, and erase-to-background + PopUpRedrawAll() on
+ * close (no pixel save/restore). The selection INDEX lives in Ctrl[r].value.
+ * ========================================================================== */
+#define LB_HIT_OUTSIDE (-1)
+#define LB_HIT_UPARROW (-2)
+#define LB_HIT_DOWNARROW (-3)
+
+// copy item idx of the bound array into a C string (handles the MMBasic
+// length-prefix layout: byte[0] = length, bytes[1..] = characters)
+static void ListBoxGetItem(struct s_ListBoxS *lb, int idx, char *buf, int buflen)
+{
+    buf[0] = 0;
+    if (idx < 0 || idx >= lb->count || lb->items == NULL)
+        return;
+    unsigned char *e = lb->items + (size_t)idx * lb->stride;
+    int len = e[0];
+    if (len > buflen - 1)
+        len = buflen - 1;
+    memcpy(buf, e + 1, len);
+    buf[len] = 0;
+}
+
+// row height used by the popup = the collapsed control's height
+static int ListBoxRowH(int r)
+{
+    int h = Ctrl[r].y2 - Ctrl[r].y1;
+    if (h < gui_font_height + 2)
+        h = gui_font_height + 2;
+    return h;
+}
+
+// clamp the scroll window so the last page fills without blank rows
+static void ListBoxClampTop(struct s_ListBoxS *lb)
+{
+    int maxtop = lb->count - lb->vis_rows;
+    if (maxtop < 0)
+        maxtop = 0;
+    if (lb->top > maxtop)
+        lb->top = maxtop;
+    if (lb->top < 0)
+        lb->top = 0;
+}
+
+void DrawListBox(int r)
+{
+    struct s_ListBoxS *lb = (struct s_ListBoxS *)Ctrl[r].s;
+    char buf[MAXSTRLEN];
+    int x1 = Ctrl[r].x1, y1 = Ctrl[r].y1, x2 = Ctrl[r].x2, y2 = Ctrl[r].y2;
+    int h = y2 - y1;
+    int z = h / 4;
+    int sel = (int)Ctrl[r].value;
+    int cx = x2 - h / 2; // centre of the drop-down marker zone (width h, right edge)
+
+    SpecialDrawRBox(x1, y1, x2, y2, 10, Ctrl[r].fc, Ctrl[r].bc, Ctrl[r].state);
+    // down-pointing drop-down marker on the right
+    SpecialDrawTriangle(cx, y2 - z, x2 - h + z, y1 + z, x2 - z, y1 + z, Ctrl[r].fc, Ctrl[r].bc, Ctrl[r].state);
+    // selected item text, clipped to the area left of the marker
+    if (sel >= 0 && sel < lb->count)
+    {
+        int avail = (x2 - h) - (x1 + gui_font_width / 2);
+        ListBoxGetItem(lb, sel, buf, sizeof(buf));
+        if (avail > 0 && (int)strlen(buf) > avail / gui_font_width)
+            buf[avail / gui_font_width] = 0; // truncate to fit
+        SpecialPrintString(x1 + gui_font_width / 2, y1 + h / 2, JUSTIFY_LEFT, JUSTIFY_MIDDLE, ORIENT_NORMAL, Ctrl[r].fc, Ctrl[r].bc, (char *)buf, Ctrl[r].state);
+    }
+}
+
+// hit-test a touch point against the open popup of control r
+static int ListBoxHit(int r, int x, int y)
+{
+    struct s_ListBoxS *lb = (struct s_ListBoxS *)Ctrl[r].s;
+    int rowh = ListBoxRowH(r);
+    int data_y1;
+    int row, idx;
+    if (x < lb->pop_x1 || x > lb->pop_x2 || y < lb->pop_y1 || y > lb->pop_y2)
+        return LB_HIT_OUTSIDE;
+    if (lb->arrows)
+    {
+        if (y < lb->pop_y1 + rowh)
+            return LB_HIT_UPARROW;
+        if (y >= lb->pop_y2 - rowh)
+            return LB_HIT_DOWNARROW;
+    }
+    data_y1 = lb->pop_y1 + (lb->arrows ? rowh : 0);
+    row = (y - data_y1) / rowh;
+    if (row < 0)
+        row = 0;
+    if (row >= lb->vis_rows)
+        row = lb->vis_rows - 1;
+    idx = lb->top + row;
+    if (idx >= lb->count)
+        return LB_HIT_OUTSIDE; // blank area past the last item
+    return idx;
+}
+
+// (re)draw the open popup: box, visible data rows (selected/pending row
+// highlighted) and the up/down scroll arrows
+static void ListBoxDrawPopup(int r)
+{
+    struct s_ListBoxS *lb = (struct s_ListBoxS *)Ctrl[r].s;
+    char buf[MAXSTRLEN];
+    int rowh = ListBoxRowH(r);
+    int data_y1 = lb->pop_y1 + (lb->arrows ? rowh : 0);
+    int hl = (lb->pend >= 0) ? lb->pend : (int)Ctrl[r].value; // highlighted item
+    int i, idx, ry1, fc, bc, cx, z, aw;
+
+    SpecialDrawBox(lb->pop_x1, lb->pop_y1, lb->pop_x2, lb->pop_y2, 1, Ctrl[r].fc, gui_bcolour, Ctrl[r].state);
+    for (i = 0; i < lb->vis_rows; i++)
+    {
+        idx = lb->top + i;
+        ry1 = data_y1 + i * rowh;
+        if (idx == hl && idx < lb->count)
+        {
+            fc = Ctrl[r].bc; // selected row drawn inverted
+            bc = Ctrl[r].fc;
+        }
+        else
+        {
+            fc = Ctrl[r].fc;
+            bc = Ctrl[r].bc;
+        }
+        SpecialDrawBox(lb->pop_x1 + 1, ry1, lb->pop_x2 - 1, ry1 + rowh, 0, bc, bc, Ctrl[r].state);
+        if (idx < lb->count)
+        {
+            int avail = (lb->pop_x2 - lb->pop_x1) - gui_font_width;
+            ListBoxGetItem(lb, idx, buf, sizeof(buf));
+            if (avail > 0 && (int)strlen(buf) > avail / gui_font_width)
+                buf[avail / gui_font_width] = 0;
+            SpecialPrintString(lb->pop_x1 + gui_font_width / 2, ry1 + rowh / 2, JUSTIFY_LEFT, JUSTIFY_MIDDLE, ORIENT_NORMAL, fc, bc, (char *)buf, Ctrl[r].state);
+        }
+    }
+    if (lb->arrows)
+    {
+        cx = (lb->pop_x1 + lb->pop_x2) / 2;
+        z = rowh / 4;
+        aw = rowh / 3;
+        // up arrow (greyed when already at the top)
+        fc = (lb->top > 0) ? Ctrl[r].fc : ChangeBright(Ctrl[r].fc, BTN_DISABLED);
+        SpecialDrawBox(lb->pop_x1 + 1, lb->pop_y1 + 1, lb->pop_x2 - 1, lb->pop_y1 + rowh, 0, Ctrl[r].bc, Ctrl[r].bc, Ctrl[r].state);
+        SpecialDrawTriangle(cx, lb->pop_y1 + z, cx - aw, lb->pop_y1 + rowh - z, cx + aw, lb->pop_y1 + rowh - z, fc, Ctrl[r].bc, Ctrl[r].state);
+        // down arrow (greyed when already at the bottom)
+        fc = (lb->top < lb->count - lb->vis_rows) ? Ctrl[r].fc : ChangeBright(Ctrl[r].fc, BTN_DISABLED);
+        SpecialDrawBox(lb->pop_x1 + 1, lb->pop_y2 - rowh, lb->pop_x2 - 1, lb->pop_y2 - 1, 0, Ctrl[r].bc, Ctrl[r].bc, Ctrl[r].state);
+        SpecialDrawTriangle(cx, lb->pop_y2 - z, cx - aw, lb->pop_y2 - rowh + z, cx + aw, lb->pop_y2 - rowh + z, fc, Ctrl[r].bc, Ctrl[r].state);
+    }
+}
+
+// close the popup: erase its pixels to background then redraw every control
+// (this is how the area under the popup is restored — no save/restore buffer)
+static void ListBoxClose(int r)
+{
+    struct s_ListBoxS *lb = (struct s_ListBoxS *)Ctrl[r].s;
+    DrawBox(lb->pop_x1, lb->pop_y1, lb->pop_x2, lb->pop_y2, 0, 0, gui_bcolour);
+    lb->pend = -1;
+    ListBoxArrowRepeat = false;
+    InvokingCtrl = 0;
+    LastRef = r;
+    PopUpRedrawAll(0, false); // re-enable and redraw all controls
+}
+
+void DrawListBoxPopup(int mode)
+{
+    int r = InvokingCtrl;
+    struct s_ListBoxS *lb;
+    int rowh, fitrows, below, above, total, hit;
+    int sel;
+    if (r == 0 || Ctrl[r].type != CTRL_LISTBOX)
+        return;
+    lb = (struct s_ListBoxS *)Ctrl[r].s;
+    rowh = ListBoxRowH(r);
+
+    if (mode == KEY_OPEN)
+    {
+        // decide how many data rows we can show and which side to open on
+        int data = lb->count;
+        if (lb->maxrows && data > lb->maxrows)
+            data = lb->maxrows;
+        if (data < 1)
+            data = 1;
+        below = (VRes - Ctrl[r].y2) / rowh;
+        above = Ctrl[r].y1 / rowh;
+        fitrows = (below >= above) ? below : above;
+        if (fitrows < 1)
+            fitrows = 1;
+        if (data > fitrows)
+            data = fitrows;
+        lb->arrows = (lb->count > data) ? 1 : 0;
+        if (lb->arrows && data + 2 > fitrows)
+        {
+            data = fitrows - 2;
+            if (data < 1)
+            {
+                data = fitrows;
+                lb->arrows = 0; // no room for arrows: show what fits, no scrolling
+            }
+        }
+        lb->vis_rows = data;
+        total = data + (lb->arrows ? 2 : 0);
+        lb->pop_x1 = Ctrl[r].x1;
+        lb->pop_x2 = Ctrl[r].x2;
+        if (below >= above)
+        {
+            lb->pop_y1 = Ctrl[r].y2;
+            lb->pop_y2 = lb->pop_y1 + total * rowh;
+        }
+        else
+        {
+            lb->pop_y2 = Ctrl[r].y1;
+            lb->pop_y1 = lb->pop_y2 - total * rowh;
+        }
+        if (lb->pop_y1 < 0)
+            lb->pop_y1 = 0;
+        if (lb->pop_y2 > VRes)
+            lb->pop_y2 = VRes;
+        // scroll the current selection into view
+        sel = (int)Ctrl[r].value;
+        if (sel < 0)
+            sel = 0;
+        if (sel < lb->top)
+            lb->top = sel;
+        if (sel >= lb->top + lb->vis_rows)
+            lb->top = sel - lb->vis_rows + 1;
+        ListBoxClampTop(lb);
+        lb->pend = -2; // sentinel: no pen-down seen inside the popup yet
+        ListBoxDrawPopup(r);
+        return;
+    }
+
+    if (mode == KEY_DRAW_ALL)
+    {
+        ListBoxDrawPopup(r);
+        return;
+    }
+
+    if (mode == KEY_KEY_CANCEL)
+    {
+        ListBoxClose(r);
+        return;
+    }
+
+    if (mode == KEY_KEY_DWN)
+    {
+        ListBoxArrowRepeat = false;
+        hit = ListBoxHit(r, TouchX, TouchY);
+        if (hit == LB_HIT_OUTSIDE)
+        {
+            ListBoxClose(r); // tap away dismisses without changing the selection
+            return;
+        }
+        if (hit == LB_HIT_UPARROW)
+        {
+            lb->pend = -3;
+            if (lb->top > 0)
+            {
+                lb->top--;
+                ListBoxArrowRepeat = true;
+                ListBoxDrawPopup(r);
+            }
+            return;
+        }
+        if (hit == LB_HIT_DOWNARROW)
+        {
+            lb->pend = -3;
+            if (lb->top < lb->count - lb->vis_rows)
+            {
+                lb->top++;
+                ListBoxArrowRepeat = true;
+                ListBoxDrawPopup(r);
+            }
+            return;
+        }
+        lb->pend = hit; // a data row: highlight it, commit on pen-up
+        ListBoxDrawPopup(r);
+        return;
+    }
+
+    if (mode == KEY_KEY_UP)
+    {
+        ListBoxArrowRepeat = false;
+        if (lb->pend >= 0)
+        {
+            Ctrl[r].value = lb->pend; // commit the selection and close
+            ListBoxClose(r);
+        }
+        else
+        {
+            // opening tap (pend == -2) or arrow release (pend == -3): stay open
+            lb->pend = -1;
+            ListBoxDrawPopup(r);
+        }
+        return;
+    }
+}
+
+/* ============================================================================
+ * SLIDER control
+ *
+ * A draggable thumb on a track for continuous analog input. Orientation is
+ * taken from the aspect ratio (wider than tall = horizontal, else vertical,
+ * with the maximum at the top). Uses the base min/max/value/inc fields - no
+ * extra storage. Drag tracking reuses the spinner's repeat-while-held loop in
+ * ProcessTouch (which re-reads the live touch coordinates each tick).
+ * ========================================================================== */
+void DrawSlider(int r)
+{
+    int x1 = Ctrl[r].x1, y1 = Ctrl[r].y1, x2 = Ctrl[r].x2, y2 = Ctrl[r].y2;
+    int w = x2 - x1, h = y2 - y1;
+    int bc = (Ctrl[r].bc >= 0) ? Ctrl[r].bc : gui_bcolour;
+    int fc = Ctrl[r].fc;
+    int groove = ChangeBright(fc, BTN_DISABLED);
+    MMFLOAT span = Ctrl[r].max - Ctrl[r].min;
+    MMFLOAT frac = (span != 0) ? (Ctrl[r].value - Ctrl[r].min) / span : 0;
+    if (frac < 0)
+        frac = 0;
+    if (frac > 1)
+        frac = 1;
+
+    // clear the control area so the previous thumb position is erased
+    SpecialDrawBox(x1, y1, x2, y2, 0, bc, bc, Ctrl[r].state);
+    if (w >= h)
+    {
+        // horizontal: min at the left, max at the right
+        int tw = h; // square thumb
+        int t1 = x1 + tw / 2, t2 = x2 - tw / 2;
+        int cx, trk1, trk2;
+        if (t2 <= t1)
+            t2 = t1 + 1;
+        cx = t1 + (int)(frac * (t2 - t1) + 0.5);
+        trk1 = y1 + h / 2 - h / 8;
+        trk2 = y1 + h / 2 + h / 8;
+        SpecialDrawRBox(t1 - tw / 4, trk1, t2 + tw / 4, trk2, (trk2 - trk1) / 2, groove, groove, Ctrl[r].state);
+        if (cx > t1 - tw / 4)
+            SpecialDrawRBox(t1 - tw / 4, trk1, cx, trk2, (trk2 - trk1) / 2, fc, fc, Ctrl[r].state); // filled portion
+        SpecialDrawRBox(cx - tw / 2, y1, cx + tw / 2, y2, tw / 3, ChangeBright(fc, -20), fc, Ctrl[r].state);          // thumb
+    }
+    else
+    {
+        // vertical: min at the bottom, max at the top
+        int tw = w; // square thumb
+        int t1 = y1 + tw / 2, t2 = y2 - tw / 2;
+        int cy, trk1, trk2;
+        if (t2 <= t1)
+            t2 = t1 + 1;
+        cy = t2 - (int)(frac * (t2 - t1) + 0.5);
+        trk1 = x1 + w / 2 - w / 8;
+        trk2 = x1 + w / 2 + w / 8;
+        SpecialDrawRBox(trk1, t1 - tw / 4, trk2, t2 + tw / 4, (trk2 - trk1) / 2, groove, groove, Ctrl[r].state);
+        if (cy < t2 + tw / 4)
+            SpecialDrawRBox(trk1, cy, trk2, t2 + tw / 4, (trk2 - trk1) / 2, fc, fc, Ctrl[r].state); // filled portion (bottom up to the thumb)
+        SpecialDrawRBox(x1, cy - tw / 2, x2, cy + tw / 2, tw / 3, ChangeBright(fc, -20), fc, Ctrl[r].state);         // thumb
+    }
+}
+
 // this will set all controls (except the control r) to disabled or non disabled
 // note: r must always be a reference to the text box (never the keypad)
 void PopUpRedrawAll(int r, int disabled)
@@ -2431,6 +2897,12 @@ void DrawControl(int r)
         break;
     case CTRL_BARGAUGE:
         DrawBarGauge(r);
+        break;
+    case CTRL_LISTBOX:
+        DrawListBox(r);
+        break;
+    case CTRL_SLIDER:
+        DrawSlider(r);
         break;
     default:
         break;
@@ -3637,6 +4109,17 @@ void ProcessTouch(void)
         { // the keyboard/keypad takes complete control when activated
             if (Ctrl[InvokingCtrl].type == CTRL_FMTBOX)
                 DrawFmtBox(KEY_KEY_DWN);
+            else if (Ctrl[InvokingCtrl].type == CTRL_LISTBOX)
+            {
+                DrawListBoxPopup(KEY_KEY_DWN);
+                if (ListBoxArrowRepeat)
+                {                                       // auto-repeat the held scroll arrow
+                    repeat = (repeat == 0) ? 500 : 100; // initial delay then repeat rate
+                    TouchTimer = 0;
+                }
+                else
+                    repeat = 0;
+            }
             else
                 DrawKeyboard(KEY_KEY_DWN);
             gui_int_down = false;
@@ -3725,6 +4208,52 @@ void ProcessTouch(void)
                     TouchTimer = 0;
                     break;
 
+                case CTRL_SLIDER:
+                {
+                    // set the value from the touch position; track continuously
+                    // while the finger is held (re-entered via the repeat loop)
+                    int sw = Ctrl[r].x2 - Ctrl[r].x1, sh = Ctrl[r].y2 - Ctrl[r].y1;
+                    MMFLOAT frac, v;
+                    if (sw >= sh)
+                    {
+                        int t1 = Ctrl[r].x1 + sh / 2, t2 = Ctrl[r].x2 - sh / 2;
+                        if (t2 <= t1)
+                            t2 = t1 + 1;
+                        frac = (MMFLOAT)(TouchX - t1) / (t2 - t1);
+                    }
+                    else
+                    {
+                        int t1 = Ctrl[r].y1 + sw / 2, t2 = Ctrl[r].y2 - sw / 2;
+                        if (t2 <= t1)
+                            t2 = t1 + 1;
+                        frac = (MMFLOAT)(t2 - TouchY) / (t2 - t1); // top = max
+                    }
+                    if (frac < 0)
+                        frac = 0;
+                    if (frac > 1)
+                        frac = 1;
+                    v = Ctrl[r].min + frac * (Ctrl[r].max - Ctrl[r].min);
+                    if (Ctrl[r].inc > 0) // snap to the nearest increment
+                        v = Ctrl[r].min + (MMFLOAT)((long long)((v - Ctrl[r].min) / Ctrl[r].inc + 0.5)) * Ctrl[r].inc;
+                    if (v < Ctrl[r].min)
+                        v = Ctrl[r].min;
+                    if (v > Ctrl[r].max)
+                        v = Ctrl[r].max;
+                    if (repeat == 0)
+                        ClickTimer += CLICK_DURATION; // click once on first contact only
+                    repeat = 50;                      // poll the finger position every 50 ms
+                    TouchTimer = 0;
+                    if (Ctrl[r].value != v)
+                    {
+                        Ctrl[r].value = v;
+                        CurrentRef = r;
+                        DrawControl(r);
+                    }
+                    else
+                        CurrentRef = r;
+                    return; // own return: no per-tick "click", interrupt fires via gui_int_down
+                }
+
                 case CTRL_NBRBOX:
                     FloatToStr((char *)Ctrl[r].s, Ctrl[r].value, 0, STR_AUTO_PRECISION, ' '); // set the string value to be saved
                                                                                               // fall thru
@@ -3757,6 +4286,18 @@ void ProcessTouch(void)
                         DrawFmtBox(KEY_OPEN); // initial draw of the keypad
                     else
                         DelayedDrawFmtBox = true; // leave it until after the keyboard interrupt
+                    return;
+
+                case CTRL_LISTBOX:
+                    if (((struct s_ListBoxS *)Ctrl[r].s)->count <= 0)
+                        return; // nothing to choose from
+                    PopUpRedrawAll(r, true);       // disable/grey the other controls
+                    CurrentRef = InvokingCtrl = r; // this control owns the popup
+                    ClickTimer += CLICK_DURATION;
+                    if (GuiIntDownVector == NULL)
+                        DrawListBoxPopup(KEY_OPEN); // initial draw of the popup
+                    else
+                        DelayedDrawListbox = true; // leave it until after the pen-down interrupt
                     return;
 
                 default:
@@ -3811,6 +4352,15 @@ void ProcessTouch(void)
         { // the keyboard/keypad takes complete control when activated
             if (Ctrl[InvokingCtrl].type == CTRL_FMTBOX)
                 DrawFmtBox(KEY_KEY_UP);
+            else if (Ctrl[InvokingCtrl].type == CTRL_LISTBOX)
+            {
+                DrawListBoxPopup(KEY_KEY_UP);
+                if (InvokingCtrl == 0)
+                    gui_int_up = true; // a selection was committed: fire the GUI up interrupt
+                else
+                    gui_int_down = false;
+                return;
+            }
             else
                 DrawKeyboard(KEY_KEY_UP);
             gui_int_down = false;
@@ -4208,6 +4758,7 @@ void cmd_ctrlval(void)
     case CTRL_SPINNER:
     case CTRL_GAUGE:
     case CTRL_BARGAUGE:
+    case CTRL_SLIDER:
         v = getnumber(cmdline);
         if (v < Ctrl[r].min)
             v = Ctrl[r].min;
@@ -4219,6 +4770,25 @@ void cmd_ctrlval(void)
         if (Ctrl[r].type == CTRL_SPINNER)
             FloatToStr((char *)Ctrl[r].s, v, 0, STR_AUTO_PRECISION, ' '); // update the displayed string
         break;
+
+    case CTRL_LISTBOX:
+    {
+        struct s_ListBoxS *lb = (struct s_ListBoxS *)Ctrl[r].s;
+        v = getnumber(cmdline); // the selected item index
+        if (lb->count <= 0)
+            v = -1;
+        else
+        {
+            if (v < 0)
+                v = 0;
+            if (v > lb->count - 1)
+                v = lb->count - 1;
+        }
+        if (Ctrl[r].value == v)
+            return; // don't update if no change
+        Ctrl[r].value = v;
+        break;
+    }
 
     case CTRL_NBRBOX:
         if (strlen((char *)cmdline) > 3 && cmdline[0] == '"' && cmdline[1] == '#' && cmdline[2] == '#')

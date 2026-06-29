@@ -89,6 +89,7 @@ extern char *GuiIntUpVector;   // Address of interrupt routine or NULL
  * ============================================================================ */
 extern volatile bool DelayedDrawKeyboard; // Draw pop-up keyboard after pen down interrupt
 extern volatile bool DelayedDrawFmtBox;   // Draw formatted keyboard after pen down interrupt
+extern volatile bool DelayedDrawListbox;  // Draw pop-up listbox after pen down interrupt
 
 /* ============================================================================
  * External variables - Touch tracking
@@ -125,6 +126,7 @@ void InitDisplaySSD(void);
 void DrawRectangleSSD1963(int x1, int y1, int x2, int y2, int c);
 void DrawKeyboard(int);
 void DrawFmtBox(int);
+void DrawListBoxPopup(int);
 
 /* ============================================================================
  * Function declarations - GUI management
