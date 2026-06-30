@@ -15,6 +15,19 @@ release — see **[Releases](https://github.com/UKTailwind/PicoMite/releases/lat
 Download the file matching your board and configuration and copy it to the
 Pico in BOOTSEL mode.
 
+## Getting the source
+
+Clone the repository (the per-chip build directories are not part of the
+download — they are created automatically on the first build):
+
+```
+git clone https://github.com/UKTailwind/PicoMite.git
+cd PicoMite
+```
+
+`git pull` updates an existing clone. A GitHub "Download ZIP" also works for a
+one-off, but a clone lets you pull later updates.
+
 ## Building
 
 Builds use CMake (NMake Makefiles generator) with the arm-none-eabi GCC
@@ -53,6 +66,13 @@ buildpicomite.bat HDMIWEB    a single named variant
 
 Each variant is selected with `-DCOMPILE=<variant>`, which forces the matching
 `PICO_BOARD`. Built `.uf2` images are collected in the `uf2/` directory.
+
+Valid `<variant>` names:
+
+- **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
+- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB`
+
+(Variant names are case-insensitive on the command line.)
 
 ## Documentation
 
