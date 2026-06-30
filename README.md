@@ -22,16 +22,22 @@ toolchain and the Raspberry Pi Pico SDK.
 
 ### Prerequisites
 
-- **Raspberry Pi Pico SDK v2.2.0**
+- **Raspberry Pi Pico SDK v2.2.0** — used **unmodified**. The build relocates
+  the SDK's GPIO interrupt dispatcher (`gpio_default_irq_handler`) into RAM
+  automatically at link time (see below); no edit to the SDK's `gpio.c` is
+  required.
 - **arm-none-eabi GCC 13.3.1**
-- Two modifications to the stock SDK are required before building:
-  - **`gpio.c`** — replace the SDK's
-    `src/rp2_common/hardware_gpio/gpio.c` with the [`gpio.c`](gpio.c) included
-    in this repository. The only difference is that the GPIO interrupt handler
-    (`gpio_default_irq_handler`) is placed in RAM (`__not_in_flash_func`)
-    instead of flash.
-  - **TinyUSB v0.20.0** — replace the TinyUSB version supplied with the Pico
-    SDK with [TinyUSB v0.20.0](https://github.com/hathach/tinyusb/releases).
+- **TinyUSB v0.20.0** — replace the TinyUSB version supplied with the Pico SDK
+  with [TinyUSB v0.20.0](https://github.com/hathach/tinyusb/releases).
+
+> **GPIO interrupt latency:** PicoMite's GPIO interrupt callback must run from
+> RAM for timing-critical features (IR, COUNT/FREQ, PS2). The SDK's shared
+> dispatcher that calls it normally sits in flash. Rather than patch the SDK,
+> the build renames that one function's section to `.time_critical.*` in the
+> compiled object ([`cmake/relocate_gpio_irq_to_ram.cmake`](cmake/relocate_gpio_irq_to_ram.cmake)),
+> which the SDK linker script already copies to RAM. A post-build check
+> ([`cmake/assert_gpio_irq_in_ram.cmake`](cmake/assert_gpio_irq_in_ram.cmake))
+> fails the build if it ever ends up in flash.
 
 ### Build
 

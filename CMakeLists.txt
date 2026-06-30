@@ -539,6 +539,26 @@ pico_enable_stdio_uart(PicoMite 0)
 pico_add_extra_outputs(PicoMite)
 pico_set_printf_implementation(PicoMite pico)
 
+# Relocate the SDK's GPIO IRQ dispatcher (gpio_default_irq_handler) into RAM so
+# GPIO interrupts don't pay XIP/flash latency on the way to PicoMite's callback
+# (critical for IR / COUNT / FREQ / PS2 timing). Done by renaming that one
+# function's section to .time_critical.* in the compiled SDK object, which the
+# SDK linker script already copies to RAM - no fork of the SDK's gpio.c. A
+# post-build assertion fails the build if it ever ends up back in flash.
+add_custom_command(TARGET PicoMite PRE_LINK
+	COMMAND ${CMAKE_COMMAND}
+		-DOBJ_ROOT=${CMAKE_BINARY_DIR}/CMakeFiles/PicoMite.dir
+		-DOBJCOPY=${CMAKE_OBJCOPY}
+		-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/relocate_gpio_irq_to_ram.cmake
+	VERBATIM
+	COMMENT "Relocating gpio_default_irq_handler into RAM (.time_critical)")
+add_custom_command(TARGET PicoMite POST_BUILD
+	COMMAND ${CMAKE_COMMAND}
+		-DMAP_FILE=$<TARGET_FILE_DIR:PicoMite>/PicoMite.elf.map
+		-P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/assert_gpio_irq_in_ram.cmake
+	VERBATIM
+	COMMENT "Verifying gpio_default_irq_handler is in RAM")
+
 if(IS_RP2350)
 	# double: 'pico' is the platform impl, which on RP2350 is DCP-backed
 	#   (double_aeabi_dcp.S / double_sci_m33.S). There is NO 'pico_dcp' double
