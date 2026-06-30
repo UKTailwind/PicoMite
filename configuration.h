@@ -118,7 +118,7 @@ extern "C"
 #endif
 #else
 #define MagicKey 0xD1F6F86C
-#define FLASH_TARGET_OFFSET (1024 * 1024)
+#define FLASH_TARGET_OFFSET (1040 * 1024)
 #define HEAP_MEMORY_SIZE (160 * 1024)
 #endif
 #else // rp2350 VGA

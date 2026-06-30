@@ -3657,7 +3657,7 @@ void MIPS16 configure(unsigned char *p, bool noask)
             MMPrintString("OLIMEX USB\r\n");
             MMPrintString("PICO COMPUTER\r\n");
             MMPrintString("HDMIUSBI2S\r\n");
-
+#else
             MMPrintString("OLIMEX\r\n");
             MMPrintString("HDMIBasic\r\n");
 #endif
@@ -3989,7 +3989,7 @@ void MIPS16 configure(unsigned char *p, bool noask)
             uSec(100000);
             doreset(format);
         }
-
+        if (checkstring(p, (unsigned char *)"OLIMEX USB"))
         {
             format = testMODBUFF(true, 192, false);
             strcpy((char *)Option.platform, "OLIMEX USB");
