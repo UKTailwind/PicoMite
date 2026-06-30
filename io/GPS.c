@@ -1731,6 +1731,25 @@ void cmd_exec_star(int day, int month, int year, int hour, int minute, int secon
   }
 
 manual_entry:
+  // Guard against an unrecognised body name (e.g. "STAR fred a,b,c,d"): none of the
+  // planet or catalog-star matches above fired. The name forms put the body name first,
+  // separated by whitespace from the alt variable, so the first field carries two tokens
+  // ("fred a"). A genuine manual RA/Dec entry always starts with a single lvalue that is
+  // immediately followed by a comma. If we see "<name> <token>" we must report the bad
+  // name rather than silently misparsing it as a manual entry (which leaves outputs as-is).
+  {
+    unsigned char *np = cmd;
+    while (*np == ' ') np++;
+    if (isalpha((unsigned char)*np))
+    {
+      unsigned char *nq = np;
+      while (isalnum((unsigned char)*nq) || *nq == '_' || *nq == '.') nq++;
+      unsigned char *nr = nq;
+      while (*nr == ' ') nr++;
+      if (nr > nq && (isalnum((unsigned char)*nr) || *nr == '_' || *nr == '.' || *nr == '"'))
+        error("Unknown body");
+    }
+  }
   // Fall through to manual RA/Dec entry
   {
     getcsargs(&cmd, 15);
