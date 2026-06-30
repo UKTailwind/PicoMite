@@ -18,8 +18,25 @@ Pico in BOOTSEL mode.
 ## Building
 
 Builds use CMake (NMake Makefiles generator) with the arm-none-eabi GCC
-toolchain and the Raspberry Pi Pico SDK. The helper script
-[`buildpicomite.bat`](buildpicomite.bat) drives the whole matrix:
+toolchain and the Raspberry Pi Pico SDK.
+
+### Prerequisites
+
+- **Raspberry Pi Pico SDK v2.2.0**
+- **arm-none-eabi GCC 13.3.1**
+- Two modifications to the stock SDK are required before building:
+  - **`gpio.c`** — replace the SDK's
+    `src/rp2_common/hardware_gpio/gpio.c` with the [`gpio.c`](gpio.c) included
+    in this repository. The only difference is that the GPIO interrupt handler
+    (`gpio_default_irq_handler`) is placed in RAM (`__not_in_flash_func`)
+    instead of flash.
+  - **TinyUSB v0.20.0** — replace the TinyUSB version supplied with the Pico
+    SDK with [TinyUSB v0.20.0](https://github.com/hathach/tinyusb/releases).
+
+### Build
+
+The helper script [`buildpicomite.bat`](buildpicomite.bat) drives the whole
+matrix:
 
 ```
 buildpicomite.bat            build every variant
