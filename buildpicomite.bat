@@ -135,7 +135,15 @@ exit /b 1
 
 :activate_build_dir
 set "active_build_dir=%~1"
-ren "%~1" build || exit /b 1
+:: Reuse the persistent per-chip build dir if it exists (keeps its CMake
+:: cache). On a fresh checkout it won't exist yet - the build dirs are
+:: git-ignored - so configure into a new "build" instead of failing the
+:: rename. deactivate_build_dir renames "build" back to %~1, creating it.
+if exist "%~1\" (
+    ren "%~1" build || exit /b 1
+) else (
+    mkdir build || exit /b 1
+)
 cd build || exit /b 1
 exit /b 0
 
