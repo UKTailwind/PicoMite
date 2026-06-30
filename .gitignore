@@ -30,6 +30,7 @@ vscode-mmbasic/node_modules/
 # ---- Generated docs / extracts ----
 doxygen/html/
 *.pdf
+!docs/PicoMite_User_Manual.pdf
 _docx_extract/
 
 # ---- Packaged VS Code extension builds ----
