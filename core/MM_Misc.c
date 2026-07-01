@@ -26,7 +26,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
 #ifdef PICOMITEWEB
-#include "WiFi.h"        // setwifi() — defined in net/WiFi.c
+#include "WiFi.h" // setwifi() — defined in net/WiFi.c
 #endif
 #include "pico/stdlib.h"
 #include "hardware/clocks.h"
@@ -3989,7 +3989,7 @@ void MIPS16 configure(unsigned char *p, bool noask)
             uSec(100000);
             doreset(format);
         }
-        if (checkstring(p, (unsigned char *)"OLIMEX USB"))
+        if (checkstring(p, (unsigned char *)"OLIMEXUSB"))
         {
             format = testMODBUFF(true, 192, false);
             strcpy((char *)Option.platform, "OLIMEX USB");
@@ -4498,7 +4498,10 @@ struct optmap_s
     uint16_t off;
     uint16_t size;
 };
-#define OPT(field, t) {#field, t, (uint16_t)offsetof(struct option_s, field), (uint16_t)sizeof(((struct option_s *)0)->field)}
+#define OPT(field, t)                                                                                          \
+    {                                                                                                          \
+        #field, t, (uint16_t)offsetof(struct option_s, field), (uint16_t)sizeof(((struct option_s *)0)->field) \
+    }
 static const struct optmap_s OptionMap[] = {
     OPT(Autorun, OPT_I8),
     OPT(Tab, OPT_I8),
