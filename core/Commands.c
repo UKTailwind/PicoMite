@@ -228,7 +228,11 @@ const uint8_t pinlist[] = {
 	158,
 	128,
 	241,
+#ifdef PICOMITEWEB
+    84,
+#else
 	81,
+#endif
 	41,
 	32,
 	204,
