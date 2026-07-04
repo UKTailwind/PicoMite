@@ -3689,7 +3689,7 @@ void MIPS16 configure(unsigned char *p, bool noask)
         {
             if (rp2350a)
                 error("RP350B chips only");
-            format = testMODBUFF(true, 512, false);
+            format = testMODBUFF(true, 512, noask);
             strcpy((char *)Option.platform, "PICO COMPUTER 3");
 #if !(defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH) || defined(PICOMITEHDMIWEB))
             Option.heartbeatpin = PINMAP[25];
@@ -3727,8 +3727,10 @@ void MIPS16 configure(unsigned char *p, bool noask)
             Option.INT2pin = PINMAP[35];
             Option.INT3pin = PINMAP[36];
             Option.INT4pin = PINMAP[37];
+
             SaveOptions();
-            printoptions();
+            if (!noask)
+                printoptions();
             uSec(100000);
             doreset(format);
         }

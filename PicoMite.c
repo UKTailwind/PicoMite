@@ -398,11 +398,19 @@ uint8_t PSRAMpin;
     float SSub(float a, float b) { return a - b; }
     float SMul(float a, float b) { return a * b; }
     float SDiv(float a, float b) { return a / b; }
-    int   SCmp(float a, float b) { if (a > b) return 1; else if (a < b) return -1; else return 0; }
-    float DtoS(double a) { return (float)a; }                                   // double -> single
-    double StoD(float a) { return (double)a; }                                  // single -> double
+    int SCmp(float a, float b)
+    {
+        if (a > b)
+            return 1;
+        else if (a < b)
+            return -1;
+        else
+            return 0;
+    }
+    float DtoS(double a) { return (float)a; }                                     // double -> single
+    double StoD(float a) { return (double)a; }                                    // single -> double
     long long StoI(float a) { return (long long)(a >= 0 ? a + 0.5f : a - 0.5f); } // single -> int (rounds)
-    float ItoS(long long a) { return (float)a; }                                // int -> single
+    float ItoS(long long a) { return (float)a; }                                  // int -> single
     uint32_t CFunc_delay_us;
 #ifndef HDMI
     int QVGA_CLKDIV; // SM divide clock ticks
@@ -491,35 +499,35 @@ uint8_t PSRAMpin;
         (void *)PIOExecute,         // 0xd8
         // --- APPEND-ONLY below: never reorder/insert above this line or every
         //     existing compiled CSUB breaks (offsets are the ABI). ---
-        (void *)&WriteBuf,          // 0xdc  current write framebuffer pointer
-        (void *)&FrameBuf,          // 0xe0  frame layer pointer
-        (void *)&LayerBuf,          // 0xe4  overlay layer pointer
+        (void *)&WriteBuf, // 0xdc  current write framebuffer pointer
+        (void *)&FrameBuf, // 0xe0  frame layer pointer
+        (void *)&LayerBuf, // 0xe4  overlay layer pointer
 #ifndef PICOMITEVGA
-		(void *)&WriteBuf,
+        (void *)&WriteBuf,
 #else
-        (void *)&DisplayBuf,        // 0xe8  display layer pointer
+    (void *)&DisplayBuf, // 0xe8  display layer pointer
 #endif
-        (void *)&DrawPixel,         // 0xec  per-mode pixel writer DrawPixel(x,y,rgb)
-        (void *)Display_Refresh,    // 0xf0  push direct writes to buffered panels
-        (void *)cos,                // 0xf4  MMFLOAT cos(MMFLOAT)
-        (void *)sqrt,               // 0xf8  MMFLOAT sqrt(MMFLOAT)
-        (void *)atan2,              // 0xfc  MMFLOAT atan2(MMFLOAT,MMFLOAT)
-        (void *)pow,                // 0x100 MMFLOAT pow(MMFLOAT,MMFLOAT)
+        (void *)&DrawPixel,      // 0xec  per-mode pixel writer DrawPixel(x,y,rgb)
+        (void *)Display_Refresh, // 0xf0  push direct writes to buffered panels
+        (void *)cos,             // 0xf4  MMFLOAT cos(MMFLOAT)
+        (void *)sqrt,            // 0xf8  MMFLOAT sqrt(MMFLOAT)
+        (void *)atan2,           // 0xfc  MMFLOAT atan2(MMFLOAT,MMFLOAT)
+        (void *)pow,             // 0x100 MMFLOAT pow(MMFLOAT,MMFLOAT)
         // single-precision (float) routines - append-only, do not reorder
-        (void *)SAdd,               // 0x104 float SAdd(float,float)
-        (void *)SSub,               // 0x108 float SSub(float,float)
-        (void *)SMul,               // 0x10c float SMul(float,float)
-        (void *)SDiv,               // 0x110 float SDiv(float,float)
-        (void *)SCmp,               // 0x114 int   SCmp(float,float)
-        (void *)sinf,               // 0x118 float sinf(float)
-        (void *)cosf,               // 0x11c float cosf(float)
-        (void *)sqrtf,              // 0x120 float sqrtf(float)
-        (void *)atan2f,             // 0x124 float atan2f(float,float)
-        (void *)powf,               // 0x128 float powf(float,float)
-        (void *)DtoS,               // 0x12c float DtoS(double)      double->single
-        (void *)StoD,               // 0x130 double StoD(float)      single->double
-        (void *)StoI,               // 0x134 long long StoI(float)   single->int (rounds)
-        (void *)ItoS,               // 0x138 float ItoS(long long)   int->single
+        (void *)SAdd,   // 0x104 float SAdd(float,float)
+        (void *)SSub,   // 0x108 float SSub(float,float)
+        (void *)SMul,   // 0x10c float SMul(float,float)
+        (void *)SDiv,   // 0x110 float SDiv(float,float)
+        (void *)SCmp,   // 0x114 int   SCmp(float,float)
+        (void *)sinf,   // 0x118 float sinf(float)
+        (void *)cosf,   // 0x11c float cosf(float)
+        (void *)sqrtf,  // 0x120 float sqrtf(float)
+        (void *)atan2f, // 0x124 float atan2f(float,float)
+        (void *)powf,   // 0x128 float powf(float,float)
+        (void *)DtoS,   // 0x12c float DtoS(double)      double->single
+        (void *)StoD,   // 0x130 double StoD(float)      single->double
+        (void *)StoI,   // 0x134 long long StoI(float)   single->int (rounds)
+        (void *)ItoS,   // 0x138 float ItoS(long long)   int->single
     };
 #ifdef rp2350
     // this is a frig to place the calltable at 0x1000023C as in previous releases
@@ -2566,7 +2574,7 @@ int __not_in_flash_func(MMInkey)(void)
     busy_wait_us(us);
 #endif
     }
-/* ProcessWeb() moved to net/WiFi.c */
+    /* ProcessWeb() moved to net/WiFi.c */
     void __not_in_flash_func(CheckAbort)(void)
     {
 #ifdef PICOMITEWEB
@@ -2697,25 +2705,25 @@ int __not_in_flash_func(MMInkey)(void)
                output that collided with the reboot banner. Register polling
                needs no interrupts, buffering or USB stack, so it survives. */
             uart_hw_t *hw = uart_get_hw(((Option.SerialConsole & 3) == 1) ? uart0 : uart1);
-#define FAULT_PUTC(c)                                          \
-    do                                                         \
-    {                                                          \
-        while (hw->fr & UART_UARTFR_TXFF_BITS)                 \
-            tight_loop_contents();                             \
-        hw->dr = (uint8_t)(c);                                 \
+#define FAULT_PUTC(c)                          \
+    do                                         \
+    {                                          \
+        while (hw->fr & UART_UARTFR_TXFF_BITS) \
+            tight_loop_contents();             \
+        hw->dr = (uint8_t)(c);                 \
     } while (0)
-#define FAULT_PUTS(str)                                        \
-    do                                                         \
-    {                                                          \
-        const char *_p = (str);                               \
-        while (*_p)                                            \
-            FAULT_PUTC(*_p++);                                 \
+#define FAULT_PUTS(str)         \
+    do                          \
+    {                           \
+        const char *_p = (str); \
+        while (*_p)             \
+            FAULT_PUTC(*_p++);  \
     } while (0)
-#define FAULT_PUTHEX(v)                                        \
-    do                                                         \
-    {                                                          \
-        for (int _i = 28; _i >= 0; _i -= 4)                    \
-            FAULT_PUTC(hex[((v) >> _i) & 0xF]);                \
+#define FAULT_PUTHEX(v)                         \
+    do                                          \
+    {                                           \
+        for (int _i = 28; _i >= 0; _i -= 4)     \
+            FAULT_PUTC(hex[((v) >> _i) & 0xF]); \
     } while (0)
             FAULT_PUTS("\r\n*** FAULT PC=");
             FAULT_PUTHEX(pc);
@@ -2762,8 +2770,8 @@ int __not_in_flash_func(MMInkey)(void)
     int vgaloop1, vgaloop2, vgaloop4, vgaloop8, vgaloop16, vgaloop32;
 
 #ifndef HDMI
-/* PIO VGA (QVGA) core1 scanout (QVgaCore + QVgaLine1/PioInit/BufInit/
-   DmaInit/Init) moved to graphics/VGA.c; launched from the core0 code below. */
+    /* PIO VGA (QVGA) core1 scanout (QVgaCore + QVgaLine1/PioInit/BufInit/
+       DmaInit/Init) moved to graphics/VGA.c; launched from the core0 code below. */
     uint32_t core1stack[128];
 /* HDMI/DVI core1 scanout (HDMICore + loops + DMA + resolution dispatch)
    moved to graphics/HDMI.c; launched from the core0 code below. */
@@ -3080,8 +3088,8 @@ uint32_t testPSRAM(void)
 
         ClearSpecificTempMemory(tmp);
     }
-/* WiFi/web runtime (web_async_*, wifi_country_from_string, WebConnect,
-   TLS/NTP) moved to net/WiFi.c */
+    /* WiFi/web runtime (web_async_*, wifi_country_from_string, WebConnect,
+       TLS/NTP) moved to net/WiFi.c */
 
 #ifdef HDMI
     /* Runtime resolution switch for the HDMI builds (no reboot). Only the
@@ -3356,7 +3364,34 @@ uint32_t testPSRAM(void)
         return 0;
     }
 #endif /* !PICOMITEVGA || full-HDMI */
-
+#ifdef rp2350
+    void TestPicoComputer3(void)
+    {
+        if (*Option.platform)
+            return;
+        gpio_init(27);
+        gpio_set_input_enabled(27, TRUE);
+        gpio_set_dir(27, GPIO_IN);
+        gpio_pull_up(27);
+        uint64_t timeout = time_us_64() + 200;
+        while (gpio_get(27) && time_us_64() < timeout)
+        {
+        }
+        while (!gpio_get(27) && time_us_64() < timeout)
+        {
+        }
+        while (gpio_get(27) && time_us_64() < timeout)
+        {
+        }
+        while (!gpio_get(27) && time_us_64() < timeout)
+        {
+        }
+        if (time_us_64() < timeout)
+        {
+            configure((unsigned char *)"PICO COMPUTER 3", true);
+        }
+    }
+#endif
     int MIPS16 main()
     {
 #if defined(PICOMITEWEB) && defined(rp2350)
@@ -3690,6 +3725,9 @@ uint32_t testPSRAM(void)
         adc_set_temp_sensor_enabled(true);
         mSecTimer = time_us_64() / 1000;
         add_repeating_timer_us(-1000, timer_callback, NULL, &timer);
+#ifdef rp2350
+        TestPicoComputer3(); // Test if firmware is running on PicoComputer3
+#endif
 #if PICOCALC
         TestPicoCalc(); // Test if firmware is running on PicoCalc
 #endif
@@ -4169,9 +4207,9 @@ uint32_t testPSRAM(void)
 #ifdef PICOMITEVGA
                     int canscroll = !Option.NoScroll; // framebuffer display always scrolls unless NoScroll
 #elif PICOMITERP2350
-                    int canscroll = !((SPIREAD && ScrollLCD != ScrollLCDSPISCR && ScrollLCD != ScrollLCDMEM332) || Option.NoScroll);
+                int canscroll = !((SPIREAD && ScrollLCD != ScrollLCDSPISCR && ScrollLCD != ScrollLCDMEM332) || Option.NoScroll);
 #else
-                    int canscroll = !((SPIREAD && ScrollLCD != ScrollLCDSPISCR) || Option.NoScroll);
+                int canscroll = !((SPIREAD && ScrollLCD != ScrollLCDSPISCR) || Option.NoScroll);
 #endif
                     if (canscroll)
                     {
