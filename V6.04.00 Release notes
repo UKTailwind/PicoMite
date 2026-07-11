@@ -1,0 +1,24 @@
+Summary of changes from V6.03.00
+
+Build system
+Firmware is now built with pico-sdk 2.3.0 (TinyUSB remains the hand-upgraded 0.20 copy, re-applied over the SDK's bundled version)
+
+All RP2350 versions with camera support
+Support for the OV5640 camera: CAMERA OPEN OV5640 with QVGA (320x240) RGB565 capture, motion detection (CAMERA CHANGE) and JPEG capture (CAMERA CAPTURE JPEG) at VGA, XGA, SXGA, UXGA, QXGA and 5MP resolutions with HIGH/MEDIUM/LOW quality
+OV5640 white balance is automatically frozen at the live preview's converged setting when taking a JPEG so stills match the preview colour
+OV5640 display capture automatically adapts its pixel clock to the CPU speed (378/315/252MHz supported)
+
+All versions with camera support
+CAMERA OPEN no longer requires a display: CAMERA CAPTURE JPEG and CAMERA CHANGE (motion detection) work headless; only the simple CAMERA CAPTURE needs a display (any panel with at least RGB565 colour is now accepted, including SSD1963 types)
+A misconfigured or disconnected camera now reports a specific error (identifying the stalled signal) instead of freezing the machine
+Camera capture no longer disturbs the PSRAM/flash controller: fixes rare hard faults after captures on PSRAM-enabled builds
+Faster capture inner loops
+
+Bluetooth versions
+Bluetooth console and keyboard fixes
+
+Other
+Auto-configure PICO COMPUTER 3 at boot (RP2350)
+Fixes embedded pin-status program for WEB builds (pin 84)
+Fixes OLIMEXUSB platform string matching
+Keyboard map updates
