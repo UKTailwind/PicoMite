@@ -66,9 +66,14 @@
    keyboards (BTH) without one evicting another. */
 #define MAX_NR_LE_DEVICE_DB_ENTRIES 4
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
-/* GATT client + HIDS client tables for the HID-host role. */
+/* GATT client + HIDS client tables for the HID-host role.
+   btstack 1.8 (pico-sdk 2.3.0) renamed MAX_NR_HIDS_CLIENTS to
+   MAX_NR_HIDS_HOSTS; define both so either stack sizes its pool.
+   CAUTION: if the new name is missing the pool silently defaults to 0
+   and every hids_host_connect fails at runtime — no compile error. */
 #define MAX_NR_GATT_CLIENTS 1
 #define MAX_NR_HIDS_CLIENTS 1
+#define MAX_NR_HIDS_HOSTS 1
 #else
 #define MAX_NR_GATT_CLIENTS 0
 #endif

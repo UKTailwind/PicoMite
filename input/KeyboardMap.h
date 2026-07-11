@@ -28,11 +28,14 @@
    btstack.h via BTKeyboard.c and the two clash.
    Instead, declare a local copy of just the boot-keyboard report
    struct we actually need. Guarded against tinyusb's header by its
-   TUSB_HID_H_ sentinel — when tinyusb's hid.h is included first
+   include-guard sentinel — when tinyusb's hid.h is included first
    (the USB-host build, via tusb.h), our typedef is skipped and
    tinyusb's wins; otherwise (BLE build), our local one is used.
+   The sentinel spelling changed between tinyusb releases:
+   _TUSB_HID_H_ (0.18, as bundled with pico-sdk 2.3.0) vs
+   TUSB_HID_H_ (0.19+), so check both.
    Both layouts are byte-identical (modifier, reserved, 6 keycodes). */
-#ifndef TUSB_HID_H_
+#if !defined(TUSB_HID_H_) && !defined(_TUSB_HID_H_)
 typedef struct {
     uint8_t modifier;
     uint8_t reserved;

@@ -1,0 +1,7 @@
+/* PicoMite override of pico-sdk's script_include/default_text_excludes.incl
+   (selected via pico_add_linker_script_override_path in CMakeLists.txt).
+   Identical to the SDK fragment except *libm.a: is NOT excluded from FLASH,
+   so libm .text stays in FLASH instead of being copied into RAM by the
+   .data catch-all (saves ~4 KB of RAM; complex math funcs are the bulk).
+   Keep in sync with the SDK original when updating the SDK. */
+*(EXCLUDE_FILE(*libgcc.a: *libc.a: *lib*_a-mem*.o) .text*)

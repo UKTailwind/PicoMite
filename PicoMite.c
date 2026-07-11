@@ -422,6 +422,7 @@ uint8_t PSRAMpin;
     }
 
     int IDiv(int a, int b) { return a / b; }
+    int IMod(int a, int b) { return a % b; }
     int FCmp(MMFLOAT a, MMFLOAT b)
     {
         if (a > b)
@@ -528,6 +529,7 @@ uint8_t PSRAMpin;
         (void *)StoD,   // 0x130 double StoD(float)      single->double
         (void *)StoI,   // 0x134 long long StoI(float)   single->int (rounds)
         (void *)ItoS,   // 0x138 float ItoS(long long)   int->single
+        (void *)IMod,   // 0x13c int IMod(int,int)
     };
 #ifdef rp2350
     // this is a frig to place the calltable at 0x1000023C as in previous releases

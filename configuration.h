@@ -195,7 +195,7 @@ extern "C"
    include configuration.h). Defining it here too would produce a redefine
    warning because -D and #define without a body resolve to different bodies. */
 #define HEAP_MEMORY_SIZE (256 * 1024)
-#define FLASH_TARGET_OFFSET (1440 * 1024)
+#define FLASH_TARGET_OFFSET (1456 * 1024)
 #else
 #define MagicKey 0x6AA79987
 #define MAXSUBFUN 256

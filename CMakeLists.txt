@@ -26,9 +26,9 @@ set(VALID_COMPILE_VARIANTS
 # VS Code uses this default when COMPILE is not supplied explicitly.
 # Guard restored: without it, this set() shadows the -DCOMPILE=X passed
 # by buildpicomite.bat and every variant silently builds as the default.
-if(NOT DEFINED COMPILE)
-	set(COMPILE HDMIWEB)
-endif()
+#if(NOT DEFINED COMPILE)
+	set(COMPILE HDMIUSB)
+#endif()
 
 list(FIND VALID_COMPILE_VARIANTS "${COMPILE}" COMPILE_INDEX)
 if(COMPILE_INDEX EQUAL -1)
@@ -406,12 +406,24 @@ target_include_directories(PicoMite PRIVATE
 	${CMAKE_CURRENT_LIST_DIR}/misc
 )
 
-# RP2040 SDK memmap_default.ld excludes libm from FLASH and pulls it into RAM
-# via .data. Keep libm in FLASH to reduce RAM usage (e.g. complex math funcs).
-file(READ ${PICO_LINKER_SCRIPT_PATH}/memmap_default.ld PICO_LINKER_SCRIPT_CONTENT)
-string(REPLACE " *libm.a:" "" PICO_LINKER_SCRIPT_CONTENT "${PICO_LINKER_SCRIPT_CONTENT}")
-file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/memmap_default_keep_libm_flash.ld "${PICO_LINKER_SCRIPT_CONTENT}")
-pico_set_linker_script(PicoMite ${CMAKE_CURRENT_BINARY_DIR}/memmap_default_keep_libm_flash.ld)
+# The SDK's default memmap excludes libm from FLASH and pulls it into RAM via
+# the .data catch-all. Keep libm in FLASH to reduce RAM usage (~4 KB, mostly
+# complex math funcs).
+if(COMMAND pico_add_linker_script_override_path)
+	# SDK >= 2.3.0 assembles the linker script from script_include/*.incl
+	# fragments, so patching memmap_default.ld no longer works (it is just an
+	# INCLUDE stub). Shadow the two EXCLUDE_FILE fragments with copies that do
+	# not exclude libm from FLASH. The fragments live in rp2_common, so one
+	# override covers both RP2040 and RP2350.
+	pico_add_linker_script_override_path(PicoMite ${CMAKE_CURRENT_LIST_DIR}/linker_overrides GLOB_FILES)
+else()
+	# SDK <= 2.2.0: monolithic memmap_default.ld; delete " *libm.a:" from its
+	# EXCLUDE_FILE lists so libm stays in FLASH.
+	file(READ ${PICO_LINKER_SCRIPT_PATH}/memmap_default.ld PICO_LINKER_SCRIPT_CONTENT)
+	string(REPLACE " *libm.a:" "" PICO_LINKER_SCRIPT_CONTENT "${PICO_LINKER_SCRIPT_CONTENT}")
+	file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/memmap_default_keep_libm_flash.ld "${PICO_LINKER_SCRIPT_CONTENT}")
+	pico_set_linker_script(PicoMite ${CMAKE_CURRENT_BINARY_DIR}/memmap_default_keep_libm_flash.ld)
+endif()
 
 if(IS_RP2350)
 	target_sources(PicoMite PRIVATE

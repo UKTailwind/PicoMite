@@ -68,6 +68,15 @@ extern uint32_t StackPeakBytes(void); /* core0 stack high-water (PicoMite.c) */
 #endif
 #if !defined(USBKEYBOARD) && !defined(PICOMITEBT)
 #include "class/cdc/cdc_device.h"
+/* pico-sdk 2.3.0 moved the BOOTSEL interface-disable mask out of
+   pico/stdio_usb.h into the new pico_usb_reset library and renamed it
+   PICO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK; map whichever name the
+   current SDK provides onto the new one (used in cmd_update). */
+#if __has_include("pico/usb_reset_config.h")
+#include "pico/usb_reset_config.h"
+#else /* SDK <= 2.2.0 */
+#define PICO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK PICO_STDIO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK
+#endif
 #endif
 
 #if defined(USBKEYBOARD)
@@ -3307,7 +3316,7 @@ void MIPS16 cmd_update(void)
     /* No USB CDC interface in BT build — nothing to disable, just reboot. */
     reset_usb_boot(gpio_mask, 0u);
 #else
-    reset_usb_boot(gpio_mask, PICO_STDIO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK);
+    reset_usb_boot(gpio_mask, PICO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK);
 #endif
 }
 #endif

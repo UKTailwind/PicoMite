@@ -403,6 +403,13 @@ void bt_console_init(void)
        after. Legacy bonding is the universally-compatible path; we
        still get an encrypted link and a stored LTK via TLV. */
     sm_set_authentication_requirements(SM_AUTHREQ_BONDING);
+    /* btstack 1.8.2 (pico-sdk 2.3.0) defaults to Secure-Connections-ONLY
+       mode and a 16-byte minimum encryption key size when
+       ENABLE_LE_SECURE_CONNECTIONS is defined. That would reject the
+       legacy-bonding path above outright (and drop existing legacy
+       bonds at re-encryption), so restore the pre-1.8.2 defaults. */
+    sm_set_secure_connections_only_mode(false);
+    sm_set_encryption_key_size_range(7, 16);
 
     att_server_init(profile_data,
                     att_read_callback,

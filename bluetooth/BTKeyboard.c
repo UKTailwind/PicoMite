@@ -34,7 +34,22 @@
 #include "pico/cyw43_arch.h"
 #undef UNUSED
 #include "btstack.h"
+/* btstack 1.8 (bundled with pico-sdk 2.3.0) renamed the HID-over-GATT
+   client from "HIDS Client" to "HIDS Host": hids_client.h/c became
+   hids_host.h/c and every hids_client_* function became hids_host_*
+   (identical signatures; the GATTSERVICE_SUBEVENT_HID_* events are
+   unchanged). Map the old names so the rest of this file compiles
+   against either stack. The memory-pool config macro renamed too —
+   see MAX_NR_HIDS_HOSTS in btstack_config.h. */
+#if __has_include("ble/gatt-service/hids_host.h")
+#include "ble/gatt-service/hids_host.h"
+#define hids_client_init hids_host_init
+#define hids_client_connect hids_host_connect
+#define hids_client_descriptor_storage_get_descriptor_data hids_host_descriptor_storage_get_descriptor_data
+#define hids_client_descriptor_storage_get_descriptor_len hids_host_descriptor_storage_get_descriptor_len
+#else /* btstack <= 1.6 (pico-sdk <= 2.2.0) */
 #include "ble/gatt-service/hids_client.h"
+#endif
 #include "ble/att_db_util.h"
 #include "btstack_tlv_flash_bank.h"
 #include "hal_flash_bank.h"
@@ -1778,6 +1793,15 @@ void bt_keyboard_init(void)
     sm_set_authentication_requirements(SM_AUTHREQ_BONDING |
                                        SM_AUTHREQ_MITM_PROTECTION |
                                        SM_AUTHREQ_SECURE_CONNECTION);
+    /* btstack 1.8.2 (pico-sdk 2.3.0) defaults to Secure-Connections-ONLY
+       mode and a 16-byte minimum encryption key size when
+       ENABLE_LE_SECURE_CONNECTIONS is defined (earlier stacks: SC
+       preferred but not required, minimum 7). SC stays our preference
+       via SM_AUTHREQ_SECURE_CONNECTION above, but legacy-pairing-only
+       BLE keyboards/mice (common) must still be able to fall back, and
+       bonds made under legacy pairing must survive re-encryption. */
+    sm_set_secure_connections_only_mode(false);
+    sm_set_encryption_key_size_range(7, 16);
 
     gatt_client_init();
 
