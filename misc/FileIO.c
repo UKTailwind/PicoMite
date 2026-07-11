@@ -371,10 +371,14 @@ static void __not_in_flash_func(save_psram_settings)(void)
 
 static void __not_in_flash_func(restore_psram_settings)(void)
 {
-    qmi_hw->m[1].timing = m1_timing;
-    qmi_hw->m[1].rfmt = m1_rfmt;
-    qmi_hw->m[0].timing = m0_timing;
-    qmi_hw->m[0].rfmt = m0_rfmt;
+    if (qmi_hw->m[1].timing != m1_timing)
+        qmi_hw->m[1].timing = m1_timing;
+    if (qmi_hw->m[1].rfmt != m1_rfmt)
+        qmi_hw->m[1].rfmt = m1_rfmt;
+    if (qmi_hw->m[0].timing != m0_timing)
+        qmi_hw->m[0].timing = m0_timing;
+    if (qmi_hw->m[0].rfmt != m0_rfmt)
+        qmi_hw->m[0].rfmt = m0_rfmt;
 }
 
 // Safe flash wrappers: boot2 re-runs inside flash_range_erase/program and
@@ -385,8 +389,10 @@ void __not_in_flash_func(safe_flash_range_erase)(uint32_t flash_offs, size_t cou
     uint32_t saved_timing = qmi_hw->m[0].timing;
     uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
     flash_range_erase(flash_offs, count);
-    qmi_hw->m[0].timing = saved_timing;
-    qmi_hw->m[0].rfmt = saved_rfmt;
+    if (qmi_hw->m[0].timing != saved_timing)
+        qmi_hw->m[0].timing = saved_timing;
+    if (qmi_hw->m[0].rfmt != saved_rfmt)
+        qmi_hw->m[0].rfmt = saved_rfmt;
 }
 
 void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const uint8_t *data, size_t count)
@@ -394,8 +400,10 @@ void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const ui
     uint32_t saved_timing = qmi_hw->m[0].timing;
     uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
     flash_range_program(flash_offs, data, count);
-    qmi_hw->m[0].timing = saved_timing;
-    qmi_hw->m[0].rfmt = saved_rfmt;
+    if (qmi_hw->m[0].timing != saved_timing)
+        qmi_hw->m[0].timing = saved_timing;
+    if (qmi_hw->m[0].rfmt != saved_rfmt)
+        qmi_hw->m[0].rfmt = saved_rfmt;
 }
 #endif
 

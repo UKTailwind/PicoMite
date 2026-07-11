@@ -2084,8 +2084,16 @@ void classicproc(void)
 // the bit-banged capture keeps up at the lower RP2350 CPU speeds (e.g. PicoMiteRP2350);
 // used for BOTH the RGB565 preview and the JPEG capture so they always match.
 #define OV2640_DVP_CLK 0x10
+// OV5640 SCCB (I2C) address. The OV5640 uses 16-bit register addresses (unlike the 8-bit
+// OV7670/OV2640) - see sccb_write16/readregister16. The canonical ArduCAM tables are run
+// UNMODIFIED (the RP2350 bit-bang keeps up with the normal QVGA pixel rate, like the
+// OV2640). Hard-won clocking notes, do not repeat: lowering the PLL multiplier 0x3036
+// destabilises the chip and corrupts the SCCB interface (chip-id reads garbage, writes
+// dropped); DVP divider 0x3824 >= 0x10 stalls the whole DVP timing generator (VSYNC dead).
+#define ov5640_address 0x3C
 #define CAM_OV7670 0
 #define CAM_OV2640 1
+#define CAM_OV5640 2
 int CameraType = CAM_OV7670;             // selected by the CAMERA OPEN keyword (default OV7670)
 uint8_t camera_address = ov7670_address; // SCCB/I2C address for ov7670_set/readregister
 #define top 120
@@ -2248,6 +2256,87 @@ void sccb_write(unsigned char a, unsigned char b)
   }
   uSec(1000);
 }
+
+// SCCB write with a 16-bit register address (OV5640): send reg-hi, reg-lo, value.
+void sccb_write16(uint16_t reg, uint8_t val)
+{
+  if (I2C0locked)
+  {
+    I2C_Sendlen = 3;
+    I2C_Rcvlen = 0;
+    I2C_Send_Buffer[0] = reg >> 8;
+    I2C_Send_Buffer[1] = reg & 0xff;
+    I2C_Send_Buffer[2] = val;
+    I2C_Addr = camera_address;
+    i2c_masterCommand(1, NULL, 1);
+  }
+  else
+  {
+    I2C2_Sendlen = 3;
+    I2C2_Rcvlen = 0;
+    I2C_Send_Buffer[0] = reg >> 8;
+    I2C_Send_Buffer[1] = reg & 0xff;
+    I2C_Send_Buffer[2] = val;
+    I2C2_Addr = camera_address;
+    i2c2_masterCommand(1, NULL, 1);
+  }
+  if (mmI2Cvalue)
+  {
+    cameraclose();
+    error("I2C failure");
+  }
+  uSec(1000);
+}
+
+// Read one byte from a 16-bit register address (OV5640): write reg-hi/reg-lo, then read.
+int readregister16(uint16_t reg)
+{
+  unsigned char buff[2];
+  if (I2C0locked)
+  {
+    I2C_Sendlen = 2;
+    I2C_Rcvlen = 0;
+    I2C_Send_Buffer[0] = reg >> 8;
+    I2C_Send_Buffer[1] = reg & 0xff;
+    I2C_Addr = camera_address;
+    i2c_masterCommand(1, NULL, 1);
+  }
+  else
+  {
+    I2C2_Sendlen = 2;
+    I2C2_Rcvlen = 0;
+    I2C_Send_Buffer[0] = reg >> 8;
+    I2C_Send_Buffer[1] = reg & 0xff;
+    I2C2_Addr = camera_address;
+    i2c2_masterCommand(1, NULL, 1);
+  }
+  if (mmI2Cvalue)
+  {
+    cameraclose();
+    error("I2C failure");
+  }
+  uSec(1000);
+  if (I2C0locked)
+  {
+    I2C_Rcvbuf_Float = NULL;
+    I2C_Rcvbuf_Int = NULL;
+    I2C_Rcvlen = 1;
+    I2C_Sendlen = 0;
+    I2C_Addr = camera_address;
+    i2c_masterCommand(1, buff, 1);
+  }
+  else
+  {
+    I2C2_Rcvbuf_Float = NULL;
+    I2C2_Rcvbuf_Int = NULL;
+    I2C2_Rcvlen = 1;
+    I2C2_Sendlen = 0;
+    I2C2_Addr = camera_address;
+    i2c2_masterCommand(1, buff, 1);
+  }
+  uSec(1000);
+  return buff[0];
+}
 #endif // rp2350 (sccb_write)
 
 // Drive a camera register table: {reg,value} pairs ending with {0xFF,0xFF}.
@@ -2265,6 +2354,15 @@ void load_camera_regs(const OV7670_command *t, int verify)
 #endif
   }
 }
+
+#ifdef rp2350
+// Drive an OV5640 (16-bit register address) table, terminated with {0xFFFF, 0xFF}.
+void load_camera_regs16(const OV5640_command *t)
+{
+  for (int i = 0; !(t[i].reg == 0xFFFF && t[i].value == 0xFF); i++)
+    sccb_write16(t[i].reg, t[i].value);
+}
+#endif
 
 void OV7670_test_pattern(OV7670_pattern pattern)
 {
@@ -2572,6 +2670,59 @@ static const OV7670_command OV2640_1280x1024_JPEG[] = {
 // OV2640 UXGA 1600x1200 JPEG framesize (ArduCAM) - full 2MP
 static const OV7670_command OV2640_1600x1200_JPEG[] = {
     {0xff, 0x01}, {0x11, 0x01}, {0x12, 0x00}, {0x17, 0x11}, {0x18, 0x75}, {0x32, 0x36}, {0x19, 0x01}, {0x1a, 0x97}, {0x03, 0x0f}, {0x37, 0x40}, {0x4f, 0xbb}, {0x50, 0x9c}, {0x5a, 0x57}, {0x6d, 0x80}, {0x3d, 0x34}, {0x39, 0x02}, {0x35, 0x88}, {0x22, 0x0a}, {0x37, 0x40}, {0x34, 0xa0}, {0x06, 0x02}, {0x0d, 0xb7}, {0x0e, 0x01}, {0xff, 0x00}, {0xe0, 0x04}, {0xc0, 0xc8}, {0xc1, 0x96}, {0x86, 0x3d}, {0x50, 0x00}, {0x51, 0x90}, {0x52, 0x2c}, {0x53, 0x00}, {0x54, 0x00}, {0x55, 0x88}, {0x57, 0x00}, {0x5a, 0x90}, {0x5b, 0x2c}, {0x5c, 0x05}, {0xd3, 0x02}, {0xe0, 0x00}, {0xFF, 0xFF}};
+// ===== OV5640 register tables (canonical ArduCAM, 16-bit register addresses) =====
+// Base sensor + ISP init (YUV422, JPEG-capable). Assumes a 24MHz input clock.
+static const OV5640_command OV5640_init[] = {
+    {0x4740, 0x20}, {0x4050, 0x6e}, {0x4051, 0x8f}, {0x3008, 0x42}, {0x3103, 0x03}, {0x3017, 0x7f}, {0x3018, 0xff}, {0x302c, 0x02}, {0x3108, 0x01}, {0x3630, 0x2e}, {0x3632, 0xe2}, {0x3633, 0x23}, {0x3621, 0xe0}, {0x3704, 0xa0}, {0x3703, 0x5a}, {0x3715, 0x78}, {0x3717, 0x01}, {0x370b, 0x60}, {0x3705, 0x1a}, {0x3905, 0x02}, {0x3906, 0x10}, {0x3901, 0x0a}, {0x3731, 0x12}, {0x3600, 0x08}, {0x3601, 0x33}, {0x302d, 0x60}, {0x3620, 0x52}, {0x371b, 0x20}, {0x471c, 0x50}, {0x3a18, 0x00}, {0x3a19, 0xf8}, {0x3635, 0x1c}, {0x3634, 0x40}, {0x3622, 0x01}, {0x3c04, 0x28}, {0x3c05, 0x98}, {0x3c06, 0x00}, {0x3c07, 0x08}, {0x3c08, 0x00}, {0x3c09, 0x1c}, {0x3c0a, 0x9c}, {0x3c0b, 0x40}, {0x3820, 0x41}, {0x3821, 0x01}, {0x3800, 0x00}, {0x3801, 0x00}, {0x3802, 0x00}, {0x3803, 0x04}, {0x3804, 0x0a}, {0x3805, 0x3f}, {0x3806, 0x07}, {0x3807, 0x9b}, {0x3808, 0x05}, {0x3809, 0x00}, {0x380a, 0x03}, {0x380b, 0xc0}, {0x3810, 0x00}, {0x3811, 0x10}, {0x3812, 0x00}, {0x3813, 0x06}, {0x3814, 0x31}, {0x3815, 0x31}, {0x3034, 0x1a}, {0x3035, 0x21}, {0x3036, 0x46}, {0x3037, 0x13}, {0x3038, 0x00}, {0x3039, 0x00}, {0x380c, 0x07}, {0x380d, 0x68}, {0x380e, 0x03}, {0x380f, 0xd8}, {0x3c01, 0xb4}, {0x3c00, 0x04}, {0x3a08, 0x00}, {0x3a09, 0x93}, {0x3a0e, 0x06}, {0x3a0a, 0x00}, {0x3a0b, 0x7b}, {0x3a0d, 0x08}, {0x3a00, 0x3c}, {0x3a02, 0x05}, {0x3a03, 0xc4}, {0x3a14, 0x05}, {0x3a15, 0xc4}, {0x3618, 0x00}, {0x3612, 0x29}, {0x3708, 0x64}, {0x3709, 0x52}, {0x370c, 0x03}, {0x4001, 0x02}, {0x4004, 0x02}, {0x3000, 0x00}, {0x3002, 0x1c}, {0x3004, 0xff}, {0x3006, 0xc3}, {0x300e, 0x58}, {0x302e, 0x00}, {0x4300, 0x30}, {0x501f, 0x00}, {0x4713, 0x03}, {0x4407, 0x04}, {0x460b, 0x35}, {0x460c, 0x22}, {0x3824, 0x01}, {0x5001, 0xa3}, {0x3406, 0x01}, {0x3400, 0x06}, {0x3401, 0x80}, {0x3402, 0x04}, {0x3403, 0x00}, {0x3404, 0x06}, {0x3405, 0x00}, {0x5180, 0xff}, {0x5181, 0xf2}, {0x5182, 0x00}, {0x5183, 0x14}, {0x5184, 0x25}, {0x5185, 0x24}, {0x5186, 0x16}, {0x5187, 0x16}, {0x5188, 0x16}, {0x5189, 0x62}, {0x518a, 0x62}, {0x518b, 0xf0}, {0x518c, 0xb2}, {0x518d, 0x50}, {0x518e, 0x30}, {0x518f, 0x30}, {0x5190, 0x50}, {0x5191, 0xf8}, {0x5192, 0x04}, {0x5193, 0x70}, {0x5194, 0xf0}, {0x5195, 0xf0}, {0x5196, 0x03}, {0x5197, 0x01}, {0x5198, 0x04}, {0x5199, 0x12}, {0x519a, 0x04}, {0x519b, 0x00}, {0x519c, 0x06}, {0x519d, 0x82}, {0x519e, 0x38}, {0x5381, 0x1e}, {0x5382, 0x5b}, {0x5383, 0x14}, {0x5384, 0x06}, {0x5385, 0x82}, {0x5386, 0x88}, {0x5387, 0x7c}, {0x5388, 0x60}, {0x5389, 0x1c}, {0x538a, 0x01}, {0x538b, 0x98}, {0x5300, 0x08}, {0x5301, 0x30}, {0x5302, 0x3f}, {0x5303, 0x10}, {0x5304, 0x08}, {0x5305, 0x30}, {0x5306, 0x18}, {0x5307, 0x28}, {0x5309, 0x08}, {0x530a, 0x30}, {0x530b, 0x04}, {0x530c, 0x06}, {0x5480, 0x01}, {0x5481, 0x06}, {0x5482, 0x12}, {0x5483, 0x24}, {0x5484, 0x4a}, {0x5485, 0x58}, {0x5486, 0x65}, {0x5487, 0x72}, {0x5488, 0x7d}, {0x5489, 0x88}, {0x548a, 0x92}, {0x548b, 0xa3}, {0x548c, 0xb2}, {0x548d, 0xc8}, {0x548e, 0xdd}, {0x548f, 0xf0}, {0x5490, 0x15}, {0x5580, 0x06}, {0x5583, 0x40}, {0x5584, 0x20}, {0x5589, 0x10}, {0x558a, 0x00}, {0x558b, 0xf8}, {0x5000, 0xa7}, {0x5800, 0x20}, {0x5801, 0x19}, {0x5802, 0x17}, {0x5803, 0x16}, {0x5804, 0x18}, {0x5805, 0x21}, {0x5806, 0x0f}, {0x5807, 0x0a}, {0x5808, 0x07}, {0x5809, 0x07}, {0x580a, 0x0a}, {0x580b, 0x0c}, {0x580c, 0x0a}, {0x580d, 0x03}, {0x580e, 0x01}, {0x580f, 0x01}, {0x5810, 0x03}, {0x5811, 0x09}, {0x5812, 0x0a}, {0x5813, 0x03}, {0x5814, 0x01}, {0x5815, 0x01}, {0x5816, 0x03}, {0x5817, 0x08}, {0x5818, 0x10}, {0x5819, 0x0a}, {0x581a, 0x06}, {0x581b, 0x06}, {0x581c, 0x08}, {0x581d, 0x0e}, {0x581e, 0x22}, {0x581f, 0x18}, {0x5820, 0x13}, {0x5821, 0x12}, {0x5822, 0x16}, {0x5823, 0x1e}, {0x5824, 0x64}, {0x5825, 0x2a}, {0x5826, 0x2c}, {0x5827, 0x2a}, {0x5828, 0x46}, {0x5829, 0x2a}, {0x582a, 0x26}, {0x582b, 0x24}, {0x582c, 0x26}, {0x582d, 0x2a}, {0x582e, 0x28}, {0x582f, 0x42}, {0x5830, 0x40}, {0x5831, 0x42}, {0x5832, 0x08}, {0x5833, 0x28}, {0x5834, 0x26}, {0x5835, 0x24}, {0x5836, 0x26}, {0x5837, 0x2a}, {0x5838, 0x44}, {0x5839, 0x4a}, {0x583a, 0x2c}, {0x583b, 0x2a}, {0x583c, 0x46}, {0x583d, 0xce}, {0x5688, 0x22}, {0x5689, 0x22}, {0x568a, 0x42}, {0x568b, 0x24}, {0x568c, 0x42}, {0x568d, 0x24}, {0x568e, 0x22}, {0x568f, 0x22}, {0x5025, 0x00}, {0x3a0f, 0x30}, {0x3a10, 0x28}, {0x3a1b, 0x30}, {0x3a1e, 0x28}, {0x3a11, 0x61}, {0x3a1f, 0x10}, {0x4005, 0x1a}, {0x3406, 0x00}, {0x3503, 0x00}, {0x3008, 0x02}, {0xFFFF, 0xFF}};
+
+// VGA preview timing (canonical ArduCAM ov5640_vga_preview) - THE SCALING TABLE. Sets
+// 2x binning (0x3814/15), the 640x480 DVP output size, line/frame totals (HTS/VTS),
+// scaler enable (0x5001) and the DVP clock dividers. MUST be loaded between OV5640_init
+// and OV5640_RGB_QVGA: without it the sensor still outputs its raw large frame and a
+// "QVGA" capture reads the top-left corner of a 4x bigger image (garbage + timeouts).
+static const OV5640_command OV5640_VGA_PREVIEW[] = {
+    {0x3035, 0x11}, {0x3036, 0x46}, {0x3c07, 0x08}, {0x3820, 0x41}, {0x3821, 0x01}, {0x3814, 0x31}, {0x3815, 0x31}, {0x3800, 0x00},
+    {0x3801, 0x00}, {0x3802, 0x00}, {0x3803, 0x04}, {0x3804, 0x0a}, {0x3805, 0x3f}, {0x3806, 0x07}, {0x3807, 0x9b}, {0x3808, 0x02},
+    {0x3809, 0x80}, {0x380a, 0x01}, {0x380b, 0xe0}, {0x380c, 0x07}, {0x380d, 0x68}, {0x380e, 0x03}, {0x380f, 0xd8}, {0x3813, 0x06},
+    {0x3618, 0x00}, {0x3612, 0x29}, {0x3709, 0x52}, {0x370c, 0x03}, {0x3a02, 0x17}, {0x3a03, 0x10}, {0x3a14, 0x17}, {0x3a15, 0x10},
+    {0x4004, 0x02}, {0x3002, 0x1c}, {0x3006, 0xc3}, {0x4713, 0x03}, {0x4407, 0x04}, {0x460b, 0x35}, {0x460c, 0x22}, {0x4837, 0x22},
+    {0x3824, 0x02}, {0x5001, 0xa3}, {0x3503, 0x00},
+    {0xFFFF, 0xFF}};
+
+// Overlay: switch to RGB565 output at QVGA 320x240 (preview / change detection).
+// Three values differ from the ArduCAM original, all HW-verified (2026-07):
+//  0x3035=0x51 (not 0x41): sys divider 5 -> ~11MHz byte clock. 0x41/14MHz is marginal
+//    for the bit-bang (occasional speckles); deep dividers (0x71+) break the sensor's
+//    ANALOG array readout (light-independent garbage while pre-ISP colour bars stay
+//    perfect - the bars bypass the array). 0x51 is the sweet spot.
+//  0x4740=0x01 (not 0x21): PCLK polarity bit5 CLEAR - with bit5 set the sensor launches
+//    data on the edge the capture loop samples on (latching mid-transition).
+//  0x4300=0x6F (not 0x61): RGB565 byte sequence matching the capture/display path.
+// HW-verified clean combination (Peter, 2026-07-11): HTS stretched x2 + DVP PCLK divider
+// 0x04 + sysclk div 7 + byte order 0x61. Notes:
+//  - the table's 0x3035 is always overridden after load with the CPU-speed ladder
+//    (378MHz -> 0x51, 315MHz -> 0x71, 252MHz -> 0x81; HW-verified with the spin-only
+//    HREF waits in capture() - the old timer-read waits were the 252MHz killer);
+//  - 0x4300=0x61 is the TRUE RGB565 byte order. The earlier "0x6F looks right" era was an
+//    off-by-one byte-pairing artefact of the old clocking: swapped order approximated the
+//    colours while gradients posterised with green/magenta fringes. If colours ever look
+//    wrong again, suspect byte PHASE (line-start alignment), not the order;
+//  - frame time ~0.5s (HTS x2 at div 7) - fine for stills/motion detection.
+static const OV5640_command OV5640_RGB_QVGA[] = {
+    {0x3008, 0x02}, {0x3035, 0x71}, {0x4740, 0x01}, {0x4300, 0x61},
+    {0x3808, 0x01}, {0x3809, 0x40}, {0x380a, 0x00}, {0x380b, 0xf0},
+    {0x380c, 0x0e}, {0x380d, 0xd0}, // HTS 1896->3792: line time x2 so the /4 DVP clock fits
+    {0x3824, 0x04},                 // DVP PCLK divider (manual mode 0x460C=0x22 from the preview table)
+    {0x501f, 0x01}, {0xFFFF, 0xFF}};
+
+// Overlay: switch to JPEG output at full QSXGA (2592x1944) - the JPEG-mode base.
+static const OV5640_command OV5640_JPEG_QSXGA[] = {
+    {0x3820, 0x40}, {0x3821, 0x26}, {0x3814, 0x11}, {0x3815, 0x11}, {0x3803, 0x00}, {0x3807, 0x9f}, {0x3808, 0x0a}, {0x3809, 0x20}, {0x380a, 0x07}, {0x380b, 0x98}, {0x380c, 0x0b}, {0x380d, 0x1c}, {0x380e, 0x07}, {0x380f, 0xb0}, {0x3813, 0x04}, {0x3618, 0x04}, {0x3612, 0x4b}, {0x3708, 0x64}, {0x3709, 0x12}, {0x370c, 0x00}, {0x3a02, 0x07}, {0x3a03, 0xb0}, {0x3a0e, 0x06}, {0x3a0d, 0x08}, {0x3a14, 0x07}, {0x3a15, 0xb0}, {0x4001, 0x02}, {0x4004, 0x06}, {0x3002, 0x00}, {0x3006, 0xff}, {0x3824, 0x04}, {0x5001, 0x83}, {0x3036, 0x69}, {0x3035, 0x31}, {0x4005, 0x1a}, {0xFFFF, 0xFF}};
+
+// Overlay: enable the JPEG downscaler (full-frame input). The caller then writes the
+// output size (0x3808..0x380b) for the chosen resolution - see OV5640_jpeg_sizes[].
+static const OV5640_command OV5640_JPEG_scale[] = {
+    {0x3800, 0x00}, {0x3801, 0x00}, {0x3802, 0x00}, {0x3803, 0x00}, {0x3804, 0x0a}, {0x3805, 0x3f}, {0x3806, 0x07}, {0x3807, 0x9f}, {0x380c, 0x0c}, {0x380d, 0x80}, {0x380e, 0x07}, {0x380f, 0xd0}, {0x5001, 0xa3}, {0x5680, 0x00}, {0x5681, 0x00}, {0x5682, 0x0a}, {0x5683, 0x20}, {0x5684, 0x00}, {0x5685, 0x00}, {0x5686, 0x07}, {0x5687, 0x98}, {0xFFFF, 0xFF}};
 #endif // rp2350 (OV2640 register tables)
 
 void OV7670_frame_control(uint8_t size, uint8_t vstart,
@@ -2673,8 +2824,40 @@ void OV7670_set_size(OV7670_size size)
 #define ST_PCLK gpio_get(PCLKGP)
 #define ST_HREF gpio_get(HREFGP)
 #define ST_VSYNC gpio_get(VSYNCGP)
+// capture() timeout codes - identify WHICH signal stalled so the error names the
+// misconfigured register (VSYNC polarity vs HREF vs PCLK divider). The RP2040/OV7670
+// variant never times out (returns 0) but shares the callers, so these live at file scope.
+#define CAPTO_VSYNC_HIGH -1 // VSYNC stuck high (never ends a frame)
+#define CAPTO_VSYNC_LOW -2  // VSYNC stuck low (no frame pulse at all)
+#define CAPTO_HREF -3       // frame started but no HREF (no line-valid)
+#define CAPTO_PCLK -4       // line active but PCLK stalled (divider misconfigured)
+// Map a capture() timeout code to a specific error so the failing signal is named.
+static void camera_timeout(int code)
+{
+  if (code == CAPTO_VSYNC_HIGH)
+    error("Camera timeout - VSYNC stuck high (polarity?)");
+  else if (code == CAPTO_VSYNC_LOW)
+    error("Camera timeout - no VSYNC pulse (sensor not streaming?)");
+  else if (code == CAPTO_HREF)
+    error("Camera timeout - no HREF after frame start");
+  else
+    error("Camera timeout - PCLK stalled (clock divider?)");
+}
+// Restore interrupts after a capture and compensate the millisecond/second timers for
+// the time spent with interrupts off (the timer tick ISR missed 0.2-0.5s per capture) -
+// the same accounting enable_interrupts_pico() does, without its PSRAM/QMI machinery
+// (rewriting live QMI registers after every capture corrupted XIP fetches on
+// PSRAM-enabled builds -> UNDEFINSTR hard faults in unrelated flash code).
+static void camera_restore_irqs(uint32_t irqs)
+{
+  restore_interrupts(irqs);
+  SecondsTimer += (time_us_64() / 1000 - mSecTimer);
+  mSecTimer = time_us_64() / 1000;
+}
 #ifndef rp2350
-void __not_in_flash_func(capture)(char *buff)
+// Returns 0 on success (the RP2040/OV7670 path is proven and untimed; the RP2350 variant
+// adds timeout protection because a misconfigured OV2640/OV5640 can stop VSYNC/PCLK dead).
+int __not_in_flash_func(capture)(char *buff)
 {
   char *k = buff;
   while (ST_VSYNC)
@@ -2744,80 +2927,105 @@ void __not_in_flash_func(capture)(char *buff)
     {
     } // wait for the first line to end
   }
+  return 0;
 }
 #else
-void __not_in_flash_func(capture)(char *buff)
+// Frame/line sync waits are timeout-guarded with the timer deadline; a misconfigured
+// sensor returns a CAPTO_* code naming the stalled signal instead of hanging with
+// interrupts disabled.
+#define CAPWAIT(cond, code)                     \
+  while (cond)                                  \
+  {                                             \
+    if ((int32_t)(time_us_32() - deadline) > 0) \
+      return code;                              \
+  }
+// Spin-only wait for the LINE-level (HREF) syncs: CAPWAIT's per-poll time_us_32() is an
+// APB timer read, slow enough at lower CPU speeds that line-start detection arrives too
+// late and the fixed-count line capture starts mid-byte (preview broken at 252MHz while
+// the JPEG loop - which has no line-start dependency - works there). A bounded spin
+// count keeps the no-hang guarantee without any timer access in the hot poll.
+#define CAPSPIN(cond, code)   \
+  {                           \
+    uint32_t s_ = 40000000;   \
+    while (cond)              \
+      if (!--s_)              \
+        return code;          \
+  }
+// FAST bit-banged line capture, its own function so the compiler register-allocates the
+// hot loop cleanly (inside capture()'s big frame the data pointer was spilled to the
+// stack and reloaded EVERY byte). Design, from the disassembly cycle budget at 378MHz:
+//  - each pin's SIO bank is resolved by the caller; polls/reads are direct 32-bit
+//    register accesses (the SDK helpers re-select banks / read both banks per call);
+//  - the sample is taken IMMEDIATELY on the rising edge (2 cycles after the poll sees
+//    it), and the shift + store are DEFERRED into the idle PCLK-low half-period, so the
+//    critical sampling latency is poll-granularity (~8 cycles) + 2, well inside the
+//    36ns data-valid window at the OV5640's canonical 14MHz byte clock (the old loop
+//    sampled up to ~13 cycles after the edge = ~2ns margin -> speckles);
+//  - deferring the shift also removes any need for a shift-free special case;
+//  - 8x unrolled (nbytes is always a multiple of 8) so the loop counter costs 1/8th
+//    per byte, also paid in the idle half;
+//  - the PCLK waits use a bounded spin count: cheap, and still can't hang.
+// Returns 0 on success, -1 if PCLK stalls. Force-inlined into capture() (which is a RAM
+// function, so the inlined body executes from RAM): no per-line call overhead, and the
+// register allocation stays clean because the hot loop is small and self-contained.
+static inline __attribute__((always_inline)) int capture_line(const volatile uint32_t *pclk_reg, uint32_t pclk_msk,
+                                                              const volatile uint32_t *data_reg, int dshift,
+                                                              char *k, int nbytes)
+{
+  uint32_t g = 40000000; // bounded spin for the PCLK waits - can't hang
+  uint32_t d;
+// Sample deterministically just after the observed rising edge; shift+store deferred to
+// the idle low half. (A "track the bus and keep the last pre-fall value" variant was
+// tried and is WRONG: reading data before checking PCLK races the falling edge, so the
+// kept value can be read mid-transition - corruption at any clock rate.) Which physical
+// clock phase this samples depends on the sensor's PCLK polarity (OV5640 0x4740 bit5):
+// if data is launched on the same edge we sample on, flip that bit rather than the loop.
+#define CAPBYTE                           \
+  while (!(*pclk_reg & pclk_msk))         \
+    if (!--g)                             \
+      return -1;                          \
+  d = *data_reg; /* sample at the edge */ \
+  while (*pclk_reg & pclk_msk)            \
+    if (!--g)                             \
+      return -1;                          \
+  *k++ = (char)(d >> dshift); /* shift+store in the idle low half */
+  for (nbytes >>= 3; nbytes; nbytes--)
+  {
+    CAPBYTE CAPBYTE CAPBYTE CAPBYTE
+    CAPBYTE CAPBYTE CAPBYTE CAPBYTE
+  }
+#undef CAPBYTE
+  return 0;
+}
+int __not_in_flash_func(capture)(char *buff)
 {
   const int width = CameraWidth;   // 160 (QQVGA) or 320 (QVGA)
   const int height = CameraHeight; // 120 (QQVGA) or 240 (QVGA)
+  const volatile uint32_t *pclk_reg = (PCLKGP < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  uint32_t pclk_msk = 1u << (PCLKGP & 31);
+  const volatile uint32_t *href_reg = (HREFGP < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  uint32_t href_msk = 1u << (HREFGP & 31);
+  const volatile uint32_t *vs_reg = (VSYNCGP < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  uint32_t vs_msk = 1u << (VSYNCGP & 31);
+  int d0 = PinDef[D0].GPno; // 8 consecutive data GPIOs, all in one bank (checked at OPEN)
+  const volatile uint32_t *data_reg = (d0 < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  const int dshift = d0 & 31;
   char *k = buff;
-  while (ST_VSYNC)
+  uint32_t deadline = time_us_32() + 8000000;
+  CAPWAIT((*vs_reg & vs_msk), CAPTO_VSYNC_HIGH) /* wait for the old frame to end */
+  CAPWAIT(!(*vs_reg & vs_msk), CAPTO_VSYNC_LOW) /* wait for a new frame to start */
+  CAPSPIN(!(*href_reg & href_msk), CAPTO_HREF)  // wait for the first line to start
+  for (int j = 0; j < height; j++)
   {
-  } /* wait for the old frame to end */
-  while (!ST_VSYNC)
-  {
-  } /* wait for a new frame to start */
-  // At this point VSync has gone high and the frame is about to start
-  while (!ST_HREF)
-  {
-  } // wait for the first line to start
-  while (!ST_PCLK)
-  {
-  } // wait for clock to go high /
-  while (ST_PCLK)
-  {
-  } // wait for clock to go back low /
-  for (int i = 0; i < width; i++)
-  {
-    while (!ST_PCLK)
-    {
-    } // wait for clock to go high /
-    *k++ = gpio_get_all64() >> PinDef[D0].GPno;
-    while (ST_PCLK)
-    {
-    } // wait for clock to go back low /
-
-    // second byte/
-    while (!ST_PCLK)
-    {
-    } // wait for clock to go high /
-    *k++ = gpio_get_all64() >> PinDef[D0].GPno;
-    while (ST_PCLK)
-    {
-    } // wait for clock to go back low /
+    if (capture_line(pclk_reg, pclk_msk, data_reg, dshift, k, width * 2))
+      return CAPTO_PCLK;
+    if (j) // line 0 is captured then overwritten: the sync-settling discard, as before
+      k += width * 2;
+    CAPSPIN((*href_reg & href_msk), CAPTO_HREF) // wait for the line to end
+    if (j < height - 1)
+      CAPSPIN(!(*href_reg & href_msk), CAPTO_HREF) // wait for the next line to start
   }
-  while (ST_HREF)
-  {
-  } // wait for the first line to end*/
-  k = buff;
-  for (int j = 0; j < height - 1; j++)
-  {
-    while (!ST_HREF)
-    {
-    } // wait for the first line to end
-    for (int i = 0; i < width; i++)
-    {
-      while (!ST_PCLK)
-      {
-      } // wait for clock to go high /
-      *k++ = gpio_get_all64() >> PinDef[D0].GPno;
-      while (ST_PCLK)
-      {
-      } // wait for clock to go back low /
-
-      // second byte/
-      while (!ST_PCLK)
-      {
-      } // wait for clock to go high /
-      *k++ = gpio_get_all64() >> PinDef[D0].GPno;
-      while (ST_PCLK)
-      {
-      } // wait for clock to go back low /
-    }
-    while (ST_HREF)
-    {
-    } // wait for the first line to end
-  }
+  return 0;
 }
 #endif
 #ifdef rp2350 // OV2640 JPEG capture - RP2350 only
@@ -2827,34 +3035,58 @@ void __not_in_flash_func(capture)(char *buff)
 // the caller trims to SOI..EOI.
 int __not_in_flash_func(capture_jpeg)(uint8_t *buff, int maxlen)
 {
+  // Direct SIO-register polling exactly like capture() - see the comment there. JPEG runs
+  // at the sensor's canonical (fast) clocks and is byte-fragile, so the loop must be tight.
+  // A stalled signal returns what was read so far; the caller's SOI/EOI trim then fails
+  // cleanly with "No JPEG frame captured".
+  const volatile uint32_t *pclk_reg = (PCLKGP < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  const uint32_t pclk_msk = 1u << (PCLKGP & 31);
+  const volatile uint32_t *href_reg = (HREFGP < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  const uint32_t href_msk = 1u << (HREFGP & 31);
+  const volatile uint32_t *vs_reg = (VSYNCGP < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  const uint32_t vs_msk = 1u << (VSYNCGP & 31);
+  const int d0 = PinDef[D0].GPno;
+  const volatile uint32_t *data_reg = (d0 < 32) ? &sio_hw->gpio_in : &sio_hw->gpio_hi_in;
+  const int dshift = d0 & 31;
   int n = 0;
-  int gp = PinDef[D0].GPno;
-  while (ST_VSYNC)
-  {
-  } // wait for the current frame to finish
-  while (!ST_VSYNC)
-  {
-  } // wait for the next frame to start
+  uint8_t b, prev = 0;
+  uint32_t deadline = time_us_32() + 8000000;
+  CAPWAIT((*vs_reg & vs_msk), 0)  // wait for the current frame to finish (0 = no data)
+  CAPWAIT(!(*vs_reg & vs_msk), 0) // wait for the next frame to start
+  // PCLK free-runs through the horizontal blanking (ArduCAM's FIFO gates writes with
+  // HREF in HARDWARE; software must do the equivalent). Gating the loop on HREF between
+  // bytes races every burst boundary: a blanking edge gets captured as a junk byte, or a
+  // real first byte is missed - each one shows as a shifted band in the decoded image
+  // (the decoder resyncs at restart markers), independent of clock speed. Instead, take
+  // EVERY PCLK edge and classify each byte by an HREF snapshot read AT the sampling
+  // instant: HREF high = data (keep), HREF low = blanking junk (discard; also the spot
+  // to notice frame-end).
+  uint32_t g = 40000000; // bounded spin - can't hang even if PCLK is gated off
   while (n < maxlen)
   {
-    while (!ST_HREF) // skip horizontal blanking
-      if (!ST_VSYNC)
+    uint32_t d, h;
+    while (!(*pclk_reg & pclk_msk)) // wait for any PCLK rising edge (data or blanking)
+      if (!--g)
+        return n; // PCLK stopped (gated + frame over): return what we have
+    d = *data_reg;  // sample the bus
+    h = *href_reg;  // snapshot HREF at the sample - classifies this edge
+    while (*pclk_reg & pclk_msk) // wait for PCLK low
+      if (!--g)
+        return n;
+    if (h & href_msk)
+    { // data byte (idle low half: shift + store + EOI check)
+      b = (uint8_t)(d >> dshift);
+      buff[n++] = b;
+      if (b == 0xD9 && prev == 0xFF)
+        return n; // JPEG end-of-image marker (register-cached compare - no buffer reads)
+      prev = b;
+    }
+    else
+    { // blanking edge: nothing stored; cheap spot for the frame-end/deadline checks
+      if (!(*vs_reg & vs_msk))
         return n; // frame ended
-    while (ST_HREF && n < maxlen)
-    {
-      while (!ST_PCLK)
-      {
-      }
-#ifndef rp2350
-      buff[n++] = gpio_get_all() >> gp;
-#else
-      buff[n++] = gpio_get_all64() >> gp;
-#endif
-      while (ST_PCLK)
-      {
-      }
-      if (n >= 2 && buff[n - 2] == 0xFF && buff[n - 1] == 0xD9)
-        return n; // JPEG end-of-image marker
+      if ((int32_t)(time_us_32() - deadline) > 0)
+        return n;
     }
   }
   return n;
@@ -2897,6 +3129,13 @@ void MIPS16 cmd_camera(void)
       tp = ct;
       gotkw = 1;
     }
+    else if ((ct = checkstring(tp, (unsigned char *)"OV5640")))
+    {
+      CameraType = CAM_OV5640;
+      camera_address = ov5640_address;
+      tp = ct;
+      gotkw = 1;
+    }
     else if ((ct = checkstring(tp, (unsigned char *)"OV7670")))
     {
       tp = ct;
@@ -2916,11 +3155,11 @@ void MIPS16 cmd_camera(void)
     // Optional trailing resolution keyword (QQVGA default, QVGA = 320x240, RP2350 only)
     CameraWidth = 160;
     CameraHeight = 120;
-    if (CameraType == CAM_OV2640)
+    if (CameraType == CAM_OV2640 || CameraType == CAM_OV5640)
     {
-      // The OV2640 init table is fixed QVGA RGB565 (any trailing keyword is ignored).
+      // The OV2640/OV5640 preview is fixed QVGA RGB565 (any trailing keyword is ignored).
 #ifndef rp2350
-      error("OV2640 is only supported on RP2350");
+      error("The OV2640 and OV5640 are only supported on RP2350");
 #endif
       CameraWidth = 320;
       CameraHeight = 240;
@@ -3005,6 +3244,12 @@ void MIPS16 cmd_camera(void)
     VSYNC = pin4;
     RESET = pin5;
     D0 = pin6;
+#ifdef rp2350
+    // capture()/capture_jpeg() read all 8 data pins in ONE direct SIO register access,
+    // so D0..D7 must not straddle the GPIO0-31 / GPIO32+ bank boundary.
+    if ((PinDef[D0].GPno & 31) > 24)
+      error("Camera data pins D0..D7 must not cross the GPIO 32 boundary");
+#endif
     if (CameraType == CAM_OV7670)
     {
       setpwm(pin1, &CameraChannel, &CameraSlice, 12000000.0, 50.0); // 12MHz master clock
@@ -3048,6 +3293,35 @@ void MIPS16 cmd_camera(void)
       if (readregister(0x0A) != 0x26) // sensor-bank PIDH = 0x26 for OV2640
         error("Camera not found");
       load_camera_regs(OV2640_QVGA, 0); // RGB565 QVGA init (table driven, no read-back)
+    }
+    else if (CameraType == CAM_OV5640)
+    {
+      // The preview divider (0x3035) is chosen per CPU speed below; JPEG capture has its
+      // own clocking and works at all speeds, so OPEN is not gated on CPU speed.
+      uint32_t cpukhz = LiveCPUSpeed ? LiveCPUSpeed : Option.CPU_Speed;
+      // OV5640: software reset, confirm chip id (0x300A/0x300B = 0x5640), then load the
+      // base init + RGB565 QVGA preview overlay. 16-bit register addresses (sccb_write16).
+      sccb_write16(0x3103, 0x11); // system clock from pad during reset
+      sccb_write16(0x3008, 0x82); // software reset
+      uSec(20000);
+      if (readregister16(0x300A) != 0x56 || readregister16(0x300B) != 0x40)
+        error("Camera not found");
+      load_camera_regs16(OV5640_init);
+      load_camera_regs16(OV5640_VGA_PREVIEW); // scaling/binning/timing - REQUIRED (see table)
+      load_camera_regs16(OV5640_RGB_QVGA);
+      // Preview divider follows the CPU speed (HW-verified ladder with the spin-only HREF
+      // waits): 378MHz -> 0x51, 315MHz -> 0x71, 252MHz -> 0x81.
+      sccb_write16(0x3035, cpukhz >= 378000 ? 0x51 : (cpukhz >= 315000 ? 0x71 : 0x81));
+      // Run the canonical ArduCAM config UNMODIFIED - the OV2640 streams its canonical
+      // config through the same pins/bit-bang, and at RP2350 speeds the poll loop keeps up
+      // with the sensor's normal QVGA pixel rate (ArduCAM needs a FIFO only because its
+      // host MCUs are slow). Do NOT re-add clock overrides: lowering the PLL multiplier
+      // (0x3036) destabilises the chip and corrupts SCCB; large DVP divider values
+      // (0x3824 >= 0x10) stall the whole DVP timing generator (VSYNC dies).
+      // Verify the register interface is still solid after the full configuration - this
+      // catches a mis-configured/half-configured camera instead of a bad image.
+      if (readregister16(0x300A) != 0x56)
+        error("Camera configuration failed");
     }
     else
 #endif
@@ -3115,15 +3389,28 @@ void MIPS16 cmd_camera(void)
     getcsargs(&tp, 3);
     if (!XCLK)
       error("Camera not open");
-    int a = getint(argv[0], 0, 255);
-    int b = getint(argv[2], 0, 255);
-    int c = readregister(a);
-    if (CameraType == CAM_OV7670)
-      ov7670_set(a, b); // read-back verified
+    int a, b, c;
 #ifdef rp2350
+    if (CameraType == CAM_OV5640)
+    {
+      a = getint(argv[0], 0, 0xFFFF); // OV5640: 16-bit register address
+      b = getint(argv[2], 0, 255);
+      c = readregister16(a);
+      sccb_write16(a, b);
+    }
     else
-      sccb_write(a, b); // OV2640 regs may not read back; set the bank with REGISTER &HFF,n first
 #endif
+    {
+      a = getint(argv[0], 0, 255);
+      b = getint(argv[2], 0, 255);
+      c = readregister(a);
+      if (CameraType == CAM_OV7670)
+        ov7670_set(a, b); // read-back verified
+#ifdef rp2350
+      else
+        sccb_write(a, b); // OV2640 regs may not read back; set the bank with REGISTER &HFF,n first
+#endif
+    }
     MMPrintString("Register &H");
     PIntH(a);
     MMPrintString(" was &H");
@@ -3188,9 +3475,11 @@ void MIPS16 cmd_camera(void)
 #endif
     char *k = buff;
     c.rgb = 0;
-    disable_interrupts_pico();
-    capture(buff);
-    enable_interrupts_pico();
+    uint32_t cirqs = save_and_disable_interrupts();
+    int cres = capture(buff);
+    camera_restore_irqs(cirqs);
+    if (cres)
+      camera_timeout(cres);
     char *linebuff = NULL;
     if (scale)
       linebuff = GetTempMainMemory(CameraWidth * 3 * scale);
@@ -3239,51 +3528,108 @@ void MIPS16 cmd_camera(void)
     // Capture a 640x480 JPEG using the OV2640's hardware JPEG engine and save it to a file.
     if (!XCLK)
       error("Camera not open");
-    if (CameraType != CAM_OV2640)
-      error("JPEG capture requires the OV2640");
+    if (CameraType != CAM_OV2640 && CameraType != CAM_OV5640)
+      error("JPEG capture requires the OV2640 or OV5640");
     getcsargs(&tp, 5);
     if (!(argc == 1 || argc == 3 || argc == 5))
       error("Filename [, resolution [, quality]] expected");
-    // Optional 2nd arg: resolution keyword (default VGA). jpegmax sizes the non-HDMI
-    // capture buffer; qsbase is the lowest QS (= best quality) that reliably fits at that
-    // resolution (bigger frames need a higher QS to stay within the buffer).
-    const OV7670_command *framesize = OV2640_640x480_JPEG;
-    int jpegmax = 64 * 1024; // VGA
-    int qsbase = 2;          // VGA HIGH-quality QS (QS=1 makes the OV2640 emit a blank frame)
-    if (argc >= 3)           // resolution is argv[2] whether or not a quality arg (argv[4]) follows
+    // Optional 2nd arg: resolution keyword. jpegmax sizes the non-HDMI capture buffer;
+    // qsbase is the best-quality QS that reliably fits at that resolution (bigger frames
+    // need a higher QS to stay within the buffer). Either way the frame is capped at the
+    // buffer - one that overflows fails cleanly with "No JPEG frame captured".
+    const OV7670_command *framesize = OV2640_640x480_JPEG; // OV2640 framesize table
+    int jpegmax = 64 * 1024;                               // VGA default
+    int qsbase = 2;
+    int ov5640_w = 640, ov5640_h = 480; // OV5640 JPEG output size (-> 0x3808..0x380b)
+    if (CameraType == CAM_OV2640)
     {
-      if (checkstring(argv[2], (unsigned char *)"VGA"))
+      if (argc >= 3) // resolution is argv[2] whether or not a quality arg (argv[4]) follows
       {
-        framesize = OV2640_640x480_JPEG;
-        jpegmax = 64 * 1024;
-        qsbase = 2;
+        if (checkstring(argv[2], (unsigned char *)"VGA"))
+        {
+          framesize = OV2640_640x480_JPEG;
+          jpegmax = 64 * 1024;
+          qsbase = 2;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"SVGA"))
+        {
+          framesize = OV2640_800x600_JPEG;
+          jpegmax = 96 * 1024;
+          qsbase = 2;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"XGA"))
+        {
+          framesize = OV2640_1024x768_JPEG;
+          jpegmax = 128 * 1024;
+          qsbase = 4;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"SXGA"))
+        {
+          framesize = OV2640_1280x1024_JPEG;
+          jpegmax = 160 * 1024;
+          qsbase = 5;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"UXGA"))
+        {
+          framesize = OV2640_1600x1200_JPEG;
+          jpegmax = 200 * 1024;
+          qsbase = 8;
+        }
+        else
+          error("Resolution must be VGA, SVGA, XGA, SXGA or UXGA");
       }
-      else if (checkstring(argv[2], (unsigned char *)"SVGA"))
+    }
+    else // OV5640: the output size drives the JPEG downscaler; qsbase is the 0x4407 QS base.
+    {
+      jpegmax = 64 * 1024;
+      qsbase = 4;
+      if (argc >= 3)
       {
-        framesize = OV2640_800x600_JPEG;
-        jpegmax = 96 * 1024;
-        qsbase = 2;
+        if (checkstring(argv[2], (unsigned char *)"VGA"))
+        {
+          ov5640_w = 640;
+          ov5640_h = 480;
+          jpegmax = 64 * 1024;
+          qsbase = 4;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"XGA"))
+        {
+          ov5640_w = 1024;
+          ov5640_h = 768;
+          jpegmax = 96 * 1024;
+          qsbase = 6;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"SXGA"))
+        {
+          ov5640_w = 1280;
+          ov5640_h = 960;
+          jpegmax = 128 * 1024;
+          qsbase = 8;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"UXGA"))
+        {
+          ov5640_w = 1600;
+          ov5640_h = 1200;
+          jpegmax = 150 * 1024;
+          qsbase = 10;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"QXGA"))
+        {
+          ov5640_w = 2048;
+          ov5640_h = 1536;
+          jpegmax = 150 * 1024;
+          qsbase = 14;
+        }
+        else if (checkstring(argv[2], (unsigned char *)"5MP"))
+        {
+          ov5640_w = 2592;
+          ov5640_h = 1944;
+          jpegmax = 150 * 1024;
+          qsbase = 30; // 20 overflowed the buffer at HIGH (5MP needs heavy compression to fit 150K)
+        }
+        else
+          error("Resolution must be VGA, XGA, SXGA, UXGA, QXGA or 5MP");
       }
-      else if (checkstring(argv[2], (unsigned char *)"XGA"))
-      {
-        framesize = OV2640_1024x768_JPEG;
-        jpegmax = 128 * 1024;
-        qsbase = 4;
-      }
-      else if (checkstring(argv[2], (unsigned char *)"SXGA"))
-      {
-        framesize = OV2640_1280x1024_JPEG;
-        jpegmax = 160 * 1024;
-        qsbase = 5;
-      }
-      else if (checkstring(argv[2], (unsigned char *)"UXGA"))
-      {
-        framesize = OV2640_1600x1200_JPEG;
-        jpegmax = 200 * 1024;
-        qsbase = 8;
-      }
-      else
-        error("Resolution must be VGA, SVGA, XGA, SXGA or UXGA");
     }
     // Optional 3rd arg: quality HIGH/MEDIUM/LOW (default MEDIUM). The QS register (DSP 0x44)
     // is a quantization scale: LOWER = higher quality / bigger file. HIGH uses the per-
@@ -3300,9 +3646,19 @@ void MIPS16 cmd_camera(void)
       else
         error("Quality must be HIGH, MEDIUM or LOW");
     }
-    int quality = qsbase * qsmult; // OV2640 QS value to write
-    if (quality < 2)
+    int quality = qsbase * qsmult; // QS value: OV2640 -> DSP reg 0x44, OV5640 -> reg 0x4407
+    if (CameraType == CAM_OV2640 && quality < 2)
       quality = 2; // QS=1 makes the OV2640 emit a valid but blank JPEG - never go below 2
+    if (CameraType == CAM_OV5640)
+    {
+      if (quality < 1)
+        quality = 1;
+      // The register is a 6-bit field but the encoder stops producing frames well below
+      // its numeric max: QS 56+ emits nothing (QXGA/5MP at LOW failed), QS 40 (UXGA LOW)
+      // is the highest HW-verified working value - cap there.
+      if (quality > 40)
+        quality = 40;
+    }
     unsigned char *fname = getFstring(argv[0]);
     AppendDefaultExtension((char *)fname, ".jpg");
     // Open the output file FIRST - a bad path/unmountable drive then fails cleanly,
@@ -3341,41 +3697,101 @@ void MIPS16 cmd_camera(void)
       }
 #endif
     }
-    // Snapshot the running preview's converged auto-exposure/gain (sensor bank) before the
-    // mode switch, so we can freeze it for the JPEG. The resolution change resets the AEC,
-    // which otherwise needs many frames to re-converge - a still taken immediately after a
-    // motion trigger would be badly over/under exposed.
-    sccb_write(0xff, 0x01);           // sensor bank
-    int ae_gain = readregister(0x00); // AGC gain[7:0]
-    int ae_aec = readregister(0x10);  // AEC[9:2]
-    int ae_r45 = readregister(0x45);  // AEC[15:10] + AGC[9:8]
-    // Switch the OV2640 to JPEG mode at the chosen resolution.
-    load_camera_regs(OV2640_JPEG_INIT, 0);
-    load_camera_regs(OV2640_YUV422, 0);
-    load_camera_regs(OV2640_JPEG, 0);
-    sccb_write(0xff, 0x01);
-    sccb_write(0x15, 0x00);
-    load_camera_regs(framesize, 0);
-    // Freeze auto-exposure/gain at the snapshotted preview values - the JPEG is then
-    // correctly exposed immediately, with no AEC re-convergence wait.
-    sccb_write(0xff, 0x01);           // sensor bank
-    sccb_write(0x13, 0xe0);           // AEC (bit0) + AGC (bit2) OFF, keep banding/fast-AEC bits
-    sccb_write(0x00, ae_gain);        // restore gain[7:0]
-    sccb_write(0x10, ae_aec);         // restore AEC[9:2]
-    sccb_write(0x45, ae_r45);         // restore AEC[15:10] + AGC[9:8]
-    sccb_write(0xff, 0x00);           // DSP bank
-    sccb_write(0xd3, OV2640_DVP_CLK); // slow DVP PCLK so the bit-banged read stays byte-perfect (same as preview)
-    sccb_write(0x44, quality);        // QS (DSP bank): lower = higher quality / bigger JPEG
-    uSec(50000);                      // brief settle for the mode change (exposure is frozen - no AEC wait)
-    disable_interrupts_pico();
-    int n = capture_jpeg(buff, maxlen);
-    enable_interrupts_pico();
-    // Restore RGB565 QVGA preview mode (soft reset first - the JPEG init changed
-    // resolution/format/windowing the OV2640_QVGA table alone doesn't undo).
-    sccb_write(0xFF, 0x01);
-    sccb_write(0x12, 0x80);
-    uSec(50000);
-    load_camera_regs(OV2640_QVGA, 0);
+    int n;
+    if (CameraType == CAM_OV2640)
+    {
+      // Snapshot the running preview's converged auto-exposure/gain (sensor bank) before the
+      // mode switch, so we can freeze it for the JPEG. The resolution change resets the AEC,
+      // which otherwise needs many frames to re-converge - a still taken immediately after a
+      // motion trigger would be badly over/under exposed.
+      sccb_write(0xff, 0x01);           // sensor bank
+      int ae_gain = readregister(0x00); // AGC gain[7:0]
+      int ae_aec = readregister(0x10);  // AEC[9:2]
+      int ae_r45 = readregister(0x45);  // AEC[15:10] + AGC[9:8]
+      // Switch the OV2640 to JPEG mode at the chosen resolution.
+      load_camera_regs(OV2640_JPEG_INIT, 0);
+      load_camera_regs(OV2640_YUV422, 0);
+      load_camera_regs(OV2640_JPEG, 0);
+      sccb_write(0xff, 0x01);
+      sccb_write(0x15, 0x00);
+      load_camera_regs(framesize, 0);
+      // Freeze auto-exposure/gain at the snapshotted preview values - the JPEG is then
+      // correctly exposed immediately, with no AEC re-convergence wait.
+      sccb_write(0xff, 0x01);           // sensor bank
+      sccb_write(0x13, 0xe0);           // AEC (bit0) + AGC (bit2) OFF, keep banding/fast-AEC bits
+      sccb_write(0x00, ae_gain);        // restore gain[7:0]
+      sccb_write(0x10, ae_aec);         // restore AEC[9:2]
+      sccb_write(0x45, ae_r45);         // restore AEC[15:10] + AGC[9:8]
+      sccb_write(0xff, 0x00);           // DSP bank
+      sccb_write(0xd3, OV2640_DVP_CLK); // slow DVP PCLK so the bit-banged read stays byte-perfect (same as preview)
+      sccb_write(0x44, quality);        // QS (DSP bank): lower = higher quality / bigger JPEG
+      uSec(50000);                      // brief settle for the mode change (exposure is frozen - no AEC wait)
+      uint32_t cirqs = save_and_disable_interrupts();
+      n = capture_jpeg(buff, maxlen);
+      camera_restore_irqs(cirqs);
+      // Restore RGB565 QVGA preview mode (soft reset first - the JPEG init changed
+      // resolution/format/windowing the OV2640_QVGA table alone doesn't undo).
+      sccb_write(0xFF, 0x01);
+      sccb_write(0x12, 0x80);
+      uSec(50000);
+      load_camera_regs(OV2640_QVGA, 0);
+    }
+    else // OV5640
+    {
+      // Snapshot the running preview's CONVERGED auto-white-balance gains (in auto mode
+      // the sensor updates 0x3400-0x3405 live). The mode switch reloads the full init,
+      // which RESETS the AWB - it then needs several frames to re-converge, but a JPEG
+      // frame takes ~0.5s and we capture after 100ms, so the still was shot with cold
+      // AWB gains (visible red cast that the long-running preview doesn't have).
+      int awb[6];
+      for (int i = 0; i < 6; i++)
+        awb[i] = readregister16(0x3400 + i);
+      // Switch the OV5640 to JPEG mode: reload the base (restores the JPEG-capable YUV format
+      // that the RGB565 preview overlay changed), enable JPEG QSXGA + the downscaler, then set
+      // the output size and QS. capture_jpeg reads the variable-length stream to EOI/maxlen.
+      load_camera_regs16(OV5640_init);
+      load_camera_regs16(OV5640_JPEG_QSXGA);
+      load_camera_regs16(OV5640_JPEG_scale);
+      sccb_write16(0x3808, (ov5640_w >> 8) & 0xff); // JPEG output width  (0x3808/0x3809)
+      sccb_write16(0x3809, ov5640_w & 0xff);
+      sccb_write16(0x380a, (ov5640_h >> 8) & 0xff); // JPEG output height (0x380a/0x380b)
+      sccb_write16(0x380b, ov5640_h & 0xff);
+      sccb_write16(0x4407, quality); // JPEG QS: lower = higher quality / bigger file
+      // Same transport fixes as the (working) RGB_QVGA preview table - the JPEG tables
+      // leave 0x4740=0x20 (VSYNC polarity bit0=0: capture_jpeg misreads the first
+      // horizontal blanking as frame-end -> "one line then abort"; PCLK phase bit5=1:
+      // samples mid-transition) and 0x3035=0x31 (too fast for the bit-bang).
+      sccb_write16(0x4740, 0x01); // VSYNC polarity + PCLK phase to match the capture loop
+      // div 8 on the JPEG PLL (0x3036=0x69) -> ~10.5MHz byte clock. The HREF-snapshot
+      // capture loop removed the burst-boundary races (which were clock-independent),
+      // so the clock only needs to stay inside the loop's sampling budget - ~10.5MHz is
+      // just under the preview's proven ~11MHz. If banding ever reappears, drop back
+      // to 0xA1 (8.4MHz, verified clean).
+      sccb_write16(0x3035, 0x81);
+      // Freeze white balance at the preview's converged gains for the still (manual AWB
+      // + write the snapshot back). The restore below reloads the init -> auto AWB again.
+      sccb_write16(0x3406, 0x01);
+      for (int i = 0; i < 6; i++)
+        sccb_write16(0x3400 + i, awb[i]);
+      if (readregister16(0x300A) != 0x56) // config sanity check before the capture
+      {
+        if (allocated)
+          FreeMemory(buff);
+        FileClose(fnbr);
+        error("Camera configuration failed");
+      }
+      uSec(100000); // settle the mode change
+      uint32_t cirqs = save_and_disable_interrupts();
+      n = capture_jpeg(buff, maxlen);
+      camera_restore_irqs(cirqs);
+      // Restore the RGB565 QVGA preview, including the speed-dependent divider that OPEN
+      // applies (the table reload resets 0x3035; ladder: 378->0x51, 315->0x71, 252->0x81).
+      load_camera_regs16(OV5640_init);
+      load_camera_regs16(OV5640_VGA_PREVIEW);
+      load_camera_regs16(OV5640_RGB_QVGA);
+      uint32_t rkhz = LiveCPUSpeed ? LiveCPUSpeed : Option.CPU_Speed;
+      sccb_write16(0x3035, rkhz >= 378000 ? 0x51 : (rkhz >= 315000 ? 0x71 : 0x81));
+    }
     // Trim to the JPEG SOI (FF D8) .. EOI (FF D9).
     int start = -1, end = -1;
     for (int i = 0; i < n - 1; i++)
@@ -3449,9 +3865,11 @@ void MIPS16 cmd_camera(void)
       // framebuffer pixel with no stride mismatch. RGB565->RGB555 just drops
       // the green LSB. (The image shows wrong colours/tears during the IRQ-disabled
       // capture, then snaps right as the convert pass runs - the cost of drawing live.)
-      disable_interrupts_pico();
-      capture((char *)WriteBuf);
-      enable_interrupts_pico();
+      uint32_t cirqs = save_and_disable_interrupts();
+      int cres = capture((char *)WriteBuf);
+      camera_restore_irqs(cirqs);
+      if (cres)
+        camera_timeout(cres);
       uint16_t *fb = (uint16_t *)WriteBuf;
       for (int y = 0; y < CameraHeight && y < VRes; y++)
       {
@@ -3479,9 +3897,11 @@ void MIPS16 cmd_camera(void)
       // scale up / position into the framebuffer via DrawBufferFast (= DrawBuffer555Fast
       // in mode 4). e.g. scale 2 fills the 320x240 screen. RGB565->RGB555 drops green LSB.
       char *buff = GetTempMainMemory(CameraWidth * CameraHeight * 2);
-      disable_interrupts_pico();
-      capture(buff);
-      enable_interrupts_pico();
+      uint32_t cirqs = save_and_disable_interrupts();
+      int cres = capture(buff);
+      camera_restore_irqs(cirqs);
+      if (cres)
+        camera_timeout(cres);
       uint16_t *line555 = (uint16_t *)GetTempMainMemory(CameraWidth * scale * 2);
       char *k = buff;
       for (int y = ys; y < CameraHeight * scale + ys; y += scale)
@@ -3509,9 +3929,11 @@ void MIPS16 cmd_camera(void)
     }
 #else
     char *buff = GetTempMainMemory(CameraWidth * CameraHeight * 2);
-    disable_interrupts_pico();
-    capture(buff);
-    enable_interrupts_pico();
+    uint32_t cirqs = save_and_disable_interrupts();
+    int cres = capture(buff);
+    camera_restore_irqs(cirqs);
+    if (cres)
+      camera_timeout(cres);
     char *linebuff = GetTempMainMemory(CameraWidth * 3 * scale);
     char *k = buff;
     for (int y = ys; y < CameraHeight * scale + ys; y += scale)

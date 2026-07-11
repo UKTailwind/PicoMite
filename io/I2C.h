@@ -111,6 +111,13 @@ typedef struct
    uint8_t value; // Value to store
 } OV7670_command;
 
+// OV5640 Command Structure (16-bit register address)
+typedef struct
+{
+   uint16_t reg;  // 16-bit register address
+   uint8_t value; // Value to store
+} OV5640_command;
+
 // Nunchuk/Classic Controller Structure
 typedef struct s_nunstruct
 {
