@@ -14,6 +14,12 @@ A misconfigured or disconnected camera now reports a specific error (identifying
 Camera capture no longer disturbs the PSRAM/flash controller: fixes rare hard faults after captures on PSRAM-enabled builds
 Faster capture inner loops
 
+WEB versions (WebMite and HDMIWEB)
+WEB PING address$ [, count] [, timeout_ms] [, avgvar] - ICMP ping a hostname or IP address; prints per-reply and summary lines and can return the average round-trip time in ms (-1 if no replies) in a float variable
+
+All versions with turtle graphics
+TURTLE PEN/FILL/CURSOR colour commands now accept COLOR as well as COLOUR in both the one-word and two-word forms (e.g. PEN COLOR, PENCOLOUR)
+
 Bluetooth versions
 Bluetooth console and keyboard fixes
 
