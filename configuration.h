@@ -146,7 +146,7 @@ extern "C"
 #define MAX_CPU 378000
 #define MIN_CPU 252000
 #ifdef USBKEYBOARD
-#define FLASH_TARGET_OFFSET (832 * 1024)
+#define FLASH_TARGET_OFFSET (848 * 1024)
 #define MagicKey 0xCD8778E7
 #define HEAP_MEMORY_SIZE (100 * 1024)
 #else
@@ -227,7 +227,7 @@ extern "C"
 
 #ifdef USBKEYBOARD
 #define MagicKey 0x029A7245
-#define FLASH_TARGET_OFFSET (1120 * 1024)
+#define FLASH_TARGET_OFFSET (1136 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
       from the cursor module (~650 bytes for user_cursor.pixels +
       state) and the click/cursor ownership tracking. Heap and BSS

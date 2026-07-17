@@ -40,6 +40,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 
 #include "hardware/irq.h"
 
+#include "hardware/sync.h"
+
 #define PinRead(a) gpio_get(PinDef[a].GPno)
 extern void DrawBufferMEM(int x1, int y1, int x2, int y2, unsigned char *p);
 extern void ReadBufferMEM(int x1, int y1, int x2, int y2, unsigned char *buff);
