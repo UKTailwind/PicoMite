@@ -184,6 +184,9 @@ extern volatile bool UDPreceive;
 void GetNTPTime(void);
 void cmd_ntp(unsigned char *tp);
 
+/* PING command */
+void cmd_ping(unsigned char *tp);
+
 /* TCP functions */
 void checkTCPOptions(void);
 void open_tcp_server(void);

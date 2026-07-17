@@ -33,7 +33,7 @@ MEM_LIBC_MALLOC is incompatible with non polling versions
 #define LWIP_ARP 1
 // #define LWIP_ETHERNET               1
 #define LWIP_ICMP 1
-#define LWIP_RAW 0
+#define LWIP_RAW 1 // raw pcbs needed by WEB PING (ICMP echo)
 #define TCP_WND (8 * TCP_MSS)
 #define TCP_MSS 1460
 #define TCP_SND_BUF (8 * TCP_MSS)

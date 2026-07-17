@@ -26,9 +26,9 @@ set(VALID_COMPILE_VARIANTS
 # VS Code uses this default when COMPILE is not supplied explicitly.
 # Guard restored: without it, this set() shadows the -DCOMPILE=X passed
 # by buildpicomite.bat and every variant silently builds as the default.
-#if(NOT DEFINED COMPILE)
-	set(COMPILE HDMIUSB)
-#endif()
+if(NOT DEFINED COMPILE)
+	set(COMPILE HDMIWEB)
+endif()
 
 list(FIND VALID_COMPILE_VARIANTS "${COMPILE}" COMPILE_INDEX)
 if(COMPILE_INDEX EQUAL -1)
@@ -106,6 +106,7 @@ set(WEB_SOURCES
 	net/MMTCPclient.c
 	net/MMtelnet.c
 	net/MMntp.c
+	net/MMping.c
 	net/MMtcpserver.c
 	third_party_mod/tftp.c
 	net/MMtftp.c

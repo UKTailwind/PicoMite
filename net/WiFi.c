@@ -588,6 +588,12 @@ void cmd_web(void)
                 cmd_ntp(tp);
                 return;
         }
+        tp = checkstring(cmdline, (unsigned char *)"PING");
+        if (tp)
+        {
+                cmd_ping(tp);
+                return;
+        }
         tp = checkstring(cmdline, (unsigned char *)"UDP");
         if (tp)
         {
