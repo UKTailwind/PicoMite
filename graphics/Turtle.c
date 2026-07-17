@@ -817,7 +817,7 @@ void cmd_turtle(void)
     {
         turtle->pen_down = 1;
     }
-    else if ((tp = checkstring(cmdline, (unsigned char *)"PEN COLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"PENCOLOR")) || (tp = checkstring(cmdline, (unsigned char *)"PC")))
+    else if ((tp = checkstring(cmdline, (unsigned char *)"PEN COLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"PEN COLOR")) || (tp = checkstring(cmdline, (unsigned char *)"PENCOLOR")) || (tp = checkstring(cmdline, (unsigned char *)"PENCOLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"PC")))
     {
         turtle->pen_color = getint(tp, 0, 0xFFFFFF);
     }
@@ -948,7 +948,7 @@ void cmd_turtle(void)
             SyntaxError();
         turtle_wedge(turtle, getnumber(argv[0]), getnumber(argv[2]), getnumber(argv[4]));
     }
-    else if ((tp = checkstring(cmdline, (unsigned char *)"FILL COLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"FILLCOLOR")) || (tp = checkstring(cmdline, (unsigned char *)"FC")))
+    else if ((tp = checkstring(cmdline, (unsigned char *)"FILL COLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"FILL COLOR")) || (tp = checkstring(cmdline, (unsigned char *)"FILLCOLOR")) || (tp = checkstring(cmdline, (unsigned char *)"FILLCOLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"FC")))
     {
         turtle->fill_color = getint(tp, 0, 0xFFFFFF);
         turtle->fill_enabled = 1;
@@ -1019,7 +1019,7 @@ void cmd_turtle(void)
             draw_turtle_cursor(turtle);
         }
     }
-    else if ((tp = checkstring(cmdline, (unsigned char *)"CURSOR COLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"CURSORCOLOR")) || (tp = checkstring(cmdline, (unsigned char *)"CC")))
+    else if ((tp = checkstring(cmdline, (unsigned char *)"CURSOR COLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"CURSOR COLOR")) || (tp = checkstring(cmdline, (unsigned char *)"CURSORCOLOR")) || (tp = checkstring(cmdline, (unsigned char *)"CURSORCOLOUR")) || (tp = checkstring(cmdline, (unsigned char *)"CC")))
     {
         turtle->cursor_color = getint(tp, 0, 0xFFFFFF);
         if (turtle->visible)
