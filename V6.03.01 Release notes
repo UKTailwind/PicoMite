@@ -23,7 +23,14 @@ TURTLE PEN/FILL/CURSOR colour commands now accept COLOR as well as COLOUR in bot
 Bluetooth versions
 Bluetooth console and keyboard fixes
 
+All versions with USB support
+When OPTION MOUSE SENSITIVITY is set the mouse report is now decoded from the mouse's own HID report descriptor, so mice with non-standard report layouts (extra buttons, padding, report IDs or wider movement fields) work correctly; the firmware falls back to the standard boot report if the mouse declares no usable movement
+
+All versions with graphics
+Fixes gaps in the outline of an ellipse drawn with CIRCLE using an aspect greater than 1 and a line width of 1
+
 Other
+Fixes the position of a mouse click or screen tap in the full screen editor on lines which have scrolled horizontally
 Auto-configure PICO COMPUTER 3 at boot (RP2350)
 Fixes embedded pin-status program for WEB builds (pin 84)
 Fixes OLIMEXUSB platform string matching

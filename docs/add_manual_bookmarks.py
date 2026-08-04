@@ -215,7 +215,10 @@ def main():
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     validate = "--validate" in sys.argv
     inp = args[0] if len(args) > 0 else PDF
-    outp = args[1] if len(args) > 1 else PDF
+    # one argument = work in place on that file (backed up to .bak_nobm); only a
+    # second argument redirects the output - otherwise a named input would be
+    # silently written to the default PDF name instead.
+    outp = args[1] if len(args) > 1 else inp
 
     reader = pypdf.PdfReader(inp)
     sections = docx_names()
