@@ -2,9 +2,7 @@
 .claude/settings.local.json
 
 # ---- Build trees (CMake out-of-source dirs reused across variants) ----
-build/
-buildRP2040L/
-buildRP2350L/
+build*/
 _tmp/
 CMakeFiles/
 CMakeCache.txt
