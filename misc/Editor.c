@@ -6247,8 +6247,13 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                                 cury--;
                         while (txtp != EdBuff && *(txtp - 1) != '\n')
                             txtp--; // move to the beginning of the line
-                        for (curx = 0; curx < lastx1 && *txtp && *txtp != '\n'; curx++)
-                            txtp++; // now position on the x axis
+                        // lastx1 is a screen column; the character under it is at
+                        // absolute column edx+lastx1 once the line has scrolled.
+                        for (curx = 0; curx < edx + lastx1 && *txtp && *txtp != '\n'; curx++)
+                            txtp++; // now position on the x axis (absolute column)
+                        curx -= edx; // convert back to a screen-relative column
+                        if (curx < 0)
+                            curx = 0;
                         PositionCursor(txtp);
                         PrintStatus();
                         ShowCursor(true);
@@ -6338,8 +6343,13 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                                 cury--;
                         while (txtp != EdBuff && *(txtp - 1) != '\n')
                             txtp--;
-                        for (curx = 0; curx < tap_col && *txtp && *txtp != '\n'; curx++)
-                            txtp++;
+                        // tap_col is a screen column; the character under it is at
+                        // absolute column edx+tap_col once the line has scrolled.
+                        for (curx = 0; curx < edx + tap_col && *txtp && *txtp != '\n'; curx++)
+                            txtp++; // now position on the x axis (absolute column)
+                        curx -= edx; // convert back to a screen-relative column
+                        if (curx < 0)
+                            curx = 0;
                         PositionCursor(txtp);
                         PrintStatus();
                         ShowCursor(true);
@@ -7515,8 +7525,13 @@ void MarkMode(unsigned char *cb, unsigned char *buf)
                             cury--;
                     while (p != EdBuff && *(p - 1) != '\n')
                         p--; // move to the beginning of the line
-                    for (curx = 0; curx < lastx1 && *p && *p != '\n'; curx++)
-                        p++; // now position on the x axis
+                    // lastx1 is a screen column; the character under it is at
+                    // absolute column edx+lastx1 once the line has scrolled.
+                    for (curx = 0; curx < edx + lastx1 && *p && *p != '\n'; curx++)
+                        p++; // now position on the x axis (absolute column)
+                    curx -= edx; // convert back to a screen-relative column
+                    if (curx < 0)
+                        curx = 0;
                     PositionCursor(p);
                     mark = p;
                 }
