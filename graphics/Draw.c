@@ -1240,12 +1240,20 @@ void DrawCircle(int x, int y, int radius, int w, int c, int fill, MMFLOAT aspect
             w = w1;
             radius = r1;
             asp = (int)(aspect * 1024.0f);
+            // With aspect > 1 the x coordinates are stretched, so consecutive points of the
+            // circle algorithm are more than one pixel apart and plotting single pixels leaves
+            // holes in the outline.  In that case join them with short horizontal runs instead.
+            int stretched = (asp > 1024);
+            int lastA, lastB, lastb;
 
             while (w >= 0 && radius > 0)
             {
                 a = 0;
                 b = radius;
                 P = 1 - radius;
+                lastA = 0;
+                lastB = (b * asp) >> 10;
+                lastb = b;
 
                 do
                 {
@@ -1254,16 +1262,34 @@ void DrawCircle(int x, int y, int radius, int w, int c, int fill, MMFLOAT aspect
 
                     if (w)
                     {
-                        // OPTIMIZED: Unrolled pixel drawing
-                        DrawPixel(A + x, b + y, c);
-                        DrawPixel(B + x, a + y, c);
-                        DrawPixel(x - A, b + y, c);
-                        DrawPixel(x - B, a + y, c);
-                        DrawPixel(B + x, y - a, c);
-                        DrawPixel(A + x, y - b, c);
-                        DrawPixel(x - A, y - b, c);
-                        DrawPixel(x - B, y - a, c);
+                        if (stretched)
+                        {
+                            // A only increases and B only decreases, so these are all left to right
+                            DrawRectangle(x + lastA, y + b, x + A, y + b, c);
+                            DrawRectangle(x - A, y + b, x - lastA, y + b, c);
+                            DrawRectangle(x + lastA, y - b, x + A, y - b, c);
+                            DrawRectangle(x - A, y - b, x - lastA, y - b, c);
+                            DrawRectangle(x + B, y + a, x + lastB, y + a, c);
+                            DrawRectangle(x - lastB, y + a, x - B, y + a, c);
+                            DrawRectangle(x + B, y - a, x + lastB, y - a, c);
+                            DrawRectangle(x - lastB, y - a, x - B, y - a, c);
+                        }
+                        else
+                        {
+                            // OPTIMIZED: Unrolled pixel drawing
+                            DrawPixel(A + x, b + y, c);
+                            DrawPixel(B + x, a + y, c);
+                            DrawPixel(x - A, b + y, c);
+                            DrawPixel(x - B, a + y, c);
+                            DrawPixel(B + x, y - a, c);
+                            DrawPixel(A + x, y - b, c);
+                            DrawPixel(x - A, y - b, c);
+                            DrawPixel(x - B, y - a, c);
+                        }
                     }
+                    lastA = A;
+                    lastB = B;
+                    lastb = b;
 
                     if (P < 0)
                     {
@@ -1277,6 +1303,16 @@ void DrawCircle(int x, int y, int radius, int w, int c, int fill, MMFLOAT aspect
                         b--;
                     }
                 } while (a <= b);
+
+                if (w && stretched)
+                {
+                    // the two octants stop short of each other at the 45 degree point, leaving a
+                    // gap of aspect-1 pixels, so bridge the last row of the flat octant across
+                    DrawRectangle(x + lastA, y + lastb, x + lastB, y + lastb, c);
+                    DrawRectangle(x - lastB, y + lastb, x - lastA, y + lastb, c);
+                    DrawRectangle(x + lastA, y - lastb, x + lastB, y - lastb, c);
+                    DrawRectangle(x - lastB, y - lastb, x - lastA, y - lastb, c);
+                }
 
                 w--;
                 radius--;
