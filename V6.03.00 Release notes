@@ -1,0 +1,103 @@
+Summary of changes from V6.02.01
+
+New versions
+Bluetooth host build
+Bluetooth serial device build
+HDMI build with full web support
+PicoMiteMIN
+
+All versions
+Performance improvements for FOR/NEXT loops and IF/THEN/ELSE/ENDIF constructs
+OPTION PROFILING ON/OFF 'see option-profiling-cache.pdf for details
+The editor now supports editing long lines without splitting them or using continuation lines
+DO UNTIL/LOOP now implemented
+Support for data sharing between two PicoMites over 4 and 8 bit parallel I/Fs see MEMORY_SHARE_User_Manual.pdf for more details
+Mandelbrot easter egg
+Adds support for escape sequences with OPTION ESCAPE ON in the INPUT statement prompt
+Extends OPTION GPS to allow baudrates over 65535
+Reduced heap utilisation for BLIT WRITE
+Fixes bug in mm.info(boot count) when not in the root directory
+LIST COLLISIONS 'This is a diagnostic that shows any variable names that hash to the same number.
+LIST command can now scroll forwards and backwards through the file or program
+Bug fixes in FRAME command
+Fixes bug in error line reporting
+Fixes bug in PIO initialsation
+GUI CURSOR command
+CLICK function
+Gesture support for all touch screens
+Adds standardised data flexibility for onewire, spi, i2c host and i2c slave read and write commands.
+non-VGA/HDMI builds now support GT911 capacitive touch controllers as well as FT63x6 controllers
+Fixes bug in MATH(CROSSING function
+Indentical CSUB code will now run on both RP2040 and RP2350 builds (if re-compiled with the new header)
+Minor enhancement to the LOAD JPG command to allow images to be downscaled
+Fixes bug in mouse double click detection
+
+Versions with GUI controls
+GUI LISTBOX and GUI SLIDER
+GUI controls are now completely flexible touch/no-touch, mouse/no-mouse, external control keyboard/joystick etc.
+
+All versions except PICOMITEMIN
+Beautify function in the editor (F12/Ctrl-A)
+In-built Filemanager (command FM) 'see FM_User_Manual.pdf
+FM_User_Manual.pdf
+Calculator immediate mode
+Change to OPTION DISK LOAD and OPTION DISK SAVE. It now saves/loads a text file with just the options that are different to the RESET condition.
+
+PicoMiteRP2040, All RP2350 variants except WebMiteRP2350
+User configurable "Just-in-time" bytecode conversion 'see option-profiling-cache.pdf for details
+
+WEB versions
+Numerous bug/edge case fixes
+Full implementation of HTTPS/TLS - all web versions
+Additional parameter for OPTION WIFI to enter country code
+MM.INFO(WIFI STATUS) is improved so that it doesn't return 1 during retries
+Changes to Web versions to allow CPU speeds up to 396MHz
+WEB TCP CLIENT WRITE data%() [,timeout]
+Reduced memory footprint of json$ function
+
+USB versions
+FLASH UF2 fname$  'flashes a RP2040/Rp2350 in boot mode with the uf2 file specified
+Support for USB CDC hosting for up to 4 CDC client devices, see USB_CDC_Host_User_Manual.pdf
+USB_CDC_Host_User_Manual.pdf
+Support for USB touch screens
+Support for USB flash drive as drive C:
+
+RP2350 versions
+Enhancements and bug fixes to Stepper command, including supporting an A axis and GCOde as MMbasic strings' see Stepper_Reference.pdf
+STAR and ASTRO commands can now take a variable as the object
+Support for programming TMC2208/9 stepper drivers over a serial connection.
+GUI commands available on all versions
+Support of OV2640 camera on RP2350 builds except VGA and HDMIWEB
+OV7670 QVGA camera capture
+Adds BLIT MEMORY332 command
+HDMI versions now support camera command (not HDMIWEB)
+Fixes bug in PORT command when using pins > GP32 on RP2350B processors
+RESOLUTION command - change the HDMI resolution without a reboot
+All versions support OPTION RESET PICO COMPUTER 3
+
+Non VGA/HDMI versions
+Fixes backlight for SSD1963 displays when external PWM pin is used for control
+Increased SPI speed for ILI9341 displays
+Fixes various bugs in SSD1963 buffered drivers
+CPU SPEED command - change the cpu speed without a reboot
+
+PICOMITEMIN
+New cut down build omitting
+Structures
+Draw3D command and function
+GUI
+Turtle graphics
+Regular expression support
+Help command
+VS1053 support
+SSD1963 support
+ILI9163
+SSD1331
+ST7735 but not ST7735S
+ILI9481IPS
+ILI9481
+ILI9488P
+GC9A01
+Virtual displays
+Editor F12
+FileManager 
