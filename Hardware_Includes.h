@@ -236,6 +236,18 @@ typedef enum
 	MOUSE_TYPE_GAMING_16BIT = 3	  // 6+ bytes: buttons, 16-bit X, 16-bit Y, wheel, etc.
 } mouse_report_type_t;
 
+/* One Input field of the mouse report, captured from the report descriptor
+   at enumeration. bit_offset is within the report payload, excluding any
+   report-ID byte. */
+typedef struct
+{
+	bool present;
+	uint16_t bit_offset;
+	uint8_t bit_size;
+	bool is_signed;	   /* Logical Minimum < 0 on the declaring Input item */
+	uint8_t report_id; /* report this field belongs to (0 = no IDs used) */
+} mouse_field_t;
+
 // Structure to hold mouse analysis results
 typedef struct
 {
@@ -249,22 +261,16 @@ typedef struct
 	uint8_t wheel_byte_offset;
 	bool uses_report_id; // <-- Add this
 	uint8_t report_id;	 // <-- Add this
+	/* General descriptor-driven layout: process_mouse_report() decodes by
+	   bit extraction from these fields, so any single-pointer layout works
+	   (arbitrary padding, field order, button counts, X/Y widths, report
+	   IDs) — not just the three fixed types above, which are kept only as
+	   a summary for print_mouse_info(). */
+	bool layout_valid; /* X and Y found in one report */
+	uint8_t min_len;   /* min payload bytes (excl. ID byte) to decode */
+	mouse_field_t f_buttons; /* run of 1-bit buttons as one bitmap */
+	mouse_field_t f_x, f_y, f_wheel, f_pan;
 } mouse_info_t;
-
-typedef struct TU_ATTR_PACKED_12
-{
-	uint8_t buttons; /**< buttons mask for currently pressed buttons in the mouse. */
-	uint8_t data[3];
-	int8_t wheel; /**< Current delta wheel movement on the mouse. */
-	int8_t pan;	  // using AC Pan
-} hid_mouse_report_12bit_t;
-typedef struct TU_ATTR_PACKED_16
-{
-	uint8_t buttons; /**< buttons mask for currently pressed buttons in the mouse. */
-	uint8_t data[4];
-	int8_t wheel; /**< Current delta wheel movement on the mouse. */
-	int8_t pan;	  // using AC Pan
-} hid_gaming_mouse_report_t;
 
 /* ============================================================================
  * Type definitions - USB multi-touch digitizer
