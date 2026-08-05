@@ -341,8 +341,14 @@ re_t re_compile_to(const char *pattern, unsigned char *re_data, unsigned *size)
       }
       else if (2 != sscanf(&pattern[i], "{%hd,%hd}", &n, &m))
       {
-        int o;
-        if (!(1 == sscanf(&pattern[i], "{%hd,}%n", &n, &o)) ||
+        int o = 0;
+        /* sscanf() returns 1 for "{n}" as well: %hd converts n and the scan
+           then stops where ',' fails to match, which still counts as one
+           assignment. Without checking how much was consumed (%n, which is
+           only stored when the scan reaches it) "{n}" compiles as TIMES_N and
+           matches n OR MORE - eg INSTR(1,"AABBAAAABAAAAAAA","[A]{3}",l) set
+           l=4. o must cover the whole quantifier, "{" .. "}" inclusive. */
+        if (!(1 == sscanf(&pattern[i], "{%hd,}%n", &n, &o) && o == (int)(p - &pattern[i]) + 1) ||
             n == 0 || n > 32767)
         {
           if (1 != sscanf(&pattern[i], "{,%hd}", &m) ||
