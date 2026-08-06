@@ -6844,6 +6844,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                         if (curx < 0)
                             curx = 0;
                         PositionCursor(txtp);
+                        PrintStatus(); // the line/column readout moved too
                     }
                     break;
                 }
