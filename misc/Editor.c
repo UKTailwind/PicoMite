@@ -6836,8 +6836,13 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                                 cury--;
                         while (txtp != EdBuff && *(txtp - 1) != '\n')
                             txtp--; // move to the beginning of the line
-                        for (curx = 0; curx < x && *txtp && *txtp != '\n'; curx++)
-                            txtp++; // now position on the x axis
+                        // x is a screen column; the character under it is at
+                        // absolute column edx+x once the line has scrolled.
+                        for (curx = 0; curx < edx + x && *txtp && *txtp != '\n'; curx++)
+                            txtp++; // now position on the x axis (absolute column)
+                        curx -= edx; // convert back to a screen-relative column
+                        if (curx < 0)
+                            curx = 0;
                         PositionCursor(txtp);
                     }
                     break;
