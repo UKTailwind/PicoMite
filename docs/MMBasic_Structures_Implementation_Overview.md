@@ -374,9 +374,9 @@ Extensive test suites demonstrate all features:
 
 ## 10. Limitations and Constraints
 
-- Maximum structure types: `MAX_STRUCT_TYPES` (typically 64)
-- Maximum members per structure: `MAX_STRUCT_MEMBERS` (typically 32)
-- Maximum nesting depth: `MAX_STRUCT_NEST_DEPTH` (typically 10)
+- Maximum structure types: `MAX_STRUCT_TYPES` (32)
+- Maximum members per structure: `MAX_STRUCT_MEMBERS` (16)
+- Maximum nesting depth: `MAX_STRUCT_NEST_DEPTH` (8)
 - String length: Maximum 255 characters per string member
 - Structures must be defined before use (at program start)
 - No runtime type creation (all types defined statically)

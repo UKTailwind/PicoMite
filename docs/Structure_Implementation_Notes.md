@@ -248,7 +248,7 @@ name = "ROOM"
 num_members = 2
 members[0] = { name="TEMP", type=T_NBR, offset=0, size=8 }
 members[1] = { name="NAME", type=T_STR, offset=8, size=20 }
-total_size = 29 (8 + 21, rounded up for alignment)
+total_size = 32 (8 + 21 = 29, rounded up to 32 for alignment)
 ```
 
 ### g_vartbl entries when function runs:

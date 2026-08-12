@@ -18,7 +18,7 @@ End Type
 
 ### Supported Member Types
 
-- `INTEGER` - 64-bit signed integer
+- `INTEGER` - 64-bit signed integer (`INT` is accepted as a synonym inside a TYPE block)
 - `FLOAT` - 64-bit floating point number
 - `STRING` - String up to 255 characters (use `LENGTH n` to specify maximum length)
 
@@ -102,7 +102,7 @@ To minimize wasted space from padding, consider:
 1. **Grouping numeric members together**: Place all INTEGER and FLOAT members consecutively.
 2. **Using string lengths that result in 8-byte aligned totals**: String lengths of 7, 15, 23, 31, etc. (where length + 1 is divisible by 8) avoid padding when followed by numeric types.
 
-**Note on structure end padding**: Padding is always added to the end of a structure to ensure the total size is aligned to 8 bytes. This is required so that arrays of structures maintain proper memory alignment for all elements. Without end padding, the second element of an array would start at a misaligned address, potentially causing memory access errors.
+**Note on structure end padding**: If a structure contains any numeric member (directly, or inside a nested structure), padding is added to the end of the structure to bring the total size up to a multiple of 8 bytes. This is required so that arrays of structures maintain proper memory alignment for all elements - without end padding, the second element of an array would start at a misaligned address. A structure whose members are all strings has no alignment requirement and receives no end padding. (Note one asymmetry: when such an all-string structure is used as a member of another structure, that member is still placed at an 8-byte boundary.)
 
 ```basic
 ' Less efficient (has internal padding):
@@ -1803,7 +1803,7 @@ End Sub
 - Returns an error if the structure type or member is not found
 - The returned values match the internal type constants used by MMBasic
 - Useful for writing generic code that handles different member types dynamically
-- For nested structure members, returns the type of the nested structure (which may include T_STRUCT flag)
+- For nested structure members, returns 0 (only the FLOAT/STRING/INTEGER bits are reported; the structure flag is masked out)
 
 ## Saving and Loading Structures
 
@@ -2397,7 +2397,7 @@ Dim ln As Line
 | "Expected '(' for structure initialisation" | Missing opening parenthesis in initialization |
 | "Expected a structure array" | STRUCT.FIND requires a structure array, not a single variable |
 | "Member not found in structure" | STRUCT.FIND or STRUCT SORT member name doesn't exist |
-| "Cannot search array members" | STRUCT.FIND cannot search members that are arrays |
+| "Array member requires index" | A member that is an array cannot be used without an index, e.g. in STRUCT(FIND) |
 | "Type mismatch: expected numeric value" | STRUCT.FIND search value type doesn't match member type |
 | "Type mismatch: expected string value" | STRUCT.FIND search value is not a string but member is |
 | "Regex search only works with string members" | STRUCT.FIND regex mode requires a string member |
@@ -2407,7 +2407,8 @@ Dim ln As Line
 | "Invalid file number" | File number is outside valid range |
 | "File not open" | STRUCT SAVE/LOAD file is not open |
 | "Not a disk file" | STRUCT SAVE/LOAD requires a disk file, not serial port |
-| "Cannot save/load a structure member" | STRUCT SAVE/LOAD requires whole structure, not member |
+| "Cannot save a structure member, use whole structure" | STRUCT SAVE requires a whole structure, not a member |
+| "Cannot load into a structure member, use whole structure" | STRUCT LOAD requires a whole structure, not a member |
 | "Array variable requires () or (index)" | STRUCT SAVE/LOAD array must use parentheses |
 
 ## Complete Example
