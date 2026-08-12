@@ -112,8 +112,25 @@ extern "C"
       the new default via ResetOptions on first boot. */
 #define MagicKey 0x57EB1A45
 #else
+   /* HDMIUSB: full 153600-byte framebuffer pool (unlike HDMIBTH/HDMIWEB,
+      which use the shrunk 96000-byte one) plus the TinyUSB host stack's
+      BSS.  That combination left only 2412 bytes of C heap between
+      __end__ and __StackLimit, which is fatal rather than merely tight:
+      newlib's dlmalloc sizes its FIRST sbrk exactly but rounds every
+      later arena growth up to sysconf(_SC_PAGESIZE) = 4096, and the SDK's
+      _sbrk returns -1 as soon as a request crosses __StackLimit.  Below
+      4096 bytes spare the arena can therefore never grow again, so the
+      first allocation that does not fit the initial exact-sized chunk
+      returns NULL and __wrap_malloc's check panics "Out of memory" ->
+      _exit -> __breakpoint - which surfaces as a HardFault with CFSR=0
+      and HFSR=DEBUGEVT (a BKPT, not a memory fault).  Launching a program
+      from FM reaches it through the 256-byte littlefs file caches that
+      lfs_file_rawopencfg takes from this heap.  156 -> 152 KB moves
+      __end__ down to 0x2007E690 for 6512 bytes: one full page of arena
+      growth plus ~2.4 KB.  Keep several KB of C-heap headroom here if
+      BSS grows again; see [[heap-bss-overlap-on-rp2350]]. */
 #define FLASH_TARGET_OFFSET (1088 * 1024)
-#define HEAP_MEMORY_SIZE (156 * 1024)
+#define HEAP_MEMORY_SIZE (152 * 1024)
 #define MagicKey 0xD340BBCD
 #endif
 #else
