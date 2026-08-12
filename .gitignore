@@ -54,3 +54,9 @@ video/*.vc
 *.pdf.bak*
 *.tmp
 dist/
+
+# ---- Scratch output written to the repo root by image save/load tests ----
+# Anchored to the root so test images kept elsewhere (Testfiles/, video/)
+# are still tracked.
+/test.bmp
+/test.png
