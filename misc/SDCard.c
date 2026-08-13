@@ -249,8 +249,14 @@ int __not_in_flash_func(getsound)(int i, int mode)
 		phase = (int)sound_PhaseAC_right[i];
 		if (sound_mode_right[i][0] == 97)
 		{
+			// Silence.  Select case 7 outright rather than "mode += 6":
+			// that produced 9 for the VS1053 right channel, which no case
+			// matches, so a stopped channel returned 0 where the mixdown
+			// wants the 2000 midpoint - biasing the average and putting a
+			// large DC offset under whatever else was playing.  This branch
+			// only ever runs with an odd mode, so 7 is always correct.
 			j = 2000;
-			mode += 6;
+			mode = 7;
 		}
 		else if (sound_mode_right[i][0] == 99)
 		{
@@ -258,7 +264,7 @@ int __not_in_flash_func(getsound)(int i, int mode)
 			j = blep_square(j, sound_PhaseAC_right[i], sound_PhaseM_right[i]);
 			mode += 4;
 		}
-		else if (mode == 1 && sound_mode_right[i][0] == 98)
+		else if (sound_mode_right[i][0] == 98)
 		{
 			mode += 4;
 			j = phase * 3800 / 4096 + 100;
@@ -270,8 +276,10 @@ int __not_in_flash_func(getsound)(int i, int mode)
 		phase = (int)sound_PhaseAC_left[i];
 		if (sound_mode_left[i][0] == 97)
 		{
+			// See the right-channel note above; this branch only ever runs
+			// with an even mode, so case 6 is always correct.
 			j = 2000;
-			mode += 6;
+			mode = 6;
 		}
 		else if (sound_mode_left[i][0] == 99)
 		{
