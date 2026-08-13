@@ -196,6 +196,51 @@ BYTE MDD_SDSPI_WriteProtectState(void)
 {
 	return 0;
 }
+// polyBLEP for the computed waveforms.  A square edge or sawtooth wrap
+// that can only land on a sample tick carries alias images that beat
+// against the true harmonics - an audible pitch-dependent shimmer on
+// sustained notes.  The band-limited edge differs from the naive one
+// only within one tick of the step, where the residual is (1-t)^2 of
+// the step toward its midpoint (t = distance from the edge in ticks).
+// The sine and triangle tables roll off fast enough to leave alone,
+// and noise is broadband by design.  Phase is 0..4096 with the wrap
+// already applied, so an edge-adjacent sample shows up either just
+// past the edge (distance < PhaseM) or just before it.
+static int __not_in_flash_func(blep_square)(int j, float ph, float inc)
+{
+	float d;
+	if (inc <= 0.0f)
+		return j;
+	if (ph < inc)
+		d = ph;					// just after the wrap edge
+	else if (4096.0f - ph < inc)
+		d = 4096.0f - ph;		// just before the wrap edge
+	else if (ph >= 2048.0f && ph - 2048.0f < inc)
+		d = ph - 2048.0f;		// just after the half-cycle edge
+	else if (ph < 2048.0f && 2048.0f - ph < inc)
+		d = 2048.0f - ph;		// just before the half-cycle edge
+	else
+		return j;
+	d = 1.0f - d / inc;			// 1 at the edge, 0 a tick away
+	return 2000 + (int)((float)(j - 2000) * (1.0f - d * d));
+}
+static int __not_in_flash_func(blep_saw)(int j, float ph, float inc)
+{
+	float d;
+	if (inc <= 0.0f)
+		return j;
+	if (ph < inc)
+	{						// just after the wrap: lift toward the midpoint
+		d = 1.0f - ph / inc;
+		return j + (int)(1900.0f * d * d);
+	}
+	if (4096.0f - ph < inc)
+	{						// just before the wrap: pull toward the midpoint
+		d = 1.0f - (4096.0f - ph) / inc;
+		return j - (int)(1900.0f * d * d);
+	}
+	return j;
+}
 int __not_in_flash_func(getsound)(int i, int mode)
 {
 	int j = 0, phase;
@@ -210,12 +255,14 @@ int __not_in_flash_func(getsound)(int i, int mode)
 		else if (sound_mode_right[i][0] == 99)
 		{
 			j = (phase > 2047 ? 3900 : 100);
+			j = blep_square(j, sound_PhaseAC_right[i], sound_PhaseM_right[i]);
 			mode += 4;
 		}
 		else if (mode == 1 && sound_mode_right[i][0] == 98)
 		{
 			mode += 4;
 			j = phase * 3800 / 4096 + 100;
+			j = blep_saw(j, sound_PhaseAC_right[i], sound_PhaseM_right[i]);
 		}
 	}
 	else
@@ -229,12 +276,14 @@ int __not_in_flash_func(getsound)(int i, int mode)
 		else if (sound_mode_left[i][0] == 99)
 		{
 			j = (phase > 2047 ? 3900 : 100);
+			j = blep_square(j, sound_PhaseAC_left[i], sound_PhaseM_left[i]);
 			mode += 4;
 		}
 		else if (sound_mode_left[i][0] == 98)
 		{
 			mode += 4;
 			j = phase * 3800 / 4096 + 100;
+			j = blep_saw(j, sound_PhaseAC_left[i], sound_PhaseM_left[i]);
 		}
 	}
 	switch (mode)
