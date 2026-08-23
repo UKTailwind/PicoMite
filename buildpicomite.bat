@@ -6,7 +6,7 @@ set "start_time=%time%"
 echo Build started at: %start_time%
 echo.
 
-set "fixed_string=V6.03.01"
+set "fixed_string=V6.03.02"
 set "extension=.uf2"
 set "directory=../uf2/"
 set "generator=NMake Makefiles"
@@ -166,7 +166,12 @@ if %ren_attempts% geq 40 (
     exit /b 1
 )
 echo Waiting for "build" directory to be released ^(attempt %ren_attempts%^)...
-timeout /t 3 /nobreak >nul
+:: NOTE: do not use "timeout" here - it aborts immediately with "Input
+:: redirection is not supported" whenever stdin is redirected (i.e. any
+:: non-interactive invocation), turning the 40 spaced retries into 40
+:: instant ones exactly when Dropbox is most likely still holding the
+:: handle. "ping -n 4" waits ~3s regardless of how stdin is attached.
+ping -n 4 127.0.0.1 >nul
 goto :deactivate_retry
 
 :build_group
@@ -226,23 +231,38 @@ exit /b 0
 
 :elapsed_time
 setlocal
+:: NOTE: %time% zero-pads its fields, and "set /a" reads a leading zero as
+:: an octal prefix - so 08 and 09 are invalid digits and abort the
+:: expression with "Invalid number", leaving the variable unset and the
+:: elapsed time nonsense (only for builds spanning an 08/09 field, which is
+:: why this went unnoticed). Capture the fields as text, then force decimal
+:: with 10<field> %% 100, which maps both "8" and "08" to 8 and also copes
+:: with the single-digit hour some locales emit as " 9:05:03.12".
 :: Parse start time
 set "start=%~1"
 for /f "tokens=1-4 delims=:., " %%a in ("%start%") do (
-    set /a "start_h=%%a"
-    set /a "start_m=%%b"
-    set /a "start_s=%%c"
-    set /a "start_ms=%%d"
+    set "sh=%%a"
+    set "sm=%%b"
+    set "ss=%%c"
+    set "sx=%%d"
 )
+set /a "start_h=10%sh% %% 100"
+set /a "start_m=10%sm% %% 100"
+set /a "start_s=10%ss% %% 100"
+set /a "start_ms=10%sx% %% 100"
 
 :: Parse end time
 set "end=%~2"
 for /f "tokens=1-4 delims=:., " %%a in ("%end%") do (
-    set /a "end_h=%%a"
-    set /a "end_m=%%b"
-    set /a "end_s=%%c"
-    set /a "end_ms=%%d"
+    set "eh=%%a"
+    set "em=%%b"
+    set "es=%%c"
+    set "ex=%%d"
 )
+set /a "end_h=10%eh% %% 100"
+set /a "end_m=10%em% %% 100"
+set /a "end_s=10%es% %% 100"
+set /a "end_ms=10%ex% %% 100"
 
 :: Convert to total centiseconds (1/100th of a second)
 set /a "start_cs=(start_h*360000)+(start_m*6000)+(start_s*100)+start_ms"
