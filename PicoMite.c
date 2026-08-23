@@ -2681,23 +2681,54 @@ int __not_in_flash_func(MMInkey)(void)
     }
     void __attribute__((naked)) sigbus(void)
     {
+        /* Hand sigbus_c the stacked frame in r0 and EXC_RETURN in r1. EXC_RETURN
+           is needed for two things it cannot recover afterwards: bit 2 says which
+           stack the frame was pushed on, and bit 4 says whether the FPU context
+           was stacked too (which changes the frame size). Written with Thumb-1
+           safe encodings (tst reg,reg not tst reg,#imm) so it also assembles for
+           the RP2040 M0+ builds. */
         __asm volatile(
-            "mrs r0, msp\n"
-            "ldr r1, =sigbus_c\n"
-            "bx r1\n");
+            "mov  r1, lr\n"
+            "movs r2, #4\n"
+            "tst  r1, r2\n"
+            "beq  1f\n"
+            "mrs  r0, psp\n"
+            "b    2f\n"
+            "1:\n"
+            "mrs  r0, msp\n"
+            "2:\n"
+            "ldr  r2, =sigbus_c\n"
+            "bx   r2\n");
     }
-    void __no_inline_not_in_flash_func(sigbus_c)(uint32_t *frame)
+    void __no_inline_not_in_flash_func(sigbus_c)(uint32_t *frame, uint32_t exc_return)
     {
         char hex[] = "0123456789ABCDEF";
-        /* Stacked exception frame: [r0 r1 r2 r3 r12 lr pc xpsr]. The pre-fault
-           SP is just above the 8-word basic frame. */
+        /* Stacked exception frame: [r0 r1 r2 r3 r12 lr pc xpsr]. */
         uint32_t pc = frame[6];
         uint32_t lr = frame[5];
-        uint32_t sp = (uint32_t)frame + 0x20;
+        uint32_t xpsr = frame[7];
+        /* Pre-fault SP = frame base + frame size + any re-alignment padding.
+           EXC_RETURN bit 4 CLEAR means the FPU context was stacked as well, so
+           the frame is 0x68 rather than the basic 0x20 -- assuming 0x20
+           unconditionally under-reports SP by 0x48 whenever the faulting code
+           had used the FPU, which makes any stack-depth reading worthless.
+           xPSR bit 9 flags the extra 4 bytes the stacker inserts when it has to
+           re-align the frame to 8 bytes. (On M0+ bit 4 of EXC_RETURN is always
+           set, so this correctly degenerates to the basic frame.) */
+        uint32_t sp = (uint32_t)frame + ((exc_return & 0x10) ? 0x20 : 0x68) + ((xpsr & (1u << 9)) ? 4 : 0);
         /* Cortex-M33 fault status: CFSR bit 20 (UFSR STKOF) = stack overflow,
            MMFSR bits flag MemManage; HFSR bit 30 (FORCED) = escalated fault. */
         uint32_t cfsr = *(volatile uint32_t *)0xE000ED28;
         uint32_t hfsr = *(volatile uint32_t *)0xE000ED2C;
+#ifdef rp2350
+        /* MMFAR/BFAR only hold a meaningful address while their VALID bit is
+           set (CFSR bit 7 = MMARVALID, bit 15 = BFARVALID); otherwise they are
+           stale. Report ffffffff when neither is valid. Only the RP2350 dump
+           reports it -- see the console path for why RP2040 stays minimal. */
+        uint32_t far = (cfsr & (1u << 15)) ? *(volatile uint32_t *)0xE000ED38
+                                           : ((cfsr & (1u << 7)) ? *(volatile uint32_t *)0xE000ED34
+                                                                 : 0xFFFFFFFFu);
+#endif
 
         if (Option.SerialConsole >= 1 && Option.SerialConsole <= 4)
         {
@@ -2737,6 +2768,29 @@ int __not_in_flash_func(MMInkey)(void)
             FAULT_PUTHEX(cfsr);
             FAULT_PUTS(" HFSR=");
             FAULT_PUTHEX(hfsr);
+#ifdef rp2350
+            /* Second line: the caller-saved registers as they were at the fault.
+               These are what pin down a bad pointer -- the faulting instruction
+               names a register, and its value is right here rather than having
+               to be inferred. FAR is the hardware-captured fault address (valid
+               only for bus/MemManage faults), EXC is EXC_RETURN. */
+            FAULT_PUTS("\r\n*** FAULT R0=");
+            FAULT_PUTHEX(frame[0]);
+            FAULT_PUTS(" R1=");
+            FAULT_PUTHEX(frame[1]);
+            FAULT_PUTS(" R2=");
+            FAULT_PUTHEX(frame[2]);
+            FAULT_PUTS(" R3=");
+            FAULT_PUTHEX(frame[3]);
+            FAULT_PUTS(" R12=");
+            FAULT_PUTHEX(frame[4]);
+            FAULT_PUTS(" XPSR=");
+            FAULT_PUTHEX(xpsr);
+            FAULT_PUTS(" FAR=");
+            FAULT_PUTHEX(far);
+            FAULT_PUTS(" EXC=");
+            FAULT_PUTHEX(exc_return);
+#endif
             FAULT_PUTS("\r\n");
             /* wait for the line to fully shift out before we reset */
             while (hw->fr & UART_UARTFR_BUSY_BITS)
@@ -2747,12 +2801,36 @@ int __not_in_flash_func(MMInkey)(void)
         }
         else
         {
+#ifdef rp2350
+            /* Same fields as the UART path, over the normal console. Driven from
+               a table so the two paths cannot drift apart. */
+            char *fname[] = {"PC=", " LR=", " SP=", " CFSR=", " HFSR=",
+                             "\r\nR0=", " R1=", " R2=", " R3=", " R12=",
+                             " XPSR=", " FAR=", " EXC="};
+            uint32_t fval[] = {pc, lr, sp, cfsr, hfsr,
+                               frame[0], frame[1], frame[2], frame[3], frame[4],
+                               xpsr, far, exc_return};
+            for (unsigned k = 0; k < sizeof(fval) / sizeof(fval[0]); k++)
+            {
+                MMPrintString(fname[k]);
+                for (int i = 28; i >= 0; i -= 4)
+                    putConsole(hex[(fval[k] >> i) & 0xF], 0);
+            }
+#else
+            /* RP2040 prints only PC and LR. sigbus_c is __not_in_flash_func,
+               so every byte of it comes out of the RAM that sits below
+               AllMemory -- and AllMemory is 4 KB-aligned, so once this
+               function grows past a boundary the cost is a whole 4 KB page,
+               not the bytes added. That is what broke the VGAUSB link. Keep
+               the RP2040 dump minimal; the full register decode is RP2350
+               only. */
             MMPrintString("PC=");
             for (int i = 28; i >= 0; i -= 4)
                 putConsole(hex[(pc >> i) & 0xF], 0);
             MMPrintString(" LR=");
             for (int i = 28; i >= 0; i -= 4)
                 putConsole(hex[(lr >> i) & 0xF], 0);
+#endif
             MMPrintString("\r\n");
         }
         uSec(250000);

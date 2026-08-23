@@ -196,6 +196,7 @@ BYTE MDD_SDSPI_WriteProtectState(void)
 {
 	return 0;
 }
+#ifdef rp2350
 // polyBLEP for the computed waveforms.  A square edge or sawtooth wrap
 // that can only land on a sample tick carries alias images that beat
 // against the true harmonics - an audible pitch-dependent shimmer on
@@ -241,6 +242,26 @@ static int __not_in_flash_func(blep_saw)(int j, float ph, float inc)
 	}
 	return j;
 }
+#else
+// RP2040 leaves the naive edges in place.  The helpers are
+// __not_in_flash_func, and on RP2040 the RAM they occupy is the binding
+// constraint: VGAUSB links with only a few hundred bytes between
+// __end__ and __StackLimit, so the 432 bytes they cost overflow the RAM
+// region outright.  These stubs inline away to nothing, leaving the four
+// call sites in getsound unchanged.
+static inline int blep_square(int j, float ph, float inc)
+{
+	(void)ph;
+	(void)inc;
+	return j;
+}
+static inline int blep_saw(int j, float ph, float inc)
+{
+	(void)ph;
+	(void)inc;
+	return j;
+}
+#endif
 int __not_in_flash_func(getsound)(int i, int mode)
 {
 	int j = 0, phase;
