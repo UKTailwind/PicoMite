@@ -505,7 +505,7 @@ uint16_t crc12(const uint8_t *array, uint16_t length, const uint16_t polynome,
 			   const uint16_t startmask, const uint16_t endmask,
 			   const uint8_t reverseIn, const uint8_t reverseOut)
 {
-	uint16_t crc = startmask;
+	uint16_t crc = startmask & 0x0FFF;
 	while (length--)
 	{
 		if ((length & 0xFF) == 0)
@@ -526,13 +526,14 @@ uint16_t crc12(const uint8_t *array, uint16_t length, const uint16_t polynome,
 			{
 				crc <<= 1;
 			}
+			crc &= 0x0FFF; // the CRC register is only 12 bits wide
 		}
 	}
 
 	if (reverseOut)
 		crc = reverse12(crc);
 	crc ^= endmask;
-	return crc;
+	return crc & 0x0FFF;
 }
 
 // CRC POLYNOME = x15 + 1 =  1000 0000 0000 0001 = 0x8001
@@ -2328,8 +2329,9 @@ void cmd_math(void)
 			card = parsefloatarray(argv[8], &q, 5, 1, dims, true, NULL);
 			if (card != 5)
 				StandardErrorParam(41, 4);
-			MMFLOAT sineterm = sin(theta / 2.0 / optionangle);
-			q[0] = cos(theta / 2.0);
+			MMFLOAT halftheta = theta / 2.0 / optionangle; // respect OPTION ANGLE for both terms
+			MMFLOAT sineterm = sin(halftheta);
+			q[0] = cos(halftheta);
 			q[1] = x * sineterm;
 			q[2] = y * sineterm;
 			q[3] = z * sineterm;
@@ -3039,7 +3041,7 @@ void fun_math(void)
 			if (argc > 9 && *argv[10])
 				reverseIn = getint(argv[10], 0, 1);
 			if (argc == 13 && *argv[12])
-				reverseOut = getint(argv[10], 0, 1);
+				reverseOut = getint(argv[12], 0, 1);
 			for (i = 0; i < length; i++)
 			{
 				if (a1float)
@@ -3093,7 +3095,7 @@ void fun_math(void)
 			if (argc > 9 && *argv[10])
 				reverseIn = getint(argv[10], 0, 1);
 			if (argc == 13 && *argv[12])
-				reverseOut = getint(argv[10], 0, 1);
+				reverseOut = getint(argv[12], 0, 1);
 			for (i = 0; i < length; i++)
 			{
 				if (a1float)
@@ -3147,7 +3149,7 @@ void fun_math(void)
 			if (argc > 9 && *argv[10])
 				reverseIn = getint(argv[10], 0, 1);
 			if (argc == 13 && *argv[12])
-				reverseOut = getint(argv[10], 0, 1);
+				reverseOut = getint(argv[12], 0, 1);
 			for (i = 0; i < length; i++)
 			{
 				if (a1float)
@@ -3201,7 +3203,7 @@ void fun_math(void)
 			if (argc > 9 && *argv[10])
 				reverseIn = getint(argv[10], 0, 1);
 			if (argc == 13 && *argv[12])
-				reverseOut = getint(argv[10], 0, 1);
+				reverseOut = getint(argv[12], 0, 1);
 			for (i = 0; i < length; i++)
 			{
 				if (a1float)
