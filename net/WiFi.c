@@ -493,7 +493,9 @@ static int scan_result(void *env, const cyw43_ev_scan_result_t *result)
                         result->auth_mode);
                 if (scan_dest != NULL)
                 {
-                        if (strlen((char *)&scan_dest[8]) + strlen(buff) > (size_t)scan_size)
+                        // >= not >: the accumulated list is nul-terminated, so one byte
+                        // of the (dims[0]-base)*8 payload capacity is reserved for the nul
+                        if (strlen((char *)&scan_dest[8]) + strlen(buff) >= (size_t)scan_size)
                         {
                                 FreeMemorySafe((void **)&scan_dups);
                                 scan_dest = NULL;

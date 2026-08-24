@@ -1100,12 +1100,12 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	int arraylength;
 	if (g_vartbl[g_VarIndex].type & T_NBR)
 	{
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
-			StandardError(6);
 		if (g_vartbl[g_VarIndex].dims[0] <= 0)
 		{ // Not an array
 			error("Argument 1 must be a numerical array");
 		}
+		if (g_vartbl[g_VarIndex].dims[1] != 0)
+			StandardError(6);
 		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
@@ -1118,12 +1118,12 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	}
 	else if (ptr1 && g_vartbl[g_VarIndex].type & T_INT)
 	{
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
-			StandardError(6);
 		if (g_vartbl[g_VarIndex].dims[0] <= 0)
 		{ // Not an array
 			error("Argument 1 must be a numerical array");
 		}
+		if (g_vartbl[g_VarIndex].dims[1] != 0)
+			StandardError(6);
 		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
@@ -1144,12 +1144,14 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	}
 	else if (ptr1 && g_vartbl[g_VarIndex].type & T_STR && stringarray)
 	{
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
-			StandardError(6);
+		// dims[0] must be tested first: a short scalar string is stored inline
+		// in dims[1..] (val.s == &dims[1]), so dims[1] holds string bytes here
 		if (g_vartbl[g_VarIndex].dims[0] <= 0)
 		{ // Not an array
 			error("Argument 1 must be a string array");
 		}
+		if (g_vartbl[g_VarIndex].dims[1] != 0)
+			StandardError(6);
 		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
@@ -2059,7 +2061,7 @@ void cmd_math(void)
 			det = determinant(matrix, n);
 			if (det == 0.0)
 			{
-				dealloc2df(matrix, numcols, numrows);
+				dealloc2df(matrix, n, n);
 				error("Determinant of array is zero");
 			}
 			MMFLOAT **matrix1 = alloc2df(n, n);
@@ -2071,8 +2073,8 @@ void cmd_math(void)
 					*a2float++ = matrix1[j][i];
 				}
 			}
-			dealloc2df(matrix, numcols, numrows);
-			dealloc2df(matrix1, numcols, numrows);
+			dealloc2df(matrix, n, n);
+			dealloc2df(matrix1, n, n);
 
 			return;
 		}
@@ -3373,11 +3375,9 @@ if (tp)
 				if (!(argc == 1))
 					StandardError(2);
 				parsenumberarray(argv[0], &a1float, &a1int, 1, 2, dims, false, NULL);
-				numcols = dims[0];
-				numrows = dims[1];
-				df = numcols * numrows;
-				numcols += (1 - g_OptionBase);
-				numrows += (1 - g_OptionBase);
+				numcols = dims[0] + 1 - g_OptionBase;
+				numrows = dims[1] + 1 - g_OptionBase;
+				df = (numcols - 1) * (numrows - 1);
 				MMFLOAT **observed = alloc2df(numcols, numrows);
 				MMFLOAT **expected = alloc2df(numcols, numrows);
 				rows = alloc1df(numrows);

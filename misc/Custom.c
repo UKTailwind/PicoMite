@@ -3071,7 +3071,7 @@ void fun_json(void)
                 // when the following RAM happens to hold a zero, but a hard-fault /
                 // reboot once the buffer lives in PSRAM (unmapped region follows).
                 int64_t slen = dest[0];
-                int64_t cap = (int64_t)g_vartbl[g_VarIndex].dims[0] * 8; // bytes after dest[0]
+                int64_t cap = (int64_t)(g_vartbl[g_VarIndex].dims[0] - g_OptionBase) * 8; // bytes after dest[0]
                 if (slen < 0)
                         slen = 0;
                 if (slen > cap)
