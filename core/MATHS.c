@@ -703,13 +703,13 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 	else
 		error("Argument % must be an integer array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D integer point array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D integer point array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -745,13 +745,13 @@ int parsestringarray(unsigned char *tp, unsigned char **a1str, int argno, int di
 	else
 		error("Argument % must be a string array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D string array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D string array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -826,13 +826,13 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 	else
 		error("Argument % must be a numerical array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D numerical array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D numerical array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -900,13 +900,13 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 	else
 		error("Argument % must be a floating point array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D floating point array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D floating point array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -1859,13 +1859,13 @@ void cmd_math(void)
 			if (!(argc == 5))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols = dims[0] - g_OptionBase;
-			numrows = dims[1] - g_OptionBase;
+			numcols = DimUpper(dims[0]) - g_OptionBase;
+			numrows = DimUpper(dims[1]) - g_OptionBase;
 			parsefloatarray(argv[2], &a2float, 1, 1, dims, false, NULL);
-			if ((dims[0] - g_OptionBase) != numcols)
+			if ((DimUpper(dims[0]) - g_OptionBase) != numcols)
 				StandardError(16);
 			parsefloatarray(argv[4], &a3float, 1, 1, dims, true, NULL);
-			if ((dims[0] - g_OptionBase) != numrows)
+			if ((DimUpper(dims[0]) - g_OptionBase) != numrows)
 				StandardError(16);
 			if (a3float == a1float || a3float == a2float)
 				error("Destination array same as source");
@@ -2040,10 +2040,10 @@ void cmd_math(void)
 			if (!(argc == 3))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols = dims[0] - g_OptionBase;
-			numrows = dims[1] - g_OptionBase;
+			numcols = DimUpper(dims[0]) - g_OptionBase;
+			numrows = DimUpper(dims[1]) - g_OptionBase;
 			parsefloatarray(argv[2], &a2float, 2, 2, dims, true, NULL);
-			if (dims[0] - g_OptionBase != numcols || dims[1] - g_OptionBase != numrows)
+			if (DimUpper(dims[0]) - g_OptionBase != numcols || DimUpper(dims[1]) - g_OptionBase != numrows)
 				StandardError(16);
 			if (numcols != numrows)
 				error("Array must be square");
@@ -2087,12 +2087,12 @@ void cmd_math(void)
 			if (!(argc == 3))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols1 = numrows2 = dims[0] - g_OptionBase;
-			numrows1 = numcols2 = dims[1] - g_OptionBase;
+			numcols1 = numrows2 = DimUpper(dims[0]) - g_OptionBase;
+			numrows1 = numcols2 = DimUpper(dims[1]) - g_OptionBase;
 			parsefloatarray(argv[2], &a2float, 2, 2, dims, true, NULL);
-			if (numcols2 != dims[0] - g_OptionBase)
+			if (numcols2 != DimUpper(dims[0]) - g_OptionBase)
 				StandardError(16);
-			if (numrows2 != dims[1] - g_OptionBase)
+			if (numrows2 != DimUpper(dims[1]) - g_OptionBase)
 				StandardError(16);
 			numcols1++;
 			numrows1++;
@@ -2135,16 +2135,16 @@ void cmd_math(void)
 			if (!(argc == 5))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols1 = numrows2 = dims[0] - g_OptionBase + 1;
-			numrows1 = dims[1] - g_OptionBase + 1;
+			numcols1 = numrows2 = DimUpper(dims[0]) - g_OptionBase + 1;
+			numrows1 = DimUpper(dims[1]) - g_OptionBase + 1;
 			parsefloatarray(argv[2], &a2float, 2, 2, dims, false, NULL);
-			numcols2 = dims[0] - g_OptionBase + 1;
-			numrows2 = dims[1] - g_OptionBase + 1;
+			numcols2 = DimUpper(dims[0]) - g_OptionBase + 1;
+			numrows2 = DimUpper(dims[1]) - g_OptionBase + 1;
 			if (numrows2 != numcols1)
 				error("Input array size mismatch");
 			parsefloatarray(argv[4], &a3float, 3, 2, dims, true, NULL);
-			numcols3 = dims[0] - g_OptionBase + 1;
-			numrows3 = dims[1] - g_OptionBase + 1;
+			numcols3 = DimUpper(dims[0]) - g_OptionBase + 1;
+			numrows3 = DimUpper(dims[1]) - g_OptionBase + 1;
 			if (numcols3 != numcols2 || numrows3 != numrows1)
 				error("Output array size mismatch");
 			if (a3float == a1float || a3float == a2float)
@@ -2196,8 +2196,8 @@ void cmd_math(void)
 			if (!(argc == 1))
 				StandardError(2);
 			parsenumberarray(argv[0], &a1float, &a1int, 1, 2, dims, false, NULL);
-			numcols = dims[0] + 1 - g_OptionBase;
-			numrows = dims[1] + 1 - g_OptionBase;
+			numcols = DimUpper(dims[0]) + 1 - g_OptionBase;
+			numrows = DimUpper(dims[1]) + 1 - g_OptionBase;
 			//			MMFLOAT **matrix=alloc2df(numcols,numrows);
 			//			int64_t **imatrix= (int64_t **)matrix;
 			if (a1float != NULL)
@@ -3375,8 +3375,8 @@ if (tp)
 				if (!(argc == 1))
 					StandardError(2);
 				parsenumberarray(argv[0], &a1float, &a1int, 1, 2, dims, false, NULL);
-				numcols = dims[0] + 1 - g_OptionBase;
-				numrows = dims[1] + 1 - g_OptionBase;
+				numcols = DimUpper(dims[0]) + 1 - g_OptionBase;
+				numrows = DimUpper(dims[1]) + 1 - g_OptionBase;
 				df = (numcols - 1) * (numrows - 1);
 				MMFLOAT **observed = alloc2df(numcols, numrows);
 				MMFLOAT **expected = alloc2df(numcols, numrows);
@@ -3502,8 +3502,8 @@ if (tp)
 			if (!(argc == 1))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols = dims[0] + 1 - g_OptionBase;
-			numrows = dims[1] + 1 - g_OptionBase;
+			numcols = DimUpper(dims[0]) + 1 - g_OptionBase;
+			numrows = DimUpper(dims[1]) + 1 - g_OptionBase;
 			if (numcols != numrows)
 				error("Array must be square");
 			n = numrows;
@@ -3536,7 +3536,7 @@ if (tp)
 			if (argc == 3)
 			{
 				int max_vtype;
-				if (dims[1] > 0)
+				if (DimIsRealArray(dims[1]))
 				{ // Not an array
 					error("Argument 1 must be a 1D numerical array");
 				}
@@ -3598,7 +3598,7 @@ if (tp)
 			if (argc == 3)
 			{
 				int min_vtype;
-				if (dims[1] > 0)
+				if (DimIsRealArray(dims[1]))
 				{ // Not an array
 					error("Argument 1 must be a 1D numerical array");
 				}
@@ -4023,7 +4023,7 @@ void cmd_FFT(unsigned char *pp)
 	{
 		getcsargs(&tp, 3);
 		card1 = parsefloatarray(argv[0], &a4float, 1, 2, dims, false, NULL);
-		int size = dims[1] - g_OptionBase + 1;
+		int size = DimUpper(dims[1]) - g_OptionBase + 1;
 		a1cplx = (cplx *)a4float;
 		card2 = parsefloatarray(argv[2], &a3float, 2, 1, dims, true, NULL);
 		if (card2 != size)
@@ -4051,7 +4051,7 @@ void cmd_FFT(unsigned char *pp)
 	card1 = parsefloatarray(argv[0], &a3float, 1, 1, dims, false, NULL);
 	card2 = parsefloatarray(argv[2], &a4float, 2, 2, dims, true, NULL);
 	a2cplx = (cplx *)a4float;
-	if ((dims[1] - g_OptionBase + 1) != card1)
+	if ((DimUpper(dims[1]) - g_OptionBase + 1) != card1)
 		StandardError(16);
 	for (i = 1; i < 65536; i *= 2)
 	{

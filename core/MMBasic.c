@@ -4045,7 +4045,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                     error("Wrong number of dimensions");
                 for (int di = 0; di < mem_dnbr; di++)
                 {
-                    if (mem_dim[di] < g_OptionBase || mem_dim[di] > m_dims[di])
+                    if (mem_dim[di] < g_OptionBase || mem_dim[di] > DimUpper(m_dims[di]))
                         error("Index out of bounds");
                 }
 
@@ -4054,7 +4054,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                 int mult = 1;
                 for (int di = 1; di < mem_dnbr; di++)
                 {
-                    mult *= (m_dims[di - 1] + 1 - g_OptionBase);
+                    mult *= DimElements(m_dims[di - 1]);
                     linear_idx += (mem_dim[di] - g_OptionBase) * mult;
                 }
 
@@ -4169,7 +4169,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                 error("Wrong number of dimensions");
             for (int di = 0; di < mem_dnbr; di++)
             {
-                if (mem_dim[di] < g_OptionBase || mem_dim[di] > m_dims[di])
+                if (mem_dim[di] < g_OptionBase || mem_dim[di] > DimUpper(m_dims[di]))
                     error("Index out of bounds");
             }
 
@@ -4178,7 +4178,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
             int mult = 1;
             for (int di = 1; di < mem_dnbr; di++)
             {
-                mult *= (m_dims[di - 1] + 1 - g_OptionBase);
+                mult *= DimElements(m_dims[di - 1]);
                 linear_idx += (mem_dim[di] - g_OptionBase) * mult;
             }
             array_offset = linear_idx * element_size;
@@ -5121,9 +5121,14 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // for a non array string this will leave nbr = 1 which is just what we want
     for (nbr = 1, i = 0; i < dnbr; i++)
     {
+#if DIM_DECODE_ENABLED
+        // an upper bound equal to OPTION BASE is a single element dimension
+        if (dim[i] < g_OptionBase)
+#else
         if (dim[i] <= g_OptionBase)
+#endif
             error("Dimensions");
-        RAW_DIM(g_vartbl[vindex], i) = dim[i];
+        RAW_DIM(g_vartbl[vindex], i) = DimEncode(dim[i]);
         nbr *= (dim[i] + 1 - g_OptionBase);
     }
 

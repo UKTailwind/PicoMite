@@ -144,16 +144,16 @@ enum trace_opcode
     OP_LOAD_LVAR_INT_PTR,
 
     /* 1-D array element load.  TOS holds INT index (already coerced from
-     * NBR if necessary).  Replay reads dims[0] from g_vartbl, bounds-checks
-     * against g_OptionBase .. dims[0], and pushes the element value.        */
+     * NBR if necessary).  Replay reads dimtbl[0] from g_vartbl, bounds-checks
+     * against g_OptionBase .. DimUpper(dimtbl[0]), and pushes the element value. */
     OP_LOAD_GVAR_NBR_AIDX1,
     OP_LOAD_GVAR_INT_AIDX1,
     OP_LOAD_LVAR_NBR_AIDX1,
     OP_LOAD_LVAR_INT_AIDX1,
 
     /* 2-D array element load.  Stack at entry: [..., int_i, int_j].  Both
-     * indices are bounds-checked against dims[0]/dims[1] and the element at
-     *   base[ (i-Base) + (j-Base)*(dims[0]+1-Base) ]
+     * indices are bounds-checked against DimUpper(dimtbl[0])/DimUpper(dimtbl[1]) and the element at
+     *   base[ (i-Base) + (j-Base)*DimElements(dimtbl[0]) ]
      * (matches MMBasic's findvar() linearization order) is pushed.          */
     OP_LOAD_GVAR_NBR_AIDX2,
     OP_LOAD_GVAR_INT_AIDX2,

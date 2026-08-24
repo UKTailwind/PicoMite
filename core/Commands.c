@@ -1426,14 +1426,14 @@ void array_insert(unsigned char *tp)
 		if (!a1int)
 			a1int = (int64_t *)afloat;
 	}
-	if (dims[1] <= 0)
+	if (!DimIsRealArray(dims[1]))
 		error("Argument 1 must be a 2D or more array");
 	for (i = 0; i < MAXDIM; i++)
 	{
 		if (dims[i] - g_OptionBase > 0)
 		{
 			dimcount++;
-			dim[i] = dims[i] - g_OptionBase;
+			dim[i] = DimUpper(dims[i]) - g_OptionBase;
 		}
 		else
 			dim[i] = 0;
@@ -1464,7 +1464,7 @@ void array_insert(unsigned char *tp)
 	}
 	if (target == -1)
 		return;
-	if (dim[target] + g_OptionBase != dims[0])
+	if (dim[target] + g_OptionBase != DimUpper(dims[0]))
 		error("Size mismatch between insert and target array");
 	if (size != size2)
 		error("String arrays differ in string length");
@@ -1532,14 +1532,14 @@ void array_slice(unsigned char *tp)
 		if (!a1int)
 			a1int = (int64_t *)afloat;
 	}
-	if (dims[1] <= 0)
+	if (!DimIsRealArray(dims[1]))
 		error("Argument 1 must be a 2D or more array");
 	for (i = 0; i < MAXDIM; i++)
 	{
 		if (dims[i] - g_OptionBase > 0)
 		{
 			dimcount++;
-			dim[i] = dims[i] - g_OptionBase;
+			dim[i] = DimUpper(dims[i]) - g_OptionBase;
 		}
 		else
 			dim[i] = 0;

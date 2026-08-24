@@ -181,3 +181,47 @@ alters no behaviour. Each should be judged on its own merits.
 
 A machine-readable table of all 214 sites (file, line, class, before, after, note)
 accompanies this document as `dims_phase_a_audit_sites.csv`.
+
+## Phase B1 — decode-safe accessors for the blind-spot sites
+
+The blind spot described above was swept and closed. 65 sites were found that would
+misbehave once a slot can hold `DIM_ONE`; 55 of them could be fixed by pure
+substitution and landed as a second inert commit, leaving 10 that need real
+restructuring for Phase B2.
+
+The most serious finding was in the four `parse*array()` helpers in `core/MATHS.c`.
+Their cardinality loops compute the element count longhand on the local copy, so a
+`DIM_ONE` slot made the loop return a **negative** cardinality, which callers pass
+straight to `GetTempMemory(card * size)` — a negative int widening to a huge `size_t`.
+Their shape checks (`dims[0] <= 0`) would also have rejected a legitimate one-element
+array outright.
+
+**The rule used, which is worth keeping:** wrap the slot in `DimUpper()` and leave the
+surrounding arithmetic exactly as written, rather than re-expressing it as
+`DimElements()`. Both are decode-correct, but wrapping preserves the original operand
+order and so compiles to identical code. Re-expressing `x - g_OptionBase + 1` as
+`DimElements(x)` (which expands to `x + 1 - g_OptionBase`) is only a reassociation, yet
+it changed the generated code in eight functions — `cmd_math`, `cmd_FFT`, the four
+`parse*array` helpers, `array_insert` and `array_slice` — and, in an `#ifdef rp2350`
+block, `cmd_keypad`. Only `DimElements()` sites whose original text was already
+`+ 1 - g_OptionBase` are order-preserving.
+
+Verified the same way: all nine variants byte-identical to the Phase A images.
+
+### Still to do in Phase B2
+
+Ten sites need restructuring rather than substitution, and they are the behavioural part:
+
+- `core/Commands.c` 1433 / 1539 — `dims[i] - g_OptionBase > 0` as an existence test in
+  `array_insert` / `array_slice`. This is the MATH SLICE failure reproduced on hardware,
+  and it is base-symmetric: it is wrong for a one-element dimension under either base.
+- `core/Commands.c` 7598 — `parse_and_strip` (REDIM) writes a dimension without the
+  escape, so `array_comp` compares an unencoded value against the encoded stored table.
+- `core/Commands.c` 9939 / 9941 — the struct `TYPE` creation guard and its companion
+  store; the second of the two `<=` → `<` relaxations.
+- `net/MMTCPclient.c` 575 / 618 / 742 / 763 and `net/WiFi.c` 552 — LongString
+  destinations whose payload starts at element 1. A one-element array leaves zero
+  payload capacity, so these need a minimum-size guard before the ring buffer or the
+  header write. Note these also expose a **pre-existing** off-by-one-element (capacity
+  computed as `count * 8` while the buffer starts at `dest[1]`); that is a separate
+  question and was deliberately not changed here.

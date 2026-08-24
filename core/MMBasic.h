@@ -349,9 +349,11 @@ extern "C"
 #if DIM_DECODE_ENABLED
 #define DimUpper(d) ((d) == DIM_ONE ? 0 : (d))
 #define DimIsRealArray(d) ((d) > 0 || (d) == DIM_ONE)
+#define DimEncode(d) ((d) == 0 ? DIM_ONE : (d)) // apply on every store of an upper bound
 #else
 #define DimUpper(d) (d)
 #define DimIsRealArray(d) ((d) > 0)
+#define DimEncode(d) (d)
 #endif
 
 // DimIsRealArray() asks whether a slot holds a real dimension: on dimtbl[0]
