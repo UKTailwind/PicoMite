@@ -371,14 +371,15 @@ void syncPIO(int pio, int my, int prev, int next)
                 mask |= (1 << 26);
                 mask |= (next << 20);
         }
-        if (pio == 0)
-                hw_set_bits(&pio0_hw->ctrl, mask);
-        else if (pio == 1)
-                hw_set_bits(&pio0_hw->ctrl, mask);
-#ifdef rp2350
-        else if (pio == 2)
-                hw_set_bits(&pio2_hw->ctrl, mask);
-#endif
+        // The reference PIO must be the one whose CTRL is written: my<<8 restarts
+        // that block's own dividers, and the prev/next masks are resolved relative
+        // to it (prev = next lower block, wrapping to the highest; next = the
+        // higher one, wrapping to PIO0). PIO_INSTANCE() derives the block address
+        // from the number, so this needs no per-PIO branch and no rp2350 guard.
+        // Previously pio == 1 wrote pio0_hw, which on RP2350 made "prev" resolve
+        // to PIO2 rather than PIO0, and on RP2040 restarted PIO0's dividers
+        // instead of PIO1's (RP2040 has no NEXTPREV bits at all).
+        hw_set_bits(&PIO_INSTANCE(pio)->ctrl, mask);
         return;
 }
 void configurePIO(PIO pio, int sm, int clock,
@@ -798,10 +799,9 @@ void MIPS16 cmd_pio(void)
                 dma_channel_config c = dma_channel_get_default_config(dma_rx_chan);
                 channel_config_set_read_increment(&c, false);
                 channel_config_set_transfer_data_size(&c, dmasize);
-                if (dma_rx_pio == 2)
-                        channel_config_set_dreq(&c, 20 + sm);
-                else
-                        channel_config_set_dreq(&c, pio_get_dreq(pio, sm, true));
+                // pio_get_dreq() derives the PIO number from the instance address and
+                // the SDK static_asserts the DREQ layout, PIO 2 included, so it needs
+                // no special case here (it yields 20 + sm for PIO 2 RX).
                 channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
                 if (argc == 13)
                 {
@@ -1047,10 +1047,8 @@ void MIPS16 cmd_pio(void)
                 dma_channel_config c = dma_channel_get_default_config(dma_tx_chan);
                 channel_config_set_write_increment(&c, false);
 
-                if (dma_tx_pio == 2)
-                        channel_config_set_dreq(&c, 16 + sm);
-                else
-                        channel_config_set_dreq(&c, pio_get_dreq(pio, sm, true));
+                // As above: pio_get_dreq() handles PIO 2 (it yields 16 + sm for TX).
+                channel_config_set_dreq(&c, pio_get_dreq(pio, sm, true));
 
                 channel_config_set_transfer_data_size(&c, dmasize);
 
