@@ -307,3 +307,30 @@ Working, under `OPTION BASE 0` unless stated:
   free exactly at its starting figure - no leak.
 - Regression: ordinary arrays are unaffected - 1-D and 2-D indexing, bounds,
   `MATH SLICE` and `MATH SUM` all unchanged.
+
+### Validation of the three bounds fixes
+
+Also exercised on the WebMite RP2350B (HDMIWEB), on WiFi.
+
+`BOUND()`: returns 0 for a genuine single element upper bound and for
+`BOUND(a(),0)`; returns the right bound per dimension on a `(3,2)` array; and now
+raises "Dimensions" past the rank (`BOUND(b(),3)`, `BOUND(a(),2)` on a 1-D array)
+and "Expected an array" on a scalar.
+
+`MATH CHI`: a 2x2 table (df 1) computes; 8x8 (df 49, the last row of the table)
+computes; a 5x1 table (df 0) raises "Needs at least 2 rows and 2 columns"; and a
+9x9 table (df 64) raises "Too many degrees of freedom (max 50)" instead of reading
+past the end of `chitable[]`.
+
+`WEB TCP CLIENT`: tested against a TCP server on the LAN.
+
+- `DIM buf%(3)` - 4 elements, so 24 bytes of payload capacity. The server sent 100
+  bytes and the length word came back **24**. Before the fix it would have been 32,
+  and those 8 bytes would have been written past the end of the array from the lwIP
+  callback.
+- `DIM big%(20)` - 160 bytes capacity, 100 bytes sent: length word 100 and the
+  payload matched the transmitted pattern byte for byte.
+- A one-element array is refused with "Array too small".
+
+Regression: `Testfiles/StructTest.bas` (2188 lines, 85 tests) runs to completion
+with 102 PASS and no failures, including its three BOUND tests.
