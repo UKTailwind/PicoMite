@@ -708,10 +708,13 @@ void cmd_transmit(unsigned char *cmd)
                                         SocketOut[SocketOutPointer++] = c;
                         }
                         FileClose(fn);
-                        SocketOut[SocketOutPointer++] = 10;
+                        /* Two CRLF pairs to end the body. This was 10,13,10,13
+                           (LF CR reversed) for years; harmless to browsers but
+                           wrong on the wire. */
                         SocketOut[SocketOutPointer++] = 13;
                         SocketOut[SocketOutPointer++] = 10;
                         SocketOut[SocketOutPointer++] = 13;
+                        SocketOut[SocketOutPointer++] = 10;
                         SocketOut[SocketOutPointer] = 0;
                         IntToStr(p, strlen(SocketOut), 10);
                         strcat(outstr, p);
