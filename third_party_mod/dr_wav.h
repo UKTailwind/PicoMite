@@ -4040,19 +4040,32 @@ DRWAV_PRIVATE drwav_bool32 drwav_init__internal(drwav *pWav, drwav_chunk_proc on
     */
     if (dataChunkSize == 0xFFFFFFFF && (pWav->container == drwav_container_riff || pWav->container == drwav_container_rifx) && pWav->isSequentialWrite == DRWAV_FALSE)
     {
+        /* MODIFIED FOR PICOMITE: the size-scan buffer comes from the allocation
+           callbacks (MMBasic heap) instead of a 4096-byte stack array. The array
+           was reserved by drwav_init__internal()'s prologue on EVERY call even
+           though this branch only runs for the rare 0xFFFFFFFF chunk size, so it
+           cost ~4 KB of stack at every PLAY WAV. */
+        drwav_uint8 *temp = (drwav_uint8 *)drwav__malloc_from_callbacks(4096, &pWav->allocationCallbacks);
+        if (temp == NULL)
+        {
+            drwav_free(pWav->pMetadata, &pWav->allocationCallbacks);
+            return DRWAV_FALSE;
+        }
+
         dataChunkSize = 0;
 
         for (;;)
         {
-            drwav_uint8 temp[4096];
-            size_t bytesRead = pWav->onRead(pWav->pUserData, temp, sizeof(temp));
+            size_t bytesRead = pWav->onRead(pWav->pUserData, temp, 4096);
             dataChunkSize += bytesRead;
 
-            if (bytesRead < sizeof(temp))
+            if (bytesRead < 4096)
             {
                 break;
             }
         }
+
+        drwav__free_from_callbacks(temp, &pWav->allocationCallbacks);
     }
 
     pWav->fmt = fmt;
@@ -6418,24 +6431,41 @@ DRWAV_API size_t drwav_read_raw(drwav *pWav, size_t bytesToRead, void *pBufferOu
             bytesRead += bytesToSeek;
         }
 
-        /* When we get here we may need to read-and-discard some data. */
-        while (bytesRead < bytesToRead)
+        /* When we get here we may need to read-and-discard some data.
+           MODIFIED FOR PICOMITE: the discard buffer comes from the allocation
+           callbacks (MMBasic heap) instead of being a 4096-byte stack array.
+           drwav_read_raw() is on the per-refill playback path, and the compiler
+           reserves that array in the prologue on EVERY call even though this
+           branch is only reachable when pBufferOut == NULL. On a deep call
+           stack (PLAY WAV launched from the file manager) the unconditional
+           4 KB was enough to run the stack past __end__ into BSS. */
+        if (bytesRead < bytesToRead)
         {
-            drwav_uint8 buffer[4096];
-            size_t bytesSeeked;
-            size_t bytesToSeek = (bytesToRead - bytesRead);
-            if (bytesToSeek > sizeof(buffer))
+            drwav_uint8 *buffer = (drwav_uint8 *)drwav__malloc_from_callbacks(4096, &pWav->allocationCallbacks);
+            if (buffer != NULL)
             {
-                bytesToSeek = sizeof(buffer);
-            }
+                while (bytesRead < bytesToRead)
+                {
+                    size_t bytesSeeked;
+                    size_t bytesToSeek = (bytesToRead - bytesRead);
+                    if (bytesToSeek > 4096)
+                    {
+                        bytesToSeek = 4096;
+                    }
 
-            bytesSeeked = pWav->onRead(pWav->pUserData, buffer, bytesToSeek);
-            bytesRead += bytesSeeked;
+                    bytesSeeked = pWav->onRead(pWav->pUserData, buffer, bytesToSeek);
+                    bytesRead += bytesSeeked;
 
-            if (bytesSeeked < bytesToSeek)
-            {
-                break; /* Reached the end. */
+                    if (bytesSeeked < bytesToSeek)
+                    {
+                        break; /* Reached the end. */
+                    }
+                }
+
+                drwav__free_from_callbacks(buffer, &pWav->allocationCallbacks);
             }
+            /* If the allocation failed we simply skip the discard and report the
+               byte count we did manage to seek past, as before. */
         }
     }
 
