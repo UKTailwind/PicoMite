@@ -271,3 +271,39 @@ stop `DIM_ONE` reaching that path, but the off-by-one itself is pre-existing.
 Build state: all nine variants compile and pass the flash/RAM/heap checks. Cost of
 enabling decode is roughly 1-2 KB of flash and ~256 bytes of RAM; the tightest variant
 (HDMIUSB) still has +7.6 KB flash and +3.4 KB RAM margin.
+
+### Hardware validation
+
+Run on a WebMite RP2350B (HDMIWEB build, flashed over serial via UPDATE FIRMWARE).
+
+Working, under `OPTION BASE 0` unless stated:
+
+- `DIM a(0)` declares one element; `a(0)` reads and writes; `a(1)` gives
+  "Index out of bounds"; `BOUND(a())` is 0; `LIST VARIABLES` prints `A(0)`.
+- `OPTION BASE 1`: `DIM b(1)` declares one element, `b(0)` and `b(2)` both error.
+- Still refused: `DIM a(-1)` under base 0, `DIM b(0)` under base 1.
+- Integer (full 64-bit range), `STRING ... LENGTH`, and float all work.
+- Multi-dimensional: `(3,0)`, `(0,3)` and `(0,0)` index correctly and report the
+  right bounds. `LIST VARIABLES` shows the trailing single-element dimension -
+  the pre-refactor code dropped it from the listing.
+- `MATH SLICE` on a `(3,0)` array returns the whole column. This is the operation
+  that failed with "Argument count" before.
+- `MATH INSERT` into a `(2,0)` target from a 3-element source.
+- `MATH SUM/MAX/MIN/MEAN`, `SORT` and `MATH SCALE` on a one-element array. Without
+  the B1 fix these returned a negative cardinality into `GetTempMemory()`.
+- `DIM z(0)=(77)` initialises; `DIM z(0)=(1,2)` correctly reports
+  "Number of initialising values".
+- Passing a one-element array to a SUB as `arr()` - 1-D, 2-D and string - with a
+  write inside the sub visible to the caller. `LOCAL` and `STATIC` one-element
+  arrays, including STATIC persistence across calls.
+- `VAR SAVE` / `VAR RESTORE` round-trips a one-element float array, a `(2,0)`
+  array and a one-element string array.
+- `REDIM` down to one element, and `REDIM PRESERVE` growing from one element while
+  keeping the value.
+- Struct member arrays: `vals(0) As integer` inside a `TYPE`, and `Dim arr(0) As pt`.
+- `WEB SCAN` with a one-element array is refused with "Array too small" rather than
+  writing past the end.
+- 200 DIM/ERASE cycles over one-element float, `(3,0)` and string arrays leave RAM
+  free exactly at its starting figure - no leak.
+- Regression: ordinary arrays are unaffected - 1-D and 2-D indexing, bounds,
+  `MATH SLICE` and `MATH SUM` all unchanged.
