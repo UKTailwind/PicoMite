@@ -2274,7 +2274,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
                     argtype[i] = 0;
 
                     // Trap an array but not an array element
-                    if (g_vartbl[argVarIndex[i]].dims[0] > 0)
+                    if (DimIsRealArray(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
                     {
                         /* See if we have an array or an array element */
                         tp = argv1[i];
@@ -2353,16 +2353,16 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         }
         ArgType |= (V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK);
         tp = findvar(argv2[i], ArgType); // declare the local variable
-        if (g_vartbl[g_VarIndex].dims[0] > 0)
+        if (DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
             error("Argument list"); // if it is an array it must be an empty array
 
         CurrentLinePtr = CallersLinePtr; // report errors at the caller
 
         // if the definition called for an array, special processing and checking will be required
-        if (g_vartbl[g_VarIndex].dims[0] == -1)
+        if (DimIsEmptyParam(RAW_DIM(g_vartbl[g_VarIndex], 0)))
         {
             int j;
-            if (g_vartbl[argVarIndex[i]].dims[0] == 0)
+            if (DimIsScalar(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
                 error("Expected an array");
             if (TypeMask(g_vartbl[g_VarIndex].type) != TypeMask(argtype[i]))
                 error("Incompatible type: $", argv1[i]);
@@ -2377,7 +2377,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
             g_vartbl[g_VarIndex].val.s = argval[i].s; // Point to caller's array data (uses element offset if specified, e.g. array(3) -> &array[3])
             g_vartbl[g_VarIndex].type |= T_PTR;       // Mark as pointer so we don't free caller's memory
             for (j = 0; j < MAXDIM; j++)              // copy the dimensions of the supplied variable into our local variable
-                g_vartbl[g_VarIndex].dims[j] = g_vartbl[argVarIndex[i]].dims[j];
+                RAW_DIM(g_vartbl[g_VarIndex], j) = RAW_DIM(g_vartbl[argVarIndex[i]], j);
             g_vartbl[g_VarIndex].size = g_vartbl[argVarIndex[i]].size; // copy string length for string arrays
             continue;                                                  // Skip the rest of parameter handling
         }
@@ -3823,7 +3823,7 @@ int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, in
     // Only copy dimensions if this is a whole array being passed (e.g., "arr()")
     // NOT when passing a single array element (e.g., "arr(1)")
     // Detect by checking if the argument has empty parentheses or an index
-    if (g_vartbl[argVarIndex].dims[0] != 0)
+    if (DimIsAllocated(RAW_DIM(g_vartbl[argVarIndex], 0)))
     {
         unsigned char *paren = (unsigned char *)strchr((char *)argname, '(');
         int is_whole_array = 0;
@@ -3839,7 +3839,7 @@ int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, in
         if (is_whole_array)
         {
             for (int j = 0; j < MAXDIM; j++)
-                g_vartbl[varIndex].dims[j] = g_vartbl[argVarIndex].dims[j];
+                RAW_DIM(g_vartbl[varIndex], j) = RAW_DIM(g_vartbl[argVarIndex], j);
         }
         // If not whole array, dims stay at 0 (single element)
     }
@@ -4045,7 +4045,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                     error("Wrong number of dimensions");
                 for (int di = 0; di < mem_dnbr; di++)
                 {
-                    if (mem_dim[di] < g_OptionBase || mem_dim[di] > m_dims[di])
+                    if (mem_dim[di] < g_OptionBase || mem_dim[di] > DimUpper(m_dims[di]))
                         error("Index out of bounds");
                 }
 
@@ -4054,7 +4054,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                 int mult = 1;
                 for (int di = 1; di < mem_dnbr; di++)
                 {
-                    mult *= (m_dims[di - 1] + 1 - g_OptionBase);
+                    mult *= DimElements(m_dims[di - 1]);
                     linear_idx += (mem_dim[di] - g_OptionBase) * mult;
                 }
 
@@ -4169,7 +4169,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                 error("Wrong number of dimensions");
             for (int di = 0; di < mem_dnbr; di++)
             {
-                if (mem_dim[di] < g_OptionBase || mem_dim[di] > m_dims[di])
+                if (mem_dim[di] < g_OptionBase || mem_dim[di] > DimUpper(m_dims[di]))
                     error("Index out of bounds");
             }
 
@@ -4178,7 +4178,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
             int mult = 1;
             for (int di = 1; di < mem_dnbr; di++)
             {
-                mult *= (m_dims[di - 1] + 1 - g_OptionBase);
+                mult *= DimElements(m_dims[di - 1]);
                 linear_idx += (mem_dim[di] - g_OptionBase) * mult;
             }
             array_offset = linear_idx * element_size;
@@ -4765,20 +4765,20 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         if (dnbr == 0)
         {
             // scalar reference: declared variable must also be scalar
-            if (g_vartbl[vindex].dims[0] != 0)
+            if (DimIsAllocated(RAW_DIM(g_vartbl[vindex], 0)))
                 error("Array dimensions");
             i = 0;
         }
         else if (dnbr == -1)
         {
             // empty-array reference (e.g. arr()): variable must be an array
-            if (g_vartbl[vindex].dims[0] == 0)
+            if (DimIsScalar(RAW_DIM(g_vartbl[vindex], 0)))
                 error("Array dimensions");
         }
         else
         {
             // array reference with explicit indices: count declared dims
-            for (i = 0; i < MAXDIM && g_vartbl[vindex].dims[i] != 0; i++)
+            for (i = 0; i < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[vindex], i)); i++)
                 ;
             if (i != dnbr)
                 error("Array dimensions");
@@ -4796,7 +4796,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         }
 
         // if it is a non arrayed variable or an empty array it is easy, just calculate and return a pointer to the value
-        if (dnbr == -1 || g_vartbl[vindex].dims[0] == 0)
+        if (dnbr == -1 || DimIsScalar(RAW_DIM(g_vartbl[vindex], 0)))
         {
 #ifdef STRUCTENABLED
             // For empty array struct access like sortArr().x, skip past () first
@@ -4864,7 +4864,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
             error("Cannot re dimension array");
         for (i = 0; i < dnbr; i++)
         {
-            if (dim[i] > g_vartbl[vindex].dims[i] || dim[i] < g_OptionBase)
+            if (dim[i] > DimUpper(RAW_DIM(g_vartbl[vindex], i)) || dim[i] < g_OptionBase)
                 error("Index out of bounds");
         }
 
@@ -4873,7 +4873,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         j = 1;
         for (i = 1; i < dnbr; i++)
         {
-            j *= (g_vartbl[vindex].dims[i - 1] + 1 - g_OptionBase);
+            j *= DimElements(RAW_DIM(g_vartbl[vindex], i - 1));
             nbr += (dim[i] - g_OptionBase) * j;
         }
 
@@ -5072,7 +5072,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     else
         g_vartbl[ifree].level = 0;
     for (j = 0; j < MAXDIM; j++)
-        g_vartbl[ifree].dims[j] = 0;
+        RAW_DIM(g_vartbl[ifree], j) = 0;
 
     // the easy request is for is a non array numeric variable, so just initialise to
     // zero and return the pointer
@@ -5106,7 +5106,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // if this is a definition of an empty array (only used in the parameter list for a sub/function)
     if (dnbr == -1)
     {
-        g_vartbl[vindex].dims[0] = -1; // let the caller know that this is an empty array and needs more work
+        RAW_DIM(g_vartbl[vindex], 0) = -1; // let the caller know that this is an empty array and needs more work
 #ifdef STRUCTENABLED
         // For struct array parameters, store the struct type index from g_StructArg
         if ((vtype & T_STRUCT) && g_StructArg >= 0 && g_StructArg < g_structcnt)
@@ -5121,9 +5121,14 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // for a non array string this will leave nbr = 1 which is just what we want
     for (nbr = 1, i = 0; i < dnbr; i++)
     {
+#if DIM_DECODE_ENABLED
+        // an upper bound equal to OPTION BASE is a single element dimension
+        if (dim[i] < g_OptionBase)
+#else
         if (dim[i] <= g_OptionBase)
+#endif
             error("Dimensions");
-        g_vartbl[vindex].dims[i] = dim[i];
+        RAW_DIM(g_vartbl[vindex], i) = DimEncode(dim[i]);
         nbr *= (dim[i] + 1 - g_OptionBase);
     }
 
@@ -5137,8 +5142,8 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     g_vartbl[ifree].type = T_BLOCKED;
     i = *g_vartbl[ifree].name;
     *g_vartbl[ifree].name = 0;
-    j = g_vartbl[ifree].dims[0];
-    g_vartbl[ifree].dims[0] = 0;
+    j = RAW_DIM(g_vartbl[ifree], 0);
+    RAW_DIM(g_vartbl[ifree], 0) = 0;
 
     // Now, grab the memory
     if (vtype & (T_NBR | T_INT))
@@ -5164,8 +5169,8 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     else
     {
         tmp = (nbr * (size + 1));
-        if (tmp <= (MAXDIM - 1) * sizeof(g_vartbl[ifree].dims[1]) && j == 0)
-            mptr = (void *)&g_vartbl[ifree].dims[1];
+        if (tmp <= (MAXDIM - 1) * sizeof(RAW_DIM(g_vartbl[ifree], 1)) && j == 0)
+            mptr = (void *)&RAW_DIM(g_vartbl[ifree], 1);
         else if (tmp <= 256)
             mptr = GetMemory(STRINGSIZE);
         else
@@ -5179,7 +5184,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     if (suffix)
         g_vartbl[ifree].namelen |= NAMELEN_EXPLICIT;
     *g_vartbl[ifree].name = i;
-    g_vartbl[ifree].dims[0] = j;
+    RAW_DIM(g_vartbl[ifree], 0) = j;
     g_vartbl[ifree].size = size;
     g_vartbl[ifree].val.s = mptr;
     return mptr;
@@ -6172,9 +6177,9 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 hashnext %= maxlocalvars; // CHANGED: was MAXVARS/2
                                           // Free memory for strings, arrays, and structs (but not pointers to caller's data)
 #ifdef STRUCTENABLED
-                if (((g_vartbl[hashcurrent].type & T_STR) || g_vartbl[hashcurrent].dims[0] != 0 || (g_vartbl[hashcurrent].type & T_STRUCT)) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)MMHeap))
+                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0)) || (g_vartbl[hashcurrent].type & T_STRUCT)) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)MMHeap))
 #else
-                if (((g_vartbl[hashcurrent].type & T_STR) || g_vartbl[hashcurrent].dims[0] != 0) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)MMHeap))
+                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0))) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)MMHeap))
 #endif
                 {
                     FreeMemorySafe((void **)&g_vartbl[hashcurrent].val.s);
@@ -6182,9 +6187,9 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 }
 #ifdef rp2350
 #ifdef STRUCTENABLED
-                if (((g_vartbl[hashcurrent].type & T_STR) || g_vartbl[hashcurrent].dims[0] != 0 || (g_vartbl[hashcurrent].type & T_STRUCT)) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)PSRAMbase + PSRAMsize))
+                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0)) || (g_vartbl[hashcurrent].type & T_STRUCT)) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)PSRAMbase + PSRAMsize))
 #else
-                if (((g_vartbl[hashcurrent].type & T_STR) || g_vartbl[hashcurrent].dims[0] != 0) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)PSRAMbase + PSRAMsize))
+                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0))) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)PSRAMbase + PSRAMsize))
 #endif
                 {
                     FreeMemorySafe((void **)&g_vartbl[hashcurrent].val.s); // free any memory (if allocated)
@@ -6209,9 +6214,9 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
         {
             // Free memory for strings, arrays, and structs (but not pointers)
 #ifdef STRUCTENABLED
-            if (((g_vartbl[i].type & T_STR) || g_vartbl[i].dims[0] != 0 || (g_vartbl[i].type & T_STRUCT)) && !(g_vartbl[i].type & T_PTR))
+            if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0)) || (g_vartbl[i].type & T_STRUCT)) && !(g_vartbl[i].type & T_PTR))
 #else
-            if (((g_vartbl[i].type & T_STR) || g_vartbl[i].dims[0] != 0) && !(g_vartbl[i].type & T_PTR))
+            if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0))) && !(g_vartbl[i].type & T_PTR))
 #endif
             {
                 if ((uint32_t)g_vartbl[i].val.s > (uint32_t)MMHeap && (uint32_t)g_vartbl[i].val.s < (uint32_t)MMHeap + heap_memory_size)
@@ -6223,9 +6228,9 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
             if (all)
             {
 #ifdef STRUCTENABLED
-                if (((g_vartbl[i].type & T_STR) || g_vartbl[i].dims[0] != 0 || (g_vartbl[i].type & T_STRUCT)) && !(g_vartbl[i].type & T_PTR))
+                if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0)) || (g_vartbl[i].type & T_STRUCT)) && !(g_vartbl[i].type & T_PTR))
 #else
-                if (((g_vartbl[i].type & T_STR) || g_vartbl[i].dims[0] != 0) && !(g_vartbl[i].type & T_PTR))
+                if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0))) && !(g_vartbl[i].type & T_PTR))
 #endif
                 {
                     if ((uint32_t)g_vartbl[i].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[i].val.s < (uint32_t)PSRAMbase + PSRAMsize)
@@ -6335,9 +6340,9 @@ uint32_t erase(char *p, bool nofree)
         // BUG FIX: Add bounds checking before freeing memory
         // Handle strings, arrays, and struct variables (but not pointers)
 #ifdef STRUCTENABLED
-        if (((g_vartbl[j].type & T_STR) || g_vartbl[j].dims[0] != 0 || (g_vartbl[j].type & T_STRUCT)) && !(g_vartbl[j].type & T_PTR))
+        if (((g_vartbl[j].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[j], 0)) || (g_vartbl[j].type & T_STRUCT)) && !(g_vartbl[j].type & T_PTR))
 #else
-        if (((g_vartbl[j].type & T_STR) || g_vartbl[j].dims[0] != 0) && !(g_vartbl[j].type & T_PTR))
+        if (((g_vartbl[j].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[j], 0))) && !(g_vartbl[j].type & T_PTR))
 #endif
         {
             addr = (uint32_t)g_vartbl[j].val.s; // ADDED: get address once
@@ -6373,7 +6378,7 @@ uint32_t erase(char *p, bool nofree)
             g_vartbl[j].name[0] = 0;
             g_vartbl[j].type = T_NOTYPE;
         }
-        g_vartbl[j].dims[0] = 0;
+        RAW_DIM(g_vartbl[j], 0) = 0;
         g_vartbl[j].level = 0;
         g_Globalvarcnt--;
         break;
@@ -6613,8 +6618,8 @@ void GetCommsTxData(unsigned char *argv[], int argc, int dataidx, int len, unsig
         if (ptr != NULL)
         {
             int t = g_vartbl[g_VarIndex].type;
-            if (((t & T_STR) && g_vartbl[g_VarIndex].dims[0] == 0) ||
-                (emptyarray && (t & (T_NBR | T_INT)) && g_vartbl[g_VarIndex].dims[0] > 0 && g_vartbl[g_VarIndex].dims[1] == 0))
+            if (((t & T_STR) && DimIsScalar(RAW_DIM(g_vartbl[g_VarIndex], 0))) ||
+                (emptyarray && (t & (T_NBR | T_INT)) && DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)) && DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1))))
                 useVar = 1;
             else
                 ptr = NULL;
@@ -6642,14 +6647,14 @@ void GetCommsTxData(unsigned char *argv[], int argc, int dataidx, int len, unsig
     }
     else if (g_vartbl[g_VarIndex].type & T_NBR)
     { // float array
-        if ((((MMFLOAT *)ptr - g_vartbl[g_VarIndex].val.fa) + len) > (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase))
+        if ((((MMFLOAT *)ptr - g_vartbl[g_VarIndex].val.fa) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
             StandardError(28);
         for (i = 0; i < len; i++)
             buf[i] = FloatToInt32(*((MMFLOAT *)ptr + i));
     }
     else
     { // integer array
-        if ((((long long int *)ptr - g_vartbl[g_VarIndex].val.ia) + len) > (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase))
+        if ((((long long int *)ptr - g_vartbl[g_VarIndex].val.ia) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
             StandardError(28);
         for (i = 0; i < len; i++)
             buf[i] = (unsigned int)(*((long long int *)ptr + i));
@@ -6697,7 +6702,7 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
     {
         if (len < 1 || len > 255)
             StandardError(21);
-        if (g_vartbl[g_VarIndex].dims[0] != 0)
+        if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
             StandardError(6);
         *(char *)ptr = len;
         dest->kind = COMMS_RXD_STRING;
@@ -6705,11 +6710,11 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
     }
     else if (g_vartbl[g_VarIndex].type & T_NBR)
     {
-        if (g_vartbl[g_VarIndex].dims[1] != 0)
+        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
             StandardError(6);
         if (emptyarray)
         { // a whole array
-            if ((((MMFLOAT *)ptr - g_vartbl[g_VarIndex].val.fa) + len) > (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase))
+            if ((((MMFLOAT *)ptr - g_vartbl[g_VarIndex].val.fa) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
                 StandardError(32);
         }
         else
@@ -6722,11 +6727,11 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
     }
     else if (g_vartbl[g_VarIndex].type & T_INT)
     {
-        if (g_vartbl[g_VarIndex].dims[1] != 0)
+        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
             StandardError(6);
         if (emptyarray)
         {
-            if ((((long long int *)ptr - g_vartbl[g_VarIndex].val.ia) + len) > (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase))
+            if ((((long long int *)ptr - g_vartbl[g_VarIndex].val.ia) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
                 StandardError(32);
         }
         else

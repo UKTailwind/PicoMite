@@ -3303,12 +3303,12 @@ void cmd_keypad(void)
             keypadrows = getint(argv[8], 1, 31);
             keypadcols = getint(argv[12], 1, 31);
             parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-            if (dims[0] - g_OptionBase + 1 != keypadrows)
+            if (DimUpper(dims[0]) - g_OptionBase + 1 != keypadrows)
             {
                 keypadcols = keypadrows = 0;
                 error("Array row count mismatch");
             }
-            if (dims[1] - g_OptionBase + 1 != keypadcols)
+            if (DimUpper(dims[1]) - g_OptionBase + 1 != keypadcols)
             {
                 keypadcols = keypadrows = 0;
                 error("Array column count mismatch");

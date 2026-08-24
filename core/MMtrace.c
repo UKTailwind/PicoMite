@@ -144,16 +144,16 @@ enum trace_opcode
     OP_LOAD_LVAR_INT_PTR,
 
     /* 1-D array element load.  TOS holds INT index (already coerced from
-     * NBR if necessary).  Replay reads dims[0] from g_vartbl, bounds-checks
-     * against g_OptionBase..dims[0], and pushes the element value.          */
+     * NBR if necessary).  Replay reads dimtbl[0] from g_vartbl, bounds-checks
+     * against g_OptionBase .. DimUpper(dimtbl[0]), and pushes the element value. */
     OP_LOAD_GVAR_NBR_AIDX1,
     OP_LOAD_GVAR_INT_AIDX1,
     OP_LOAD_LVAR_NBR_AIDX1,
     OP_LOAD_LVAR_INT_AIDX1,
 
     /* 2-D array element load.  Stack at entry: [..., int_i, int_j].  Both
-     * indices are bounds-checked against dims[0]/dims[1] and the element at
-     *   base[ (i-Base) + (j-Base)*(dims[0]+1-Base) ]
+     * indices are bounds-checked against DimUpper(dimtbl[0])/DimUpper(dimtbl[1]) and the element at
+     *   base[ (i-Base) + (j-Base)*DimElements(dimtbl[0]) ]
      * (matches MMBasic's findvar() linearization order) is pushed.          */
     OP_LOAD_GVAR_NBR_AIDX2,
     OP_LOAD_GVAR_INT_AIDX2,
@@ -557,7 +557,7 @@ static int resolve_scalar(unsigned char *namebuf, unsigned char suffix,
                 continue;
             if (j < MAXVARLEN && tn[j] != 0)
                 continue;
-            if (g_vartbl[i].dims[0] != 0)
+            if (DimIsAllocated(RAW_DIM(g_vartbl[i], 0)))
                 return SCOPE_NONE;
             int t = g_vartbl[i].type;
             if (t & (T_STR | T_CONST))
@@ -591,7 +591,7 @@ static int resolve_scalar(unsigned char *namebuf, unsigned char suffix,
             continue;
         if (j < MAXVARLEN && tn[j] != 0)
             continue;
-        if (g_vartbl[i].dims[0] != 0)
+        if (DimIsAllocated(RAW_DIM(g_vartbl[i], 0)))
             return SCOPE_NONE;
         int t = g_vartbl[i].type;
         if (t & (T_STR | T_PTR))
@@ -666,12 +666,12 @@ static int resolve_array_nd(unsigned char *namebuf, unsigned char suffix,
             if (j < MAXVARLEN && tn[j] != 0)
                 continue;
             /* Must be 1-D or 2-D (no higher).                               */
-            if (g_vartbl[i].dims[0] == 0)
+            if (DimIsScalar(RAW_DIM(g_vartbl[i], 0)))
                 return SCOPE_NONE;
             int ndim;
-            if (MAXDIM > 1 && g_vartbl[i].dims[1] != 0)
+            if (MAXDIM > 1 && !DimIsEnd(RAW_DIM(g_vartbl[i], 1)))
             {
-                if (MAXDIM > 2 && g_vartbl[i].dims[2] != 0)
+                if (MAXDIM > 2 && !DimIsEnd(RAW_DIM(g_vartbl[i], 2)))
                     return SCOPE_NONE;
                 ndim = 2;
             }
@@ -712,12 +712,12 @@ static int resolve_array_nd(unsigned char *namebuf, unsigned char suffix,
             continue;
         if (j < MAXVARLEN && tn[j] != 0)
             continue;
-        if (g_vartbl[i].dims[0] == 0)
+        if (DimIsScalar(RAW_DIM(g_vartbl[i], 0)))
             return SCOPE_NONE;
         int ndim;
-        if (MAXDIM > 1 && g_vartbl[i].dims[1] != 0)
+        if (MAXDIM > 1 && !DimIsEnd(RAW_DIM(g_vartbl[i], 1)))
         {
-            if (MAXDIM > 2 && g_vartbl[i].dims[2] != 0)
+            if (MAXDIM > 2 && !DimIsEnd(RAW_DIM(g_vartbl[i], 2)))
                 return SCOPE_NONE;
             ndim = 2;
         }
@@ -780,7 +780,7 @@ static int resolve_str_scalar(unsigned char *namebuf, int *out_idx,
                 j++;
             if (j != len || (j < MAXVARLEN && tn[j] != 0))
                 continue;
-            if (g_vartbl[i].dims[0] != 0)
+            if (DimIsAllocated(RAW_DIM(g_vartbl[i], 0)))
                 return SCOPE_NONE;
             int t = g_vartbl[i].type;
             if (!(t & T_STR))
@@ -802,7 +802,7 @@ static int resolve_str_scalar(unsigned char *namebuf, int *out_idx,
             j++;
         if (j != len || (j < MAXVARLEN && tn[j] != 0))
             continue;
-        if (g_vartbl[i].dims[0] != 0)
+        if (DimIsAllocated(RAW_DIM(g_vartbl[i], 0)))
             return SCOPE_NONE;
         int t = g_vartbl[i].type;
         if (!(t & T_STR))
@@ -902,7 +902,7 @@ static int __not_in_flash_func(re_resolve_locals)(struct cache_entry *e)
                 return 0;
             if (t & (T_CONST | T_PTR))
                 return 0;
-            if (g_vartbl[found].dims[0] != 0)
+            if (DimIsAllocated(RAW_DIM(g_vartbl[found], 0)))
                 return 0;
             op->varindex = found;
             continue;
@@ -917,18 +917,18 @@ static int __not_in_flash_func(re_resolve_locals)(struct cache_entry *e)
         {
             /* Must still be the same shape (1-D vs 2-D) and same element
              * type as we compiled for.                                      */
-            if (g_vartbl[found].dims[0] == 0)
+            if (DimIsScalar(RAW_DIM(g_vartbl[found], 0)))
                 return 0;
             if (is_array == 1)
             {
-                if (MAXDIM > 1 && g_vartbl[found].dims[1] != 0)
+                if (MAXDIM > 1 && !DimIsEnd(RAW_DIM(g_vartbl[found], 1)))
                     return 0;
             }
             else /* is_array == 2 */
             {
-                if (MAXDIM <= 1 || g_vartbl[found].dims[1] == 0)
+                if (MAXDIM <= 1 || DimIsEnd(RAW_DIM(g_vartbl[found], 1)))
                     return 0;
-                if (MAXDIM > 2 && g_vartbl[found].dims[2] != 0)
+                if (MAXDIM > 2 && !DimIsEnd(RAW_DIM(g_vartbl[found], 2)))
                     return 0;
             }
             int want_nbr = (op->opcode == OP_LOAD_LVAR_NBR_AIDX1 ||
@@ -942,7 +942,7 @@ static int __not_in_flash_func(re_resolve_locals)(struct cache_entry *e)
             op->varindex = found;
             continue;
         }
-        if (g_vartbl[found].dims[0] != 0)
+        if (DimIsAllocated(RAW_DIM(g_vartbl[found], 0)))
             return 0;
         /* The PTR-ness must match what we compiled for: we cannot turn a
          * non-pointer load into a pointer load (or vice versa) at runtime
@@ -2544,7 +2544,7 @@ static int replay_common(struct cache_entry *e, int *out_bool)
                 return 0;
             int64_t iv = istk[sp - 1];
             int vi = op->varindex;
-            int64_t hi = g_vartbl[vi].dims[0];
+            int64_t hi = DimUpper(RAW_DIM(g_vartbl[vi], 0));
             if (iv < g_OptionBase || iv > hi)
                 return 0; /* let interpreter raise "Index out of bounds" */
             MMFLOAT *base = (MMFLOAT *)g_vartbl[vi].val.s;
@@ -2559,7 +2559,7 @@ static int replay_common(struct cache_entry *e, int *out_bool)
                 return 0;
             int64_t iv = istk[sp - 1];
             int vi = op->varindex;
-            int64_t hi = g_vartbl[vi].dims[0];
+            int64_t hi = DimUpper(RAW_DIM(g_vartbl[vi], 0));
             if (iv < g_OptionBase || iv > hi)
                 return 0;
             long long int *base = (long long int *)g_vartbl[vi].val.s;
@@ -2577,8 +2577,8 @@ static int replay_common(struct cache_entry *e, int *out_bool)
             int64_t jv = istk[sp - 1];
             int64_t iv = istk[sp - 2];
             int vi = op->varindex;
-            int64_t hi0 = g_vartbl[vi].dims[0];
-            int64_t hi1 = g_vartbl[vi].dims[1];
+            int64_t hi0 = DimUpper(RAW_DIM(g_vartbl[vi], 0));
+            int64_t hi1 = DimUpper(RAW_DIM(g_vartbl[vi], 1));
             if (iv < g_OptionBase || iv > hi0)
                 return 0;
             if (jv < g_OptionBase || jv > hi1)
@@ -2599,8 +2599,8 @@ static int replay_common(struct cache_entry *e, int *out_bool)
             int64_t jv = istk[sp - 1];
             int64_t iv = istk[sp - 2];
             int vi = op->varindex;
-            int64_t hi0 = g_vartbl[vi].dims[0];
-            int64_t hi1 = g_vartbl[vi].dims[1];
+            int64_t hi0 = DimUpper(RAW_DIM(g_vartbl[vi], 0));
+            int64_t hi1 = DimUpper(RAW_DIM(g_vartbl[vi], 1));
             if (iv < g_OptionBase || iv > hi0)
                 return 0;
             if (jv < g_OptionBase || jv > hi1)
@@ -2949,7 +2949,7 @@ static int replay_common(struct cache_entry *e, int *out_bool)
                 return 0;
             int64_t iv = istk[sp - 2];
             int vi = op->varindex;
-            int64_t hi = g_vartbl[vi].dims[0];
+            int64_t hi = DimUpper(RAW_DIM(g_vartbl[vi], 0));
             if (iv < g_OptionBase || iv > hi)
                 return 0;
             MMFLOAT *base = (MMFLOAT *)g_vartbl[vi].val.s;
@@ -2964,7 +2964,7 @@ static int replay_common(struct cache_entry *e, int *out_bool)
                 return 0;
             int64_t iv = istk[sp - 2];
             int vi = op->varindex;
-            int64_t hi = g_vartbl[vi].dims[0];
+            int64_t hi = DimUpper(RAW_DIM(g_vartbl[vi], 0));
             if (iv < g_OptionBase || iv > hi)
                 return 0;
             long long int *base = (long long int *)g_vartbl[vi].val.s;
@@ -2983,8 +2983,8 @@ static int replay_common(struct cache_entry *e, int *out_bool)
             int64_t jv = istk[sp - 2];
             int64_t iv = istk[sp - 3];
             int vi = op->varindex;
-            int64_t hi0 = g_vartbl[vi].dims[0];
-            int64_t hi1 = g_vartbl[vi].dims[1];
+            int64_t hi0 = DimUpper(RAW_DIM(g_vartbl[vi], 0));
+            int64_t hi1 = DimUpper(RAW_DIM(g_vartbl[vi], 1));
             if (iv < g_OptionBase || iv > hi0)
                 return 0;
             if (jv < g_OptionBase || jv > hi1)
@@ -3005,8 +3005,8 @@ static int replay_common(struct cache_entry *e, int *out_bool)
             int64_t jv = istk[sp - 2];
             int64_t iv = istk[sp - 3];
             int vi = op->varindex;
-            int64_t hi0 = g_vartbl[vi].dims[0];
-            int64_t hi1 = g_vartbl[vi].dims[1];
+            int64_t hi0 = DimUpper(RAW_DIM(g_vartbl[vi], 0));
+            int64_t hi1 = DimUpper(RAW_DIM(g_vartbl[vi], 1));
             if (iv < g_OptionBase || iv > hi0)
                 return 0;
             if (jv < g_OptionBase || jv > hi1)
@@ -3730,7 +3730,7 @@ int __not_in_flash_func(TraceCacheTryInc)(unsigned char *cmdline)
                         continue;
                     if (g_vartbl[j].level != g_LocalIndex)
                         continue;
-                    if (g_vartbl[j].dims[0] != 0)
+                    if (DimIsAllocated(RAW_DIM(g_vartbl[j], 0)))
                         continue;
                     int t = g_vartbl[j].type;
                     if (pl->type == T_INT && !(t & T_INT))
@@ -3761,7 +3761,7 @@ int __not_in_flash_func(TraceCacheTryInc)(unsigned char *cmdline)
                         continue;
                     if (g_vartbl[j].level != g_LocalIndex)
                         continue;
-                    if (g_vartbl[j].dims[0] != 0)
+                    if (DimIsAllocated(RAW_DIM(g_vartbl[j], 0)))
                         continue;
                     int t = g_vartbl[j].type;
                     if (pl->step_type == T_INT && !(t & T_INT))

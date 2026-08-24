@@ -656,7 +656,7 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 #ifdef STRUCTENABLED
 	// Check if this is a struct member access
 	if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
@@ -679,7 +679,7 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 		int card = 1;
 		for (i = 0; i < MAXDIM; i++)
 		{
-			j = (g_vartbl[g_VarIndex].dims[i] - g_OptionBase + 1);
+			j = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], i)) - g_OptionBase + 1);
 			if (j > 0)
 				card *= j;
 			else
@@ -691,9 +691,9 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 	if (g_vartbl[g_VarIndex].type & T_INT)
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		*a1int = (int64_t *)ptr1;
 		if ((uint32_t)ptr1 != (uint32_t)g_vartbl[g_VarIndex].val.s)
@@ -703,13 +703,13 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 	else
 		error("Argument % must be an integer array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D integer point array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D integer point array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -728,13 +728,13 @@ int parsestringarray(unsigned char *tp, unsigned char **a1str, int argno, int di
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 	if (g_vartbl[g_VarIndex].type & T_STR)
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		*length = g_vartbl[g_VarIndex].size;
 		*a1str = (unsigned char *)ptr1;
@@ -745,13 +745,13 @@ int parsestringarray(unsigned char *tp, unsigned char **a1str, int argno, int di
 	else
 		error("Argument % must be a string array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D string array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D string array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -773,7 +773,7 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 #ifdef STRUCTENABLED
 	// Check if this is a struct member access
 	if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
@@ -799,7 +799,7 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 		int card = 1;
 		for (i = 0; i < MAXDIM; i++)
 		{
-			j = (g_vartbl[g_VarIndex].dims[i] - g_OptionBase + 1);
+			j = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], i)) - g_OptionBase + 1);
 			if (j > 0)
 				card *= j;
 			else
@@ -811,9 +811,9 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 	if (g_vartbl[g_VarIndex].type & (T_INT | T_NBR))
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		if (g_vartbl[g_VarIndex].type & T_NBR)
 			*a1float = (MMFLOAT *)ptr1;
@@ -826,13 +826,13 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 	else
 		error("Argument % must be a numerical array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D numerical array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D numerical array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -853,7 +853,7 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 #ifdef STRUCTENABLED
 	// Check if this is a struct member access
 	if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
@@ -876,7 +876,7 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 		int card = 1;
 		for (i = 0; i < MAXDIM; i++)
 		{
-			j = (g_vartbl[g_VarIndex].dims[i] - g_OptionBase + 1);
+			j = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], i)) - g_OptionBase + 1);
 			if (j > 0)
 				card *= j;
 			else
@@ -888,9 +888,9 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 	if (g_vartbl[g_VarIndex].type & T_NBR)
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		*a1float = (MMFLOAT *)ptr1;
 		if ((uint32_t)ptr1 != (uint32_t)g_vartbl[g_VarIndex].val.s)
@@ -900,13 +900,13 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 	else
 		error("Argument % must be a floating point array", argno);
 	int card = 1;
-	if (dimensions == 1 && (dims[0] <= 0 || dims[1] > 0))
+	if (dimensions == 1 && (!DimIsRealArray(dims[0]) || DimIsRealArray(dims[1])))
 		error("Argument % must be a 1D floating point array", argno);
-	if (dimensions == 2 && (dims[0] <= 0 || dims[1] <= 0 || dims[2] > 0))
+	if (dimensions == 2 && (!DimIsRealArray(dims[0]) || !DimIsRealArray(dims[1]) || DimIsRealArray(dims[2])))
 		error("Argument % must be a 2D floating point array", argno);
 	for (i = 0; i < MAXDIM; i++)
 	{
-		j = (dims[i] - g_OptionBase + 1);
+		j = (DimUpper(dims[i]) - g_OptionBase + 1);
 		if (j)
 			card *= j;
 	}
@@ -1100,13 +1100,13 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	int arraylength;
 	if (g_vartbl[g_VarIndex].type & T_NBR)
 	{
-		if (g_vartbl[g_VarIndex].dims[0] <= 0)
+		if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 		{ // Not an array
 			error("Argument 1 must be a numerical array");
 		}
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
+		if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
 			StandardError(6);
-		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
+		arraylength = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
 		if (*length > arraylength)
@@ -1118,13 +1118,13 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	}
 	else if (ptr1 && g_vartbl[g_VarIndex].type & T_INT)
 	{
-		if (g_vartbl[g_VarIndex].dims[0] <= 0)
+		if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 		{ // Not an array
 			error("Argument 1 must be a numerical array");
 		}
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
+		if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
 			StandardError(6);
-		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
+		arraylength = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
 		if (*length > arraylength)
@@ -1146,13 +1146,13 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	{
 		// dims[0] must be tested first: a short scalar string is stored inline
 		// in dims[1..] (val.s == &dims[1]), so dims[1] holds string bytes here
-		if (g_vartbl[g_VarIndex].dims[0] <= 0)
+		if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 		{ // Not an array
 			error("Argument 1 must be a string array");
 		}
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
+		if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
 			StandardError(6);
-		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
+		arraylength = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
 		if (*length > arraylength)
@@ -1859,13 +1859,13 @@ void cmd_math(void)
 			if (!(argc == 5))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols = dims[0] - g_OptionBase;
-			numrows = dims[1] - g_OptionBase;
+			numcols = DimUpper(dims[0]) - g_OptionBase;
+			numrows = DimUpper(dims[1]) - g_OptionBase;
 			parsefloatarray(argv[2], &a2float, 1, 1, dims, false, NULL);
-			if ((dims[0] - g_OptionBase) != numcols)
+			if ((DimUpper(dims[0]) - g_OptionBase) != numcols)
 				StandardError(16);
 			parsefloatarray(argv[4], &a3float, 1, 1, dims, true, NULL);
-			if ((dims[0] - g_OptionBase) != numrows)
+			if ((DimUpper(dims[0]) - g_OptionBase) != numrows)
 				StandardError(16);
 			if (a3float == a1float || a3float == a2float)
 				error("Destination array same as source");
@@ -2040,10 +2040,10 @@ void cmd_math(void)
 			if (!(argc == 3))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols = dims[0] - g_OptionBase;
-			numrows = dims[1] - g_OptionBase;
+			numcols = DimUpper(dims[0]) - g_OptionBase;
+			numrows = DimUpper(dims[1]) - g_OptionBase;
 			parsefloatarray(argv[2], &a2float, 2, 2, dims, true, NULL);
-			if (dims[0] - g_OptionBase != numcols || dims[1] - g_OptionBase != numrows)
+			if (DimUpper(dims[0]) - g_OptionBase != numcols || DimUpper(dims[1]) - g_OptionBase != numrows)
 				StandardError(16);
 			if (numcols != numrows)
 				error("Array must be square");
@@ -2087,12 +2087,12 @@ void cmd_math(void)
 			if (!(argc == 3))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols1 = numrows2 = dims[0] - g_OptionBase;
-			numrows1 = numcols2 = dims[1] - g_OptionBase;
+			numcols1 = numrows2 = DimUpper(dims[0]) - g_OptionBase;
+			numrows1 = numcols2 = DimUpper(dims[1]) - g_OptionBase;
 			parsefloatarray(argv[2], &a2float, 2, 2, dims, true, NULL);
-			if (numcols2 != dims[0] - g_OptionBase)
+			if (numcols2 != DimUpper(dims[0]) - g_OptionBase)
 				StandardError(16);
-			if (numrows2 != dims[1] - g_OptionBase)
+			if (numrows2 != DimUpper(dims[1]) - g_OptionBase)
 				StandardError(16);
 			numcols1++;
 			numrows1++;
@@ -2135,16 +2135,16 @@ void cmd_math(void)
 			if (!(argc == 5))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols1 = numrows2 = dims[0] - g_OptionBase + 1;
-			numrows1 = dims[1] - g_OptionBase + 1;
+			numcols1 = numrows2 = DimUpper(dims[0]) - g_OptionBase + 1;
+			numrows1 = DimUpper(dims[1]) - g_OptionBase + 1;
 			parsefloatarray(argv[2], &a2float, 2, 2, dims, false, NULL);
-			numcols2 = dims[0] - g_OptionBase + 1;
-			numrows2 = dims[1] - g_OptionBase + 1;
+			numcols2 = DimUpper(dims[0]) - g_OptionBase + 1;
+			numrows2 = DimUpper(dims[1]) - g_OptionBase + 1;
 			if (numrows2 != numcols1)
 				error("Input array size mismatch");
 			parsefloatarray(argv[4], &a3float, 3, 2, dims, true, NULL);
-			numcols3 = dims[0] - g_OptionBase + 1;
-			numrows3 = dims[1] - g_OptionBase + 1;
+			numcols3 = DimUpper(dims[0]) - g_OptionBase + 1;
+			numrows3 = DimUpper(dims[1]) - g_OptionBase + 1;
 			if (numcols3 != numcols2 || numrows3 != numrows1)
 				error("Output array size mismatch");
 			if (a3float == a1float || a3float == a2float)
@@ -2196,8 +2196,8 @@ void cmd_math(void)
 			if (!(argc == 1))
 				StandardError(2);
 			parsenumberarray(argv[0], &a1float, &a1int, 1, 2, dims, false, NULL);
-			numcols = dims[0] + 1 - g_OptionBase;
-			numrows = dims[1] + 1 - g_OptionBase;
+			numcols = DimUpper(dims[0]) + 1 - g_OptionBase;
+			numrows = DimUpper(dims[1]) + 1 - g_OptionBase;
 			//			MMFLOAT **matrix=alloc2df(numcols,numrows);
 			//			int64_t **imatrix= (int64_t **)matrix;
 			if (a1float != NULL)
@@ -3375,9 +3375,16 @@ if (tp)
 				if (!(argc == 1))
 					StandardError(2);
 				parsenumberarray(argv[0], &a1float, &a1int, 1, 2, dims, false, NULL);
-				numcols = dims[0] + 1 - g_OptionBase;
-				numrows = dims[1] + 1 - g_OptionBase;
+				numcols = DimUpper(dims[0]) + 1 - g_OptionBase;
+				numrows = DimUpper(dims[1]) + 1 - g_OptionBase;
 				df = (numcols - 1) * (numrows - 1);
+				// chitable[] carries critical values for df 1..50 only.  df 0 is a
+				// single row or column, which has no degrees of freedom and would
+				// read the probability header row as if it were data.
+				if (df < 1)
+					error("Needs at least 2 rows and 2 columns");
+				if (df > 50)
+					error("Too many degrees of freedom (max 50)");
 				MMFLOAT **observed = alloc2df(numcols, numrows);
 				MMFLOAT **expected = alloc2df(numcols, numrows);
 				rows = alloc1df(numrows);
@@ -3502,8 +3509,8 @@ if (tp)
 			if (!(argc == 1))
 				StandardError(2);
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
-			numcols = dims[0] + 1 - g_OptionBase;
-			numrows = dims[1] + 1 - g_OptionBase;
+			numcols = DimUpper(dims[0]) + 1 - g_OptionBase;
+			numrows = DimUpper(dims[1]) + 1 - g_OptionBase;
 			if (numcols != numrows)
 				error("Array must be square");
 			n = numrows;
@@ -3536,7 +3543,7 @@ if (tp)
 			if (argc == 3)
 			{
 				int max_vtype;
-				if (dims[1] > 0)
+				if (DimIsRealArray(dims[1]))
 				{ // Not an array
 					error("Argument 1 must be a 1D numerical array");
 				}
@@ -3598,7 +3605,7 @@ if (tp)
 			if (argc == 3)
 			{
 				int min_vtype;
-				if (dims[1] > 0)
+				if (DimIsRealArray(dims[1]))
 				{ // Not an array
 					error("Argument 1 must be a 1D numerical array");
 				}
@@ -4023,7 +4030,7 @@ void cmd_FFT(unsigned char *pp)
 	{
 		getcsargs(&tp, 3);
 		card1 = parsefloatarray(argv[0], &a4float, 1, 2, dims, false, NULL);
-		int size = dims[1] - g_OptionBase + 1;
+		int size = DimUpper(dims[1]) - g_OptionBase + 1;
 		a1cplx = (cplx *)a4float;
 		card2 = parsefloatarray(argv[2], &a3float, 2, 1, dims, true, NULL);
 		if (card2 != size)
@@ -4051,7 +4058,7 @@ void cmd_FFT(unsigned char *pp)
 	card1 = parsefloatarray(argv[0], &a3float, 1, 1, dims, false, NULL);
 	card2 = parsefloatarray(argv[2], &a4float, 2, 2, dims, true, NULL);
 	a2cplx = (cplx *)a4float;
-	if ((dims[1] - g_OptionBase + 1) != card1)
+	if ((DimUpper(dims[1]) - g_OptionBase + 1) != card1)
 		StandardError(16);
 	for (i = 1; i < 65536; i *= 2)
 	{

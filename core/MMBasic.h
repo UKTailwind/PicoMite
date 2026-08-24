@@ -131,7 +131,7 @@ extern "C"
     do                                                                           \
     {                                                                            \
         if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0 && \
-            g_vartbl[g_VarIndex].dims[0] > 0)                                    \
+            DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))                    \
             StandardError(47);                                                   \
     } while (0)
 #else
@@ -284,9 +284,9 @@ extern "C"
         unsigned char size;
         unsigned char namelen;
 #ifdef rp2350
-        int __attribute__((aligned(4))) dims[MAXDIM];
+        int __attribute__((aligned(4))) dimtbl[MAXDIM];
 #else
-    short __attribute__((aligned(4))) dims[MAXDIM];
+    short __attribute__((aligned(4))) dimtbl[MAXDIM];
 #endif
         union u_val
         {
@@ -306,7 +306,7 @@ extern "C"
         unsigned char type;            // T_NBR, T_STR, T_INT, or T_STRUCT
         unsigned char size;            // For strings: max length; for nested struct: struct index
         int offset;                    // Byte offset within structure
-        short dims[MAXDIM];            // Array dimensions (0 = not an array)
+        short dimtbl[MAXDIM];          // Array dimensions (0 = not an array)
     } structmember_val;
 
     /* Structure type definition */
@@ -318,6 +318,53 @@ extern "C"
         int total_size;                                    // Total size in bytes
     } structdef_val;
 #endif
+
+/* ============================================================================
+ * Array dimension access
+ *
+ * dimtbl[i] holds the DECLARED UPPER BOUND of dimension i.  Two values are
+ * reserved and can never be a real upper bound:
+ *      0   not an array, and it terminates the scan that counts dimensions
+ *     -1   an unbound empty array parameter, eg  SUB s(a())
+ * The element count of a dimension is DimElements(): the upper bound plus one,
+ * less OPTION BASE.  Because zero is reserved, an upper bound of zero (a one
+ * element dimension under OPTION BASE 0) has no natural encoding; DIM_ONE is
+ * the value reserved to carry it.
+ *
+ * Read a slot through the accessors below rather than indexing dimtbl[].
+ * RAW_DIM() is for the places that must see the value as stored: the dimension
+ * scan, whole table copies, the reserved value tests, and the short string that
+ * findvar() stores in dimtbl[1..].
+ * ============================================================================ */
+
+#define DIM_ONE (-2) // reserved encoding for an upper bound of 0
+
+// Set to 0 and no DIM_ONE is ever stored, every accessor below expands to the
+// expression it replaced, and single element dimensions are refused as they
+// always were - useful for bisecting a regression back to this change.
+#define DIM_DECODE_ENABLED 1
+
+#define RAW_DIM(v, i) ((v).dimtbl[i]) // the value as stored
+#define DIM_TABLE(v) ((v).dimtbl)     // the whole table, for copies
+
+#if DIM_DECODE_ENABLED
+#define DimUpper(d) ((d) == DIM_ONE ? 0 : (d))
+#define DimIsRealArray(d) ((d) > 0 || (d) == DIM_ONE)
+#define DimEncode(d) ((d) == 0 ? DIM_ONE : (d)) // apply on every store of an upper bound
+#else
+#define DimUpper(d) (d)
+#define DimIsRealArray(d) ((d) > 0)
+#define DimEncode(d) (d)
+#endif
+
+// DimIsRealArray() asks whether a slot holds a real dimension: on dimtbl[0]
+// that means the variable is an array (and not an unbound parameter), on
+// dimtbl[i] that dimension i is present.
+#define DimElements(d) (DimUpper(d) + 1 - g_OptionBase)
+#define DimIsScalar(d) ((d) == 0)     // dimtbl[0]: this variable is not an array
+#define DimIsEnd(d) ((d) == 0)        // dimtbl[i]: no further dimension
+#define DimIsAllocated(d) ((d) != 0)  // dimtbl[0]: an array or an array parameter
+#define DimIsEmptyParam(d) ((d) == -1)
 
     /* Hash table structure */
     typedef struct s_hash
