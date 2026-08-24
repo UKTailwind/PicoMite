@@ -215,6 +215,16 @@ uint64_t timeroffset = 0;
 int SaveOptionErrorSkip = 0;
 char SaveErrorMessage[MAXERRMSG] = {0};
 int Saveerrno = 0;
+void MIPS16 cmd_update(void)
+{
+    uint gpio_mask = 0u;
+#ifdef USBKEYBOARD
+    /* USB host build: no USB CDC device interface, so nothing to disable. */
+    reset_usb_boot(gpio_mask, 0u);
+#else
+    reset_usb_boot(gpio_mask, PICO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK);
+#endif
+}
 void integersort(int64_t *iarray, int n, long long *index, int flags, int startpoint)
 {
     int i, j = n, s = 1;
@@ -3308,16 +3318,6 @@ void fun_keydown(void)
         }
     }
     targ = T_INT;
-}
-void MIPS16 cmd_update(void)
-{
-    uint gpio_mask = 0u;
-#ifdef PICOMITEBT
-    /* No USB CDC interface in BT build — nothing to disable, just reboot. */
-    reset_usb_boot(gpio_mask, 0u);
-#else
-    reset_usb_boot(gpio_mask, PICO_USB_RESET_BOOTSEL_INTERFACE_DISABLE_MASK);
-#endif
 }
 #endif
 void MIPS16 disable_systemspi(void)
