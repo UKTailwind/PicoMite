@@ -45,6 +45,7 @@
 #define MAXVARLEN 32 // maximum length of a variable name
 #ifdef PICORP2350
 #define MAXDIM 5 // maximum nbr of dimensions to an array
+#define rp2350
 #else
 #define MAXDIM 6 // maximum nbr of dimensions to an array
 #endif
