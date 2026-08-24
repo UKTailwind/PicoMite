@@ -7698,7 +7698,9 @@ void cmd_redim(void)
 				strcpy((char *)newstring, (char *)argv[i]);
 				strcat((char *)newstring, " LENGTH ");
 				IntToStr((char *)&newstring[strlen((char *)newstring)], length, 10);
-				findvar(newstring, type | V_FIND | V_DIM_VAR);
+				// T_IMPLIED is required: TypeMask() strips it, and without it findvar
+				// falls back to DefaultType for a name carrying no type suffix.
+				findvar(newstring, type | T_IMPLIED | V_FIND | V_DIM_VAR);
 			}
 #ifdef STRUCTENABLED
 			else if (type & T_STRUCT)
@@ -7717,7 +7719,10 @@ void cmd_redim(void)
 			}
 #endif
 			else
-				findvar(argv[i], type | V_FIND | V_DIM_VAR);
+				// Ditto: "a(5)" has no suffix, so without T_IMPLIED findvar recreates
+				// the array as DefaultType (float) whatever it was declared as. An
+				// INTEGER array then reads its preserved bits back as doubles.
+				findvar(argv[i], type | T_IMPLIED | V_FIND | V_DIM_VAR);
 			newmemory = g_vartbl[g_VarIndex].val.s;
 			newsize = MemSize(g_vartbl[g_VarIndex].val.s);
 			if (preserve)
