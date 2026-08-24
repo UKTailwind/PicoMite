@@ -9958,7 +9958,11 @@ int checkdetailinterrupts(void)
     {
         if (!dma_channel_is_busy(dma_rx_chan))
         {
-            PIO pio = (dma_rx_pio ? pio1 : pio0);
+#ifdef rp2350
+            PIO pio = (dma_rx_pio == 0 ? pio0 : (dma_rx_pio == 1 ? pio1 : pio2));
+#else
+            PIO pio = (dma_rx_pio == 0 ? pio0 : pio1);
+#endif
             intaddr = (char *)DMAinterruptRX;
             DMAinterruptRX = NULL;
             pio_sm_set_enabled(pio, dma_rx_sm, false);
@@ -9969,7 +9973,11 @@ int checkdetailinterrupts(void)
     {
         if (!dma_channel_is_busy(dma_tx_chan))
         {
-            PIO pio = (dma_tx_pio ? pio1 : pio0);
+#ifdef rp2350
+            PIO pio = (dma_tx_pio == 0 ? pio0 : (dma_tx_pio == 1 ? pio1 : pio2));
+#else
+            PIO pio = (dma_tx_pio == 0 ? pio0 : pio1);
+#endif
             if ((pio->flevel >> (dma_tx_sm * 8) & 0xf) == 0)
             {
                 intaddr = (char *)DMAinterruptTX;
