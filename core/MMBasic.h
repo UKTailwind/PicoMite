@@ -339,9 +339,10 @@ extern "C"
 
 #define DIM_ONE (-2) // reserved encoding for an upper bound of 0
 
-// While this is 0 no DIM_ONE is ever stored and every accessor below expands to
-// the expression it replaced, so the interpreter behaves exactly as before.
-#define DIM_DECODE_ENABLED 0
+// Set to 0 and no DIM_ONE is ever stored, every accessor below expands to the
+// expression it replaced, and single element dimensions are refused as they
+// always were - useful for bisecting a regression back to this change.
+#define DIM_DECODE_ENABLED 1
 
 #define RAW_DIM(v, i) ((v).dimtbl[i]) // the value as stored
 #define DIM_TABLE(v) ((v).dimtbl)     // the whole table, for copies

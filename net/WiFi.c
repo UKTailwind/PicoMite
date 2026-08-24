@@ -549,6 +549,8 @@ void cmd_web(void)
                                 { // Not an array
                                         StandardError(35);
                                 }
+                                if (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)) < 2)
+                                        error("Array too small"); // element 0 holds the length, the text starts at element 1
                                 scan_size = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase) * 8;
                                 scan_dest = (char *)ptr1;
                                 scan_dest[8] = 0;

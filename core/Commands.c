@@ -1430,7 +1430,7 @@ void array_insert(unsigned char *tp)
 		error("Argument 1 must be a 2D or more array");
 	for (i = 0; i < MAXDIM; i++)
 	{
-		if (dims[i] - g_OptionBase > 0)
+		if (DimIsRealArray(dims[i]))
 		{
 			dimcount++;
 			dim[i] = DimUpper(dims[i]) - g_OptionBase;
@@ -1536,7 +1536,7 @@ void array_slice(unsigned char *tp)
 		error("Argument 1 must be a 2D or more array");
 	for (i = 0; i < MAXDIM; i++)
 	{
-		if (dims[i] - g_OptionBase > 0)
+		if (DimIsRealArray(dims[i]))
 		{
 			dimcount++;
 			dim[i] = DimUpper(dims[i]) - g_OptionBase;
@@ -7595,7 +7595,8 @@ void parse_and_strip(char *string, short *dims)
 			unsigned char saved = *p;
 			*p = 0;
 			// Evaluate the expression
-			dims[idx++] = getinteger(start);
+			long long int dv = getinteger(start);
+			dims[idx++] = DimEncode(dv);
 			// Restore and skip comma
 			*p = saved;
 			if (*p == ',')
@@ -9936,9 +9937,14 @@ const char *ParseStructMember(unsigned char *p, struct s_structdef *sd)
 			}
 			if (!have_digits)
 				return "Dimensions";
+#if DIM_DECODE_ENABLED
+			// an upper bound equal to OPTION BASE is a single element dimension
+			if (dim < g_OptionBase)
+#else
 			if (dim <= g_OptionBase)
+#endif
 				return "Dimensions";
-			dims[ndims++] = dim;
+			dims[ndims++] = DimEncode(dim);
 			array_elements *= (dim + 1 - g_OptionBase); // Account for OPTION BASE
 
 			skipspace(p);

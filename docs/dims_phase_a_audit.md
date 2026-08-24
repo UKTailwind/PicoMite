@@ -225,3 +225,49 @@ Ten sites need restructuring rather than substitution, and they are the behaviou
   header write. Note these also expose a **pre-existing** off-by-one-element (capacity
   computed as `count * 8` while the buffer starts at `dest[1]`); that is a separate
   question and was deliberately not changed here.
+
+## Phase B2 — single element dimensions enabled
+
+`DIM_DECODE_ENABLED` is now `1`. An upper bound of `0` is stored as `DIM_ONE`, so
+`DIM a(0)` under `OPTION BASE 0` and `DIM a(1)` under `OPTION BASE 1` both declare a
+one-element array. Setting the flag back to `0` restores the old behaviour exactly,
+which makes it a clean bisect point if a regression is ever traced to this change.
+
+What landed beyond flipping the flag:
+
+- **Creation guards relaxed** from `<=` to `<`, behind `#if DIM_DECODE_ENABLED`, in
+  findvar (`core/MMBasic.c`) and in the struct `TYPE` member parser
+  (`core/Commands.c`). Both now store through `DimEncode()`.
+- **`array_insert` / `array_slice`** (`core/Commands.c`) — the dimension existence test
+  became `DimIsRealArray(dims[i])`. The old `dims[i] - g_OptionBase > 0` asked
+  "does this dimension have at least two elements", which is the wrong question; this
+  is the `MATH SLICE` "Argument count" failure reproduced on hardware.
+- **REDIM** (`parse_and_strip`) encodes the parsed bound, so `array_comp` compares
+  like-for-like against the stored table. The bound is read into a temporary first
+  because `DimEncode()` evaluates its argument twice and must never be handed a call
+  to `getinteger()`.
+- **Minimum-size guards** on the LongString destinations whose payload starts at
+  element 1: `net/WiFi.c` (WEB SCAN) and the three `net/MMTCPclient.c` sites. A
+  one-element array has no payload element at all, so these now raise "Array too
+  small" rather than writing past the end. These reject only arrays that could not be
+  declared before, so no existing program changes behaviour.
+
+Two things deliberately **not** changed:
+
+- **`misc/Custom.c:2253`** (PIO buffer) writes `size / 8 - 1 + g_OptionBase` into a
+  dimension slot. The Phase A audit flagged this as needing the escape, but `size` is
+  validated to be a power of two of at least 256, so the expression can never be 0 and
+  the collision is unreachable. No escape added.
+- **`core/MMtrace.c`** needs no `DIM_ONE` bail-out. The earlier plan assumed one would
+  be required; auditing it showed the trace compiler already takes rank from the raw
+  `0` terminator (which `DIM_ONE` is not) and every bound and stride is loaded through
+  `DimUpper()`, so cached array access decodes correctly.
+
+Also unchanged, and worth a separate decision: the three `net/MMTCPclient.c` receive
+paths size the buffer as `count * 8` while the payload starts at `dest[1]`, so the
+armed capacity has always overstated the real capacity by one element. The new guards
+stop `DIM_ONE` reaching that path, but the off-by-one itself is pre-existing.
+
+Build state: all nine variants compile and pass the flash/RAM/heap checks. Cost of
+enabling decode is roughly 1-2 KB of flash and ~256 bytes of RAM; the tightest variant
+(HDMIUSB) still has +7.6 KB flash and +3.4 KB RAM margin.
