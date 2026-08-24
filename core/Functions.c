@@ -196,7 +196,7 @@ void fun_bound(void)
 	if (which == 0)
 		iret = g_OptionBase;
 	else
-		iret = g_vartbl[g_VarIndex].dims[which - 1];
+		iret = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], which - 1));
 	if (iret == -1)
 		iret = 0;
 	targ = T_INT;

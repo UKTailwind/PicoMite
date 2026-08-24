@@ -1495,11 +1495,11 @@ void MIPS16 cmd_memory(void)
             continue;
         if (g_vartbl[var].type & T_PTR)
             continue;
-        nbr = g_vartbl[var].dims[0] + 1 - g_OptionBase;
-        if (g_vartbl[var].dims[0])
+        nbr = DimElements(RAW_DIM(g_vartbl[var], 0));
+        if (DimIsAllocated(RAW_DIM(g_vartbl[var], 0)))
         {
-            for (j = 1; j < MAXDIM && g_vartbl[var].dims[j]; j++)
-                nbr *= (g_vartbl[var].dims[j] + 1 - g_OptionBase);
+            for (j = 1; j < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[var], j)); j++)
+                nbr *= DimElements(RAW_DIM(g_vartbl[var], j));
             if (g_vartbl[var].type & T_NBR)
                 i += MRoundUp(nbr * sizeof(MMFLOAT));
             else if (g_vartbl[var].type & T_INT)
@@ -1509,7 +1509,7 @@ void MIPS16 cmd_memory(void)
         }
         else if (g_vartbl[var].type & T_STR)
         {
-            if (g_vartbl[var].val.s != (void *)&g_vartbl[var].dims[1])
+            if (g_vartbl[var].val.s != (void *)&RAW_DIM(g_vartbl[var], 1))
                 i += STRINGSIZE;
         }
     }

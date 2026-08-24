@@ -745,7 +745,7 @@ int cmd_tcpclient(void)
         ptr1 = findvar(argv[4], V_FIND | V_NOFIND_ERR);
         if (g_vartbl[g_VarIndex].type & T_INT)
         {
-            if (g_vartbl[g_VarIndex].dims[0] != 0)
+            if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
                 error("Argument 3 must be an integer");
             state->buffer_read = (int *)ptr1;
         }
@@ -754,7 +754,7 @@ int cmd_tcpclient(void)
         ptr1 = findvar(argv[6], V_FIND | V_NOFIND_ERR);
         if (g_vartbl[g_VarIndex].type & T_INT)
         {
-            if (g_vartbl[g_VarIndex].dims[0] != 0)
+            if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
                 error("Argument 4 must be an integer");
             state->buffer_write = (int *)ptr1;
         }

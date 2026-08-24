@@ -7150,8 +7150,8 @@ void MIPS16 cmd_var(void)
                 nbr |= (*bufp++) << 16;
                 nbr |= (*bufp++) << 24;
                 nbr2 = 1;
-                for (j = 0; g_vartbl[g_VarIndex].dims[j] != 0 && j < MAXDIM; j++)
-                    nbr2 *= (g_vartbl[g_VarIndex].dims[j] + 1 - g_OptionBase);
+                for (j = 0; !DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], j)) && j < MAXDIM; j++)
+                    nbr2 *= DimElements(RAW_DIM(g_vartbl[g_VarIndex], j));
                 if (type & T_STR)
                     nbr2 *= g_vartbl[g_VarIndex].size + 1;
                 if (type & T_NBR)
@@ -7273,13 +7273,13 @@ void MIPS16 cmd_var(void)
             vdata = VarDataList[i / 2];                      // pointer to the variable's data
             type = TypeMask(g_vartbl[g_VarIndex].type);      // get the variable's type
             type |= (g_vartbl[g_VarIndex].type & T_IMPLIED); // set the implied flag
-            array = (g_vartbl[g_VarIndex].dims[0] != 0);
+            array = DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0));
 
             nbr = 1; // number of elements to save
             if (array)
             { // if this is an array calculate the number of elements
-                for (j = 0; g_vartbl[g_VarIndex].dims[j] != 0 && j < MAXDIM; j++)
-                    nbr *= (g_vartbl[g_VarIndex].dims[j] + 1 - g_OptionBase);
+                for (j = 0; !DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], j)) && j < MAXDIM; j++)
+                    nbr *= DimElements(RAW_DIM(g_vartbl[g_VarIndex], j));
                 type |= 0x80; // an array has the top bit set
             }
 

@@ -656,7 +656,7 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 #ifdef STRUCTENABLED
 	// Check if this is a struct member access
 	if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
@@ -679,7 +679,7 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 		int card = 1;
 		for (i = 0; i < MAXDIM; i++)
 		{
-			j = (g_vartbl[g_VarIndex].dims[i] - g_OptionBase + 1);
+			j = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], i)) - g_OptionBase + 1);
 			if (j > 0)
 				card *= j;
 			else
@@ -691,9 +691,9 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 	if (g_vartbl[g_VarIndex].type & T_INT)
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		*a1int = (int64_t *)ptr1;
 		if ((uint32_t)ptr1 != (uint32_t)g_vartbl[g_VarIndex].val.s)
@@ -728,13 +728,13 @@ int parsestringarray(unsigned char *tp, unsigned char **a1str, int argno, int di
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 	if (g_vartbl[g_VarIndex].type & T_STR)
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		*length = g_vartbl[g_VarIndex].size;
 		*a1str = (unsigned char *)ptr1;
@@ -773,7 +773,7 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 #ifdef STRUCTENABLED
 	// Check if this is a struct member access
 	if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
@@ -799,7 +799,7 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 		int card = 1;
 		for (i = 0; i < MAXDIM; i++)
 		{
-			j = (g_vartbl[g_VarIndex].dims[i] - g_OptionBase + 1);
+			j = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], i)) - g_OptionBase + 1);
 			if (j > 0)
 				card *= j;
 			else
@@ -811,9 +811,9 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 	if (g_vartbl[g_VarIndex].type & (T_INT | T_NBR))
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		if (g_vartbl[g_VarIndex].type & T_NBR)
 			*a1float = (MMFLOAT *)ptr1;
@@ -853,7 +853,7 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 	if ((g_vartbl[g_VarIndex].type & T_CONST) && ConstantNotAllowed)
 		StandardError(22);
 	if (dims == NULL)
-		dims = g_vartbl[g_VarIndex].dims;
+		dims = DIM_TABLE(g_vartbl[g_VarIndex]);
 #ifdef STRUCTENABLED
 	// Check if this is a struct member access
 	if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
@@ -876,7 +876,7 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 		int card = 1;
 		for (i = 0; i < MAXDIM; i++)
 		{
-			j = (g_vartbl[g_VarIndex].dims[i] - g_OptionBase + 1);
+			j = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], i)) - g_OptionBase + 1);
 			if (j > 0)
 				card *= j;
 			else
@@ -888,9 +888,9 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 	if (g_vartbl[g_VarIndex].type & T_NBR)
 	{
 #ifdef rp2350
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(int));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(int));
 #else
-		memcpy(dims, g_vartbl[g_VarIndex].dims, MAXDIM * sizeof(short));
+		memcpy(dims, DIM_TABLE(g_vartbl[g_VarIndex]), MAXDIM * sizeof(short));
 #endif
 		*a1float = (MMFLOAT *)ptr1;
 		if ((uint32_t)ptr1 != (uint32_t)g_vartbl[g_VarIndex].val.s)
@@ -1100,13 +1100,13 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	int arraylength;
 	if (g_vartbl[g_VarIndex].type & T_NBR)
 	{
-		if (g_vartbl[g_VarIndex].dims[0] <= 0)
+		if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 		{ // Not an array
 			error("Argument 1 must be a numerical array");
 		}
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
+		if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
 			StandardError(6);
-		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
+		arraylength = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
 		if (*length > arraylength)
@@ -1118,13 +1118,13 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	}
 	else if (ptr1 && g_vartbl[g_VarIndex].type & T_INT)
 	{
-		if (g_vartbl[g_VarIndex].dims[0] <= 0)
+		if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 		{ // Not an array
 			error("Argument 1 must be a numerical array");
 		}
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
+		if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
 			StandardError(6);
-		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
+		arraylength = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
 		if (*length > arraylength)
@@ -1146,13 +1146,13 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	{
 		// dims[0] must be tested first: a short scalar string is stored inline
 		// in dims[1..] (val.s == &dims[1]), so dims[1] holds string bytes here
-		if (g_vartbl[g_VarIndex].dims[0] <= 0)
+		if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 		{ // Not an array
 			error("Argument 1 must be a string array");
 		}
-		if (g_vartbl[g_VarIndex].dims[1] != 0)
+		if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
 			StandardError(6);
-		arraylength = g_vartbl[g_VarIndex].dims[0] - g_OptionBase + 1;
+		arraylength = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase + 1;
 		if (*length == 0)
 			*length = arraylength;
 		if (*length > arraylength)

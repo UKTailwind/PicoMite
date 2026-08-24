@@ -2476,7 +2476,7 @@ void MIPS16 cmd_play(void)
 		ptr1 = findvar(argv[2], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
 		if (g_vartbl[g_VarIndex].type & T_INT)
 		{
-			if (g_vartbl[g_VarIndex].dims[0] != 0)
+			if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 				error("Argument 2 must be an integer");
 			streamreadpointer = (int *)ptr1;
 		}
@@ -2485,7 +2485,7 @@ void MIPS16 cmd_play(void)
 		ptr1 = findvar(argv[4], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
 		if (g_vartbl[g_VarIndex].type & T_INT)
 		{
-			if (g_vartbl[g_VarIndex].dims[0] != 0)
+			if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
 				error("Argument 3 must be an integer");
 			streamwritepointer = (int *)ptr1;
 		}

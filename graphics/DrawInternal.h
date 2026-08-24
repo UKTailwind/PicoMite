@@ -129,7 +129,7 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
     ptr = findvar((unsigned char *)pp, V_FIND | V_EMPTY_OK | V_NOFIND_NULL);
     if (ptr && g_vartbl[g_VarIndex].type & (T_NBR | T_INT))
     {
-        if (g_vartbl[g_VarIndex].dims[0] <= 0)
+        if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
         { // simple variable
             *n = 1;
             return;
@@ -137,9 +137,9 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
         else
         { // array or array element
             if (*n == 0)
-                *n = g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase;
+                *n = DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0));
             else
-                *n = (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase) < *n ? (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase) : *n;
+                *n = (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) < *n ? (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) : *n;
             skipspace(p);
             do
             {
@@ -158,7 +158,7 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
                 }
             }
         }
-        if (g_vartbl[g_VarIndex].dims[1] != 0)
+        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
             StandardError(6);
         if (g_vartbl[g_VarIndex].type & T_NBR)
             *fp = (MMFLOAT *)ptr;
@@ -211,12 +211,12 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
 
         // Calculate number of elements from array dimensions
         if (*n == 0)
-            *n = g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase;
+            *n = DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0));
         else
-            *n = (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase) < *n ? (g_vartbl[g_VarIndex].dims[0] + 1 - g_OptionBase) : *n;
+            *n = (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) < *n ? (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) : *n;
 
         // Check for 2D arrays (not supported)
-        if (g_vartbl[g_VarIndex].dims[1] != 0)
+        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
             StandardError(6);
 
         // Set stride to structure size
