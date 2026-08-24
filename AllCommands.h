@@ -598,6 +598,7 @@ void fun_frame(void);
 	{(unsigned char *)"Set", T_CMD, 0, cmd_set},
 	{(unsigned char *)"Byte(", T_CMD | T_FUN, 0, cmd_byte},
 	{(unsigned char *)"Flag(", T_CMD | T_FUN, 0, cmd_flag},
+	{(unsigned char *)"Update Firmware", T_CMD, 0, cmd_update},
 #ifdef PICOMITEVGA
 	{(unsigned char *)"TILE", T_CMD, 0, cmd_tile},
 	{(unsigned char *)"MODE", T_CMD, 0, cmd_mode},
@@ -638,9 +639,7 @@ void fun_frame(void);
 	{(unsigned char *)"Draw3D", T_CMD, 0, cmd_3D},
 #endif
 #endif
-#ifndef USBKEYBOARD
-	{(unsigned char *)"Update Firmware", T_CMD, 0, cmd_update},
-#else
+#ifdef USBKEYBOARD
 	{(unsigned char *)"Gamepad", T_CMD, 0, cmd_gamepad},
 #endif
 	{(unsigned char *)"Configure", T_CMD, 0, cmd_configure},
