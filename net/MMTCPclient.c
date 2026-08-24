@@ -572,9 +572,13 @@ int cmd_tcpclient(void)
             SyntaxError();
         ;
         char *request = (char *)getstring(argv[0]);
-        size = parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL) * 8;
-        if (size < 16)
-            error("Array too small"); // element 0 is the length, the payload starts at element 1
+        /* BUF_SIZE is the capacity of the PAYLOAD, which starts at element 1 -
+           element 0 carries the length.  Sizing it from the whole array let the
+           receive callback write 8 bytes past the end of the array, and in
+           STREAM this same value is the ring buffer modulus. */
+        size = (parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL) - 1) * 8;
+        if (size < 8)
+            error("Array too small");
         dest[0] = 0;
         q = (uint8_t *)&dest[1];
         if (argc == 5)
@@ -617,9 +621,13 @@ int cmd_tcpclient(void)
         if (argc < 1)
             SyntaxError();
         ;
-        size = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) * 8;
-        if (size < 16)
-            error("Array too small"); // element 0 is the length, the payload starts at element 1
+        /* BUF_SIZE is the capacity of the PAYLOAD, which starts at element 1 -
+           element 0 carries the length.  Sizing it from the whole array let the
+           receive callback write 8 bytes past the end of the array, and in
+           STREAM this same value is the ring buffer modulus. */
+        size = (parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1) * 8;
+        if (size < 8)
+            error("Array too small");
         dest[0] = 0;
         q = (uint8_t *)&dest[1];
         if (argc == 3)
@@ -743,9 +751,13 @@ int cmd_tcpclient(void)
             SyntaxError();
         ;
         char *request = (char *)getstring(argv[0]);
-        size = parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL) * 8;
-        if (size < 16)
-            error("Array too small"); // element 0 is the length, the payload starts at element 1
+        /* BUF_SIZE is the capacity of the PAYLOAD, which starts at element 1 -
+           element 0 carries the length.  Sizing it from the whole array let the
+           receive callback write 8 bytes past the end of the array, and in
+           STREAM this same value is the ring buffer modulus. */
+        size = (parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL) - 1) * 8;
+        if (size < 8)
+            error("Array too small");
         dest[0] = 0;
         q = (uint8_t *)&dest[1];
         ptr1 = findvar(argv[4], V_FIND | V_NOFIND_ERR);

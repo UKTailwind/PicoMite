@@ -194,11 +194,22 @@ void fun_bound(void)
 		which = getint(argv[2], 0, MAXDIM);
 	findvar(argv[0], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
 	if (which == 0)
+	{
 		iret = g_OptionBase;
+	}
 	else
+	{
+		// A single element dimension has an upper bound of 0 under OPTION BASE 0,
+		// so 0 can no longer double as "no such dimension" - asking for one the
+		// variable does not have has to be an error rather than a silent 0.
+		if (DimIsScalar(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+			error("Expected an array");
+		if (DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], which - 1)))
+			error("Dimensions");
 		iret = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], which - 1));
-	if (iret == -1)
-		iret = 0;
+		if (iret == -1)
+			iret = 0; // unbound empty array parameter
+	}
 	targ = T_INT;
 }
 /*

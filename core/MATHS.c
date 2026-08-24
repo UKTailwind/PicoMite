@@ -3378,6 +3378,13 @@ if (tp)
 				numcols = DimUpper(dims[0]) + 1 - g_OptionBase;
 				numrows = DimUpper(dims[1]) + 1 - g_OptionBase;
 				df = (numcols - 1) * (numrows - 1);
+				// chitable[] carries critical values for df 1..50 only.  df 0 is a
+				// single row or column, which has no degrees of freedom and would
+				// read the probability header row as if it were data.
+				if (df < 1)
+					error("Needs at least 2 rows and 2 columns");
+				if (df > 50)
+					error("Too many degrees of freedom (max 50)");
 				MMFLOAT **observed = alloc2df(numcols, numrows);
 				MMFLOAT **expected = alloc2df(numcols, numrows);
 				rows = alloc1df(numrows);
