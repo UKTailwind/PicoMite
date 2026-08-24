@@ -43,7 +43,11 @@
 
 /*****************************************************************************************/
 #define MAXVARLEN 32 // maximum length of a variable name
-#define MAXDIM 5	 // maximum nbr of dimensions to an array
+#ifdef PICORP2350
+#define MAXDIM 5 // maximum nbr of dimensions to an array
+#else
+#define MAXDIM 6 // maximum nbr of dimensions to an array
+#endif
 #define MMFLOAT double
 #define MAXKEYLEN 64
 
@@ -258,7 +262,11 @@ struct s_vartbl
 	char level;			  // its subroutine or function level (used to track local variables)
 	unsigned char size;	  // the number of chars to allocate for each element in a string array
 	char dummy;
+#ifdef PICORP2350
 	int __attribute__((aligned(4))) dims[MAXDIM]; // the dimensions. it is an array if the first dimension is NOT zero
+#else
+	short __attribute__((aligned(4))) dims[MAXDIM]; // the dimensions. it is an array if the first dimension is NOT zero
+#endif
 	union u_val
 	{
 		MMFLOAT f;		   // the value if it is a float
