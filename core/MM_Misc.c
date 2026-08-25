@@ -218,7 +218,7 @@ int Saveerrno = 0;
 void MIPS16 cmd_update(void)
 {
     uint gpio_mask = 0u;
-#if defined(USBKEYBOARD) || defined(PICOMITEBT)
+#if defined(USBKEYBOARD) || defined(PICOMITEBT) || defined(PICOMITEBTH)
     /* A USB host build has no USB CDC device interface, and the BT console
        build has no USB device stack at all - there PICO_USB_RESET_BOOTSEL_
        INTERFACE_DISABLE_MASK is not even declared.  Nothing to disable. */
