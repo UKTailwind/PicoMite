@@ -182,7 +182,10 @@ char last_units[32];
 
 // used for keypads
 int GUIKeyDown = 0;       // true if a key is down
-bool KeyAltShift = false; // true if in alt keypad layout
+int KeyAltShift = 0; // keypad layout selector: bit0 = alt (&12) layout, bit1 = shift.
+                     // Must be int, not bool: the shift key sets bit1 (value 2) and a
+                     // bool would truncate that to 1, i.e. the alt layout, making the
+                     // lower-case and alt-shift caption columns unreachable.
 int InvokingCtrl = 0;     // the number of the control that invoked the keypad
 // int InCallback = 0;                     // true if we are running MM.KEYPRESS
 // int InPause = 0;                        // true if we are inside a PAUSE command (used to suppress calling MM.KEYPRESS)
