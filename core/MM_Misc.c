@@ -7918,8 +7918,18 @@ void MIPS16 fun_info(void)
         else if (restart_reason == 0xFFFFFFFC)
             strcpy((char *)sret, "Firmware update");
 #ifdef rp2350
-        else if (restart_reason & 0x30000)
+        /* POWMAN records the two causes separately: HAD_POR (0x10000) is a
+           true power-on reset, HAD_BOR (0x20000) a brown-out reset. Test POR
+           first - a cold start can latch HAD_BOR as well as the supply ramps
+           up through the core brown-out threshold (0.946V by default), and
+           calling that a brown-out would be wrong. A core rail that collapses
+           while the always-on rail holds up sets HAD_BOR on its own, and that
+           is the case worth reporting. RP2040 cannot tell them apart at all -
+           its single HAD_POR bit covers both - so its branch is unchanged. */
+        else if (restart_reason & 0x10000)
             strcpy((char *)sret, "Power On");
+        else if (restart_reason & 0x20000)
+            strcpy((char *)sret, "Brown Out");
         else if (restart_reason & 0x40000)
             strcpy((char *)sret, "Reset Switch");
         else if (restart_reason & 0x280000)
