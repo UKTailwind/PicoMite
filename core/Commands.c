@@ -1638,28 +1638,67 @@ static void MIPS16 cmd_let_arraycopy(unsigned char *p_equals)
 	if (g_vartbl[dstidx].type & T_CONST)
 		StandardError(22); // cannot change a constant
 
-	// the source must also be a whole array
+	// the source: a whole array, or a call of an array-returning function
 	p = p_equals + 1; // step over the equals sign
 	skipspace(p);
 	rhs = p;
 	if (!isnamestart(*p))
 		error("Expected an array");
-	src = findvar(p, V_FIND | V_NOFIND_ERR | V_EMPTY_OK);
+
+	// same resolution order as getvalue: a name followed by '(' that is in
+	// the sub/fun table is a function call, anything else is a variable
+	int fidx = -1;
+	{
+		unsigned char *tq = p + 1;
+		while (isnamechar(*tq))
+			tq++;
+		if (*tq == '$' || *tq == '%' || *tq == '!')
+			tq++;
+		if (*tq == '(')
+			fidx = FindSubFun(p, 1);
+	}
+	int srctype, srcsize = 0;
+	if (fidx >= 0)
+	{
+		// array function: run it and take the temp-memory result.  calling
+		// DefinedSubFun directly (not via evaluate) is what makes this the
+		// one legal context for an array function
+		MMFLOAT f;
+		long long int i64;
+		unsigned char *s = NULL;
+		int t = T_NOTYPE;
+		DefinedSubFun(true, p, fidx, &f, &i64, &s, &t);
+		if (!g_FunReturnArrayCount)
+			error("Expected an array");
+		srccount = g_FunReturnArrayCount;
+		g_FunReturnArrayCount = 0;
+		src = s;
+		srctype = t; // always T_INT or T_NBR
+	}
+	else
+	{
+		src = findvar(p, V_FIND | V_NOFIND_ERR | V_EMPTY_OK);
 #ifdef STRUCTENABLED
-	if (g_StructMemberType != 0)
-		StandardError(47);
+		if (g_StructMemberType != 0)
+			StandardError(47);
 #endif
-	if (!emptyarray)
-		error("Expected an array");
-	srcidx = g_VarIndex;
+		if (!emptyarray)
+			error("Expected an array");
+		srcidx = g_VarIndex;
+		srctype = g_vartbl[srcidx].type;
+		srcsize = g_vartbl[srcidx].size;
+		srccount = 1;
+		for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[srcidx], d)); d++)
+			srccount *= DimElements(RAW_DIM(g_vartbl[srcidx], d));
+	}
 
 	// element types must match exactly (no int/float conversion)
-	if (TypeMask(g_vartbl[dstidx].type) != TypeMask(g_vartbl[srcidx].type))
+	if (TypeMask(g_vartbl[dstidx].type) != TypeMask(srctype))
 		error("Incompatible type");
 	if (g_vartbl[dstidx].type & T_STR)
 	{
 		// string element LENGTH must also match so the layouts are identical
-		if (g_vartbl[dstidx].size != g_vartbl[srcidx].size)
+		if (g_vartbl[dstidx].size != srcsize)
 			StandardError(14); // string length
 		esize = g_vartbl[dstidx].size + 1;
 	}
@@ -1667,7 +1706,7 @@ static void MIPS16 cmd_let_arraycopy(unsigned char *p_equals)
 	else if (g_vartbl[dstidx].type & T_STRUCT)
 	{
 		// for structure arrays the size field holds the structure type index
-		if (g_vartbl[dstidx].size != g_vartbl[srcidx].size)
+		if (g_vartbl[dstidx].size != srcsize)
 			error("Structure types must match");
 		esize = g_structtbl[(int)g_vartbl[dstidx].size]->total_size;
 	}
@@ -1677,11 +1716,8 @@ static void MIPS16 cmd_let_arraycopy(unsigned char *p_equals)
 
 	// exact total element counts only; DimElements() handles OPTION BASE
 	dstcount = 1;
-	srccount = 1;
 	for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[dstidx], d)); d++)
 		dstcount *= DimElements(RAW_DIM(g_vartbl[dstidx], d));
-	for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[srcidx], d)); d++)
-		srccount *= DimElements(RAW_DIM(g_vartbl[srcidx], d));
 	if (dstcount != srccount)
 		StandardError(16); // array size mismatch
 

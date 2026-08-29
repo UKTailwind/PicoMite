@@ -515,6 +515,7 @@ extern "C"
      * ============================================================================ */
     extern int multi;
     extern int emptyarray;
+    extern int g_FunReturnArrayCount;
     extern int TempStringClearStart;
 
 #if defined(MMFAMILY)

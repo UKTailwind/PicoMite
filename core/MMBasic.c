@@ -129,6 +129,7 @@ unsigned char OptionExplicit, OptionEscape, OptionConsole;            // used to
 bool OptionNoCheck = false;
 unsigned char DefaultType; // the default type if a variable is not specifically typed
 int emptyarray = 0;
+int g_FunReturnArrayCount = 0;            // >0 means DefinedSubFun just returned a whole array (element count); consumed by cmd_let's array assignment, an error anywhere else
 int TempStringClearStart;                 // used to prevent clearing of space in an expression that called a FUNCTION
 unsigned char *subfun[MAXSUBFUN];         // table used to locate all subroutines and functions
 char CurrentSubFunName[MAXVARLEN + 1];    // the name of the current sub or fun
@@ -2056,6 +2057,66 @@ static bool defsubfun_static_in_use = false;
 //   cmd      = pointer to the command name used by the caller (in program memory)
 //   index    = index into subfun[i] which points to the definition of the sub or funct
 //   fa, i64a, sa and typ are pointers to where the return value is to be stored (used by functions only)
+// Create the local array that receives an array function's result and return
+// a pointer to its data block.  fun_name is the bare function name and dims
+// points at the "(d1 [,d2 ...])" text in the definition line; the two are
+// joined in a buffer so findvar's normal dimension parsing (constant
+// expressions, OPTION BASE, MAXDIM checks) does all the work.  *count is set
+// to the total element count.  (NOT in RAM for size savings.)
+#ifdef rp2350
+static void *FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
+#else
+static void MIPS16 *FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
+#endif
+{
+    unsigned char nbuf[MAXVARLEN + 84];
+    int nl = strlen((char *)fun_name);
+    int depth = 0, inquote = false, d;
+    unsigned char *dp = dims;
+
+    memcpy(nbuf, fun_name, nl);
+    do
+    {
+        if (*dp == 0 || nl >= (int)sizeof(nbuf) - 1)
+            error("Dimensions");
+        if (*dp == '\"')
+            inquote = !inquote;
+        if (!inquote)
+        {
+            // paren-function tokens (eg INT() carry their own opening bracket
+            if (*dp == '(' || (tokentype(*dp) & T_FUN))
+                depth++;
+            else if (*dp == ')')
+                depth--;
+        }
+        nbuf[nl++] = *dp++;
+    } while (depth > 0);
+    nbuf[nl] = 0;
+    findvar(nbuf, FunType | V_FUNCT); // create the local array
+    *count = 1;
+    for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], d)); d++)
+        *count *= DimElements(RAW_DIM(g_vartbl[g_VarIndex], d));
+    return g_vartbl[g_VarIndex].val.s; // the base of the data block
+}
+
+// Copy an array function's result to temp memory at the caller's level so it
+// survives ClearVars, and flag the array return for the caller to consume
+// (cf CopyStructReturn).  (NOT in RAM for size savings.)
+#ifdef rp2350
+static unsigned char *FunArrayReturn(void *base, int count)
+#else
+static unsigned char MIPS16 *FunArrayReturn(void *base, int count)
+#endif
+{
+    unsigned char *tmp;
+    g_LocalIndex--; // allocate at the caller's level
+    tmp = GetTempMemory(count * 8);
+    g_LocalIndex++;
+    memcpy(tmp, base, count * 8); // MMFLOAT and long long int are both 8 bytes
+    g_FunReturnArrayCount = count;
+    return tmp;
+}
+
 #if LOWRAM
 void MIPS16 DefinedSubFun(int isfun, unsigned char *cmd, int index, MMFLOAT *fa, long long int *i64a, unsigned char **sa, int *typ)
 {
@@ -2081,6 +2142,8 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     unsigned char *argbyref;
     int i;
     int ArgType, FunType;
+    unsigned char *FunArrayDims = NULL; // "(d1[,d2...])" text when the function returns an array
+    int FunArrayCount = 0;              // its total element count
     int *argtype;
     union u_argval *argval;
     int *argVarIndex;
@@ -2090,6 +2153,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     // Memory allocated to *argval needs to be recovered.
     // This allows unit tests to recover cleanly from skipped errors.i.e. ON ERROR SKIP
     DefinedSubFunLocalIndex = g_LocalIndex; // save the LocalIndex
+    g_FunReturnArrayCount = 0;              // clear any stale array-return flag
 
     CallersLinePtr = CurrentLinePtr;
     SubLinePtr = subfun[index];            // used for error reporting
@@ -2147,6 +2211,15 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
             ttp = CheckIfTypeSpecified(ttp, &FunType, true); // get the type
             if (!(FunType & T_IMPLIED))
                 error("Variable type");
+            skipspace(ttp);
+            if (*ttp == '(')
+            {
+                // an array return type, eg AS INTEGER(6): remember where the
+                // dimension list starts for when the local array is created
+                if (!(FunType & (T_INT | T_NBR)))
+                    error("Array function must be INTEGER or FLOAT");
+                FunArrayDims = ttp;
+            }
 #ifdef STRUCTENABLED
             SavedStructArg = g_StructArg; // Save before argument processing overwrites it
 #endif
@@ -2469,7 +2542,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #ifdef STRUCTENABLED
     g_StructArg = SavedStructArg; // Restore struct index for function return type
 #endif
-    tp = findvar(fun_name, FunType | V_FUNCT); // declare the local variable
+    if (FunArrayDims != NULL)
+        tp = FunArrayCreate(fun_name, FunArrayDims, FunType, &FunArrayCount); // declare the local result array
+    else
+        tp = findvar(fun_name, FunType | V_FUNCT); // declare the local variable
     FunType = g_vartbl[g_VarIndex].type;
 #ifdef STRUCTENABLED
     int FunStructType = -1; // struct type index if returning a struct
@@ -2504,7 +2580,9 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     nextstmt = ttp;
 
     // return the value of the function's variable to the caller
-    if (FunType & T_NBR)
+    if (FunArrayCount > 0)
+        *sa = FunArrayReturn(tp, FunArrayCount); // whole-array return via temp memory
+    else if (FunType & T_NBR)
         *fa = *(MMFLOAT *)tp;
     else if (FunType & T_INT)
         *i64a = *(long long int *)tp;
@@ -3101,6 +3179,12 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
                 unsigned char *SaveCurrentLinePtr = CurrentLinePtr;
                 DefinedSubFun(true, p, i, &f, &i64, &s, &t);
                 CurrentLinePtr = SaveCurrentLinePtr;
+                if (g_FunReturnArrayCount)
+                {
+                    // an array function's result cannot take part in an expression
+                    g_FunReturnArrayCount = 0;
+                    error("Array function is only valid in an array assignment");
+                }
             }
             else
             {
