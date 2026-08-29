@@ -1617,10 +1617,11 @@ int __not_in_flash_func(MMInkey)(void)
         IntToStr(&goend[strlen(goend)], l2 + MMPromptPos, 10);
         strcat(goend, "C");
 
-        /* The wrap-trick below (write a char to force wrap, then \b) only works
-         * if the serial terminal has DECAWM (autowrap) enabled. Make sure of it. */
-        SSPrintString("\033[?7h");
-
+        /* The wrap-trick below (write a char to force wrap, then \b) relies on
+         * the terminal having DECAWM (autowrap) enabled.  That is the ambient
+         * state: it is asserted once at reset and restored by the full screen
+         * editor on exit - do NOT re-assert it here, it would prefix every
+         * line of console input with an escape sequence. */
         MMPrintString((char *)inpbuf);
         CharIndex = strlen((const char *)inpbuf);
 
@@ -4031,6 +4032,10 @@ uint32_t testPSRAM(void)
 #endif
 #endif
 #endif
+        // reset the serial terminal to autowrap on (DECAWM): this is the one
+        // place it is asserted - the full screen editor disables it for its
+        // duration and restores it on exit, nothing else touches it
+        SSPrintString("\033[?7h");
         if (!(_excep_code == RESET_FLASHSTORAGE || _excep_code == INVALID_CLOCKSPEED || _excep_code == SCREWUP_TIMEOUT || _excep_code == WATCHDOG_TIMEOUT || (_excep_code == POSSIBLE_WATCHDOG && watchdog_caused_reboot())))
         {
             if (Option.Autorun == 0)
