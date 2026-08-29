@@ -136,6 +136,7 @@ set(OPTIMIZED_SOURCES
 	core/MATHS.c
 	misc/Editor.c
 	third_party_mod/aes.c
+	misc/XModem.c
 )
 
 set(FULL_RP2040_VARIANTS

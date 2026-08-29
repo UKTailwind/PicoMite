@@ -1613,9 +1613,15 @@ void array_slice(unsigned char *tp)
 // number of elements; shape is not compared, so a 2x3 array can fill a
 // 6 element one.  Every legal copy is then a single memcpy.
 // Kept out of RAM: cmd_let itself is RAM-resident and only pays for the
-// two-character detect.
+// two-character detect.  noinline is essential where RAM is the scarce
+// resource - as a static with a single caller GCC would otherwise inline
+// the whole body back into RAM-resident cmd_let (measured: +660 bytes of
+// RAM on VGAUSB).  The RP2040 non-VGA variants (PICO/PICOMIN/PICOUSB) have
+// RAM to spare but tight flash, so there inlining is preferred.
 #if defined(rp2350)
-static void cmd_let_arraycopy(unsigned char *p_equals)
+static void __attribute__((noinline)) cmd_let_arraycopy(unsigned char *p_equals)
+#elif LOWRAM
+static void MIPS16 __attribute__((noinline)) cmd_let_arraycopy(unsigned char *p_equals)
 #else
 static void MIPS16 cmd_let_arraycopy(unsigned char *p_equals)
 #endif
@@ -1667,8 +1673,9 @@ static void MIPS16 cmd_let_arraycopy(unsigned char *p_equals)
 		long long int i64;
 		unsigned char *s = NULL;
 		int t = T_NOTYPE;
+		g_FunReturnArrayCount = -1; // sanction an array return (see FunArrayReturn)
 		DefinedSubFun(true, p, fidx, &f, &i64, &s, &t);
-		if (!g_FunReturnArrayCount)
+		if (g_FunReturnArrayCount <= 0)
 			error("Expected an array");
 		srccount = g_FunReturnArrayCount;
 		g_FunReturnArrayCount = 0;
@@ -1768,21 +1775,19 @@ void MIPS16 __not_in_flash_func(cmd_let)(void)
 
 	// whole-array assignment (eg, a() = b()) is handled out of line.
 	// detect it with an O(1) backward peek from the equals sign: only
-	// empty parentheses can put '(' adjacent to ')'
+	// empty parentheses can put '(' adjacent to ')'.  the brackets must be
+	// adjacent - the tokeniser already strips spaces before '(' and a
+	// space between the brackets is left to fail as before
+	// no bounds guards needed: the bytes before cmdline are the command
+	// token pair, both >= C_BASETOKEN, so they can never match ' ' ')' '('
 	{
 		unsigned char *q = p1;
-		while (q > cmdline && *(q - 1) == ' ')
-			q--;
-		if (q > cmdline && *(q - 1) == ')')
+		while (*(q - 1) == ' ')
+			q--; // spaces between ')' and '=' are common
+		if (*(q - 1) == ')' && *(q - 2) == '(')
 		{
-			q--;
-			while (q > cmdline && *(q - 1) == ' ')
-				q--;
-			if (q > cmdline && *(q - 1) == '(')
-			{
-				cmd_let_arraycopy(p1);
-				return;
-			}
+			cmd_let_arraycopy(p1);
+			return;
 		}
 	}
 

@@ -2063,8 +2063,12 @@ static bool defsubfun_static_in_use = false;
 // joined in a buffer so findvar's normal dimension parsing (constant
 // expressions, OPTION BASE, MAXDIM checks) does all the work.  *count is set
 // to the total element count.  (NOT in RAM for size savings.)
+// noinline on rp2350 only: DefinedSubFun is RAM-resident there and GCC would
+// otherwise inline this body into RAM.  On RP2040 the LOWRAM variants have a
+// flash DefinedSubFun (inlining is free) and the others have RAM to spare
+// but tight flash, so inlining is preferred.
 #ifdef rp2350
-static void *FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
+static void __attribute__((noinline)) *FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
 #else
 static void MIPS16 *FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
 #endif
@@ -2099,11 +2103,42 @@ static void MIPS16 *FunArrayCreate(unsigned char *fun_name, unsigned char *dims,
     return g_vartbl[g_VarIndex].val.s; // the base of the data block
 }
 
+// Check for an array return type (eg AS INTEGER(6)) following the AS <type>
+// clause of a function definition.  Returns a pointer to the dimension list
+// or NULL if there is none.  An unsanctioned call (any context other than
+// cmd_let's whole-array assignment) is rejected HERE, before DefinedSubFun
+// has incremented gosubindex or run the body: erroring later would leak a
+// gosub frame when the error is skipped with ON ERROR IGNORE (the error
+// unwind only decrements gosubindex while DefinedSubFunMem is set), and it
+// would also run the function's side effects before failing.
+// (NOT in RAM for size savings.)
+#ifdef rp2350
+static unsigned char __attribute__((noinline)) *CheckFunArrayDef(unsigned char *p, int FunType, int sanctioned, unsigned char *callerlp)
+#else
+static unsigned char MIPS16 *CheckFunArrayDef(unsigned char *p, int FunType, int sanctioned, unsigned char *callerlp)
+#endif
+{
+    skipspace(p);
+    if (*p != '(')
+        return NULL;
+    if (!(FunType & (T_INT | T_NBR)))
+        error("Variable type"); // array functions must be INTEGER or FLOAT
+    if (!sanctioned)
+    {
+        CurrentLinePtr = callerlp; // report at the call site, not the definition
+        error("Array function is only valid in an array assignment");
+    }
+    return p;
+}
+
 // Copy an array function's result to temp memory at the caller's level so it
 // survives ClearVars, and flag the array return for the caller to consume
-// (cf CopyStructReturn).  (NOT in RAM for size savings.)
+// (cf CopyStructReturn).  Only reached for sanctioned calls - every other
+// context was rejected in CheckFunArrayDef before the body ran, which is
+// what keeps guard code and veneers out of the RAM-resident evaluator paths.
+// (NOT in RAM for size savings.)
 #ifdef rp2350
-static unsigned char *FunArrayReturn(void *base, int count)
+static unsigned char __attribute__((noinline)) *FunArrayReturn(void *base, int count)
 #else
 static unsigned char MIPS16 *FunArrayReturn(void *base, int count)
 #endif
@@ -2153,7 +2188,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     // Memory allocated to *argval needs to be recovered.
     // This allows unit tests to recover cleanly from skipped errors.i.e. ON ERROR SKIP
     DefinedSubFunLocalIndex = g_LocalIndex; // save the LocalIndex
-    g_FunReturnArrayCount = 0;              // clear any stale array-return flag
+    // cmd_let's whole-array assignment announces itself by setting the
+    // array-return flag to -1; capture that sanction and reset the flag
+    int FunArraySanctioned = (g_FunReturnArrayCount < 0);
+    g_FunReturnArrayCount = 0;
 
     CallersLinePtr = CurrentLinePtr;
     SubLinePtr = subfun[index];            // used for error reporting
@@ -2211,15 +2249,9 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
             ttp = CheckIfTypeSpecified(ttp, &FunType, true); // get the type
             if (!(FunType & T_IMPLIED))
                 error("Variable type");
-            skipspace(ttp);
-            if (*ttp == '(')
-            {
-                // an array return type, eg AS INTEGER(6): remember where the
-                // dimension list starts for when the local array is created
-                if (!(FunType & (T_INT | T_NBR)))
-                    error("Array function must be INTEGER or FLOAT");
-                FunArrayDims = ttp;
-            }
+            // an array return type, eg AS INTEGER(6): remember where the
+            // dimension list starts for when the local array is created
+            FunArrayDims = CheckFunArrayDef(ttp, FunType, FunArraySanctioned, CallersLinePtr);
 #ifdef STRUCTENABLED
             SavedStructArg = g_StructArg; // Save before argument processing overwrites it
 #endif
@@ -3179,12 +3211,8 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
                 unsigned char *SaveCurrentLinePtr = CurrentLinePtr;
                 DefinedSubFun(true, p, i, &f, &i64, &s, &t);
                 CurrentLinePtr = SaveCurrentLinePtr;
-                if (g_FunReturnArrayCount)
-                {
-                    // an array function's result cannot take part in an expression
-                    g_FunReturnArrayCount = 0;
-                    error("Array function is only valid in an array assignment");
-                }
+                // (an array function's result is rejected inside FunArrayReturn
+                // because this expression context never sanctions it)
             }
             else
             {

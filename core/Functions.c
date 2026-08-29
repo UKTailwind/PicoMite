@@ -257,12 +257,8 @@ void fun_call(void)
 	if (i >= 0)
 	{ // >= 0 means it is a user defined command
 		DefinedSubFun(true, p, i, &f, &i64, &s, &targ);
-		if (g_FunReturnArrayCount)
-		{
-			// an array function's result cannot be returned through CALL()
-			g_FunReturnArrayCount = 0;
-			error("Array function is only valid in an array assignment");
-		}
+		// (an array function's result is rejected inside FunArrayReturn
+		// because CALL() never sanctions it)
 	}
 	else
 		error("Unknown user function");
