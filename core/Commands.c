@@ -1606,6 +1606,93 @@ void array_slice(unsigned char *tp)
 	return;
 }
 
+// Whole-array assignment:  a() = b()
+// Called from cmd_let when the left hand side ends in empty parentheses.
+// Both sides must be existing whole arrays of exactly the same type (and,
+// for strings, the same element LENGTH) holding exactly the same total
+// number of elements; shape is not compared, so a 2x3 array can fill a
+// 6 element one.  Every legal copy is then a single memcpy.
+// Kept out of RAM: cmd_let itself is RAM-resident and only pays for the
+// two-character detect.
+#if defined(rp2350)
+static void cmd_let_arraycopy(unsigned char *p_equals)
+#else
+static void MIPS16 cmd_let_arraycopy(unsigned char *p_equals)
+#endif
+{
+	void *dst, *src;
+	int dstidx, srcidx, dstcount, srccount, esize, d;
+	unsigned char *p, *rhs;
+
+	// the destination must be an existing whole array.  V_NOFIND_ERR is
+	// essential: plain V_FIND would auto-create an undeclared a() as a
+	// half-formed parameter-list stub (dims[0] = -1)
+	dst = findvar(cmdline, V_FIND | V_NOFIND_ERR | V_EMPTY_OK);
+#ifdef STRUCTENABLED
+	if (g_StructMemberType != 0)
+		StandardError(47); // struct member arrays not supported
+#endif
+	if (!emptyarray)
+		SyntaxError();
+	dstidx = g_VarIndex;
+	if (g_vartbl[dstidx].type & T_CONST)
+		StandardError(22); // cannot change a constant
+
+	// the source must also be a whole array
+	p = p_equals + 1; // step over the equals sign
+	skipspace(p);
+	rhs = p;
+	if (!isnamestart(*p))
+		error("Expected an array");
+	src = findvar(p, V_FIND | V_NOFIND_ERR | V_EMPTY_OK);
+#ifdef STRUCTENABLED
+	if (g_StructMemberType != 0)
+		StandardError(47);
+#endif
+	if (!emptyarray)
+		error("Expected an array");
+	srcidx = g_VarIndex;
+
+	// element types must match exactly (no int/float conversion)
+	if (TypeMask(g_vartbl[dstidx].type) != TypeMask(g_vartbl[srcidx].type))
+		error("Incompatible type");
+	if (g_vartbl[dstidx].type & T_STR)
+	{
+		// string element LENGTH must also match so the layouts are identical
+		if (g_vartbl[dstidx].size != g_vartbl[srcidx].size)
+			StandardError(14); // string length
+		esize = g_vartbl[dstidx].size + 1;
+	}
+#ifdef STRUCTENABLED
+	else if (g_vartbl[dstidx].type & T_STRUCT)
+	{
+		// for structure arrays the size field holds the structure type index
+		if (g_vartbl[dstidx].size != g_vartbl[srcidx].size)
+			error("Structure types must match");
+		esize = g_structtbl[(int)g_vartbl[dstidx].size]->total_size;
+	}
+#endif
+	else
+		esize = 8; // MMFLOAT and long long int are both 8 bytes
+
+	// exact total element counts only; DimElements() handles OPTION BASE
+	dstcount = 1;
+	srccount = 1;
+	for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[dstidx], d)); d++)
+		dstcount *= DimElements(RAW_DIM(g_vartbl[dstidx], d));
+	for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[srcidx], d)); d++)
+		srccount *= DimElements(RAW_DIM(g_vartbl[srcidx], d));
+	if (dstcount != srccount)
+		StandardError(16); // array size mismatch
+
+	// dst == src happens with a() = a() and with a byref parameter
+	// aliasing its caller's array; partial overlap is impossible because
+	// heap allocations are distinct blocks
+	if (dst != src)
+		memcpy(dst, src, (size_t)dstcount * esize);
+	checkend(skipvar(rhs, false));
+}
+
 // the LET command
 // because the LET is implied (ie, line does not have a recognisable command)
 // it ends up as the place where mistyped commands are discovered.  This is why
@@ -1642,6 +1729,26 @@ void MIPS16 __not_in_flash_func(cmd_let)(void)
 	if (p1 != p2)
 		SyntaxError();
 	;
+
+	// whole-array assignment (eg, a() = b()) is handled out of line.
+	// detect it with an O(1) backward peek from the equals sign: only
+	// empty parentheses can put '(' adjacent to ')'
+	{
+		unsigned char *q = p1;
+		while (q > cmdline && *(q - 1) == ' ')
+			q--;
+		if (q > cmdline && *(q - 1) == ')')
+		{
+			q--;
+			while (q > cmdline && *(q - 1) == ' ')
+				q--;
+			if (q > cmdline && *(q - 1) == '(')
+			{
+				cmd_let_arraycopy(p1);
+				return;
+			}
+		}
+	}
 
 	// create the variable and get the length if it is a string
 	p2 = findvar(cmdline, V_FIND);
