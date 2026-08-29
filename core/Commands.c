@@ -870,6 +870,7 @@ unsigned char *TraceBuff[TRACE_BUFF_SIZE];
 int TraceBuffIndex;	 // used for listing the contents of the trace buffer
 int OptionErrorSkip; // how to handle an error
 int MMerrno;		 // the error number
+int MMerrline;		 // the (1-based) program line of the last error, 0 if none/immediate/library - MM.ERRLINE
 unsigned char cmdlinebuff[STRINGSIZE];
 const unsigned int CaseOption = 0xffffffff; // used to store the case of the listed output
 
@@ -8458,6 +8459,7 @@ void cmd_on(void)
 			return;
 		}
 		MMerrno = 0; // clear the error flags
+		MMerrline = 0;
 		*MMErrMsg = 0;
 		if (checkstring(p, (unsigned char *)"CLEAR"))
 			return;

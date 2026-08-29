@@ -215,6 +215,7 @@ uint64_t timeroffset = 0;
 int SaveOptionErrorSkip = 0;
 char SaveErrorMessage[MAXERRMSG] = {0};
 int Saveerrno = 0;
+int Saveerrline = 0;
 void MIPS16 cmd_update(void)
 {
     uint gpio_mask = 0u;
@@ -1898,6 +1899,7 @@ void cmd_ireturn(void)
         OptionErrorSkip = SaveOptionErrorSkip; // Restore ON ERROR IGNORE (-1)
     strcpy(MMErrMsg, SaveErrorMessage);
     MMerrno = Saveerrno;
+    MMerrline = Saveerrline;
 }
 
 void MIPS16 cmd_library(void)
@@ -10223,8 +10225,10 @@ GotAnInterrupt:
     OptionErrorSkip = 0;
     strcpy(SaveErrorMessage, MMErrMsg);
     Saveerrno = MMerrno;
+    Saveerrline = MMerrline;
     *MMErrMsg = 0;
     MMerrno = 0;
+    MMerrline = 0;
     InterruptReturn = nextstmt; // for when IRETURN is executed
     // if the interrupt is pointing to a SUB token we need to call a subroutine
     CommandToken tkn = commandtbl_decode((const unsigned char *)intaddr);

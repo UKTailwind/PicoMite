@@ -80,6 +80,7 @@ const char *overlaid_functions[] = {
 #ifndef PICOMITEWEB
 	"MM.SUPPLY",
 #endif
+	"MM.ErrLine", // appended (not inserted) so the ~() codes of the entries above stay stable
 	"MM.END"};
 #ifndef rp2350
 const MMFLOAT sinetab[360] = {
@@ -701,6 +702,9 @@ void fun_tilde(void)
 		break;
 	case MMERRMSG:
 		fun_errmsg();
+		break;
+	case MMERRLINE:
+		iret = MMerrline;
 		break;
 	case MMWATCHDOG:
 		iret = WatchdogSet;

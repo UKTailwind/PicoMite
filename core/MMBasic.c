@@ -5685,7 +5685,16 @@ void MIPS16 error(char *msg, ...)
     ScrewUpTimer = 0;
     // first build the error message in the global string MMErrMsg
     if (MMerrno == 0)
-        MMerrno = 16;              // indicate an error
+        MMerrno = 16; // indicate an error
+    // record the line number for MM.ERRLINE now - the ON ERROR SKIP/IGNORE
+    // longjmp below leaves before the error-print code that normally derives
+    // it.  CountLines resolves a mid-line pointer to its containing line, so
+    // no line-start fixup is needed just to count.  The +1 gives the same
+    // 1-based number as the printed [n] prefix.
+    if (CurrentLinePtr && CurrentLinePtr >= ProgMemory && CurrentLinePtr < ProgMemory + MAX_PROG_SIZE)
+        MMerrline = CountLines(CurrentLinePtr) + 1;
+    else
+        MMerrline = 0;             // immediate mode or the library
     memset(tstr, 0, sizeof(tstr)); // clear any previous string
     if (*msg)
     {
@@ -6608,6 +6617,7 @@ void MIPS16 ClearRuntime(bool all)
         clear320();
 #endif
     MMerrno = 0; // clear the error flags
+    MMerrline = 0;
     *MMErrMsg = 0;
     ClearVars(0, true);
 #if !(defined(PICOMITEWEB) || defined(PICOMITEMIN))

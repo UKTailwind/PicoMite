@@ -466,6 +466,7 @@ extern "C"
     extern jmp_buf ErrNext;
     extern unsigned char BreakKey;
     extern int MMerrno;
+    extern int MMerrline;
     extern char MMErrMsg[MAXERRMSG];
 
     /* ============================================================================

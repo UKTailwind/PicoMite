@@ -647,6 +647,7 @@ extern "C"
 #ifndef PICOMITEWEB
       MMSUPPLY,
 #endif
+      MMERRLINE, // appended (not inserted) so the ~() codes of the entries above stay stable
       MMEND
    } Operation;
 

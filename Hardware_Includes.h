@@ -412,6 +412,7 @@ typedef struct tagMTRand
  * External variables - Error handling and control
  * ============================================================================ */
 extern int MMerrno;
+extern int MMerrline;
 extern int OptionErrorSkip;
 extern int ExitMMBasicFlag;
 extern unsigned char *InterruptReturn;
