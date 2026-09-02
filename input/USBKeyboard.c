@@ -1783,6 +1783,39 @@ void clearrepeat(void)
 	repeattime = Option.RepeatStart;
 	memset(KeyDown, 0, sizeof(KeyDown));
 }
+
+/* USB connect/disconnect chime, deferred out of the mount callbacks.
+   The callbacks run inside tuh_task() between enumeration steps of OTHER
+   devices; PlayMemWav there (heap GetMemory, WAV parse, audio-clock
+   reconfig) stalls the bus long enough to make a marginal device behind a
+   hub lose enumeration. So a mount only sets USBSoundFlag (1 = a device
+   arrived, -1 = one left); USB_sound_service(), called from routinechecks()
+   after tuh_task() returns, actually plays the chime - on the main thread,
+   clear of enumeration. The flag latches for the whole chime, so any devices
+   that enumerate within one chime's duration yield a single sound; a device
+   that arrives after the chime has finished gets its own (which is fine). */
+volatile int USBSoundFlag = 0;
+void USB_sound_service(void)
+{
+	static int active = 0; /* chime currently playing: 0 none, 1 connect, -1 disconnect */
+	if (active == 0)
+	{
+		if (USBSoundFlag != 0 && CurrentlyPlaying == P_NOTHING)
+		{
+			active = USBSoundFlag;
+			if (active > 0)
+				PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+			else
+				PlayMemWav(remove_wav, REMOVE_WAV_SIZE);
+		}
+	}
+	else if (CurrentlyPlaying == P_NOTHING) /* our chime finished */
+	{
+		if (USBSoundFlag == active) /* clear only if unchanged; a new event type survives */
+			USBSoundFlag = 0;
+		active = 0;
+	}
+}
 bool diff_than_2(uint8_t x, uint8_t y)
 {
 	return (x - y > 4) || (y - x > 4);
@@ -2446,7 +2479,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			MMPrintString("\r\n> ");
 		}
 		//		tuh_hid_set_report(HID[slot].Device_address, HID[slot].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights,1);
-		PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+		USBSoundFlag = 1; /* deferred chime */
 		Current_USB_devices++;
 		return;
 	}
@@ -2490,7 +2523,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			PInt(slot + 1);
 			MMPrintString("\r\n> ");
 		}
-		PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+		USBSoundFlag = 1; /* deferred chime */
 		Current_USB_devices++;
 		return;
 	}
@@ -2557,7 +2590,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 					PInt(tinfo.y_logical_max);
 					MMPrintString(")\r\n> ");
 				}
-				PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+				USBSoundFlag = 1; /* deferred chime */
 				Current_USB_devices++;
 				return;
 			}
@@ -2596,7 +2629,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 					PInt(tinfo.pointer_y_logical_max);
 					MMPrintString(")\r\n> ");
 				}
-				PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+				USBSoundFlag = 1; /* deferred chime */
 				Current_USB_devices++;
 				return;
 			}
@@ -2688,7 +2721,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			return;
 		}
 	}
-	PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+	USBSoundFlag = 1; /* deferred chime */
 	Current_USB_devices++;
 }
 
@@ -2763,7 +2796,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 	}
 	if (i < 4)
 	{
-		PlayMemWav(remove_wav, REMOVE_WAV_SIZE);
+		USBSoundFlag = -1; /* deferred chime */
 		memset((void *)&HID[i], 0, sizeof(struct s_HID));
 		HID[i].report_requested = true;
 		Current_USB_devices--;

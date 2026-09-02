@@ -145,13 +145,15 @@ static void cdc_init_arrays(void)
 
 // Fixed mapping: COM3 = CDC idx 0 (ch 5), COM4 = idx 1 (ch 6), COM5 = idx 2 (ch 7), COM6 = idx 3 (ch 8)
 
+extern volatile int USBSoundFlag; /* deferred connect/disconnect chime (USBKeyboard.c) */
+
 // TinyUSB CDC host callbacks
 void tuh_cdc_mount_cb(uint8_t idx)
 {
 	if (idx >= 4)
 		return;
 	cdc_init_arrays();
-	PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+	USBSoundFlag = 1; /* defer the chime to routinechecks(), off the tuh_task path */
 	if (!CurrentLinePtr)
 	{
 		MMPrintString("USB CDC Device Connected on channel ");
@@ -176,7 +178,7 @@ void tuh_cdc_umount_cb(uint8_t idx)
 		return;
 	// If the port is open by BASIC, keep the state intact so reconnection works
 	// transparently. Only print a message. SerialPutchar already guards on tuh_cdc_mounted().
-	PlayMemWav(remove_wav, REMOVE_WAV_SIZE);
+	USBSoundFlag = -1; /* defer the chime */
 	if (!CurrentLinePtr)
 	{
 		MMPrintString("USB CDC Device Disconnected on channel ");

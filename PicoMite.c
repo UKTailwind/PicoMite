@@ -912,6 +912,12 @@ uint8_t PSRAMpin;
         {
             tuh_task();
             hid_app_task();
+            /* Play any pending USB connect/disconnect chime here, AFTER
+               tuh_task() has returned - never from inside a mount callback,
+               where the heavy PlayMemWav setup would stall enumeration of
+               other devices behind the hub. */
+            extern void USB_sound_service(void);
+            USB_sound_service();
         }
 #endif
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)

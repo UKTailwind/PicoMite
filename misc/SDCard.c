@@ -1454,12 +1454,14 @@ static DRESULT msc_wait_complete(uint32_t timeout_ms)
 }
 
 /* TinyUSB callbacks - called from tuh_task() context */
+extern volatile int USBSoundFlag; /* deferred connect/disconnect chime (USBKeyboard.c) */
+
 void tuh_msc_mount_cb(uint8_t dev_addr)
 {
 	msc_dev_addr = dev_addr;
 	msc_mounted = true;
 	USBDriveStat &= ~STA_NODISK; /* device present; STA_NOINIT cleared by disk_initialize() */
-	PlayMemWav(ezyZip_wav, EZYZIP_WAV_SIZE);
+	USBSoundFlag = 1;            /* defer the chime to routinechecks(), off the tuh_task path */
 	if (!CurrentLinePtr)
 	{
 		MMPrintString("USB Flash Drive Connected (addr ");
@@ -1481,7 +1483,7 @@ void tuh_msc_umount_cb(uint8_t dev_addr)
 		msc_readahead_invalidate();
 #endif
 		USBDriveStat |= (STA_NOINIT | STA_NODISK);
-		PlayMemWav(remove_wav, REMOVE_WAV_SIZE);
+		USBSoundFlag = -1; /* defer the chime */
 		if (!CurrentLinePtr)
 		{
 			MMPrintString("USB Flash Drive Disconnected\r\n> ");
