@@ -108,9 +108,15 @@ extern "C"
 #define CFG_TUH_CDC 4                        // support up to 4 CDC host interfaces (COM3-COM6)
 #define CFG_TUH_HID (4 * CFG_TUH_DEVICE_MAX) // typical keyboard + mouse device can have 3-4 HID interfaces
 
+// Raised from TinyUSB's default 16: with several devices enumerating behind
+// a hub while an MSC stick is being read, 16 events overflowed in the donor
+// MicroPython port (Pico Computer 3) and a dropped completion is a silent
+// TU_ASSERT in a release build - the stack then waits forever. 64 matches
+// the donor's proven config; costs ~0.75 KB BSS.
+#define CFG_TUH_TASK_QUEUE_SZ 64
+
     // Optional host tuning knobs for controlled A/B tests.
     // Keep these commented unless specifically testing behavior changes.
-    // #define CFG_TUH_TASK_QUEUE_SZ 32 // default 16 in TinyUSB
     // #define CFG_TUH_API_EDPT_XFER 1  // enable endpoint-level transfer callback path
 
 #ifdef rp2350

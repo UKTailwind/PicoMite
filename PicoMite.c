@@ -222,6 +222,7 @@ uint8_t PSRAMpin;
     /* keytimer now lives in KeyboardMap.c (shared with the BLE-HID-host
        build) -- previously defined here too. */
     extern void USB_bus_reset(void);
+    extern void USB_host_controller_tuning(void);
     bool USBenabled = false;
 #else
 #ifdef HDMI
@@ -254,6 +255,7 @@ uint8_t PSRAMpin;
     /* keytimer now lives in KeyboardMap.c (shared with the BLE-HID-host
        build) -- previously defined here too. */
     extern void USB_bus_reset(void);
+    extern void USB_host_controller_tuning(void);
     bool USBenabled = false;
 #include "pico/multicore.h"
     mutex_t frameBufferMutex; // mutex to lock frame buffer
@@ -4121,8 +4123,9 @@ uint32_t testPSRAM(void)
         // Enumeration is deferred to tuh_task() in the main loop, which runs
         // after the reset, so re-enumeration starts from a clean bus.
         tuh_init(BOARD_TUH_RHPORT);
-        USB_bus_reset(); // force any attached hub back to Default state
-        uSec(50000);     // recovery: let the hub re-detect its downstream ports
+        USB_host_controller_tuning(); // MULTI_HUB_FIX (rp2350)
+        USB_bus_reset();              // force any attached hub back to Default state
+                                      // (masks USBCTRL_IRQ across reset + 50ms recovery)
         USBenabled = true;
 #else
     initMouse0(0);

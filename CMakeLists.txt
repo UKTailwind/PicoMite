@@ -381,6 +381,18 @@ endif()
 set(PICO_BOARD ${_PM_BOARD} CACHE STRING "PICO target board (derived from COMPILE)" FORCE)
 message(STATUS "PicoMite: COMPILE=${COMPILE} -> PICO_PLATFORM=${PICO_PLATFORM} PICO_BOARD=${PICO_BOARD}")
 
+# TinyUSB 0.21 for every variant (host and device). The tree is the proven
+# 0.21.0 pin from the Pico Computer 3 MicroPython port with its three hcd
+# patches baked in (see tinyusb-0.21/patches/): EPX buf_ctrl clear on
+# RX-timeout, single-buffered host CONTROL transfers, and 100 ms enumeration
+# reset recovery. 0.21's rewritten rp2040 hcd schedules host bulk on EPX
+# (double-buffered) instead of 1-packet-per-frame interrupt endpoints,
+# lifting USB MSC from ~64 KB/s to the full-speed wire ceiling (~1.1 MB/s).
+# CACHE FORCE for the same reason as PICO_BOARD above: the build dir is
+# reused across variants. Rollback = comment out this line (the SDK then
+# falls back to its bundled hand-copied 0.20 tree).
+set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21 CACHE PATH "TinyUSB 0.21 (PC3-patched)" FORCE)
+
 include(pico_sdk_import.cmake)
 project(PicoMite C CXX ASM)
 set(CMAKE_C_STANDARD 11)
@@ -389,6 +401,19 @@ set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
 
 add_executable(PicoMite ${COMMON_SOURCES})
+
+# Diagnostic: timing-neutral USB host event ring in the PC3-patched TinyUSB
+# files (four stores per event, no prints - a UART print in the IRQ path is
+# known to CHANGE enumeration outcomes on this hardware). Read back over the
+# console with PEEK using the pc3_evlog / pc3_evlog_n addresses from the map.
+# Enable with -DPC3_USB_EVLOG=ON at configure; OFF costs nothing.
+option(PC3_USB_EVLOG "USB host event-ring instrumentation" OFF)
+if(PC3_USB_EVLOG)
+    set_source_files_properties(
+        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/rp2040_usb.c
+        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/hcd_rp2040.c
+        PROPERTIES COMPILE_DEFINITIONS "PC3_USB_EVLOG;PC3_EVLOG_N=112")
+endif()
 
 # Project root on the include path so source files can be relocated into
 # subdirectories without rewriting their bare-filename includes

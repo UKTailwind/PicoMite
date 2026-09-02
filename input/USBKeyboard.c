@@ -47,6 +47,7 @@ the non US keyboard layouts
 #include "Hardware_Includes.h"
 #include "tusb.h"
 #include "hardware/structs/usb.h"
+#include "hardware/irq.h" /* USB_bus_reset: irq_set_enabled(USBCTRL_IRQ) across the SE0 reset */
 #ifdef USBKEYBOARD
 #include "Audio.h"
 #include "Connect.h"
@@ -1723,6 +1724,17 @@ static void touch_reassemble(uint8_t dev_addr, uint8_t instance,
 									   USB_USBPHY_DIRECT_OVERRIDE_TX_DP_OE_OVERRIDE_EN_BITS | USB_USBPHY_DIRECT_OVERRIDE_TX_DP_OVERRIDE_EN_BITS)
 void USB_bus_reset(void)
 {
+	/* Mask the USB interrupt across the reset AND the recovery time.
+	   The controller has already queued an attach the moment the PHY
+	   powered up (tuh_init), and the SE0 below would queue a remove and
+	   a second attach behind it - a remove-during-enumeration of our own
+	   making, processed in order by TinyUSB 0.21, which abandons a device
+	   whose enumeration fails and never retries it. With the interrupt
+	   masked the edges coalesce: one pending CONN_DIS, read AFTER the hub
+	   has re-attached, becomes one attach on a stable bus. (Proven in the
+	   Fuzix PC3 port, usbkbd.c usbkbd_init.) */
+	irq_set_enabled(USBCTRL_IRQ, false);
+
 	// Take manual control of the DP/DM output drivers.
 	hw_set_bits(&usb_hw->phy_direct_override, USB_BUS_RESET_PHY_OVERRIDE_EN);
 	// Enable the output drivers, then pull both lines low = SE0 = bus reset.
@@ -1738,6 +1750,32 @@ void USB_bus_reset(void)
 	// manual control after return - a likely cause of the old unreliability).
 	hw_clear_bits(&usb_hw->phy_direct, USB_USBPHY_DIRECT_TX_DM_OE_BITS | USB_USBPHY_DIRECT_TX_DP_OE_BITS);
 	hw_clear_bits(&usb_hw->phy_direct_override, USB_BUS_RESET_PHY_OVERRIDE_EN);
+
+	uSec(50000); /* recovery: let the hub re-detect its downstream ports */
+	irq_set_enabled(USBCTRL_IRQ, true);
+}
+
+/* Controller tuning applied once, immediately after tuh_init() (which owns
+   the INTE register - anything written before it is overwritten). Both
+   fixes were identified on the PC3 (RP2350B host, every device behind a
+   hub) and are carried by its MicroPython and Fuzix ports. */
+void USB_host_controller_tuning(void)
+{
+#ifdef rp2350
+	/* "Host - increase inter-packet and turnaround timeouts to accommodate
+	   worst-case hub delays." Off by default; without it a status-stage IN
+	   through a hub times out at boot, which TinyUSB 0.20 rode over by
+	   letting the SIE retry and 0.21 turns into a failed transfer and an
+	   abandoned device (keyboard registers but reports never arrive, MSC
+	   never mounts). */
+	hw_set_bits((io_rw_32 *)(USBCTRL_REGS_BASE + USB_LINESTATE_TUNING_OFFSET),
+				USB_LINESTATE_TUNING_MULTI_HUB_FIX_BITS);
+	/* NOTE: the Fuzix port additionally masks ERROR_DATA_SEQ+HOST_RESUME
+	   interrupts here. Deliberately NOT done: the working MicroPython
+	   reference does not mask them, and masking DATA_SEQ hides real
+	   data-toggle corruption. Revisit only if the donor-parity build
+	   shows noise-triggered panics. */
+#endif
 }
 void clearrepeat(void)
 {
