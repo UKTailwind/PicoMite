@@ -1,0 +1,137 @@
+--- a/src/host/usbh.c
++++ b/src/host/usbh.c
+@@ -901,6 +901,26 @@
+ }
+ 
+ // TODO timeout_ms is not supported yet
++/* PicoMite: enumeration-exclusive control dispatch. TinyUSB 0.20 had a
++   single control context - an application control transfer issued while a
++   device was being enumerated was simply refused, so enumeration was
++   effectively atomic. 0.21 queues such transfers and interleaves them
++   between enumeration steps (the 100 ms reset-recovery and debounce waits
++   are deferred, leaving wide gaps). An application that services mounted
++   devices while later devices are still enumerating - keyboard LED
++   reports, touch-digitizer handshakes - then injects control traffic into
++   the middle of another device's enumeration. Restore 0.20's semantics:
++   while an enumeration is in progress, only transfers to address 0 and to
++   the hub the enumeration is running through may use the control slot;
++   everything else waits in the pending FIFO until the enumeration
++   completes. */
++TU_ATTR_ALWAYS_INLINE static inline bool pc3_ctrl_blocked_by_enum(uint8_t daddr) {
++  return (_usbh_data.enumerating_daddr != TUSB_INDEX_INVALID_8) &&
++         (daddr != 0) &&
++         (daddr != _usbh_data.enumerating_daddr) && // driver-open phase: enum continues at the new address
++         (daddr != _usbh_data.dev0_bus.hub_addr);
++}
++
+ bool tuh_control_xfer (tuh_xfer_t* xfer) {
+   const uint8_t daddr = xfer->daddr;
+   TU_VERIFY(daddr <= TOTAL_DEVICES && xfer->ep_addr == 0 && xfer->setup); // EP0 with setup packet
+@@ -928,7 +948,7 @@
+     bool claimed = false;
+     bool is_queued = false;
+     (void) osal_mutex_lock(_usbh_mutex, OSAL_TIMEOUT_WAIT_FOREVER);
+-    if (ctrl_info->stage == CONTROL_STAGE_IDLE) {
++    if (ctrl_info->stage == CONTROL_STAGE_IDLE && !pc3_ctrl_blocked_by_enum(daddr)) {
+       ctrl_info->stage        = CONTROL_STAGE_SETUP;
+       ctrl_info->daddr        = daddr;
+       ctrl_info->actual_len   = 0;
+@@ -1017,26 +1037,39 @@
+ // Start control transfer from pending fifo
+ static void control_xfer_dispatch_pending(void) {
+   usbh_ctrl_xfer_info_t* ctrl_info = &_usbh_data.ctrl_xfer_info;
++  /* PicoMite: entries blocked by an in-progress enumeration are re-queued
++     at the back and held; bound the scan so an all-blocked queue cannot
++     spin this loop forever. */
++  uint16_t pc3_scan = (uint16_t)(tu_fifo_count(&_usbh_pending_ctrl_q) / sizeof(usbh_pending_ctrl_t)) + 1;
+ 
+-  while (true) {
++  while (pc3_scan--) {
+     usbh_pending_ctrl_t xfer;
+     bool has_xfer = false;
++    bool pc3_requeued = false;
+ 
+     (void) osal_mutex_lock(_usbh_mutex, OSAL_TIMEOUT_WAIT_FOREVER);
+     if (ctrl_info->stage == CONTROL_STAGE_IDLE &&
+         tu_fifo_read_n(&_usbh_pending_ctrl_q, &xfer, sizeof(xfer)) == sizeof(xfer)) {
+-      ctrl_info->stage        = CONTROL_STAGE_SETUP;
+-      ctrl_info->daddr        = xfer.daddr;
+-      ctrl_info->actual_len   = 0;
+-      ctrl_info->failed_count = 0;
+-      ctrl_info->buffer       = xfer.buffer;
+-      ctrl_info->complete_cb  = xfer.complete_cb;
+-      ctrl_info->user_data    = xfer.user_data;
+-      _usbh_epbuf.request     = xfer.setup;
+-      has_xfer = true;
++      if (pc3_ctrl_blocked_by_enum(xfer.daddr)) {
++        tu_fifo_write_n(&_usbh_pending_ctrl_q, &xfer, sizeof(xfer)); // hold until enumeration completes
++        pc3_requeued = true;
++      } else {
++        ctrl_info->stage        = CONTROL_STAGE_SETUP;
++        ctrl_info->daddr        = xfer.daddr;
++        ctrl_info->actual_len   = 0;
++        ctrl_info->failed_count = 0;
++        ctrl_info->buffer       = xfer.buffer;
++        ctrl_info->complete_cb  = xfer.complete_cb;
++        ctrl_info->user_data    = xfer.user_data;
++        _usbh_epbuf.request     = xfer.setup;
++        has_xfer = true;
++      }
+     }
+     (void) osal_mutex_unlock(_usbh_mutex);
+ 
++    if (pc3_requeued) {
++      continue; // look at the next entry
++    }
+     if (!has_xfer) {
+       return; // nothing to do
+     }
+@@ -1695,7 +1728,18 @@
+   ENUM_RESET_ROOT_DELAY_MS           = 50,  // T(DRSTr)  minimum 50 ms for reset from root port
+   ENUM_RESET_ROOT_POST_DELAY_MS      = 2,   // 2 ms delay after root port reset before getting speed/status
+   ENUM_RESET_HUB_DELAY_MS            = 20,  // T(DRST)   10-20 ms for hub reset
+-  ENUM_RESET_RECOVERY_DELAY_MS       = 10,  // T(RSTRCY) minimum 10 ms for reset recovery
++  /* PC3: 100, not the 10 ms minimum.  Behind the Pico Computer 3's hub a
++   * flash drive and a touch panel were not answering their first SETUP
++   * 10 ms after the port reset was cleared; the rp2 controller retried,
++   * every retry timed out, the 0.21 hcd failed the transfer on the first
++   * timeout, and the stack abandoned the device (no retry of a failed
++   * enumeration).  An event log showed it: seven RX timeouts in 120 us,
++   * four FAILED, then a STALL on the next device.  0.20 waited longer and
++   * tolerated timeouts, and the same devices enumerate under it; so did
++   * 0.21 whenever a debug print stretched this gap.  Ten devices at 90 ms
++   * each is under a second of boot; a device still not ready after 100 ms
++   * is a device to replug.  (2026-09-01, ports/rp2/usbh.patch) */
++  ENUM_RESET_RECOVERY_DELAY_MS       = 100, // T(RSTRCY) minimum 10 ms for reset recovery - PC3: 100
+   ENUM_SET_ADDRESS_RECOVERY_DELAY_MS = 2,   // USB 2.0 Spec 9.2.6.3 min is 2 ms
+ };
+ 
+@@ -2228,6 +2272,12 @@
+   }
+ }
+ 
++#if CFG_TUH_HUB
++static void pc3_port_disable_complete(tuh_xfer_t *xfer) {
++  (void)xfer; // nothing to do; a callback is required or the transfer blocks
++}
++#endif
++
+ static void enum_full_complete(bool success) {
+   (void)success;
+   TU_LOG_USBH("Enumeration complete: success = %u\r\n", success);
+@@ -2238,6 +2288,15 @@
+   #if CFG_TUH_HUB
+   // Hub status is already requested in case of successful enumeration
+   if (!success && _usbh_data.dev0_bus.hub_addr != 0) {
++    /* PicoMite: the abandoned device is left ENABLED on its port, parked
++       at USB address 0. If it answers later it talks over every subsequent
++       address-0 enumeration: garbled descriptors, SET_ADDRESS captured by
++       the wrong device, device-table entries whose identity/port no longer
++       match reality (observed: pulling a never-enumerated flash stick
++       unmounted the touch panel). Disable the port so a failed device
++       stays parked until replugged. */
++    hub_port_clear_feature(_usbh_data.dev0_bus.hub_addr, _usbh_data.dev0_bus.hub_port,
++                           HUB_FEATURE_PORT_ENABLE, pc3_port_disable_complete, 0);
+     hub_edpt_status_xfer(_usbh_data.dev0_bus.hub_addr);
+   }
+   #endif

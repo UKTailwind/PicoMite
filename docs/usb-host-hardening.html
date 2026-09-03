@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RP2 USB Host Hardening</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#EDF0F4; --surface:#FFFFFF; --surface2:#F4F7F9;
+  --ink:#161B24; --muted:#586377; --line:#D6DCE4;
+  --accent:#0E7490; --accent-soft:#DBEBEF;
+  --bad:#AF4034; --bad-soft:#F6E5E2;
+  --good:#2C7A54; --good-soft:#DEEEE6;
+  --amber:#9A6008; --amber-soft:#F4E9D5;
+  --plus-ink:#1F6b45; --minus-ink:#9c3b30;
+  --shadow:0 1px 2px rgba(20,26,38,.06),0 4px 14px rgba(20,26,38,.05);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#11151B; --surface:#191E26; --surface2:#1F262F;
+    --ink:#E7EBF1; --muted:#98A3B5; --line:#2C343F;
+    --accent:#39B4C4; --accent-soft:#123138;
+    --bad:#DF867C; --bad-soft:#2C1C1A;
+    --good:#71C097; --good-soft:#15261D;
+    --amber:#D6A24E; --amber-soft:#2A2114;
+    --plus-ink:#7ec99a; --minus-ink:#df867c;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11151B; --surface:#191E26; --surface2:#1F262F;
+  --ink:#E7EBF1; --muted:#98A3B5; --line:#2C343F;
+  --accent:#39B4C4; --accent-soft:#123138;
+  --bad:#DF867C; --bad-soft:#2C1C1A;
+  --good:#71C097; --good-soft:#15261D;
+  --amber:#D6A24E; --amber-soft:#2A2114;
+  --plus-ink:#7ec99a; --minus-ink:#df867c;
+  --shadow:none;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  font-size:16.5px; line-height:1.6; padding:0 22px 96px;
+}
+.wrap{max-width:788px;margin:0 auto}
+.measure{max-width:64ch}
+a{color:var(--accent);text-underline-offset:2px}
+
+header.doc{padding:64px 0 30px;border-bottom:1px solid var(--line);margin-bottom:40px}
+.eyebrow{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:500;
+  letter-spacing:.14em;text-transform:uppercase;color:var(--accent);
+  margin:0 0 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+}
+.eyebrow .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);display:inline-block}
+h1{
+  font-family:"Archivo",sans-serif;font-weight:800;letter-spacing:-.02em;
+  font-size:clamp(33px,6vw,52px);line-height:1.02;margin:0 0 18px;text-wrap:balance;
+}
+.standfirst{font-size:19.5px;color:var(--muted);margin:0 0 26px;max-width:60ch;line-height:1.5}
+.meta{
+  display:flex;flex-wrap:wrap;gap:8px 26px;
+  font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--muted);
+}
+.meta b{color:var(--ink);font-weight:600}
+
+h2{
+  font-family:"Archivo",sans-serif;font-weight:700;letter-spacing:-.01em;
+  font-size:26px;line-height:1.15;margin:52px 0 6px;text-wrap:balance;
+}
+h3{font-family:"Archivo",sans-serif;font-weight:600;font-size:18.5px;margin:28px 0 8px}
+p{margin:12px 0}
+.lead{font-size:17.5px}
+strong{font-weight:600}
+.section-tag{
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:500;
+  letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+  margin:54px 0 -2px;display:block;
+}
+
+code{
+  font-family:"IBM Plex Mono",monospace;font-size:.85em;
+  background:var(--surface2);border:1px solid var(--line);
+  padding:.05em .38em;border-radius:5px;white-space:nowrap;
+}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;
+  font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:600;
+  letter-spacing:.04em;text-transform:uppercase;
+  padding:4px 11px;border-radius:999px;border:1px solid transparent;white-space:nowrap;
+}
+.chip.replace{background:var(--bad-soft);color:var(--bad);border-color:color-mix(in srgb,var(--bad) 30%,transparent)}
+.chip.amend{background:var(--amber-soft);color:var(--amber);border-color:color-mix(in srgb,var(--amber) 34%,transparent)}
+.chip.keep{background:var(--good-soft);color:var(--good);border-color:color-mix(in srgb,var(--good) 30%,transparent)}
+
+.issuebar{
+  display:flex;flex-wrap:wrap;gap:10px;margin:24px 0 6px;
+}
+.issue{
+  display:block;text-decoration:none;flex:1 1 210px;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:15px 17px;box-shadow:var(--shadow);
+}
+.issue .num{font-family:"IBM Plex Mono",monospace;font-size:12.5px;font-weight:600;color:var(--accent)}
+.issue .ti{display:block;margin-top:5px;font-size:14.5px;color:var(--ink);line-height:1.35}
+.issue .st{display:block;margin-top:8px;font-family:"IBM Plex Mono",monospace;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+
+.fix{
+  background:var(--surface);border:1px solid var(--line);border-radius:14px;
+  padding:24px 28px 26px;margin:20px 0;box-shadow:var(--shadow);
+}
+.fix-head{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin-bottom:2px}
+.fix-file{
+  font-family:"IBM Plex Mono",monospace;font-size:12.5px;color:var(--accent);
+  background:var(--accent-soft);padding:3px 10px;border-radius:6px;
+}
+.fix > h2{font-size:23px;margin:10px 0 4px}
+.grid{display:grid;gap:0;margin:16px 0 2px}
+.row{display:grid;grid-template-columns:118px 1fr;gap:16px;padding:12px 0;border-top:1px solid var(--line)}
+.row:first-child{border-top:none}
+.rk{font-family:"IBM Plex Mono",monospace;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding-top:2px}
+.row.cause .rk{color:var(--bad)}
+.row.verdict .rk{color:var(--accent)}
+.rv{margin:0}.rv p{margin:0 0 8px}.rv p:last-child{margin:0}
+
+pre{
+  margin:14px 0 2px;background:var(--surface2);border:1px solid var(--line);
+  border-radius:10px;padding:16px 18px;overflow-x:auto;
+  font-family:"IBM Plex Mono",monospace;font-size:12.5px;line-height:1.62;
+}
+pre code{background:none;border:none;padding:0;white-space:pre;font-size:inherit;color:var(--ink)}
+.cap{font-family:"IBM Plex Mono",monospace;font-size:12px;color:var(--muted);margin:14px 0 -6px;display:flex;gap:8px;align-items:center}
+.cap::before{content:"";width:14px;height:1px;background:var(--muted);display:inline-block}
+.pl{color:var(--plus-ink)}
+.cm{color:var(--muted)}
+
+.note{border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 10px 10px 0;padding:14px 18px;margin:18px 0;font-size:15px}
+.note.warn{border-left-color:var(--bad);background:var(--bad-soft)}
+.note b{font-weight:600}
+.note code{background:color-mix(in srgb,var(--surface) 55%,transparent)}
+
+ul{padding-left:20px;margin:12px 0}
+li{margin:7px 0}
+li::marker{color:var(--accent)}
+
+.paths{display:grid;gap:14px;margin:22px 0}
+@media(min-width:640px){.paths{grid-template-columns:1fr 1fr}}
+.path{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:22px 24px;box-shadow:var(--shadow)}
+.path.primary{border-color:color-mix(in srgb,var(--good) 45%,var(--line))}
+.path h3{margin:0 0 4px}
+.path .plabel{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 12px;display:block}
+.path.primary .plabel{color:var(--good)}
+.path p{margin:8px 0;font-size:15px}
+.path ul{font-size:14.5px;margin:10px 0 0}
+
+figure.diagram{margin:26px 0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px 24px 16px;box-shadow:var(--shadow)}
+figure.diagram svg{display:block;max-width:100%;height:auto;margin:0 auto;color:var(--ink)}
+figure.diagram figcaption{margin:16px auto 0;max-width:62ch;font-size:13.5px;color:var(--muted);line-height:1.5;text-align:center}
+figure.diagram figcaption code{white-space:nowrap}
+.dg-box{fill:var(--surface2);stroke:currentColor;stroke-width:1.4}
+.dg-latch{fill:var(--accent-soft);stroke:var(--accent);stroke-width:1.8}
+.dg-line{stroke:currentColor;stroke-width:1.6;fill:none}
+.dg-badline{stroke:var(--bad);stroke-width:2.1;fill:none}
+.dg-arrow{fill:currentColor}
+.dg-badarrow{fill:var(--bad)}
+.dg-txt{font-family:"IBM Plex Sans",sans-serif;font-size:12.5px;font-weight:500;fill:var(--ink)}
+.dg-sub{font-family:"IBM Plex Mono",monospace;font-size:11px;fill:var(--muted)}
+.dg-lbl{font-family:"IBM Plex Mono",monospace;font-size:11.5px;fill:var(--ink)}
+.dg-bad{fill:var(--bad)}
+footer{margin-top:60px;padding-top:22px;border-top:1px solid var(--line);color:var(--muted);font-size:13.5px}
+footer a{color:var(--accent)}
+footer code{font-size:12px}
+
+@media (max-width:560px){.row{grid-template-columns:1fr;gap:4px}.rk{padding-top:0}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header class="doc">
+  <p class="eyebrow"><span class="dot"></span>TinyUSB 0.21 &middot; RP2040 / RP2350 host driver</p>
+  <h1>RP2 USB Host Hardening</h1>
+  <p class="standfirst">Making multi-device enumeration behind a hub reliable on the rp2 host driver. This is the approach that was validated on hardware &mdash; not the one that looked best on paper. The two that actually mattered: keep the mount callbacks light, and make the control path tolerant of a documented silicon race.</p>
+  <div class="meta">
+    <span>Validated on a <b>PicoComputer&nbsp;3</b> (RP2350B)</span>
+    <span>2 keyboards + touch + MSC <b>behind one hub</b></span>
+    <span>for the MicroPython <b>rp2</b> port</span>
+  </div>
+</header>
+
+<p class="lead measure">This began as three control-path patches and a plan to adopt the upstream root-cause fix. Then all of it was run on real multi-device-behind-a-hub hardware, across software, hardware and power-on resets. The result reorders the advice: <strong>the tolerant workarounds plus keeping the mount callbacks light gave four devices on every boot</strong>, while the &ldquo;proper&rdquo; hcd rewrite &mdash; correct as its analysis is &mdash; enumerated <em>fewer</em> devices on this marginal hardware. Below is what held up, in the order it matters.</p>
+
+<span class="section-tag">Two independent problems</span>
+<h2>What actually breaks enumeration</h2>
+<p class="measure">Two unrelated things each cost a device behind the hub. One is a silicon race in the host driver; the other is the application doing heavy work in the wrong context. Both have to be handled &mdash; fixing only one still drops devices.</p>
+<div class="issuebar">
+  <a class="issue" href="https://github.com/hathach/tinyusb/issues/3533">
+    <span class="num">#3533</span>
+    <span class="ti">The shared-latch race: a full analysis of the rp2 host driver, with a reference tree</span>
+    <span class="st">Open &middot; RP2350 &middot; the root cause</span>
+  </a>
+  <a class="issue" href="https://github.com/hathach/tinyusb/issues/2517">
+    <span class="num">#2517</span>
+    <span class="ti">Panic on HID enumeration through a particular hub &mdash; same signature since 2024</span>
+    <span class="st">Open &middot; corroborates</span>
+  </a>
+  <a class="issue" href="https://github.com/hathach/tinyusb/issues/2776">
+    <span class="num">#2776</span>
+    <span class="ti">HCD does not recover from data-sequence errors per USB&nbsp;8.6.4</span>
+    <span class="st">Open &middot; related</span>
+  </a>
+</div>
+
+<span class="section-tag">The silicon</span>
+<h2>The shared handshake latch</h2>
+<p class="measure">The RP2040/RP2350 SIE keeps <strong>one</strong> set of handshake-result latches &mdash; <code>ACK_REC</code>, <code>RX_TIMEOUT</code>, <code>DATA_SEQ_ERROR</code> &mdash; shared across the EPX control/bulk endpoint and the interrupt-endpoint poller. When a control transfer completes on EPX and the SIE then polls an interrupt endpoint &mdash; a keyboard or touch panel behind the hub &mdash; that poll <strong>overwrites the EPX latch before the IRQ handler reads it</strong>. A transfer the device actually ACK'd is misread as <code>RX_TIMEOUT</code>, and enumeration fails. It only shows with interrupt endpoints present, which is why <a href="https://github.com/hathach/tinyusb/issues/2517">#2517</a> reports the same hub working with a flash drive alone and panicking the moment a keyboard is added. <a href="https://github.com/hathach/tinyusb/issues/3533">#3533</a> documents the mechanism in full.</p>
+
+<figure class="diagram">
+<svg viewBox="0 0 640 316" role="img" aria-label="One shared SIE latch. The EPX control transfer writes ACK; an interrupt-endpoint poll then overwrites it; the IRQ handler reads a stale RX_TIMEOUT, so a device the bus acknowledged is dropped.">
+  <defs>
+    <marker id="dgah" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" class="dg-arrow"/></marker>
+    <marker id="dgahb" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto"><path d="M0,0 L9,4 L0,8 Z" class="dg-badarrow"/></marker>
+  </defs>
+
+  <rect class="dg-box" x="44" y="38" width="158" height="50" rx="7"/>
+  <text class="dg-txt" x="123" y="59" text-anchor="middle">EPX control xfer</text>
+  <text class="dg-sub" x="123" y="76" text-anchor="middle">device sends ACK</text>
+
+  <rect class="dg-box" x="438" y="38" width="158" height="50" rx="7"/>
+  <text class="dg-txt" x="517" y="59" text-anchor="middle">interrupt-EP poll</text>
+  <text class="dg-sub" x="517" y="76" text-anchor="middle">HID, behind hub</text>
+
+  <rect class="dg-latch" x="241" y="140" width="158" height="54" rx="7"/>
+  <text class="dg-txt" x="320" y="163" text-anchor="middle">SIE handshake latch</text>
+  <text class="dg-sub" x="320" y="180" text-anchor="middle">one register &mdash; shared</text>
+
+  <rect class="dg-box" x="241" y="248" width="158" height="52" rx="7"/>
+  <text class="dg-txt" x="320" y="270" text-anchor="middle">IRQ handler reads</text>
+  <text class="dg-sub dg-bad" x="320" y="287" text-anchor="middle">RX_TIMEOUT</text>
+
+  <line class="dg-line" x1="123" y1="88" x2="276" y2="138" marker-end="url(#dgah)"/>
+  <text class="dg-lbl" x="150" y="118" text-anchor="start">&#9312; writes ACK</text>
+
+  <line class="dg-badline" x1="517" y1="88" x2="364" y2="138" marker-end="url(#dgahb)"/>
+  <text class="dg-lbl dg-bad" x="490" y="118" text-anchor="end">&#9313; overwrites it</text>
+
+  <line class="dg-line" x1="320" y1="194" x2="320" y2="246" marker-end="url(#dgah)"/>
+  <text class="dg-lbl" x="332" y="224" text-anchor="start">&#9314; reads stale value</text>
+</svg>
+<figcaption>The RP2 SIE has a single handshake-result latch. When an interrupt-endpoint poll (a HID device behind the hub) lands between a control transfer completing and the IRQ handler reading it, step&nbsp;&#9313; clobbers the ACK from step&nbsp;&#9312; &mdash; so the handler reads <code>RX_TIMEOUT</code> and abandons a device the bus actually acknowledged. Remove the interrupt endpoints and the race, and the failure, disappear.</figcaption>
+</figure>
+
+<p class="measure">There are two ways to live with this race &mdash; tolerate it above the driver, or remove it inside the driver. The validated recommendation, below, is <em>tolerate</em>: it proved markedly more robust on marginal hardware.</p>
+
+<!-- SECTION: callbacks -->
+<div class="fix">
+  <div class="fix-head">
+    <span class="chip keep">Validated &middot; do this first</span>
+    <span class="fix-file">application side</span>
+  </div>
+  <h2>Keep the mount callbacks light</h2>
+  <div class="grid">
+    <div class="row"><div class="rk">Symptom</div><div class="rv"><p>With the driver otherwise fine, one device &mdash; the marginal one &mdash; still fails to enumerate on some boots. On our rig, disabling a single connect chime was the difference between random 1&ndash;3 devices and a stable count.</p></div></div>
+    <div class="row cause"><div class="rk">Root cause</div><div class="rv"><p><code>tuh_mount_cb</code> / <code>tuh_hid_mount_cb</code> run inside <code>tuh_task()</code>, <em>between the enumeration steps of the other devices on the bus</em>. Anything heavy there &mdash; a sound (heap alloc + audio-clock reconfig), a slow log line, a blocking allocation &mdash; stalls the bus long enough for a marginal device behind the hub to lose its enumeration. The MicroPython and Fuzix rp2 ports both defer mount-time notification for exactly this reason; our hardware confirmed why.</p></div></div>
+    <div class="row verdict"><div class="rk">The rule</div><div class="rv"><p>A mount callback should do almost nothing &mdash; set a flag, stash an id. Anything with real cost (notifications, allocation, device setup that can wait) belongs on the main loop, <em>after</em> <code>tuh_task()</code> returns. Never call it from inside the callback.</p></div></div>
+  </div>
+  <p class="cap">the pattern: callback sets a flag, the main loop acts on it</p>
+<pre><code><span class="cm">// in the mount / unmount callback — cheap, non-blocking:</span>
+usb_event_flag = <span class="pl">+1</span>;   <span class="cm">// device arrived  (-1 = left)</span>
+
+<span class="cm">// in the main loop, right after tuh_task():</span>
+tuh_task();
+<span class="pl">usb_event_service();</span>          <span class="cm">// off the enumeration path — safe to be heavy here</span></code></pre>
+  <div class="note"><b>A nice side effect.</b> Latch the flag for the duration of whatever the service does (e.g. a chime), so a burst of devices enumerating together collapses into one action instead of one per device. A device that arrives after it finishes simply starts a fresh one.</div>
+</div>
+
+<span class="section-tag">The driver &middot; the validated choice</span>
+<h2>Make the control path tolerant</h2>
+<p class="measure">These three patches sit above the silicon and <em>tolerate</em> the shared-latch race and its fallout rather than removing it. On the PicoComputer&nbsp;3 &mdash; two keyboards (one marginal), a touch panel and a flash drive behind one hub &mdash; this set enumerated all four devices on every software, hardware and power-on reset. Keep all three.</p>
+
+<div class="fix">
+  <div class="fix-head"><span class="chip keep">Validated</span><span class="fix-file">hcd_rp2040.c</span></div>
+  <h2>Grace period for control-pipe RX timeouts</h2>
+  <div class="grid">
+    <div class="row"><div class="rk">What it does</div><div class="rv"><p>On <code>RX_TIMEOUT</code> for endpoint&nbsp;0 only, within a bounded window, it does not fail the transfer &mdash; it leaves it armed for the SIE to retry, so a spurious latch-clobbered timeout is simply outlasted and the transfer reads back correctly. Bulk and interrupt keep the fast-fail (their slow-path flow control is NAK, which never raises <code>RX_TIMEOUT</code>).</p></div></div>
+    <div class="row verdict"><div class="rk">Why it holds</div><div class="rv"><p>It is forgiving of exactly the marginal, race-prone case that a strict driver drops. Close the window only on a <em>control-pipe</em> completion &mdash; resetting it on any completion lets hub/HID traffic re-arm it forever and wedge the pipe.</p></div></div>
+  </div>
+<pre><code>if (status & USB_INTS_ERROR_RX_TIMEOUT_BITS) {
+  usb_hw_clear->sie_status = USB_SIE_STATUS_RX_TIMEOUT_BITS;
+<span class="pl">  bool in_grace = false;</span>
+<span class="pl">  if (epx->state == EPSTATE_ACTIVE && tu_edpt_number(epx->ep_addr) == 0) {</span>
+<span class="pl">    if (!rx_timing) { rx_timing = true; rx_start_us = time_us_32(); }</span>
+<span class="pl">    in_grace = (time_us_32() - rx_start_us) < 1000000u;   // 1 s ceiling</span>
+<span class="pl">  }</span>
+<span class="pl">  if (!in_grace) {</span>  <span class="cm">/* original STOP_TRANS + fail-the-transfer body */</span>  <span class="pl">}</span>
+}
+<span class="cm">// clear rx_timing on any EP0 completion, in xfer_complete_isr()</span></code></pre>
+</div>
+
+<div class="fix">
+  <div class="fix-head"><span class="chip keep">Validated</span><span class="fix-file">usbh.c</span></div>
+  <h2>Enumeration-exclusive control dispatch</h2>
+  <div class="grid">
+    <div class="row"><div class="rk">What it does</div><div class="rv"><p>While an enumeration is in progress, only transfers to address&nbsp;0, to the address being enumerated, and to the hub in use may claim the single control slot. Application control traffic &mdash; a keyboard LED write, a touch handshake &mdash; waits in the pending FIFO. This restores 0.20's effectively-atomic enumeration and keeps the shared EPX state from being disturbed mid-bring-up.</p></div></div>
+  </div>
+<pre><code>static inline bool ctrl_blocked_by_enum(uint8_t daddr) {
+  return (_usbh_data.enumerating_daddr != TUSB_INDEX_INVALID_8) &&
+         (daddr != 0) &&
+         (daddr != _usbh_data.enumerating_daddr) &&  <span class="cm">// driver-open phase</span>
+         (daddr != _usbh_data.dev0_bus.hub_addr);
+}
+<span class="cm">// gate both the slot claim in tuh_control_xfer() and the pending drain</span></code></pre>
+</div>
+
+<div class="fix">
+  <div class="fix-head"><span class="chip keep">Validated</span><span class="fix-file">usbh.c</span></div>
+  <h2>Disable the hub port on a failed enumeration</h2>
+  <div class="grid">
+    <div class="row"><div class="rk">What it does</div><div class="rv"><p>In <code>enum_full_complete(false)</code>, send <code>CLEAR_FEATURE(PORT_ENABLE)</code> to the abandoned device's hub port. 0.21 otherwise leaves it enabled at address&nbsp;0; if it wakes later it answers address-0 traffic in parallel with the next device's bring-up &mdash; the mechanism behind &ldquo;pulling one device reported another disconnecting.&rdquo; The chime must use a non-NULL completion callback (a NULL one blocks and deadlocks inside <code>tuh_task()</code>).</p></div></div>
+  </div>
+<pre><code>hub_port_clear_feature(_usbh_data.dev0_bus.hub_addr,
+                       _usbh_data.dev0_bus.hub_port,
+                       HUB_FEATURE_PORT_ENABLE,
+                       port_disable_complete, 0);   <span class="cm">// no-op cb, not NULL</span></code></pre>
+</div>
+
+<!-- SECTION: 3533 hcd -->
+<span class="section-tag">The other path</span>
+<h2>The #3533 hcd &mdash; cleaner, but validate it</h2>
+<p class="measure"><a href="https://github.com/hathach/tinyusb/issues/3533">#3533</a> ships a from-scratch rp2 host driver that removes the race at source &mdash; it suppresses interrupt-endpoint polling around each EPX transfer (<code>suppress_int_polling()</code>), clears stale latches before every start (<code>epx_prepare_for_start()</code>), and carries a per-device EP0 max-packet table. It is the theoretically correct fix, and it drops in cleanly: the reference tree pins the <em>exact</em> 0.21.0 base, so its two files replace ours verbatim, compile and fit.</p>
+<div class="note warn"><b>But on our hardware it enumerated fewer devices, not more.</b> With the strict driver in place, the marginal second keyboard behind the hub was lost on most boots &mdash; a stable but incomplete count &mdash; where the tolerant workarounds above brought up all four every time. We did not fully isolate why: it may be a genuine sensitivity to a marginal device, or an interaction with the manual SE0 bus reset our firmware drives on restart (which MicroPython does not do). The correct diagnosis does not guarantee the stricter implementation wins on every device set.</div>
+<p class="measure"><strong>Recommendation:</strong> treat #3533 as an option to evaluate, not a drop-in upgrade. If you carry a manual bus reset, test with it removed first. Validate against your real, marginal hardware &mdash; and if the tolerant workarounds already give you a reliable count, there is no urgency to switch until #3533 is merged and matured upstream.</p>
+
+<span class="section-tag">Cheap and independent</span>
+<h2>Two more, regardless of path</h2>
+<ul>
+  <li><b>RP2350 hub-timeout bit.</b> Set <code>USB_LINESTATE_TUNING_MULTI_HUB_FIX</code> after <code>tuh_rhport_init()</code>. It is the controller's own accommodation for worst-case hub turnaround timing, off by reset default, and it addresses real hub delay rather than the latch race &mdash; complementary to everything above.</li>
+  <li><b>Task queue depth.</b> Raise <code>CFG_TUH_TASK_QUEUE_SZ</code> from 16 to 64. Under several devices enumerating behind a hub the default overflowed, and a dropped completion is a silent stall in a release build.</li>
+</ul>
+
+<span class="section-tag">How it was proven</span>
+<h2>Validating</h2>
+<ul>
+  <li><b>All reset kinds, repeatedly.</b> Software reset, hardware reset and cold power-on each brought up all four devices &mdash; every time. The race is probabilistic, so &ldquo;first time, every time&rdquo; across reset types is the only bar that counts.</li>
+  <li><b>MSC alongside HID.</b> The failure needs an interrupt endpoint present to appear &mdash; a stick that enumerates alone but not beside a keyboard is the race, not a bad device.</li>
+  <li><b>Sustained transfer under load.</b> A large read, or audio streamed straight off the flash drive, with HID live and no underrun.</li>
+  <li><b>Pull the marginal device</b> and confirm its own connect/disconnect is reported, not a neighbour's.</li>
+</ul>
+
+<footer>
+  <p>Sources: TinyUSB <a href="https://github.com/hathach/tinyusb/issues/3533">#3533</a> (shared-latch race + reference tree), <a href="https://github.com/hathach/tinyusb/issues/2517">#2517</a>, <a href="https://github.com/hathach/tinyusb/issues/2776">#2776</a>. Approach validated in the PicoMite <code>tinyusb-0.21</code> tree on a PicoComputer&nbsp;3 (RP2350B): two keyboards, a multi-touch panel and a USB flash drive behind one hub &mdash; four devices on every software, hardware and power-on reset, with the stick reading ~8&times; faster than the 0.20 stack it replaced.</p>
+</footer>
+</div>
+
+</body>
+</html>

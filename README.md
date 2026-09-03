@@ -35,13 +35,30 @@ toolchain and the Raspberry Pi Pico SDK.
 
 ### Prerequisites
 
-- **Raspberry Pi Pico SDK v2.2.0** — used **unmodified**. The build relocates
+- **Raspberry Pi Pico SDK v2.3.0** — used **unmodified**. The build relocates
   the SDK's GPIO interrupt dispatcher (`gpio_default_irq_handler`) into RAM
   automatically at link time (see below); no edit to the SDK's `gpio.c` is
   required.
 - **arm-none-eabi GCC 13.3.1**
-- **TinyUSB v0.20.0** — replace the TinyUSB version supplied with the Pico SDK
-  with [TinyUSB v0.20.0](https://github.com/hathach/tinyusb/releases).
+- **TinyUSB v0.21.0 (patched)** — the USB-**host** driver fixes (fast USB
+  flash-drive transfers, and reliable enumeration of several devices behind a
+  hub) live in a patched TinyUSB 0.21 tree kept in a **sibling directory**
+  `../tinyusb-0.21` (next to this repo, not inside it) and selected by
+  `PICO_TINYUSB_PATH` in [`CMakeLists.txt`](CMakeLists.txt). The Pico SDK's own
+  bundled TinyUSB is **not** touched.
+
+  Create the tree once, before the first build:
+
+  ```
+  tinyusb-patches/setup-tinyusb.sh      # Linux / macOS / Git Bash
+  tinyusb-patches\setup-tinyusb.bat     # Windows
+  ```
+
+  This clones TinyUSB 0.21.0 into `../tinyusb-0.21` and applies the patches in
+  [`tinyusb-patches/`](tinyusb-patches). See
+  [`tinyusb-patches/README.md`](tinyusb-patches/README.md) for what each patch
+  does, and the [`docs/usb-host-hardening.html`](docs/usb-host-hardening.html)
+  guide for the host-driver fixes in depth.
 
 > **GPIO interrupt latency:** PicoMite's GPIO interrupt callback must run from
 > RAM for timing-critical features (IR, COUNT/FREQ, PS2). The SDK's shared

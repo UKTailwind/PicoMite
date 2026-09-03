@@ -1,0 +1,90 @@
+--- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
++++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
+@@ -48,6 +48,40 @@
+ 
+ critical_section_t rp2usb_lock;
+ 
++#ifdef PC3_USB_EVLOG
++#include "hardware/timer.h"
++/* PC3: timing-neutral event ring for the USB host driver.  A UART print in
++ * the interrupt path made a multi-device enumeration succeed that fails
++ * without it (2026-09-01), so the instrument must not take time: four
++ * stores per event, read back over the REPL from Python (address from the
++ * ELF's pc3_evlog symbol).  Tags: 'S' transfer start (ep_addr|dev_addr<<8,
++ * total_len, 0), 'C' buffer completion (buf_id|is_double<<8|is_done<<16,
++ * bc32, xact|remaining<<16), 'I' hcd interrupt (ints, sie_status, 0),
++ * 'X' transfer complete to the stack (ep_addr|dev_addr<<8, result, len). */
++typedef struct { uint32_t t; uint32_t tag; uint32_t a; uint32_t b; uint32_t c; } pc3_ev_t;
++#ifndef PC3_EVLOG_N /* PicoMite: overridable - HDMIUSB has ~2.7 KB BSS headroom, 256*20B does not fit */
++#define PC3_EVLOG_N 256
++#endif
++volatile pc3_ev_t pc3_evlog[PC3_EVLOG_N];
++volatile uint32_t pc3_evlog_n;
++/* PicoMite: freeze the ring shortly after the FIRST failed transfer so the
++   lead-up and the failure survive instead of being overwritten by later
++   traffic (a whole failed multi-device enumeration is ~750 events; the ring
++   holds 112). -1 = armed, >0 = events still to record, 0 = frozen. PEEK
++   pc3_evlog_freeze to see whether a failure triggered. */
++volatile int32_t pc3_evlog_freeze = -1;
++void pc3_evlog_add(uint32_t tag, uint32_t a, uint32_t b, uint32_t c) {
++    if (pc3_evlog_freeze == 0) return;
++    if (pc3_evlog_freeze > 0) pc3_evlog_freeze--;
++    uint32_t i = pc3_evlog_n++;
++    volatile pc3_ev_t *e = &pc3_evlog[i % PC3_EVLOG_N];
++    e->t = time_us_32();
++    e->tag = tag; e->a = a; e->b = b; e->c = c;
++    if (tag == 'X' && b != 0 /* xfer_result != SUCCESS */ && pc3_evlog_freeze < 0)
++        pc3_evlog_freeze = 40;
++}
++#endif
++
+ //--------------------------------------------------------------------+
+ // Implementation
+ //--------------------------------------------------------------------+
+@@ -196,7 +230,18 @@
+   if (ep_reg != NULL) {
+     uint32_t ep_ctrl = *ep_reg;
+   #if CFG_TUH_ENABLED
+-    const bool force_single = (rp2usb_is_host_mode() && ep->interrupt_num > 0);
++    /* PC3: single-buffer host CONTROL transfers as well as interrupt ones.
++     * A 525-byte GET_DESCRIPTOR(report) IN from a touch panel - nine
++     * full-speed packets, double-buffered on EPX - was completed by this
++     * driver after the first 64 bytes with the other buffer still armed;
++     * the status stage then hit "buf_ctrl already available" (a panic).
++     * Two-packet control INs and 64 KB double-buffered BULK reads work,
++     * so only control is narrowed here.  0.20 double-buffered EP0 too
++     * but synced both halves per interrupt rather than trusting
++     * BUF_CPU_SHOULD_HANDLE.  Control transfers are small; the cost is
++     * nil.  (Pico Computer 3, 2026-09-01, ports/rp2/rp2040_usb.patch) */
++    const bool force_single = rp2usb_is_host_mode() &&
++                              (ep->interrupt_num > 0 || tu_edpt_number(ep->ep_addr) == 0);
+   #else
+     const bool force_single = false;
+   #endif
+@@ -230,6 +275,9 @@
+   ep->remaining_len = total_len;
+   ep->xferred_len   = 0;
+   ep->state         = EPSTATE_ACTIVE;
++#ifdef PC3_USB_EVLOG
++  pc3_evlog_add('S', ep->ep_addr | ((uint32_t)ep->dev_addr << 8), total_len, 0);
++#endif
+ 
+   #if CFG_TUD_EDPT_DEDICATED_HWFIFO
+   if (ff != NULL) {
+@@ -356,6 +404,16 @@
+   const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
+   const bool     is_short   = xact_bytes < ep->max_packet_size;
+   const bool     is_done    = is_short || is_last;
++#ifdef PC3_USB_EVLOG
++  pc3_evlog_add('C', buf_id | ((uint32_t)is_double << 8) | ((uint32_t)is_done << 16),
++                *buf_reg, xact_bytes | ((uint32_t)ep->remaining_len << 16));
++#endif
++#ifdef PC3_USB_TRACE
++  if (is_host && !is_double) {
++    TU_LOG2("PC3 epx cont: id %u bc32 %08lx xact %u last %u rem %u done %u pid %u\r\n", buf_id,
++            (unsigned long)*buf_reg, xact_bytes, is_last, ep->remaining_len, is_done, ep->next_pid);
++  }
++#endif
+ 
+   // Short packet on rx with double buffer: abort the other half (if not last) and reset the buffer control.
+   // The other buffer may be: (a) still AVAIL, (b) in-progress (controller receiving), or (c) already completed.
