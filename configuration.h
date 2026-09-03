@@ -96,7 +96,7 @@ extern "C"
       HEAP_MEMORY_SIZE are provisional — tune against build_limits.txt /
       GetHighestHexAddress.py. Bump MagicKey when Option layout/defaults
       change so stale cached options get rewritten. */
-#define FLASH_TARGET_OFFSET (1520 * 1024)
+#define FLASH_TARGET_OFFSET (1504 * 1024)
    /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
       kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
       pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
@@ -129,7 +129,7 @@ extern "C"
       __end__ down to 0x2007E690 for 6512 bytes: one full page of arena
       growth plus ~2.4 KB.  Keep several KB of C-heap headroom here if
       BSS grows again; see [[heap-bss-overlap-on-rp2350]]. */
-#define FLASH_TARGET_OFFSET (1088 * 1024)
+#define FLASH_TARGET_OFFSET (1072 * 1024)
 #define HEAP_MEMORY_SIZE (152 * 1024)
 #define MagicKey 0xD340BBCD
 #endif
@@ -143,7 +143,7 @@ extern "C"
 #define MAX_CPU 378000
 #define MIN_CPU 252000
 #ifdef USBKEYBOARD
-#define FLASH_TARGET_OFFSET (1056 * 1024)
+#define FLASH_TARGET_OFFSET (1040 * 1024)
 #define HEAP_MEMORY_SIZE (164 * 1024)
 #define MagicKey 0x4C73A942
 #else
@@ -163,7 +163,7 @@ extern "C"
 #define MAX_CPU 378000
 #define MIN_CPU 252000
 #ifdef USBKEYBOARD
-#define FLASH_TARGET_OFFSET (848 * 1024)
+#define FLASH_TARGET_OFFSET (832 * 1024)
 #define MagicKey 0xCD8778E7
 #define HEAP_MEMORY_SIZE (100 * 1024)
 #else
@@ -244,7 +244,7 @@ extern "C"
 
 #ifdef USBKEYBOARD
 #define MagicKey 0x029A7245
-#define FLASH_TARGET_OFFSET (1136 * 1024)
+#define FLASH_TARGET_OFFSET (1120 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
       from the cursor module (~650 bytes for user_cursor.pixels +
       state) and the click/cursor ownership tracking. Heap and BSS
@@ -296,7 +296,7 @@ extern "C"
 
 #ifdef USBKEYBOARD
 #define MagicKey 0xEE897110
-#define FLASH_TARGET_OFFSET (928 * 1024)
+#define FLASH_TARGET_OFFSET (912 * 1024)
 #define HEAP_MEMORY_SIZE (132 * 1024)
 #else
 #ifdef PICOMITEMIN
