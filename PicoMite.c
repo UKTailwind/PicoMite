@@ -68,6 +68,10 @@ extern "C"
 #include "tusb.h"
 #include "host/hcd.h"
 #include "usb_host_files/tusb_config.h"
+    const tusb_rhport_init_t host_init = {
+        .role = TUSB_ROLE_HOST,
+        .speed = TUSB_SPEED_AUTO, // or TUSB_SPEED_FULL for the RP2040/RP2350 PIO/native host port
+    };
 #else
 #include "pico/unique_id.h"
 #ifndef PICOMITEBT
@@ -2826,19 +2830,19 @@ int __not_in_flash_func(MMInkey)(void)
                     putConsole(hex[(fval[k] >> i) & 0xF], 0);
             }
 #else
-            /* RP2040 prints only PC and LR. sigbus_c is __not_in_flash_func,
-               so every byte of it comes out of the RAM that sits below
-               AllMemory -- and AllMemory is 4 KB-aligned, so once this
-               function grows past a boundary the cost is a whole 4 KB page,
-               not the bytes added. That is what broke the VGAUSB link. Keep
-               the RP2040 dump minimal; the full register decode is RP2350
-               only. */
-            MMPrintString("PC=");
-            for (int i = 28; i >= 0; i -= 4)
-                putConsole(hex[(pc >> i) & 0xF], 0);
-            MMPrintString(" LR=");
-            for (int i = 28; i >= 0; i -= 4)
-                putConsole(hex[(lr >> i) & 0xF], 0);
+        /* RP2040 prints only PC and LR. sigbus_c is __not_in_flash_func,
+           so every byte of it comes out of the RAM that sits below
+           AllMemory -- and AllMemory is 4 KB-aligned, so once this
+           function grows past a boundary the cost is a whole 4 KB page,
+           not the bytes added. That is what broke the VGAUSB link. Keep
+           the RP2040 dump minimal; the full register decode is RP2350
+           only. */
+        MMPrintString("PC=");
+        for (int i = 28; i >= 0; i -= 4)
+            putConsole(hex[(pc >> i) & 0xF], 0);
+        MMPrintString(" LR=");
+        for (int i = 28; i >= 0; i -= 4)
+            putConsole(hex[(lr >> i) & 0xF], 0);
 #endif
             MMPrintString("\r\n");
         }
@@ -4128,7 +4132,7 @@ uint32_t testPSRAM(void)
         // MMBasic reboot) holds its old USB address and ignores re-enumeration.
         // Enumeration is deferred to tuh_task() in the main loop, which runs
         // after the reset, so re-enumeration starts from a clean bus.
-        tuh_init(BOARD_TUH_RHPORT);
+        tusb_init(BOARD_TUH_RHPORT, &host_init);
         USB_host_controller_tuning(); // MULTI_HUB_FIX (rp2350)
         USB_bus_reset();              // force any attached hub back to Default state
                                       // (masks USBCTRL_IRQ across reset + 50ms recovery)
