@@ -517,24 +517,15 @@ unsigned char FunKey[NBRPROGKEYS][MAXKEYLEN + 1]; // data storage for the progra
 
 uint32_t DefinedSubFunMem;   // Records memory allocated to DefinedSubFun in case of an error
 int DefinedSubFunLocalIndex; // Records LocalIndex at start of DefinedSubFun in case of an error
-char digit[256] = {
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x10
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, // 0x20
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, // 0x30
-    0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x40
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x50
-    0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x60
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x70
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x80
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x90
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xA0
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xB0
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xC0
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xD0
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xE0
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // 0xF0
-};
+/* True for the characters that can appear inside a numeric literal:
+   0-9 . + - E e. Replaces a 256-byte lookup table (`digit[]`) - saves the
+   table's flash, and keeps it out of the RP2040 RAM-resident .data region
+   that sits below the 4 KB-aligned AllMemory heap. Single call site in the
+   number-token scanner below. */
+static inline int isnumchar(int c)
+{
+    return (c >= '0' && c <= '9') || c == '.' || c == '+' || c == '-' || c == 'E' || c == 'e';
+}
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Global information used by operators and functions
 //
@@ -3281,7 +3272,7 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
             p++;
 
             // Optimized digit parsing
-            while (digit[(uint8_t)*p] && (tsp - ts) < 30)
+            while (isnumchar((uint8_t)*p) && (tsp - ts) < 30)
             {
                 c = *p;
                 if (c >= '0' && c <= '9')
