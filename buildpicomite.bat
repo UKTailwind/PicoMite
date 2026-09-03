@@ -218,7 +218,11 @@ echo ========================================
 echo Building %compile%
 echo ========================================
 
-cmake -G "%generator%" -DCOMPILE=%compile% .. || exit /b 1
+rem CMAKE_BUILD_TYPE is pinned: the build dir is reused across variants and can
+rem inherit a stale Debug configuration from a VSCode/CMake-Tools session, which
+rem silently produces larger, less-optimised images. Release is the only thing
+rem this script should ever build.
+cmake -G "%generator%" -DCOMPILE=%compile% -DCMAKE_BUILD_TYPE=Release .. || exit /b 1
 nmake || exit /b 1
 
 if not exist "..\uf2\" mkdir "..\uf2"
