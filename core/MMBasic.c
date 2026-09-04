@@ -523,7 +523,6 @@ int DefinedSubFunLocalIndex; // Records LocalIndex at start of DefinedSubFun in 
    stay a single table load. MMBasic.c is compiled -Os, where the equivalent
    compare chain is ~7 instructions; using it everywhere cost PICORP2350 about
    7% in 6.03.02b2. Only the flash-tight PICOMITEMIN uses the inline test. */
-#if defined(rp2350)
 /* RAM-resident strlen/strchr for the interpreter loop.  ExecuteProgram, getvalue,
    findvar, cmd_for and makeargs call these on every statement; newlib's copies sit
    in flash and their address shifts with every unrelated code-size change, which
@@ -532,7 +531,6 @@ __attribute__((optimize("no-tree-loop-distribute-patterns"), section(".time_crit
 size_t strlen(const char *s) { const char *p = s; while (*p) p++; return (size_t)(p - s); }
 __attribute__((optimize("no-tree-loop-distribute-patterns"), section(".time_critical.strchr")))
 char *strchr(const char *s, int c) { for (;; s++) { if (*s == (char)c) return (char *)s; if (!*s) return NULL; } }
-#endif
 
 #if defined(PICOMITEMIN)
 static inline int isnumchar(int c)
