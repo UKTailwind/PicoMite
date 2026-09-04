@@ -517,15 +517,47 @@ unsigned char FunKey[NBRPROGKEYS][MAXKEYLEN + 1]; // data storage for the progra
 
 uint32_t DefinedSubFunMem;   // Records memory allocated to DefinedSubFun in case of an error
 int DefinedSubFunLocalIndex; // Records LocalIndex at start of DefinedSubFun in case of an error
-/* True for the characters that can appear inside a numeric literal:
-   0-9 . + - E e. Replaces a 256-byte lookup table (`digit[]`) - saves the
-   table's flash, and keeps it out of the RP2040 RAM-resident .data region
-   that sits below the 4 KB-aligned AllMemory heap. Single call site in the
-   number-token scanner below. */
+/* Characters that can appear inside a numeric literal: 0-9 . + - E e.
+   This sits on the hottest path in the interpreter - getvalue() scans every
+   numeric literal each time an expression is evaluated - so the test must
+   stay a single table load. MMBasic.c is compiled -Os, where the equivalent
+   compare chain is ~7 instructions; using it everywhere cost PICORP2350 about
+   7% in 6.03.02b2. Only the flash-tight PICOMITEMIN uses the inline test. */
+#if defined(PICOMITEMIN)
 static inline int isnumchar(int c)
 {
     return (c >= '0' && c <= '9') || c == '.' || c == '+' || c == '-' || c == 'E' || c == 'e';
 }
+#define ISNUMCHAR(c) isnumchar((uint8_t)(c))
+#else
+#if defined(rp2350)
+#define DIGIT_TABLE_QUAL /* .data: single-cycle SRAM, identical to 6.03.02b1 */
+#else
+/* RP2040: const puts the table in .rodata, keeping it OUT of the RAM-resident
+   .data region below the 4 KB-aligned AllMemory heap - VGAUSB's 100 KB heap
+   depends on that region staying under a page boundary. */
+#define DIGIT_TABLE_QUAL const
+#endif
+DIGIT_TABLE_QUAL char digit[256] = {
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x10
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, // 0x20
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, // 0x30
+    0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x40
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x50
+    0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x60
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x70
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x80
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0x90
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xA0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xB0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xC0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xD0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, // 0xE0
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0  // 0xF0
+};
+#define ISNUMCHAR(c) digit[(uint8_t)(c)]
+#endif
 ///////////////////////////////////////////////////////////////////////////////////////////////
 // Global information used by operators and functions
 //
@@ -3272,7 +3304,7 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
             p++;
 
             // Optimized digit parsing
-            while (isnumchar((uint8_t)*p) && (tsp - ts) < 30)
+            while (ISNUMCHAR(*p) && (tsp - ts) < 30)
             {
                 c = *p;
                 if (c >= '0' && c <= '9')
