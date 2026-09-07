@@ -1816,6 +1816,40 @@ void USB_sound_service(void)
 		active = 0;
 	}
 }
+
+/* USB host fault reporting.  The RP2 host driver used to answer three
+   recoverable bus conditions with panic(), which on a PicoMite is fatal AND
+   silent: pico-stdio is not routed to the console, so the panic text was
+   discarded and the breakpoint in _exit() surfaced only as MMBasic's own
+   "*** FAULT PC=..." line (on RP2040, with CFSR/HFSR printing as zero because
+   M0+ has no such registers).  Those sites now recover and record instead -
+   see tinyusb-patches/ - and this reports the record from the main loop,
+   never from the interrupt.  Capped at a few lines so a persistent fault
+   cannot flood the console.
+     DATA_SEQ  = data-toggle mismatch on the wire
+     BUFCTRL32 / BUFCTRL16 = a buffer re-armed while still marked available */
+extern volatile uint8_t pm_usb_fault_code;
+extern volatile uint16_t pm_usb_fault_count;
+void USB_fault_service(void)
+{
+	static uint16_t reported = 0;
+	static int lines = 0;
+	const uint16_t n = pm_usb_fault_count;
+	if (n == reported)
+		return;
+	reported = n;
+	if (lines >= 5)
+		return; /* stay quiet after the first few */
+	lines++;
+	char buff[16];
+	const uint8_t c = pm_usb_fault_code;
+	MMPrintString("\r\n[USB ");
+	MMPrintString(c == 1 ? "DATA_SEQ" : (c == 2 ? "BUFCTRL32" : (c == 3 ? "BUFCTRL16" : "?")));
+	MMPrintString(" x");
+	IntToStr(buff, n, 10);
+	MMPrintString(buff);
+	MMPrintString("]\r\n");
+}
 bool diff_than_2(uint8_t x, uint8_t y)
 {
 	return (x - y > 4) || (y - x > 4);

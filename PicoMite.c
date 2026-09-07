@@ -922,6 +922,10 @@ uint8_t PSRAMpin;
                other devices behind the hub. */
             extern void USB_sound_service(void);
             USB_sound_service();
+            /* Report any recoverable USB host fault the driver recovered from
+               (these used to be a silent, fatal panic - see tinyusb-patches/). */
+            extern void USB_fault_service(void);
+            USB_fault_service();
         }
 #endif
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)

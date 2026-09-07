@@ -6,7 +6,7 @@ set "start_time=%time%"
 echo Build started at: %start_time%
 echo.
 
-set "fixed_string=V6.03.02b2"
+set "fixed_string=V6.03.02b3"
 set "extension=.uf2"
 set "directory=../uf2/"
 set "generator=NMake Makefiles"

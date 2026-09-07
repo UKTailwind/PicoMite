@@ -1,9 +1,29 @@
 --- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
 +++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
-@@ -48,6 +48,40 @@
+@@ -48,6 +48,60 @@
  
  critical_section_t rp2usb_lock;
  
++/* PicoMite: USB host fault record.  The RP2 host driver answers three
++ * recoverable bus conditions with panic(), which on a PicoMite is both fatal
++ * and invisible: pico-stdio is not wired to the console, so panic()'s message
++ * is discarded and the breakpoint in _exit() surfaces only as MMBasic's own
++ * "*** FAULT PC=..." line (RP2040 has no CFSR/HFSR, so those print as zero and
++ * say nothing).  Record and recover instead; PicoMite reports the record from
++ * the main loop, off the interrupt (USB_fault_service, input/USBKeyboard.c).
++ *   1 = ERROR_DATA_SEQ, 2 = stale AVAIL in bufctrl_write32,
++ *   3 = stale AVAIL in bufctrl_write16. */
++#define PM_USB_FAULT_BUFCTRL32 2u
++#define PM_USB_FAULT_BUFCTRL16 3u
++volatile uint8_t  pm_usb_fault_code;
++volatile uint16_t pm_usb_fault_count;
++void __tusb_irq_path_func(pm_usb_fault_note)(uint8_t code) {
++  pm_usb_fault_code = code;
++  if (pm_usb_fault_count != 0xFFFFu) {
++    pm_usb_fault_count++;
++  }
++}
++
 +#ifdef PC3_USB_EVLOG
 +#include "hardware/timer.h"
 +/* PC3: timing-neutral event ring for the USB host driver.  A UART print in
@@ -41,7 +61,33 @@
  //--------------------------------------------------------------------+
  // Implementation
  //--------------------------------------------------------------------+
-@@ -196,7 +230,18 @@
+@@ -118,7 +172,13 @@
+   const uint32_t current    = *buf_reg;
+   const uint32_t avail_mask = USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16);
+   if (current & value & avail_mask) {
+-    panic("buf_ctrl @ 0x%lX already available", (uintptr_t)buf_reg);
++    /* PicoMite: was panic().  A still-armed AVAIL means the controller never
++     * finished the previous transfer on this buffer (a STOP_TRANS that raced,
++     * or a buffer abandoned on error).  Dropping the stale arming is exactly
++     * what the caller is about to do anyway, so clear it and re-arm rather
++     * than killing MMBasic. */
++    pm_usb_fault_note(PM_USB_FAULT_BUFCTRL32);
++    *buf_reg = 0;
+   }
+   *buf_reg = value & ~(USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16)); // write other bits first
+ 
+@@ -136,7 +196,9 @@
+ void __tusb_irq_path_func(bufctrl_write16)(io_rw_16 *buf_reg16, uint16_t value) {
+   const uint16_t current = *buf_reg16;
+   if (current & value & USB_BUF_CTRL_AVAIL) {
+-    panic("buf_ctrl @ 0x%lX already available", (uintptr_t)buf_reg16);
++    /* PicoMite: was panic() - see bufctrl_write32(). */
++    pm_usb_fault_note(PM_USB_FAULT_BUFCTRL16);
++    *buf_reg16 = 0;
+   }
+   *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
+ 
+@@ -196,7 +258,18 @@
    if (ep_reg != NULL) {
      uint32_t ep_ctrl = *ep_reg;
    #if CFG_TUH_ENABLED
@@ -61,7 +107,7 @@
    #else
      const bool force_single = false;
    #endif
-@@ -230,6 +275,9 @@
+@@ -230,6 +303,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -71,7 +117,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -356,6 +404,16 @@
+@@ -356,6 +432,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;

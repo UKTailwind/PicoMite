@@ -1,20 +1,32 @@
 --- a/src/portable/raspberrypi/rp2040/hcd_rp2040.c
 +++ b/src/portable/raspberrypi/rp2040/hcd_rp2040.c
-@@ -31,6 +31,7 @@
+@@ -31,8 +31,14 @@
  #if CFG_TUH_ENABLED && (CFG_TUSB_MCU == OPT_MCU_RP2040) && !CFG_TUH_RPI_PIO_USB && !CFG_TUH_MAX3421
  
    #include "pico.h"
 +  #include "hardware/timer.h" /* PicoMite: time_us_32 for the RX-timeout grace window */
  
-   #if defined(PICO_RP2350) && PICO_RP2350 == 1
+-  #if defined(PICO_RP2350) && PICO_RP2350 == 1
++  /* PicoMite: PM_FORCE_EPX_SOF makes an RP2350 build take the RP2040 EPX
++     path (SOF round-robin + STOP_TRANS) instead of the hardware
++     stop-on-NAK path, so RP2040-only code can be exercised on RP2350
++     hardware.  Both registers the SOF path touches (NAK_POLL, SOF_RD)
++     exist on RP2350.  Diagnostic only - never define it for a release. */
++  #if defined(PICO_RP2350) && PICO_RP2350 == 1 && !defined(PM_FORCE_EPX_SOF)
      #define HAS_STOP_EPX_ON_NAK
-@@ -232,9 +233,35 @@
+   #endif
+ 
+@@ -232,9 +238,39 @@
  //--------------------------------------------------------------------+
  // Interrupt handlers
  //--------------------------------------------------------------------+
 +#ifdef PC3_USB_EVLOG
 +void pc3_evlog_add(uint32_t tag, uint32_t a, uint32_t b, uint32_t c); /* rp2040_usb.c (patched) */
 +#endif
++
++/* PicoMite: USB host fault record - rp2040_usb.c (patched). */
++void pm_usb_fault_note(uint8_t code);
++#define PM_USB_FAULT_DATA_SEQ 1u
 +
 +/* PicoMite: restore TinyUSB 0.20's RX-timeout tolerance for CONTROL
 + * transfers, bounded. 0.20 never failed a transfer on RX_TIMEOUT - it
@@ -44,7 +56,7 @@
    rp2usb_reset_transfer(ep);
    hcd_event_xfer_complete(ep->dev_addr, ep->ep_addr, xferred_len, xfer_result, true);
  
-@@ -303,6 +330,9 @@
+@@ -303,6 +339,9 @@
  
  static void __tusb_irq_path_func(hcd_rp2040_irq)(void) {
    const uint32_t status = usb_hw->ints;
@@ -54,7 +66,7 @@
  
    if (status & USB_INTS_HOST_CONN_DIS_BITS) {
      uint8_t speed = dev_speed();
-@@ -327,6 +357,20 @@
+@@ -327,6 +366,20 @@
    if (status & USB_INTS_ERROR_RX_TIMEOUT_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_RX_TIMEOUT_BITS;
  
@@ -75,7 +87,7 @@
      const uint32_t sie_ctrl = (usb_hw->sie_ctrl & SIE_CTRL_BASE_MASK) | USB_SIE_CTRL_STOP_TRANS_BITS;
      usb_hw->sie_ctrl        = sie_ctrl;
      // while (usb_hw->sie_ctrl & USB_SIE_CTRL_STOP_TRANS_BITS) {}
-@@ -334,8 +378,17 @@
+@@ -334,8 +387,17 @@
      // Even if STOP_TRANS bit is clear, controller maybe in middle of retrying and may re-raise timeout once extra time
      // Only handle if epx is active, don't carry more epx transfer since STOP_TRANS is raced and not safe.
      if (epx->state == EPSTATE_ACTIVE) {
@@ -93,3 +105,53 @@
    }
  
    if (status & USB_INTS_TRANS_COMPLETE_BITS) {
+@@ -384,9 +446,30 @@
+       if (epx_switch_request) {
+         // Second SOF with no transfer completion: endpoint is NAK-retrying, safe to switch.
+         epx_switch_request = false;
+-        sie_stop_xfer();
+-        epx_save_context(epx);
+-        epx_switch_ep(next_ep);
++        /* PicoMite: only preempt a transfer that has not moved any data yet.
++         * epx_save_context() must infer, from AVAIL/FULL alone, whether the
++         * packet it is unwinding completed on the wire; once a transfer is
++         * part-way through that inference can be wrong, and guessing wrong
++         * flips next_pid, so the device next reply arrives with the
++         * unexpected PID -> ERROR_DATA_SEQ.  With xferred_len == 0 there is
++         * nothing to unwind but the armed-and-unstarted buffer, which is the
++         * well-defined case.  Declining costs little: an endpoint that has
++         * already transferred data is by definition not NAK-starved, and its
++         * completion path (xfer_complete_isr with is_more) picks up the next
++         * pending endpoint at a clean packet boundary.  The RP2350
++         * stop-on-NAK path above is untouched - the controller stops that one
++         * at a packet boundary, so it has no such ambiguity. */
++  #ifdef PM_EPX_PREEMPT_UNGUARDED
++        /* Diagnostic A/B only: stock 0.21.0 behaviour, preempt regardless. */
++        const bool pm_may_preempt = true;
++  #else
++        const bool pm_may_preempt = (epx->xferred_len == 0);
++  #endif
++        if (pm_may_preempt) {
++          sie_stop_xfer();
++          epx_save_context(epx);
++          epx_switch_ep(next_ep);
++        }
+       } else {
+         epx_switch_request = true;
+       }
+@@ -396,7 +479,14 @@
+ 
+   if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
+     usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
+-    panic("Data Seq Error \n");
++    /* PicoMite: was panic().  A data-toggle mismatch is a recoverable bus
++     * condition.  0.20 shipped the identical panic but never preempted a live
++     * transfer, so nothing ever desynchronised the toggle and it effectively
++     * could not fire; 0.21 EPX round-robin reconstructs the toggle by hand
++     * after a STOP_TRANS, which is the only way EPX can be switched on RP2040
++     * (no HAS_STOP_EPX_ON_NAK).  Clear the latch, record it, and let the SIE
++     * retry and usbh time the pipe out - exactly what 0.20 did. */
++    pm_usb_fault_note(PM_USB_FAULT_DATA_SEQ);
+   }
+ }
+ 

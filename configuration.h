@@ -144,7 +144,18 @@ extern "C"
 #define MIN_CPU 252000
 #ifdef USBKEYBOARD
 #define FLASH_TARGET_OFFSET (1040 * 1024)
-#define HEAP_MEMORY_SIZE (164 * 1024)
+   /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
+      BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
+      __end__ up until that gap fell well under 4096 bytes - below which
+      dlmalloc can never grow the arena (it page-rounds every sbrk after the
+      first, and the SDK's _sbrk is strict).  It also left the arena's top
+      reaching into the region core0's 8 KB stack overflows into during a
+      recursive FM directory copy, corrupting malloc and surfacing as a SILENT
+      panic("Out of memory") - a bare "FAULT PC=..." with CFSR=0 and
+      HFSR=80000000 (DEBUGEVT = the BKPT in _exit).  Heap moves only in 4 KB
+      steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
+      and [[project_core0_stack_overflow_fm]]. */
+#define HEAP_MEMORY_SIZE (160 * 1024)
 #define MagicKey 0x4C73A942
 #else
 #define FLASH_TARGET_OFFSET (1008 * 1024)
@@ -165,7 +176,11 @@ extern "C"
 #ifdef USBKEYBOARD
 #define FLASH_TARGET_OFFSET (832 * 1024)
 #define MagicKey 0xCD8778E7
-#define HEAP_MEMORY_SIZE (100 * 1024)
+   /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
+      above - see the note there. VGAUSB's newlib C heap (__StackLimit -
+      __end__) was 4732 bytes, only ~640 bytes clear of the 4096 page
+      cliff below which dlmalloc can never grow the arena. */
+#define HEAP_MEMORY_SIZE (96 * 1024)
 #else
 #define FLASH_TARGET_OFFSET (800 * 1024)
 #define HEAP_MEMORY_SIZE (100 * 1024)
@@ -251,7 +266,18 @@ extern "C"
       share the same SRAM block; growing BSS past the boundary
       silently corrupts heap-adjacent statics (see memory note
       "heap-bss-overlap-on-rp2350"). */
-#define HEAP_MEMORY_SIZE (300 * 1024)
+   /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
+      BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
+      __end__ up until that gap fell well under 4096 bytes - below which
+      dlmalloc can never grow the arena (it page-rounds every sbrk after the
+      first, and the SDK's _sbrk is strict).  It also left the arena's top
+      reaching into the region core0's 8 KB stack overflows into during a
+      recursive FM directory copy, corrupting malloc and surfacing as a SILENT
+      panic("Out of memory") - a bare "FAULT PC=..." with CFSR=0 and
+      HFSR=80000000 (DEBUGEVT = the BKPT in _exit).  Heap moves only in 4 KB
+      steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
+      and [[project_core0_stack_overflow_fm]]. */
+#define HEAP_MEMORY_SIZE (296 * 1024)
 #elif defined(PICOMITEBT)
    /* PICOMITEBT replaces USB CDC console with BLE Nordic UART Service over
       CYW43439. The CYW43 + btstack stack can't reliably keep up at very
@@ -297,7 +323,18 @@ extern "C"
 #ifdef USBKEYBOARD
 #define MagicKey 0xEE897110
 #define FLASH_TARGET_OFFSET (912 * 1024)
-#define HEAP_MEMORY_SIZE (132 * 1024)
+   /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
+      BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
+      __end__ up until that gap fell well under 4096 bytes - below which
+      dlmalloc can never grow the arena (it page-rounds every sbrk after the
+      first, and the SDK's _sbrk is strict).  It also left the arena's top
+      reaching into the region core0's 8 KB stack overflows into during a
+      recursive FM directory copy, corrupting malloc and surfacing as a SILENT
+      panic("Out of memory") - a bare "FAULT PC=..." with CFSR=0 and
+      HFSR=80000000 (DEBUGEVT = the BKPT in _exit).  Heap moves only in 4 KB
+      steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
+      and [[project_core0_stack_overflow_fm]]. */
+#define HEAP_MEMORY_SIZE (128 * 1024)
 #else
 #ifdef PICOMITEMIN
 #define FLASH_TARGET_OFFSET (688 * 1024)

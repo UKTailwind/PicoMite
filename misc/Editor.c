@@ -873,11 +873,21 @@ typedef struct
     int name_stride;
     int *type_next;
     unsigned char *marks;
-    int type_head[256];
+    /* Heap-allocated with the rest of the panel cache.  This was an inline
+       int[256] - 1 KB per panel, 2 KB across the two panels in cmd_fm - which
+       helped push cmd_fm's frame to 5824 bytes, 72% of the 8 KB core0 stack.
+       A recursive directory copy then ran the stack past __StackLimit into the
+       C heap and corrupted malloc's arena, surfacing as a silent panic
+       ("Out of memory") - see the dr_wav/dr_flac stack arrays for the same
+       remedy: move the big buffer to the MMBasic heap. */
+    int *type_head;
     int entry_count;
     int marked_count;
     int cache_valid;
 } fm_panel_t;
+
+#define FM_TYPE_HEAD_N 256
+#define FM_TYPE_HEAD_BYTES ((int)(FM_TYPE_HEAD_N * sizeof(int)))
 
 typedef struct
 {
@@ -1312,10 +1322,10 @@ static int fm_parse_panel_context_line(const char *line, fm_panel_t *panel)
     panel->name_stride = 0;
     panel->type_next = NULL;
     panel->marks = NULL;
+    panel->type_head = NULL;
     panel->entry_count = 0;
     panel->marked_count = 0;
     panel->cache_valid = 0;
-    memset(panel->type_head, 0xFF, sizeof(panel->type_head));
     return 1;
 }
 
@@ -1652,12 +1662,12 @@ static void fm_free_panel_cache(fm_panel_t *panel)
     FreeMemorySafe((void **)&panel->name_pool);
     FreeMemorySafe((void **)&panel->type_next);
     FreeMemorySafe((void **)&panel->marks);
+    FreeMemorySafe((void **)&panel->type_head);
     panel->name_stride = 0;
     panel->entry_count = 0;
     panel->count = 0;
     panel->marked_count = 0;
     panel->cache_valid = 0;
-    memset(panel->type_head, 0xFF, sizeof(panel->type_head));
 }
 
 // If the inactive panel is showing the same directory as the active panel,
@@ -1850,7 +1860,8 @@ static int fm_build_panel_cache(fm_panel_t *panel, char *errmsg, int errmsglen)
     panel->name_pool = GetMemory(panel->name_stride * count);
     panel->type_next = GetMemory(sizeof(int) * count);
     panel->marks = GetMemory(count);
-    if (!panel->entries || !panel->name_pool || !panel->type_next || !panel->marks)
+    panel->type_head = GetMemory(FM_TYPE_HEAD_BYTES);
+    if (!panel->entries || !panel->name_pool || !panel->type_next || !panel->marks || !panel->type_head)
     {
         fm_free_panel_cache(panel);
         snprintf(errmsg, errmsglen, "Not enough memory for FM list");
@@ -2011,7 +2022,7 @@ static int fm_build_panel_cache(fm_panel_t *panel, char *errmsg, int errmsglen)
             qsort(&panel->entries[1], panel->entry_count - 1, sizeof(fm_entry_t), fm_entry_cmp_name);
     }
 
-    memset(panel->type_head, 0xFF, sizeof(panel->type_head));
+    memset(panel->type_head, 0xFF, FM_TYPE_HEAD_BYTES);
     for (i = panel->entry_count - 1; i >= 1; i--)
     {
         int key = tolower((unsigned char)panel->entries[i].name[0]);
@@ -3535,6 +3546,11 @@ static int fm_find_prefix_match(fm_panel_t *panel, const char *prefix, int *matc
 
     key = tolower((unsigned char)prefix[0]);
 
+    /* fm_build_panel_cache() can return success with an empty panel; the
+       cache pointers are only guaranteed once there are entries. */
+    if (!panel->type_head || !panel->type_next || !panel->entries)
+        return 0;
+
     for (i = panel->type_head[key]; i != -1; i = panel->type_next[i])
     {
         if (fm_name_starts_with_icase(panel->entries[i].name, prefix))
@@ -4522,7 +4538,6 @@ fm_relaunch:
     for (pi = 0; pi < 2; pi++)
     {
         panels[pi].sortorder = FM_SORT_NAME;
-        memset(panels[pi].type_head, 0xFF, sizeof(panels[pi].type_head));
     }
 
     panels[0].filesystem = 0;

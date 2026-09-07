@@ -415,6 +415,32 @@ if(PC3_USB_EVLOG)
         PROPERTIES COMPILE_DEFINITIONS "PC3_USB_EVLOG;PC3_EVLOG_N=112")
 endif()
 
+# Diagnostic: force an RP2350 build to take the RP2040 EPX-switch path in the
+# TinyUSB host driver (SOF round-robin + STOP_TRANS) instead of the RP2350
+# hardware stop-on-NAK path. The RP2040-only path cannot otherwise be exercised
+# on RP2350 hardware. Enable with -DFORCE_EPX_SOF=ON at configure; OFF costs
+# nothing. NEVER ship a release with this on.
+option(FORCE_EPX_SOF "Force the RP2040 EPX SOF round-robin path on RP2350" OFF)
+if(FORCE_EPX_SOF)
+    # APPEND: PC3_USB_EVLOG above may already have set definitions on this file
+    set_property(SOURCE
+        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/hcd_rp2040.c
+        APPEND PROPERTY COMPILE_DEFINITIONS "PM_FORCE_EPX_SOF;PM_EPX_STATS")
+    message(STATUS "PicoMite: FORCE_EPX_SOF=ON - RP2350 uses the RP2040 EPX SOF path")
+endif()
+
+# Diagnostic A/B partner for FORCE_EPX_SOF: restore stock 0.21.0 behaviour and
+# let the SOF round-robin preempt a transfer that has already moved data - the
+# data-toggle desync that made the RP2040 panic. Use it to demonstrate the
+# failure; leave it OFF for any real build.
+option(EPX_PREEMPT_UNGUARDED "Diagnostic: let the SOF round-robin preempt mid-transfer" OFF)
+if(EPX_PREEMPT_UNGUARDED)
+    set_property(SOURCE
+        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/hcd_rp2040.c
+        APPEND PROPERTY COMPILE_DEFINITIONS "PM_EPX_PREEMPT_UNGUARDED")
+    message(WARNING "PicoMite: EPX_PREEMPT_UNGUARDED=ON - diagnostic build, do not ship")
+endif()
+
 # Project root on the include path so source files can be relocated into
 # subdirectories without rewriting their bare-filename includes
 # (#include "Custom.h" etc.). Harmless for the current flat layout — every
