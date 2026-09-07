@@ -1,0 +1,51 @@
+PicoMite User Manual - consistency check
+Manual: PicoMite_User_Manual.docx  (Ver 6.03.02, 7 September 2026)
+Source: main @ 6b88df2, firmware V6.03.02b2
+Method: per-variant commandtbl[]/tokentbl[] extracted with arm-none-eabi-gcc -E
+        over AllCommands.h for all 16 shipped variants, diffed against the
+        five reference tables read out of the .docx.
+
+REFERENCE TABLE SIZES
+  Predefined Read Only Variables      39
+  Options                             86
+  Commands                           381
+  Functions                          105
+  Obsolete Commands and Functions     15
+
+KEYWORD COVERAGE
+  313 top-level keywords across the 16 variants.
+  40 have no row of their own in a reference table; every one is accounted for:
+    - 16  PIO assembler mnemonics (IN JMP MOV NOP OUT PULL PUSH SET WAIT and
+          the IRQ forms) - documented in Appendix F
+    - 16  BASIC clause keywords (AS CASE ELSE IF END IF END SELECT EXIT FOR
+          STEP THEN TO UNTIL WHILE ...) - documented under their parent statement
+    -  2  CTRLVAL() and MSGBOX() - Advanced Graphics Functions.pdf, via Appendix L
+    -  6  documented under different wording (CALC, CMM2 RUN, COLOR, EDIT FILE,
+          FLAGS, WII CLASSIC)
+  0 unexplained gaps.
+
+APPLICABILITY NOTATION
+  Underlining in a reference description means applicability and nothing else.
+  25 version labels + 7 conditions, all defined in Appendix K.
+  43 of the 86 Options rows carry a label; the other 43 are available on all
+  sixteen images.
+
+PDF   PDF/PicoMite_User_Manual.pdf  (+ PicoMite_User_ManualV6.03.02b2.pdf)
+      pre-bookmark export kept as PicoMite_User_Manual.pdf.bak_nobm
+  290 pages, 42 top-level bookmarks, 540 leaf bookmarks, 841 bookmarks total.
+  Bookmark coverage 100% in every section:
+    Predefined Read Only Variables 23/23, Options 75/75, Commands 336/336,
+    Functions 91/91, Obsolete 15/15.
+
+COMPANION MANUALS
+  All 20 PDFs referenced by the manual were checked against PDF/ and every one
+  is present. The reference to "Graphics in the PicoMite.pdf" was removed - no
+  such document exists; the graphics documentation is Advanced Graphics
+  Functions.pdf and 3D_Graphics_User_Manual.pdf, both listed in Appendices L
+  and M.
+
+NOT LISTED (deliberate)
+  Three PDFs in PDF/ are not referenced by the manual and are not in Appendix M:
+    CONVERTER.pdf  (6 pp)  - PC-side video/image converter tool
+    armcfgen.pdf   (15 pp) - PC-side CSUB generator tool
+    vs1053.pdf     (89 pp) - third-party VS1053 chip datasheet, not a manual

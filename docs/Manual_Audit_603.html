@@ -1,0 +1,550 @@
+<title>PicoMite Manual Endgame</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --ground:#eceff2; --surface:#ffffff; --surface-2:#f4f6f8;
+  --ink:#15191d; --ink-2:#4b545c; --ink-3:#727d86;
+  --rule:#d2d9df; --rule-soft:#e3e8ec;
+  --copper:#9c5326; --copper-2:#b8703f;
+  --wrong:#9e2129; --gap:#8a6510; --struct:#28607e;
+  --yes:#2f6f4e; --no:#c3cbd2;
+  --display:"Archivo",-apple-system,"Segoe UI",sans-serif;
+  --body:"Source Serif 4",Georgia,"Times New Roman",serif;
+  --mono:"JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+  --measure:68ch;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --ground:#131719; --surface:#1a1f22; --surface-2:#20262a;
+    --ink:#e7eaec; --ink-2:#adb6bd; --ink-3:#8a949c;
+    --rule:#2e363b; --rule-soft:#252c31;
+    --copper:#d98d55; --copper-2:#e0a074;
+    --wrong:#e4757a; --gap:#d9b055; --struct:#78b3d0;
+    --yes:#63b189; --no:#3a444a;
+  }
+}
+:root[data-theme="dark"]{
+  --ground:#131719; --surface:#1a1f22; --surface-2:#20262a;
+  --ink:#e7eaec; --ink-2:#adb6bd; --ink-3:#8a949c;
+  --rule:#2e363b; --rule-soft:#252c31;
+  --copper:#d98d55; --copper-2:#e0a074;
+  --wrong:#e4757a; --gap:#d9b055; --struct:#78b3d0;
+  --yes:#63b189; --no:#3a444a;
+}
+*{box-sizing:border-box}
+body{background:var(--ground);color:var(--ink);font-family:var(--body);
+     font-size:16.5px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px 96px;display:flex;flex-direction:column;gap:46px}
+.prose{max-width:var(--measure)}
+h1,h2,h3,.lab{font-family:var(--display)}
+h1{font-size:clamp(30px,4.6vw,44px);line-height:1.08;margin:0;font-weight:700;letter-spacing:-.022em;text-wrap:balance}
+h2{font-size:24px;line-height:1.2;margin:0;font-weight:600;letter-spacing:-.012em;text-wrap:balance}
+h3{font-size:16px;margin:0;font-weight:600;letter-spacing:-.005em}
+p{margin:0 0 .85em}
+p:last-child{margin-bottom:0}
+code,.kw{font-family:var(--mono);font-size:.855em;background:var(--surface-2);
+     padding:.08em .34em;border-radius:2px;color:var(--copper);border:1px solid var(--rule-soft)}
+.lab{font-size:11px;text-transform:uppercase;letter-spacing:.13em;color:var(--ink-3);font-weight:600}
+
+header{padding:56px 0 26px;border-bottom:3px solid var(--ink);
+       display:flex;flex-direction:column;gap:18px}
+.meta{display:flex;flex-wrap:wrap;gap:8px 26px;font-family:var(--mono);font-size:11.5px;color:var(--ink-2)}
+.meta b{color:var(--ink);font-weight:600}
+.dek{font-size:18.5px;color:var(--ink-2);max-width:60ch;margin:0}
+
+.sec{display:flex;flex-direction:column;gap:20px}
+.sec-head{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--rule);padding-bottom:8px}
+.sec-head .lab{white-space:nowrap}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));
+       border:1px solid var(--rule);background:var(--surface)}
+.stat{padding:16px 18px;border-right:1px solid var(--rule-soft);display:flex;flex-direction:column;gap:4px}
+.stat:last-child{border-right:0}
+.stat .n{font-family:var(--display);font-size:27px;font-weight:700;line-height:1;
+         font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat .t{font-size:13px;color:var(--ink-2);line-height:1.35}
+.stat.bad .n{color:var(--wrong)}
+.stat .t code{font-size:11px}
+
+.finds{display:flex;flex-direction:column;border:1px solid var(--rule);background:var(--surface)}
+.find{display:grid;grid-template-columns:78px 1fr;border-bottom:1px solid var(--rule-soft)}
+.find:last-child{border-bottom:0}
+.find > .id{padding:16px 0 16px 14px;font-family:var(--mono);font-size:12px;font-weight:600;
+            color:var(--ink-3);border-left:4px solid var(--no)}
+.find.e > .id{border-left-color:var(--wrong);color:var(--wrong)}
+.find.g > .id{border-left-color:var(--gap);color:var(--gap)}
+.find.s > .id{border-left-color:var(--struct);color:var(--struct)}
+.find .bd{padding:14px 18px 17px 4px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.find p{font-size:15px;color:var(--ink-2);margin:0}
+.cmp{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:13.5px;align-items:baseline;margin:0}
+.cmp dt{font-family:var(--display);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;
+        color:var(--ink-3);font-weight:600;padding-top:3px;white-space:nowrap}
+.cmp dd{margin:0;font-family:var(--mono);font-size:12.5px;line-height:1.55;color:var(--ink);min-width:0;overflow-wrap:anywhere}
+.was{color:var(--wrong)}
+.src{font-family:var(--mono);font-size:11px;color:var(--ink-3);overflow-wrap:anywhere}
+
+.scroll{overflow-x:auto;border:1px solid var(--rule);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 9px;border-bottom:1px solid var(--rule-soft);white-space:nowrap}
+thead th{font-family:var(--display);font-size:10px;text-transform:uppercase;letter-spacing:.07em;
+         color:var(--ink-3);font-weight:600;border-bottom:1px solid var(--rule);vertical-align:bottom;background:var(--surface)}
+tbody tr:last-child td{border-bottom:0}
+td.kwcell{font-family:var(--mono);font-size:11.5px;white-space:normal;min-width:230px;line-height:1.55}
+td.c{text-align:center;padding:7px 5px;font-family:var(--mono);font-size:12px}
+td.num{text-align:right;font-variant-numeric:tabular-nums}
+.on{color:var(--yes);font-weight:600}
+.off{color:var(--no)}
+th.grp,td.grp{border-left:1px solid var(--rule)}
+tbody tr:nth-child(even){background:var(--surface-2)}
+
+.phases{display:flex;flex-direction:column}
+.ph{display:grid;grid-template-columns:58px 1fr;border-top:1px solid var(--rule);padding:20px 0}
+.ph:last-child{border-bottom:1px solid var(--rule)}
+.ph .num{font-family:var(--display);font-size:13px;font-weight:700;color:var(--copper);
+         font-variant-numeric:tabular-nums;padding-top:3px}
+.ph .bd{display:flex;flex-direction:column;gap:10px;max-width:var(--measure)}
+.ph ul{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:5px;font-size:15px;color:var(--ink-2)}
+.ph .out{font-size:13.5px;font-family:var(--display);color:var(--ink-3);
+         border-left:2px solid var(--copper);padding-left:12px;line-height:1.5}
+.ph .out b{color:var(--ink-2);font-weight:600}
+
+.note{background:var(--surface);border:1px solid var(--rule);border-left:3px solid var(--copper);
+      padding:15px 18px;font-size:15px;color:var(--ink-2);max-width:var(--measure)}
+.note b{color:var(--ink)}
+.ok{font-size:15px;color:var(--ink-2)}
+.ok ul{margin:0;padding-left:19px;display:flex;flex-direction:column;gap:6px}
+.legend{display:flex;flex-wrap:wrap;gap:18px;font-size:12.5px;color:var(--ink-2);font-family:var(--display)}
+.chip{display:inline-flex;align-items:center;gap:6px}
+.sw{width:11px;height:11px;border-radius:2px;display:inline-block}
+footer{border-top:1px solid var(--rule);padding-top:18px;font-size:13px;color:var(--ink-3);max-width:var(--measure)}
+@media (max-width:640px){
+  .find{grid-template-columns:1fr}
+  .find > .id{padding:12px 14px 0;border-left-width:4px}
+  .find .bd{padding:8px 16px 16px 18px}
+  .ph{grid-template-columns:1fr;gap:10px}
+  .cmp{grid-template-columns:1fr;gap:2px 0}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+
+<header>
+  <div class="lab">Documentation audit &middot; MMBasic firmware</div>
+  <h1>PicoMite Manual Endgame</h1>
+  <p class="dek">A code-derived audit of <em>PicoMite_User_Manual.docx</em> against the V6.03.02b2 source tree, and the work list to close it out as the final manual.</p>
+  <div class="meta">
+    <span><b>Manual</b> V6.03.02b2, 617 reference rows</span>
+    <span><b>Source</b> 6b88df2 on main</span>
+    <span><b>Variants compared</b> 16 shipped .uf2</span>
+    <span><b>Method</b> preprocessor-exact</span>
+  </div>
+</header>
+
+<section class="sec">
+  <div class="note" style="max-width:none;border-left-color:var(--yes)">
+    <b>Status &mdash; phases 01 and 02 complete.</b>
+    <b>Phase 01:</b> every error below (E1&ndash;E8, G0&ndash;G3, S1&ndash;S2) applied to
+    <code>docs/PicoMite_User_Manual.docx</code> as 54 scripted edits, each asserting an exact match count.
+    Reference-table sizes after it: Commands 379 and Functions 105 unchanged,
+    Options 81&nbsp;&rarr;&nbsp;83, Read-only variables 37&nbsp;&rarr;&nbsp;38.
+    <b>Phase 02:</b> a further 39 edits collapsed the <b>46 ad-hoc flag wordings to 31</b>, every one
+    of them now in the closed list; added <b>Appendix K &mdash; Firmware Version Applicability</b>,
+    which defines each label as an explicit list of firmware images; and made underlining mean
+    applicability and nothing else. The authoring rule is in <code>docs/MANUAL_STYLE.md</code>.
+    <b>Phase 03:</b> 31 more edits took the Options listing from <b>19 labelled rows to 43 of 86</b>,
+    split <code>OPTION KEYBOARD</code> into its PS/2 and USB/Bluetooth forms, gave
+    <code>OPTION CACHE DEBUG</code> and <code>OPTION CACHE SUB</code> entries of their own, and
+    repaired the <code>OPTION CPUSPEED</code> and <code>OPTION RESOLUTION</code> rows, which still
+    carried errors phase 01 had fixed only in the body chapters. Two labels were added to Appendix K
+    (<code>PS2 KEYBOARD VERSIONS ONLY</code>, <code>TRACE CACHE VERSIONS ONLY</code>).
+    <b>Phase 04:</b> 11 edits took the four sub-keyword decisions. Companion manuals kept, with a new
+    <b>Appendix L &mdash; Where Each Keyword Is Documented</b> resolving every family that lives in one;
+    a single sentence covers the COLOR/COLOUR and GRAY/GREY spellings; the seven firmware diagnostics
+    get one entry saying they are unsupported; and the genuinely missing syntax is written up
+    (<code>COPY A2A/A2B/B2A/B2B</code>, <code>FLASH MODBUFF LOAD</code>,
+    <code>GAMEPAD MONITOR SILENT</code>, Turtle <code>ARECTANGLE</code>, the Turtle alias list, and the
+    RP2350 PWM channel range). A Turtle <code>FILL</code> command that the appendix documented but the
+    firmware does not implement was removed. Reviewing the code also turned up three firmware defects,
+    which have <b>since been fixed in the source</b> &mdash; <code>PENDOWNU</code> is now
+    <code>PENDOWN</code>, <code>PWM711</code> is now <code>PWM11A</code>, and
+    <code>PIO DMA TX TABLE</code> has been deleted &mdash; and the manual follows the corrected firmware.
+    <b>Phase 05:</b> new <b>Appendix M &mdash; Companion Manuals</b> lists all 21 with what each covers
+    and which versions it applies to; the <code>Raycaster_User_manual.pdf</code> case mismatch is fixed;
+    and the Appendix L pointer to <code>ONESHOT_User_Manual.pdf</code> was dropped, since no generator
+    builds that PDF and ONESHOT already has three full entries in the Commands listing. Every other
+    referenced PDF was checked against a generator or source in <code>docs/</code> and resolves &mdash;
+    the one exception is noted below.
+    <b>Phase 06:</b> the Obsolete section now states the entries are deprecated but permanent rather
+    than threatening removal; the title page drops "Draft" and carries a current date; HDMIBTH was
+    confirmed absent (0 mentions). <b>The PDF is rebuilt</b> &mdash; Word export with the table of
+    contents refreshed, then <code>add_manual_bookmarks.py</code>: <b>290 pages, 42 top-level bookmarks,
+    540 leaf bookmarks</b>, and <b>100% bookmark coverage in all five sections</b>
+    (23/23, 75/75, 336/336, 91/91, 15/15).
+    Backups: <code>.bak_audit603</code> through <code>.bak_phase05</code>.
+  </div>
+  <div class="note" style="max-width:none;border-left-color:var(--yes)">
+    <b>Release gate met.</b> The final check finds <b>0 unexplained gaps</b>. Of 313 keywords, 40 have
+    no reference row of their own and every one is accounted for: 16 PIO assembler mnemonics
+    (Appendix F), 16 BASIC clause keywords documented under their parent statement,
+    <code>CTRLVAL()</code> and <code>MSGBOX()</code> routed through Appendix L, and six documented under
+    different wording. The report is archived at <code>docs/manual_check_603.txt</code>.
+  </div>
+  <div class="note" style="max-width:none;border-left-color:var(--yes)">
+    <b>Companion references verified against what ships.</b> All 20 PDFs the manual names are present in
+    <code>PDF/</code> &mdash; checked file by file, not inferred from the generators.
+    <code>Graphics in the PicoMite.pdf</code> was the one exception: no such document exists, so both the
+    sentence in the Graphics Functions chapter and its Appendix M row have been removed. Three PDFs in
+    <code>PDF/</code> stay out of Appendix M by intent: <code>CONVERTER.pdf</code> and
+    <code>armcfgen.pdf</code> document PC-side tools, and <code>vs1053.pdf</code> is the third-party
+    VS1053 chip datasheet rather than a PicoMite manual.
+  </div>
+</section>
+
+<section class="sec">
+  <div class="sec-head"><span class="lab">01</span><h2>How this was measured</h2></div>
+  <div class="prose">
+    <p>Rather than read for plausibility, I built the keyword inventory the firmware actually has and diffed the manual against it. Three extractions, all repeatable:</p>
+    <ul style="font-size:15px;color:var(--ink-2);padding-left:19px;margin:0 0 .9em;display:flex;flex-direction:column;gap:7px">
+      <li><b>Token tables per variant.</b> <code>arm-none-eabi-gcc -E</code> run over <code>AllCommands.h</code> and the other table headers with each variant's real macro set from <code>CMakeLists.txt</code>, giving the exact <code>commandtbl[]</code> and <code>tokentbl[]</code> contents for all sixteen builds. Cross-check: HDMIWEB comes out at 126 function tokens plus the NULL entry &mdash; 127, the known 7-bit ceiling.</li>
+      <li><b>Second-level keywords.</b> Every <code>checkstring()</code> literal in the tree (1,832 sites) tagged with its enclosing <code>cmd_</code>/<code>fun_</code> handler and its live <code>#if</code> stack. This is where <code>OPTION&nbsp;&hellip;</code>, <code>MM.INFO(&hellip;)</code>, panel names and sub-commands live.</li>
+      <li><b>Manual reference rows.</b> The five reference tables pulled out of the .docx with run-level underline formatting preserved, so the underlined-caps version flags could be read as data rather than prose.</li>
+    </ul>
+    <p>Group tokens &mdash; <code>base$(</code>, <code>SChange$(</code>, <code>TopBottom(</code>, <code>~(</code> &mdash; were excluded from the missing-from-manual counts. The manual correctly documents <code>HEX$</code>, <code>LCASE$</code>, <code>MIN</code>, <code>MM.HRES</code> and the rest by their user-facing names.</p>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="sec-head"><span class="lab">02</span><h2>The shape of the result</h2></div>
+  <div class="stats">
+    <div class="stat"><span class="n">313</span><span class="t">top-level keywords across all variants</span></div>
+    <div class="stat"><span class="n">15</span><span class="t">reference rows with no code token, all explained</span></div>
+    <div class="stat bad"><span class="n">0</span><span class="t">of 81 <code>OPTION</code> rows carry a version qualifier</span></div>
+    <div class="stat bad"><span class="n">63</span><span class="t">of 157 <code>OPTION</code> keywords are variant-specific</span></div>
+    <div class="stat bad"><span class="n">180</span><span class="t">sub-keywords absent from the manual entirely</span></div>
+  </div>
+  <div class="prose ok">
+    <p><b>What is already in good shape.</b> The manual is far more complete than it is accurate; the gaps are concentrated rather than diffuse.</p>
+    <ul>
+      <li>Coverage of the command and function tables is essentially total. Six command rows and nine function rows have no matching code token, and every one is explained &mdash; shortcut syntax such as <code>*file</code> and <code>A:</code>, or names the tokeniser rewrites into group tokens.</li>
+      <li>Only three <code>OPTION</code> keywords are missing from the Options table, and one of those (<code>OPTION F8</code>) is already covered by the <code>OPTION FNKey</code> row.</li>
+      <li>The GUI Integration chapter's input-device matrix and the HDMIWEB resolution list are both correct against the code, which is evidence that the per-variant approach works when it is actually applied.</li>
+    </ul>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="sec-head"><span class="lab">03</span><h2>Errors a reader would act on</h2></div>
+  <p class="prose" style="font-size:15px;color:var(--ink-2)">Each of these produces a syntax error, an unknown-command error, or a wrong design decision if followed. Ordered by how directly they block a user.</p>
+  <div class="legend">
+    <span class="chip"><span class="sw" style="background:var(--wrong)"></span>Wrong fact</span>
+    <span class="chip"><span class="sw" style="background:var(--gap)"></span>Missing or undocumented</span>
+    <span class="chip"><span class="sw" style="background:var(--struct)"></span>Structural</span>
+  </div>
+
+  <div class="finds">
+
+    <div class="find e"><div class="id">E1</div><div class="bd">
+      <h3>Buffered SSD1963 driver names carry stray spaces</h3>
+      <p>Five of the six buffered parallel drivers are unusable as printed. Only <code>SSD1963_5_BUFF</code> is spelled correctly.</p>
+      <dl class="cmp">
+        <dt>Manual</dt><dd class="was">SSD 1963_7_ BUFF &nbsp; SSD 1963_5_ 12BUFF &nbsp; SSD 1963_7_ 12BUFF &nbsp; SSD 1963_5_16 BUFF &nbsp; SSD 1963_7_16 BUFF</dd>
+        <dt>Code</dt><dd>SSD1963_7_BUFF &nbsp; SSD1963_5_12BUFF &nbsp; SSD1963_7_12BUFF &nbsp; SSD1963_5_16BUFF &nbsp; SSD1963_7_16BUFF</dd>
+      </dl>
+      <div class="src">graphics/SSD1963.c:115&ndash;137 &middot; manual, "RP2350 Extended Display Support"</div>
+    </div></div>
+
+    <div class="find e"><div class="id">E2</div><div class="bd">
+      <h3>Two of the four VGA222 driver names are wrong</h3>
+      <p><code>VGA_720</code> and <code>VGA_360</code> are not keywords; the prefix is <code>VGA222_</code> throughout. The long forms the code also accepts are undocumented.</p>
+      <dl class="cmp">
+        <dt>Manual</dt><dd class="was">VGA222_640, VGA222_320, VGA_720, VGA_360</dd>
+        <dt>Code</dt><dd>VGA222_640 / VGA222_640x480 &nbsp; VGA222_320 / VGA222_320x240 &nbsp; VGA222_720 / VGA222_720x400 &nbsp; VGA222_360 / VGA222_360x200</dd>
+      </dl>
+      <div class="src">graphics/VGA222.c:692&ndash;704 &middot; manual, "VGA222 drivers"</div>
+    </div></div>
+
+    <div class="find e"><div class="id">E3</div><div class="bd">
+      <h3>The RP2350 default clock speed is 200&nbsp;MHz, not 150&nbsp;MHz</h3>
+      <p>Stated as 150&nbsp;MHz in three places. <code>FreqDefault</code> is 200000 on both chips and <code>ResetOptions()</code> assigns it unconditionally &mdash; 150&nbsp;MHz is the stock Pico 2 speed, not the PicoMite default. This also puts a wrong baseline under both the overclocking discussion and the 25&nbsp;mA power figure.</p>
+      <div class="src">configuration.h:462, 465 &middot; misc/FileIO.c:6855 &middot; manual "Clock Speed" (twice) and the <code>OPTION CPUSPEED</code> row</div>
+    </div></div>
+
+    <div class="find e"><div class="id">E4</div><div class="bd">
+      <h3>CPU speed limits are per-variant but printed as one range</h3>
+      <p>"48000 to 420000" holds only for the PicoMite builds. A WebMite user setting 48&nbsp;MHz, or a BT user setting anything below 200&nbsp;MHz, gets an error; an RP2350 PicoMite user is told 396&nbsp;MHz is the ceiling when it is 420.</p>
+      <dl class="cmp">
+        <dt>Actual</dt><dd>PicoMite RP2040 / RP2350 &nbsp; 48000&ndash;420000<br>WebMite RP2040 / RP2350 &nbsp; 126000&ndash;396000<br>PicoMiteBT / BTH &nbsp; 200000&ndash;396000</dd>
+      </dl>
+      <div class="src">configuration.h &mdash; MIN_CPU / MAX_CPU per variant block</div>
+    </div></div>
+
+    <div class="find e"><div class="id">E5</div><div class="bd">
+      <h3>The HDMI fixed-clock list is wrong</h3>
+      <p>324&nbsp;MHz does not exist anywhere in the firmware, and 333, 336 and 252&nbsp;MHz are missing. The same paragraph gives 372&nbsp;MHz as the overclocking maximum when 378&nbsp;MHz is reachable at 640&times;480, and writes "640x400" where it means 640&times;480.</p>
+      <dl class="cmp">
+        <dt>Manual</dt><dd class="was">283.2, 324, 360, 372, 375</dd>
+        <dt>Code</dt><dd>252 (1024&times;600) &middot; 283.2 (720&times;400) &middot; 333 (800&times;480) &middot; 336 (848&times;480) &middot; 360 (800&times;600) &middot; 372 (1280&times;720) &middot; 375 (1024&times;768) &middot; 252/315/378 (640&times;480)</dd>
+      </dl>
+      <div class="src">graphics/Screens.h:17&ndash;27 &middot; manual, "Clock Speed"</div>
+    </div></div>
+
+    <div class="find e"><div class="id">E6</div><div class="bd">
+      <h3>Four version flags in the command reference are wrong</h3>
+      <p>Each was checked against the generated availability matrix, and against every sibling row for the same keyword rather than only the first.</p>
+      <dl class="cmp">
+        <dt>CLICK</dt><dd><span class="was">"NOT RP2040 WEBMITE OR PICOMITEMIN"</span> &mdash; also absent on RP2040 VGA, which has no GUICONTROLS. The GUI Integration chapter states this correctly, so the manual contradicts itself</dd>
+        <dt>GUI CLICK<br>GUI CURSOR</dt><dd>carry the same flag, but their gate is <code>GUICONTROLS</code> alone &mdash; so RP2040 VGA <em>and</em> RP2040 VGA USB both lack them. The manual's own GUI Integration table already says so</dd>
+        <dt>KEYBOARD</dt><dd><span class="was">"HDMI and VGA USB VERSIONS ONLY"</span> &mdash; RP2040 VGAUSB does not have it; only VGAUSB RP2350, HDMIUSB and HDMIWEB do. <code>OPTION SCREEN KEYBOARD</code> shares the gate and repeats the same wrong claim</dd>
+        <dt>DRAW3D</dt><dd><span class="was">"NOT AVAILABLE ON THE WEBMITE VERSION"</span> &mdash; present on HDMIWEB, absent on PicoMiteMIN. Both the command and function rows carry it</dd>
+      </dl>
+      <p style="border-left:2px solid var(--struct);padding-left:11px;font-size:14px"><b>Correction.</b> An earlier pass of this audit also listed <code>MAP</code> and <code>MODE</code> here. Both are in fact correct: each has three separate blocks in the reference &mdash; VGA, HDMI, and PicoMite RP2350 buffered drivers &mdash; with the right flag on each. The first pass compared only the first row matching a keyword and so missed the siblings.</p>
+      <div class="src">AllCommands.h:635&ndash;639, 674, 712&ndash;713, 879&ndash;880 &middot; graphics/GUI.h</div>
+    </div></div>
+
+    <div class="find g"><div class="id">G0</div><div class="bd">
+      <h3>Fourteen variant-specific entries carry no flag at all</h3>
+      <p>These read as universally available. <code>ASTRO</code>, <code>LOCATION</code>, <code>STAR</code>, <code>STEPPER</code> and <code>CMM2 LOAD</code>/<code>RUN</code> are RP2350 only; <code>JSON$()</code> is WebMite only; the three <code>GAMEPAD</code> rows need a USB host; <code>REFRESH</code> is non-VGA/HDMI; <code>TURTLE</code> is absent on PicoMiteMIN and both WebMites; <code>HELP</code>, <code>STRUCT</code>, <code>TYPE</code> and <code>END TYPE</code> are absent on PicoMiteMIN; and <code>TOUCH()</code>'s first row is absent on RP2040 VGA.</p>
+    </div></div>
+
+    <div class="find e"><div class="id">E7</div><div class="bd">
+      <h3><code>OPTION KEYBOARD</code>: two layouts missing, one unavailable</h3>
+      <p>The manual lists US, UK, GR, FR, BR and ES. The PS/2 branch accepts <b>IT</b> and <b>BE</b> as well; the USB and BTH branch accepts only US, FR, GR, IT, UK and ES &mdash; so <b>BR is documented but rejected on every USB and Bluetooth-host build</b>. The optional <code>capslock</code>, <code>numlock</code> and repeat arguments are also silently ignored on those builds, where <code>OPTION KEYBOARD REPEAT</code> is the route.</p>
+      <div class="src">core/MM_Misc.c:5583&ndash;5615</div>
+    </div></div>
+
+    <div class="find e"><div class="id">E8</div><div class="bd">
+      <h3>Bare <code>1024</code> selects a different resolution on HDMIWEB</h3>
+      <p>On HDMI and HDMIUSB, <code>OPTION RESOLUTION 1024</code> means 1024&times;768. On HDMIWEB it means 1024&times;600. The manual prints one combined short-form list, so the same command silently does something different depending on the image loaded.</p>
+      <div class="src">core/MM_Misc.c:6489 (HDMICUTDOWN) against 6536</div>
+    </div></div>
+
+    <div class="find g"><div class="id">G1</div><div class="bd">
+      <h3><code>ST7365P</code> and <code>ST7365PBUFF</code> are entirely undocumented</h3>
+      <p>Zero mentions anywhere in the manual, so the panel type cannot be discovered from it at all.</p>
+      <div class="src">graphics/SPI-LCD.c:292, 355</div>
+    </div></div>
+
+    <div class="find g"><div class="id">G2</div><div class="bd">
+      <h3>Two options and one read-only variable are undocumented</h3>
+      <dl class="cmp">
+        <dt>Option</dt><dd>LOCAL KEYBOARD ON|OFF &mdash; PicoMite RP2350 only, the PicoCalc matrix keyboard<br>PS2 PINS clk, data &mdash; accepted alias of KEYBOARD PINS</dd>
+        <dt>Variable</dt><dd>MM.CODE &mdash; present in overlaid_functions[] on every build</dd>
+      </dl>
+      <div class="src">core/MM_Misc.c:5398, 5488 &middot; core/Functions.c:49</div>
+    </div></div>
+
+    <div class="find g"><div class="id">G3</div><div class="bd">
+      <h3>The buffered-display feature is not available on WebMiteRP2350</h3>
+      <p>"RP2350 Extended Display Support" opens with "the PicoMite firmware for the RP2350 supports the following new display drivers". Both the buffered drivers and their prerequisite <code>OPTION LCD SPI</code> are gated on <code>PICOMITERP2350</code>, which is <code>PICOMITE &amp;&amp; rp2350</code> &mdash; a condition WebMiteRP2350 does not satisfy. The feature exists on exactly four images: PicoMite RP2350, RP2350USB, RP2350BT and RP2350BTH.</p>
+      <div class="src">graphics/SSD1963.c:114 &middot; graphics/SPI-LCD.c:350 &middot; configuration.h:600</div>
+    </div></div>
+
+    <div class="find s"><div class="id">S1</div><div class="bd">
+      <h3>The GUI Integration variant table omits PicoMiteHDMIWEB</h3>
+      <p>Fifteen of the sixteen shipped variants are listed. HDMIWEB has both <code>GUICONTROLS</code> and the USB host stack, so the missing row reads: GUI controls yes, touch USB, mouse USB, keyboard USB.</p>
+    </div></div>
+
+    <div class="find s"><div class="id">S2</div><div class="bd">
+      <h3>Small consistency defects in the front matter</h3>
+      <p>"There are a sixteen firmware files" &mdash; the count of sixteen is right, the article is not. The worked filename example still reads <code>V6.01.00</code>. The power-consumption paragraph gives 25&nbsp;mA and then says the WebMite is "the same at 20mA".</p>
+    </div></div>
+
+  </div>
+</section>
+
+<section class="sec">
+  <div class="sec-head"><span class="lab">04</span><h2>The systemic weakness</h2></div>
+  <div class="prose">
+    <p>Every individual error above is cheap to fix. The reason there are errors at all is that <b>variant applicability is carried as free prose rather than as data</b>, so nothing can check it and it drifts silently between releases.</p>
+    <p>Three measurements make the case:</p>
+  </div>
+  <div class="scroll">
+    <table>
+      <thead><tr><th>Reference section</th><th class="num">Rows</th><th class="num">Carrying a version qualifier</th><th>Variant-specific in the code</th></tr></thead>
+      <tbody>
+        <tr><td>Commands</td><td class="num">379</td><td class="num">51</td><td>31 of 217 command tokens</td></tr>
+        <tr><td>Functions</td><td class="num">105</td><td class="num">5</td><td>12 of 125 function tokens</td></tr>
+        <tr><td>Options</td><td class="num">81</td><td class="num" style="color:var(--wrong);font-weight:600">0</td><td>63 of 157 keywords</td></tr>
+        <tr><td style="padding-left:22px;color:var(--ink-3)">&mdash; after phase 03</td><td class="num">86</td><td class="num" style="color:var(--yes);font-weight:600">43</td><td style="color:var(--ink-3)">the remaining 43 rows are genuinely universal</td></tr>
+        <tr><td>Read-only variables</td><td class="num">37</td><td class="num">12</td><td>5 &mdash; MM.PS2/MM.USB, MM.SUPPLY, the three WEB strings</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="prose">
+    <p>Where a flag does exist it is written in roughly twenty different ways: <code>VGA VERSION ONLY</code> alongside <code>VGA VERSIONS ONLY</code>; <code>HDMI AND VGA VERSIONS ONLY</code> alongside <code>VGA AND HDMI VERSIONS ONLY</code>; and, for the identical meaning, both <code>NOT VGA OR HDMI VERSIONS</code> and <code>NOT VGA AND HDMI VERSIONS</code>, which read as opposites. Some are underlined runs; some are ordinary sentences such as "RP2350 only" that neither a reader nor a tool can distinguish from body text.</p>
+    <div class="note"><b>The fix is a closed vocabulary, not more prose.</b> The build system has only nine independent axes &mdash; chip, video (none / VGA / HDMI / cut-down HDMI), input (PS/2 / USB host / BLE host), network, Bluetooth, GUI controls, raycaster, structures, and the MIN build. All 36 variant-specific keywords resolve to just <b>17 distinct availability signatures</b>, listed below. Naming those 17 and tagging each entry with one makes the claim checkable against a generated matrix.</div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="sec-head"><span class="lab">05</span><h2>Ground truth: the 17 availability signatures</h2></div>
+  <p class="prose" style="font-size:15px;color:var(--ink-2)">Generated from the preprocessed token tables. Every top-level keyword not listed here is present on all sixteen builds.</p>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr>
+          <th style="min-width:230px"></th>
+          <th class="grp" colspan="6" style="text-align:center">RP2040</th>
+          <th class="grp" colspan="10" style="text-align:center">RP2350</th>
+        </tr>
+        <tr>
+          <th>Keywords</th>
+          <th class="grp" style="text-align:center">Pico</th><th style="text-align:center">Min</th><th style="text-align:center">USB</th><th style="text-align:center">VGA</th><th style="text-align:center">VGA USB</th><th style="text-align:center">Web</th>
+          <th class="grp" style="text-align:center">Pico</th><th style="text-align:center">USB</th><th style="text-align:center">VGA</th><th style="text-align:center">VGA USB</th><th style="text-align:center">Web</th><th style="text-align:center">BT</th><th style="text-align:center">BTH</th><th style="text-align:center">HDMI</th><th style="text-align:center">HDMI USB</th><th style="text-align:center">HDMI WEB</th>
+        </tr>
+      </thead>
+      <tbody id="mx"></tbody>
+    </table>
+  </div>
+  <p class="prose" style="font-size:14px;color:var(--ink-3)">Legend: <span class="on">&#9679;</span> available &nbsp; <span class="off">&middot;</span> not built. Where a name is registered as both a command and a function &mdash; <code>MAP</code>, <code>RAY</code>, <code>FRAME</code>, <code>CTRLVAL</code>, <code>DRAW3D</code>, <code>STRUCT</code>, <code>TILEMAP</code> &mdash; the row shows the union of the two; the one place the halves diverge is <code>TILEMAP(</code> as a function, which is absent on both WebMite builds although the <code>TILEMAP</code> command is universal. HDMIBTH exists in <code>CMakeLists.txt</code> but is not among the sixteen shipped images, and is correctly absent from the manual.</p>
+</section>
+
+<section class="sec">
+  <div class="sec-head"><span class="lab">06</span><h2>The 180 undocumented sub-keywords</h2></div>
+  <div class="prose">
+    <p>These appear nowhere in the manual text. They are not one problem but four, and each needs a different decision before any writing starts.</p>
+  </div>
+  <div class="finds">
+    <div class="find s"><div class="id">A</div><div class="bd">
+      <h3>Owned by a companion manual &mdash; about 120 tokens</h3>
+      <p><code>GUI</code> (BARGAUGE, CHECKBOX, LISTBOX, SLIDER, SPINBOX, TEXTBOX, NUMBERBOX, CAPTION, DISPLAYBOX), <code>SPRITE</code>, <code>RAY</code>, <code>FRAME</code>, <code>TILEMAP</code>, <code>TURTLE</code>, <code>3D</code>, <code>STEPPER</code> (ESTOP, GCODE, HWLIMITS, JERK, SCURVE, SPINDLE), <code>MEMORY SHARE</code>, <code>STRUCT SIZEOF</code>. <b>Decision needed:</b> whether the main manual carries a complete keyword index pointing into the companion PDFs, or whether a reader is expected to know which companion to open. Note that <code>CTRLVAL()</code> and <code>MSGBOX()</code> have no entry in the main reference at all despite being present on 12 of 16 builds.</p>
+    </div></div>
+    <div class="find s"><div class="id">B</div><div class="bd">
+      <h3>US-spelling aliases &mdash; 6 tokens</h3>
+      <p><code>OPTION DEFAULT COLORS</code>, <code>MM.INFO(FCOLOR)</code>, <code>MM.INFO(BCOLOR)</code>, <code>TURTLE CURSORCOLOR</code>, <code>FILLCOLOR</code> and the <code>COLOR</code> command. <b>Decision:</b> one sentence stating that US spellings are accepted throughout, rather than six more rows.</p>
+    </div></div>
+    <div class="find s"><div class="id">C</div><div class="bd">
+      <h3>Diagnostics &mdash; 9 tokens</h3>
+      <p><code>MM.INFO(HEAPEND)</code>, <code>STACKPEAK</code>, <code>CHEAPMAX</code>, <code>CHEAPTOTAL</code>, <code>TLSHEAP</code>, <code>TLSHEAPMAX</code>, <code>TLSHEAPERR</code>. <b>Decision:</b> document them as an explicitly unsupported diagnostic set, or leave them undocumented &mdash; but say which, once, so it is a choice on record rather than an omission.</p>
+    </div></div>
+    <div class="find s"><div class="id">D</div><div class="bd">
+      <h3>Genuinely missing user-facing syntax &mdash; about 45 tokens</h3>
+      <p>The residue that belongs in the main manual: <code>ST7365P</code> and <code>ST7365PBUFF</code>, <code>OPTION LOCAL KEYBOARD</code>, <code>OPTION PS2 PINS</code>, <code>MM.CODE</code>, <code>COPY A2A|A2B|B2A|B2B</code>, <code>FLASH MODBUFF LOAD</code>, <code>GAMEPAD MONITOR SILENT</code>, Turtle <code>ARECTANGLE</code> and the Turtle one-word aliases.</p>
+      <p style="border-left:2px solid var(--struct);padding-left:11px;font-size:14px"><b>Two corrections.</b> Several apparent gaps were false positives from matching contiguous strings: the manual writes <code>LOAD[BMP]</code> and <code>ENCRYPT/DECRYPT CBC/ECB/CTR</code>, and <code>C_MULT</code>/<code>CARG</code> are aliases of the documented <code>C_MUL</code>/<code>C_ARG</code>. And the board names (<code>SWEETIEPI</code>, <code>RP2040GEEK</code>, <code>PICORESTOUCHLCD2.8</code>&hellip;) are not <code>OPTION PLATFORM</code> values &mdash; that takes free text. They are the configurations accepted by <code>OPTION RESET&nbsp;<i>cfg</i></code> / <code>CONFIGURE&nbsp;<i>cfg</i></code>, which are already documented and self-describing at runtime via <code>OPTION RESET LIST</code>, so no enumeration is needed or wanted.</p>
+    </div></div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="sec-head"><span class="lab">07</span><h2>Plan for the finished manual</h2></div>
+  <p class="prose" style="font-size:15px;color:var(--ink-2)">Ordered by dependency rather than size. Phases 00&ndash;02 change the manual's failure mode; 03&ndash;06 are execution against them.</p>
+  <div class="phases">
+
+    <div class="ph"><div class="num">00</div><div class="bd">
+      <h3>Land the checker in the repo</h3>
+      <ul>
+        <li>Move the four extraction scripts into <code>docs/tools/manual_audit/</code>: docx to text, per-variant token tables via <code>gcc -E</code>, the <code>checkstring</code> scan, and the diff.</li>
+        <li>Emit two artefacts: <code>keyword_matrix.csv</code> (313 keywords &times; 16 variants) and <code>manual_diff.txt</code>.</li>
+        <li>Add it to the release pre-flight beside the existing <code>.uf2</code> mtime check.</li>
+      </ul>
+      <div class="out"><b>Why first:</b> every later phase is verified by it, and without it the same drift returns on the next edit.</div>
+    </div></div>
+
+    <div class="ph"><div class="num">01</div><div class="bd">
+      <h3>Fix the hard facts</h3>
+      <ul>
+        <li>E1&ndash;E8, G1&ndash;G3, S1&ndash;S2 above. Bounded, no restructuring, no policy decisions.</li>
+        <li>Re-run the checker; the 15 explained no-token rows and the group tokens are the expected residue.</li>
+      </ul>
+      <div class="out"><b>Ships independently.</b> If nothing else in this plan happens, this phase alone removes every error that puts a syntax error in front of a user.</div>
+    </div></div>
+
+    <div class="ph"><div class="num">02</div><div class="bd">
+      <h3>Adopt one applicability notation</h3>
+      <ul>
+        <li>Name the 17 signatures with short stable labels &mdash; for example <span class="kw">RP2350 ONLY</span>, <span class="kw">NON-VIDEO</span>, <span class="kw">VIDEO</span>, <span class="kw">USB HOST</span>, <span class="kw">WEBMITE</span>, <span class="kw">HDMI</span>, <span class="kw">GUI CONTROLS</span>, <span class="kw">NOT PICOMITEMIN</span>.</li>
+        <li>One rendering only: an underlined small-caps run at the head of the description. Retire "RP2350 only" written as ordinary prose.</li>
+        <li>Resolve the two phrasings that read as opposites by dropping the "NOT &hellip; AND &hellip;" form entirely.</li>
+        <li>Add a generated appendix carrying the full matrix, so a reader can always resolve a label and the checker has something concrete to compare against.</li>
+      </ul>
+      <div class="out"><b>Output:</b> a one-page style rule in the repo, plus the appendix. Everything after this is mechanical.</div>
+    </div></div>
+
+    <div class="ph"><div class="num">03</div><div class="bd">
+      <h3>Tag the Options table</h3>
+      <ul>
+        <li>Apply a label to each of the 63 variant-specific <code>OPTION</code> keywords. This is the single largest accuracy win available in the document.</li>
+        <li>Split the rows where one entry currently describes two different behaviours: <code>OPTION KEYBOARD</code> (PS/2 against USB and BTH), <code>OPTION CPUSPEED</code> (three ranges), <code>OPTION RESOLUTION</code> (HDMI against cut-down HDMI short forms).</li>
+      </ul>
+      <div class="out"><b>Scope:</b> 63 rows touched, roughly 12 of them split.</div>
+    </div></div>
+
+    <div class="ph"><div class="num">04</div><div class="bd">
+      <h3>Take the four sub-keyword decisions</h3>
+      <ul>
+        <li>Groups A&ndash;D in section 06. Only group D is writing; A&ndash;C are one-time policy calls that close about 135 tokens at a stroke.</li>
+        <li>The one needing real thought is A: whether <code>GUI</code>, <code>CTRLVAL()</code> and <code>MSGBOX()</code> &mdash; present on 12 of 16 builds &mdash; belong in the main reference rather than only in <em>Advanced Graphics Functions</em>.</li>
+      </ul>
+      <div class="out"><b>Recommendation:</b> keep the companion manuals, but add a complete keyword index to the main manual in which every keyword resolves either to a page or to a named companion PDF.</div>
+    </div></div>
+
+    <div class="ph"><div class="num">05</div><div class="bd">
+      <h3>Rationalise the companion set</h3>
+      <ul>
+        <li>The manual references nine companion documents; roughly twenty ship. Add a single "Companion manuals" appendix giving title, one line of purpose, and which variants it applies to.</li>
+        <li>Fix the filename mismatches &mdash; <code>Raycaster_User_manual.pdf</code> against the actual <code>Raycaster_User_Manual.pdf</code> &mdash; and confirm every referenced PDF is genuinely in the release zip.</li>
+      </ul>
+      <div class="out"><b>Why it matters at 6.03.02:</b> the companions are where most of the new capability of the last two releases landed.</div>
+    </div></div>
+
+    <div class="ph"><div class="num">06</div><div class="bd">
+      <h3>Final pass and rebuild</h3>
+      <ul>
+        <li>Version stamps: the worked filename example, the sixteen-file table, the "a sixteen" typo.</li>
+        <li>Review the Obsolete section &mdash; it still warns that entries "may be removed in the future to recover memory". For a final release, say whether they are staying.</li>
+        <li>Confirm HDMIBTH remains unshipped and unmentioned.</li>
+        <li>Rebuild the PDF through the proven pipeline: Word COM export, then <code>add_manual_bookmarks.py</code> run from <code>docs/</code>. The old baseline was 283 pages / 39 headings / 533 leaves; Appendices K, L and M add three Heading&nbsp;1s (38&nbsp;&rarr;&nbsp;41 in the .docx) and several pages, so <b>expect 42 headings</b> &mdash; do not treat that as a regression.</li>
+        <li>Run the phase-00 checker once more and archive its output alongside the release.</li>
+      </ul>
+      <div class="out"><b>Gate:</b> ship only when the checker reports zero unexplained differences.</div>
+    </div></div>
+
+  </div>
+</section>
+
+<footer>
+  Generated against <code>main</code> at 6b88df2, firmware V6.03.02b2. Counts come from the preprocessed token tables for the sixteen shipped variants; source line numbers are current as of that commit.
+</footer>
+
+</div>
+
+<script>
+var COLS = 16;
+var G = [
+ ["ASTRO, CMM2 LOAD, CMM2 RUN, FRAME, LOCATION, RAM, SLEW, STAR, STEPPER, TMC22xx", "0000001111111111"],
+ ["END TYPE, FM, HELP, STRUCT, TYPE",                                              "1011111111111111"],
+ ["BACKLIGHT, REFRESH",                                                            "1110011100011000"],
+ ["CTRLVAL(, MSGBOX(",                                                             "1010001111111111"],
+ ["DRAW3D, TURTLE",                                                                "1011101111011111"],
+ ["GETSCANLINE, TILE",                                                             "0001100010100111"],
+ ["JSON$(, WEB",                                                                   "0000010000100001"],
+ ["MAP, MODE",                                                                     "0001101111011111"],
+ ["CAMERA",                                                                        "1110011100011110"],
+ ["CLICK(",                                                                        "1010101111111111"],
+ ["GAMEPAD",                                                                       "0010100101000101"],
+ ["KEYBOARD",                                                                      "0000000001000011"],
+ ["MANDELBROT",                                                                    "0001101111111111"],
+ ["RAY, RAY(",                                                                     "0000001111011111"],
+ ["RESOLUTION",                                                                    "0000000000000111"],
+ ["TOUCH(",                                                                        "1110111111111111"],
+ ["YMODEM",                                                                        "0000001010111100"]
+];
+var tb = document.getElementById('mx');
+G.forEach(function (g) {
+  var tr = document.createElement('tr');
+  var td = document.createElement('td');
+  td.className = 'kwcell';
+  td.textContent = g[0];
+  tr.appendChild(td);
+  for (var i = 0; i < COLS; i++) {
+    var c = document.createElement('td');
+    var on = g[1].charAt(i) === '1';
+    c.className = 'c' + ((i === 0 || i === 6) ? ' grp' : '');
+    c.innerHTML = '<span class="' + (on ? 'on' : 'off') + '">' + (on ? '●' : '·') + '</span>';
+    tr.appendChild(c);
+  }
+  tb.appendChild(tr);
+});
+</script>

@@ -813,7 +813,7 @@ void cmd_turtle(void)
     {
         turtle->pen_down = 0;
     }
-    else if ((tp = checkstring(cmdline, (unsigned char *)"PEN DOWN")) || (tp = checkstring(cmdline, (unsigned char *)"PENDOWNU")) || (tp = checkstring(cmdline, (unsigned char *)"PD")))
+    else if ((tp = checkstring(cmdline, (unsigned char *)"PEN DOWN")) || (tp = checkstring(cmdline, (unsigned char *)"PENDOWN")) || (tp = checkstring(cmdline, (unsigned char *)"PD")))
     {
         turtle->pen_down = 1;
     }

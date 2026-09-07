@@ -1646,7 +1646,7 @@ void MIPS16 cmd_setpin(void)
         value = EXT_PWM9A;
     else if (checkstring(argv[2], (unsigned char *)"PWM10A"))
         value = EXT_PWM10A;
-    else if (checkstring(argv[2], (unsigned char *)"PWM711"))
+    else if (checkstring(argv[2], (unsigned char *)"PWM11A"))
         value = EXT_PWM11A;
 #endif
     else if (checkstring(argv[2], (unsigned char *)"PWM0B"))
@@ -5968,7 +5968,7 @@ void MIPS16 ClearExternalIO(void)
        otherwise. */
     if (click_pin)
     {
-        click_pin     = 0;
+        click_pin = 0;
         click_pin_inv = false;
     }
     /* Stale "last click was emulated" from a previous program would

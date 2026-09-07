@@ -861,43 +861,7 @@ void MIPS16 cmd_pio(void)
                 pio_sm_set_enabled(pio, sm, true);
                 return;
         }
-#ifdef rp2350
-        tp = checkstring(cmdline, (unsigned char *)"DMA TX TABLE");
-        if (tp)
-        {
-                getcsargs(&tp, 13);
-                // parameters are:
-                // PIO
-                // state machine number
-                // address table count
-                // buffer address table
-                // transfer size
-                int pior = getint(argv[0], 0, PIOMAX - 1);
-                if (PIO0 == false && pior == 0)
-                        StandardError(3);
-                if (PIO1 == false && pior == 1)
-                        StandardError(4);
-                if (PIO2 == false && pior == 2)
-                        StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-                int sm = getint(argv[2], 0, 3);
-                dma_tx_pio = pior;
-                dma_tx_sm = sm;
-                uint32_t nbr = getint(argv[4], 0, 0xFFFFFFFF);
-                static uint32_t *a1int = NULL;
-                //                int64_t *aint = NULL;
-                //                int toarraysize = parseintegerarray(argv[6], &aint, 4, 1, dims, true, NULL);
-                //                if ((toarraysize << 1) < nbr)
-                //                        StandardError(17);
-                a1int = (uint32_t *)(uint32_t)getint(argv[6], 0, 0xFFFFFFFF);
-                ;
-                int bsize = getint(argv[8], 0, 0xFFFFFF);
-                setup_dma_pio_lines(pio, sm, dma_tx_chan3,
-                                    a1int, nbr,
-                                    bsize);
-                return;
-        }
-#endif
+
         tp = checkstring(cmdline, (unsigned char *)"DMA TX");
         if (tp)
         {
@@ -1232,12 +1196,12 @@ void MIPS16 cmd_pio(void)
                 uint32_t rxunder = 1u << (PIO_FDEBUG_RXUNDER_LSB + sm);
                 while (nbr--)
                 {
-                        pio->fdebug = rxunder;          // clear sticky underflow before the read
+                        pio->fdebug = rxunder; // clear sticky underflow before the read
                         *dd = pio_sm_get(pio, sm);
-                        if (pio->fdebug & rxunder)      // this read drained an empty FIFO
+                        if (pio->fdebug & rxunder) // this read drained an empty FIFO
                         {
-                                *dd = -1;               // -> data is invalid, mark it
-                                pio->fdebug = rxunder;  // clear the flag we just consumed
+                                *dd = -1;              // -> data is invalid, mark it
+                                pio->fdebug = rxunder; // clear the flag we just consumed
                         }
                         dd++;
                 }
@@ -2998,7 +2962,7 @@ void cmd_label(void)
    no-op and fun_json calls json_arena_reset() on every exit path. With custom hooks cJSON
    also avoids realloc (it uses allocate+copy+free), so the SDK realloc guard is never hit. */
 #define JSON_ARENA_BLOCK 4096
-static void *json_arena_head = NULL;        // newest block; its first word -> previous block
+static void *json_arena_head = NULL; // newest block; its first word -> previous block
 static unsigned char *json_arena_cur = NULL;
 static unsigned char *json_arena_end = NULL;
 
@@ -3025,7 +2989,7 @@ static void *CJSON_CDECL json_malloc_hook(size_t sz)
                         blk = JSON_ARENA_BLOCK;
                 unsigned char *b = (unsigned char *)GetMemoryNull((int)blk);
                 if (b == NULL)
-                        return NULL; // cJSON treats NULL as out-of-memory and unwinds
+                        return NULL;           // cJSON treats NULL as out-of-memory and unwinds
                 *(void **)b = json_arena_head; // chain the new block
                 json_arena_head = b;
                 json_arena_cur = b + 8;
