@@ -334,7 +334,7 @@ extern "C"
       HFSR=80000000 (DEBUGEVT = the BKPT in _exit).  Heap moves only in 4 KB
       steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
       and [[project_core0_stack_overflow_fm]]. */
-#define HEAP_MEMORY_SIZE (128 * 1024)
+#define HEAP_MEMORY_SIZE (124 * 1024)
 #else
 #ifdef PICOMITEMIN
 #define FLASH_TARGET_OFFSET (688 * 1024)
@@ -494,6 +494,18 @@ extern "C"
 #define FNV_offset_basis 2166136261
 #define DISKCHECKRATE 500 // Check for SD card removal every 500ms
 #define EDIT_BUFFER_SIZE (heap_memory_size - 3072 - 3 * HRes)
+   /* Subtracted from EDIT_BUFFER_SIZE when the editor is opening a FILE rather
+      than the program in memory (see edit() in Editor.c).  The editor takes its
+      buffer as ONE contiguous bottom-up GetTempMemory block, so any other heap
+      page in use makes it fail with "Not enough System Heap memory".  b3 moved
+      fm_panel_t.type_head off cmd_fm's stack, which was overflowing into the C
+      heap, and onto the MMBasic heap - 1 KB per panel, 2 KB across cmd_fm's
+      panels[2] - so EDIT launched from FM has that much less to work with than
+      EDIT from the command line, and without this reserve it fails while the
+      command line works.  The bytes cannot come from BSS instead: on the RP2350
+      the stack grows down and BSS up into the same block, so moving the buffer
+      there only relocates the pressure. */
+#define FM_HEAP_RESERVE 2048
 
 #ifdef rp2350
 #define FreqDefault 200000

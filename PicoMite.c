@@ -2441,8 +2441,22 @@ int __not_in_flash_func(MMInkey)(void)
            cursor with arrow keys / joystick — that's where the click
            lands). ProcessTouch reads gui_click_from_mouse to know it
            should trust the latched values rather than calling
-           GetTouch(). */
-        if (Ctrl != NULL)
+           GetTouch().
+
+           OSK_IsActive() widens the gate the same way check_interrupt()
+           does for touch: the on-screen keyboard is usable without any
+           GUI controls allocated, but a mouse has no hardware touch path
+           so software has to synthesise the down/up events here. Without
+           this a user running OPTION GUI CONTROLS 0 could tap OSK keys on
+           a touch panel but not click them with a mouse. Nothing in this
+           block dereferences Ctrl, and ProcessTouch guards every Ctrl
+           access on InvokingCtrl / Option.MaxCtrls, both zero when no
+           controls are allocated. */
+        if (Ctrl != NULL
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+            || OSK_IsActive()
+#endif
+        )
         {
             bool pin_held = click_pin_pressed();
             bool btn = (nunstruct[2].L || gui_click_synthetic_down || pin_held)

@@ -637,8 +637,14 @@ void edit(unsigned char *cmdline, bool cmdfile)
     cleanserver();
 #endif
     multilinecomment = false;
-    EdBuff = GetTempMemory(EDIT_BUFFER_SIZE);
-    edit_buff_size = EDIT_BUFFER_SIZE;
+    /* Editing a file (cmdfile false) can be reached from FM, which still holds
+       its panel cache on the MMBasic heap; the buffer is one contiguous
+       bottom-up allocation, so ask for FM_HEAP_RESERVE less or it fails with
+       "Not enough System Heap memory".  Editing the program in memory
+       (cmdfile true) is only reachable from the command prompt, where nothing
+       else holds the heap, so it keeps the full buffer. */
+    edit_buff_size = EDIT_BUFFER_SIZE - (cmdfile ? 0 : FM_HEAP_RESERVE);
+    EdBuff = GetTempMemory(edit_buff_size);
     char buff[STRINGSIZE * 2] = {0};
     *EdBuff = 0;
 

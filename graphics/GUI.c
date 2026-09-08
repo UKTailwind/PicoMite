@@ -2857,8 +2857,20 @@ void DrawControl(int r)
        (2) Control drawing paints opaque pixels over the cursor sprite
            leaving partial cursor remnants until the next refresh.
        Erasing first clears cursor_painted; the next CursorRefresh
-       tick (~10 ms) repaints the cursor on top of the new control
-       image with a fresh save buffer. */
+       tick repaints the cursor on top of the new control image with a
+       fresh save buffer.
+
+       CursorSuspend holds refresh off for the whole redraw, not just
+       the moment of the hide. CursorRefresh runs from routinechecks(),
+       so without this it can fire while the control is half drawn,
+       CursorPaintAt() saves those half-drawn pixels as its background,
+       and the next time the cursor MOVES the stale rectangle is
+       restored over the finished control - a cursor-sized block of
+       corruption. It only shows when the pointer moves between the
+       press and the release, because a bad save is invisible until it
+       is restored somewhere else, and it never happens with touch
+       because there is no cursor to save and restore. */
+    CursorSuspend = true;
     CursorHide();
 #endif
     fnt = gui_font;
@@ -2911,6 +2923,12 @@ void DrawControl(int r)
         break;
     }
     SetFont(fnt);
+#ifdef GUICONTROLS
+    /* Control is fully drawn: let CursorRefresh run again. cursor_painted
+       is false (CursorHide above), so the next tick repaints the cursor
+       and takes a fresh save of the finished image. */
+    CursorSuspend = false;
+#endif
 }
 
 // similar to DrawControl() but it will only redraw the control if it is in the current
@@ -3544,6 +3562,17 @@ static void OSK_DrawKeyAt(int k)
     /* NONE cells are dead — drawn as part of their left-anchor's wide box. */
     if (vals[k] == OSK_V_NONE)
         return;
+    /* Take the cursor off the screen and hold CursorRefresh off for the
+       whole redraw.  Pressing a key inverts it; if the cursor is sitting
+       on that key its sprite is inverted along with the key AND its save
+       buffer still holds the pre-invert pixels, so the next move restores
+       a non-inverted block into the inverted key - anything from a single
+       white line to a full cursor-sized white rectangle depending on how
+       far the pointer travelled.  The release only inverts the key back,
+       so the corrupt patch survives.  Touch never shows this because
+       there is no cursor to save and restore. */
+    CursorSuspend = true;
+    CursorHide();
     /* DrawSingleKey calls GUIPrintString which clobbers CurrentX/CurrentY
        (they become the caption's drawing coordinates). Save and restore so
        the prompt's text cursor doesn't get yanked into the keyboard. */
@@ -3583,12 +3612,19 @@ static void OSK_DrawKeyAt(int k)
                        fc, bc, captionbuf, 0);
     CurrentX = savedX;
     CurrentY = savedY;
+    /* Key fully drawn: cursor_painted is false, so the next CursorRefresh
+       repaints the cursor with a fresh save of the finished key. */
+    CursorSuspend = false;
 }
 
 void OSK_DrawAll(void)
 {
     if (!OptionVResreserved)
         return;
+    /* See OSK_DrawKeyAt: keep the cursor out of the way for the whole
+       repaint so it cannot save half-drawn keys as its background. */
+    CursorSuspend = true;
+    CursorHide();
     /* If we previously drew at a larger reserve, wipe the band above the
        new top that would otherwise be left with stale OSK pixels. */
     if (osk_drawn_reserved > OptionVResreserved)
@@ -3621,6 +3657,7 @@ void OSK_DrawAll(void)
     if (Option.Refresh)
         Display_Refresh();
     osk_drawn_reserved = OptionVResreserved;
+    CursorSuspend = false;
 }
 
 void OSK_Erase(void)
@@ -3630,12 +3667,15 @@ void OSK_Erase(void)
     int reserved = osk_drawn_reserved;
     if (reserved <= 0)
         return;
+    CursorSuspend = true;
+    CursorHide();
     int top = VRes - (VRes * reserved / 100);
     DrawRectangle(0, top, HRes - 1, VRes - 1, BLACK);
     if (Option.Refresh)
         Display_Refresh();
     osk_pressed = -1;
     osk_drawn_reserved = 0;
+    CursorSuspend = false;
 }
 
 /* Tell the OSK its on-screen pixels are no longer valid (e.g. after a
