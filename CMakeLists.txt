@@ -425,7 +425,7 @@ if(FORCE_EPX_SOF)
     # APPEND: PC3_USB_EVLOG above may already have set definitions on this file
     set_property(SOURCE
         ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/hcd_rp2040.c
-        APPEND PROPERTY COMPILE_DEFINITIONS "PM_FORCE_EPX_SOF;PM_EPX_STATS")
+        APPEND PROPERTY COMPILE_DEFINITIONS "PM_FORCE_EPX_SOF")
     message(STATUS "PicoMite: FORCE_EPX_SOF=ON - RP2350 uses the RP2040 EPX SOF path")
 endif()
 

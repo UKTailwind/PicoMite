@@ -1824,31 +1824,48 @@ void USB_sound_service(void)
    "*** FAULT PC=..." line (on RP2040, with CFSR/HFSR printing as zero because
    M0+ has no such registers).  Those sites now recover and record instead -
    see tinyusb-patches/ - and this reports the record from the main loop,
-   never from the interrupt.  Capped at a few lines so a persistent fault
-   cannot flood the console.
+   never from the interrupt.
+
+   One counter per code, printed together as a running total, e.g.
+   "[USB DATA_SEQ 3 BUFCTRL32 2]".  The first version kept a single total plus
+   a separate "last code" byte and read the two at different moments, so the
+   label could belong to a different fault than the count - a field log showed
+   BUFCTRL32 and DATA_SEQ both claiming to be the 4th.  'busy' stops a line
+   being cut in half if anything re-enters us mid-print.
      DATA_SEQ  = data-toggle mismatch on the wire
-     BUFCTRL32 / BUFCTRL16 = a buffer re-armed while still marked available */
-extern volatile uint8_t pm_usb_fault_code;
-extern volatile uint16_t pm_usb_fault_count;
+     BUFCTRL32 = EPX (control/bulk) buffer re-armed while still available
+     BUFCTRL16 = interrupt-endpoint buffer re-armed while still available */
+extern volatile unsigned short pm_usb_fault_n[];
+extern volatile unsigned short pm_usb_fault_total;
 void USB_fault_service(void)
 {
-	static uint16_t reported = 0;
+	static unsigned short reported = 0;
 	static int lines = 0;
-	const uint16_t n = pm_usb_fault_count;
+	static int busy = 0;
+	if (busy)
+		return; /* never interleave with a line already going out */
+	const unsigned short n = pm_usb_fault_total;
 	if (n == reported)
 		return;
 	reported = n;
 	if (lines >= 5)
 		return; /* stay quiet after the first few */
 	lines++;
+	busy = 1;
+	static const char *const fault_name[4] = {"", " DATA_SEQ ", " BUFCTRL32 ", " BUFCTRL16 "};
 	char buff[16];
-	const uint8_t c = pm_usb_fault_code;
-	MMPrintString("\r\n[USB ");
-	MMPrintString(c == 1 ? "DATA_SEQ" : (c == 2 ? "BUFCTRL32" : (c == 3 ? "BUFCTRL16" : "?")));
-	MMPrintString(" x");
-	IntToStr(buff, n, 10);
-	MMPrintString(buff);
+	MMPrintString("\r\n[USB");
+	for (int c = 1; c <= 3; c++)
+	{
+		unsigned short v = pm_usb_fault_n[c];
+		if (v == 0)
+			continue;
+		MMPrintString((char *)fault_name[c]);
+		IntToStr(buff, v, 10);
+		MMPrintString(buff);
+	}
 	MMPrintString("]\r\n");
+	busy = 0;
 }
 bool diff_than_2(uint8_t x, uint8_t y)
 {

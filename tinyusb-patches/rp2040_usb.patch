@@ -1,6 +1,6 @@
 --- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
 +++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
-@@ -48,6 +48,60 @@
+@@ -48,6 +48,70 @@
  
  critical_section_t rp2usb_lock;
  
@@ -11,17 +11,27 @@
 + * "*** FAULT PC=..." line (RP2040 has no CFSR/HFSR, so those print as zero and
 + * say nothing).  Record and recover instead; PicoMite reports the record from
 + * the main loop, off the interrupt (USB_fault_service, input/USBKeyboard.c).
-+ *   1 = ERROR_DATA_SEQ, 2 = stale AVAIL in bufctrl_write32,
-+ *   3 = stale AVAIL in bufctrl_write16. */
++ *
++ * ONE COUNTER PER CODE.  The first version kept a single total plus a
++ * "last code" byte, which the reporter read at a different moment from the
++ * total - so a report could pair a count with the wrong label (a field log
++ * showed BUFCTRL32 and DATA_SEQ both claiming to be the 4th fault).  Counts
++ * were right, labels were not.  Per-code counters remove the race entirely.
++ * Readable from BASIC with PEEK for field diagnosis. */
++#define PM_USB_FAULT_DATA_SEQ  1u
 +#define PM_USB_FAULT_BUFCTRL32 2u
 +#define PM_USB_FAULT_BUFCTRL16 3u
-+volatile uint8_t  pm_usb_fault_code;
-+volatile uint16_t pm_usb_fault_count;
++#define PM_USB_FAULT_NCODES    4u /* codes 1..3 */
++volatile uint16_t pm_usb_fault_n[PM_USB_FAULT_NCODES];
++volatile uint16_t pm_usb_fault_total;
 +void __tusb_irq_path_func(pm_usb_fault_note)(uint8_t code) {
-+  pm_usb_fault_code = code;
-+  if (pm_usb_fault_count != 0xFFFFu) {
-+    pm_usb_fault_count++;
++  if (code < PM_USB_FAULT_NCODES && pm_usb_fault_n[code] != 0xFFFFu) {
++    pm_usb_fault_n[code]++;
 +  }
++  if (pm_usb_fault_total != 0xFFFFu) {
++    pm_usb_fault_total++;
++  }
++}
 +}
 +
 +#ifdef PC3_USB_EVLOG
@@ -61,7 +71,7 @@
  //--------------------------------------------------------------------+
  // Implementation
  //--------------------------------------------------------------------+
-@@ -118,7 +172,13 @@
+@@ -118,7 +182,13 @@
    const uint32_t current    = *buf_reg;
    const uint32_t avail_mask = USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16);
    if (current & value & avail_mask) {
@@ -76,7 +86,7 @@
    }
    *buf_reg = value & ~(USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16)); // write other bits first
  
-@@ -136,7 +196,9 @@
+@@ -136,7 +206,9 @@
  void __tusb_irq_path_func(bufctrl_write16)(io_rw_16 *buf_reg16, uint16_t value) {
    const uint16_t current = *buf_reg16;
    if (current & value & USB_BUF_CTRL_AVAIL) {
@@ -87,7 +97,7 @@
    }
    *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
  
-@@ -196,7 +258,18 @@
+@@ -196,7 +268,18 @@
    if (ep_reg != NULL) {
      uint32_t ep_ctrl = *ep_reg;
    #if CFG_TUH_ENABLED
@@ -107,7 +117,7 @@
    #else
      const bool force_single = false;
    #endif
-@@ -230,6 +303,9 @@
+@@ -230,6 +313,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -117,7 +127,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -356,6 +432,16 @@
+@@ -356,6 +442,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;
