@@ -1,6 +1,6 @@
 --- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
 +++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
-@@ -48,6 +48,70 @@
+@@ -48,6 +48,69 @@
  
  critical_section_t rp2usb_lock;
  
@@ -31,7 +31,6 @@
 +  if (pm_usb_fault_total != 0xFFFFu) {
 +    pm_usb_fault_total++;
 +  }
-+}
 +}
 +
 +#ifdef PC3_USB_EVLOG
@@ -71,7 +70,7 @@
  //--------------------------------------------------------------------+
  // Implementation
  //--------------------------------------------------------------------+
-@@ -118,7 +182,13 @@
+@@ -118,7 +181,13 @@
    const uint32_t current    = *buf_reg;
    const uint32_t avail_mask = USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16);
    if (current & value & avail_mask) {
@@ -86,7 +85,7 @@
    }
    *buf_reg = value & ~(USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16)); // write other bits first
  
-@@ -136,7 +206,9 @@
+@@ -136,7 +205,9 @@
  void __tusb_irq_path_func(bufctrl_write16)(io_rw_16 *buf_reg16, uint16_t value) {
    const uint16_t current = *buf_reg16;
    if (current & value & USB_BUF_CTRL_AVAIL) {
@@ -97,7 +96,7 @@
    }
    *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
  
-@@ -196,7 +268,18 @@
+@@ -196,7 +267,18 @@
    if (ep_reg != NULL) {
      uint32_t ep_ctrl = *ep_reg;
    #if CFG_TUH_ENABLED
@@ -117,7 +116,7 @@
    #else
      const bool force_single = false;
    #endif
-@@ -230,6 +313,9 @@
+@@ -230,6 +312,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -127,7 +126,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -356,6 +442,16 @@
+@@ -356,6 +441,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;

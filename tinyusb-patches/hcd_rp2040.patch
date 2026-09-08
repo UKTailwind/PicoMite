@@ -75,7 +75,18 @@
    rp2usb_reset_transfer(ep);
    hcd_event_xfer_complete(ep->dev_addr, ep->ep_addr, xferred_len, xfer_result, true);
  
-@@ -303,6 +351,9 @@
+@@ -288,7 +336,9 @@
+     const uint8_t epnum = idx >> 1u;
+     for (size_t e = 0; e < TU_ARRAY_SIZE(ep_pool); e++) {
+       hw_endpoint_t *ep = &ep_pool[e];
+-      if (ep->interrupt_num == epnum) {
++      /* max_packet_size == 0 means the slot is free; never deliver a
++         completion to one (belt and braces alongside the two clears). */
++      if (ep->max_packet_size > 0 && ep->interrupt_num == epnum) {
+         io_rw_32  *ep_reg  = dpram_int_ep_ctrl(ep->interrupt_num);
+         io_rw_32  *buf_reg = dpram_int_ep_buffer_ctrl(ep->interrupt_num);
+         const bool done    = rp2usb_xfer_continue(ep, ep_reg, buf_reg, 0, tu_edpt_dir(ep->ep_addr) == TUSB_DIR_IN);
+@@ -303,6 +353,9 @@
  
  static void __tusb_irq_path_func(hcd_rp2040_irq)(void) {
    const uint32_t status = usb_hw->ints;
@@ -85,7 +96,7 @@
  
    if (status & USB_INTS_HOST_CONN_DIS_BITS) {
      uint8_t speed = dev_speed();
-@@ -327,6 +378,20 @@
+@@ -327,6 +380,20 @@
    if (status & USB_INTS_ERROR_RX_TIMEOUT_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_RX_TIMEOUT_BITS;
  
@@ -106,7 +117,7 @@
      const uint32_t sie_ctrl = (usb_hw->sie_ctrl & SIE_CTRL_BASE_MASK) | USB_SIE_CTRL_STOP_TRANS_BITS;
      usb_hw->sie_ctrl        = sie_ctrl;
      // while (usb_hw->sie_ctrl & USB_SIE_CTRL_STOP_TRANS_BITS) {}
-@@ -334,8 +399,17 @@
+@@ -334,8 +401,17 @@
      // Even if STOP_TRANS bit is clear, controller maybe in middle of retrying and may re-raise timeout once extra time
      // Only handle if epx is active, don't carry more epx transfer since STOP_TRANS is raced and not safe.
      if (epx->state == EPSTATE_ACTIVE) {
@@ -124,7 +135,7 @@
    }
  
    if (status & USB_INTS_TRANS_COMPLETE_BITS) {
-@@ -381,12 +455,38 @@
+@@ -381,12 +457,38 @@
        usb_hw->nak_poll   = USB_NAK_POLL_RESET;
        epx_switch_request = false;
      } else if (epx->state == EPSTATE_ACTIVE) {
@@ -166,7 +177,7 @@
        } else {
          epx_switch_request = true;
        }
-@@ -396,7 +496,14 @@
+@@ -396,7 +498,14 @@
  
    if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
@@ -182,3 +193,33 @@
    }
  }
  
+@@ -502,6 +611,16 @@
+         *ep_reg           = 0;
+       }
+ 
++      /* PicoMite: a freed slot must NOT keep its hardware interrupt-endpoint
++         index.  handle_buf_status_isr() finds the endpoint a completion
++         belongs to by searching the pool for interrupt_num == epnum and
++         taking the first match, so a stale index on a reused slot silently
++         steals another device's completions - that endpoint then never
++         completes, and the class driver waits forever with no error raised
++         anywhere.  0.20 could not hit this: it mapped hardware IEP i to
++         ep_pool[i] positionally.  Symptom: plugging a mouse in kills an
++         already-working keyboard, no fault counters move, reset clears it. */
++      ep->interrupt_num   = 0;
+       ep->max_packet_size = 0; // mark as unused
+     }
+   }
+@@ -551,6 +670,12 @@
+ 
+   if (ep->transfer_type != TUSB_XFER_INTERRUPT) {
+     ep->dpram_buf = usbh_dpram->epx_data;
++    /* PicoMite: control/bulk endpoints run on EPX and own no hardware
++       interrupt endpoint.  The interrupt branch below is the only place
++       interrupt_num is assigned, so without this a slot recycled from a
++       previous interrupt endpoint would keep that index and shadow the
++       device that now legitimately owns it (see hcd_device_close). */
++    ep->interrupt_num = 0;
+   } else {
+     // from 15 interrupt endpoints pool
+     uint8_t int_idx;
