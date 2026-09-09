@@ -96,7 +96,7 @@ DIM INTEGER tBp(13)                ' ship type 1..13 -> blueprint index
 DIM FLOAT mV(2, 39), mNrm(2, 15)
 DIM INTEGER mFc(31), mHost(31), mF(159), mEc(31), mFl(31)
 DIM INTEGER col(6)
-DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cGrey
+DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cGrey, cRed
 
 ' Draw3D object pool.  objOwn(n) is the slot that owns object n, or -1.
 DIM INTEGER maxObj, objOwn(15)
@@ -138,22 +138,46 @@ CONST TIDYEVERY = 16               ' renormalise one ship's orientation this oft
 
 CONST NEARZ = 32                   ' nearer than this and nothing is drawn
 CONST FARXY = 30000                ' Draw3D clamps its offsets at +-32766
-CONST BANDDIV = 2048               ' distance -> the 0..31 visibility band
+' The original compares the blueprint's visibility byte directly against the
+' high byte of z, so its unit is 256 world units.  Two hard cut-offs sit
+' either side of that comparison: nothing at all is drawn beyond z_hi 192,
+' and below z_hi 16 the mesh is always drawn whatever the blueprint says -
+' which is why the escape pod, canister and missile, whose bytes are under
+' 16, all turn into dots at exactly 4096.
+CONST ZHI = 256                    ' world units per step of the visibility scale
+CONST VISFLOOR = 16                ' below this the mesh is always drawn
+CONST VISCUT = 192                 ' beyond this the ship is not drawn at all
 CONST NSTAR = 18                   ' stardust particles, as the original
 
 DIM FLOAT stX(NSTAR-1), stY(NSTAR-1), stZ(NSTAR-1)
 DIM INTEGER spx(NSTAR-1), spy(NSTAR-1), spc(NSTAR-1)
-DIM INTEGER lastBar(12)
+DIM INTEGER DLY(5), DRY(6)         ' dashboard bar rows, left and right
+DIM LLAB$(5) LENGTH 3, RLAB$(6) LENGTH 3
 
-CONST BARW = 50                    ' the drawn part of an indicator bar
-CONST BARH = 5
-CONST LX = 20                      ' left column bars start here
-CONST RX = 250                     ' right column bars start here
-CONST SCX = 160                    ' scanner centre
-CONST SCY = 210
-CONST SCA = 70                     ' scanner semi-axis across
-CONST SCB = 17                     ' and down
-CONST CPX = 300                    ' compass centre
-CONST CPY = 186
+' Dashboard columns, from the original's screen addresses.  Left column
+' BBC x 16..47 -> ours 20..59; right column BBC x 208..239 -> ours
+' 260..299.  A bar is 16 steps of 2.5 of our pixels.
+CONST DL = 20                      ' left column, the status bars
+CONST DR = 260                     ' right column, speed / roll / pitch / energy
+CONST DW = 40                      ' a full length bar
+
+' Scanner ellipse: BBC centre (124, 220), semi-axes 69 x 18.
+CONST SCX = 155                    ' scanner centre
+CONST SCY = 204
+CONST SCA = 86                     ' scanner semi-axis across
+CONST SCB = 18                     ' and down
+CONST SCDOTX = 154                 ' BBC 123, the dot's x origin
+CONST SCXDIV = 204.8               ' 256 world units per BBC pixel, x 1.25
+CONST SCZDIV = 1024                ' a quarter of z's high byte, down the ellipse
+CONST SCYDIV = 512                 ' half of y's high byte, for the stick
+CONST SCTOP = 178                  ' BBC 194, the dot's clip
+CONST SCBOT = 230                  ' BBC 246
+
+' Compass: BBC centre (195, 203), a normalised component of +-96 becoming
+' +-9 pixels.  Yellow and two rows deep when the target is ahead, green
+' and one row deep when it is behind.
+CONST CPX = 244
+CONST CPY = 187
+CONST CPR = 9
 CONST PROFILE = 1                  ' accumulate per-stage frame times
 

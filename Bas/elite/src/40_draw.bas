@@ -12,7 +12,7 @@ SUB DrawFrame
     t = TIMER : CLS           : prof(0) = prof(0) + TIMER - t
     t = TIMER : DrawStardust  : prof(1) = prof(1) + TIMER - t
     t = TIMER : DrawPlanetSun : prof(2) = prof(2) + TIMER - t
-    t = TIMER : DrawShips     : prof(3) = prof(3) + TIMER - t
+    t = TIMER : DrawShips : SpaceFurniture : prof(3) = prof(3) + TIMER - t
     t = TIMER : DrawDash      : prof(4) = prof(4) + TIMER - t
     ViewName
   ELSE
@@ -20,31 +20,40 @@ SUB DrawFrame
     DrawStardust
     DrawPlanetSun
     DrawShips
+    SpaceFurniture
     DrawDash
     ViewName
   ENDIF
 END SUB
 
 
-' A ship is drawn as its mesh when it is close enough and an object is
-' free for it, and as a single dot otherwise - which is exactly the
-' original's rule, and the reason a busy bubble stays affordable.
+' Whether a ship is drawn at all, and as a mesh or a dot, is decided the
+' way the original decides it - on the high byte of z alone, not on range.
+' Outside a 45 degree cone nothing is drawn even though our wider screen
+' could show it; beyond z_hi 192 nothing is drawn either.  Between those,
+' the blueprint's visibility byte picks mesh or dot, except below z_hi 16
+' where the mesh always wins.
 SUB DrawShips
-  LOCAL INTEGER n, px, py, band
+  LOCAL INTEGER n, px, py, zb
   FOR n = 0 TO nUsed - 1
     IF sTyp(n) <> 0 AND sBp(n) >= 0 THEN
       ViewXform n
       IF tz > NEARZ THEN
-        px = VCX + VPLANE * tx / tz
-        py = VCY - VPLANE * ty / tz
-        band = MaxAbs3(tx, ty, tz) \ BANDDIV
-        IF sObj(n) > 0 AND band <= bVis(sBp(n)) AND ABS(tx) < FARXY AND ABS(ty) < FARXY THEN
-          ViewOrient n
-          Draw3D ROTATE qC(), sObj(n)
-          Draw3D WRITE sObj(n), tx, ty, tz, 0, solidMode
-        ELSE
-          IF px >= 0 AND px < SCRW AND py >= 0 AND py < VIEWH THEN
-            PIXEL px, py, cWhite
+        zb = tz \ ZHI
+        IF zb < VISCUT AND ABS(tx) < tz AND ABS(ty) < tz THEN
+          IF zb >= VISFLOOR AND zb > bVis(sBp(n)) THEN
+            ' Too far for a mesh.  The original's distant ship is not a
+            ' single pixel but a short dash two rows deep, sitting one
+            ' pixel right of the projected point.
+            px = VCX + SGN(tx) * ((VPLANE * ABS(tx)) \ tz)
+            py = VCY - SGN(ty) * ((VPLANE * ABS(ty)) \ tz)
+            IF py > 0 AND py < VIEWH - 2 THEN BOX px + 1, py, 3, 2, 0, cWhite, cWhite
+          ELSE
+            IF sObj(n) > 0 AND ABS(tx) < FARXY AND ABS(ty) < FARXY THEN
+              ViewOrient n
+              Draw3D ROTATE qC(), sObj(n)
+              Draw3D WRITE sObj(n), tx, ty, tz, 0, solidMode
+            ENDIF
           ENDIF
         ENDIF
       ENDIF
@@ -52,11 +61,19 @@ SUB DrawShips
   NEXT n
 END SUB
 
-FUNCTION MaxAbs3(a AS FLOAT, b AS FLOAT, c AS FLOAT) AS FLOAT
-  MaxAbs3 = ABS(a)
-  IF ABS(b) > MaxAbs3 THEN MaxAbs3 = ABS(b)
-  IF ABS(c) > MaxAbs3 THEN MaxAbs3 = ABS(c)
-END FUNCTION
+' The original frames the space view with a two pixel border, and puts
+' crosshairs at the centre of any view that has a laser fitted.
+SUB SpaceFurniture
+  LINE 0, 0, SCRW - 2, 0, 1, cWhite
+  BOX 0, 0, 2, VIEWH, 0, cWhite, cWhite
+  BOX SCRW - 2, 0, 2, VIEWH, 0, cWhite, cWhite
+  IF vw = 0 THEN
+    LINE VCX - 25, VCY, VCX - 12, VCY, 1, cWhite
+    LINE VCX + 12, VCY, VCX + 25, VCY, 1, cWhite
+    LINE VCX, VCY - 20, VCX, VCY - 10, 1, cWhite
+    LINE VCX, VCY + 10, VCX, VCY + 20, 1, cWhite
+  ENDIF
+END SUB
 
 ' The planet and the sun are far too big to go through the 3D engine, so
 ' they are drawn as discs, exactly as the original does: an outline for

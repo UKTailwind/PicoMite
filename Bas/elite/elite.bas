@@ -96,7 +96,7 @@ DIM INTEGER tBp(13)                ' ship type 1..13 -> blueprint index
 DIM FLOAT mV(2, 39), mNrm(2, 15)
 DIM INTEGER mFc(31), mHost(31), mF(159), mEc(31), mFl(31)
 DIM INTEGER col(6)
-DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cGrey
+DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cGrey, cRed
 
 ' Draw3D object pool.  objOwn(n) is the slot that owns object n, or -1.
 DIM INTEGER maxObj, objOwn(15)
@@ -138,23 +138,47 @@ CONST TIDYEVERY = 16               ' renormalise one ship's orientation this oft
 
 CONST NEARZ = 32                   ' nearer than this and nothing is drawn
 CONST FARXY = 30000                ' Draw3D clamps its offsets at +-32766
-CONST BANDDIV = 2048               ' distance -> the 0..31 visibility band
+' The original compares the blueprint's visibility byte directly against the
+' high byte of z, so its unit is 256 world units.  Two hard cut-offs sit
+' either side of that comparison: nothing at all is drawn beyond z_hi 192,
+' and below z_hi 16 the mesh is always drawn whatever the blueprint says -
+' which is why the escape pod, canister and missile, whose bytes are under
+' 16, all turn into dots at exactly 4096.
+CONST ZHI = 256                    ' world units per step of the visibility scale
+CONST VISFLOOR = 16                ' below this the mesh is always drawn
+CONST VISCUT = 192                 ' beyond this the ship is not drawn at all
 CONST NSTAR = 18                   ' stardust particles, as the original
 
 DIM FLOAT stX(NSTAR-1), stY(NSTAR-1), stZ(NSTAR-1)
 DIM INTEGER spx(NSTAR-1), spy(NSTAR-1), spc(NSTAR-1)
-DIM INTEGER lastBar(12)
+DIM INTEGER DLY(5), DRY(6)         ' dashboard bar rows, left and right
+DIM LLAB$(5) LENGTH 3, RLAB$(6) LENGTH 3
 
-CONST BARW = 50                    ' the drawn part of an indicator bar
-CONST BARH = 5
-CONST LX = 20                      ' left column bars start here
-CONST RX = 250                     ' right column bars start here
-CONST SCX = 160                    ' scanner centre
-CONST SCY = 210
-CONST SCA = 70                     ' scanner semi-axis across
-CONST SCB = 17                     ' and down
-CONST CPX = 300                    ' compass centre
-CONST CPY = 186
+' Dashboard columns, from the original's screen addresses.  Left column
+' BBC x 16..47 -> ours 20..59; right column BBC x 208..239 -> ours
+' 260..299.  A bar is 16 steps of 2.5 of our pixels.
+CONST DL = 20                      ' left column, the status bars
+CONST DR = 260                     ' right column, speed / roll / pitch / energy
+CONST DW = 40                      ' a full length bar
+
+' Scanner ellipse: BBC centre (124, 220), semi-axes 69 x 18.
+CONST SCX = 155                    ' scanner centre
+CONST SCY = 204
+CONST SCA = 86                     ' scanner semi-axis across
+CONST SCB = 18                     ' and down
+CONST SCDOTX = 154                 ' BBC 123, the dot's x origin
+CONST SCXDIV = 204.8               ' 256 world units per BBC pixel, x 1.25
+CONST SCZDIV = 1024                ' a quarter of z's high byte, down the ellipse
+CONST SCYDIV = 512                 ' half of y's high byte, for the stick
+CONST SCTOP = 178                  ' BBC 194, the dot's clip
+CONST SCBOT = 230                  ' BBC 246
+
+' Compass: BBC centre (195, 203), a normalised component of +-96 becoming
+' +-9 pixels.  Yellow and two rows deep when the target is ahead, green
+' and one row deep when it is behind.
+CONST CPX = 244
+CONST CPY = 187
+CONST CPR = 9
 CONST PROFILE = 1                  ' accumulate per-stage frame times
 
 ' =====================================================================
@@ -423,6 +447,18 @@ SUB SetupScreen
   ' RGB(), which the trace cache cannot compile.
   cGreen = RGB(GREEN) : cYellow = RGB(YELLOW) : cWhite = RGB(WHITE)
   cBlack = RGB(BLACK) : cCyan = RGB(CYAN) : cGrey = RGB(64, 64, 64)
+  cRed = RGB(RED)
+  ' Bar rows, converted from the original's character rows.  Left column:
+  ' forward shield, aft shield, fuel, cabin temperature, laser temperature,
+  ' altitude.  Right column: speed, roll, dive/climb, four energy banks.
+  DLY(0) = 178 : DLY(1) = 186 : DLY(2) = 194
+  DLY(3) = 202 : DLY(4) = 210 : DLY(5) = 218
+  DRY(0) = 178 : DRY(1) = 185 : DRY(2) = 193 : DRY(3) = 202
+  DRY(4) = 210 : DRY(5) = 218 : DRY(6) = 226
+  LLAB$(0) = "FS" : LLAB$(1) = "AS" : LLAB$(2) = "FU"
+  LLAB$(3) = "CT" : LLAB$(4) = "LT" : LLAB$(5) = "AL"
+  RLAB$(0) = "SP" : RLAB$(1) = "RL" : RLAB$(2) = "DC"
+  RLAB$(3) = "1" : RLAB$(4) = "2" : RLAB$(5) = "3" : RLAB$(6) = "4"
 END SUB
 
 ' The four views are rotations of the whole universe about the vertical
@@ -713,7 +749,7 @@ SUB DrawFrame
     t = TIMER : CLS           : prof(0) = prof(0) + TIMER - t
     t = TIMER : DrawStardust  : prof(1) = prof(1) + TIMER - t
     t = TIMER : DrawPlanetSun : prof(2) = prof(2) + TIMER - t
-    t = TIMER : DrawShips     : prof(3) = prof(3) + TIMER - t
+    t = TIMER : DrawShips : SpaceFurniture : prof(3) = prof(3) + TIMER - t
     t = TIMER : DrawDash      : prof(4) = prof(4) + TIMER - t
     ViewName
   ELSE
@@ -721,31 +757,40 @@ SUB DrawFrame
     DrawStardust
     DrawPlanetSun
     DrawShips
+    SpaceFurniture
     DrawDash
     ViewName
   ENDIF
 END SUB
 
 
-' A ship is drawn as its mesh when it is close enough and an object is
-' free for it, and as a single dot otherwise - which is exactly the
-' original's rule, and the reason a busy bubble stays affordable.
+' Whether a ship is drawn at all, and as a mesh or a dot, is decided the
+' way the original decides it - on the high byte of z alone, not on range.
+' Outside a 45 degree cone nothing is drawn even though our wider screen
+' could show it; beyond z_hi 192 nothing is drawn either.  Between those,
+' the blueprint's visibility byte picks mesh or dot, except below z_hi 16
+' where the mesh always wins.
 SUB DrawShips
-  LOCAL INTEGER n, px, py, band
+  LOCAL INTEGER n, px, py, zb
   FOR n = 0 TO nUsed - 1
     IF sTyp(n) <> 0 AND sBp(n) >= 0 THEN
       ViewXform n
       IF tz > NEARZ THEN
-        px = VCX + VPLANE * tx / tz
-        py = VCY - VPLANE * ty / tz
-        band = MaxAbs3(tx, ty, tz) \ BANDDIV
-        IF sObj(n) > 0 AND band <= bVis(sBp(n)) AND ABS(tx) < FARXY AND ABS(ty) < FARXY THEN
-          ViewOrient n
-          Draw3D ROTATE qC(), sObj(n)
-          Draw3D WRITE sObj(n), tx, ty, tz, 0, solidMode
-        ELSE
-          IF px >= 0 AND px < SCRW AND py >= 0 AND py < VIEWH THEN
-            PIXEL px, py, cWhite
+        zb = tz \ ZHI
+        IF zb < VISCUT AND ABS(tx) < tz AND ABS(ty) < tz THEN
+          IF zb >= VISFLOOR AND zb > bVis(sBp(n)) THEN
+            ' Too far for a mesh.  The original's distant ship is not a
+            ' single pixel but a short dash two rows deep, sitting one
+            ' pixel right of the projected point.
+            px = VCX + SGN(tx) * ((VPLANE * ABS(tx)) \ tz)
+            py = VCY - SGN(ty) * ((VPLANE * ABS(ty)) \ tz)
+            IF py > 0 AND py < VIEWH - 2 THEN BOX px + 1, py, 3, 2, 0, cWhite, cWhite
+          ELSE
+            IF sObj(n) > 0 AND ABS(tx) < FARXY AND ABS(ty) < FARXY THEN
+              ViewOrient n
+              Draw3D ROTATE qC(), sObj(n)
+              Draw3D WRITE sObj(n), tx, ty, tz, 0, solidMode
+            ENDIF
           ENDIF
         ENDIF
       ENDIF
@@ -753,11 +798,19 @@ SUB DrawShips
   NEXT n
 END SUB
 
-FUNCTION MaxAbs3(a AS FLOAT, b AS FLOAT, c AS FLOAT) AS FLOAT
-  MaxAbs3 = ABS(a)
-  IF ABS(b) > MaxAbs3 THEN MaxAbs3 = ABS(b)
-  IF ABS(c) > MaxAbs3 THEN MaxAbs3 = ABS(c)
-END FUNCTION
+' The original frames the space view with a two pixel border, and puts
+' crosshairs at the centre of any view that has a laser fitted.
+SUB SpaceFurniture
+  LINE 0, 0, SCRW - 2, 0, 1, cWhite
+  BOX 0, 0, 2, VIEWH, 0, cWhite, cWhite
+  BOX SCRW - 2, 0, 2, VIEWH, 0, cWhite, cWhite
+  IF vw = 0 THEN
+    LINE VCX - 25, VCY, VCX - 12, VCY, 1, cWhite
+    LINE VCX + 12, VCY, VCX + 25, VCY, 1, cWhite
+    LINE VCX, VCY - 20, VCX, VCY - 10, 1, cWhite
+    LINE VCX, VCY + 10, VCX, VCY + 20, 1, cWhite
+  ENDIF
+END SUB
 
 ' The planet and the sun are far too big to go through the 3D engine, so
 ' they are drawn as discs, exactly as the original does: an outline for
@@ -823,29 +876,34 @@ SUB DrawStardust
 END SUB
 
 ' =====================================================================
-'  The dashboard and the 3D scanner
+'  The dashboard, the 3D scanner and the compass
 '
-'  PROVISIONAL LAYOUT.  The arrangement follows the original - speed,
-'  roll and dive/climb on the left with the four energy banks beneath,
-'  the scanner and compass in the middle, the six status bars on the
-'  right - but the exact pixel geometry is still to be reconciled with
-'  the source.
+'  Geometry taken from the original's screen addresses, converted with
+'  x_ours = ROUND(x_bbc * 1.25) and y_ours = y_bbc - 16.  The BBC's
+'  dashboard is character rows 24 to 30, i.e. BBC y 192..247, landing on
+'  our rows 176..231; row 31 exists in memory but the video chip never
+'  displays it, so our last eight rows have no counterpart and are free.
+'
+'  Note which column is which: speed, roll, dive/climb and the four
+'  energy banks are on the RIGHT, and the six status bars on the LEFT.
+'
+'  Colour follows the original's threshold rule, which runs in opposite
+'  directions for different indicators.  A high reading is dangerous for
+'  speed and the two temperatures, so those turn red at the top of their
+'  range; a low reading is dangerous for energy, shields and fuel, so
+'  those turn red at the bottom.  Altitude never changes colour.
 '
 '  The whole screen is cleared each frame, because the planet's disc and
 '  the outermost stardust reach below the space view and the drawing
-'  primitives clip to the screen rather than to a region.  The dashboard
-'  is therefore laid down again over the top of the space view, fixed
-'  artwork first.
+'  primitives clip to the screen rather than to a region.  The fixed
+'  artwork is therefore laid down again every frame, but by restoring a
+'  photograph of it rather than by redrawing it.
 ' =====================================================================
 
-' The fixed artwork is drawn once and then photographed straight out of the
-' framebuffer into an array.  Every later call puts it back with a single
-' word-aligned memory copy of the 64 rows, which costs a fraction of what
-' redrawing thirteen labels and outlines does.  At 4 bits per pixel the
-' strip is (SCRH-DASHY) * SCRW / 2 bytes, hence the divide by 16 to count
-' 64-bit words.
-'
-' fadd caches the write buffer's address, so this is only valid while the
+' Drawn once, then read straight out of the framebuffer into an array.
+' Every later call puts it back with one word-aligned memory copy of the
+' 64 rows, a fraction of the cost of redrawing the labels and frames.
+' fadd caches the write buffer's address, so this holds only while the
 ' framebuffer stays the write target - which it does for the whole game.
 SUB DashStatic
   STATIC INTEGER wordcount = (SCRH - DASHY) * SCRW \ 16
@@ -855,111 +913,120 @@ SUB DashStatic
     LOCAL INTEGER i
     addr = PEEK(VARADDR store())
     fadd = MM.INFO(WRITEBUFF) + DASHY * SCRW / 2
-    BOX 0, DASHY, SCRW, SCRH - DASHY, 0, RGB(BLACK), RGB(BLACK)
-    LINE 0, DASHY, SCRW - 1, DASHY, 1, RGB(CYAN)
-    BarFrame LX, DASHY + 4,  "SP"
-    BarFrame LX, DASHY + 12, "RL"
-    BarFrame LX, DASHY + 20, "DC"
-    FOR i = 0 TO 3
-      BarFrame LX, DASHY + 32 + i * 7, STR$(i + 1) + " "
+    BOX 0, DASHY, SCRW, SCRH - DASHY, 0, cBlack, cBlack
+    LINE 0, DASHY, SCRW - 1, DASHY, 1, cCyan
+    ' The labels go in the character blocks the original never writes to:
+    ' ours x 0..19 left of the left column, x 300..319 right of the right.
+    FOR i = 0 TO 5
+      TEXT 17, DLY(i) - 1, LLAB$(i), "RT", 7, 1, cWhite
+      BOX DL, DLY(i) - 1, DW + 2, 5, 1, cGrey, -1
     NEXT i
-    BarFrame RX, DASHY + 4,  "FS"
-    BarFrame RX, DASHY + 12, "AS"
-    BarFrame RX, DASHY + 20, "FU"
-    BarFrame RX, DASHY + 28, "CT"
-    BarFrame RX, DASHY + 36, "LT"
-    BarFrame RX, DASHY + 44, "AL"
+    FOR i = 0 TO 6
+      TEXT 303, DRY(i) - 1, RLAB$(i), "LT", 7, 1, cWhite
+      BOX DR, DRY(i) - 1, DW + 2, 5, 1, cGrey, -1
+    NEXT i
+    CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cGrey, -1
     MEMORY COPY INTEGER fadd, addr, wordcount
   ELSE
     MEMORY COPY INTEGER addr, fadd, wordcount
   ENDIF
-  ARRAY SET -1, lastBar()
-END SUB
-
-SUB BarFrame(x AS INTEGER, y AS INTEGER, lb$)
-  TEXT x - 15, y - 1, lb$, "LT", 7, 1, RGB(WHITE)
-  BOX x, y, BARW, BARH, 1, RGB(GRAY), -1
 END SUB
 
 SUB DrawDash
   LOCAL INTEGER i, e
-  ' The space view's planet and stardust overrun this strip, so the fixed
-  ' artwork goes down again each frame before anything that moves.
   DashStatic
-  Bar 0, LX, DASHY + 4, dSpeed / MAXSPEED, RGB(YELLOW)
-  Pointer 1, LX, DASHY + 12, alp2 * alp1 / 31.0
-  Pointer 2, LX, DASHY + 20, bet2 * bet1 / 8.0
+  ' --- right column: what the ship is doing
+  Bar DR, DRY(0), dSpeed \ 2, 14, cRed, cYellow             ' speed
+  Pointer DR, DRY(1), 8 + alp2 * (alp1 \ 4)                 ' roll
+  Pointer DR, DRY(2), 8 + bet2 * bet1                       ' dive / climb
   FOR i = 0 TO 3
-    e = pEnergy - i * 64
+    e = (pEnergy \ 4) - (3 - i) * 16
     IF e < 0 THEN e = 0
-    IF e > 64 THEN e = 64
-    Bar 3 + i, LX, DASHY + 32 + i * 7, e / 64.0, RGB(YELLOW)
+    IF e > 16 THEN e = 16
+    Bar DR, DRY(3 + i), e, 3, cYellow, cRed                 ' the four banks
   NEXT i
-  Bar 7,  RX, DASHY + 4,  pFsh / 255.0, RGB(GREEN)
-  Bar 8,  RX, DASHY + 12, pAsh / 255.0, RGB(GREEN)
-  Bar 9,  RX, DASHY + 20, pFuel / 70.0, RGB(YELLOW)
-  Bar 10, RX, DASHY + 28, pCabT / 255.0, RGB(MAGENTA)
-  Bar 11, RX, DASHY + 36, pLasT / 255.0, RGB(MAGENTA)
-  Bar 12, RX, DASHY + 44, pAltit / 255.0, RGB(GREEN)
+  ' --- left column: what the ship has left
+  Bar DL, DLY(0), pFsh \ 16, 3, cYellow, cRed
+  Bar DL, DLY(1), pAsh \ 16, 3, cYellow, cRed
+  Bar DL, DLY(2), pFuel \ 4, 3, cYellow, cRed
+  Bar DL, DLY(3), pCabT \ 16, 11, cRed, cYellow
+  Bar DL, DLY(4), pLasT \ 16, 11, cRed, cYellow
+  Bar DL, DLY(5), pAltit \ 16, 99, cRed, cYellow            ' 99 is unreachable
+  Missiles
   DrawScanner
   DrawCompass
 END SUB
 
-' A bar is only touched when its length has actually changed.
-SUB Bar(id AS INTEGER, x AS INTEGER, y AS INTEGER, frac AS FLOAT, c AS INTEGER)
-  LOCAL INTEGER w
-  w = frac * (BARW - 2)
-  IF w < 0 THEN w = 0
-  IF w > BARW - 2 THEN w = BARW - 2
-  IF w <> lastBar(id) THEN
-    lastBar(id) = w
-    BOX x + 1, y + 1, BARW - 2, BARH - 2, 0, RGB(BLACK), RGB(BLACK)
-    IF w > 0 THEN BOX x + 1, y + 1, w, BARH - 2, 0, c, c
-  ENDIF
+' A bar of length lv on the original's 0..16 scale.  It takes colour hi at
+' or above the threshold and lo below it, which is how one routine serves
+' both the "high is bad" and the "low is bad" indicators.
+SUB Bar(x AS INTEGER, y AS INTEGER, lv AS INTEGER, t1 AS INTEGER, hi AS INTEGER, lo AS INTEGER)
+  LOCAL INTEGER w, c, v
+  v = lv
+  IF v < 0 THEN v = 0
+  IF v > 16 THEN v = 16
+  c = lo
+  IF v >= t1 THEN c = hi
+  w = v * 2.5
+  BOX x + 1, y, DW, 3, 0, cBlack, cBlack
+  IF w > 0 THEN BOX x + 1, y, w, 3, 0, c, c
 END SUB
 
-' Roll and dive/climb are centre-zero: a marker that slides either side
-' of the middle rather than a bar that fills from one end.
-SUB Pointer(id AS INTEGER, x AS INTEGER, y AS INTEGER, frac AS FLOAT)
-  LOCAL INTEGER px
-  px = BARW \ 2 + frac * (BARW \ 2 - 3)
-  IF px < 1 THEN px = 1
-  IF px > BARW - 4 THEN px = BARW - 4
-  IF px <> lastBar(id) THEN
-    lastBar(id) = px
-    BOX x + 1, y + 1, BARW - 2, BARH - 2, 0, RGB(BLACK), RGB(BLACK)
-    BOX x + px, y + 1, 2, BARH - 2, 0, RGB(YELLOW), RGB(YELLOW)
-  ENDIF
+' Roll and dive/climb are centre-zero: one marker sliding over sixteen
+' positions with the centre at 8, and four rows deep rather than three.
+SUB Pointer(x AS INTEGER, y AS INTEGER, p AS INTEGER)
+  LOCAL INTEGER v
+  v = p
+  IF v < 0 THEN v = 0
+  IF v > 15 THEN v = 15
+  BOX x + 1, y, DW, 4, 0, cBlack, cBlack
+  BOX x + 1 + v * 2.5, y, 3, 4, 0, cYellow, cYellow
 END SUB
 
-' The scanner.  Each contact is a dot with a stick down to the plane of
+' Four missile blocks, filled from the left as missiles are carried.
+SUB Missiles
+  LOCAL INTEGER i, c
+  FOR i = 0 TO 3
+    c = cBlack
+    IF i < pMissl THEN c = cGreen
+    BOX 20 + i * 10, 225, 7, 5, 0, c, c
+  NEXT i
+END SUB
+
+' The scanner.  Each contact is a dash with a stick down to the plane of
 ' the ellipse, so the ellipse reads as the plane the player is flying in
-' and the stick shows how far above or below it the contact sits.
+' and the stick shows how far above or below it the contact sits.  It is
+' always drawn in front-view coordinates whichever way the player is
+' looking, exactly as the original does it.
 SUB DrawScanner
   LOCAL INTEGER n, px, py, base, c
-  BOX SCX - SCA, SCY - SCB - 7, 2 * SCA, 2 * SCB + 14, 0, cBlack, cBlack
+  BOX SCX - SCA, SCY - SCB - 9, 2 * SCA, 2 * SCB + 18, 0, cBlack, cBlack
   ' CIRCLE takes the vertical radius; its aspect is width over height.
   CIRCLE SCX, SCY, SCB, 1, SCA / SCB, cCyan, -1
   FOR n = 0 TO nUsed - 1
     IF sTyp(n) <> 0 AND sBp(n) >= 0 THEN
+      ' A contact shows only while all three high bytes are 63 or less.
       IF ABS(sX(n)) < 16384 AND ABS(sY(n)) < 16384 AND ABS(sZ(n)) < 16384 THEN
-        px = SCX + sX(n) / 234
-        base = SCY - sZ(n) / 1024
-        py = base - sY(n) / 700
-        IF px > SCX - SCA AND px < SCX + SCA AND py > SCY - SCB - 7 AND py < SCY + SCB + 7 THEN
+        px = SCDOTX + sX(n) / SCXDIV
+        base = SCY - sZ(n) / SCZDIV
+        py = base - sY(n) / SCYDIV
+        IF py < SCTOP THEN py = SCTOP
+        IF py > SCBOT THEN py = SCBOT
+        IF px > SCX - SCA AND px < SCX + SCA THEN
           c = cGreen
           IF sTyp(n) = T_MISSILE THEN c = cYellow
-          IF sTyp(n) = T_STATION THEN c = cWhite
           LINE px, base, px, py, 1, c
-          BOX px - 1, py - 1, 3, 3, 0, c, c
+          BOX px, py - 1, 5, 2, 0, c, c
         ENDIF
       ENDIF
     ENDIF
   NEXT n
 END SUB
 
-' The compass points at the station inside the safe zone and at the
-' planet outside it, and is hollow when the target is behind us.
+' The compass points at the station inside the safe zone and at the planet
+' outside it.  Ahead it is a yellow dash two rows deep, behind it a green
+' one a single row deep: the original tells the two apart by height and
+' colour together, not by filling or hollowing one marker.
 SUB DrawCompass
   LOCAL INTEGER n, px, py
   LOCAL FLOAT m
@@ -968,26 +1035,27 @@ SUB DrawCompass
   IF sTyp(n) = 0 THEN EXIT SUB
   m = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
   IF m < 1 THEN EXIT SUB
-  BOX CPX - 11, CPY - 11, 23, 23, 0, RGB(BLACK), RGB(BLACK)
-  CIRCLE CPX, CPY, 10, 1, 1, RGB(64, 64, 64), -1
-  px = CPX + 9 * sX(n) / m
-  py = CPY - 9 * sY(n) / m
+  BOX CPX - CPR - 4, CPY - CPR - 3, 2 * CPR + 9, 2 * CPR + 7, 0, cBlack, cBlack
+  CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cGrey, -1
+  px = CPX + CPR * 1.25 * sX(n) / m
+  py = CPY - CPR * sY(n) / m
   IF sZ(n) >= 0 THEN
-    BOX px - 1, py - 1, 3, 3, 0, RGB(GREEN), RGB(GREEN)
+    BOX px, py, 3, 2, 0, cYellow, cYellow
   ELSE
-    BOX px - 1, py - 1, 3, 3, 1, RGB(GREEN), -1
+    BOX px, py, 3, 1, 0, cGreen, cGreen
   ENDIF
 END SUB
 
 SUB ViewName
   LOCAL v$
   SELECT CASE vw
-    CASE 0 : v$ = "FRONT VIEW"
-    CASE 1 : v$ = "REAR VIEW"
-    CASE 2 : v$ = "LEFT VIEW"
-    CASE 3 : v$ = "RIGHT VIEW"
+    CASE 0 : v$ = "Front view"
+    CASE 1 : v$ = "Rear view"
+    CASE 2 : v$ = "Left view"
+    CASE 3 : v$ = "Right view"
   END SELECT
-  TEXT VCX, 2, v$, "CT", 7, 1, RGB(WHITE)
+  ' BBC text column 11, row 1: x = 11 * 8 * 1.25, y = 8.
+  TEXT 110, 8, v$, "LT", 7, 1, cWhite
 END SUB
 
 ' =====================================================================
