@@ -150,7 +150,7 @@ CONST VISCUT = 192                 ' beyond this the ship is not drawn at all
 CONST NSTAR = 18                   ' stardust particles, as the original
 
 DIM FLOAT stX(NSTAR-1), stY(NSTAR-1), stZ(NSTAR-1)
-DIM INTEGER spx(NSTAR-1), spy(NSTAR-1), spc(NSTAR-1)
+DIM INTEGER spx(4*NSTAR-1), spy(4*NSTAR-1), spc(4*NSTAR-1)
 DIM INTEGER DLY(5), DRY(6)         ' dashboard bar rows, left and right
 DIM LLAB$(5) LENGTH 3, RLAB$(6) LENGTH 3
 
@@ -854,40 +854,135 @@ SUB DrawPlanetSun
   NEXT n
 END SUB
 
-' Stardust: particles that stream past to show the ship is moving.  They
-' live in their own screen-referred space rather than the world, which
-' is why they can be cheap.
+' Stardust.  The particles do not live in the world: x and y are pixel
+' offsets from the centre of the view and z is a depth in the same units
+' the visibility scale uses, so the whole field costs no projection at
+' all.  Each view moves them differently - outwards from the centre in
+' front, inwards behind, and sideways in the two side views - and each
+' has its own rule for where a particle that leaves the screen comes
+' back.  A particle is one pixel far away, two abreast closer in, and a
+' two by two block when it is nearly past, which is the depth cue that
+' makes the field read as speed.
+'
+' alp1 and bet1 are used here as the small signed integers the original
+' works in, not as the radian angles the ship rotation uses.
 SUB InitStardust
   LOCAL INTEGER i
   FOR i = 0 TO NSTAR - 1
-    stX(i) = (RND * 2 - 1) * 116
-    stY(i) = (RND * 2 - 1) * 116
-    stZ(i) = 1 + RND * 255
-    spc(i) = RGB(WHITE)
+    stX(i) = SdSM(RND * 256)
+    stY(i) = SdSM(RND * 256)
+    stZ(i) = 1 + RND * 254
   NEXT i
+  FOR i = 0 TO 4 * NSTAR - 1 : spc(i) = cWhite : NEXT i
 END SUB
 
+' A random byte read as a sign and a magnitude, giving -127..127.
+FUNCTION SdSM(b AS FLOAT) AS FLOAT
+  LOCAL INTEGER v
+  v = b
+  IF (v AND 128) <> 0 THEN SdSM = -(v AND 127) ELSE SdSM = (v AND 127)
+END FUNCTION
+
 SUB DrawStardust
-  LOCAL INTEGER i
-  LOCAL FLOAT q, x, y, z
+  LOCAL INTEGER i, zh, np, sx, sy, sy2, r
+  LOCAL FLOAT q, x, y, z, a, b, h, qb, d, dsg, ratsg
+  a = alp2 * alp1
+  b = bet2 * bet1
+  np = 0
+  ARRAY SET -1, spx()
+  IF vw > 1 THEN
+    ' the right view runs the same maths with the angles negated
+    IF vw = 3 THEN
+      a = -a : b = -b : dsg = 1 : ratsg = -1
+    ELSE
+      dsg = -1 : ratsg = 1
+    ENDIF
+  ENDIF
   FOR i = 0 TO NSTAR - 1
     x = stX(i) : y = stY(i) : z = stZ(i)
-    ' perspective: the nearer a particle is, the faster it flies outwards
-    q = dSpeed / z
-    z = z - dSpeed * 0.25
-    x = x + x * q
-    y = y + y * q + alpha * x * 4 - beta * 256
-    x = x - alpha * y * 4
-    IF ABS(x) >= 116 OR ABS(y) >= 116 OR z < 16 THEN
-      x = (RND * 2 - 1) * 116
-      y = (RND * 2 - 1) * 116
-      z = 144 + RND * 111
+    IF vw = 0 THEN
+      ' --- front: everything streams out from the centre
+      zh = z
+      q = (INT(64 * dSpeed / zh)) OR 1
+      z = z - dSpeed / 4
+      y = y + FIX(y) * q / 256
+      x = x + FIX(x) * q / 256
+      y = y - a * FIX(x) / 256
+      x = x + a * FIX(y) / 256
+      qb = INT(ABS(b) * INT(ABS(y)) / 256)
+      x = x + 2 * qb * qb / 256
+      y = y - b
+      IF ABS(x) >= 120 OR ABS(y) >= 120 OR z < 16 THEN
+        y = SdSM((RND * 256) OR 4)
+        x = SdSM((RND * 256) OR 8)
+        z = (INT(RND * 256)) OR 144
+      ENDIF
+    ELSEIF vw = 1 THEN
+      ' --- rear: everything streams in towards the centre
+      zh = z
+      q = (INT(64 * dSpeed / zh)) OR 1
+      x = x - FIX(x) * q / 256
+      y = y - FIX(y) * q / 256
+      z = z + dSpeed / 4
+      y = y + a * FIX(x) / 256
+      x = x - a * FIX(y) / 256
+      h = FIX(y)
+      qb = -SGN(b) * SGN(h) * INT(ABS(b) * ABS(h) / 256)
+      x = x + 2 * qb * (-FIX(x)) / 256
+      y = y + b
+      ' there is no test on x at all in the rear view
+      IF ABS(y) >= 110 OR z >= 160 THEN
+        r = (INT(RND * 256) AND 127) + 10 + INT(RND * 2)
+        z = r
+        IF (r AND 1) = 0 THEN
+          IF (r AND 2) = 0 THEN x = 126 ELSE x = -126
+          y = SdSM(RND * 256)
+        ELSE
+          r = INT(RND * 256)
+          x = SdSM(r)
+          IF (r AND 1) = 0 THEN y = 115 ELSE y = -115
+        ENDIF
+      ENDIF
+    ELSE
+      ' --- side views: depth never changes, the field just slides across
+      zh = z
+      d = INT(zh / 8)
+      IF d < 1 THEN d = 1
+      x = x + dsg * dSpeed / d
+      x = x + b * FIX(y) / 256
+      y = y - b * FIX(x) / 256
+      h = FIX(y)
+      qb = SGN(a) * SGN(h) * INT(ABS(a) * ABS(h) / 256)
+      x = x - qb * FIX(x) / 256
+      y = y + qb * h / 256 + a
+      IF ABS(x) >= 116 THEN
+        y = SdSM(RND * 256)
+        x = 115 * ratsg
+        z = (INT(RND * 256)) OR 8
+      ELSEIF ABS(y) >= 116 THEN
+        x = SdSM(RND * 256)
+        IF a > 0 THEN y = -110 ELSE y = 110
+        z = (INT(RND * 256)) OR 8
+      ENDIF
     ENDIF
     stX(i) = x : stY(i) = y : stZ(i) = z
-    spx(i) = VCX + x
-    spy(i) = VCY - y
+    ' plot: size grows as the particle gets close
+    IF ABS(y) < VCY THEN
+      zh = z
+      sx = VCX + FIX(x)
+      sy = VCY - FIX(y)
+      spx(np) = sx : spy(np) = sy : np = np + 1
+      IF zh < 144 THEN
+        spx(np) = sx + 1 : spy(np) = sy : np = np + 1
+        IF zh < 80 THEN
+          IF (sy AND 7) = 0 THEN sy2 = sy + 1 ELSE sy2 = sy - 1
+          spx(np) = sx : spy(np) = sy2 : np = np + 1
+          spx(np) = sx + 1 : spy(np) = sy2 : np = np + 1
+        ENDIF
+      ENDIF
+    ENDIF
   NEXT i
-  ' The array form draws the whole field in one call, and clips for us.
+  ' One call draws the whole field, and clips it for us.
   PIXEL spx(), spy(), spc()
 END SUB
 

@@ -150,7 +150,7 @@ CONST VISCUT = 192                 ' beyond this the ship is not drawn at all
 CONST NSTAR = 18                   ' stardust particles, as the original
 
 DIM FLOAT stX(NSTAR-1), stY(NSTAR-1), stZ(NSTAR-1)
-DIM INTEGER spx(NSTAR-1), spy(NSTAR-1), spc(NSTAR-1)
+DIM INTEGER spx(4*NSTAR-1), spy(4*NSTAR-1), spc(4*NSTAR-1)
 DIM INTEGER DLY(5), DRY(6)         ' dashboard bar rows, left and right
 DIM LLAB$(5) LENGTH 3, RLAB$(6) LENGTH 3
 
