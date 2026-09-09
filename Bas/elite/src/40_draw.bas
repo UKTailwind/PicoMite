@@ -76,29 +76,91 @@ SUB SpaceFurniture
 END SUB
 
 ' The planet and the sun are far too big to go through the 3D engine, so
-' they are drawn as discs, exactly as the original does: an outline for
-' the planet with its surface detail, a filled disc for the sun.
+' they are drawn directly.  On-screen radius is 256 * 24576 / z, and the
+' original clamps it: a radius that reaches 256 is forced to 248, so a
+' planet you are nearly touching stops growing rather than filling the
+' screen.  Nothing is drawn closer than z = 256 or further than the
+' radius-2-pixels distance.
+'
+' The cassette game has two kinds of planet and picks between them on a
+' bit of the system's tech level: one with an equator and meridians, one
+' with a crater.  The crater is an ellipse of half the planet's radius,
+' its centre pushed 0.87 of the radius along the up vector, drawn only
+' while the up vector points towards us.
+'
+' Deviation: the original draws the outline as an 8, 16 or 32 sided
+' polygon depending on radius, which is visibly faceted.  Ours is a true
+' circle, because one CIRCLE call costs a fraction of thirty-two
+' interpreted line segments.
 SUB DrawPlanetSun
-  LOCAL INTEGER n, px, py, r
+  LOCAL INTEGER n, cx, cy, r
   FOR n = 0 TO 1
     IF sTyp(n) = T_PLANET OR sTyp(n) = T_CRATER OR sTyp(n) = T_SUN THEN
       ViewXform n
-      IF tz > NEARZ THEN
-        px = VCX + VPLANE * tx / tz
-        py = VCY - VPLANE * ty / tz
-        r = VPLANE * PRADIUS / tz
-        IF r > 0 AND r < 2000 THEN
-          IF px + r > 0 AND px - r < SCRW AND py + r > 0 AND py - r < VIEWH THEN
-            IF sTyp(n) = T_SUN THEN
-              CIRCLE px, py, r, 1, 1, RGB(WHITE), RGB(WHITE)
-            ELSE
-              CIRCLE px, py, r, 1, 1, RGB(WHITE), -1
-            ENDIF
+      IF tz > 255 AND tz < 3145728 THEN
+        cx = VCX + SGN(tx) * ((VPLANE * ABS(tx)) \ tz)
+        cy = VCY - SGN(ty) * ((VPLANE * ABS(ty)) \ tz)
+        r = 6291456 / tz
+        IF r >= 256 THEN r = 248
+        IF cx + r > 0 AND cx - r < SCRW AND cy + r > 0 AND cy - r < VIEWH THEN
+          IF sTyp(n) = T_SUN THEN
+            CIRCLE cx, cy, r, 1, 1, cWhite, cWhite
+          ELSE
+            CIRCLE cx, cy, r, 1, 1, cWhite, -1
+            IF r >= 6 THEN Surface n, cx, cy, r
           ENDIF
         ENDIF
       ENDIF
     ENDIF
   NEXT n
+END SUB
+
+' The planet's surface detail, in the plane of the screen.  Both the
+' crater and the meridians are built from the planet's own orientation
+' vectors projected flat, so the pattern turns with the planet.
+SUB Surface(n AS INTEGER, cx AS INTEGER, cy AS INTEGER, r AS INTEGER)
+  LOCAL INTEGER k
+  LOCAL FLOAT vnx, vny, vrx, vry, vrz, vsx, vsy, ox, oy, ax, ay, bx, by
+  MATH SLICE sQ(), , n, qA()
+  MATH Q_VECTOR 0, 0, 1, qB() : MATH Q_ROTATE qA(), qB(), qV()
+  vnx = qV(1) * qV(4) : vny = qV(2) * qV(4)                        ' nose
+  MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
+  vrx = qV(1) * qV(4) : vry = qV(2) * qV(4) : vrz = qV(3) * qV(4)  ' up
+  MATH Q_VECTOR 1, 0, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
+  vsx = qV(1) * qV(4) : vsy = qV(2) * qV(4)                        ' side
+
+  IF sTyp(n) = T_CRATER THEN
+    ' Drawn only while the up vector, which the crater sits on, is
+    ' pointing away from us rather than towards us.
+    IF vrz < 0 THEN EXIT SUB
+    ox = cx + 0.867 * r * vrx
+    oy = cy - 0.867 * r * vry
+    ax = 0.5 * r * vnx : ay = 0.5 * r * vny
+    bx = 0.5 * r * vsx : by = 0.5 * r * vsy
+    FOR k = 0 TO NSEG - 1
+      pgx(k) = ox + ax * ctab(k) + bx * stab(k)
+      pgy(k) = oy - (ay * ctab(k) + by * stab(k))
+    NEXT k
+    POLYGON NSEG, pgx(), pgy(), cWhite
+  ELSE
+    ' Equator and meridians: three great circles, each an ellipse from a
+    ' conjugate pair of the planet's projected orientation vectors.
+    Meridian cx, cy, r, vnx, vny, vrx, vry
+    Meridian cx, cy, r, vsx, vsy, vrx, vry
+    Meridian cx, cy, r, vnx, vny, vsx, vsy
+  ENDIF
+END SUB
+
+' One great circle of the planet, as a closed ellipse from two conjugate
+' radius vectors.  The original draws only the half facing us; a closed
+' ellipse costs the same here and reads the same at this size.
+SUB Meridian(cx AS INTEGER, cy AS INTEGER, r AS INTEGER, ax AS FLOAT, ay AS FLOAT, bx AS FLOAT, by AS FLOAT)
+  LOCAL INTEGER k
+  FOR k = 0 TO NSEG - 1
+    pgx(k) = cx + r * (ax * ctab(k) + bx * stab(k))
+    pgy(k) = cy - r * (ay * ctab(k) + by * stab(k))
+  NEXT k
+  POLYGON NSEG, pgx(), pgy(), cWhite
 END SUB
 
 ' Stardust.  The particles do not live in the world: x and y are pixel

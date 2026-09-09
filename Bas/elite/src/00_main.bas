@@ -148,7 +148,9 @@ CONST ZHI = 256                    ' world units per step of the visibility scal
 CONST VISFLOOR = 16                ' below this the mesh is always drawn
 CONST VISCUT = 192                 ' beyond this the ship is not drawn at all
 CONST NSTAR = 18                   ' stardust particles, as the original
+CONST NSEG = 16                    ' segments in a planet surface ellipse
 
+DIM FLOAT ctab(NSEG-1), stab(NSEG-1), pgx(NSEG-1), pgy(NSEG-1)
 DIM FLOAT stX(NSTAR-1), stY(NSTAR-1), stZ(NSTAR-1)
 DIM INTEGER spx(4*NSTAR-1), spy(4*NSTAR-1), spc(4*NSTAR-1)
 DIM INTEGER DLY(5), DRY(6)         ' dashboard bar rows, left and right

@@ -20,8 +20,11 @@ SUB TestScene
   vw = 0 : mcnt = 0 : inSafe = 1
   InitStardust
 
-  ' The planet, low and ahead, one station orbit away
-  MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
+  ' The planet, low and ahead, one station orbit away.  It is tilted so
+  ' the crater faces us: with the up vector square on, the crater's plane
+  ' is edge on and it projects to a line, which is correct but shows
+  ' nothing.
+  MATH Q_EULER 0, RAD(40), 0, qA() : qA(4) = 1
   n = NewShip(T_CRATER, 0, -20000, 50000, qA())
 
   ' The station we have just left, turning as it always does

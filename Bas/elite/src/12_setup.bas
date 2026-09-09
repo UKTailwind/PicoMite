@@ -16,6 +16,12 @@ SUB SetupScreen
   cGreen = RGB(GREEN) : cYellow = RGB(YELLOW) : cWhite = RGB(WHITE)
   cBlack = RGB(BLACK) : cCyan = RGB(CYAN) : cGrey = RGB(64, 64, 64)
   cRed = RGB(RED)
+  ' One turn of the unit circle, for the planet's surface ellipses.
+  LOCAL INTEGER k
+  FOR k = 0 TO NSEG - 1
+    ctab(k) = COS(2 * PI * k / NSEG)
+    stab(k) = SIN(2 * PI * k / NSEG)
+  NEXT k
   ' Bar rows, converted from the original's character rows.  Left column:
   ' forward shield, aft shield, fuel, cabin temperature, laser temperature,
   ' altitude.  Right column: speed, roll, dive/climb, four energy banks.
