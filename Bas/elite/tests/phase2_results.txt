@@ -1,0 +1,40 @@
+Elite Phase 2 results - the flight core - PC3 (PicoMiteHDMIWEB V6.03.02b3, RP2350B, 378 MHz)
+Measured 2026-09-09. Program Bas/elite/elite.bas, built from src/*.bas by elite_tools/build.py.
+
+What runs
+  Universe slot table, 12 slots, planet in 0 and sun/station in 1, shuffle-down removal.
+  Player controls with the original's spring and auto-recentre; speed 1..40.
+  Universe rotation, ship movement along the nose, per-ship roll/pitch counters.
+  Four views, ship meshes or dots on the original's visibility rule.
+  Stardust, all four view variants. Planet with crater or meridians. Dashboard and scanner.
+
+Frame budget, 5 ships plus the planet, scripted demo of 260 frames
+  CLS        0.14 ms
+  stardust   3.85
+  planet     1.04
+  ships      1.70
+  dashboard  4.33
+  move       3.09
+  total     31.1 ms per frame = 32 fps
+The rest of the frame is FRAMEBUFFER COPY F,N,B, which paces to the 60 Hz refresh.
+
+Against the plan's Phase 0 budget: target was 25 fps with 6 drawn ships, floor 15 fps with 8.
+
+Specifications reconciled (elite_tools/spec.py reads the extraction)
+  shipdraw   major   visibility rule, 45 degree cone, dash-shaped dot, truncation direction
+  dashboard  minor   columns were swapped; threshold colours; missile blocks
+  scanner    minor   ellipse and compass geometry, compass was 56 px out
+  controls   minor   auto-recentre, speed key gate
+  movement   minor   acceleration clamp is a bit-7 test
+  stardust   minor   four separate view routines, size ramp with depth, integer angle scale
+  planetsun  minor   radius cap at 248, both planet types, crater geometry
+  universe   major   mostly Phase 3/4 items: AI byte randomisation, kill flags, crash threshold
+
+Known deviations, deliberate
+  Planet outline is a true circle, not the original's 8/16/32 sided polygon.
+  The position rotation's one-unit-per-frame drift is not reproduced.
+  The sun is a plain filled disc; the per-row fringe is not implemented.
+
+Still open
+  Test scene places the bubble by hand. Real arrival geometry is Phase 3 (SOLAR/NWSPS).
+  MAX3D=12 firmware built but not flashed, so the object pool is still capped at 8.
