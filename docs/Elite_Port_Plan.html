@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Elite on the PicoComputer 3</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.4rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:68ch}
+ul,ol{max-width:72ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li p{margin:.25rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.88em;background:var(--code-bg);padding:.08em .35em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{display:grid;grid-template-columns:1fr minmax(240px,340px);gap:2rem;align-items:center;padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:60ch}
+header.hero canvas{width:100%;height:auto;display:block}
+@media (max-width:720px){header.hero .wrap{grid-template-columns:1fr}}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.12rem;max-width:66ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p{max-width:none}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0}
+table{border-collapse:collapse;width:100%;font-size:.92rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+td.num,th.num{text-align:right}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.12em .5em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.6rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:.25rem 1rem;font-size:.95rem;margin:.6rem 0}
+.kv dt{color:var(--muted)} .kv dd{margin:0}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:70ch}
+.ref{font-size:.85rem;color:var(--muted)}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (prefers-reduced-motion: reduce){ .spin{animation:none} }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Port plan · PicoMite MMBasic · September 2026</div>
+      <h1>Elite on the PicoComputer 3</h1>
+      <p>A phased plan for bringing the 1984 BBC Micro <em>Elite</em> (cassette version) to the PC3 in MMBasic, built on the firmware's <code>Draw3D</code> engine, the twelve ship meshes already proven in <code>Bas/3ddemo.bas</code>, and the annotated source at bbcelite.com.</p>
+      <p class="ref">Rendering below: the real Cobra Mk III mesh from <code>3ddemo.bas</code>, drawn with the same backface rule <code>Draw3D</code> uses.</p>
+    </div>
+    <canvas id="cobra" width="340" height="260" aria-label="Wireframe Cobra Mk III"></canvas>
+  </div>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Sections">
+  <a href="#answer">Recommendation</a>
+  <a href="#platform">Platform facts</a>
+  <a href="#engine">Draw3D engine</a>
+  <a href="#render">Rendering modes</a>
+  <a href="#arch">Architecture</a>
+  <a href="#mapping">Elite to MMBasic</a>
+  <a href="#phases">Phases</a>
+  <a href="#risks">Risks</a>
+  <a href="#ships">Appendix A · Ships</a>
+  <a href="#algos">Appendix B · Algorithms</a>
+  <a href="#sources">Appendix C · Sources</a>
+</nav>
+
+<section id="answer">
+  <div class="eyebrow">Recommendation</div>
+  <h2>Wireframe with backface culling is both the cheapest mode and the authentic one</h2>
+  <p class="lede">The original game never did hidden-line removal. Its rule was "draw an edge if either face it belongs to faces the viewer", and that is exactly what <code>Draw3D</code> produces when faces are created without a fill colour. Filled faces cost about the same (the triangle fill runs in C). True hidden-line mode (<code>depthmode=2</code>) is the expensive one: it rasterises a float depth buffer over the ship's screen box every frame, which for a close ship is more RAM than the whole MMBasic heap.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>Default: authentic wireframe</h3>
+      <p><code>Draw3D CREATE</code> with no fill array, <code>Draw3D WRITE n,x,y,z,0,0</code> into a framebuffer, one <code>FRAMEBUFFER COPY</code> per frame. Overlapping ships simply overdraw, as on the BBC. Works on every RP2350 variant.</p>
+    </div>
+    <div class="card">
+      <h3>Option: solid ships</h3>
+      <p>Same meshes with a fill array. Costs roughly one triangle fill per face on top of the edges. Ships must be drawn far-to-near (sort by z in BASIC, trivial) because the engine has no inter-object depth. Offer it as an in-game toggle; it is the Archimedes look, not the BBC look.</p>
+    </div>
+    <div class="card">
+      <h3>Reserve: hidden-line</h3>
+      <p>Use only where one large object fills the screen and the frame rate does not matter: the title-screen ship and the docking-bay view. Not for flight.</p>
+    </div>
+    <div class="card">
+      <h3>Ships beyond visibility range</h3>
+      <p>As in the original, a ship further than its blueprint's visibility distance is a single <code>PIXEL</code>. This is the main frame-rate lever: only ships close enough to have shape cost a <code>Draw3D</code> call.</p>
+    </div>
+  </div>
+
+  <div class="decide">
+    <div class="eyebrow">Decisions taken · 9 September 2026</div>
+    <ol>
+      <li><strong>MODE 2</strong> (320x240, 16 colours). Runs on every PC3 variant; display plus F buffer is 76800 bytes of the framebuffer pool.</li>
+      <li><strong><code>MAX3D</code> raised from 8 to 12</strong> in <code>configuration.h</code>. The only array sized by it is the 13-entry pointer table, so the cost is 16 bytes of BSS. Needs a rebuild and flash before Phase 0 can create more than 8 objects.</li>
+      <li><strong><code>Draw3D CLOSE ALL</code> off-by-one</strong> explained below; fixed in <code>graphics/Draw3D.c</code> (loop now 1..MAX3D), uncommitted alongside the <code>MAX3D</code> change.</li>
+      <li><strong>PSRAM is present but nothing depends on it.</strong> The budget below fits the plain heap. Hidden-line mode is the only feature that needs PSRAM, and it stays optional (title screen only, skipped when <code>MM.INFO(PSRAM SIZE)</code> is 0).</li>
+      <li><strong>Single program</strong>, with every table external and the docked and flight halves kept separable so a <code>CHAIN</code> split stays a mechanical fallback if the tokenised size cap is reached.</li>
+    </ol>
+    <h4>The CLOSE ALL bug</h4>
+    <p>Objects are numbered 1 to <code>MAX3D</code> and live in <code>struct3d[MAX3D + 1]</code>; index 0 is never used. <code>closeall3d()</code> (Draw3D.c line 303) loops <code>for (i = 0; i &lt; MAX3D; i++)</code>, so it frees indices 0 to <code>MAX3D - 1</code> and never visits the last object. <code>HIDE ALL</code> a few lines later loops <code>1 .. MAX3D</code> correctly. <code>closeall3d()</code> is also what <code>CloseAllFiles()</code> calls when a program ends, so a program that finishes (or errors) with the last object open leaves its pointer dangling after the heap is reinitialised: the next run's <code>Draw3D CREATE</code> of that number fails with "Object already exists" and any <code>SHOW</code> of it reads freed memory. With <code>MAX3D</code> at 12 the victim becomes object 12, which Elite will use. Fixed: the loop is now <code>for (i = 1; i &lt;= MAX3D; i++)</code>. <code>LIGHT</code>, <code>SET FLAGS</code> and <code>RESET</code> now raise the same "object does not exist" error as <code>SHOW</code> instead of dereferencing a missing object, and <code>SET FLAGS</code> rejects a face number outside 0..nf-1 (a negative face used to pass the upper-bound test and write before the flags array).</p>
+  </div>
+</section>
+
+<section id="platform">
+  <div class="eyebrow">Ground truth</div>
+  <h2>What the PC3 gives us</h2>
+  <p>The PicoComputer 3 is an RP2350B machine. Everything below is from the firmware source and the PC3 manual, not from the BBC's constraints.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Item</th><th>PC3 / PicoMite fact</th><th>What it means for Elite</th></tr>
+    <tr><td>CPU</td><td>RP2350B, 252 MHz default, 315 or 378 MHz via <code>OPTION CPUSPEED</code> (tied to the HDMI pixel clock)</td><td>Run the game at 378 MHz. Both the interpreter and the SPI/HSTX paths scale.</td></tr>
+    <tr><td>RAM</td><td>MMBasic heap 152 KB (HDMIUSB), 144 KB (HDMIWEB), 180 KB (HDMIBTH). 8 MB PSRAM if <code>OPTION PSRAM PIN</code> is set; <code>GetMemory</code> spills to PSRAM for requests over half the heap.</td><td>Ship objects (about 5 KB each) and all game arrays fit the heap comfortably. PSRAM is the safety valve for tables and the z-buffer.</td></tr>
+    <tr><td>Framebuffer pool</td><td>153600 B on HDMIUSB; 96000 B on HDMIWEB/HDMIBTH (cut-down build)</td><td>MODE 2 + F = 76800 B fits everywhere. MODE 5 + F = 153600 B fits HDMIUSB only.</td></tr>
+    <tr><td>Display</td><td>HDMI 640x480 timing; MODE 2 = 320x240 x 16 colours (palette via <code>MAP</code>), MODE 5 = 320x240 x RGB332, both pixel-doubled by hardware. <code>FRAMEBUFFER COPY F,N,B</code> copies on core 1.</td><td>Same 320x240 canvas Chuckie Egg used. Elite's 256x192 space view plus 56-row dashboard maps to 320x184 + 56 with the same proportions.</td></tr>
+    <tr><td>Keyboard</td><td>USB host. <code>KEYDOWN(0)</code> = keys held, <code>KEYDOWN(1..6)</code> = their codes; <code>INKEY$</code> for typed characters. Arrow codes 128..131, F1..F12 = 145..156.</td><td>Held-key flight controls work (Chuckie's <code>ReadKeys</code> is the template). Function-key screens as on the BBC.</td></tr>
+    <tr><td>Gamepad</td><td><code>DEVICE(GAMEPAD n, LX|LY|RX|RY|B|H|T)</code> for USB and BLE pads</td><td>Optional analogue pitch/roll; map later, not in the core.</td></tr>
+    <tr><td>Audio</td><td>I2S DAC (PCM5102). <code>PLAY SOUND</code> 4 channels (S/Q/T/N/O waveforms), <code>PLAY MODFILE</code>, <code>PLAY MODSAMPLE</code>, <code>PLAY SAMPLE</code></td><td>BBC-style beeps from <code>PLAY SOUND</code> (the <code>sfxdata.bas</code> idiom); verify the sound generators run on the I2S path early in Phase 0.</td></tr>
+    <tr><td>Storage</td><td>A: flash drive and SD card, <code>VAR SAVE</code> (16 KB flash area), <code>RUN "file",args</code> with <code>MM.CMDLINE$</code>, <code>CHAIN</code> (clears variables), <code>LIBRARY</code></td><td>Commander saves as a file. Data files (meshes, tokens, tables) on A: or SD.</td></tr>
+    <tr><td>Program size</td><td><code>MAX_PROG_SIZE = HEAP_MEMORY_SIZE</code> (tokenised). Chuckie Egg is 53 KB of source, 1664 lines.</td><td>Elite will be 3 to 4 times Chuckie. Keep every table out of the program text from day one.</td></tr>
+    <tr><td>Maths in C</td><td><code>MATH Q_CREATE / Q_MULT / Q_INVERT / Q_ROTATE / Q_VECTOR / Q_EULER</code>, <code>V_CROSS / V_NORMALISE / V_ROTATE</code>, <code>M_MULT</code>, <code>DOTPRODUCT</code>, <code>SCALE</code>, <code>INTERPOLATE</code></td><td>Orientation and universe rotation stay in C. The interpreter only sequences them.</td></tr>
+  </table></div>
+  <p class="note">The keyboard, sound and display facts above are for the PC3 (USB host, HDMI). They do not hold for the PicoCalc, whose I2C keyboard cannot report held keys.</p>
+</section>
+
+<section id="engine">
+  <div class="eyebrow">Ground truth</div>
+  <h2>What <code>Draw3D</code> actually does</h2>
+  <p>From <code>graphics/Draw3D.c</code> (1349 lines, compiled <code>-Os</code>, runs from flash). The published 3D manual is out of date in several places; the list below is what the parser and renderer do today, and every item matters for the port.</p>
+  <h3>Model and camera</h3>
+  <ul>
+    <li><strong>8 objects, 3 cameras</strong> (<code>MAX3D</code>, <code>MAXCAM</code> in <code>configuration.h</code>). The camera is bound at <code>CREATE</code>.</li>
+    <li><strong>Camera sits at (x, y, 0) looking down +Z</strong>, no orientation, no look-at. X right, Y up, +Z into the screen. Projection is <code>sx = W/2 - panx + (x - camx) * viewplane / z</code>, so <code>viewplane</code> is the focal length in pixels. Elite's own projection is a 256-pixel focal length on a 256-wide screen; <code>Draw3D CAMERA 1, 320</code> reproduces that field of view on 320 pixels.</li>
+    <li><strong>This is Elite's coordinate system.</strong> Elite stores every object relative to the player, nose along +Z. No camera transform is needed: a ship's INWK position goes straight into <code>Draw3D WRITE n, x, y, z</code>.</li>
+    <li><strong><code>ROTATE</code> is absolute</strong> and takes a 5-element float array <code>[w, x, y, z, m]</code>; <code>m</code> scales by <code>m²</code>, so keep it 1.0. Feed each ship's orientation quaternion every frame. <code>RESET</code> bakes the current pose rather than restoring it; never call it.</li>
+    <li><strong>No persistent position.</strong> <code>x, y, z</code> on <code>SHOW</code>/<code>WRITE</code> are world offsets applied to every vertex. <code>x, y</code> are clamped to ±32766, <code>z</code> is any integer. A ship inside the field of view always satisfies |x| &lt; 0.7 z, so the clamp only bites beyond z ≈ 46000, which is dot range anyway.</li>
+  </ul>
+  <h3>Visibility and drawing</h3>
+  <ul>
+    <li><strong>Backface culling per face</strong> from the first three vertices of the face: <code>N = (v1→v2) × (v1→v0)</code>, drawn when <code>dot(v0 - cam, N) &lt; 0</code>. Winding therefore decides visibility; the converter must fix winding against Elite's stored face normals. <code>SET FLAGS n, 4, face, count</code> inverts individual faces as a repair tool.</li>
+    <li><strong>Painter's sort within one object only</strong> (bubble sort of face centroids, or of the farthest vertex with <code>depthmode=1</code>). Objects never depth-test against each other. Use <code>depthmode=1</code> for solid ships: coplanar detail polygons (the Cobra's engine recesses) sort wrongly by centroid.</li>
+    <li><strong>Wireframe</strong> = faces created without a fill colour: the perimeter of each front-facing face is stroked. Shared edges between two visible faces are drawn twice, harmlessly.</li>
+    <li><strong>Solid</strong> = fill index per face: triangles via <code>DrawTriangle</code>, quads as two triangles plus the four outer edges, 5+ vertices through the scanline polygon filler. Faces must have at most 20 vertices; larger ones overrun a stack array (the Cobra's 7-vertex rear and the Thargoid's 8-vertex ring are fine).</li>
+    <li><strong>Hidden-line (<code>depthmode=2</code>, RP2350 only)</strong> needs a framebuffer write target, allocates a <code>float</code> per pixel of the object's on-screen bounding box (a 200x150 ship = 120 KB), rasterises every visible face into it, then depth-tests each edge pixel by pixel.</li>
+    <li><strong>No near-plane clipping.</strong> Anything with z near or below zero projects to huge values that wrap in 16-bit screen coordinates. BASIC must skip <code>WRITE</code> for z below a small positive threshold; Elite treats those distances as collisions anyway.</li>
+    <li><strong><code>SHOW</code> erases its previous box in colour 0; <code>WRITE</code> leaves it.</strong> With a cleared framebuffer every frame, use <code>WRITE</code>. After <code>WRITE</code>, <code>DRAW3D(XMIN n)</code> and <code>HIDE</code> stop working; the game computes screen positions itself.</li>
+    <li><strong>Lighting</strong> (flag 8) reads the normal of the previous face and goes black without <code>Draw3D LIGHT</code>. Leave it off.</li>
+  </ul>
+  <h3>Cost and memory</h3>
+  <ul>
+    <li><code>CREATE</code> makes 16 page-rounded allocations, so an object costs at least 4 KB whatever its size; a Cobra (28 vertices, 17 faces) is about 5 KB. Twelve objects is under 64 KB.</li>
+    <li>Every draw recomputes all face normals (two or three <code>sqrtf</code> per face) and bubble-sorts the faces. For Elite meshes (4 to 17 faces) that is negligible against interpreter time. Phase 0 measures it.</li>
+    <li><code>CREATE</code> needs nine comma slots even when the fill array is omitted: <code>Draw3D CREATE n,nv,nf,cam,v(),fc(),f(),col(),ec(),</code>. The vertex array is <code>FLOAT v(2, nv-1)</code> indexed <code>(coord, vertex)</code>.</li>
+  </ul>
+</section>
+
+<section id="render">
+  <div class="eyebrow">Design choice</div>
+  <h2>Rendering modes compared</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Mode</th><th>Per-ship cost</th><th>Memory</th><th>Look</th><th>Fidelity to BBC Elite</th><th>Verdict</th></tr>
+    <tr class="rec"><td>Wireframe, backface culled (<code>depthmode</code> 0, no fill)</td><td>Normals + sort + one <code>DrawLine</code> per perimeter edge of visible faces</td><td>Object only</td><td>White lines on black, ships read as solid because rear faces are culled</td><td>Exact: same edge rule as LL9</td><td><span class="pill ok">Default</span></td></tr>
+    <tr><td>Solid (fill index per face)</td><td>Above plus one triangle fill per face (two per quad)</td><td>Object only</td><td>Flat-shaded ships, one colour per face group</td><td>Archimedes/Amiga look; needs far-to-near draw order across ships</td><td><span class="pill acc">Toggle</span></td></tr>
+    <tr><td>Hidden-line (<code>depthmode</code> 2)</td><td>Above plus per-pixel depth raster of every visible face and depth-tested edges</td><td>4 bytes per bbox pixel, cached, up to 300 KB for a full-screen object</td><td>Clean wireframe with correct occlusion, including concave parts</td><td>Better than the original</td><td><span class="pill warn">Title and hangar only</span></td></tr>
+    <tr><td>Dot (<code>PIXEL</code>)</td><td>One projection in BASIC</td><td>None</td><td>Single pixel</td><td>Exact: SHPPT</td><td><span class="pill ok">Beyond visibility distance</span></td></tr>
+  </table></div>
+  <p>Elite's ships are mostly convex, which is why the original looked right without occlusion. The exceptions (the Cobra's engine recesses, the Coriolis docking slot, the Python's rear) are handled in the original by winding and normals, and the converter carries those normals across, so mode 0 gives the same picture the BBC gave.</p>
+  <p>Per-face visibility distances in the blueprints (faces that are "always drawn when far") and per-vertex level-of-detail have no equivalent in <code>Draw3D</code>. Neither is visible at 320x240: the dot threshold covers the far case and the near case is drawn fully.</p>
+</section>
+
+<section id="arch">
+  <div class="eyebrow">Architecture</div>
+  <h2>Shape of the program</h2>
+  <div class="grid2">
+    <div class="card">
+      <h3>Frame loop</h3>
+      <p>Plain <code>DO</code> loop, no <code>SETTICK</code>. Each iteration: read keys (<code>INKEY$</code> then <code>KEYDOWN</code>), advance the simulation by the measured frame time, draw into F, <code>FRAMEBUFFER COPY F,N,B</code>. <code>TIMER</code> gives the delta. The BBC ran 5 to 12 frames a second and moved everything per frame; we scale the per-frame deltas by (our frame time / BBC frame time) so speed and turn rates feel the same at 25 fps as at 8.</p>
+    </div>
+    <div class="card">
+      <h3>Universe state</h3>
+      <p>Twelve slots as parallel arrays: type, position (3 floats, Elite units), orientation quaternion (5 floats), speed, accel, pitch and roll counters, energy, AI flags, missiles, target, explosion timer, and the <code>Draw3D</code> object number (0 when the ship is a dot or absent). Slot 0 is the planet, slot 1 the sun or station, as in FRIN.</p>
+    </div>
+    <div class="card">
+      <h3>Orientation in C</h3>
+      <p>Player pitch and roll rotate the universe: build <code>r</code> with <code>MATH Q_CREATE</code>, then for each slot <code>MATH Q_ROTATE</code> the position and <code>MATH Q_MULT</code> the ship's quaternion. A ship's own pitch and roll are a <code>Q_MULT</code> in its own frame; its nose vector is <code>Q_ROTATE(q, [0,0,1])</code>. Renormalise the quaternion every 16 frames, the same cadence as Elite's TIDY.</p>
+    </div>
+    <div class="card">
+      <h3>Data pipeline</h3>
+      <p>Python tools in <code>Bas/elite_tools/</code> (the <code>chuckie_tools</code> pattern): parse the beebasm source into mesh, token, market and ship-stat files; generate reference test vectors for the galaxy; assemble the final <code>.bas</code>. Nothing hand-copied from the assembler listing.</p>
+    </div>
+  </div>
+
+  <h3>Memory budget (HDMIUSB, MODE 2)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Consumer</th><th class="num">KB</th><th>Notes</th></tr>
+    <tr><td>Framebuffer pool: MODE 2 display + F</td><td class="num">75</td><td>Separate pool, not heap. Add L (37.5 KB) only on HDMIUSB.</td></tr>
+    <tr><td>12 <code>Draw3D</code> objects</td><td class="num">~60</td><td>Heap. Created on spawn, closed on kill. Coriolis is the largest (16 v, 15 f).</td></tr>
+    <tr><td>Universe arrays (12 slots)</td><td class="num">~4</td><td>Heap.</td></tr>
+    <tr><td>Mesh source arrays (12 blueprints)</td><td class="num">~12</td><td>Loaded once from file; copied into each <code>CREATE</code>.</td></tr>
+    <tr><td>Text tokens, names, market tables</td><td class="num">~8</td><td>Pre-expanded strings; spill to PSRAM if present.</td></tr>
+    <tr><td>Stardust, scanner, temp strings, locals</td><td class="num">~6</td><td></td></tr>
+    <tr><td><strong>Heap total</strong></td><td class="num"><strong>~90</strong></td><td>of 152 KB (HDMIUSB) or 144 KB (HDMIWEB). Hidden-line z-buffer is extra and PSRAM-only.</td></tr>
+  </table></div>
+
+  <h3>Screen layout (320x240)</h3>
+  <p>Space view 320x184 (Elite's 256x192 at 1.25x width, trimmed 8 rows), dashboard 320x56 below it. The dashboard is line art on the BBC and stays line art here: drawn once into a background copy and blitted, with the moving indicators redrawn each frame. The 3D scanner ellipse, its ship sticks and the compass live in the dashboard. Text uses an 8x8 <code>DEFINEFONT</code> of the BBC MOS character set so the docked screens keep the original 40-column feel at 320 pixels.</p>
+
+  <h3>Files</h3>
+<pre><code>Bas/elite/
+  elite.bas            the game (single program to start)
+  data/ships.dat       12 meshes: header stats, vertices, faces (winding fixed)
+  data/tokens.dat      expanded text tokens, name digraphs, system descriptions
+  data/market.dat      17 commodities: base price, econ factor, base qty, mask, unit
+  data/dash.bmp        dashboard bezel (optional; line art otherwise)
+  elite.cmd            commander save (A: or SD)
+Bas/elite_tools/
+  blueprints.py        beebasm SHIP_* blocks -> data/ships.bas + ships.json (+ 3ddemo cross-check)
+  meshcheck.py         scores meshview.bas auto output: engine verdicts vs stored normals
+  pc3.py               COM3 console driver: probe, cmd, run (AUTOSAVE), grab (XMODEM screen capture)
+  tokens.py            TKN1/QQ16 tables -> tokens.dat
+  galaxy_ref.py        reference seeds/names/system data -> tests/galaxy_ref.txt
+  build.py             assemble elite.bas from parts + DATA
+Bas/elite/tests/
+  bench.bas            Phase 0 frame-time harness
+  meshview.bas         spin any ship in the three render modes; AUTOMODE runs the winding check
+  sheet.bas            contact sheets of all ships for screen capture (captures/*.png)
+  galaxy_test.bas      compares 256 systems x 8 galaxies against galaxy_ref.txt</code></pre>
+</section>
+
+<section id="mapping">
+  <div class="eyebrow">Translation table</div>
+  <h2>Elite mechanism to MMBasic mechanism</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Elite (cassette source)</th><th>MMBasic on the PC3</th><th>Notes</th></tr>
+    <tr><td>Ship blueprints (XX21): vertices, edges with two face ids, face normals, visibility distances</td><td><code>ships.dat</code> with face polygons; <code>Draw3D CREATE</code> per live ship</td><td>Faces are rebuilt from edge adjacency; winding set so the computed normal agrees with the stored one. <code>3ddemo.bas</code> already has all 12 and is the cross-check.</td></tr>
+    <tr><td>INWK / K% ship data block, FRIN slots, NOSH = 12</td><td>Parallel arrays, 12 slots</td><td>Shuffle-down on KILLSHP as in the original; close the <code>Draw3D</code> object first.</td></tr>
+    <tr><td>Orientation vectors (sidev, roofv, nosev), TIDY</td><td>Unit quaternion + <code>MATH Q_*</code>; normalise every 16 frames</td><td>Quaternion is smaller and the engine wants one anyway.</td></tr>
+    <tr><td>MVEIT: apply player pitch/roll to all ships, move along nose, apply ship's own pitch/roll, damp</td><td>One SUB per slot per frame using <code>Q_ROTATE</code>/<code>Q_MULT</code></td><td>Counters and damping tables copied from the source.</td></tr>
+    <tr><td>LL9 ship drawing, SHPPT dot</td><td><code>Draw3D WRITE</code> when z ≤ visibility distance, else <code>PIXEL</code></td><td>Engine culls and projects. Skip when z below near threshold or when the projected centre is far off screen.</td></tr>
+    <tr><td>Explosion cloud (DOEXP)</td><td>BASIC particle burst from the ship's projected centre, sized by distance and age</td><td>Engine does not expose projected vertices; the original's per-vertex clusters are approximated.</td></tr>
+    <tr><td>Planet (PLANET, PL9): circle plus crater (cassette); meridians are the disc version</td><td><code>CIRCLE</code> outline; crater as one ellipse of <code>LINE</code> segments from the rotated axis vectors</td><td>16 to 64 segments depending on radius. Meridians can be added later from the disc source.</td></tr>
+    <tr><td>Sun (SUN): filled disc with fuzzy edge</td><td>Per-scanline <code>LINE</code> with random edge jitter, as the original</td><td>Radius clamped; cache the last drawing to skip when unchanged.</td></tr>
+    <tr><td>Stardust (STARS front/side)</td><td>18 particles, <code>PIXEL</code>/short <code>LINE</code></td><td>Front view: radial with speed; side views: horizontal drift; rear: inward.</td></tr>
+    <tr><td>Space views and axis flipping</td><td>Flip x or z of every position and quaternion before drawing; camera unchanged</td><td>Four views, F1 to F4 as on the BBC.</td></tr>
+    <tr><td>Dashboard (DIALS), 3D scanner, compass</td><td>Line art into the dashboard strip each frame</td><td>Scanner: ellipse, stick per ship, dot colour by type.</td></tr>
+    <tr><td>Key logger (DOKEY)</td><td><code>KEYDOWN(1..6)</code> latched into flags, <code>INKEY$</code> for one-shot keys</td><td>Chuckie's <code>ReadKeys</code> pattern; BBC letters kept, views and screens on F1 to F10 (key table in B4).</td></tr>
+    <tr><td>Galaxy and system seeds, twisting, names, system data, market</td><td>Pure integer BASIC, bit-exact</td><td>Verified against the Python reference over all 2048 systems.</td></tr>
+    <tr><td>Text tokens (TT27, QQ18)</td><td>Pre-expanded strings in <code>tokens.dat</code>; only names and system descriptions generated at runtime</td><td>Removes the recursive tokeniser entirely.</td></tr>
+    <tr><td>Tactics (TACTICS), aggression, missiles, ECM, fleeing, docking traffic</td><td>One SUB per ship, run every 8th frame per slot as in the original's scheduling</td><td>Behaviour tables from the source.</td></tr>
+    <tr><td>Docking checks, station safe zone, docking computer</td><td>Angle and speed checks in the station's frame; docking computer = timed auto-dock</td><td>Cassette version has no docking animation.</td></tr>
+    <tr><td>Sound (NOISE, BEEP, EXNO)</td><td><code>PLAY SOUND ch, B, Q|N|T, f, v</code> envelopes on a tick</td><td>Laser, missile launch, ECM, explosion, hyperspace, beep, boop.</td></tr>
+    <tr><td>Commander save (SVE/LOD)</td><td>Text file on A: or SD</td><td>No competition code.</td></tr>
+  </table></div>
+</section>
+
+<section id="phases">
+  <div class="eyebrow">Sequence</div>
+  <h2>Phases</h2>
+  <p>Each phase ends with something that runs on the PC3 and a measurable acceptance test. Sizes are relative to Chuckie Egg (about 1700 lines including data).</p>
+
+  <div class="phase">
+    <div class="num">0<small>Spike</small></div>
+    <div>
+      <h3>Feasibility and numbers</h3>
+      <div class="meta">Size: small · Output: a table of measurements and the five decisions above, settled</div>
+      <ul>
+        <li><code>bench.bas</code>: MODE 2 + F at 378 MHz; create 1, 4, 8 Cobras; measure ms per frame for wireframe, solid and hidden-line, plus the cost of <code>CREATE</code>/<code>CLOSE</code>, <code>FRAMEBUFFER COPY</code>, and a synthetic MVEIT-sized BASIC loop per ship.</li>
+        <li>Key handling: <code>KEYDOWN</code> reports up to six held keys; pick the flight keys so that pitch, roll, speed and fire do not ghost on a typical keyboard matrix (test with <code>keytest.bas</code>). <code>PLAY SOUND</code> on I2S is established.</li>
+        <li>Check <code>OPTION PSRAM PIN</code> and <code>MM.INFO(PSRAM SIZE)</code>.</li>
+        <li>Decide the frame budget: target 25 fps with 6 drawn ships; floor is 15 fps with 8.</li>
+      </ul>
+      <p>The harness, using the Cobra mesh from <code>3ddemo.bas</code> (its DATA block is elided here):</p>
+<pre><code>' bench.bas  -  Phase 0 frame-time harness.  Run at OPTION CPUSPEED 378000.
+OPTION EXPLICIT
+MODE 2 : FRAMEBUFFER CREATE : FRAMEBUFFER WRITE F
+Draw3D CAMERA 1, 320                       ' Elite's field of view on 320 px
+DIM FLOAT v(2, 27), q(4)                   ' v(coord, vertex); q = w,x,y,z,m
+DIM INTEGER fc(16), f(59), col(1), ec(16), fl(16)
+DIM INTEGER n, ships, i, mode
+DIM FLOAT t0
+' ... READ the 28 vertices into v(0..2, i), the 17 face counts into fc(),
+' ... the 60 face-vertex indices into f(); col(0)=RGB(WHITE): col(1)=RGB(GRAY)
+' ... ec() all 0 (edge colour index), fl() all 1 (fill colour index)
+q(4) = 1                                   ' m must be 1: the engine scales by m^2
+FOR mode = 0 TO 2                          ' 0 wireframe, 1 solid, 2 hidden-line
+  FOR ships = 1 TO 8
+    FOR n = 1 TO ships
+      IF mode = 1 THEN
+        Draw3D CREATE n, 28, 17, 1, v(), fc(), f(), col(), ec(), fl()
+      ELSE
+        Draw3D CREATE n, 28, 17, 1, v(), fc(), f(), col(), ec()    ' 9 args, no fill = wireframe
+      ENDIF
+    NEXT n
+    t0 = TIMER
+    FOR i = 1 TO 100
+      CLS
+      FOR n = 1 TO ships
+        MATH Q_EULER RAD(i + n * 40), RAD(i * 2), 0, q()
+        Draw3D ROTATE q(), n
+        Draw3D WRITE n, (n - 4) * 60, 0, 900, 0, (mode = 2) * -2
+      NEXT n
+      FRAMEBUFFER COPY F, N, B
+    NEXT i
+    PRINT "mode"; mode; ships; " ships:"; (TIMER - t0) / 100; " ms/frame"
+    FOR n = 1 TO ships : Draw3D CLOSE n : NEXT n
+  NEXT ships
+NEXT mode</code></pre>
+<p>Add a second run with a synthetic per-ship update (three <code>MATH Q_ROTATE</code>, one <code>Q_MULT</code>, twenty scalar statements) to stand in for MVEIT, and a third with the ships at z = 2500 to see how much of the cost is fill and line length rather than per-face overhead.</p>
+<p><strong>Accept when</strong> the numbers exist and the firmware changes (if any) are agreed.</p>
+      <h4>Results, 9 September 2026 (PC3 on COM3, HDMIWEB V6.03.02b3, 378 MHz, PSRAM, MODE 2 + F)</h4>
+      <p>Full listing in <code>Bas/elite/tests/bench_results.txt</code>; programs <code>bench.bas</code>, <code>bench2.bas</code>, <code>keytest.bas</code> alongside. Per-ship figures exclude the clear and the copy.</p>
+      <div class="tablewrap"><table>
+        <tr><th>Per Cobra, ms</th><th class="num">z = 300</th><th class="num">z = 500</th><th class="num">z = 900</th><th class="num">z = 2500</th></tr>
+        <tr class="rec"><td>Wireframe (mode 0)</td><td class="num">1.02</td><td class="num">0.73</td><td class="num">0.50</td><td class="num">0.35</td></tr>
+        <tr><td>Solid (mode 1)</td><td class="num">2.03</td><td class="num">1.51</td><td class="num">1.14</td><td class="num">0.84</td></tr>
+        <tr><td>Hidden-line (mode 2)</td><td class="num">21.15</td><td class="num">6.95</td><td class="num">1.25</td><td class="num">0.48</td></tr>
+      </table></div>
+      <div class="tablewrap"><table>
+        <tr><th>Fixed cost</th><th class="num">ms</th><th>Note</th></tr>
+        <tr><td>CLS of the framebuffer</td><td class="num">0.10</td><td></td></tr>
+        <tr><td><code>FRAMEBUFFER COPY F,N</code></td><td class="num">0.08</td><td>38400 bytes</td></tr>
+        <tr><td><code>FRAMEBUFFER COPY F,N,B</code></td><td class="num">16.55</td><td>Paces to the 60 Hz frame: this is the game's vsync</td></tr>
+        <tr><td><code>Draw3D CREATE</code> + <code>CLOSE</code></td><td class="num">0.19</td><td>Spawn and kill per frame cost nothing</td></tr>
+        <tr><td>Synthetic MVEIT update, 8 ships</td><td class="num">2.07</td><td>3 <code>Q_ROTATE</code>, 1 <code>Q_MULT</code>, ~20 scalar statements each</td></tr>
+      </table></div>
+      <p><strong>Budget decided:</strong> one 60 Hz frame (16.5 ms) per iteration, paced by the background copy. Eight wireframe ships at z = 900 plus the MVEIT-sized update come to about 6 ms, leaving 10 ms for the dashboard, scanner, stardust, planet and tactics. Solid ships fit 60 fps with few ships close and 30 fps otherwise. Hidden-line at z = 300 took 21 ms per ship and a 164 KB z-buffer that only existed because PSRAM is fitted; it stays title-screen only.</p>
+      <p><strong>Closed by Peter:</strong> <code>KEYDOWN</code> works as documented, up to six simultaneous keys like any USB keyboard, subject to the keyboard's own matrix (which keys ghost depends on their positions), and <code>PLAY SOUND</code> on the I2S path is proven. Neither is a risk. The one remaining item is flashing the MAX3D = 12 build, which the PC3 does not yet run.</p>
+
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">1<small>Data</small></div>
+    <div>
+      <h3>Blueprint pipeline and mesh viewer</h3>
+      <div class="meta">Size: small · Depends on: 0</div>
+      <ul>
+        <li><code>blueprints.py</code>: parse <code>elite-source.asm</code> SHIP_* blocks; build face polygons from edge adjacency; orient winding against the stored normals; emit header stats (speed, energy, laser, missiles, bounty, canisters, visibility distance, targetable area, explosion count) and the mesh.</li>
+        <li>Cross-check every mesh against <code>3ddemo.bas</code> (same vertex count, same face count, same edge set).</li>
+        <li><code>meshview.bas</code>: cycle ships, toggle the three modes, show the face count and frame time. This is where a wrong winding shows up as a missing or ghost face.</li>
+      </ul>
+      <p><strong>Accept when</strong> all 12 ships display correctly in wireframe and solid at three distances, with no face flagged by hand.</p>
+      <h4>Results, 9 September 2026</h4>
+      <p><code>elite_tools/blueprints.py</code> reads the cassette <code>elite-source.asm</code> and writes <code>Bas/elite/data/ships.bas</code>. Every blueprint edge is drawn: boundary loops chained from the edge list, single-face detail edges as extra polygons, and bare lines (the Python's four fin lines, the Thargoid's two vents, the Cobra's nose spike, the Missile's eight fin lines) as sliver triangles with one extra vertex 0.5 units off the line. Nine ships came out identical to <code>3ddemo.bas</code>; the demo's Python, Thargoid, Cobra and Missile were each missing lines and the Thargon was absent.</p>
+      <p><code>meshview.bas</code> in auto mode asked the engine's <code>DIAGNOSE</code> for every polygon at three orientations and <code>meshcheck.py</code> compared each verdict with the stored normal: 444 verdicts, <strong>0 mismatches on real faces</strong>, 3 deviations on sliver lines (inherent: a sliver's normal must be perpendicular to its line). Draw times per ship match Phase 0 (0.6 to 1.7 ms wireframe, 0.8 to 3.8 ms solid; the Coriolis is the dearest). Full table in <code>tests/meshview_results.txt</code>.</p>
+      <p><strong>Solid mode must use <code>depthmode</code> 1</strong> (vertex-based sort). With centroid sorting the coplanar detail quads on the Cobra's rear face can be painted over by the face itself; the demo already did this.</p>
+      <p>Captured from the PC3 (<code>SAVE IMAGE</code>, then <code>XMODEM S</code> into <code>pc3.py grab</code>):</p>
+      <div style="display:flex;flex-wrap:wrap;gap:.6rem;margin:.6rem 0"><img src="data:image/png;base64,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" alt="All twelve ships, wireframe" width="320" height="240" style="image-rendering:pixelated;border:1px solid var(--line)"><img src="data:image/png;base64,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" alt="All twelve ships, solid" width="320" height="240" style="image-rendering:pixelated;border:1px solid var(--line)"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUAAAADwCAIAAAD+Tyo8AAALQklEQVR4nO3d2ZLjNgxAUXFq/v+XkUqroqitxdyJ5Z7KQ8djyyIoENTqbQMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwRto8EpH9j5R8NhDYJZd5e6Tu9RXAk+Sy3orINV1JZvhjO4H3nPzI1dvsvf0gZVmV8wh7YN7kMIFf0i8/e1NKpLGeRN29z5te3haWpUDk5NvXBP54A/Pq5bl69Mj1zU9dSVYbS+DbqfLt295z+2kh+wczvwU5nXVo6bX8lN6iZrWZ5pWW1o9/+tqX1zrgvu/HKRoKc/Z6PpZ8lr51a9H7ixSt+SD+Ezg/yrez6+U9ZFdm5BvTQJpTutHaLcTS1vleY5+OfxTF9/oR0rhF0dynFylJ0afd7/ZdtjncJnBLcG+Xtnystatx76ble7fezsfeNGwSxrbIp0rbsWZ+7fXlfWbRU6esKmKSN/F+GspfPjLZ3824a/ZWzJnP9sPR57PE10m1hp6z5ZipKgldyjjhfF7n66H1EeXdfwIf2dVyqum6zI837K+cJ0t6tjzTNJ+rS88prXadTTpn4P73nmAv7z/LX/jtcr6+DTkMRVIe1lDJmhurwB9T3GtBrj7v93WUfTlciVJ6pqB19MzI7CXw2VGBzy9WRDa/P4401tOFRp0jyQQ1VgLfjt8dTxp9fT8b3KCzMtfX4TCBbye0OVOy9tMYFN5BXs7W3L4BthP4afy+PeJ//N2430X26jnNQz7vvI1qt0/n+HhPxVVWTJu1mZPP0nyB/WgqVqK79zuKbvu+8SEBWEvGTLlzrvxbS8t6rH0GwPXFc1br6S1MLtFCAitRdJcvtwS7IZfHJ+1a7lVWVYFtH8RqPNx1/CsHSLxKD/tHjRf86BElgQ+3XahnQMX84XuXefJC2zVkbLiISL4d3Xgf31XNooGg5NstLsrvZADwmMlkKWCMcNMoYJ1k3DoOQC8hgQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWEXk///e3/byv9Dm3EFPf9ctbftvm4EKmb1LAtty5NigZBNfCfx3c0RkS+nX38emcLx+/Ou2/Xrzbn/l/NmPD6KkO+pz5fho5jJSSh+deO3l9y8y2tE21/rStefEO/71+uJHpx6Jepv2tx9Hdu/8G8RUHrtzp9x26MOILDO7pqJdg9iuwB9hPHKv6FPV78G3GCYRqdvW3z907uiUHivw0+TrOvPK+dLfC6lsV3e2E/jqqW+opTNN2L6v1Tg91+ec5Uwbm/rylsDXYfjr3ux1OIc2H8cybveengbxa8k95zxdD7ztjk7eO51JQ9P+rF4BwKr0M5FevRZAP9cN2v0mLksbSAVGN0qO6wDoWYsowoB2L1nqPoG3dW1kCg10wAEteK4/FOFBqMBAHxRhmJRTXSNU4GgtRaxNNs6WLRNbyhQaTTj3C4QoNXEq8DaxsX89hYnLgKDEtPsNk+nx7CNATOdmqoh2tA6S8e1VWoHrSque26yBbcoGqTSBW+bD5PAEBBnjHmgY6GDJKtVBDtg7Eq/JrW2OGLKJGF5Lhdsg2xscLmSzMLaq2iDdXsjBhak60S99uU3gHXW4ezw5yF8n0MjVsZ3yo9fS0CWYkXtEIrS9byPJ4Y6RVLUco/o23/kU+jifHHyjUSXQZDKmEb3LFqMqgMG7Q/o1338FPgTfaKCH8znIoLaxM9wSOhPLtKVLBPReCz1o2ONESKlxEWvfglP4G1c03rgzNMeqf3g6rO7dcXRB45JFRw1vbEJjbANV4AN3Ha7N3l4LTApG4fb9ModTwtEj6758JeN38ItqgveC/GfzZEJ7yOHJHRH2Z5Mibodz2uNw5NN64eT7csL2gpwi4yoI034mixyu64Xu4XW1+WY7t9pPBHJ+ZafvRbl+Ymf2fuyAXSCXzdhJECaP2eRw9/DWjbBONt9sbo/n5TeDHF7eBR0/62TzbRvjPAShdOrV8Q5VD+HroS4OXc6IbjGI42Pyq2ZfHNBqCSY3+vfa0szn8Nrh33z4mpVGoO/AFyH+4vuk2sJHlpLDFdnbEvBpy9QjZ7yzHYH2JGwfAmxH0NTRh8bVMCendeYjsPCh0Md2aT6II0/gzblY3R8JcmXL2iMix/XltoNYSNWG5TXyMuAU6R/3t+/XfXbAGtk281kILp84IyUtMh+BhQc2fV6h+krnYRVnwRcFBwjnWXvTQrQcfj8tuSoCniIv0S4vXXt+IlQCa76oYPkKOLg8xlsOVxzHtx3Hb54uytXQag3r0K4lmIYjMG7VS3f5DAfxG/2X1KtaGXPXJq00dNWLcthwEMvvaNPWWG3rUyr0PR6jczh/989wELMHKbVtVLtiyq9KWm/Cqmfe2GU4iC6mGPrXcMLtrrEu5Mj0dGWC+TPpefipitGiXxS0MIscF2GL13vbWttt1o2W0StwWA5/EEAfIrx43LW1o5jJbkMMrbkMOCh4u0AqcDh2d+9trXmaMsHRnsB6+kzPmkA5GbOd3G6B2hMYI9gdjKyseZp1fIEE9rC5IMglwFaPinEyyVlUHa+5zL2GnwoMdEP5nR2XsCeTrDdH55rL9FvobFRg9kWhf5OQFXu/NhIYcdLAtDT9IJPhBJ625bGV65Q0jT6r9n7/2O0tVf1nF2Hsxeo5ngjPf3F8HMt6o0TBmi/8oRkzFfgJBSS4pGMiRvltfYDG6F48lq9hcxnBbrtk9VnGVeXXQwXepR92N0G0SKu7fmH5dZLASjrSNKJXgUuv+ods9NUwjscI002TFSu/8OnlVlX8tELfr3Yb2R+mWydzV17Dr5z/cTnTYzaIOTj4PHB8GjE6an4Aei+mGyizVl5D+TVZgfMLbMtvfANfUX4n1eG+j+eNMCKYbqNM+UEPDeXXtqKm9opLhONYO7ttlHW/yKN5yRqtyuEIUTbdRln3s3iNSy79iMl94Docmo4TrjR45fXs/dpO4NJ+Mr1RQgPhoZPLY9reB3FGAdMtlTHnEbsvs2XJtitwHeow6lB+FUW25VCE6boUqrHSdeW1lV9X6kJQl/lbJNbbK+rPPrQsNuIU+ozpNCGyePDZpzlTYusVqYL1JkuPw5YKy69DE3I4ZsRNt1oUn3cwHdj+pj0ZKxrrDZeG9ddcfr3tA7NPS2BHYO93KiY85gKr+TyFaC2/DivwUIZ/YRlb/eyMTl/A1mV0hpgOgpRfdau5/FKBEUsqL8KU32WsXEZnjulQSMn5QuXl13kF5og0GrcKyu9ifZ+G1WtRDliPhmT8PID+8uu8AlOE0YLyq4XmK+nssh4TeV5/K+XXfwUG6lB+dWkcU61Xm0Gsh0Xu1t9Q+Q1n75v5z9ByzHRw5CGBZ34dhmcycXccHPm9/pRfq5n8fkhj7koZYz0+clp/c+X37xbb+VjFEWIOYMQkPPPZh3NNtl5e5rAeJRnc1+OWHL0C3zoqsPXtEvkovwjN9GAnI3+wbmhkqMAISk55tc+59lf6HgHhIRAwQ38RluknHfTHZBKRX//tr4z+xqLX0bixnju39IPvbhc7oR/J3regV3fAx0BQ8XEMeC732AiLLNgrJoHfuuGowx8vnl+5vud2Q7nm8zW9p1V+62of/nj/4ntvbs89dX3x+p6MT3H9fFdPPfc0Qbrt/ut7npZ//bu6bsfRK4HfB+uiXtvylt97TjFjQ7F9FPp6vPAatOM9+x8pNWVg48cj2J9ZM+hqto/e7OXcrR9LPh7BU9SiaQefbSfwB5H/o/+SZjnvQXNflAb3fE1r5/zccr7+tFX85PPn+uvcof0HXDiLHnZJeHUAAAAASUVORK5CYII=" alt="Python, Missile, Thargoid and Coriolis close up" width="320" height="240" style="image-rendering:pixelated;border:1px solid var(--line)"><img src="data:image/png;base64,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" alt="Cobra Mk III solid, engine recesses drawn over the rear face" width="320" height="240" style="image-rendering:pixelated;border:1px solid var(--line)"></div>
+
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">2<small>Flight</small></div>
+    <div>
+      <h3>Space flight core</h3>
+      <div class="meta">Size: large · Depends on: 1</div>
+      <ul>
+        <li>Universe arrays, spawn/kill with slot shuffle, player controls (pitch, roll, speed with the original's counters and damping), universe rotation, four views.</li>
+        <li>Ship rendering (WRITE or dot), stardust, crater planet, sun, station mesh in slot 1.</li>
+        <li>Dashboard: speed, roll, pitch, four energy banks, fore and aft shields, fuel, cabin and laser temperature, altitude, missile blocks, compass, 3D scanner.</li>
+        <li>Fixed test scene: launched from Lave's station, planet and sun placed by SOLAR, a Cobra and two asteroids drifting.</li>
+      </ul>
+      <p><strong>Accept when</strong> flying around the station with 6 ships in the bubble holds the frame budget and the scanner agrees with the view.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">3<small>Universe</small></div>
+    <div>
+      <h3>Galaxy, hyperspace and spawning</h3>
+      <div class="meta">Size: medium · Depends on: 2</div>
+      <ul>
+        <li>Seeds, twisting, names, system data, and the reference test over all 2048 systems.</li>
+        <li>Short-range and long-range charts with cursor, fuel circle and distance; data on system screen.</li>
+        <li>Hyperspace countdown, arrival placement (SOLAR), mis-jump to witchspace with Thargoids, in-system jump (J) with its blocking rules.</li>
+        <li>Main-loop spawning: traders, pirates (1 to 4), police weighted by legal status, bounty hunters, asteroids, canisters, Thargoids, using the MCNT scheduling counter.</li>
+      </ul>
+      <p><strong>Accept when</strong> Lave, Zaonce, Diso and Riedquat come out with the right names, economies and prices, and a 10-system tour spawns plausible traffic.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">4<small>Combat</small></div>
+    <div>
+      <h3>Weapons, tactics and damage</h3>
+      <div class="meta">Size: large · Depends on: 3</div>
+      <ul>
+        <li>Lasers: pulse, beam, military, mining; sight; laser temperature and overheating; hit test in the crosshairs using the targetable area.</li>
+        <li>Missiles: target lock, launch, ECM (ours and theirs), ECM energy drain.</li>
+        <li>Ship tactics: aggression, hostility, firing arcs, fleeing, missiles, cargo dumping, station police.</li>
+        <li>Energy, shields, damage messages, cargo canisters on death, explosion clouds, kill counting and combat rank, legal status, death screen.</li>
+      </ul>
+      <p><strong>Accept when</strong> a Cobra and two Sidewinders fight back convincingly, the player can die, and the kill tally advances the rank.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">5<small>Station</small></div>
+    <div>
+      <h3>Docking and launching</h3>
+      <div class="meta">Size: medium · Depends on: 2</div>
+      <ul>
+        <li>Rotating Coriolis, safe zone, station-launched police, docking checks (approach angle, roll alignment with the slot, speed).</li>
+        <li>Crash on a bad approach; docking computer as an equipment item.</li>
+        <li>Launch tunnel of expanding squares, escape pod.</li>
+      </ul>
+      <p><strong>Accept when</strong> manual docking succeeds and fails for the same reasons as on the BBC.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">6<small>Docked</small></div>
+    <div>
+      <h3>Docked screens and commander</h3>
+      <div class="meta">Size: medium · Depends on: 3</div>
+      <ul>
+        <li>Status, inventory, market (buy and sell with the original price and quantity algorithm), equipment shop with tech-level gating and prices, fuel.</li>
+        <li>Commander save and load (file), new commander (Jameson at Lave with 100 Cr), title screen with a hidden-line Cobra.</li>
+      </ul>
+      <p><strong>Accept when</strong> a trade loop Lave to Zaonce and back turns the expected profit and the save survives a power cycle.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">7<small>Polish</small></div>
+    <div>
+      <h3>Feel, sound and options</h3>
+      <div class="meta">Size: medium · Depends on: 4, 5, 6</div>
+      <ul>
+        <li>Sound effects on the four <code>PLAY SOUND</code> channels; the original had no music.</li>
+        <li>Solid-ship toggle, gamepad mapping, key remap, difficulty tuning against the frame-time scaling.</li>
+        <li>Demo mode (ships fighting behind the title) and the disc-version split if program size demands it.</li>
+      </ul>
+      <p><strong>Accept when</strong> a fresh commander can reach Competent without hitting a bug and the manual page is written.</p>
+    </div>
+  </div>
+
+  <p class="note">The cassette version has no missions (the Constrictor and Thargoid plans are disc-version features), no Trumbles, and no docking animation. They are out of scope here and could be borrowed from the disc source later.</p>
+</section>
+
+<section id="risks">
+  <div class="eyebrow">Risks</div>
+  <h2>What could sink it, and the fallback</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Risk</th><th>Likelihood</th><th>Mitigation</th></tr>
+    <tr><td>Interpreter time per ship blows the frame budget with 8+ ships</td><td><span class="pill warn">Medium</span></td><td>Phase 0 measures before design locks. Levers: run tactics on alternate frames per slot (the original already does), lower the dot threshold, fewer ships in the bubble, keep all vector maths in <code>MATH</code>.</td></tr>
+    <tr><td>Tokenised program exceeds <code>MAX_PROG_SIZE</code></td><td><span class="pill warn">Medium</span></td><td>All tables external from the start; <code>LIBRARY</code> for shared utilities; docked/flight <code>CHAIN</code> split with <code>VAR SAVE</code> state as the disc version did.</td></tr>
+    <tr><td>Firmware with <code>MAX3D = 12</code> not yet flashed on the target</td><td><span class="pill ok">Low</span></td><td>Phase 0 runs on the rebuilt HDMIUSB image; until then the bench caps at 8 objects.</td></tr>
+    <tr><td>Wrong winding on a concave face after conversion</td><td><span class="pill ok">Low</span></td><td>Converter checks each face's computed normal against the stored one; <code>SET FLAGS 4</code> per face as the manual override.</td></tr>
+    <tr><td>Near-plane wrap when a ship is very close</td><td><span class="pill ok">Low</span></td><td>Skip <code>WRITE</code> below a z threshold; collision fires first in the original at those ranges.</td></tr>
+    <tr><td>Per-object minimum of 4 KB</td><td><span class="pill ok">Low</span></td><td>Twelve objects stay under 64 KB; the <code>CLOSE ALL</code> leak is fixed.</td></tr>
+    <tr><td>Hidden-line z-buffer exhausts the heap</td><td><span class="pill ok">Low</span></td><td>Only used on the title screen; falls back to wireframe if <code>MM.INFO(PSRAM SIZE)</code> is 0.</td></tr>
+    <tr><td>Copyright</td><td><span class="pill acc">Note</span></td><td>Elite is copyright Ian Bell and David Braben; the bbcelite.com repositories carry no licence. This is a personal port using the published data, like the existing Chuckie Egg port. Keep that in mind before distributing.</td></tr>
+  </table></div>
+</section>
+
+<section id="ships">
+  <div class="eyebrow">Appendix A</div>
+  <h2>Ship data</h2>
+  <p>The meshes in <code>Bas/3ddemo.bas</code> (already rendering on the engine) and the blueprint statistics from the cassette source.</p>
+  <h3>Meshes proven in 3ddemo.bas</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Ship</th><th class="num">Vertices</th><th class="num">Faces</th><th class="num">Face-vertex entries</th><th class="num">Demo z</th><th>Largest face</th></tr>
+    <tr><td>Viper</td><td class="num">15</td><td class="num">9</td><td class="num">34</td><td class="num">600</td><td>6 (rear)</td></tr>
+    <tr><td>Thargoid</td><td class="num">20</td><td class="num">9</td><td class="num">40</td><td class="num">1600</td><td>8 (ring)</td></tr>
+    <tr><td>Escape pod</td><td class="num">4</td><td class="num">4</td><td class="num">12</td><td class="num">400</td><td>3</td></tr>
+    <tr><td>Asp Mk II</td><td class="num">19</td><td class="num">13</td><td class="num">50</td><td class="num">800</td><td>5</td></tr>
+    <tr><td>Asteroid</td><td class="num">9</td><td class="num">14</td><td class="num">42</td><td class="num">1000</td><td>3</td></tr>
+    <tr><td>Canister</td><td class="num">10</td><td class="num">7</td><td class="num">30</td><td class="num">300</td><td>5</td></tr>
+    <tr><td>Cobra Mk III</td><td class="num">28</td><td class="num">17</td><td class="num">60</td><td class="num">1000</td><td>7 (rear)</td></tr>
+    <tr><td>Mamba</td><td class="num">25</td><td class="num">9</td><td class="num">30</td><td class="num">600</td><td>4</td></tr>
+    <tr><td>Missile</td><td class="num">17</td><td class="num">9</td><td class="num">32</td><td class="num">600</td><td>4</td></tr>
+    <tr><td>Python</td><td class="num">11</td><td class="num">9</td><td class="num">28</td><td class="num">1500</td><td>4</td></tr>
+    <tr><td>Sidewinder</td><td class="num">10</td><td class="num">8</td><td class="num">26</td><td class="num">600</td><td>4</td></tr>
+    <tr><td>Coriolis station</td><td class="num">16</td><td class="num">15</td><td class="num">52</td><td class="num">2500</td><td>4; docking slot is face 2 (vertices 12..15)</td></tr>
+  </table></div>
+  <p>The demo scales blueprint coordinates by 2 (<code>MATH SCALE vertices(),2.0</code>) and uses the demo z column above to frame each ship at <code>viewplane</code> 600. Two things to know before reusing these meshes:</p>
+  <ul>
+    <li><strong>Face counts differ from the blueprints on purpose.</strong> Elite stores edges, and some edges are surface detail whose two face ids are the same face (the Viper's rear vents, the Cobra's engine recesses and cockpit). <code>Draw3D</code> only strokes face perimeters, so the demo's converter turned each such detail group into an extra polygon that shares its host face's normal. That is the right technique and the converter in Phase 1 must do the same.</li>
+    <li><strong>All twelve are now regenerated from the source</strong> (Phase 1). The demo's Python, Thargoid, Cobra and Missile were missing lines and the Thargon was absent; the Asp Mk II in the demo is a disc-version ship and is not used.</li>
+  </ul>
+  <h3>Blueprint statistics (cassette source, XX21 order)</h3>
+  <p>Header fields decoded from each <code>SHIP_*</code> block. Bounty is the 16-bit word divided by 10. Laser and missiles come from byte 19 (<code>%00lllmmm</code>). Types 5 and 7 share the Cobra Mk III blueprint.</p>
+  <div class="tablewrap"><table>
+    <tr><th class="num">Type</th><th>Ship</th><th class="num">Vert</th><th class="num">Edges</th><th class="num">Faces</th><th class="num">Canisters</th><th class="num">Area (side)</th><th class="num">Bounty Cr</th><th class="num">Vis dist</th><th class="num">Energy</th><th class="num">Speed</th><th class="num">Normal scale</th><th class="num">Laser</th><th class="num">Missiles</th><th class="num">Max |coord|</th></tr>
+    <tr><td class="num">1</td><td>Sidewinder</td><td class="num">10</td><td class="num">15</td><td class="num">7</td><td class="num">0</td><td class="num">65</td><td class="num">5.0</td><td class="num">20</td><td class="num">70</td><td class="num">37</td><td class="num">2</td><td class="num">2</td><td class="num">0</td><td class="num">64</td></tr>
+    <tr><td class="num">2</td><td>Viper (police)</td><td class="num">15</td><td class="num">20</td><td class="num">7</td><td class="num">0</td><td class="num">75</td><td class="num">0</td><td class="num">23</td><td class="num">120</td><td class="num">32</td><td class="num">1</td><td class="num">2</td><td class="num">1</td><td class="num">72</td></tr>
+    <tr><td class="num">3</td><td>Mamba</td><td class="num">25</td><td class="num">28</td><td class="num">5</td><td class="num">1</td><td class="num">70</td><td class="num">15.0</td><td class="num">25</td><td class="num">90</td><td class="num">30</td><td class="num">2</td><td class="num">2</td><td class="num">2</td><td class="num">64</td></tr>
+    <tr><td class="num">4</td><td>Python</td><td class="num">11</td><td class="num">26</td><td class="num">13</td><td class="num">3</td><td class="num">120</td><td class="num">20.0</td><td class="num">40</td><td class="num">250</td><td class="num">20</td><td class="num">0</td><td class="num">3</td><td class="num">3</td><td class="num">224</td></tr>
+    <tr><td class="num">5</td><td>Cobra Mk III (hunter)</td><td class="num">28</td><td class="num">38</td><td class="num">13</td><td class="num">3</td><td class="num">95</td><td class="num">0</td><td class="num">50</td><td class="num">150</td><td class="num">28</td><td class="num">1</td><td class="num">2</td><td class="num">3</td><td class="num">128</td></tr>
+    <tr><td class="num">6</td><td>Thargoid</td><td class="num">20</td><td class="num">26</td><td class="num">10</td><td class="num">0</td><td class="num">99</td><td class="num">50.0</td><td class="num">55</td><td class="num">240</td><td class="num">39</td><td class="num">2</td><td class="num">2</td><td class="num">6</td><td class="num">164</td></tr>
+    <tr><td class="num">7</td><td>Cobra Mk III (trader)</td><td class="num">28</td><td class="num">38</td><td class="num">13</td><td class="num">3</td><td class="num">95</td><td class="num">0</td><td class="num">50</td><td class="num">150</td><td class="num">28</td><td class="num">1</td><td class="num">2</td><td class="num">3</td><td class="num">128</td></tr>
+    <tr><td class="num">8</td><td>Coriolis station</td><td class="num">16</td><td class="num">28</td><td class="num">14</td><td class="num">0</td><td class="num">160</td><td class="num">0</td><td class="num">120</td><td class="num">240</td><td class="num">0</td><td class="num">0</td><td class="num">0</td><td class="num">6</td><td class="num">160</td></tr>
+    <tr><td class="num">9</td><td>Missile</td><td class="num">17</td><td class="num">24</td><td class="num">9</td><td class="num">0</td><td class="num">40</td><td class="num">0</td><td class="num">14</td><td class="num">2</td><td class="num">44</td><td class="num">2</td><td class="num">0</td><td class="num">0</td><td class="num">68</td></tr>
+    <tr><td class="num">10</td><td>Asteroid</td><td class="num">9</td><td class="num">21</td><td class="num">14</td><td class="num">0</td><td class="num">80</td><td class="num">0.5</td><td class="num">50</td><td class="num">60</td><td class="num">30</td><td class="num">1</td><td class="num">0</td><td class="num">0</td><td class="num">80</td></tr>
+    <tr><td class="num">11</td><td>Cargo canister</td><td class="num">10</td><td class="num">15</td><td class="num">7</td><td class="num">0</td><td class="num">20</td><td class="num">0</td><td class="num">12</td><td class="num">17</td><td class="num">15</td><td class="num">2</td><td class="num">0</td><td class="num">0</td><td class="num">24</td></tr>
+    <tr><td class="num">12</td><td>Thargon</td><td class="num">10</td><td class="num">15</td><td class="num">7</td><td class="num">0</td><td class="num">40</td><td class="num">5.0</td><td class="num">20</td><td class="num">20</td><td class="num">30</td><td class="num">2</td><td class="num">2</td><td class="num">0</td><td class="num">40</td></tr>
+    <tr><td class="num">13</td><td>Escape pod</td><td class="num">4</td><td class="num">6</td><td class="num">4</td><td class="num">0</td><td class="num">16</td><td class="num">0</td><td class="num">8</td><td class="num">17</td><td class="num">8</td><td class="num">3</td><td class="num">0</td><td class="num">0</td><td class="num">36</td></tr>
+  </table></div>
+  <p>Other header bytes the game needs: the gun vertex (Cobra 21, Thargoid 15, all others 0), the explosion count (4n+6 with n from 1 for the missile to 12 for the station), and the edge heap size. Source constants: <code>NOSH=12</code>, <code>NTY=13</code>, <code>COPS=2</code>, <code>THG=6</code>, <code>CYL=7</code>, <code>SST=8</code>, <code>MSL=9</code>, <code>AST=10</code>, <code>OIL=11</code>, <code>TGL=12</code>, <code>ESC=13</code>, <code>POW=15</code>. The station's docking slot is the 20 x 60 rectangle of vertices 12 to 15 on the +z face.</p>
+  
+</section>
+
+<section id="algos">
+  <div class="eyebrow">Appendix B</div>
+  <h2>Algorithm crib from the deep dives</h2>
+  <p>Condensed from bbcelite.com so the implementer does not need to re-read the 6502 listing for the parts that must be bit-exact or that define the feel of the game.</p>
+    <p class="note">Everything here was read from the cassette source pages, not the prose overviews, unless marked "verify". Formulas are written in MMBasic terms where that removes 8-bit trickery; the ones that must stay bit-exact (seeds, twist, names, market, RNG, checksum) are written as the 6502 does them.</p>
+
+  <h3>B1 · Galaxy, system and name generation (bit-exact)</h3>
+  <p>A galaxy is three 16-bit seeds s0, s1, s2 stored little-endian (bytes <code>s0_lo s0_hi s1_lo s1_hi s2_lo s2_hi</code>). Galaxy 1: <code>s0=&amp;5A4A, s1=&amp;0248, s2=&amp;B753</code>. System 0 of galaxy 1 is Tibedied; each further system is four twists on. Lave sits at chart position (20, 173).</p>
+<pre><code>' twist (TT54), 16-bit arithmetic, carry out of the high byte discarded
+tmp = (s0 + s1) AND &amp;HFFFF : s0 = s1 : s1 = s2 : s2 = (tmp + s1) AND &amp;HFFFF
+
+' system data (TT24) from the current seeds
+gal_x        = s1_hi
+gal_y        = s0_hi \ 2
+government   = (s1_lo \ 8) AND 7
+economy      = s0_hi AND 7 : IF government &lt;= 1 THEN economy = economy OR 2
+tech         = (economy XOR 7) + (s1_hi AND 3) + (government + 1) \ 2   ' displayed as tech + 1
+population   = tech * 4 + economy + government + 1                       ' tenths of a billion
+productivity = ((economy XOR 7) + 3) * (government + 4) * population * 8 ' M Cr
+radius_km    = ((s2_hi AND 15) + 11) * 256 + s1_hi
+
+' name (cpl): 3 or 4 digraphs, on a COPY of the seeds
+n = 3 : IF s0_lo AND 64 THEN n = 4
+FOR k = 1 TO n : i = s2_hi AND 31 : IF i &lt;&gt; 0 THEN name$ = name$ + digraph$(i) : twist : NEXT</code></pre>
+  <p>Digraph tokens 128 to 159, index 0 prints nothing and index 15 ("A?") prints just "A":</p>
+  <div class="tablewrap"><table>
+    <tr><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th>10</th><th>11</th><th>12</th><th>13</th><th>14</th><th>15</th><th>16</th></tr>
+    <tr><td>AL</td><td>LE</td><td>XE</td><td>GE</td><td>ZA</td><td>CE</td><td>BI</td><td>SO</td><td>US</td><td>ES</td><td>AR</td><td>MA</td><td>IN</td><td>DI</td><td>RE</td><td>A?</td></tr>
+    <tr><th>17</th><th>18</th><th>19</th><th>20</th><th>21</th><th>22</th><th>23</th><th>24</th><th>25</th><th>26</th><th>27</th><th>28</th><th>29</th><th>30</th><th>31</th><th>0</th></tr>
+    <tr><td>ER</td><td>AT</td><td>EN</td><td>BE</td><td>RA</td><td>LA</td><td>VE</td><td>TI</td><td>ED</td><td>OR</td><td>QU</td><td>AN</td><td>TE</td><td>IS</td><td>RI</td><td>ON</td></tr>
+  </table></div>
+  <p>Governments 0 to 7: Anarchy, Feudal, Multi-government, Dictatorship, Communist, Confederacy, Democracy, Corporate State. Economy 0 to 7: bit 2 clear is Industrial, set is Agricultural; 0 and 5 Rich, 1 and 6 Average, 2 and 7 Poor, 3 and 4 Mainly. Check value: Tibedied is Feudal, Poor Industrial, tech level 9 (stored 8), population 3.6 billion, productivity 11520 M Cr, radius 4610 km. Galactic hyperspace rotates each of the six seed bytes left by one bit, independently, and clears the legal record.</p>
+
+  <h3>B2 · Market (bit-exact)</h3>
+  <p>One random byte QQ26 is drawn on arrival in a system and saved with the commander; prices do not change until the next arrival. Economy is 0 to 7 as above.</p>
+<pre><code>price (0.1 Cr) = ((base + (QQ26 AND mask) + economy * factor) AND 255) * 4   ' 8-bit wrap is intentional
+quantity       = base_qty + (QQ26 AND mask) - economy * factor
+IF quantity &lt; 0 THEN quantity = 0 ELSE quantity = quantity AND 63</code></pre>
+  <div class="tablewrap"><table>
+    <tr><th class="num">#</th><th>Item</th><th class="num">Base</th><th class="num">Factor</th><th>Unit</th><th class="num">Base qty</th><th>Mask</th></tr>
+    <tr><td class="num">0</td><td>Food</td><td class="num">19</td><td class="num">-2</td><td>t</td><td class="num">6</td><td class="mono">00000001</td></tr>
+    <tr><td class="num">1</td><td>Textiles</td><td class="num">20</td><td class="num">-1</td><td>t</td><td class="num">10</td><td class="mono">00000011</td></tr>
+    <tr><td class="num">2</td><td>Radioactives</td><td class="num">65</td><td class="num">-3</td><td>t</td><td class="num">2</td><td class="mono">00000111</td></tr>
+    <tr><td class="num">3</td><td>Slaves</td><td class="num">40</td><td class="num">-5</td><td>t</td><td class="num">226</td><td class="mono">00011111</td></tr>
+    <tr><td class="num">4</td><td>Liquor/Wines</td><td class="num">83</td><td class="num">-5</td><td>t</td><td class="num">251</td><td class="mono">00001111</td></tr>
+    <tr><td class="num">5</td><td>Luxuries</td><td class="num">196</td><td class="num">+8</td><td>t</td><td class="num">54</td><td class="mono">00000011</td></tr>
+    <tr><td class="num">6</td><td>Narcotics</td><td class="num">235</td><td class="num">+29</td><td>t</td><td class="num">8</td><td class="mono">01111000</td></tr>
+    <tr><td class="num">7</td><td>Computers</td><td class="num">154</td><td class="num">+14</td><td>t</td><td class="num">56</td><td class="mono">00000011</td></tr>
+    <tr><td class="num">8</td><td>Machinery</td><td class="num">117</td><td class="num">+6</td><td>t</td><td class="num">40</td><td class="mono">00000111</td></tr>
+    <tr><td class="num">9</td><td>Alloys</td><td class="num">78</td><td class="num">+1</td><td>t</td><td class="num">17</td><td class="mono">00011111</td></tr>
+    <tr><td class="num">10</td><td>Firearms</td><td class="num">124</td><td class="num">+13</td><td>t</td><td class="num">29</td><td class="mono">00000111</td></tr>
+    <tr><td class="num">11</td><td>Furs</td><td class="num">176</td><td class="num">-9</td><td>t</td><td class="num">220</td><td class="mono">00111111</td></tr>
+    <tr><td class="num">12</td><td>Minerals</td><td class="num">32</td><td class="num">-1</td><td>t</td><td class="num">53</td><td class="mono">00000011</td></tr>
+    <tr><td class="num">13</td><td>Gold</td><td class="num">97</td><td class="num">-1</td><td>kg</td><td class="num">66</td><td class="mono">00000111</td></tr>
+    <tr><td class="num">14</td><td>Platinum</td><td class="num">171</td><td class="num">-2</td><td>kg</td><td class="num">55</td><td class="mono">00011111</td></tr>
+    <tr><td class="num">15</td><td>Gem-Stones</td><td class="num">45</td><td class="num">-1</td><td>g</td><td class="num">250</td><td class="mono">00001111</td></tr>
+    <tr><td class="num">16</td><td>Alien items</td><td class="num">53</td><td class="num">+15</td><td>t</td><td class="num">192</td><td class="mono">00000111</td></tr>
+  </table></div>
+  <p>Check: at Lave (economy 5) food is 3.6 to 4.0 Cr and computers 89.6 to 90.8 Cr with none available.</p>
+
+  <h3>B3 · Ship data block and scale</h3>
+  <p>Each slot is 36 bytes (INWK). Positions are 24-bit sign-magnitude, ±8388607, relative to the player, z into the screen. Orientation is three vectors (nosev forward, roofv up, sidev right) of 16-bit sign-magnitude components with unit length 96 (<code>&amp;6000</code>); nearly every calculation uses only the high bytes (±96). A fresh ship has sidev (96,0,0), roofv (0,96,0), nosev (0,0,-96), nose toward the viewer.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Bytes</th><th>Field</th><th>Notes</th></tr>
+    <tr><td>0-8</td><td>x, y, z (lo, hi, sign each)</td><td></td></tr>
+    <tr><td>9-26</td><td>nosev, roofv, sidev (x_lo, x_hi, y_lo, y_hi, z_lo, z_hi each)</td><td></td></tr>
+    <tr><td>27</td><td>speed 1-40</td><td>NPC moves 1.5 x speed units per frame; player DELTA 0-40 units per frame</td></tr>
+    <tr><td>28</td><td>acceleration, signed</td><td>applied then zeroed each frame</td></tr>
+    <tr><td>29, 30</td><td>roll counter, pitch counter</td><td>bits 0-6 magnitude, bit 7 direction; 127 = rotate forever (station, asteroids); otherwise decremented by 1 per frame</td></tr>
+    <tr><td>31</td><td>flags</td><td>bits 0-2 missiles, 3 on screen, 4 on scanner, 5 exploding, 6 drawn/firing, 7 killed</td></tr>
+    <tr><td>32</td><td>AI byte</td><td>bit 7 AI on, bits 1-6 aggression 0-63, bit 0 ECM fitted</td></tr>
+    <tr><td>33-34</td><td>line heap pointer</td><td>not needed: the engine redraws</td></tr>
+    <tr><td>35</td><td>energy</td><td>blueprint byte 14 is the maximum</td></tr>
+  </table></div>
+  <p>Scale: projection is <code>256 * value / z</code> on a 256 x 192 view centred (128, 96), so 320 pixels wide means a 320-pixel focal length. The planet has radius 24576 (96 0) and is placed 65536 ahead on arrival, filling the view exactly; the sun is the same size, 1 to 7 planet-distances further. Ships are removed beyond 57344 on any axis (FAROF). The in-system jump moves 65536. Vertex coordinates in the blueprints are in the same units as positions (a Cobra is 256 units across), so the meshes go into <code>Draw3D</code> unscaled and <code>WRITE</code> takes the raw position. The blueprint visibility byte is compared with the distance reduced to 0..31 (LL9 part 2, which looks like the largest high byte divided by 8, so units of 2048: verify); Cobra 50 is never reached inside the bubble, Sidewinder 20 becomes a dot beyond about 40000, canister 12 beyond about 24000.</p>
+
+  <h3>B4 · Player controls and the feel</h3>
+  <p>Roll JSTX and pitch JSTY are 1..255 centred on 128. A held key moves roll by 7 and pitch by 14 per frame (saturating; pushing the other way from beyond centre first snaps to 128). With damping on, the value moves 1 toward 128 per call, called twice per frame for roll and once for pitch. Then:</p>
+<pre><code>d = JSTX - 128 : ALP1 = ABS(d) \ 4 : IF ALP1 &lt; 8 THEN ALP1 = ALP1 \ 2       ' 0..31, sign in ALP2
+e = ABS(JSTY - 128) + 4 : BET1 = e \ 16 : IF BET1 &lt; 3 THEN BET1 = BET1 \ 2   ' 0..8,  sign in BET2
+alpha = ALP1 / 256 : beta = BET1 / 256                                       ' radians per frame</code></pre>
+  <p>Full roll builds in about 18 frames and decays at 2 per frame; full pitch builds in 9 and decays at 1. Speed DELTA is 0..40. These per-frame constants are what the frame-time scaling in the architecture section must preserve.</p>
+  <div class="tablewrap"><table>
+    <tr><th>BBC key</th><th>Action</th><th>BBC key</th><th>Action</th></tr>
+    <tr><td>S / X</td><td>pitch down / pull up</td><td>A</td><td>fire laser</td></tr>
+    <tr><td>&lt; / &gt;</td><td>roll left / right</td><td>T, U, M</td><td>target, unarm, fire missile</td></tr>
+    <tr><td>Space / ?</td><td>speed up / slow down</td><td>E</td><td>ECM</td></tr>
+    <tr><td>J</td><td>in-system jump</td><td>C</td><td>docking computer</td></tr>
+    <tr><td>H</td><td>hyperspace</td><td>TAB, ESC</td><td>energy bomb, escape pod</td></tr>
+    <tr><td>f0-f3</td><td>front, rear, left, right view</td><td>f4-f9</td><td>long chart, short chart, data, market, status, inventory</td></tr>
+  </table></div>
+  <p>On the PC3 keep the BBC letters (they are all plain ASCII in <code>KEYDOWN</code>) and put the views and screens on F1 to F10. Arrow keys can double S/X/&lt;/&gt;.</p>
+
+  <h3>B5 · Moving a ship (MVEIT), per slot per frame, in this order</h3>
+  <ol>
+    <li>If <code>(MCNT XOR slot) AND 15 = 0</code>: TIDY the orientation (renormalise nosev, make roofv perpendicular, sidev = cross product). Each ship every 16 frames.</li>
+    <li>If AI on: missiles run TACTICS every frame, other ships when <code>(MCNT XOR slot) AND 7 = 0</code>.</li>
+    <li>Move forward: <code>pos += nosev_hi * speed / 64</code> per axis (unit 96, so 1.5 x speed units).</li>
+    <li><code>speed += acceleration</code>, clamp 1..max, zero the acceleration.</li>
+    <li>Rotate the position by the player's alpha and beta (below), then <code>z -= DELTA</code>.</li>
+    <li>Rotate nosev, roofv, sidev by alpha and beta (small-angle, roll then pitch, using updated intermediates).</li>
+    <li>Apply the ship's own pitch counter to (roofv, nosev) and roll counter to (roofv, sidev): <code>X = X*(1 - 1/512) ± Y/16 : Y = Y*(1 - 1/512) ∓ X/16</code>, about 3.6° per frame; decrement the counter unless it is 127.</li>
+  </ol>
+  <p>Universe rotation by the player (MVEIT part 5), high bytes only:</p>
+<pre><code>k = y - alpha * x
+z = z + beta * k
+y = k - beta * z        ' uses the new z
+x = x + alpha * y       ' uses the new y</code></pre>
+  <p>With quaternions: build <code>r</code> from the roll angle about Z and the pitch angle about X, invert it, and apply <code>Q_ROTATE</code> to positions and <code>Q_MULT</code> to orientations. The shear the original picks up from its Minsky rotation is what TIDY corrects; a normalised quaternion has none, so the feel is the same without the drift.</p>
+  <p>View flipping (PLUT), applied to positions and all three vectors before drawing: rear negates x and z; left swaps x and z then negates the new z; right swaps x and z then negates the new x.</p>
+
+  <h3>B6 · Tactics (TACTICS), when a slot gets its turn</h3>
+  <ol>
+    <li><strong>Missiles:</strong> any ECM active destroys them. Target reached when all three high bytes are 0 (within 256 units): 250 damage to the player if very close, else 80; a target with ECM has a 6% chance (rnd &lt; 16) to fire it. A missile reaching the station is simply destroyed.</li>
+    <li>Escape pods head for the planet. A hostile station spawns a Viper. A Thargon without its mothership drifts. Pirates inside the safe zone do not attack. <code>energy += 1</code>.</li>
+    <li>CNT = nosev · unit vector to the player.</li>
+    <li>2.5% chance (rnd ≥ 250) of a long roll (counter = rnd OR 104). If energy &gt; max/2 go to lasers; if &gt; max/4 go to missiles; else 10% chance (rnd ≥ 230) of bailing out in an escape pod.</li>
+    <li><strong>Missiles:</strong> m = missiles held; fire if m &gt; 0, no ECM active and <code>(rnd AND 31) &lt; m</code>. A Thargoid launches a Thargon instead. "INCOMING MISSILE".</li>
+    <li><strong>Lasers:</strong> only if every position high byte is under 32. CNT as sign-magnitude: below 160 cannot shoot; 160 to 162 fires and misses (flash and sound); 163 or more hits for <code>laser_power \ 2</code> damage (blueprint byte 19 shifted right once) and the attacker's acceleration is decremented.</li>
+    <li><strong>Steering:</strong> XX15 = unit vector to the target. If very close (z_hi &lt; 3 and x_hi, y_hi under 2) head away; else head toward with probability <code>(rnd OR 128) &lt; AI_byte</code>. Pitch counter = 3 with sign from roofv · XX15; roll counter = 5 (only if current roll &lt; 16) with sign from sidev · XX15 XOR the pitch sign. CNT ≥ 22 means accelerate by 3; |CNT| ≥ 18 means decelerate by 1 (missiles 2).</li>
+  </ol>
+  <p>AI byte at spawn: traders <code>rnd \ 2</code> with AI off (they never fight in the cassette version); pirates and bounty hunters <code>rnd OR 192</code> (AI on, aggression 32-63) with ECM if a second random byte is 245 or more; Thargoids, Thargons, missiles and escape pods 63 with AI on; cops 32-63; station <code>%00000001</code>; asteroids and canisters 0.</p>
+
+  <h3>B7 · Main-loop schedule (MCNT counts down every iteration)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Condition</th><th>Task</th></tr>
+    <tr><td>every iteration</td><td>keys, essential dials, laser temperature -1, message timer</td></tr>
+    <tr><td>every 4</td><td>the non-essential bars</td></tr>
+    <tr><td><code>MCNT AND 7 = 0</code></td><td>if energy ≥ 128 recharge fore and aft shields by 1 each (1 energy each); then <code>energy = MIN(255, energy + 1 + energy_unit)</code></td></tr>
+    <tr><td><code>(MCNT XOR slot) AND 7 = 0</code></td><td>TACTICS for that slot</td></tr>
+    <tr><td><code>(MCNT XOR slot) AND 15 = 0</code></td><td>TIDY that slot</td></tr>
+    <tr><td>every 16</td><td>dial flash phase (8 on, 8 off)</td></tr>
+    <tr><td><code>MCNT AND 31 = 0</code></td><td>station proximity check and spawn (B8)</td></tr>
+    <tr><td><code>MCNT AND 31 = 10</code></td><td>altitude = sqrt(x_hi² + y_hi² + z_hi² - 36); negative is a crash; "ENERGY LOW" below 50</td></tr>
+    <tr><td><code>MCNT AND 31 = 20</code></td><td>cabin temperature from the sun distance, death past 255; scoops add speed/8 fuel when ≥ 224, cap 70</td></tr>
+    <tr><td>MCNT wraps (every 256)</td><td>spawning: rnd &lt; 35 gives a benign spawn at z_hi 38 (a Cobra trader 50% of the time, else an asteroid, or a canister with rnd &lt; 5, skipped in the safe zone or with 3 asteroids present); cops with probability from contraband and legal status; pirates unless rnd ≥ 90 or <code>(rnd AND 7) &lt; government</code>: rnd ≥ 200 gives a pack of <code>(rnd AND 3) + 1</code> Sidewinders or Mambas, else one of Mamba, Python, Cobra hunter, Thargoid</td></tr>
+  </table></div>
+  <p>MCNT is set to 0 on launch, buying fuel and hyperspace, 1 after an in-system jump, 255 on death.</p>
+
+  <h3>B8 · Station, safe zone and docking</h3>
+  <p>The station is placed at planet centre plus 2 x nosev(planet) x radius, so at altitude one radius, when <code>MCNT AND 31 = 0</code>, no station exists and the player is within 49152 (192 0) of that point on every axis. It spawns pointing at the planet with roll counter 255 (permanent 3.6° per frame) and AI byte <code>%00000001</code>. Inside the safe zone nothing hostile spawns, pirates do not attack, and the compass points at the station.</p>
+  <p>Docking checks in order: station not hostile; station nose within 26° of pointing at us (its nosev_z ≥ 86 of 96); station in front; unit vector to the station has z ≥ 89 of 96 (a 22° cone); our roll matches the slot (|roofv_x| ≥ 80 of 96, within 34°). A failed approach below speed 5 bounces without damage, otherwise it damages or kills.</p>
+
+  <h3>B9 · Weapons, damage and rank</h3>
+  <p>Fire when the laser timer is 0, the fire key is held, laser temperature &lt; 242 and the current view has a laser. Damage is <code>power AND 127</code>, 15 for both pulse and beam. Each shot adds 8 to the laser temperature, which cools by 1 per iteration. Beam refires every frame; pulse sets the timer to 10, decremented at 50 Hz, so 5 shots a second. Hit test: the target is in front, not the planet or sun, not exploding, both x_hi and y_hi are 0, and <code>x_lo² + y_lo² &lt; targetable area</code>. On a hit energy drops by the damage; going negative kills (canisters spawn 50% of the time, up to blueprint byte 0). NPC lasers hit the player for <code>laser_power \ 2</code>.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Rank</th><th>Kills</th><th>Rank</th><th>Kills</th></tr>
+    <tr><td>Harmless</td><td>0-7</td><td>Above Average</td><td>64-127</td></tr>
+    <tr><td>Mostly Harmless</td><td>8-15</td><td>Competent</td><td>128-511</td></tr>
+    <tr><td>Poor</td><td>16-31</td><td>Dangerous</td><td>512-2559</td></tr>
+    <tr><td>Average</td><td>32-63</td><td>Deadly</td><td>2560-6399</td></tr>
+    <tr><td></td><td></td><td>Elite</td><td>6400 and up</td></tr>
+  </table></div>
+  <p>One kill point per kill in the cassette version; "RIGHT ON COMMANDER" each time the low byte wraps. Killing a Viper sets the fugitive bit.</p>
+
+  <h3>B10 · Drawing the rest of the view</h3>
+  <ul>
+    <li><strong>Scanner:</strong> shown when x_hi, y_hi, z_hi are all under 64. Dot x = 123 + x_hi (clip 60..186); stick base y = 220 - z_hi/4 on the ellipse (138 x 36, x 56..192, y 204..239); stick height = -y_hi/2 (clip y 194..246). Scale those to the 320-wide dashboard by 1.25.</li>
+    <li><strong>Dashboard:</strong> bars 16 px; speed shows DELTA/2 (full from 32); fuel 0-70 shows fuel/4; energy 255 across four banks; shields, cabin and laser temperature, altitude 0-255 direct. Roll indicator 8 ± ALP1/4, pitch 8 ± (BET1 - 1). Compass: unit vector to the station in the safe zone, else the planet; dot at (195 + x/10, 204 - y/10), filled when z ≥ 0 (ahead), hollow when behind.</li>
+    <li><strong>Stardust, front view:</strong> 18 particles (3 in witchspace), 16-bit x, y, z with the high byte as the pixel offset from centre. Per frame with q = 64 x speed / z_hi: <code>z -= speed*64 : y += |y_hi|*q : x += |x_hi|*q</code>; roll <code>y += alpha*x/256 : x -= alpha*y/256</code>; pitch <code>y_hi -= BET1</code> (plus a small x term the original's author calls a mystery). Recycle when |x_hi| or |y_hi| ≥ 120 or z_hi &lt; 16: <code>x_hi = rnd OR 8, y_hi = rnd OR 4, z_hi = rnd OR 144</code>, random signs. Side views drift x by <code>8*256*speed/z_hi</code>; the rear view reverses the perspective.</li>
+    <li><strong>Sun:</strong> K = 256 x r / z. Fringe CNT = 7 if K ≥ 96, 3 if ≥ 40, 1 if ≥ 16, else 0. For each row at offset V: half-width = <code>sqrt(K² - V²) + (rnd AND CNT)</code>, one horizontal line per row.</li>
+    <li><strong>Planet (cassette = crater):</strong> circle of radius K at the projected centre. Crater centre = planet centre + 0.87 K x (roofv_x, roofv_y)/96 (screen y flipped); crater axes u = (nosev_x, nosev_y) K / 192, v = (sidev_x, sidev_y) K / 192, full ellipse of 64 steps; drawn only when the crater faces us (check the sign of roofv_z during Phase 2). Meridians and equators belong to the disc version.</li>
+    <li><strong>Explosions:</strong> a counter starts at 18 and grows by 4 per redraw to 128, then the cloud shrinks until it expires; cloud size = counter / distance; particles scatter within that size around each projected vertex, with the vertex count from the blueprint's explosion byte. The original re-seeds its RNG to redraw the same cloud for erasure; a framebuffer makes that unnecessary.</li>
+  </ul>
+
+  <h3>B11 · Random numbers, text and the commander file (bit-exact where it matters)</h3>
+<pre><code>' DORND: four seed bytes r0..r3; DORND2 clears the carry first, DORND does not
+a = r0 : c = a \ 128 : a = ((a * 2) AND 255) OR carry_in : x = a
+a = a + r2 + c : c = a \ 256 : a = a AND 255 : r0 = a : r2 = x
+a = r1 : x = a
+a = a + r3 + c : c = a \ 256 : a = a AND 255 : r1 = a : r3 = x
+' result: a (random byte); carry c survives to the next call</code></pre>
+  <p>Text tokens (TT27): 0-13 control codes (cash, galaxy number, current and selected system, commander name, fuel/cash line, sentence case, beep, all caps, tab to column 21, newlines), 14-31 recursive tokens 128-145, 32-95 ASCII, 96-127 recursive, 128-159 digraphs, 160-255 recursive tokens 0-95. Stored text is XORed with 35. The Python tool expands every fixed token to a plain string so only names, numbers and case handling remain at runtime.</p>
+  <p>Commander file: 76 data bytes. 0 mission flags; 1-2 chart position (20, 173 = Lave); 3-8 galaxy seeds; 9-12 cash in 0.1 Cr (1000.0 Cr = 10000; the source table shows the bytes as <code>E8 03 00 00</code>, so confirm the byte order against a real save); 13 fuel 70; 15 galaxy number; 16-19 lasers front/rear/left/right (15, 0, 0, 0); 22 hold size 22; 23-39 cargo x 17; 40-69 equipment flags, missiles, legal status, market availability x 17; 70 QQ26; 71-72 kills; 73 = 128; 74 CHK2 = &amp;AA; 75 CHK = &amp;03. Checksum: <code>a = 73 : c = 0 : FOR x = 73 TO 1 STEP -1 : a = a + b(x-1) + c : c = a \ 256 : a = (a AND 255) XOR b(x) : NEXT</code> gives CHK, and CHK2 = CHK XOR &amp;A9. Our port only needs this if it wants to import real BBC saves; a plain text file is otherwise fine.</p>
+
+</section>
+
+<section id="sources">
+  <div class="eyebrow">Appendix C</div>
+  <h2>Sources</h2>
+  <ul>
+    <li>Annotated source and deep dives: <a href="https://elite.bbcelite.com/">elite.bbcelite.com</a>; cassette indexes at <a href="https://elite.bbcelite.com/cassette/indexes/a-z.html">/cassette/indexes/a-z.html</a>.</li>
+    <li>Buildable source: <a href="https://github.com/markmoxon/cassette-elite-beebasm">markmoxon/cassette-elite-beebasm</a>, <code>1-source-files/main-sources/elite-source.asm</code> (ship blueprints, text tokens, tables) and <code>elite-loader.asm</code>. The same file is served raw from the <code>elite-source-code-bbc-micro-cassette</code> repository, which is what the converter should fetch. Per-ship annotated pages: <code>/cassette/main/variable/ship_&lt;name&gt;.html</code>; the blueprint table is <code>xx21.html</code>.</li>
+    <li>Key deep dives: ship blueprints, drawing ships, back-face culling, the local bubble of universe, program flow of the main game loop, pitching and rolling, orientation vectors, galaxy and system seeds, generating system names, market item prices, the 3D scanner, docking checks, stardust, drawing the sun, drawing meridians and equators, drawing explosion clouds, scheduling tasks with the main loop counter, a sense of scale.</li>
+    <li>Firmware: <code>graphics/Draw3D.c</code>, <code>graphics/Draw.h</code>, <code>configuration.h</code> (<code>MAX3D</code>, heap and pool sizes), <code>core/MATHS.c</code> (quaternion and vector commands), <code>graphics/FrameBuffer.c</code> (<code>COPY ... ,B</code>), <code>misc/External.c</code> (gamepad).</li>
+    <li>Existing PicoMite material: <code>Bas/3ddemo.bas</code> (12 Elite meshes on the engine), <code>Bas/chuckie.bas</code> and <code>Bas/chuckie_tools/</code> (port and build pattern), <code>PDF/3D_Graphics_User_Manual.pdf</code>, <code>PDF/Game_Development_Guide.pdf</code>.</li>
+  </ul>
+</section>
+
+<footer>Prepared against PicoMite firmware 6.03.02 (main, commit bb53afa) and Pico Computer 3 manual v0.11.</footer>
+</div>
+
+<script>
+(function(){
+  var c=document.getElementById('cobra'); if(!c||!c.getContext) return;
+  var ctx=c.getContext('2d');
+  // Cobra Mk III from Bas/3ddemo.bas (blueprint units x2, as the demo scales them)
+  var V=[[32,0,76],[-32,0,76],[0,26,24],[-120,-3,-8],[120,-3,-8],[-88,16,-40],[88,16,-40],[128,-8,-40],[-128,-8,-40],[0,26,-40],[-32,-24,-40],[32,-24,-40],[-36,8,-40],[-8,12,-40],[8,12,-40],[36,8,-40],[36,-12,-40],[8,-16,-40],[-8,-16,-40],[-36,-12,-40],[0,0,76],[0,0,90],[-80,-6,-40],[-80,6,-40],[-88,0,-40],[80,6,-40],[88,0,-40],[80,-6,-40]].map(function(p){return [p[0]*2,p[1]*2,p[2]*2];});
+  var F=[[2,1,0],[2,5,1],[0,6,2],[5,3,1],[0,4,6],[2,9,5],[6,9,2],[5,8,3],[4,7,6],[6,7,11,10,8,5,9],[12,13,18,19],[14,15,16,17],[22,24,23],[25,26,27],[1,3,8,10],[0,1,10,11],[11,7,4,0]];
+  var reduce=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var yaw=0.6,pitch=-0.35,roll=0.15, t0=null;
+  function rot(p,ya,pi,ro){
+    var x=p[0],y=p[1],z=p[2],s,co;
+    s=Math.sin(ya);co=Math.cos(ya); var x1=x*co+z*s, z1=-x*s+z*co; x=x1; z=z1;
+    s=Math.sin(pi);co=Math.cos(pi); var y1=y*co-z*s, z2=y*s+z*co; y=y1; z=z2;
+    s=Math.sin(ro);co=Math.cos(ro); var x2=x*co-y*s, y2=x*s+y*co; x=x2; y=y2;
+    return [x,y,z];
+  }
+  function draw(ts){
+    if(!reduce){ if(t0===null) t0=ts; var t=(ts-t0)/1000; yaw=0.6+t*0.35; pitch=-0.35+Math.sin(t*0.4)*0.25; roll=0.15+t*0.12; }
+    var W=c.width,H=c.height,vp=330,zc=900;
+    ctx.clearRect(0,0,W,H);
+    var P=V.map(function(p){var r=rot(p,yaw,pitch,roll); return [r[0],r[1],r[2]+zc];});
+    ctx.strokeStyle='#DCE6EE'; ctx.lineWidth=1.1; ctx.lineJoin='round';
+    for(var i=0;i<F.length;i++){
+      var f=F[i], a=P[f[0]], b=P[f[1]], d=P[f[2]];
+      // Draw3D rule: N = (v1->v2) x (v1->v0); visible when dot(v0 - cam, N) < 0, cam at origin
+      var e1=[d[0]-b[0],d[1]-b[1],d[2]-b[2]], e2=[a[0]-b[0],a[1]-b[1],a[2]-b[2]];
+      var n=[e1[1]*e2[2]-e1[2]*e2[1], e1[2]*e2[0]-e1[0]*e2[2], e1[0]*e2[1]-e1[1]*e2[0]];
+      if(a[0]*n[0]+a[1]*n[1]+a[2]*n[2] >= 0) continue;
+      ctx.beginPath();
+      for(var k=0;k<f.length;k++){ var p=P[f[k]]; var sx=W/2+p[0]*vp/p[2], sy=H/2-p[1]*vp/p[2]; if(k===0) ctx.moveTo(sx,sy); else ctx.lineTo(sx,sy); }
+      ctx.closePath(); ctx.stroke();
+    }
+    if(!reduce) requestAnimationFrame(draw);
+  }
+  if(reduce) draw(0); else requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

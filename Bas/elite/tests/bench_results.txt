@@ -1,0 +1,32 @@
+Elite Phase 0 benchmark results - PC3 (PicoMiteHDMIWEB V6.03.02b3, RP2350B, 378 MHz, PSRAM 6 MB, MODE 2 320x240 + FRAMEBUFFER F)
+Measured 2026-09-09 with bench.bas and bench2.bas.  Cobra Mk III mesh: 28 vertices, 17 faces.
+Per-ship figures exclude the CLS and the plain framebuffer copy.
+
+Fixed costs
+  CLS (F)                    0.10 ms
+  FRAMEBUFFER COPY F,N       0.08 ms
+  FRAMEBUFFER COPY F,N,B    16.55 ms   (paces to the 60 Hz frame; use it as the vsync)
+  Draw3D CREATE + CLOSE      0.19 ms   (spawn/kill per frame is free)
+  synthetic MVEIT x 8 ships  2.07 ms/frame  (3 Q_ROTATE, 1 Q_MULT, ~20 scalar statements per ship)
+
+Per ship, ms                z=300   z=500   z=900   z=2500     (z=300: Cobra ~275 px wide)
+  mode 0 wireframe           1.02    0.73    0.50    0.35
+  mode 1 solid               2.03    1.51    1.14    0.84   (8 ships at z=900: 1.35)
+  mode 2 hidden-line        21.15    6.95    1.25    0.48   (z-buffer 164 KB at z=300, from PSRAM)
+
+Whole frame, 8 ships at z=900 (draw + CLS + copy)
+  wireframe   4.1 ms      solid  10.9 ms      hidden-line  10.5 ms
+  4 ships at z=300: wireframe 4.4   solid 8.4   hidden-line 86.6
+
+Other checks
+  PLAY SOUND 1,B,S,440,20 accepted on the I2S path (proven feature per Peter; not an open item)
+  PSRAM present: OPTION PSRAM PIN GP47, MM.INFO(PSRAM SIZE) = 6291456
+  KEYDOWN: works as documented per Peter; up to 6 simultaneous keys like any USB keyboard,
+  subject to the keyboard's own matrix (ghosting depends on key positions). keytest.bas kept for key-map checks.
+  MAX3D=12 firmware: built and limit-checked, NOT flashed on this PC3 (still b3, 8 objects)
+
+Conclusion
+  Budget one 60 Hz frame (16.5 ms) per game iteration using COPY F,N,B as the pacer.
+  Wireframe with 8 drawn ships plus the MVEIT-sized update costs about 6-10 ms, so 60 fps is
+  realistic; solid ships fit 30 fps comfortably and 60 fps when few are close.  Hidden-line is
+  for the title screen only and needs PSRAM.
