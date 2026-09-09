@@ -4,7 +4,7 @@
 
 The 3D graphics system in PicoMite MMBasic provides commands and functions for creating, manipulating, and displaying three-dimensional objects on a 2D screen. The system uses quaternion-based rotation and supports features like:
 
-- Multiple 3D objects (up to 8 objects)
+- Multiple 3D objects (up to 12 objects)
 - Multiple cameras (up to 3 cameras)
 - Face-based rendering with depth sorting
 - Surface normal calculations for hidden face removal

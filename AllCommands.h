@@ -850,7 +850,7 @@ void fun_frame(void);
 	{(unsigned char *)"~(", T_FUN | T_INT | T_NBR | T_STR, 0, fun_tilde},
 #ifdef PICOMITEVGA
 #if (!defined(PICOMITEWEB) || defined(PICOMITEHDMIWEB)) && !defined(PICOMITEMIN)
-	{(unsigned char *)"DRAW3D(", T_FUN | T_INT, 0, fun_3D},
+	{(unsigned char *)"DRAW3D(", T_FUN | T_INT | T_NBR, 0, fun_3D},
 #endif
 	{(unsigned char *)"GetScanLine", T_FNA | T_INT, 0, fun_getscanline},
 	{(unsigned char *)"Map(", T_FUN | T_INT, 0, fun_map},

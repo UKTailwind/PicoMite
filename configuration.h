@@ -439,7 +439,7 @@ extern "C"
 #define MAXPID 8                   // Maximum PIDs
 #define MAX_ARG_COUNT 75           // Max arguments to PRINT, INPUT, WRITE, ON, DIM, ERASE, DATA, READ
 #define MAXCFUNCTION 20            // Maximum C functions
-#define MAX3D 8                    // Maximum 3D objects
+#define MAX3D 12                   // Maximum 3D objects (raised from 8 for the Elite port: station + 10-ship bubble)
 #define MAXCAM 3                   // Maximum cameras
 #define MAX_3D_POLYGON_VERTICES 20 // Maximum vertices in a polygon
 #define MAXBLITBUF 64              // Maximum blit buffers

@@ -300,7 +300,11 @@ void MIPS16 Free3DMemory(int i)
 void MIPS16 closeall3d(void)
 {
     int i;
-    for (i = 0; i < MAX3D; i++)
+    /* Objects are numbered 1..MAX3D (index 0 is unused); the old 0..MAX3D-1
+       bound skipped the last object, so it leaked and, because CloseAllFiles
+       calls this at program end, stayed as a dangling pointer into the next
+       run ("Object already exists" on CREATE, freed memory on SHOW). */
+    for (i = 1; i <= MAX3D; i++)
     {
         if (struct3d[i] != NULL)
         {
@@ -1026,6 +1030,8 @@ void MIPS16 cmd_3D(void)
         if (argc != 9)
             StandardError(2);
         int n = getint(argv[0], 1, MAX3D);
+        if (struct3d[n] == NULL)
+            StandardErrorParam(7, n);
         struct3d[n]->light.x = getint(argv[2], -32766, 32766);
         struct3d[n]->light.y = getint(argv[4], -32766, 32766);
         struct3d[n]->light.z = getint(argv[6], -32766, 32766);
@@ -1068,6 +1074,8 @@ void MIPS16 cmd_3D(void)
         if ((argc & 0b11) != 0b11)
             SyntaxError();
         int n = getint(argv[0], 1, MAX3D);
+        if (struct3d[n] == NULL)
+            StandardErrorParam(7, n);
         int flag = getint(argv[2], 0, 255);
         // step over the equals sign and get the value for the assignment
         for (i = 4; i < argc; i += 4)
@@ -1075,7 +1083,7 @@ void MIPS16 cmd_3D(void)
             face = getinteger(argv[i]);
             nbr = getinteger(argv[i + 2]);
 
-            if (nbr <= 0 || nbr > struct3d[n]->nf - face)
+            if (face < 0 || face >= struct3d[n]->nf || nbr <= 0 || nbr > struct3d[n]->nf - face)
                 SyntaxError();
 
             while (--nbr >= 0)
@@ -1140,6 +1148,8 @@ void MIPS16 cmd_3D(void)
         for (i = 0; i < argc; i += 2)
         {
             n = getint(argv[i], 1, MAX3D);
+            if (struct3d[n] == NULL)
+                StandardErrorParam(7, n);
             for (v = 0; v < struct3d[n]->nv; v++)
             {
                 memcpy(&struct3d[n]->q_vertices[v], &struct3d[n]->r_vertices[v], sizeof(s_quaternion));
