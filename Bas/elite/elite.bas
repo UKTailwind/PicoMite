@@ -542,42 +542,41 @@ END SUB
 ' ended up.
 SUB UpdatePlayer
   LOCAL INTEGER d
-  ' --- roll.  Pushing the opposite way from beyond centre snaps to
-  '     centre first, so a reversal is immediate rather than sluggish.
+  ' --- roll and pitch.  A held key pushes the rate away from centre, but
+  '     it cannot cross the centre in one press: if the step would take it
+  '     to the far side, it stops dead at centre instead.  That is the
+  '     original's auto-recentre, and it is what makes a reversal feel
+  '     crisp rather than sluggish.
   IF kRollL THEN
-    IF pRoll > JCENTRE THEN pRoll = JCENTRE
-    pRoll = pRoll - JROLLSTEP
-    IF pRoll < 1 THEN pRoll = 1
+    pRoll = Recentre(pRoll, -JROLLSTEP)
   ELSEIF kRollR THEN
-    IF pRoll < JCENTRE THEN pRoll = JCENTRE
-    pRoll = pRoll + JROLLSTEP
-    IF pRoll > 255 THEN pRoll = 255
+    pRoll = Recentre(pRoll, JROLLSTEP)
   ELSE
     pRoll = Spring(pRoll, JDAMPROLL)
   ENDIF
-
-  ' --- pitch
   IF kUp THEN
-    IF pPitch > JCENTRE THEN pPitch = JCENTRE
-    pPitch = pPitch - JPITCHSTEP
-    IF pPitch < 1 THEN pPitch = 1
+    pPitch = Recentre(pPitch, -JPITCHSTEP)
   ELSEIF kDn THEN
-    IF pPitch < JCENTRE THEN pPitch = JCENTRE
-    pPitch = pPitch + JPITCHSTEP
-    IF pPitch > 255 THEN pPitch = 255
+    pPitch = Recentre(pPitch, JPITCHSTEP)
   ELSE
     pPitch = Spring(pPitch, JDAMPPITCH)
   ENDIF
 
-  ' --- speed
-  IF kFaster THEN dSpeed = dSpeed + 1
+  ' --- speed.  The ceiling is tested before the increase but not before
+  '     the decrease, so holding both keys at full speed settles at one
+  '     below it rather than doing nothing.
+  IF kFaster THEN
+    IF dSpeed < MAXSPEED THEN dSpeed = dSpeed + 1
+  ENDIF
   IF kSlower THEN dSpeed = dSpeed - 1
-  IF dSpeed > MAXSPEED THEN dSpeed = MAXSPEED
-  IF dSpeed < 0 THEN dSpeed = 0
+  IF dSpeed < 1 THEN dSpeed = 1
 
   ' --- the rotation angles.  Both curves are deliberately non-linear:
-  '     small deflections are halved again, which gives fine control
-  '     near centre and a hard bank at the extremes.
+  '     small deflections are halved again, which gives fine control near
+  '     centre and a hard bank at the extremes.  Roll reaches 31/256 of a
+  '     radian a frame, pitch only 8/256, so a ship rolls nearly four
+  '     times as fast as it pitches - which is why Elite is flown by
+  '     rolling onto a target and then pulling.
   d = ABS(pRoll - JCENTRE)
   alp1 = d \ 4
   IF alp1 < 8 THEN alp1 = alp1 \ 2
@@ -592,12 +591,25 @@ SUB UpdatePlayer
   beta = bet2 * bet1 / ANGSCALE
 END SUB
 
+' Move a rate by one key step, stopping at the centre rather than through
+' it.  Returns the new value, clamped to the 1..255 range it lives in.
+FUNCTION Recentre(n AS INTEGER, dv AS INTEGER) AS INTEGER
+  LOCAL INTEGER v
+  v = n + dv
+  IF SGN(n - JCENTRE) <> 0 THEN
+    IF SGN(v - JCENTRE) <> SGN(n - JCENTRE) THEN v = JCENTRE
+  ENDIF
+  IF v < 1 THEN v = 1
+  IF v > 255 THEN v = 255
+  Recentre = v
+END FUNCTION
+
 ' The spring: move n one step per call towards the centre, without
 ' overshooting it.
-FUNCTION Spring(n AS INTEGER, steps AS INTEGER) AS INTEGER
+FUNCTION Spring(n AS INTEGER, nstep AS INTEGER) AS INTEGER
   LOCAL INTEGER v, i
   v = n
-  FOR i = 1 TO steps
+  FOR i = 1 TO nstep
     IF v > JCENTRE THEN
       v = v - 1
     ELSEIF v < JCENTRE THEN
@@ -643,11 +655,15 @@ SUB MoveShips
         sZ(n) = sZ(n) + qV(3) * qV(4) * sSpd(n) * NPCSPEED
       ENDIF
 
-      ' --- 2. acceleration is applied once and then forgotten
+      ' --- 2. acceleration is applied once and then forgotten.  The
+      '     original tests bit 7 of the raw eight bit sum, so anything
+      '     that lands in 128..255 is zeroed - an overshoot at the top
+      '     stops the ship dead rather than pinning it at maximum.
       IF sAcc(n) <> 0 THEN
-        sSpd(n) = sSpd(n) + sAcc(n)
-        IF sSpd(n) > bSpd(sBp(n)) THEN sSpd(n) = bSpd(sBp(n))
-        IF sSpd(n) < 1 THEN sSpd(n) = 1
+        mag = sSpd(n) + sAcc(n)
+        IF mag < 0 OR mag > 127 THEN mag = 0
+        IF mag > bSpd(sBp(n)) THEN mag = bSpd(sBp(n))
+        sSpd(n) = mag
         sAcc(n) = 0
       ENDIF
 

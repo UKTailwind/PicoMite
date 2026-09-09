@@ -28,6 +28,7 @@ error on off gosub goto return select case exit erase peek poke var save load ru
 
 DECL = re.compile(r"^\s*(?:DIM|LOCAL|CONST|STATIC)\s+(.*)$", re.I)
 SUBDEF = re.compile(r"^\s*(SUB|FUNCTION)\s+([A-Za-z_][A-Za-z0-9_]*)", re.I)
+PARAMS = re.compile(r"^\s*(?:SUB|FUNCTION)\s+[A-Za-z_][A-Za-z0-9_$%!]*\s*\((.*?)\)", re.I)
 
 
 def base_name(tok):
@@ -75,6 +76,20 @@ def check(text):
     for n, i, ln in declared_names(text):
         if n in RESERVED:
             problems.append("line %d: '%s' is a reserved word: %s" % (i, n, ln))
+
+    # A reserved word used as a SUB/FUNCTION parameter breaks the whole
+    # definition, and MMBasic then reports "Variable name" at the CALL site,
+    # which is nowhere near the real fault.  Worth catching here.
+    for i, ln in enumerate(lines, 1):
+        m = PARAMS.match(ln.split("'")[0])
+        if not m:
+            continue
+        for prm in m.group(1).split(","):
+            prm = re.sub(r"\s+AS\s+\w+", "", prm, flags=re.I)
+            nm = base_name(prm)
+            if nm in RESERVED:
+                problems.append("line %d: parameter '%s' is a reserved word "
+                                "(the caller will fail with 'Variable name'): %s" % (i, nm, ln.strip()))
 
     # duplicate global declarations (suffix-insensitive); LOCALs are per-SUB so track scope
     scope, seen = "(main)", {}

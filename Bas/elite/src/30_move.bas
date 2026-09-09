@@ -34,11 +34,15 @@ SUB MoveShips
         sZ(n) = sZ(n) + qV(3) * qV(4) * sSpd(n) * NPCSPEED
       ENDIF
 
-      ' --- 2. acceleration is applied once and then forgotten
+      ' --- 2. acceleration is applied once and then forgotten.  The
+      '     original tests bit 7 of the raw eight bit sum, so anything
+      '     that lands in 128..255 is zeroed - an overshoot at the top
+      '     stops the ship dead rather than pinning it at maximum.
       IF sAcc(n) <> 0 THEN
-        sSpd(n) = sSpd(n) + sAcc(n)
-        IF sSpd(n) > bSpd(sBp(n)) THEN sSpd(n) = bSpd(sBp(n))
-        IF sSpd(n) < 1 THEN sSpd(n) = 1
+        mag = sSpd(n) + sAcc(n)
+        IF mag < 0 OR mag > 127 THEN mag = 0
+        IF mag > bSpd(sBp(n)) THEN mag = bSpd(sBp(n))
+        sSpd(n) = mag
         sAcc(n) = 0
       ENDIF
 
