@@ -90,7 +90,7 @@ FUNCTION NewShip(t AS INTEGER, x AS FLOAT, y AS FLOAT, z AS FLOAT, q() AS FLOAT)
 
   sTyp(n) = t
   sX(n) = x : sY(n) = y : sZ(n) = z
-  FOR i = 0 TO 4 : sQ(i, n) = q(i) : NEXT i
+  MATH INSERT sQ(), , n, q()
   sQ(4, n) = 1                      ' Draw3D scales by this squared
   sObj(n) = 0
   sSpd(n) = 0 : sAcc(n) = 0 : sRol(n) = 0 : sPit(n) = 0
@@ -129,7 +129,8 @@ SUB CopySlot(d AS INTEGER, s AS INTEGER)
   LOCAL INTEGER i
   sTyp(d) = sTyp(s) : sBp(d) = sBp(s) : sObj(d) = sObj(s)
   sX(d) = sX(s) : sY(d) = sY(s) : sZ(d) = sZ(s)
-  FOR i = 0 TO 4 : sQ(i, d) = sQ(i, s) : NEXT i
+  MATH SLICE sQ(), , s, qA()
+  MATH INSERT sQ(), , d, qA()
   sSpd(d) = sSpd(s) : sAcc(d) = sAcc(s)
   sRol(d) = sRol(s) : sPit(d) = sPit(s)
   sEne(d) = sEne(s) : sAI(d) = sAI(s) : sFlg(d) = sFlg(s)
@@ -183,13 +184,16 @@ END SUB
 
 ' The ship's orientation seen from the current view.  Leaves the result
 ' in qC() ready for Draw3D ROTATE.
+' MATH SLICE lifts one ship's quaternion out of the 5 x NSLOT table in a
+' single call, and a whole-array assignment copies one in a single memcpy;
+' both replace five interpreted statements, which is what this costs when
+' it runs for every ship every frame.
 SUB ViewOrient(n AS INTEGER)
-  LOCAL INTEGER i
-  FOR i = 0 TO 4 : qA(i) = sQ(i, n) : NEXT i
+  MATH SLICE sQ(), , n, qA()
   IF vw = 0 THEN
-    FOR i = 0 TO 4 : qC(i) = qA(i) : NEXT i
+    qC() = qA()
   ELSE
-    FOR i = 0 TO 4 : qB(i) = vwQ(i, vw) : NEXT i
+    MATH SLICE vwQ(), , vw, qB()
     MATH Q_MULT qB(), qA(), qC()
   ENDIF
   qC(4) = 1

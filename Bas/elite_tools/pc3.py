@@ -17,6 +17,7 @@ BAUD = 115200
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[=>]|\r")
 CHAR_GAP = 0.002
 LINE_GAP = 0.03
+FAST_LINE_GAP = 0.006   # AUTOSAVE N: no echo coming back, so lines can go out quickly
 
 
 class PC3:
@@ -92,15 +93,19 @@ class PC3:
     def upload(self, source, timeout=30.0):
         """AUTOSAVE the source into program memory."""
         self.drain(0.05)
-        self.send_line("AUTOSAVE")
+        # The N suppresses the console echo for the transfer, so the device is
+        # not sending every character back while we are still talking.  That
+        # removes the reason for pacing characters, and a whole line can go out
+        # in a single write.
+        self.send_line("AUTOSAVE N")
         time.sleep(0.4)
         self.drain(0.2)
         n = 0
         for raw in source.splitlines():
-            self.send_raw(raw.rstrip("\r\n") + "\r")
+            self.s.write((raw.rstrip("\r\n") + "\r").encode("latin-1"))
             n += 1
-            time.sleep(LINE_GAP)
-            if n % 10 == 0:
+            time.sleep(FAST_LINE_GAP)
+            if n % 32 == 0:
                 self._read()
         time.sleep(0.2)
         self.s.write(b"\x1a")  # Ctrl-Z

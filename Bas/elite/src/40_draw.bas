@@ -6,20 +6,25 @@
 '  the shapes it produced.
 ' =====================================================================
 
-CONST NEARZ = 32                   ' nearer than this and nothing is drawn
-CONST FARXY = 30000                ' Draw3D clamps its offsets at +-32766
-CONST BANDDIV = 2048               ' distance -> the 0..31 visibility band
-CONST NSTAR = 18                   ' stardust particles, as the original
-
-DIM FLOAT stX(NSTAR-1), stY(NSTAR-1), stZ(NSTAR-1)
-
 SUB DrawFrame
-  CLS
-  DrawStardust
-  DrawPlanetSun
-  DrawShips
-  DrawDash
+  LOCAL FLOAT t
+  IF PROFILE THEN
+    t = TIMER : CLS           : prof(0) = prof(0) + TIMER - t
+    t = TIMER : DrawStardust  : prof(1) = prof(1) + TIMER - t
+    t = TIMER : DrawPlanetSun : prof(2) = prof(2) + TIMER - t
+    t = TIMER : DrawShips     : prof(3) = prof(3) + TIMER - t
+    t = TIMER : DrawDash      : prof(4) = prof(4) + TIMER - t
+    ViewName
+  ELSE
+    CLS
+    DrawStardust
+    DrawPlanetSun
+    DrawShips
+    DrawDash
+    ViewName
+  ENDIF
 END SUB
+
 
 ' A ship is drawn as its mesh when it is close enough and an object is
 ' free for it, and as a single dot otherwise - which is exactly the
@@ -39,7 +44,7 @@ SUB DrawShips
           Draw3D WRITE sObj(n), tx, ty, tz, 0, solidMode
         ELSE
           IF px >= 0 AND px < SCRW AND py >= 0 AND py < VIEWH THEN
-            PIXEL px, py, RGB(WHITE)
+            PIXEL px, py, cWhite
           ENDIF
         ENDIF
       ENDIF
@@ -85,35 +90,33 @@ END SUB
 SUB InitStardust
   LOCAL INTEGER i
   FOR i = 0 TO NSTAR - 1
-    NewStar i
+    stX(i) = (RND * 2 - 1) * 116
+    stY(i) = (RND * 2 - 1) * 116
     stZ(i) = 1 + RND * 255
+    spc(i) = RGB(WHITE)
   NEXT i
-END SUB
-
-SUB NewStar(i AS INTEGER)
-  stX(i) = (RND * 2 - 1) * 116
-  stY(i) = (RND * 2 - 1) * 116
-  stZ(i) = 144 + RND * 111
 END SUB
 
 SUB DrawStardust
-  LOCAL INTEGER i, px, py
-  LOCAL FLOAT q
+  LOCAL INTEGER i
+  LOCAL FLOAT q, x, y, z
   FOR i = 0 TO NSTAR - 1
-    ' move towards the viewer at the player's speed, and swing with the
-    ' player's roll and pitch
-    q = dSpeed / stZ(i)
-    stZ(i) = stZ(i) - dSpeed * 0.25
-    stX(i) = stX(i) + stX(i) * q
-    stY(i) = stY(i) + stY(i) * q
-    stY(i) = stY(i) + alpha * stX(i) * 4
-    stX(i) = stX(i) - alpha * stY(i) * 4
-    stY(i) = stY(i) - beta * 256
-    IF ABS(stX(i)) >= 116 OR ABS(stY(i)) >= 116 OR stZ(i) < 16 THEN NewStar i
-    px = VCX + stX(i)
-    py = VCY - stY(i)
-    IF px >= 0 AND px < SCRW AND py >= 0 AND py < VIEWH THEN
-      PIXEL px, py, RGB(WHITE)
+    x = stX(i) : y = stY(i) : z = stZ(i)
+    ' perspective: the nearer a particle is, the faster it flies outwards
+    q = dSpeed / z
+    z = z - dSpeed * 0.25
+    x = x + x * q
+    y = y + y * q + alpha * x * 4 - beta * 256
+    x = x - alpha * y * 4
+    IF ABS(x) >= 116 OR ABS(y) >= 116 OR z < 16 THEN
+      x = (RND * 2 - 1) * 116
+      y = (RND * 2 - 1) * 116
+      z = 144 + RND * 111
     ENDIF
+    stX(i) = x : stY(i) = y : stZ(i) = z
+    spx(i) = VCX + x
+    spy(i) = VCY - y
   NEXT i
+  ' The array form draws the whole field in one call, and clips for us.
+  PIXEL spx(), spy(), spc()
 END SUB

@@ -8,10 +8,6 @@
 '  its own roll and pitch counters.  This SUB is the whole of that.
 ' =====================================================================
 
-CONST SELFROT = 0.0625             ' a ship's own roll / pitch, radians per frame
-CONST NPCSPEED = 1.5               ' a ship of speed s moves 1.5 * s per frame
-CONST TIDYEVERY = 16               ' renormalise one ship's orientation this often
-
 SUB MoveShips
   LOCAL INTEGER n, i, mag, dir, gone
   LOCAL FLOAT k
@@ -60,7 +56,7 @@ SUB MoveShips
 
       ' --- 5. the same rotation applied to the ship's orientation
       IF sBp(n) >= 0 THEN
-        FOR i = 0 TO 4 : qA(i) = sQ(i, n) : NEXT i
+        MATH SLICE sQ(), , n, qA()
         MATH Q_MULT qP(), qA(), qC()
 
         ' --- 6. the ship's own roll and pitch counters.  Bits 0 to 6
@@ -72,7 +68,7 @@ SUB MoveShips
           dir = 1
           IF (sPit(n) AND 128) <> 0 THEN dir = -1
           MATH Q_CREATE dir * SELFROT, 1, 0, 0, qB()
-          FOR i = 0 TO 4 : qA(i) = qC(i) : NEXT i
+          qA() = qC()
           MATH Q_MULT qA(), qB(), qC()
           IF mag <> 127 THEN sPit(n) = (mag - 1) OR (sPit(n) AND 128)
         ENDIF
@@ -81,12 +77,12 @@ SUB MoveShips
           dir = 1
           IF (sRol(n) AND 128) <> 0 THEN dir = -1
           MATH Q_CREATE dir * SELFROT, 0, 0, 1, qB()
-          FOR i = 0 TO 4 : qA(i) = qC(i) : NEXT i
+          qA() = qC()
           MATH Q_MULT qA(), qB(), qC()
           IF mag <> 127 THEN sRol(n) = (mag - 1) OR (sRol(n) AND 128)
         ENDIF
 
-        FOR i = 0 TO 4 : sQ(i, n) = qC(i) : NEXT i
+        MATH INSERT sQ(), , n, qC()
         sQ(4, n) = 1
         ' The original tidies one ship's orientation vectors every 16
         ' frames to stop rounding error accumulating; a quaternion needs
@@ -113,7 +109,7 @@ END SUB
 ' A ship's own +Z axis is its nose.
 SUB NoseVec(n AS INTEGER)
   LOCAL INTEGER i
-  FOR i = 0 TO 4 : qA(i) = sQ(i, n) : NEXT i
+  MATH SLICE sQ(), , n, qA()
   MATH Q_VECTOR 0, 0, 1, qB()
   MATH Q_ROTATE qA(), qB(), qV()
 END SUB

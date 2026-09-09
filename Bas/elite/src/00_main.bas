@@ -20,6 +20,17 @@
 '
 '  Built by elite_tools/build.py from src/*.bas - do not edit elite.bas.
 ' =====================================================================
+' The trace cache compiles each statement to bytecode on its first run and
+' replays it thereafter, which removes the variable-name lookups and the
+' re-parsing that dominate an interpreted frame loop.  It has to come before
+' OPTION EXPLICIT and the DIMs, because those invalidate its entries.  The
+' two named SUBs are the per-particle and per-contact loops, where the same
+' handful of statements run hundreds of times a frame.
+OPTION TRACECACHE ON 80             ' rounded up to 128 slots by the firmware
+OPTION CACHE DEBUG ON
+'OPTION PROFILING ON                ' [PERF] report of the hottest statements
+OPTION CACHE SUB DrawStardust, DrawScanner
+
 OPTION EXPLICIT
 OPTION BASE 0
 OPTION DEFAULT NONE
@@ -30,6 +41,7 @@ CONST VIEWH = 176                  ' space view occupies rows 0..VIEWH-1
 CONST VCX = 160, VCY = 88          ' space view centre
 CONST DASHY = 176                  ' first dashboard row
 CONST VPLANE = 256                 ' focal length in pixels, as the BBC
+CONST DEMOFRAMES = 260             ' >0 runs a scripted demo and exits; 0 plays
 CONST PANY = VCY - (SCRH \ 2 - 1)  ' shifts Draw3D's centre up to VCY
 
 ' ------------------------------------------------------- universe size
@@ -84,6 +96,7 @@ DIM INTEGER tBp(13)                ' ship type 1..13 -> blueprint index
 DIM FLOAT mV(2, 39), mNrm(2, 15)
 DIM INTEGER mFc(31), mHost(31), mF(159), mEc(31), mFl(31)
 DIM INTEGER col(6)
+DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cGrey
 
 ' Draw3D object pool.  objOwn(n) is the slot that owns object n, or -1.
 DIM INTEGER maxObj, objOwn(15)
@@ -96,87 +109,51 @@ DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
 DIM INTEGER kView, kPause
 
 ' Frame timing.
-DIM FLOAT frameMs, tFrame
+DIM FLOAT frameMs, tFrame, tStage
 DIM INTEGER frames
+
+DIM FLOAT prof(5)                  ' cls, stardust, planet, ships, dash, move
 
 ' Rendering options and the view transform's output.
 DIM INTEGER solidMode, showDot
 DIM FLOAT tx, ty, tz
 
-' ============================================================ start up
-SetupScreen
-LoadStats
-ProbeObjects
-SetupViews
-TestScene
+' ------------------------ constants belonging to the other modules
+' MMBasic executes CONST and DIM, so every one of them has to run before
+' the main flow reaches END - they cannot live beside the SUBs that use
+' them further down the file.
 
-frames = 0
-tFrame = TIMER
-DO
-  ReadKeys
-  IF kQuit THEN EXIT DO
-  UpdatePlayer
-  MoveShips
-  DrawFrame
-  FRAMEBUFFER COPY F, N, B
-  mcnt = (mcnt + 1) AND 255
-  frames = frames + 1
-LOOP
-frameMs = (TIMER - tFrame) / frames
+' --- the original's control constants, all in units per frame
+CONST JCENTRE = 128                ' the centre of the 1..255 range
+CONST JROLLSTEP = 7                ' a held roll key moves JSTX this far
+CONST JPITCHSTEP = 14              ' a held pitch key moves JSTY this far
+CONST JDAMPROLL = 2                ' the spring pulls roll back this fast
+CONST JDAMPPITCH = 1               ' and pitch this fast
+CONST MAXSPEED = 40                ' DELTA's ceiling
+CONST ANGSCALE = 256               ' ALP1 / 256 is the angle in radians
 
-CloseAll
-FRAMEBUFFER CLOSE
-MODE 1
-PRINT "frames"; frames; "  average"; STR$(frameMs, 4, 2); " ms"
-END
+CONST SELFROT = 0.0625             ' a ship's own roll / pitch, radians per frame
+CONST NPCSPEED = 1.5               ' a ship of speed s moves 1.5 * s per frame
+CONST TIDYEVERY = 16               ' renormalise one ship's orientation this often
 
-' ============================================================ set up
-SUB SetupScreen
-  MODE 2
-  FRAMEBUFFER CREATE
-  FRAMEBUFFER WRITE F
-  ' Draw3D's own centre is (W/2, H/2-1); pany lifts it to the space
-  ' view's centre so ships sit above the dashboard, not behind it.
-  Draw3D CAMERA 1, VPLANE, 0, 0, 0, PANY
-  col(0) = RGB(WHITE) : col(1) = RGB(GRAY) : col(2) = RGB(BLUE)
-  col(3) = RGB(GREEN) : col(4) = RGB(RED) : col(5) = RGB(MAGENTA)
-  col(6) = RGB(CYAN)
-END SUB
+CONST NEARZ = 32                   ' nearer than this and nothing is drawn
+CONST FARXY = 30000                ' Draw3D clamps its offsets at +-32766
+CONST BANDDIV = 2048               ' distance -> the 0..31 visibility band
+CONST NSTAR = 18                   ' stardust particles, as the original
 
-' The four views are rotations of the whole universe about the vertical
-' axis: front none, rear 180, left +90, right -90.  Positions are
-' transformed by hand in ViewXform (three assignments beat a quaternion
-' multiply); orientations are pre-multiplied by these.
-SUB SetupViews
-  LOCAL INTEGER i
-  MATH Q_EULER 0, 0, 0, qA()      : FOR i = 0 TO 4 : vwQ(i, 0) = qA(i) : NEXT i
-  MATH Q_CREATE RAD(180), 0, 1, 0, qA() : FOR i = 0 TO 4 : vwQ(i, 1) = qA(i) : NEXT i
-  MATH Q_CREATE RAD(90), 0, 1, 0, qA()  : FOR i = 0 TO 4 : vwQ(i, 2) = qA(i) : NEXT i
-  MATH Q_CREATE RAD(-90), 0, 1, 0, qA() : FOR i = 0 TO 4 : vwQ(i, 3) = qA(i) : NEXT i
-END SUB
+DIM FLOAT stX(NSTAR-1), stY(NSTAR-1), stZ(NSTAR-1)
+DIM INTEGER spx(NSTAR-1), spy(NSTAR-1), spc(NSTAR-1)
+DIM INTEGER lastBar(12)
 
-' How many Draw3D objects does this firmware allow?  MAX3D was 8 and is
-' 12 in the current build; creating one past the limit raises an error,
-' so ask rather than assume.
-SUB ProbeObjects
-  LOCAL INTEGER n
-  LoadMesh 0
-  maxObj = 8
-  FOR n = 9 TO 15
-    ON ERROR SKIP 1
-    Draw3D CREATE n, bNv(0), bNf(0), 1, mV(), mFc(), mF(), col(), mEc()
-    IF MM.ERRNO <> 0 THEN EXIT FOR
-    Draw3D CLOSE n
-    maxObj = n
-  NEXT n
-  ON ERROR CLEAR
-  FOR n = 0 TO 15 : objOwn(n) = -1 : NEXT n
-END SUB
+CONST BARW = 50                    ' the drawn part of an indicator bar
+CONST BARH = 5
+CONST LX = 20                      ' left column bars start here
+CONST RX = 250                     ' right column bars start here
+CONST SCX = 160                    ' scanner centre
+CONST SCY = 210
+CONST SCA = 70                     ' scanner semi-axis across
+CONST SCB = 17                     ' and down
+CONST CPX = 300                    ' compass centre
+CONST CPY = 186
+CONST PROFILE = 1                  ' accumulate per-stage frame times
 
-SUB CloseAll
-  LOCAL INTEGER n
-  FOR n = 1 TO maxObj
-    IF objOwn(n) >= 0 THEN Draw3D CLOSE n
-    objOwn(n) = -1
-  NEXT n
-END SUB

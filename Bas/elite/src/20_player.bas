@@ -9,15 +9,6 @@
 '  direct key-to-angle mapping.
 ' =====================================================================
 
-' --- the original's control constants, all in units per frame
-CONST JCENTRE = 128                ' the centre of the 1..255 range
-CONST JROLLSTEP = 7                ' a held roll key moves JSTX this far
-CONST JPITCHSTEP = 14              ' a held pitch key moves JSTY this far
-CONST JDAMPROLL = 2                ' the spring pulls roll back this fast
-CONST JDAMPPITCH = 1               ' and pitch this fast
-CONST MAXSPEED = 40                ' DELTA's ceiling
-CONST ANGSCALE = 256               ' ALP1 / 256 is the angle in radians
-
 SUB ReadKeys
   LOCAL INTEGER i, k
   LOCAL kb$ LENGTH 2

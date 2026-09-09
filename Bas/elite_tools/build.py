@@ -120,7 +120,12 @@ def check(text):
             if w in CLOSERS and prev != "EXIT":
                 depth[CLOSERS[w]] -= 1
             elif w in OPENERS and prev not in ("END", "EXIT"):
-                # "DO" also appears in nothing else; "SELECT" only opens.
+                # A SUB or FUNCTION definition is always the first word of its
+                # line; the word also appears inside OPTION CACHE SUB and in
+                # EXIT SUB, neither of which opens a block.  FOR, DO and
+                # SELECT can legitimately start a statement mid-line.
+                if w in ("SUB", "FUNCTION") and j != 0:
+                    continue
                 depth[OPENERS[w]] += 1
             elif prev == "END" and w in depth:
                 depth[w] -= 1
