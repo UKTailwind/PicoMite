@@ -69,9 +69,13 @@ END SUB
 SUB DemoInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
+  kTarget = 0 : kMissile = 0 : kECM = 0
   SELECT CASE f
     CASE 0 TO 9     : kFaster = 1                  ' ease forward only
-    CASE 20 TO 240  : kFire = 1                    ' hold the trigger down
+    CASE 20 TO 120  : kFire = 1                    ' hold the trigger down
+    CASE 130        : kTarget = 1                  ' lock on
+    CASE 132        : kMissile = 1                 ' and launch
+    CASE 200        : kECM = 1                     ' burst the E.C.M.
     CASE 160 TO 179 : vw = 1                       ' look behind
     CASE 180 TO 199 : vw = 3                       ' and to the right
     CASE 200 TO 209 : vw = 0

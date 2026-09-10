@@ -18,11 +18,16 @@ DO
   IF kQuit OR dead THEN EXIT DO
   UpdatePlayer
   IF kFire THEN FireLaser
+  IF kTarget THEN TargetMissile
+  IF kMissile THEN LaunchMissile
+  IF kECM THEN FireECM
   IF lasTimer > 0 THEN lasTimer = lasTimer - 1
   IF lasFlash > 0 THEN lasFlash = lasFlash - 1
   tStage = TIMER
   MoveShips
+  Missiles
   Tactics
+  ECMService
   Recharge
   StationCheck
   prof(5) = prof(5) + TIMER - tStage
@@ -37,6 +42,7 @@ DO
 LOOP
 frameMs = (TIMER - tFrame) / frames
 
+IF dead THEN DeathScreen : PAUSE 1500
 CloseAll
 FRAMEBUFFER CLOSE
 MODE 1
@@ -44,6 +50,7 @@ PRINT "frames"; frames; "  average"; STR$(frameMs, 4, 2); " ms per frame"
 PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10; " Cr  rank "; RankName$()
 PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
 PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
+PRINT "missiles left"; pMissl; "  legal status "; LegalName$()
 IF PROFILE THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"

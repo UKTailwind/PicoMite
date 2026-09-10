@@ -67,6 +67,8 @@ SUB Explode(n AS INTEGER)
   ' things and half a credit for an asteroid.
   kills = kills + 1
   cashTenths = cashTenths + bBty(sBp(n))
+  NoteKill n
+  EjectCargo n
   DropObject n
 END SUB
 

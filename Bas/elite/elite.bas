@@ -81,6 +81,7 @@ DIM FLOAT sX(NSLOT-1), sY(NSLOT-1), sZ(NSLOT-1)
 DIM FLOAT sQ(4, NSLOT-1)           ' orientation quaternion w,x,y,z,m
 DIM INTEGER sSpd(NSLOT-1), sAcc(NSLOT-1), sRol(NSLOT-1), sPit(NSLOT-1)
 DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1), sExp(NSLOT-1)
+DIM INTEGER sTgt(NSLOT-1)   ' a missile's quarry: a slot, or -2 for us
 DIM INTEGER nUsed                  ' slots in use, 0..NSLOT
 
 ' Ship blueprint statistics, indexed by blueprint 0..NBP-1.
@@ -106,7 +107,7 @@ DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 
 ' Keyboard flags, refreshed once per frame.
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
-DIM INTEGER kView, kPause
+DIM INTEGER kView, kPause, kTarget, kMissile, kECM
 
 ' Frame timing.
 DIM FLOAT frameMs, tFrame, tStage
@@ -132,6 +133,9 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 ' how hot it has got.
 CONST LASPULSE = 4                 ' frames between pulse laser shots
 DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+CONST MSTURN = 0.22                ' how hard a missile swings onto a bearing
+CONST ECMFRAMES = 24               ' how long one burst runs, and drains energy
+DIM INTEGER msLock, ecmActive, legal
 
 ' Arrival distances are in units of the step the original's sign byte moves in.
 CONST UNIT = 65536                 ' one step of the original's sign byte
@@ -239,11 +243,16 @@ DO
   IF kQuit OR dead THEN EXIT DO
   UpdatePlayer
   IF kFire THEN FireLaser
+  IF kTarget THEN TargetMissile
+  IF kMissile THEN LaunchMissile
+  IF kECM THEN FireECM
   IF lasTimer > 0 THEN lasTimer = lasTimer - 1
   IF lasFlash > 0 THEN lasFlash = lasFlash - 1
   tStage = TIMER
   MoveShips
+  Missiles
   Tactics
+  ECMService
   Recharge
   StationCheck
   prof(5) = prof(5) + TIMER - tStage
@@ -251,7 +260,6 @@ DO
   FRAMEBUFFER COPY F, N, B
   mcnt = (mcnt + 1) AND 255
   frames = frames + 1
-  IF frames = 15 THEN DumpSlots
   IF DEMOFRAMES > 0 THEN
     IF frames = 40 OR frames = 80 OR frames = 120 OR frames = 250 THEN SaveShot frames
     IF frames >= DEMOFRAMES THEN EXIT DO
@@ -259,6 +267,7 @@ DO
 LOOP
 frameMs = (TIMER - tFrame) / frames
 
+IF dead THEN DeathScreen : PAUSE 1500
 CloseAll
 FRAMEBUFFER CLOSE
 MODE 1
@@ -266,6 +275,7 @@ PRINT "frames"; frames; "  average"; STR$(frameMs, 4, 2); " ms per frame"
 PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10; " Cr  rank "; RankName$()
 PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
 PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
+PRINT "missiles left"; pMissl; "  legal status "; LegalName$()
 IF PROFILE THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"
@@ -569,6 +579,7 @@ SUB ReadKeys
   LOCAL kb$ LENGTH 2
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
+  kTarget = 0 : kMissile = 0 : kECM = 0
   kView = -1 : kPause = 0
   ' INKEY$ first: every KEYDOWN call empties the console input buffer.
   kb$ = INKEY$
@@ -1196,7 +1207,7 @@ SUB DrawDash
   Bar DL, DLY(3), pCabT \ 16, 11, cRed, cYellow
   Bar DL, DLY(4), pLasT \ 16, 11, cRed, cYellow
   Bar DL, DLY(5), pAltit \ 16, 99, cRed, cYellow            ' 99 is unreachable
-  Missiles
+  MissileBlocks
   DrawScanner
   DrawCompass
 END SUB
@@ -1228,7 +1239,7 @@ SUB Pointer(x AS INTEGER, y AS INTEGER, p AS INTEGER)
 END SUB
 
 ' Four missile blocks, filled from the left as missiles are carried.
-SUB Missiles
+SUB MissileBlocks
   LOCAL INTEGER i, c
   FOR i = 0 TO 3
     c = cBlack
@@ -1373,9 +1384,13 @@ END SUB
 SUB DemoInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
+  kTarget = 0 : kMissile = 0 : kECM = 0
   SELECT CASE f
     CASE 0 TO 9     : kFaster = 1                  ' ease forward only
-    CASE 20 TO 240  : kFire = 1                    ' hold the trigger down
+    CASE 20 TO 120  : kFire = 1                    ' hold the trigger down
+    CASE 130        : kTarget = 1                  ' lock on
+    CASE 132        : kMissile = 1                 ' and launch
+    CASE 200        : kECM = 1                     ' burst the E.C.M.
     CASE 160 TO 179 : vw = 1                       ' look behind
     CASE 180 TO 199 : vw = 3                       ' and to the right
     CASE 200 TO 209 : vw = 0
@@ -1959,6 +1974,8 @@ SUB Explode(n AS INTEGER)
   ' things and half a credit for an asteroid.
   kills = kills + 1
   cashTenths = cashTenths + bBty(sBp(n))
+  NoteKill n
+  EjectCargo n
   DropObject n
 END SUB
 
@@ -2133,6 +2150,190 @@ FUNCTION RankName$()
     RankName$ = "ELITE"
   ENDIF
 END FUNCTION
+
+' =====================================================================
+'  Missiles, E.C.M., cargo and consequences
+'
+'  A missile is a ship like any other, with its own blueprint and its own
+'  place in the bubble.  What makes it a missile is that it runs its
+'  tactics every single frame instead of one frame in eight, so it turns
+'  faster than anything it chases, and that reaching its target destroys
+'  them both.
+'
+'  It is stopped by one thing only: an E.C.M. burst destroys every missile
+'  in the bubble, whoever fired it.  That is why a ship carrying E.C.M.
+'  is so much harder to kill with missiles, and why firing one at a
+'  Thargoid is usually a waste.
+' =====================================================================
+
+' Lock on to whatever is lined up, the same alignment test the laser uses.
+SUB TargetMissile
+  LOCAL INTEGER n, best, bestz
+  IF pMissl = 0 THEN EXIT SUB
+  best = -1 : bestz = 999999
+  FOR n = 2 TO nUsed - 1
+    IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 AND sTyp(n) <> T_MISSILE THEN
+      IF sZ(n) > 0 AND sZ(n) < bestz THEN
+        IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 THEN
+          IF sX(n) * sX(n) + sY(n) * sY(n) < bArea(sBp(n)) THEN
+            best = n : bestz = sZ(n)
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+  NEXT n
+  IF best >= 0 THEN msLock = best
+END SUB
+
+' Launch one at whatever is locked.  It appears just ahead of us already
+' pointing the right way and moving faster than anything it chases.
+SUB LaunchMissile
+  LOCAL INTEGER n
+  IF pMissl = 0 OR msLock < 0 THEN EXIT SUB
+  IF sTyp(msLock) = 0 OR sExp(msLock) > 0 THEN msLock = -1 : EXIT SUB
+  MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_MISSILE, 0, -28, 200, qA())
+  IF n < 0 THEN EXIT SUB
+  sSpd(n) = bSpd(sBp(n))
+  sAI(n) = 128 OR 126               ' as aggressive as anything gets
+  sTgt(n) = msLock
+  pMissl = pMissl - 1
+  msLock = -1
+END SUB
+
+' Everything a missile does, every frame.  It turns towards whatever it is
+' chasing and goes off when it gets there.
+SUB Missiles
+  LOCAL INTEGER n, t
+  LOCAL FLOAT dx, dy, dz, d
+  FOR n = 2 TO nUsed - 1
+    IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN
+      t = sTgt(n)
+      ' The target may have died, or been shuffled down the table.
+      IF t < 0 OR t >= nUsed THEN
+        Explode n
+      ELSEIF sTyp(t) = 0 OR sExp(t) > 0 THEN
+        Explode n
+      ELSE
+        dx = sX(t) - sX(n) : dy = sY(t) - sY(n) : dz = sZ(t) - sZ(n)
+        d = SQR(dx * dx + dy * dy + dz * dz)
+        IF d < 256 THEN
+          ' Close enough: both of them go.
+          Explode n
+          IF sTyp(t) <> T_STATION THEN
+            sEne(t) = 0
+            Explode t
+          ENDIF
+        ELSE
+          HomeOn n, dx, dy, dz, d
+        ENDIF
+      ENDIF
+    ENDIF
+  NEXT n
+  ' A missile aimed at us behaves the same way, but there is nothing in a
+  ' slot to chase - we are the origin.
+  FOR n = 2 TO nUsed - 1
+    IF sTyp(n) = T_MISSILE AND sExp(n) = 0 AND sTgt(n) = -2 THEN
+      d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
+      IF d < 256 THEN
+        Explode n
+        IF d < 128 THEN HitPlayer 250 ELSE HitPlayer 80
+      ELSE
+        HomeOn n, -sX(n), -sY(n), -sZ(n), d
+      ENDIF
+    ENDIF
+  NEXT n
+END SUB
+
+' Swing a missile onto a bearing.  It turns hard, which is what makes one
+' so difficult to shake off without E.C.M.
+SUB HomeOn(n AS INTEGER, dx AS FLOAT, dy AS FLOAT, dz AS FLOAT, d AS FLOAT)
+  LOCAL FLOAT nx, ny, nz, ax, ay, az, m
+  IF d < 1 THEN EXIT SUB
+  NoseVec n
+  nx = qV(1) * qV(4) : ny = qV(2) * qV(4) : nz = qV(3) * qV(4)
+  ' Turn the nose towards the bearing by a fixed fraction each frame.
+  nx = nx + (dx / d - nx) * MSTURN
+  ny = ny + (dy / d - ny) * MSTURN
+  nz = nz + (dz / d - nz) * MSTURN
+  m = SQR(nx * nx + ny * ny + nz * nz)
+  IF m < 0.0001 THEN EXIT SUB
+  nx = nx / m : ny = ny / m : nz = nz / m
+  ' Rebuild an orientation whose nose is that direction: the axis is the
+  ' cross product of the ship's own forward axis with the new bearing.
+  ax = -ny : ay = nx : az = 0
+  m = SQR(ax * ax + ay * ay)
+  IF m < 0.0001 THEN
+    MATH Q_EULER 0, 0, 0, qA()
+  ELSE
+    MATH Q_CREATE ACOS(nz), ax / m, ay / m, 0, qA()
+  ENDIF
+  qA(4) = 1
+  MATH INSERT sQ(), , n, qA()
+END SUB
+
+' One burst destroys every missile in the bubble, ours included, and
+' costs energy to do it.
+SUB FireECM
+  LOCAL INTEGER n
+  IF ecmActive > 0 THEN EXIT SUB
+  ecmActive = ECMFRAMES
+  FOR n = 2 TO nUsed - 1
+    IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN Explode n
+  NEXT n
+END SUB
+
+SUB ECMService
+  IF ecmActive > 0 THEN
+    ecmActive = ecmActive - 1
+    pEnergy = pEnergy - 1
+    IF pEnergy < 0 THEN pEnergy = 0
+  ENDIF
+END SUB
+
+' What a ship leaves behind.  Roughly half the time it sheds cargo, up to
+' the number its blueprint says it can carry.
+SUB EjectCargo(n AS INTEGER)
+  LOCAL INTEGER i, cnt, m
+  IF bCan(sBp(n)) = 0 THEN EXIT SUB
+  IF RND < 0.5 THEN EXIT SUB
+  cnt = INT(RND * (bCan(sBp(n)) + 1))
+  FOR i = 1 TO cnt
+    MATH Q_EULER RND * 6, RND * 6, 0, qA() : qA(4) = 1
+    m = NewShip(T_CANISTER, sX(n) + (RND * 400 - 200), sY(n) + (RND * 400 - 200), sZ(n) + (RND * 400 - 200), qA())
+    IF m < 0 THEN EXIT SUB
+    sRol(m) = 130 : sPit(m) = 5
+  NEXT i
+END SUB
+
+' Shooting a police ship makes an outlaw of you, and the station will send
+' more of them.
+SUB NoteKill(n AS INTEGER)
+  IF sTyp(n) = T_VIPER THEN
+    legal = legal + 64
+    IF legal > 255 THEN legal = 255
+  ENDIF
+END SUB
+
+FUNCTION LegalName$()
+  IF legal = 0 THEN
+    LegalName$ = "Clean"
+  ELSEIF legal < 50 THEN
+    LegalName$ = "Offender"
+  ELSE
+    LegalName$ = "Fugitive"
+  ENDIF
+END FUNCTION
+
+' The end.  The original scatters the wreck of your own ship across the
+' view; ours says so plainly and stops.
+SUB DeathScreen
+  CLS
+  TEXT VCX, 60, "GAME OVER", "CT", 1, 2, cRed
+  TEXT VCX, 100, "Kills: " + STR$(kills) + "   " + RankName$(), "CT", 7, 1, cWhite
+  TEXT VCX, 115, "Cash: " + STR$(cashTenths / 10) + " Cr", "CT", 7, 1, cWhite
+  FRAMEBUFFER COPY F, N
+END SUB
 
 ' ======================================================================
 ' ship blueprint data (generated by elite_tools/blueprints.py)

@@ -81,6 +81,7 @@ DIM FLOAT sX(NSLOT-1), sY(NSLOT-1), sZ(NSLOT-1)
 DIM FLOAT sQ(4, NSLOT-1)           ' orientation quaternion w,x,y,z,m
 DIM INTEGER sSpd(NSLOT-1), sAcc(NSLOT-1), sRol(NSLOT-1), sPit(NSLOT-1)
 DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1), sExp(NSLOT-1)
+DIM INTEGER sTgt(NSLOT-1)   ' a missile's quarry: a slot, or -2 for us
 DIM INTEGER nUsed                  ' slots in use, 0..NSLOT
 
 ' Ship blueprint statistics, indexed by blueprint 0..NBP-1.
@@ -106,7 +107,7 @@ DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 
 ' Keyboard flags, refreshed once per frame.
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
-DIM INTEGER kView, kPause
+DIM INTEGER kView, kPause, kTarget, kMissile, kECM
 
 ' Frame timing.
 DIM FLOAT frameMs, tFrame, tStage
@@ -132,6 +133,9 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 ' how hot it has got.
 CONST LASPULSE = 4                 ' frames between pulse laser shots
 DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+CONST MSTURN = 0.22                ' how hard a missile swings onto a bearing
+CONST ECMFRAMES = 24               ' how long one burst runs, and drains energy
+DIM INTEGER msLock, ecmActive, legal
 
 ' Arrival distances are in units of the step the original's sign byte moves in.
 CONST UNIT = 65536                 ' one step of the original's sign byte

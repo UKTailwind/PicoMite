@@ -75,7 +75,7 @@ SUB DrawDash
   Bar DL, DLY(3), pCabT \ 16, 11, cRed, cYellow
   Bar DL, DLY(4), pLasT \ 16, 11, cRed, cYellow
   Bar DL, DLY(5), pAltit \ 16, 99, cRed, cYellow            ' 99 is unreachable
-  Missiles
+  MissileBlocks
   DrawScanner
   DrawCompass
 END SUB
@@ -107,7 +107,7 @@ SUB Pointer(x AS INTEGER, y AS INTEGER, p AS INTEGER)
 END SUB
 
 ' Four missile blocks, filled from the left as missiles are carried.
-SUB Missiles
+SUB MissileBlocks
   LOCAL INTEGER i, c
   FOR i = 0 TO 3
     c = cBlack

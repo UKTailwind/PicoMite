@@ -32,6 +32,22 @@ Implemented
   shields and energy recharging on the original's eight frame schedule
   combat rating from the kill tally
 
-Not yet done in this phase
-  missiles and target lock, ECM, cargo canisters ejected on death, legal status
-  and the police response, the death screen
+Missiles, E.C.M. and consequences (added to finish the phase)
+  A missile is a ship like any other, with its own blueprint and its own slot.
+  What makes it a missile is that it runs its tactics every frame instead of one
+  frame in eight, so it out-turns anything it chases, and that reaching its
+  target destroys them both.  One E.C.M. burst destroys every missile in the
+  bubble, whoever fired it, and drains energy while it runs.
+
+  Verified in the same demo run:
+    missiles 3 -> 2 after one launch
+    energy 255 -> 240 across an E.C.M. burst
+    cash 100.0 -> 100.5 Cr, the asteroid's bounty
+    legal status reported, and shooting a police Viper marks the record
+
+  Also in: cargo shed on death, about half the time and up to the number the
+  blueprint allows; the combat rating; and a death screen.
+
+Still open, and belonging to later phases
+  the police response to an outlaw record (needs the station, Phase 5)
+  fuel scooping and cabin temperature near the sun (Phase 5)

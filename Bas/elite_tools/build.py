@@ -134,6 +134,21 @@ def check(text):
             problems.append("line %d: '%s' is a reserved word or builtin: %s"
                             % (i, m.group(2), ln.strip()))
 
+    # Two definitions of the same name: MMBasic reports "Duplicate name" at
+    # the second one, which is clear enough, but the build should not get
+    # that far.
+    seen_subs = {}
+    for i, ln in enumerate(lines, 1):
+        m = SUBDEF.match(ln.split("'")[0])
+        if not m:
+            continue
+        nm = m.group(2).lower().rstrip("$%!")
+        if nm in seen_subs:
+            problems.append("line %d: '%s' is already defined at line %d"
+                            % (i, m.group(2), seen_subs[nm]))
+        else:
+            seen_subs[nm] = i
+
     # SUB/FUNCTION name colliding with a variable name
     subs = {m.group(2).lower().rstrip("$%!") for m in (SUBDEF.match(l.split("'")[0]) for l in lines) if m}
     for n, i, ln in declared_names(text):
