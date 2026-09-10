@@ -114,6 +114,13 @@ DIM INTEGER frames
 
 DIM FLOAT prof(5)                  ' cls, stardust, planet, ships, dash, move
 
+' The galaxy.  Three 16-bit seeds and the fields the current system's
+' seeds decode to.  The two-letter fragments names are built from are
+' held as one string and indexed rather than as 32 separate entries.
+DIM INTEGER gs0, gs1, gs2, gSys, gGal
+DIM INTEGER sysX, sysY, sysGov, sysEco, sysTech, sysPop, sysProd, sysRad
+CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRION"
+
 ' Rendering options and the view transform's output.
 DIM INTEGER solidMode, showDot
 DIM FLOAT tx, ty, tz
