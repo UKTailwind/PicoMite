@@ -176,6 +176,11 @@ def check(text):
                 # SELECT can legitimately start a statement mid-line.
                 if w in ("SUB", "FUNCTION") and j != 0:
                     continue
+                # FOR also appears in OPEN ... FOR INPUT/OUTPUT/APPEND, which
+                # opens a file rather than a loop.  A loop header always has a
+                # TO after it.
+                if w == "FOR" and "TO" not in words[j + 1:]:
+                    continue
                 depth[OPENERS[w]] += 1
             elif prev == "END" and w in depth:
                 depth[w] -= 1

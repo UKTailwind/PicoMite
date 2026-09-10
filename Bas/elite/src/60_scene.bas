@@ -157,3 +157,53 @@ SUB DockInput(f AS INTEGER)
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
 END SUB
+
+' Draw each docked screen once and photograph it.  Nothing here is
+' interactive: it exists to prove the screens render from real state.
+SUB DockedScreens
+  LOCAL INTEGER n, i
+  pFuel = 44 : cashTenths = 1000 : holdSize = 20
+  pEnergy = 255 : pFsh = 255 : pAsh = 255 : pMissl = 3
+  lasPower = 15 : kills = 20 : legal = 0 : docked = 1 : energyUnit = 0
+  gGal = 1
+  LoadMarket
+  EquipTable
+  SetGalaxy 1
+  FOR n = 0 TO 255
+    SysData
+    IF SysName$() = "LAVE" THEN EXIT FOR
+    NextSystem
+  NEXT n
+  homeSys = n : selSys = n
+  homeX = sysX : homeY = sysY * 2
+  curX = homeX : curY = homeY
+  mkByte = 0
+  MakeMarket sysEco, mkByte
+
+  ' Trade a little so the screens have something to show.
+  FOR i = 1 TO 5 : BuyOne 0 : NEXT i        ' five tonnes of food
+  FOR i = 1 TO 3 : BuyOne 12 : NEXT i       ' and some minerals
+  eqOwned(2) = 1                            ' fitted with E.C.M.
+
+  MarketScreen 6
+  FRAMEBUFFER COPY F, N
+  SAVE IMAGE "A:/dock_market.bmp"
+  StatusScreen
+  FRAMEBUFFER COPY F, N
+  SAVE IMAGE "A:/dock_status.bmp"
+  EquipScreen 2
+  FRAMEBUFFER COPY F, N
+  SAVE IMAGE "A:/dock_equip.bmp"
+  InventoryScreen
+  FRAMEBUFFER COPY F, N
+  SAVE IMAGE "A:/dock_inv.bmp"
+
+  PRINT "cash after trading "; STR$(cashTenths / 10); " Cr, hold "; STR$(HoldUsed()); "/"; STR$(holdSize)
+  SaveCommander "A:/cmdr.txt"
+  cashTenths = 0 : kills = 0
+  IF LoadCommander("A:/cmdr.txt") THEN
+    PRINT "commander reloaded: cash "; STR$(cashTenths / 10); " Cr, kills "; STR$(kills); ", at "; SysName$()
+  ELSE
+    PRINT "** commander file did not load **"
+  ENDIF
+END SUB

@@ -42,7 +42,7 @@ CONST VCX = 160, VCY = 88          ' space view centre
 CONST DASHY = 176                  ' first dashboard row
 CONST VPLANE = 256                 ' focal length in pixels, as the BBC
 CONST DEMOFRAMES = 260             ' >0 runs a scripted demo and exits; 0 plays
-CONST DEMOSCENE = 1                ' 1 the flight and combat demo, 2 docking
+CONST DEMOSCENE = 1                ' 1 flight and combat, 2 docking, 3 the docked screens
 CONST PANY = VCY - (SCRH \ 2 - 1)  ' shifts Draw3D's centre up to VCY
 
 ' ------------------------------------------------------- universe size
@@ -140,7 +140,7 @@ DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
 CONST DOCKRANGE = 280              ' touching distance: the station spans 160
 CONST DOCKFACE = 0.896             ' the station's nose back towards us
 CONST DOCKCONE = 0.927             ' how nearly dead ahead it must be
-CONST DOCKROLL = 0.833             ' how closely our roll must fit the slot
+CONST DOCKROLL = 0.833             ' 80 of 96: the slot within 33.6 deg of level
 
 CONST MSTURN = 0.22                ' how hard a missile swings onto a bearing
 CONST ECMFRAMES = 24               ' how long one burst runs, and drains energy
@@ -156,6 +156,11 @@ CONST SRCX = 130                   ' short range chart centre, ours
 CONST SRCY = 90
 CONST SRDX = 5                     ' our pixels per galaxy unit across
 CONST SRDY = 2                     ' and down
+
+' Equipment on offer, gated by the system's technology level.
+CONST NEQUIP = 8
+DIM eqName$(NEQUIP-1) LENGTH 20
+DIM INTEGER eqPrice(NEQUIP-1), eqTech(NEQUIP-1), eqOwned(NEQUIP-1)
 
 CONST NGOODS = 17
 DIM mkName$(NGOODS-1) LENGTH 14, mkUnit$(NGOODS-1) LENGTH 2

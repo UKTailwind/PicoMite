@@ -5,7 +5,13 @@ SetupScreen
 LoadStats
 ProbeObjects
 SetupViews
-IF DEMOSCENE = 2 THEN
+IF DEMOSCENE = 3 THEN
+  DockedScreens
+  FRAMEBUFFER CLOSE
+  MODE 1
+  PRINT "docked screens done"
+  END
+ELSEIF DEMOSCENE = 2 THEN
   DockScene
 ELSE
   TestScene

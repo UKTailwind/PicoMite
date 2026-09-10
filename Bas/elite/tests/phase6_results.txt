@@ -1,0 +1,30 @@
+Elite Phase 6 results - the docked screens - PC3, 2026-09-10.
+
+Everything here is a screen over state that already exists.  Prices were fixed
+the moment we arrived and do not move while we trade; buying and selling adjust
+the hold and the till and nothing else.
+
+Verified on the board, starting from a new commander at Lave with 100 Cr:
+  bought 5 tonnes of food and 3 of minerals
+  cash 100.0 -> 49.6 Cr, hold 8 of 20 - the arithmetic the market test proved
+  the market screen shows Lave's canonical prices, with computers, narcotics
+  and firearms all at zero for sale
+  status shows the system, condition, fuel, cash, legal standing, rating and
+  the equipment fitted
+  commander saved and reloaded: cash, kills and location all restored
+
+Screens: market with per-item selection, status, inventory, equipment shop.
+The shop only offers what the system's technology level can supply, which is
+why the better lasers are unavailable in a poor agricultural system.
+
+One bug worth recording.  The commander file first wrote several values to a
+line with PRINT, which separates them with spaces, and read them back with
+INPUT, which expects commas.  Everything after the first field on each line was
+lost, so a reloaded commander had the right kill count and no money and was
+sitting at system zero.  One value to a line now.
+
+Still open
+  the docked screens are drawn but not yet driven by the keyboard: no key
+  handling loop, so buying is exercised by calling BuyOne rather than by a
+  player pressing a key
+  the title screen and new-commander flow

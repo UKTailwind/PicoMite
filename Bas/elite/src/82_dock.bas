@@ -2,18 +2,26 @@
 '  Docking, and what the station does about you
 '
 '  Docking is not a collision, it is five separate tests, and failing any
-'  one of them at speed is fatal.  The slot is a letterbox on one face of
-'  the station, so you have to arrive at the right face, pointing at it,
-'  lined up with it, and rolled to match it.  That last test is why
-'  docking is a manoeuvre rather than an approach: the station turns all
-'  the time, so the roll that fits has to be flown, not held.
+'  one of them at speed is fatal.
 '
-'  The tests, all as fractions of a unit vector:
 '    1  the station is not hostile
 '    2  its own nose points back at us, within about 26 degrees
-'    3  it is in front of us at all
-'    4  it is nearly dead ahead, within about 22 degrees
-'    5  our roll matches the slot, within about 34 degrees
+'    3  it is nearly dead ahead of us, within 22 degrees
+'    4  and in front of us at all
+'    5  the slot is within 33.6 degrees of horizontal
+'
+'  Test 5 is the one that makes docking a manoeuvre rather than an
+'  approach, and it is worth being exact about what it means.  The slot is
+'  a letterbox, 20 units across and 60 tall in the station's own frame, so
+'  its long axis lies along the station's up vector.  The test measures the
+'  x component of that up vector in OUR frame: when its magnitude is near
+'  one, the slot's long axis is lying horizontally, which is the direction
+'  our own ship is widest in.  So the ship has to be rolled to match the
+'  station's rotation, with its wings along the long dimension of the port.
+'  The station turns continuously, so that match has to be flown.
+'
+'  The original's own comment calls this 36.6 degrees; the arithmetic of
+'  its threshold, 80 out of 96, is 33.6.
 '
 '  Below speed 5 a failed approach only bounces.  Above it, it does not.
 ' =====================================================================
@@ -48,7 +56,7 @@ SUB DockCheck
   IF nz > -DOCKFACE THEN Crash : EXIT SUB
   ' 3 and 4: it has to be nearly dead ahead.
   IF tz2 < DOCKCONE THEN Crash : EXIT SUB
-  ' 5: and we have to be rolled to fit the letterbox.
+  ' 5: and our wings have to lie along the long axis of the letterbox.
   IF ABS(rx) < DOCKROLL THEN Crash : EXIT SUB
   DoDock
 END SUB
