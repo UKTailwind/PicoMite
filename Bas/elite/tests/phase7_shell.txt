@@ -1,0 +1,73 @@
+Phase 7 - the game shell: docked, in flight, and the screens either side
+========================================================================
+PC3, PicoMiteHDMIWEB V6.03.02b3 at 378 MHz, MODE 2, firmware of 9 Sep 14:36
+(MAX3D 12).  Driven over the console: the PicoMite stores serial bytes raw
+in the same ring buffer INKEY$ reads, so the function keys (0x91..0x9C) and
+the arrows (0x80..0x83) go down the wire exactly as a USB keyboard delivers
+them.  Screenshots were taken by a key patched into the uploaded copy only.
+
+What was run
+------------
+A new commander at Lave, docked, then:
+
+  F2   market, buying          three rows down, four presses of space
+  F3   market, selling         one press of space
+  F4   equip ship              space: buy a missile, 30 Cr
+  F5   galactic chart          two presses of the right arrow
+  F6   short range chart
+  F7   data on system
+  F10  inventory
+  F9   status                  S: save the commander
+  F1   launch
+  ESC  leave the game
+
+Result
+------
+  frames 328  average  17.40 ms per frame
+  shots 0 hits 0  kills 0  cash 46 Cr  rank Harmless
+  energy 255 fore shield 255 laser temp 0 fuel 7 LY
+  slots in use 2  dead 0  witchspace 0
+  missiles left 4  legal status Clean
+  docked 0  docking computer 0
+    CLS          0.14 ms
+    stardust     3.27 ms
+    planet       4.52 ms
+    ships        0.60 ms
+    dash         3.68 ms
+    move         1.54 ms
+
+Cash 100 -> 46 Cr and missiles 3 -> 4 account for four tonnes of slaves at
+Lave prices and one missile, so the market, the hold and the shop all moved
+real state rather than only drawing it.  A:/cmdr.txt was written and reads
+back.  Flight after the launch tunnel is unchanged at 17.4 ms a frame.
+
+The screens are in captures/shell_*.png.  Lave reads Rich Agri, Dictatorship,
+tech 5, 2.5 billion, 7000 M CR, radius 4116 km, and the short range chart
+shows Leesti, Reorte, Orrere, Quator, Orerve and Tionisla around it - the
+neighbourhood every player knows.
+
+In flight
+---------
+F5 to F10 reach the same six screens from the cockpit and F1 to F4 return to
+a view, which is the original's arrangement shifted one key because the BBC
+had an f0.  Tested with a serial stand-in for the function keys, because in
+flight they are read through KEYDOWN and KEYDOWN empties the console buffer
+a serial byte would have to arrive in: captures/shell_flight_market.png is
+the market screen taken from the cockpit, with no row highlighted because
+nothing can be bought out there.
+
+The one-shot keys
+-----------------
+KEYDOWN reports what is held, not what has just been pressed, so T, M, E, C
+and H are now edges against the previous frame's set.  Without that, holding
+C toggled the docking computer on and off every frame and holding M emptied
+the racks in a fifth of a second.  Roll, pitch, speed and the trigger stay
+level-triggered, which is what they should be.
+
+Not yet exercised on hardware
+-----------------------------
+Docking from flight into the docked loop.  DoDock now resets the ship and
+clears the slots, and the approach itself was proved in phase 5, but the
+transition into RunDocked has not been flown: it cannot be driven from the
+console, and the board stopped responding to an AUTOSAVE before the patched
+build that would have tested it could be uploaded.

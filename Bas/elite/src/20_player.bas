@@ -10,12 +10,12 @@
 ' =====================================================================
 
 SUB ReadKeys
-  LOCAL INTEGER i, k
+  LOCAL INTEGER i, k, hnow, hnew
   LOCAL kb$ LENGTH 2
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
-  kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
   kView = -1 : kPause = 0
+  hnow = 0
   ' INKEY$ first: every KEYDOWN call empties the console input buffer.
   kb$ = INKEY$
   IF kb$ = CHR$(27) THEN kQuit = 1
@@ -32,9 +32,34 @@ SUB ReadKeys
       CASE 65, 97        : kFire = 1         ' A
       CASE 27            : kQuit = 1
       CASE 145 TO 148    : kView = k - 145   ' F1..F4 select the four views
+      ' The original's one-shot keys, and the six information screens.
+      CASE 84, 116       : hnow = hnow OR KB_TARGET      ' T
+      CASE 77, 109       : hnow = hnow OR KB_MISSILE     ' M
+      CASE 69, 101       : hnow = hnow OR KB_ECM         ' E
+      CASE 67, 99        : hnow = hnow OR KB_DOCK        ' C
+      CASE 72, 104       : hnow = hnow OR KB_JUMP        ' H
+      CASE 149 TO 154    : hnow = hnow OR (KB_SCREEN << (k - 149))
     END SELECT
   NEXT i
   IF kView >= 0 THEN vw = kView
+
+  ' Everything above this line is a rate that a held key should keep
+  ' feeding.  Everything below it happens once per press: holding C would
+  ' otherwise toggle the docking computer on and off every frame, and
+  ' holding M would empty the missile racks in a fifth of a second.
+  hnew = hnow AND (hnow XOR kHeld)
+  kHeld = hnow
+  kTarget = (hnew AND KB_TARGET) <> 0
+  kMissile = (hnew AND KB_MISSILE) <> 0
+  kECM = (hnew AND KB_ECM) <> 0
+  kDock = (hnew AND KB_DOCK) <> 0
+  kJump = (hnew AND KB_JUMP) <> 0
+  kChart = 0
+  IF (hnew AND KB_SCREENS) <> 0 THEN
+    FOR i = 0 TO 5
+      IF (hnew AND (KB_SCREEN << i)) <> 0 THEN kChart = i + 1 : EXIT FOR
+    NEXT i
+  ENDIF
 END SUB
 
 ' One frame of control input.  Order matters: the keys move the value,

@@ -41,8 +41,8 @@ CONST VIEWH = 176                  ' space view occupies rows 0..VIEWH-1
 CONST VCX = 160, VCY = 88          ' space view centre
 CONST DASHY = 176                  ' first dashboard row
 CONST VPLANE = 256                 ' focal length in pixels, as the BBC
-CONST DEMOFRAMES = 260             ' >0 runs a scripted demo and exits; 0 plays
-CONST DEMOSCENE = 3                ' 1 the flight and combat demo, 2 docking
+CONST DEMOFRAMES = 0               ' >0 runs a scripted demo and exits; 0 plays
+CONST DEMOSCENE = 1                ' 1 flight and combat, 2 docking, 3 the docked screens
 CONST PANY = VCY - (SCRH \ 2 - 1)  ' shifts Draw3D's centre up to VCY
 
 ' ------------------------------------------------------- universe size
@@ -108,10 +108,17 @@ DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 
 ' Keyboard flags, refreshed once per frame.
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
-DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock
+DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock, kJump, kChart
+' KEYDOWN reports what is held, not what has just been pressed, so the
+' one-shot keys are turned into edges against the previous frame's set.
+DIM INTEGER kHeld
+CONST KB_TARGET = 1, KB_MISSILE = 2, KB_ECM = 4, KB_DOCK = 8, KB_JUMP = 16
+CONST KB_SCREEN = 32               ' F5, then one bit per key up to F10
+CONST KB_SCREENS = 32+64+128+256+512+1024
 
-' Frame timing.
-DIM FLOAT frameMs, tFrame, tStage
+' Frame timing.  tFlight accumulates only the time spent flying, so the
+' average is not diluted by however long the player spends docked.
+DIM FLOAT frameMs, tFrame, tStage, tFlight
 DIM INTEGER frames
 
 DIM FLOAT prof(5)                  ' cls, stardust, planet, ships, dash, move
@@ -237,68 +244,87 @@ CONST CPY = 187
 CONST CPR = 9
 CONST PROFILE = 1                  ' accumulate per-stage frame times
 
+' ------------------------------------------------------- the game shell
+' Which docked or information screen is showing, and what the market
+' screen's action key does.
+CONST SCR_STATUS = 0, SCR_INVENT = 1, SCR_MARKET = 2, SCR_EQUIP = 3
+CONST SCR_LONG = 4, SCR_SHORT = 5, SCR_DATA = 6
+CONST CMDRFILE = "A:/cmdr.txt"
+DIM INTEGER quitGame, dscreen, dsel, dbuy
+
 ' =====================================================================
-'  Start up and the frame loop
+'  Start up, then either the game or one of the scripted demos
+'
+'  DEMOFRAMES is 0 for a game anyone can play and non-zero for a demo
+'  that flies itself, photographs a few frames and reports; the demos are
+'  how each phase was tested and they are kept working.
 ' =====================================================================
 SetupScreen
 LoadStats
 ProbeObjects
 SetupViews
-IF DEMOSCENE = 3 THEN
-  DockedScreens
-  FRAMEBUFFER CLOSE
-  MODE 1
-  PRINT "docked screens done"
-  END
-ELSEIF DEMOSCENE = 2 THEN
-  DockScene
-ELSE
-  TestScene
-ENDIF
+EquipTable
 
-frames = 0
-tFrame = TIMER
-DO
-  IF DEMOFRAMES > 0 THEN
-    IF DEMOSCENE = 2 THEN DockInput frames ELSE DemoInput frames
+IF DEMOFRAMES = 0 THEN
+
+  NewGame
+  RunGame
+
+ELSE
+
+  IF DEMOSCENE = 3 THEN
+    DockedScreens
+    FRAMEBUFFER CLOSE
+    MODE 1
+    PRINT "docked screens done"
+    END
+  ELSEIF DEMOSCENE = 2 THEN
+    DockScene
   ELSE
-    ReadKeys
+    TestScene
   ENDIF
-  IF kQuit OR dead OR docked THEN EXIT DO
-  UpdatePlayer
-  IF kFire THEN FireLaser
-  IF kTarget THEN TargetMissile
-  IF kMissile THEN LaunchMissile
-  IF kECM THEN FireECM
-  IF kDock THEN dockComp = 1 - dockComp
-  IF dockComp THEN DockingComputer
-  IF lasTimer > 0 THEN lasTimer = lasTimer - 1
-  IF lasFlash > 0 THEN lasFlash = lasFlash - 1
-  tStage = TIMER
-  MoveShips
-  Missiles
-  Tactics
-  ECMService
-  Recharge
-  StationCheck
-  StationPolice
-  DockCheck
-  prof(5) = prof(5) + TIMER - tStage
-  DrawFrame
-  FRAMEBUFFER COPY F, N, B
-  mcnt = (mcnt + 1) AND 255
-  frames = frames + 1
-  IF DEMOFRAMES > 0 THEN
+
+  frames = 0
+  tFrame = TIMER
+  DO
+    IF DEMOSCENE = 2 THEN DockInput frames ELSE DemoInput frames
+    IF kQuit OR dead OR docked THEN EXIT DO
+    UpdatePlayer
+    IF kFire THEN FireLaser
+    IF kTarget THEN TargetMissile
+    IF kMissile THEN LaunchMissile
+    IF kECM THEN FireECM
+    IF kDock THEN dockComp = 1 - dockComp
+    IF dockComp THEN DockingComputer
+    IF lasTimer > 0 THEN lasTimer = lasTimer - 1
+    IF lasFlash > 0 THEN lasFlash = lasFlash - 1
+    tStage = TIMER
+    MoveShips
+    Missiles
+    Tactics
+    ECMService
+    Recharge
+    StationCheck
+    StationPolice
+    DockCheck
+    prof(5) = prof(5) + TIMER - tStage
+    DrawFrame
+    FRAMEBUFFER COPY F, N, B
+    mcnt = (mcnt + 1) AND 255
+    frames = frames + 1
     IF frames = 40 OR frames = 80 OR frames = 120 OR frames = 250 THEN SaveShot frames
     IF frames >= DEMOFRAMES THEN EXIT DO
-  ENDIF
-LOOP
-frameMs = (TIMER - tFrame) / frames
+  LOOP
+  tFlight = TIMER - tFrame
+
+ENDIF
 
 IF dead THEN DeathScreen : PAUSE 1500
 CloseAll
 FRAMEBUFFER CLOSE
 MODE 1
+frameMs = 0
+IF frames > 0 THEN frameMs = tFlight / frames
 PRINT "frames"; frames; "  average"; STR$(frameMs, 4, 2); " ms per frame"
 PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10; " Cr  rank "; RankName$()
 PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
@@ -306,6 +332,7 @@ PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
 PRINT "missiles left"; pMissl; "  legal status "; LegalName$()
 PRINT "docked"; docked; "  docking computer"; dockComp
 IF PROFILE THEN
+ IF frames > 0 THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"
   PRINT "  planet   "; STR$(prof(2) / frames, 5, 2); " ms"
@@ -313,6 +340,7 @@ IF PROFILE THEN
   PRINT "  dash     "; STR$(prof(4) / frames, 5, 2); " ms"
   PRINT "  move     "; STR$(prof(5) / frames, 5, 2); " ms"
   PRINT "  the rest is the background framebuffer copy, which paces to 60 Hz"
+ ENDIF
 ENDIF
 END
 
@@ -604,12 +632,12 @@ END SUB
 ' =====================================================================
 
 SUB ReadKeys
-  LOCAL INTEGER i, k
+  LOCAL INTEGER i, k, hnow, hnew
   LOCAL kb$ LENGTH 2
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
-  kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
   kView = -1 : kPause = 0
+  hnow = 0
   ' INKEY$ first: every KEYDOWN call empties the console input buffer.
   kb$ = INKEY$
   IF kb$ = CHR$(27) THEN kQuit = 1
@@ -626,9 +654,34 @@ SUB ReadKeys
       CASE 65, 97        : kFire = 1         ' A
       CASE 27            : kQuit = 1
       CASE 145 TO 148    : kView = k - 145   ' F1..F4 select the four views
+      ' The original's one-shot keys, and the six information screens.
+      CASE 84, 116       : hnow = hnow OR KB_TARGET      ' T
+      CASE 77, 109       : hnow = hnow OR KB_MISSILE     ' M
+      CASE 69, 101       : hnow = hnow OR KB_ECM         ' E
+      CASE 67, 99        : hnow = hnow OR KB_DOCK        ' C
+      CASE 72, 104       : hnow = hnow OR KB_JUMP        ' H
+      CASE 149 TO 154    : hnow = hnow OR (KB_SCREEN << (k - 149))
     END SELECT
   NEXT i
   IF kView >= 0 THEN vw = kView
+
+  ' Everything above this line is a rate that a held key should keep
+  ' feeding.  Everything below it happens once per press: holding C would
+  ' otherwise toggle the docking computer on and off every frame, and
+  ' holding M would empty the missile racks in a fifth of a second.
+  hnew = hnow AND (hnow XOR kHeld)
+  kHeld = hnow
+  kTarget = (hnew AND KB_TARGET) <> 0
+  kMissile = (hnew AND KB_MISSILE) <> 0
+  kECM = (hnew AND KB_ECM) <> 0
+  kDock = (hnew AND KB_DOCK) <> 0
+  kJump = (hnew AND KB_JUMP) <> 0
+  kChart = 0
+  IF (hnew AND KB_SCREENS) <> 0 THEN
+    FOR i = 0 TO 5
+      IF (hnew AND (KB_SCREEN << i)) <> 0 THEN kChart = i + 1 : EXIT FOR
+    NEXT i
+  ENDIF
 END SUB
 
 ' One frame of control input.  Order matters: the keys move the value,
@@ -1353,21 +1406,23 @@ END SUB
 '  something tumbling, and the planet close enough to show its curve
 '  along the bottom of the screen.
 ' =====================================================================
-' The starting state: a new commander at Lave, just launched from the
-' station.  The bubble is built by the same code the game uses on
-' arrival, so the planet's markings, the station's spin and the sun's
-' position all come from Lave's seeds rather than being placed by hand.
-SUB TestScene
-  LOCAL INTEGER n, i
-  ' Player state
+' A brand new commander at Lave, with a hundred credits, three missiles
+' and a pulse laser.  Everything the game needs to start is set here, so
+' the test scene and a real new game begin from the same state.
+SUB NewCommander
+  LOCAL INTEGER i
   pRoll = JCENTRE : pPitch = JCENTRE
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
   cashTenths = 1000 : holdSize = 20
   ' A new commander carries a pulse laser on the front view only.
   lasPower = 15 : lasTimer = 0 : lasFlash = 0
-  kills = 0 : dead = 0 : energyUnit = 0
+  kills = 0 : dead = 0 : energyUnit = 0 : legal = 0
+  shots = 0 : hits = 0
+  docked = 0 : dockComp = 0 : msLock = -1
   vw = 0 : inWitch = 0
+  FOR i = 0 TO NEQUIP - 1 : eqOwned(i) = 0 : NEXT i
+  FOR i = 0 TO NGOODS - 1 : cargo(i) = 0 : NEXT i
   InitStardust
   LoadMarket
 
@@ -1384,7 +1439,15 @@ SUB TestScene
   curX = homeX : curY = homeY
   mkByte = 0
   MakeMarket sysEco, mkByte
+END SUB
 
+' Just launched from the station at Lave.  The bubble is built by the
+' same code the game uses on arrival, so the planet's markings, the
+' station's spin and the sun's position all come from Lave's seeds
+' rather than being placed by hand.
+SUB TestScene
+  LOCAL INTEGER n
+  NewCommander
   LaunchState
 
   ' Some traffic to look at.
@@ -1414,6 +1477,7 @@ SUB DemoInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   kTarget = 0 : kMissile = 0 : kECM = 0
+  kJump = 0 : kChart = 0
   SELECT CASE f
     CASE 0 TO 9     : kFaster = 1                  ' ease forward only
     CASE 20 TO 120  : kFire = 1                    ' hold the trigger down
@@ -1500,6 +1564,7 @@ SUB DockInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
+  kJump = 0 : kChart = 0
 END SUB
 
 ' Draw each docked screen once and photograph it.  Nothing here is
@@ -2536,9 +2601,20 @@ SUB Crash
   ENDIF
 END SUB
 
+' Inside.  The station repairs the ship and cools the laser, but it does
+' not give anything away: fuel, missiles and equipment all have to be
+' bought, and the hold and the legal record come in exactly as they were.
 SUB DoDock
   docked = 1
   dSpeed = 0
+  dockComp = 0
+  msLock = -1
+  pEnergy = 255 : pFsh = 255 : pAsh = 255
+  pLasT = 0 : pCabT = 30 : pAltit = 200
+  pRoll = JCENTRE : pPitch = JCENTRE
+  ' Nothing outside matters any more, and the Draw3D objects the bubble
+  ' was holding are better returned to the pool than kept.
+  ClearSlots
 END SUB
 
 ' The docking computer flies the approach for you: it lines the ship up
@@ -2899,6 +2975,340 @@ DATA "Fuel Scoops",525,5
 DATA "Energy Unit",1500,8
 DATA "Docking Computer",1500,9
 DATA "Galactic Hyperdrive",5000,10
+
+' =====================================================================
+'  The game shell: docked, in flight, and the screens either side
+'
+'  Two states with a loop each.  In flight the frame loop runs as fast as
+'  it can and the whole universe moves; docked, nothing moves at all, so
+'  the screen is only repainted when a key has changed something and the
+'  loop can afford to block on the keyboard between times.
+'
+'  The function keys follow the original's docked menu, shifted one place
+'  because the BBC had an f0 and a PC keyboard does not:
+'
+'        docked                        in flight
+'    F1  launch                    F1  front view
+'    F2  buy cargo                 F2  rear view
+'    F3  sell cargo                F3  left view
+'    F4  equip ship                F4  right view
+'    F5  galactic chart            F5  galactic chart
+'    F6  short range chart         F6  short range chart
+'    F7  data on system            F7  data on system
+'    F8  market prices             F8  market prices
+'    F9  status                    F9  status
+'    F10 inventory                 F10 inventory
+'
+'  The six information screens are the same code in both states, so they
+'  run as a small modal loop of their own and hand control back where it
+'  came from.  Modal is a departure: the original keeps flying while you
+'  read the chart, and you can be shot at while you do it.  Ours cannot
+'  afford that - the long range chart walks all 256 systems and generates
+'  each one's seeds to place its dot, which is far too much work to repeat
+'  every frame, and it has nowhere to keep the finished picture.
+' =====================================================================
+
+SUB RunGame
+  quitGame = 0
+  frames = 0
+  tFlight = 0
+  DO
+    IF docked THEN
+      RunDocked
+    ELSE
+      RunFlight
+    ENDIF
+  LOOP UNTIL quitGame OR dead
+END SUB
+
+' --- in flight
+SUB RunFlight
+  LOCAL FLOAT t0
+  t0 = TIMER
+  DO
+    ReadKeys
+    IF kQuit THEN quitGame = 1 : EXIT DO
+    UpdatePlayer
+    IF kFire THEN FireLaser
+    IF kTarget THEN TargetMissile
+    IF kMissile THEN LaunchMissile
+    IF kECM THEN FireECM
+    IF kDock THEN dockComp = 1 - dockComp
+    IF dockComp THEN DockingComputer
+    IF kJump THEN JumpAway
+    IF kChart > 0 THEN
+      ' The information screens stop the clock as well as the universe,
+      ' so the time spent reading one is not counted as time flying.
+      tStage = TIMER
+      InfoScreen kChart
+      t0 = t0 + TIMER - tStage
+    ENDIF
+    IF lasTimer > 0 THEN lasTimer = lasTimer - 1
+    IF lasFlash > 0 THEN lasFlash = lasFlash - 1
+    tStage = TIMER
+    MoveShips
+    Missiles
+    Tactics
+    ECMService
+    Recharge
+    StationCheck
+    StationPolice
+    DockCheck
+    prof(5) = prof(5) + TIMER - tStage
+    DrawFrame
+    FRAMEBUFFER COPY F, N, B
+    mcnt = (mcnt + 1) AND 255
+    frames = frames + 1
+  LOOP UNTIL dead OR docked
+  tFlight = tFlight + TIMER - t0
+END SUB
+
+' Hyperspace.  Only outside the safe zone, only if the tank will cover it,
+' and never to the system we are already sitting in.
+SUB JumpAway
+  IF inSafe THEN EXIT SUB
+  IF selSys = homeSys THEN EXIT SUB
+  IF CanReach(selSys) = 0 THEN EXIT SUB
+  Hyperspace selSys
+END SUB
+
+' --- docked
+'
+' The repaint is the expensive thing here, not the input, so it happens
+' once per key rather than once per pass.  DockKey blocks until there is
+' something to do, which leaves the machine idle instead of spinning.
+SUB RunDocked
+  LOCAL INTEGER k, dirty
+  dscreen = SCR_STATUS
+  dsel = 0
+  dirty = 1
+  DO
+    IF dirty THEN
+      DrawDocked
+      FRAMEBUFFER COPY F, N
+      dirty = 0
+    ENDIF
+    k = DockKey()
+    dirty = 1
+    SELECT CASE k
+      CASE 27                                  ' escape leaves the game
+        quitGame = 1
+        EXIT SUB
+      CASE 145                                 ' F1: launch
+        LaunchTunnel
+        docked = 0
+        dockComp = 0
+        msLock = -1
+        LaunchState
+        EXIT SUB
+      CASE 146 : dscreen = SCR_MARKET : dbuy = 1 : dsel = 0
+      CASE 147 : dscreen = SCR_MARKET : dbuy = 0 : dsel = 0
+      CASE 148 : dscreen = SCR_EQUIP  : dsel = 0
+      CASE 149 : dscreen = SCR_LONG
+      CASE 150 : dscreen = SCR_SHORT
+      CASE 151 : dscreen = SCR_DATA
+      CASE 152 : dscreen = SCR_MARKET : dbuy = 1 : dsel = 0
+      CASE 153 : dscreen = SCR_STATUS
+      CASE 154 : dscreen = SCR_INVENT
+      CASE 128 : DockUp
+      CASE 129 : DockDown
+      CASE 130 : DockLeft
+      CASE 131 : DockRight
+      CASE 32, 13                              ' space or return: do it
+        DockAct
+      CASE 70, 102                             ' F: fill the tank
+        IF dscreen = SCR_EQUIP THEN BuyFuel
+      CASE 83, 115                             ' S: save the commander
+        SaveCommander CMDRFILE
+        dscreen = SCR_STATUS
+      CASE 76, 108                             ' L: load one back
+        IF LoadCommander(CMDRFILE) THEN dscreen = SCR_STATUS
+      CASE ELSE
+        dirty = 0
+    END SELECT
+  LOOP
+END SUB
+
+' What space does depends on which screen is showing.
+SUB DockAct
+  SELECT CASE dscreen
+    CASE SCR_MARKET
+      IF dbuy THEN BuyOne dsel ELSE SellOne dsel
+    CASE SCR_EQUIP
+      BuyShopItem
+  END SELECT
+END SUB
+
+' One key, waited for.  Docked there is nothing to animate, so blocking
+' here costs nothing.  KEYDOWN is not used because every call to it
+' empties the console buffer INKEY$ reads from.
+FUNCTION DockKey() AS INTEGER
+  LOCAL k$ LENGTH 2
+  DO
+    k$ = INKEY$
+  LOOP UNTIL k$ <> ""
+  DockKey = ASC(k$)
+END FUNCTION
+
+SUB DrawDocked
+  SELECT CASE dscreen
+    CASE SCR_STATUS
+      StatusScreen
+      DockFooter "F1 launch   S save   L load"
+    CASE SCR_INVENT
+      InventoryScreen
+      DockFooter "F1 launch   F2 buy   F3 sell"
+    CASE SCR_MARKET
+      MarketScreen dsel
+      IF dbuy THEN
+        DockFooter "up/down choose   SPACE buy one   F3 sell"
+      ELSE
+        DockFooter "up/down choose   SPACE sell one   F2 buy"
+      ENDIF
+    CASE SCR_EQUIP
+      EquipScreen dsel
+      DockFooter "up/down choose   SPACE buy   F fill the tank"
+    CASE SCR_LONG
+      ChartLong
+      DockFooter "arrows move the cursor   F7 data   F1 launch"
+    CASE SCR_SHORT
+      ChartShort
+      DockFooter "arrows move the cursor   F7 data   F1 launch"
+    CASE SCR_DATA
+      SysDataScreen
+      DockFooter "F5 galactic chart   F6 short range   F1 launch"
+  END SELECT
+END SUB
+
+SUB DockFooter(t$)
+  TEXT VCX, SCRH - 9, t$, "CT", 7, 1, cGrey
+END SUB
+
+' The four arrows mean different things on different screens: a row on a
+' list, a light year on a chart.
+SUB DockUp
+  IF dscreen = SCR_MARKET OR dscreen = SCR_EQUIP THEN
+    dsel = dsel - 1
+    IF dsel < 0 THEN dsel = 0
+  ELSE
+    curY = curY - 4 : ChartMoved
+  ENDIF
+END SUB
+
+SUB DockDown
+  LOCAL INTEGER nrows
+  IF dscreen = SCR_MARKET THEN
+    nrows = NGOODS - 1
+  ELSEIF dscreen = SCR_EQUIP THEN
+    nrows = ShopCount() - 1
+  ELSE
+    curY = curY + 4 : ChartMoved
+    EXIT SUB
+  ENDIF
+  dsel = dsel + 1
+  IF dsel > nrows THEN dsel = nrows
+  IF dsel < 0 THEN dsel = 0
+END SUB
+
+SUB DockLeft
+  IF dscreen <> SCR_MARKET AND dscreen <> SCR_EQUIP THEN
+    curX = curX - 2 : ChartMoved
+  ENDIF
+END SUB
+
+SUB DockRight
+  IF dscreen <> SCR_MARKET AND dscreen <> SCR_EQUIP THEN
+    curX = curX + 2 : ChartMoved
+  ENDIF
+END SUB
+
+' Keep the cursor on the map and pick out whatever system is nearest it.
+SUB ChartMoved
+  IF curX < 0 THEN curX = 0
+  IF curX > 255 THEN curX = 255
+  IF curY < 0 THEN curY = 0
+  IF curY > 255 THEN curY = 255
+  FindSystem curX, curY
+END SUB
+
+' --- the equipment shop
+'
+' The shop only lists what this system is advanced enough to sell, so the
+' row the cursor is on is not the item's number and has to be counted back.
+FUNCTION ShopCount() AS INTEGER
+  LOCAL INTEGER i, k
+  GotoSystem gGal, homeSys
+  SysData
+  k = 0
+  FOR i = 0 TO NEQUIP - 1
+    IF eqTech(i) <= sysTech + 1 THEN k = k + 1
+  NEXT i
+  ShopCount = k
+END FUNCTION
+
+SUB BuyShopItem
+  LOCAL INTEGER i, k
+  GotoSystem gGal, homeSys
+  SysData
+  k = 0
+  FOR i = 0 TO NEQUIP - 1
+    IF eqTech(i) <= sysTech + 1 THEN
+      IF k = dsel THEN BuyEquip i : EXIT SUB
+      k = k + 1
+    ENDIF
+  NEXT i
+END SUB
+
+' --- the information screens, from either state
+'
+' which: 1 galactic chart, 2 short range chart, 3 system data,
+'        4 market prices, 5 status, 6 inventory - F5 to F10 in order.
+SUB InfoScreen(which AS INTEGER)
+  LOCAL INTEGER k, w, dirty
+  w = which
+  dirty = 1
+  DO
+    IF dirty THEN
+      SELECT CASE w
+        CASE 1 : ChartLong
+        CASE 2 : ChartShort
+        CASE 3 : SysDataScreen
+        CASE 4 : MarketScreen(-1)
+        CASE 5 : StatusScreen
+        CASE 6 : InventoryScreen
+      END SELECT
+      DockFooter "F5-F10 screens   arrows move   F1-F4 back"
+      FRAMEBUFFER COPY F, N
+      dirty = 0
+    ENDIF
+    k = DockKey()
+    dirty = 1
+    SELECT CASE k
+      CASE 128 : curY = curY - 4 : ChartMoved
+      CASE 129 : curY = curY + 4 : ChartMoved
+      CASE 130 : curX = curX - 2 : ChartMoved
+      CASE 131 : curX = curX + 2 : ChartMoved
+      CASE 149 TO 154 : w = k - 148
+      ' A view key leaves the screen and selects that view, as it does in
+      ' the original.
+      CASE 145 TO 148 : vw = k - 145 : EXIT SUB
+      CASE 13, 27 : EXIT SUB
+      CASE ELSE : dirty = 0
+    END SELECT
+  LOOP
+END SUB
+
+' --- starting
+'
+' A new commander begins docked at Lave with a hundred credits, three
+' missiles and a pulse laser, which is where every game of Elite starts.
+SUB NewGame
+  NewCommander
+  ClearSlots
+  docked = 1
+  dscreen = SCR_STATUS
+  dbuy = 1
+END SUB
 
 ' ======================================================================
 ' ship blueprint data (generated by elite_tools/blueprints.py)

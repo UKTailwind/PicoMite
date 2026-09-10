@@ -41,7 +41,7 @@ CONST VIEWH = 176                  ' space view occupies rows 0..VIEWH-1
 CONST VCX = 160, VCY = 88          ' space view centre
 CONST DASHY = 176                  ' first dashboard row
 CONST VPLANE = 256                 ' focal length in pixels, as the BBC
-CONST DEMOFRAMES = 260             ' >0 runs a scripted demo and exits; 0 plays
+CONST DEMOFRAMES = 0               ' >0 runs a scripted demo and exits; 0 plays
 CONST DEMOSCENE = 1                ' 1 flight and combat, 2 docking, 3 the docked screens
 CONST PANY = VCY - (SCRH \ 2 - 1)  ' shifts Draw3D's centre up to VCY
 
@@ -108,10 +108,17 @@ DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 
 ' Keyboard flags, refreshed once per frame.
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
-DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock
+DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock, kJump, kChart
+' KEYDOWN reports what is held, not what has just been pressed, so the
+' one-shot keys are turned into edges against the previous frame's set.
+DIM INTEGER kHeld
+CONST KB_TARGET = 1, KB_MISSILE = 2, KB_ECM = 4, KB_DOCK = 8, KB_JUMP = 16
+CONST KB_SCREEN = 32               ' F5, then one bit per key up to F10
+CONST KB_SCREENS = 32+64+128+256+512+1024
 
-' Frame timing.
-DIM FLOAT frameMs, tFrame, tStage
+' Frame timing.  tFlight accumulates only the time spent flying, so the
+' average is not diluted by however long the player spends docked.
+DIM FLOAT frameMs, tFrame, tStage, tFlight
 DIM INTEGER frames
 
 DIM FLOAT prof(5)                  ' cls, stardust, planet, ships, dash, move
@@ -236,4 +243,12 @@ CONST CPX = 244
 CONST CPY = 187
 CONST CPR = 9
 CONST PROFILE = 1                  ' accumulate per-stage frame times
+
+' ------------------------------------------------------- the game shell
+' Which docked or information screen is showing, and what the market
+' screen's action key does.
+CONST SCR_STATUS = 0, SCR_INVENT = 1, SCR_MARKET = 2, SCR_EQUIP = 3
+CONST SCR_LONG = 4, SCR_SHORT = 5, SCR_DATA = 6
+CONST CMDRFILE = "A:/cmdr.txt"
+DIM INTEGER quitGame, dscreen, dsel, dbuy
 

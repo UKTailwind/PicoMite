@@ -1,65 +1,76 @@
 ' =====================================================================
-'  Start up and the frame loop
+'  Start up, then either the game or one of the scripted demos
+'
+'  DEMOFRAMES is 0 for a game anyone can play and non-zero for a demo
+'  that flies itself, photographs a few frames and reports; the demos are
+'  how each phase was tested and they are kept working.
 ' =====================================================================
 SetupScreen
 LoadStats
 ProbeObjects
 SetupViews
-IF DEMOSCENE = 3 THEN
-  DockedScreens
-  FRAMEBUFFER CLOSE
-  MODE 1
-  PRINT "docked screens done"
-  END
-ELSEIF DEMOSCENE = 2 THEN
-  DockScene
-ELSE
-  TestScene
-ENDIF
+EquipTable
 
-frames = 0
-tFrame = TIMER
-DO
-  IF DEMOFRAMES > 0 THEN
-    IF DEMOSCENE = 2 THEN DockInput frames ELSE DemoInput frames
+IF DEMOFRAMES = 0 THEN
+
+  NewGame
+  RunGame
+
+ELSE
+
+  IF DEMOSCENE = 3 THEN
+    DockedScreens
+    FRAMEBUFFER CLOSE
+    MODE 1
+    PRINT "docked screens done"
+    END
+  ELSEIF DEMOSCENE = 2 THEN
+    DockScene
   ELSE
-    ReadKeys
+    TestScene
   ENDIF
-  IF kQuit OR dead OR docked THEN EXIT DO
-  UpdatePlayer
-  IF kFire THEN FireLaser
-  IF kTarget THEN TargetMissile
-  IF kMissile THEN LaunchMissile
-  IF kECM THEN FireECM
-  IF kDock THEN dockComp = 1 - dockComp
-  IF dockComp THEN DockingComputer
-  IF lasTimer > 0 THEN lasTimer = lasTimer - 1
-  IF lasFlash > 0 THEN lasFlash = lasFlash - 1
-  tStage = TIMER
-  MoveShips
-  Missiles
-  Tactics
-  ECMService
-  Recharge
-  StationCheck
-  StationPolice
-  DockCheck
-  prof(5) = prof(5) + TIMER - tStage
-  DrawFrame
-  FRAMEBUFFER COPY F, N, B
-  mcnt = (mcnt + 1) AND 255
-  frames = frames + 1
-  IF DEMOFRAMES > 0 THEN
+
+  frames = 0
+  tFrame = TIMER
+  DO
+    IF DEMOSCENE = 2 THEN DockInput frames ELSE DemoInput frames
+    IF kQuit OR dead OR docked THEN EXIT DO
+    UpdatePlayer
+    IF kFire THEN FireLaser
+    IF kTarget THEN TargetMissile
+    IF kMissile THEN LaunchMissile
+    IF kECM THEN FireECM
+    IF kDock THEN dockComp = 1 - dockComp
+    IF dockComp THEN DockingComputer
+    IF lasTimer > 0 THEN lasTimer = lasTimer - 1
+    IF lasFlash > 0 THEN lasFlash = lasFlash - 1
+    tStage = TIMER
+    MoveShips
+    Missiles
+    Tactics
+    ECMService
+    Recharge
+    StationCheck
+    StationPolice
+    DockCheck
+    prof(5) = prof(5) + TIMER - tStage
+    DrawFrame
+    FRAMEBUFFER COPY F, N, B
+    mcnt = (mcnt + 1) AND 255
+    frames = frames + 1
     IF frames = 40 OR frames = 80 OR frames = 120 OR frames = 250 THEN SaveShot frames
     IF frames >= DEMOFRAMES THEN EXIT DO
-  ENDIF
-LOOP
-frameMs = (TIMER - tFrame) / frames
+  LOOP
+  tFlight = TIMER - tFrame
+
+ENDIF
 
 IF dead THEN DeathScreen : PAUSE 1500
 CloseAll
 FRAMEBUFFER CLOSE
 MODE 1
+frameMs = 0
+IF frames > 0 THEN frameMs = tFlight / frames
 PRINT "frames"; frames; "  average"; STR$(frameMs, 4, 2); " ms per frame"
 PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10; " Cr  rank "; RankName$()
 PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
@@ -67,6 +78,7 @@ PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
 PRINT "missiles left"; pMissl; "  legal status "; LegalName$()
 PRINT "docked"; docked; "  docking computer"; dockComp
 IF PROFILE THEN
+ IF frames > 0 THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"
   PRINT "  planet   "; STR$(prof(2) / frames, 5, 2); " ms"
@@ -74,5 +86,6 @@ IF PROFILE THEN
   PRINT "  dash     "; STR$(prof(4) / frames, 5, 2); " ms"
   PRINT "  move     "; STR$(prof(5) / frames, 5, 2); " ms"
   PRINT "  the rest is the background framebuffer copy, which paces to 60 Hz"
+ ENDIF
 ENDIF
 END

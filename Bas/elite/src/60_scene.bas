@@ -9,21 +9,23 @@
 '  something tumbling, and the planet close enough to show its curve
 '  along the bottom of the screen.
 ' =====================================================================
-' The starting state: a new commander at Lave, just launched from the
-' station.  The bubble is built by the same code the game uses on
-' arrival, so the planet's markings, the station's spin and the sun's
-' position all come from Lave's seeds rather than being placed by hand.
-SUB TestScene
-  LOCAL INTEGER n, i
-  ' Player state
+' A brand new commander at Lave, with a hundred credits, three missiles
+' and a pulse laser.  Everything the game needs to start is set here, so
+' the test scene and a real new game begin from the same state.
+SUB NewCommander
+  LOCAL INTEGER i
   pRoll = JCENTRE : pPitch = JCENTRE
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
   cashTenths = 1000 : holdSize = 20
   ' A new commander carries a pulse laser on the front view only.
   lasPower = 15 : lasTimer = 0 : lasFlash = 0
-  kills = 0 : dead = 0 : energyUnit = 0
+  kills = 0 : dead = 0 : energyUnit = 0 : legal = 0
+  shots = 0 : hits = 0
+  docked = 0 : dockComp = 0 : msLock = -1
   vw = 0 : inWitch = 0
+  FOR i = 0 TO NEQUIP - 1 : eqOwned(i) = 0 : NEXT i
+  FOR i = 0 TO NGOODS - 1 : cargo(i) = 0 : NEXT i
   InitStardust
   LoadMarket
 
@@ -40,7 +42,15 @@ SUB TestScene
   curX = homeX : curY = homeY
   mkByte = 0
   MakeMarket sysEco, mkByte
+END SUB
 
+' Just launched from the station at Lave.  The bubble is built by the
+' same code the game uses on arrival, so the planet's markings, the
+' station's spin and the sun's position all come from Lave's seeds
+' rather than being placed by hand.
+SUB TestScene
+  LOCAL INTEGER n
+  NewCommander
   LaunchState
 
   ' Some traffic to look at.
@@ -70,6 +80,7 @@ SUB DemoInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   kTarget = 0 : kMissile = 0 : kECM = 0
+  kJump = 0 : kChart = 0
   SELECT CASE f
     CASE 0 TO 9     : kFaster = 1                  ' ease forward only
     CASE 20 TO 120  : kFire = 1                    ' hold the trigger down
@@ -156,6 +167,7 @@ SUB DockInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
+  kJump = 0 : kChart = 0
 END SUB
 
 ' Draw each docked screen once and photograph it.  Nothing here is

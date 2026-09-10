@@ -73,9 +73,20 @@ SUB Crash
   ENDIF
 END SUB
 
+' Inside.  The station repairs the ship and cools the laser, but it does
+' not give anything away: fuel, missiles and equipment all have to be
+' bought, and the hold and the legal record come in exactly as they were.
 SUB DoDock
   docked = 1
   dSpeed = 0
+  dockComp = 0
+  msLock = -1
+  pEnergy = 255 : pFsh = 255 : pAsh = 255
+  pLasT = 0 : pCabT = 30 : pAltit = 200
+  pRoll = JCENTRE : pPitch = JCENTRE
+  ' Nothing outside matters any more, and the Draw3D objects the bubble
+  ' was holding are better returned to the pool than kept.
+  ClearSlots
 END SUB
 
 ' The docking computer flies the approach for you: it lines the ship up
