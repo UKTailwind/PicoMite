@@ -5,22 +5,28 @@ SetupScreen
 LoadStats
 ProbeObjects
 SetupViews
-TestScene
+IF DEMOSCENE = 2 THEN
+  DockScene
+ELSE
+  TestScene
+ENDIF
 
 frames = 0
 tFrame = TIMER
 DO
   IF DEMOFRAMES > 0 THEN
-    DemoInput frames
+    IF DEMOSCENE = 2 THEN DockInput frames ELSE DemoInput frames
   ELSE
     ReadKeys
   ENDIF
-  IF kQuit OR dead THEN EXIT DO
+  IF kQuit OR dead OR docked THEN EXIT DO
   UpdatePlayer
   IF kFire THEN FireLaser
   IF kTarget THEN TargetMissile
   IF kMissile THEN LaunchMissile
   IF kECM THEN FireECM
+  IF kDock THEN dockComp = 1 - dockComp
+  IF dockComp THEN DockingComputer
   IF lasTimer > 0 THEN lasTimer = lasTimer - 1
   IF lasFlash > 0 THEN lasFlash = lasFlash - 1
   tStage = TIMER
@@ -30,6 +36,8 @@ DO
   ECMService
   Recharge
   StationCheck
+  StationPolice
+  DockCheck
   prof(5) = prof(5) + TIMER - tStage
   DrawFrame
   FRAMEBUFFER COPY F, N, B
@@ -51,6 +59,7 @@ PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10
 PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
 PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
 PRINT "missiles left"; pMissl; "  legal status "; LegalName$()
+PRINT "docked"; docked; "  docking computer"; dockComp
 IF PROFILE THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"

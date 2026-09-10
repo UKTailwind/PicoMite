@@ -14,7 +14,7 @@ SUB ReadKeys
   LOCAL kb$ LENGTH 2
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
-  kTarget = 0 : kMissile = 0 : kECM = 0
+  kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
   kView = -1 : kPause = 0
   ' INKEY$ first: every KEYDOWN call empties the console input buffer.
   kb$ = INKEY$

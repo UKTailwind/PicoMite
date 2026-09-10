@@ -50,6 +50,7 @@ SUB FireLaser
   IF sEne(best) <= 0 THEN
     IF sTyp(best) = T_STATION THEN
       sEne(best) = bEne(sBp(best))       ' a station cannot be shot down
+      AngerStation
     ELSE
       Explode best
     ENDIF

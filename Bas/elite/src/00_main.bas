@@ -42,6 +42,7 @@ CONST VCX = 160, VCY = 88          ' space view centre
 CONST DASHY = 176                  ' first dashboard row
 CONST VPLANE = 256                 ' focal length in pixels, as the BBC
 CONST DEMOFRAMES = 260             ' >0 runs a scripted demo and exits; 0 plays
+CONST DEMOSCENE = 1                ' 1 the flight and combat demo, 2 docking
 CONST PANY = VCY - (SCRH \ 2 - 1)  ' shifts Draw3D's centre up to VCY
 
 ' ------------------------------------------------------- universe size
@@ -107,7 +108,7 @@ DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 
 ' Keyboard flags, refreshed once per frame.
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
-DIM INTEGER kView, kPause, kTarget, kMissile, kECM
+DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock
 
 ' Frame timing.
 DIM FLOAT frameMs, tFrame, tStage
@@ -133,9 +134,17 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 ' how hot it has got.
 CONST LASPULSE = 4                 ' frames between pulse laser shots
 DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+' Docking.  All five approach tests are angles, expressed as fractions of
+' a unit vector: about 26 degrees off the slot's face, 22 degrees off dead
+' ahead, and 34 degrees of roll.
+CONST DOCKRANGE = 280              ' touching distance: the station spans 160
+CONST DOCKFACE = 0.896             ' the station's nose back towards us
+CONST DOCKCONE = 0.927             ' how nearly dead ahead it must be
+CONST DOCKROLL = 0.833             ' how closely our roll must fit the slot
+
 CONST MSTURN = 0.22                ' how hard a missile swings onto a bearing
 CONST ECMFRAMES = 24               ' how long one burst runs, and drains energy
-DIM INTEGER msLock, ecmActive, legal
+DIM INTEGER msLock, ecmActive, legal, docked, dockComp
 
 ' Arrival distances are in units of the step the original's sign byte moves in.
 CONST UNIT = 65536                 ' one step of the original's sign byte

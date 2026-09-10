@@ -111,3 +111,49 @@ SUB DumpSlots
     PRINT
   NEXT n
 END SUB
+
+' A scene that exists only to prove the docking approach: the station
+' ahead with its slot facing us, and the computer flying us in.  The
+' station rolls all the time, so the alignment test is only satisfied for
+' part of each turn - the approach has to arrive at the right moment.
+SUB DockScene
+  LOCAL INTEGER n
+  pRoll = JCENTRE : pPitch = JCENTRE
+  pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
+  pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
+  cashTenths = 1000 : holdSize = 20
+  lasPower = 15 : kills = 0 : dead = 0 : docked = 0
+  vw = 0 : inWitch = 0 : msLock = -1
+  InitStardust
+  LoadMarket
+  gGal = 1
+  SetGalaxy 1
+  FOR n = 0 TO 255
+    SysData
+    IF SysName$() = "LAVE" THEN EXIT FOR
+    NextSystem
+  NEXT n
+  homeSys = n : selSys = n
+  homeX = sysX : homeY = sysY * 2
+  curX = homeX : curY = homeY
+
+  ClearSlots
+  MATH Q_EULER RAD(35), RAD(40), 0, qA() : qA(4) = 1
+  n = NewShip(T_CRATER, 0, -20000, 3 * UNIT, qA())
+  IF n >= 0 THEN sRol(n) = 127
+
+  ' Slot towards us, and turning as it always does.
+  MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_STATION, 0, 0, 7000, qA())
+  IF n >= 0 THEN sRol(n) = 255 : sAI(n) = 1
+  dSpeed = 0
+  inSafe = 1
+  mcnt = 0
+  dockComp = 1
+END SUB
+
+SUB DockInput(f AS INTEGER)
+  kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
+  kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
+  kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
+END SUB

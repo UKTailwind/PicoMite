@@ -42,6 +42,7 @@ CONST VCX = 160, VCY = 88          ' space view centre
 CONST DASHY = 176                  ' first dashboard row
 CONST VPLANE = 256                 ' focal length in pixels, as the BBC
 CONST DEMOFRAMES = 260             ' >0 runs a scripted demo and exits; 0 plays
+CONST DEMOSCENE = 1                ' 1 the flight and combat demo, 2 docking
 CONST PANY = VCY - (SCRH \ 2 - 1)  ' shifts Draw3D's centre up to VCY
 
 ' ------------------------------------------------------- universe size
@@ -107,7 +108,7 @@ DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 
 ' Keyboard flags, refreshed once per frame.
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
-DIM INTEGER kView, kPause, kTarget, kMissile, kECM
+DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock
 
 ' Frame timing.
 DIM FLOAT frameMs, tFrame, tStage
@@ -133,9 +134,17 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 ' how hot it has got.
 CONST LASPULSE = 4                 ' frames between pulse laser shots
 DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+' Docking.  All five approach tests are angles, expressed as fractions of
+' a unit vector: about 26 degrees off the slot's face, 22 degrees off dead
+' ahead, and 34 degrees of roll.
+CONST DOCKRANGE = 280              ' touching distance: the station spans 160
+CONST DOCKFACE = 0.896             ' the station's nose back towards us
+CONST DOCKCONE = 0.927             ' how nearly dead ahead it must be
+CONST DOCKROLL = 0.833             ' how closely our roll must fit the slot
+
 CONST MSTURN = 0.22                ' how hard a missile swings onto a bearing
 CONST ECMFRAMES = 24               ' how long one burst runs, and drains energy
-DIM INTEGER msLock, ecmActive, legal
+DIM INTEGER msLock, ecmActive, legal, docked, dockComp
 
 ' Arrival distances are in units of the step the original's sign byte moves in.
 CONST UNIT = 65536                 ' one step of the original's sign byte
@@ -230,22 +239,28 @@ SetupScreen
 LoadStats
 ProbeObjects
 SetupViews
-TestScene
+IF DEMOSCENE = 2 THEN
+  DockScene
+ELSE
+  TestScene
+ENDIF
 
 frames = 0
 tFrame = TIMER
 DO
   IF DEMOFRAMES > 0 THEN
-    DemoInput frames
+    IF DEMOSCENE = 2 THEN DockInput frames ELSE DemoInput frames
   ELSE
     ReadKeys
   ENDIF
-  IF kQuit OR dead THEN EXIT DO
+  IF kQuit OR dead OR docked THEN EXIT DO
   UpdatePlayer
   IF kFire THEN FireLaser
   IF kTarget THEN TargetMissile
   IF kMissile THEN LaunchMissile
   IF kECM THEN FireECM
+  IF kDock THEN dockComp = 1 - dockComp
+  IF dockComp THEN DockingComputer
   IF lasTimer > 0 THEN lasTimer = lasTimer - 1
   IF lasFlash > 0 THEN lasFlash = lasFlash - 1
   tStage = TIMER
@@ -255,6 +270,8 @@ DO
   ECMService
   Recharge
   StationCheck
+  StationPolice
+  DockCheck
   prof(5) = prof(5) + TIMER - tStage
   DrawFrame
   FRAMEBUFFER COPY F, N, B
@@ -276,6 +293,7 @@ PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10
 PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
 PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
 PRINT "missiles left"; pMissl; "  legal status "; LegalName$()
+PRINT "docked"; docked; "  docking computer"; dockComp
 IF PROFILE THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"
@@ -579,7 +597,7 @@ SUB ReadKeys
   LOCAL kb$ LENGTH 2
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
-  kTarget = 0 : kMissile = 0 : kECM = 0
+  kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
   kView = -1 : kPause = 0
   ' INKEY$ first: every KEYDOWN call empties the console input buffer.
   kb$ = INKEY$
@@ -1427,6 +1445,52 @@ SUB DumpSlots
   NEXT n
 END SUB
 
+' A scene that exists only to prove the docking approach: the station
+' ahead with its slot facing us, and the computer flying us in.  The
+' station rolls all the time, so the alignment test is only satisfied for
+' part of each turn - the approach has to arrive at the right moment.
+SUB DockScene
+  LOCAL INTEGER n
+  pRoll = JCENTRE : pPitch = JCENTRE
+  pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
+  pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
+  cashTenths = 1000 : holdSize = 20
+  lasPower = 15 : kills = 0 : dead = 0 : docked = 0
+  vw = 0 : inWitch = 0 : msLock = -1
+  InitStardust
+  LoadMarket
+  gGal = 1
+  SetGalaxy 1
+  FOR n = 0 TO 255
+    SysData
+    IF SysName$() = "LAVE" THEN EXIT FOR
+    NextSystem
+  NEXT n
+  homeSys = n : selSys = n
+  homeX = sysX : homeY = sysY * 2
+  curX = homeX : curY = homeY
+
+  ClearSlots
+  MATH Q_EULER RAD(35), RAD(40), 0, qA() : qA(4) = 1
+  n = NewShip(T_CRATER, 0, -20000, 3 * UNIT, qA())
+  IF n >= 0 THEN sRol(n) = 127
+
+  ' Slot towards us, and turning as it always does.
+  MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_STATION, 0, 0, 7000, qA())
+  IF n >= 0 THEN sRol(n) = 255 : sAI(n) = 1
+  dSpeed = 0
+  inSafe = 1
+  mcnt = 0
+  dockComp = 1
+END SUB
+
+SUB DockInput(f AS INTEGER)
+  kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
+  kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
+  kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
+END SUB
+
 ' =====================================================================
 '  The galaxy
 '
@@ -1957,6 +2021,7 @@ SUB FireLaser
   IF sEne(best) <= 0 THEN
     IF sTyp(best) = T_STATION THEN
       sEne(best) = bEne(sBp(best))       ' a station cannot be shot down
+      AngerStation
     ELSE
       Explode best
     ENDIF
@@ -2333,6 +2398,165 @@ SUB DeathScreen
   TEXT VCX, 100, "Kills: " + STR$(kills) + "   " + RankName$(), "CT", 7, 1, cWhite
   TEXT VCX, 115, "Cash: " + STR$(cashTenths / 10) + " Cr", "CT", 7, 1, cWhite
   FRAMEBUFFER COPY F, N
+END SUB
+
+' =====================================================================
+'  Docking, and what the station does about you
+'
+'  Docking is not a collision, it is five separate tests, and failing any
+'  one of them at speed is fatal.  The slot is a letterbox on one face of
+'  the station, so you have to arrive at the right face, pointing at it,
+'  lined up with it, and rolled to match it.  That last test is why
+'  docking is a manoeuvre rather than an approach: the station turns all
+'  the time, so the roll that fits has to be flown, not held.
+'
+'  The tests, all as fractions of a unit vector:
+'    1  the station is not hostile
+'    2  its own nose points back at us, within about 26 degrees
+'    3  it is in front of us at all
+'    4  it is nearly dead ahead, within about 22 degrees
+'    5  our roll matches the slot, within about 34 degrees
+'
+'  Below speed 5 a failed approach only bounces.  Above it, it does not.
+' =====================================================================
+
+' Run once a frame while the station is close enough to matter.
+SUB DockCheck
+  LOCAL INTEGER n
+  LOCAL FLOAT d, tz2, rx, nz
+  n = SLOT_STAR
+  IF sTyp(n) <> T_STATION THEN EXIT SUB
+  IF dead THEN EXIT SUB
+  ' The station is only ever entered through the one face, so anything
+  ' behind us is not an approach at all - which matters immediately after
+  ' launching, when we are a couple of hundred units in front of the slot
+  ' with the station at our back.
+  IF sZ(n) <= 0 THEN EXIT SUB
+  d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
+  IF d > DOCKRANGE THEN EXIT SUB
+
+  ' The station's own orientation: where its nose points, and how its
+  ' slot is rolled.
+  MATH SLICE sQ(), , n, qA()
+  MATH Q_VECTOR 0, 0, 1, qB() : MATH Q_ROTATE qA(), qB(), qV()
+  nz = qV(3)
+  MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
+  rx = qV(1)
+  tz2 = sZ(n) / d
+
+  ' 1: a station we have attacked will not take us.
+  IF (sAI(n) AND 128) <> 0 THEN Crash : EXIT SUB
+  ' 2: we must be on the slot's side of it.
+  IF nz > -DOCKFACE THEN Crash : EXIT SUB
+  ' 3 and 4: it has to be nearly dead ahead.
+  IF tz2 < DOCKCONE THEN Crash : EXIT SUB
+  ' 5: and we have to be rolled to fit the letterbox.
+  IF ABS(rx) < DOCKROLL THEN Crash : EXIT SUB
+  DoDock
+END SUB
+
+' A failed approach.  Slowly it is a bump; quickly it is the end.
+SUB Crash
+  IF dSpeed < 5 THEN
+    dSpeed = 1
+    sZ(SLOT_STAR) = sZ(SLOT_STAR) + 300
+    HitPlayer 10
+  ELSE
+    pEnergy = 0
+    dead = 1
+  ENDIF
+END SUB
+
+SUB DoDock
+  docked = 1
+  dSpeed = 0
+END SUB
+
+' The docking computer flies the approach for you: it lines the ship up
+' on the slot and eases in.  The original's is a sequence of nudges to
+' the same controls a player uses, and so is this.
+SUB DockingComputer
+  LOCAL INTEGER n
+  LOCAL FLOAT d, ux, uy, uz, rx
+  n = SLOT_STAR
+  IF sTyp(n) <> T_STATION THEN EXIT SUB
+  d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
+  IF d < 1 THEN EXIT SUB
+  ux = sX(n) / d : uy = sY(n) / d : uz = sZ(n) / d
+
+  ' Steer towards it by pushing the same rate values a held key would.
+  IF ux > 0.05 THEN
+    pRoll = JCENTRE + 40
+  ELSEIF ux < -0.05 THEN
+    pRoll = JCENTRE - 40
+  ELSE
+    pRoll = JCENTRE
+  ENDIF
+  IF uy > 0.05 THEN
+    pPitch = JCENTRE - 30
+  ELSEIF uy < -0.05 THEN
+    pPitch = JCENTRE + 30
+  ELSE
+    pPitch = JCENTRE
+  ENDIF
+
+  ' Roll to match the slot once we are pointing at it.
+  IF uz > 0.9 THEN
+    MATH SLICE sQ(), , n, qA()
+    MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
+    rx = qV(1)
+    IF ABS(rx) < DOCKROLL THEN pRoll = JCENTRE + 30
+  ENDIF
+
+  ' And close, gently.
+  IF d > 4000 THEN
+    dSpeed = 20
+  ELSEIF d > 1200 THEN
+    dSpeed = 8
+  ELSE
+    dSpeed = 3
+  ENDIF
+END SUB
+
+' Leaving.  The original throws a tunnel of expanding squares at you for
+' a moment; ours does the same and then hands back a flying ship.
+SUB LaunchTunnel
+  LOCAL INTEGER i, k, r
+  FOR i = 0 TO 23
+    CLS
+    FOR k = 0 TO 5
+      r = ((i + k * 4) MOD 24) * 7 + 8
+      BOX VCX - r * 1.25, VCY - r, r * 2.5, r * 2, 1, cWhite, -1
+    NEXT k
+    DrawDash
+    ViewName
+    FRAMEBUFFER COPY F, N, B
+  NEXT i
+END SUB
+
+' A station we have attacked sends police after us, on the same schedule
+' that spawns everything else.
+SUB StationPolice
+  LOCAL INTEGER n
+  IF sTyp(SLOT_STAR) <> T_STATION THEN EXIT SUB
+  IF (sAI(SLOT_STAR) AND 128) = 0 THEN EXIT SUB
+  IF (mcnt AND 31) <> 0 THEN EXIT SUB
+  IF nUsed >= NSLOT THEN EXIT SUB
+  MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_VIPER, sX(SLOT_STAR), sY(SLOT_STAR), sZ(SLOT_STAR) - 400, qA())
+  IF n >= 0 THEN
+    sSpd(n) = bSpd(sBp(n))
+    sAI(n) = 128 OR 56              ' police are single minded about it
+  ENDIF
+END SUB
+
+' Attacking the station turns it, and everything it can call on, against
+' you.  Nothing can shoot the station down, so this is the only
+' consequence it has.
+SUB AngerStation
+  IF sTyp(SLOT_STAR) = T_STATION THEN sAI(SLOT_STAR) = sAI(SLOT_STAR) OR 128
+  legal = legal + 64
+  IF legal > 255 THEN legal = 255
 END SUB
 
 ' ======================================================================
