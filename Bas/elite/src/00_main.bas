@@ -122,11 +122,15 @@ DIM INTEGER sysX, sysY, sysGov, sysEco, sysTech, sysPop, sysProd, sysRad
 ' Where we are, where the chart cursor is, and which system it picked.
 ' All in raw galaxy coordinates: y is the unhalved value, and the charts
 ' halve it themselves.
-DIM INTEGER homeX, homeY, homeSys, curX, curY, selSys
+DIM INTEGER homeX, homeY, homeSys, curX, curY, selSys, inWitch
 CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRION"
 
 ' The market: seventeen commodities, priced from the system's economy and
 ' the one random byte drawn on arrival.
+' Arrival distances are in units of the step the original's sign byte moves in.
+CONST UNIT = 65536                 ' one step of the original's sign byte
+CONST LAUNCHSPD = 12               ' speed immediately after launching
+
 ' Chart geometry, converted from the original x * 1.25.
 CONST CHTOP = 24                   ' first chart row, under the title rule
 CONST SRCX = 130                   ' short range chart centre, ours

@@ -9,48 +9,47 @@
 '  something tumbling, and the planet close enough to show its curve
 '  along the bottom of the screen.
 ' =====================================================================
+' The starting state: a new commander at Lave, just launched from the
+' station.  The bubble is built by the same code the game uses on
+' arrival, so the planet's markings, the station's spin and the sun's
+' position all come from Lave's seeds rather than being placed by hand.
 SUB TestScene
-  LOCAL INTEGER n
-  ClearSlots
-
+  LOCAL INTEGER n, i
   ' Player state
-  pRoll = JCENTRE : pPitch = JCENTRE : dSpeed = 0
+  pRoll = JCENTRE : pPitch = JCENTRE
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
-  vw = 0 : mcnt = 0 : inSafe = 1
+  cashTenths = 1000 : holdSize = 20
+  vw = 0 : inWitch = 0
   InitStardust
+  LoadMarket
 
-  ' The planet, low and ahead, one station orbit away.  It is tilted so
-  ' the crater faces us: with the up vector square on, the crater's plane
-  ' is edge on and it projects to a line, which is correct but shows
-  ' nothing.
-  MATH Q_EULER 0, RAD(40), 0, qA() : qA(4) = 1
-  n = NewShip(T_CRATER, 0, -20000, 50000, qA())
+  ' Find Lave and make it home.
+  gGal = 1
+  SetGalaxy 1
+  FOR i = 0 TO 255
+    SysData
+    IF SysName$() = "LAVE" THEN EXIT FOR
+    NextSystem
+  NEXT i
+  homeSys = i : selSys = i
+  homeX = sysX : homeY = sysY * 2
+  curX = homeX : curY = homeY
+  mkByte = 0
+  MakeMarket sysEco, mkByte
 
-  ' The station we have just left, turning as it always does
-  MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
-  n = NewShip(T_STATION, 0, 0, 800, qA())
-  IF n >= 0 THEN sRol(n) = 127        ' 127 = turn for ever
+  LaunchState
 
-  ' A Cobra heading away from us
+  ' Some traffic to look at.
   MATH Q_EULER RAD(20), 0, 0, qA() : qA(4) = 1
   n = NewShip(T_COBRA3, 900, 150, 3500, qA())
   IF n >= 0 THEN sSpd(n) = 12
-
-  ' A Viper crossing
   MATH Q_EULER RAD(-70), RAD(10), 0, qA() : qA(4) = 1
   n = NewShip(T_VIPER, -1200, -300, 5000, qA())
   IF n >= 0 THEN sSpd(n) = 20
-
-  ' An asteroid, tumbling
   MATH Q_EULER RAD(30), RAD(20), RAD(10), qA() : qA(4) = 1
   n = NewShip(T_ASTEROID, 400, 600, 2200, qA())
   IF n >= 0 THEN sPit(n) = 127
-
-  ' And a canister drifting close by
-  MATH Q_EULER RAD(10), RAD(200), 0, qA() : qA(4) = 1
-  n = NewShip(T_CANISTER, -350, 200, 1200, qA())
-  IF n >= 0 THEN sRol(n) = 130        ' slow tumble the other way
 END SUB
 
 ' ------------------------------------------------- the scripted demo
@@ -69,6 +68,14 @@ SUB DemoInput(f AS INTEGER)
     CASE 170 TO 199 : vw = 3                       ' look right
     CASE 200 TO 209 : vw = 0
     CASE 210 TO 259 : kRollL = 1 : kDn = 1         ' roll and dive together
+  END SELECT
+  ' Halfway through, jump somewhere: this rebuilds the whole bubble from
+  ' the destination's seeds and charges the tank for the distance.
+  IF f = 205 THEN
+    Hyperspace selSys
+  ENDIF
+  SELECT CASE f
+    CASE 260 TO 999 : kFaster = 1
   END SELECT
 END SUB
 

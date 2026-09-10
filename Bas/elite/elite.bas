@@ -122,11 +122,15 @@ DIM INTEGER sysX, sysY, sysGov, sysEco, sysTech, sysPop, sysProd, sysRad
 ' Where we are, where the chart cursor is, and which system it picked.
 ' All in raw galaxy coordinates: y is the unhalved value, and the charts
 ' halve it themselves.
-DIM INTEGER homeX, homeY, homeSys, curX, curY, selSys
+DIM INTEGER homeX, homeY, homeSys, curX, curY, selSys, inWitch
 CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRION"
 
 ' The market: seventeen commodities, priced from the system's economy and
 ' the one random byte drawn on arrival.
+' Arrival distances are in units of the step the original's sign byte moves in.
+CONST UNIT = 65536                 ' one step of the original's sign byte
+CONST LAUNCHSPD = 12               ' speed immediately after launching
+
 ' Chart geometry, converted from the original x * 1.25.
 CONST CHTOP = 24                   ' first chart row, under the title rule
 CONST SRCX = 130                   ' short range chart centre, ours
@@ -230,6 +234,7 @@ DO
   UpdatePlayer
   tStage = TIMER
   MoveShips
+  StationCheck
   prof(5) = prof(5) + TIMER - tStage
   DrawFrame
   FRAMEBUFFER COPY F, N, B
@@ -907,19 +912,19 @@ END SUB
 ' vectors projected flat, so the pattern turns with the planet.
 SUB Surface(n AS INTEGER, cx AS INTEGER, cy AS INTEGER, r AS INTEGER)
   LOCAL INTEGER k
-  LOCAL FLOAT vnx, vny, vrx, vry, vrz, vsx, vsy, ox, oy, ax, ay, bx, by
+  LOCAL FLOAT vnx, vny, vnz, vrx, vry, vrz, vsx, vsy, vsz, ox, oy, ax, ay, bx, by
   MATH SLICE sQ(), , n, qA()
   MATH Q_VECTOR 0, 0, 1, qB() : MATH Q_ROTATE qA(), qB(), qV()
-  vnx = qV(1) * qV(4) : vny = qV(2) * qV(4)                        ' nose
+  vnx = qV(1) : vny = qV(2) : vnz = qV(3)          ' nose
   MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
-  vrx = qV(1) * qV(4) : vry = qV(2) * qV(4) : vrz = qV(3) * qV(4)  ' up
+  vrx = qV(1) : vry = qV(2) : vrz = qV(3)          ' up
   MATH Q_VECTOR 1, 0, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
-  vsx = qV(1) * qV(4) : vsy = qV(2) * qV(4)                        ' side
+  vsx = qV(1) : vsy = qV(2) : vsz = qV(3)          ' side
 
   IF sTyp(n) = T_CRATER THEN
-    ' Drawn only while the up vector, which the crater sits on, is
-    ' pointing away from us rather than towards us.
-    IF vrz < 0 THEN EXIT SUB
+    ' The crater sits on the up pole, in the plane the nose and side
+    ' vectors span, and is only drawn while that pole faces us.
+    IF vrz > 0 THEN EXIT SUB
     ox = cx + 0.867 * r * vrx
     oy = cy - 0.867 * r * vry
     ax = 0.5 * r * vnx : ay = 0.5 * r * vny
@@ -930,24 +935,34 @@ SUB Surface(n AS INTEGER, cx AS INTEGER, cy AS INTEGER, r AS INTEGER)
     NEXT k
     POLYGON NSEG, pgx(), pgy(), cWhite
   ELSE
-    ' Equator and meridians: three great circles, each an ellipse from a
-    ' conjugate pair of the planet's projected orientation vectors.
-    Meridian cx, cy, r, vnx, vny, vrx, vry
-    Meridian cx, cy, r, vsx, vsy, vrx, vry
-    Meridian cx, cy, r, vnx, vny, vsx, vsy
+    ' An equator and one meridian.  Only the half of each great circle
+    ' that faces us is drawn - a closed ellipse would show the far side
+    ' too and the planet would read as a ball of wire.
+    HalfCircle cx, cy, r, vnx, vny, vnz, vrx, vry, vrz
+    HalfCircle cx, cy, r, vsx, vsy, vsz, vrx, vry, vrz
   ENDIF
 END SUB
 
-' One great circle of the planet, as a closed ellipse from two conjugate
-' radius vectors.  The original draws only the half facing us; a closed
-' ellipse costs the same here and reads the same at this size.
-SUB Meridian(cx AS INTEGER, cy AS INTEGER, r AS INTEGER, ax AS FLOAT, ay AS FLOAT, bx AS FLOAT, by AS FLOAT)
-  LOCAL INTEGER k
-  FOR k = 0 TO NSEG - 1
-    pgx(k) = cx + r * (ax * ctab(k) + bx * stab(k))
-    pgy(k) = cy - r * (ay * ctab(k) + by * stab(k))
+' One great circle of the planet, drawn only where it faces the viewer.
+' The pair of vectors are conjugate radii: the curve is a*cos + b*sin, and
+' a point is on the near side when its own z is towards us.
+SUB HalfCircle(cx AS INTEGER, cy AS INTEGER, r AS INTEGER, ax AS FLOAT, ay AS FLOAT, az AS FLOAT, bx AS FLOAT, by AS FLOAT, bz AS FLOAT)
+  LOCAL INTEGER k, px, py, lx, ly, have
+  LOCAL FLOAT c, sn, pz
+  have = 0
+  FOR k = 0 TO NSEG
+    c = ctab(k AND (NSEG - 1))
+    sn = stab(k AND (NSEG - 1))
+    pz = az * c + bz * sn
+    IF pz <= 0 THEN
+      px = cx + r * (ax * c + bx * sn)
+      py = cy - r * (ay * c + by * sn)
+      IF have THEN LINE lx, ly, px, py, 1, cWhite
+      lx = px : ly = py : have = 1
+    ELSE
+      have = 0
+    ENDIF
   NEXT k
-  POLYGON NSEG, pgx(), pgy(), cWhite
 END SUB
 
 ' Stardust.  The particles do not live in the world: x and y are pixel
@@ -1276,48 +1291,47 @@ END SUB
 '  something tumbling, and the planet close enough to show its curve
 '  along the bottom of the screen.
 ' =====================================================================
+' The starting state: a new commander at Lave, just launched from the
+' station.  The bubble is built by the same code the game uses on
+' arrival, so the planet's markings, the station's spin and the sun's
+' position all come from Lave's seeds rather than being placed by hand.
 SUB TestScene
-  LOCAL INTEGER n
-  ClearSlots
-
+  LOCAL INTEGER n, i
   ' Player state
-  pRoll = JCENTRE : pPitch = JCENTRE : dSpeed = 0
+  pRoll = JCENTRE : pPitch = JCENTRE
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
-  vw = 0 : mcnt = 0 : inSafe = 1
+  cashTenths = 1000 : holdSize = 20
+  vw = 0 : inWitch = 0
   InitStardust
+  LoadMarket
 
-  ' The planet, low and ahead, one station orbit away.  It is tilted so
-  ' the crater faces us: with the up vector square on, the crater's plane
-  ' is edge on and it projects to a line, which is correct but shows
-  ' nothing.
-  MATH Q_EULER 0, RAD(40), 0, qA() : qA(4) = 1
-  n = NewShip(T_CRATER, 0, -20000, 50000, qA())
+  ' Find Lave and make it home.
+  gGal = 1
+  SetGalaxy 1
+  FOR i = 0 TO 255
+    SysData
+    IF SysName$() = "LAVE" THEN EXIT FOR
+    NextSystem
+  NEXT i
+  homeSys = i : selSys = i
+  homeX = sysX : homeY = sysY * 2
+  curX = homeX : curY = homeY
+  mkByte = 0
+  MakeMarket sysEco, mkByte
 
-  ' The station we have just left, turning as it always does
-  MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
-  n = NewShip(T_STATION, 0, 0, 800, qA())
-  IF n >= 0 THEN sRol(n) = 127        ' 127 = turn for ever
+  LaunchState
 
-  ' A Cobra heading away from us
+  ' Some traffic to look at.
   MATH Q_EULER RAD(20), 0, 0, qA() : qA(4) = 1
   n = NewShip(T_COBRA3, 900, 150, 3500, qA())
   IF n >= 0 THEN sSpd(n) = 12
-
-  ' A Viper crossing
   MATH Q_EULER RAD(-70), RAD(10), 0, qA() : qA(4) = 1
   n = NewShip(T_VIPER, -1200, -300, 5000, qA())
   IF n >= 0 THEN sSpd(n) = 20
-
-  ' An asteroid, tumbling
   MATH Q_EULER RAD(30), RAD(20), RAD(10), qA() : qA(4) = 1
   n = NewShip(T_ASTEROID, 400, 600, 2200, qA())
   IF n >= 0 THEN sPit(n) = 127
-
-  ' And a canister drifting close by
-  MATH Q_EULER RAD(10), RAD(200), 0, qA() : qA(4) = 1
-  n = NewShip(T_CANISTER, -350, 200, 1200, qA())
-  IF n >= 0 THEN sRol(n) = 130        ' slow tumble the other way
 END SUB
 
 ' ------------------------------------------------- the scripted demo
@@ -1336,6 +1350,14 @@ SUB DemoInput(f AS INTEGER)
     CASE 170 TO 199 : vw = 3                       ' look right
     CASE 200 TO 209 : vw = 0
     CASE 210 TO 259 : kRollL = 1 : kDn = 1         ' roll and dive together
+  END SELECT
+  ' Halfway through, jump somewhere: this rebuilds the whole bubble from
+  ' the destination's seeds and charges the tank for the distance.
+  IF f = 205 THEN
+    Hyperspace selSys
+  ENDIF
+  SELECT CASE f
+    CASE 260 TO 999 : kFaster = 1
   END SELECT
 END SUB
 
@@ -1553,10 +1575,13 @@ DATA "Alien items",53,15,"t",192,7
 ' Distance between two systems in tenths of a light year.  The y axis is
 ' halved because the galaxy is drawn half as tall as it is wide.
 FUNCTION SysDist(x0 AS INTEGER, y0 AS INTEGER, x1 AS INTEGER, y1 AS INTEGER) AS INTEGER
-  LOCAL FLOAT dx, dy
+  LOCAL INTEGER dx, dy
   dx = ABS(x1 - x0)
-  dy = ABS(y1 - y0) / 2
-  SysDist = INT(4 * SQR(dx * dx + dy * dy))
+  dy = ABS(y1 - y0) \ 2
+  ' The square root is taken as a whole number and only then multiplied by
+  ' four.  Truncating after the multiply instead would put Lave to Zaonce
+  ' at 5.7 light years rather than the 5.6 every player knows.
+  SysDist = 4 * INT(SQR(dx * dx + dy * dy))
 END FUNCTION
 
 ' Walk the current galaxy looking for the system nearest to (cx, cy) in
@@ -1671,6 +1696,151 @@ END SUB
 SUB DataLine(y AS INTEGER, lb$, v$)
   TEXT 20, y, lb$ + ":", "LT", 7, 1, cWhite
   TEXT 150, y, v$, "LT", 7, 1, cYellow
+END SUB
+
+' =====================================================================
+'  Arriving somewhere: hyperspace, the planet and sun, the station
+'
+'  When the player jumps, the destination system's seeds become the
+'  current ones and a fresh bubble is built around them.  Nothing about
+'  the destination was stored while we were away - the planet's size, its
+'  markings, where the sun sits - it is all regenerated from the seeds.
+'
+'  Distances here are in units of 65536, which is the step the original's
+'  sign byte moves in.  The planet lands three to seven of those ahead,
+'  taken from the system's own seeds, so every system looks different on
+'  arrival but the same system always looks the same.
+' =====================================================================
+
+' Build the bubble for the system the seeds are sitting on.  The planet
+' goes ahead of us and the sun behind, both placed from the seeds, and
+' the planet turns for ever.
+SUB ArriveInSystem
+  LOCAL INTEGER n, pz, sz, sx, ptype
+  ClearSlots
+  SysData
+  ' Planet: three to seven units straight ahead, and it carries a crater
+  ' or an equator depending on a bit of the system's technology level.
+  pz = (((gs0 >> 8) AND 7) + 6) \ 2
+  IF pz < 3 THEN pz = 3
+  ptype = T_PLANET
+  IF (sysTech AND 2) <> 0 THEN ptype = T_CRATER
+  MATH Q_EULER RAD(35), RAD(40), 0, qA() : qA(4) = 1
+  n = NewShip(ptype, 0, 0, pz * UNIT, qA())
+  IF n >= 0 THEN sRol(n) = 127 : sPit(n) = 127
+
+  ' Sun: behind us, an odd number of units away, offset sideways.
+  sz = ((((gs2 >> 8) AND 7) OR 1))
+  sx = ((gs2 >> 8) AND 3) * UNIT
+  MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_SUN, sx, 0, -sz * UNIT, qA())
+
+  dSpeed = 0
+  inSafe = 0
+  mcnt = 0
+END SUB
+
+' The state immediately after launching out of the station's slot: the
+' planet dead ahead one unit away, the station just behind us, and the
+' ship already moving.
+SUB LaunchState
+  LOCAL INTEGER n, ptype
+  ClearSlots
+  SysData
+  ptype = T_PLANET
+  IF (sysTech AND 2) <> 0 THEN ptype = T_CRATER
+  MATH Q_EULER RAD(35), RAD(40), 0, qA() : qA(4) = 1
+  n = NewShip(ptype, 0, 0, UNIT, qA())
+  IF n >= 0 THEN sRol(n) = 127 : sPit(n) = 127
+  MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_STATION, 0, 0, -256, qA())
+  IF n >= 0 THEN
+    ' Sign bit set for anticlockwise, magnitude 127 for no damping: the
+    ' station turns at the same rate for ever.
+    sRol(n) = 255
+    sPit(n) = 0
+    sAI(n) = 1
+  ENDIF
+  dSpeed = LAUNCHSPD
+  inSafe = 1
+  mcnt = 0
+END SUB
+
+' Can we get there on what is in the tank?
+FUNCTION CanReach(target AS INTEGER) AS INTEGER
+  LOCAL INTEGER d, hx, hy
+  hx = homeX : hy = homeY
+  GotoSystem gGal, target
+  SysData
+  d = SysDist(hx, hy, sysX, sysY * 2)
+  GotoSystem gGal, homeSys
+  SysData
+  CanReach = (d <= pFuel)
+END FUNCTION
+
+' Jump.  Fuel pays for the distance, the destination becomes home, and a
+' new bubble is generated.  Very occasionally the jump goes wrong and
+' drops the ship into witchspace, which has no planet, no sun and no
+' station - only Thargoids.
+SUB Hyperspace(target AS INTEGER)
+  LOCAL INTEGER d, hx, hy
+  hx = homeX : hy = homeY
+  GotoSystem gGal, target
+  SysData
+  d = SysDist(hx, hy, sysX, sysY * 2)
+  IF d > pFuel THEN EXIT SUB
+  pFuel = pFuel - d
+  homeSys = target
+  homeX = sysX
+  homeY = sysY * 2
+  curX = homeX : curY = homeY
+  selSys = target
+  ' The market is redrawn on arrival and not touched again until we leave.
+  mkByte = INT(RND * 256)
+  MakeMarket sysEco, mkByte
+  IF RND < 0.004 THEN
+    Witchspace
+  ELSE
+    ArriveInSystem
+  ENDIF
+END SUB
+
+' A mis-jump: nowhere at all, with company.
+SUB Witchspace
+  LOCAL INTEGER n, i
+  ClearSlots
+  FOR i = 0 TO 1
+    MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
+    n = NewShip(T_THARGOID, (i * 2 - 1) * 1500, 200, 4000 + i * 1200, qA())
+    IF n >= 0 THEN sSpd(n) = 20 : sAI(n) = 255
+  NEXT i
+  dSpeed = 0
+  inSafe = 0
+  mcnt = 0
+  inWitch = 1
+END SUB
+
+' The station appears once we are close enough to where it orbits, on the
+' same schedule the original uses - one check every 32 frames.
+SUB StationCheck
+  LOCAL INTEGER n, px, py, pz
+  IF inWitch THEN EXIT SUB
+  IF sTyp(SLOT_PLANET) = 0 THEN EXIT SUB
+  IF (mcnt AND 31) <> 0 THEN EXIT SUB
+  IF sTyp(SLOT_STAR) = T_STATION THEN EXIT SUB
+  ' The station orbits two planet radii from the centre, so it sits one
+  ' radius above the surface on the side we approach from.
+  px = sX(SLOT_PLANET)
+  py = sY(SLOT_PLANET)
+  pz = sZ(SLOT_PLANET) - 2 * PRADIUS
+  inSafe = 0
+  IF ABS(px) < SAFEZONE AND ABS(py) < SAFEZONE AND ABS(pz) < SAFEZONE THEN
+    inSafe = 1
+    IF sTyp(SLOT_STAR) <> 0 THEN KillShip SLOT_STAR
+    MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
+    n = NewShip(T_STATION, px, py, pz, qA())
+    IF n >= 0 THEN sRol(n) = 255 : sAI(n) = 1
+  ENDIF
 END SUB
 
 ' ======================================================================

@@ -19,6 +19,7 @@ DO
   UpdatePlayer
   tStage = TIMER
   MoveShips
+  StationCheck
   prof(5) = prof(5) + TIMER - tStage
   DrawFrame
   FRAMEBUFFER COPY F, N, B

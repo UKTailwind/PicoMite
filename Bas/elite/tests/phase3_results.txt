@@ -1,0 +1,41 @@
+Elite Phase 3 results - the galaxy - PC3 (PicoMiteHDMIWEB V6.03.02b3, 378 MHz)
+Measured 2026-09-10.
+
+Verified against independent Python references, over the whole input space:
+  galaxy   8 galaxies x 256 systems      checksum 1418124007   2.2 s on the board
+  market   8 economies x 256 bytes x 17  checksum  566388444   3.8 s on the board
+
+Both references are anchored to systems and prices any player can check:
+  Lave      Rich Agricultural Dictatorship, tech 5, 2.5 bn, 7000 MCr, radius 4116 km
+  Riedquat  Anarchy, Poor Agricultural
+  Zaonce    Corporate State, Average Industrial, tech 12
+  Lave market: food 3.6 Cr, and no computers, narcotics or firearms in stock
+  Distances from Lave: Zaonce 5.6, Reorte 4.4, Diso 3.6, Leesti 3.6 light years
+
+Screens working: long range chart, short range chart with names, system data.
+Hyperspace: fuel charged by distance, destination becomes home, bubble rebuilt
+from the destination's seeds, with a small chance of a mis-jump into witchspace.
+Arrival places the planet three to seven units ahead and the sun behind, both
+from the system's own seeds, so a system always looks the same when you return.
+The station appears on the original's schedule once inside the safe zone.
+
+Frame cost with the real arrival (planet, sun, station, three ships): 34 ms.
+
+Bugs found and fixed in this phase
+  Name fragments: one contributes a single letter and carries a marker for the
+  letter it lacks. I stripped only the first marker; eleven of the 2048 names
+  carry two. Galaxy 1's famous systems were all correct, so only the
+  whole-universe checksum caught it.
+  Distance: the square root is taken as a whole number and only then multiplied
+  by four. Truncating after the multiply put Lave to Zaonce at 5.7 rather than
+  5.6 light years.
+  Planet markings: drawing each great circle as a closed ellipse showed the far
+  side as well and the planet read as a ball of wire. Only the near half is
+  drawn now.
+
+MMBasic collisions found (all now caught by build.py before upload)
+  step, rnd      reserved as parameter names: break the definition, error at the
+                 CALL site with "Variable name"
+  Distance       a builtin in this firmware: rejected as a FUNCTION name
+  dir, val       builtins that need parentheses: fine as variables, not as
+                 SUB/FUNCTION names - so the checker keeps two separate lists

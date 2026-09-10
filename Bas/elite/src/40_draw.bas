@@ -120,19 +120,19 @@ END SUB
 ' vectors projected flat, so the pattern turns with the planet.
 SUB Surface(n AS INTEGER, cx AS INTEGER, cy AS INTEGER, r AS INTEGER)
   LOCAL INTEGER k
-  LOCAL FLOAT vnx, vny, vrx, vry, vrz, vsx, vsy, ox, oy, ax, ay, bx, by
+  LOCAL FLOAT vnx, vny, vnz, vrx, vry, vrz, vsx, vsy, vsz, ox, oy, ax, ay, bx, by
   MATH SLICE sQ(), , n, qA()
   MATH Q_VECTOR 0, 0, 1, qB() : MATH Q_ROTATE qA(), qB(), qV()
-  vnx = qV(1) * qV(4) : vny = qV(2) * qV(4)                        ' nose
+  vnx = qV(1) : vny = qV(2) : vnz = qV(3)          ' nose
   MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
-  vrx = qV(1) * qV(4) : vry = qV(2) * qV(4) : vrz = qV(3) * qV(4)  ' up
+  vrx = qV(1) : vry = qV(2) : vrz = qV(3)          ' up
   MATH Q_VECTOR 1, 0, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
-  vsx = qV(1) * qV(4) : vsy = qV(2) * qV(4)                        ' side
+  vsx = qV(1) : vsy = qV(2) : vsz = qV(3)          ' side
 
   IF sTyp(n) = T_CRATER THEN
-    ' Drawn only while the up vector, which the crater sits on, is
-    ' pointing away from us rather than towards us.
-    IF vrz < 0 THEN EXIT SUB
+    ' The crater sits on the up pole, in the plane the nose and side
+    ' vectors span, and is only drawn while that pole faces us.
+    IF vrz > 0 THEN EXIT SUB
     ox = cx + 0.867 * r * vrx
     oy = cy - 0.867 * r * vry
     ax = 0.5 * r * vnx : ay = 0.5 * r * vny
@@ -143,24 +143,34 @@ SUB Surface(n AS INTEGER, cx AS INTEGER, cy AS INTEGER, r AS INTEGER)
     NEXT k
     POLYGON NSEG, pgx(), pgy(), cWhite
   ELSE
-    ' Equator and meridians: three great circles, each an ellipse from a
-    ' conjugate pair of the planet's projected orientation vectors.
-    Meridian cx, cy, r, vnx, vny, vrx, vry
-    Meridian cx, cy, r, vsx, vsy, vrx, vry
-    Meridian cx, cy, r, vnx, vny, vsx, vsy
+    ' An equator and one meridian.  Only the half of each great circle
+    ' that faces us is drawn - a closed ellipse would show the far side
+    ' too and the planet would read as a ball of wire.
+    HalfCircle cx, cy, r, vnx, vny, vnz, vrx, vry, vrz
+    HalfCircle cx, cy, r, vsx, vsy, vsz, vrx, vry, vrz
   ENDIF
 END SUB
 
-' One great circle of the planet, as a closed ellipse from two conjugate
-' radius vectors.  The original draws only the half facing us; a closed
-' ellipse costs the same here and reads the same at this size.
-SUB Meridian(cx AS INTEGER, cy AS INTEGER, r AS INTEGER, ax AS FLOAT, ay AS FLOAT, bx AS FLOAT, by AS FLOAT)
-  LOCAL INTEGER k
-  FOR k = 0 TO NSEG - 1
-    pgx(k) = cx + r * (ax * ctab(k) + bx * stab(k))
-    pgy(k) = cy - r * (ay * ctab(k) + by * stab(k))
+' One great circle of the planet, drawn only where it faces the viewer.
+' The pair of vectors are conjugate radii: the curve is a*cos + b*sin, and
+' a point is on the near side when its own z is towards us.
+SUB HalfCircle(cx AS INTEGER, cy AS INTEGER, r AS INTEGER, ax AS FLOAT, ay AS FLOAT, az AS FLOAT, bx AS FLOAT, by AS FLOAT, bz AS FLOAT)
+  LOCAL INTEGER k, px, py, lx, ly, have
+  LOCAL FLOAT c, sn, pz
+  have = 0
+  FOR k = 0 TO NSEG
+    c = ctab(k AND (NSEG - 1))
+    sn = stab(k AND (NSEG - 1))
+    pz = az * c + bz * sn
+    IF pz <= 0 THEN
+      px = cx + r * (ax * c + bx * sn)
+      py = cy - r * (ay * c + by * sn)
+      IF have THEN LINE lx, ly, px, py, 1, cWhite
+      lx = px : ly = py : have = 1
+    ELSE
+      have = 0
+    ENDIF
   NEXT k
-  POLYGON NSEG, pgx(), pgy(), cWhite
 END SUB
 
 ' Stardust.  The particles do not live in the world: x and y are pixel
