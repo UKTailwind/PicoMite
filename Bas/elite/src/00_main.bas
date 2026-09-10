@@ -121,6 +121,14 @@ DIM INTEGER gs0, gs1, gs2, gSys, gGal
 DIM INTEGER sysX, sysY, sysGov, sysEco, sysTech, sysPop, sysProd, sysRad
 CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRION"
 
+' The market: seventeen commodities, priced from the system's economy and
+' the one random byte drawn on arrival.
+CONST NGOODS = 17
+DIM mkName$(NGOODS-1) LENGTH 14, mkUnit$(NGOODS-1) LENGTH 2
+DIM INTEGER mkBase(NGOODS-1), mkFact(NGOODS-1), mkQty(NGOODS-1), mkMask(NGOODS-1)
+DIM INTEGER mkPrice(NGOODS-1), mkStock(NGOODS-1), mkByte
+DIM INTEGER cargo(NGOODS-1), holdSize, cashTenths
+
 ' Rendering options and the view transform's output.
 DIM INTEGER solidMode, showDot
 DIM FLOAT tx, ty, tz
