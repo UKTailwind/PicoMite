@@ -119,10 +119,21 @@ DIM FLOAT prof(5)                  ' cls, stardust, planet, ships, dash, move
 ' held as one string and indexed rather than as 32 separate entries.
 DIM INTEGER gs0, gs1, gs2, gSys, gGal
 DIM INTEGER sysX, sysY, sysGov, sysEco, sysTech, sysPop, sysProd, sysRad
+' Where we are, where the chart cursor is, and which system it picked.
+' All in raw galaxy coordinates: y is the unhalved value, and the charts
+' halve it themselves.
+DIM INTEGER homeX, homeY, homeSys, curX, curY, selSys
 CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRION"
 
 ' The market: seventeen commodities, priced from the system's economy and
 ' the one random byte drawn on arrival.
+' Chart geometry, converted from the original x * 1.25.
+CONST CHTOP = 24                   ' first chart row, under the title rule
+CONST SRCX = 130                   ' short range chart centre, ours
+CONST SRCY = 90
+CONST SRDX = 5                     ' our pixels per galaxy unit across
+CONST SRDY = 2                     ' and down
+
 CONST NGOODS = 17
 DIM mkName$(NGOODS-1) LENGTH 14, mkUnit$(NGOODS-1) LENGTH 2
 DIM INTEGER mkBase(NGOODS-1), mkFact(NGOODS-1), mkQty(NGOODS-1), mkMask(NGOODS-1)

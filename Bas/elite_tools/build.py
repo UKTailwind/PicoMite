@@ -16,15 +16,25 @@ SRC = os.path.normpath(os.path.join(HERE, "..", "elite", "src"))
 DATA = os.path.normpath(os.path.join(HERE, "..", "elite", "data", "ships.bas"))
 OUT = os.path.normpath(os.path.join(HERE, "..", "elite", "elite.bas"))
 
-# MMBasic keywords and no-argument builtins that cannot be used as variable names.
-# Names are unique irrespective of type suffix, so this list is checked case- and suffix-insensitively.
+# Two lists, because the two cases differ.  A keyword or a no-argument
+# builtin - one usable without parentheses - cannot be a variable or a
+# parameter name: it silently breaks the enclosing definition.  A builtin
+# that REQUIRES parentheses is harmless as a variable name (a variable
+# called val or dir is fine) but still cannot be the name of a SUB or
+# FUNCTION, which MMBasic rejects with "Invalid identifier".
 RESERVED = set("""
 pos timer pi date time day name scroll word as min max step to then else next loop until while wend
 for do if endif end sub function local dim const global static option print input line read data restore
 mode font colour color cls box circle rbox text pixel arc polygon triangle blit sprite framebuffer
-math play pause timer inkey key keydown asc chr val str hex oct bin left right mid instr len space
+math play pause inkey key keydown asc chr str hex oct bin left right space
 error on off gosub goto return select case exit erase peek poke var save load run new list edit
-rnd timer pi date time day pos inkey mm epoch cursor pause settick font mode
+rnd mm epoch cursor settick
+""".split())
+
+# Everything above, plus the parenthesised builtins, for SUB/FUNCTION names.
+RESERVED_NAMES = RESERVED | set("""
+distance choice field trim eof lof loc dir cwd bound val ln log exp sin cos tan sqr abs int fix sgn
+instr mid val len tab atn asin acos deg rad pin port pwm sound tone
 """.split())
 
 DECL = re.compile(r"^\s*(?:DIM|LOCAL|CONST|STATIC)\s+(.*)$", re.I)
@@ -114,6 +124,15 @@ def check(text):
                 problems.append("line %d: '%s' already declared in %s at line %d" % (i, n, key_scope, seen[key]))
             else:
                 seen[key] = i
+
+    # A SUB or FUNCTION whose own name is a builtin - MMBasic rejects the
+    # definition with "Invalid identifier", which at least points at the
+    # right line, unlike the parameter case.
+    for i, ln in enumerate(lines, 1):
+        m = SUBDEF.match(ln.split("'")[0])
+        if m and m.group(2).lower().rstrip("$%!") in RESERVED_NAMES:
+            problems.append("line %d: '%s' is a reserved word or builtin: %s"
+                            % (i, m.group(2), ln.strip()))
 
     # SUB/FUNCTION name colliding with a variable name
     subs = {m.group(2).lower().rstrip("$%!") for m in (SUBDEF.match(l.split("'")[0]) for l in lines) if m}
