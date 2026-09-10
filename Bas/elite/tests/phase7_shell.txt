@@ -64,10 +64,26 @@ C toggled the docking computer on and off every frame and holding M emptied
 the racks in a fifth of a second.  Roll, pitch, speed and the trigger stay
 level-triggered, which is what they should be.
 
-Not yet exercised on hardware
------------------------------
-Docking from flight into the docked loop.  DoDock now resets the ship and
-clears the slots, and the approach itself was proved in phase 5, but the
-transition into RunDocked has not been flown: it cannot be driven from the
-console, and the board stopped responding to an AUTOSAVE before the patched
-build that would have tested it could be uploaded.
+Docking, and the round trip
+---------------------------
+Flown with the docking computer, starting from the phase 5 approach scene
+rather than from the station, so the transition into the docked loop is the
+real one and not a flag set by hand.  The computer took about 17 seconds to
+line up and go in; captures/shell_after_docking.png is the screen that came
+up on the other side, reading Condition: Docked with the cash and the legal
+record carried in unchanged.  F1 then relaunched and the report afterwards
+read docked 0 with two slots in use, the planet and the station, so the
+bubble was rebuilt on the way out.
+
+The report taken at the moment of docking read:
+
+  frames 1007  average  16.68 ms per frame
+  slots in use 0  dead 0  witchspace 0
+  docked 1  docking computer 0
+
+Nought slots and the computer switched off are DoDock returning the Draw3D
+objects to the pool and putting the controls back where the player left them.
+
+Finally the committed build itself, unpatched, was uploaded and driven
+through the same docked sequence: cash 100 -> 30 Cr for two tonnes and a
+missile, launched, flew at 17.47 ms a frame, escaped.
