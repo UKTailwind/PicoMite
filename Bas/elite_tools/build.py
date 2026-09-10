@@ -26,7 +26,7 @@ RESERVED = set("""
 pos timer pi date time day name scroll word as min max step to then else next loop until while wend
 for do if endif end sub function local dim const global static option print input line read data restore
 mode font colour color cls box circle rbox text pixel arc polygon triangle blit sprite framebuffer
-math play pause inkey key keydown asc chr str hex oct bin left right space
+math play pause inkey key keydown asc chr str hex oct bin space
 error on off gosub goto return select case exit erase peek poke var save load run new list edit
 rnd mm epoch cursor settick
 """.split())
@@ -34,7 +34,7 @@ rnd mm epoch cursor settick
 # Everything above, plus the parenthesised builtins, for SUB/FUNCTION names.
 RESERVED_NAMES = RESERVED | set("""
 distance choice field trim eof lof loc dir cwd bound val ln log exp sin cos tan sqr abs int fix sgn
-instr mid val len tab atn asin acos deg rad pin port pwm sound tone
+instr mid val len tab atn asin acos deg rad pin port pwm sound tone left right chr asc str
 """.split())
 
 DECL = re.compile(r"^\s*(?:DIM|LOCAL|CONST|STATIC)\s+(.*)$", re.I)

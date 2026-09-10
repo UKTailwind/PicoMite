@@ -1,0 +1,37 @@
+Elite Phase 4 results - combat - PC3 (PicoMiteHDMIWEB V6.03.02b3, 378 MHz)
+Measured 2026-09-10.
+
+The laser does not travel.  Firing tests whatever is lined up and hits it at
+once, which is why Elite is about pointing rather than leading a target.  The
+test is on lateral offset alone and ignores range entirely: a ship is hittable
+while it is within 256 units of the line of sight in both axes and its squared
+offset is inside the blueprint's targetable area.
+
+Verified end to end against an asteroid placed dead ahead - the one thing with
+no AI, so it cannot evade and a fixed forward shot is certain to connect:
+
+  34 shots fired, 10 hits, 1 kill
+  cash 100.0 -> 100.5 Cr, exactly the asteroid's blueprint bounty
+  4 hits x 15 damage = 60, exactly the asteroid's energy
+  laser temperature reached 241, just under the 242 cut-off that stops firing
+
+What the hit rate demonstrated, before the asteroid was added: a passive trader
+took six hits and then stopped being hittable.  That is correct.  Anything hit
+turns hostile, and a hostile ship runs the tactics routine and evades, so fixed
+forward fire cannot stay on it.  The demo cannot aim; a player can.
+
+Frame cost with combat live: 41 ms, against 34 without.  Tactics runs one slot
+in eight per frame, as the original schedules it.
+
+Implemented
+  laser firing, heat (8 per shot, 1 back per 8 frames), the 242 overheat gate,
+  pulse rate limiting, the alignment hit test, damage, kills, bounties
+  explosions: the cloud grows by 4 a redraw to 128 and then the ship is removed
+  tactics: closing, evading, breaking away inside 1024 units, firing arcs
+  damage to the player through the fore shield then the energy banks, and death
+  shields and energy recharging on the original's eight frame schedule
+  combat rating from the kill tally
+
+Not yet done in this phase
+  missiles and target lock, ECM, cargo canisters ejected on death, legal status
+  and the police response, the death screen

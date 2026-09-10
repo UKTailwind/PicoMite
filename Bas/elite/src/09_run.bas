@@ -15,10 +15,15 @@ DO
   ELSE
     ReadKeys
   ENDIF
-  IF kQuit THEN EXIT DO
+  IF kQuit OR dead THEN EXIT DO
   UpdatePlayer
+  IF kFire THEN FireLaser
+  IF lasTimer > 0 THEN lasTimer = lasTimer - 1
+  IF lasFlash > 0 THEN lasFlash = lasFlash - 1
   tStage = TIMER
   MoveShips
+  Tactics
+  Recharge
   StationCheck
   prof(5) = prof(5) + TIMER - tStage
   DrawFrame
@@ -26,7 +31,7 @@ DO
   mcnt = (mcnt + 1) AND 255
   frames = frames + 1
   IF DEMOFRAMES > 0 THEN
-    IF frames = 30 OR frames = 110 OR frames = 190 OR frames = 250 THEN SaveShot frames
+    IF frames = 40 OR frames = 80 OR frames = 120 OR frames = 250 THEN SaveShot frames
     IF frames >= DEMOFRAMES THEN EXIT DO
   ENDIF
 LOOP
@@ -36,6 +41,9 @@ CloseAll
 FRAMEBUFFER CLOSE
 MODE 1
 PRINT "frames"; frames; "  average"; STR$(frameMs, 4, 2); " ms per frame"
+PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10; " Cr  rank "; RankName$()
+PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
+PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
 IF PROFILE THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"

@@ -20,6 +20,9 @@ SUB TestScene
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
   cashTenths = 1000 : holdSize = 20
+  ' A new commander carries a pulse laser on the front view only.
+  lasPower = 15 : lasTimer = 0 : lasFlash = 0
+  kills = 0 : dead = 0 : energyUnit = 0
   vw = 0 : inWitch = 0
   InitStardust
   LoadMarket
@@ -41,14 +44,21 @@ SUB TestScene
   LaunchState
 
   ' Some traffic to look at.
-  MATH Q_EULER RAD(20), 0, 0, qA() : qA(4) = 1
-  n = NewShip(T_COBRA3, 900, 150, 3500, qA())
-  IF n >= 0 THEN sSpd(n) = 12
+  ' A Cobra coming straight at us with its AI off - a trader, which flies
+  ' on and does not evade, so a fixed forward shot can actually connect.
+  MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_COBRA3, 0, 0, 9000, qA())
+  IF n >= 0 THEN sSpd(n) = 12 : sAI(n) = 0
+  ' And a hostile Viper, which does evade and does shoot back.
   MATH Q_EULER RAD(-70), RAD(10), 0, qA() : qA(4) = 1
   n = NewShip(T_VIPER, -1200, -300, 5000, qA())
-  IF n >= 0 THEN sSpd(n) = 20
+  IF n >= 0 THEN sSpd(n) = 20 : sAI(n) = 128 OR (24 * 2)
+  ' An asteroid dead ahead and tumbling.  It has no AI at all, so it
+  ' cannot evade, and it is the one thing a fixed forward shot is certain
+  ' to connect with - which is what makes it the honest test of the whole
+  ' hit, damage, explode and score path.
   MATH Q_EULER RAD(30), RAD(20), RAD(10), qA() : qA(4) = 1
-  n = NewShip(T_ASTEROID, 400, 600, 2200, qA())
+  n = NewShip(T_ASTEROID, 0, 0, 4000, qA())
   IF n >= 0 THEN sPit(n) = 127
 END SUB
 
@@ -60,18 +70,15 @@ SUB DemoInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   SELECT CASE f
-    CASE 0 TO 29    : kFaster = 1                  ' build up speed
-    CASE 30 TO 79   : kRollR = 1                   ' roll right
-    CASE 80 TO 109  : kUp = 1                      ' and pull up
-    CASE 110 TO 139 : vw = 1                       ' look behind
-    CASE 140 TO 169 : vw = 2                       ' look left
-    CASE 170 TO 199 : vw = 3                       ' look right
+    CASE 0 TO 9     : kFaster = 1                  ' ease forward only
+    CASE 20 TO 240  : kFire = 1                    ' hold the trigger down
+    CASE 160 TO 179 : vw = 1                       ' look behind
+    CASE 180 TO 199 : vw = 3                       ' and to the right
     CASE 200 TO 209 : vw = 0
-    CASE 210 TO 259 : kRollL = 1 : kDn = 1         ' roll and dive together
   END SELECT
   ' Halfway through, jump somewhere: this rebuilds the whole bubble from
   ' the destination's seeds and charges the tank for the distance.
-  IF f = 205 THEN
+  IF f = 250 THEN
     Hyperspace selSys
   ENDIF
   SELECT CASE f
@@ -81,4 +88,22 @@ END SUB
 
 SUB SaveShot(f AS INTEGER)
   SAVE IMAGE "A:/fly" + STR$(f) + ".bmp"
+END SUB
+
+' One-shot diagnostic: what is actually in the bubble, and would the
+' laser's alignment test accept it?
+SUB DumpSlots
+  LOCAL INTEGER n
+  PRINT "slots at frame 60, nUsed"; nUsed; " lasPower"; lasPower
+  FOR n = 0 TO nUsed - 1
+    PRINT "  "; n; " typ"; sTyp(n); " bp"; sBp(n); " obj"; sObj(n);
+    PRINT " x"; STR$(sX(n), 0, 0); " y"; STR$(sY(n), 0, 0); " z"; STR$(sZ(n), 0, 0);
+    IF sBp(n) >= 0 THEN
+      PRINT " area"; bArea(sBp(n)); " ene"; sEne(n); " ai"; sAI(n);
+      IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 AND sZ(n) > 0 THEN
+        IF sX(n)*sX(n) + sY(n)*sY(n) < bArea(sBp(n)) THEN PRINT " <- IN THE SIGHTS";
+      ENDIF
+    ENDIF
+    PRINT
+  NEXT n
 END SUB

@@ -80,7 +80,7 @@ DIM INTEGER sTyp(NSLOT-1), sBp(NSLOT-1), sObj(NSLOT-1)
 DIM FLOAT sX(NSLOT-1), sY(NSLOT-1), sZ(NSLOT-1)
 DIM FLOAT sQ(4, NSLOT-1)           ' orientation quaternion w,x,y,z,m
 DIM INTEGER sSpd(NSLOT-1), sAcc(NSLOT-1), sRol(NSLOT-1), sPit(NSLOT-1)
-DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1)
+DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1), sExp(NSLOT-1)
 DIM INTEGER nUsed                  ' slots in use, 0..NSLOT
 
 ' Ship blueprint statistics, indexed by blueprint 0..NBP-1.
@@ -127,6 +127,12 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 
 ' The market: seventeen commodities, priced from the system's economy and
 ' the one random byte drawn on arrival.
+' Combat.  The laser does not travel: firing tests what is lined up and
+' hits it at once, so the only timing is how often it can be fired and
+' how hot it has got.
+CONST LASPULSE = 4                 ' frames between pulse laser shots
+DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+
 ' Arrival distances are in units of the step the original's sign byte moves in.
 CONST UNIT = 65536                 ' one step of the original's sign byte
 CONST LAUNCHSPD = 12               ' speed immediately after launching

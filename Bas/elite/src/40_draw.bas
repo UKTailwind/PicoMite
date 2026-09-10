@@ -12,7 +12,7 @@ SUB DrawFrame
     t = TIMER : CLS           : prof(0) = prof(0) + TIMER - t
     t = TIMER : DrawStardust  : prof(1) = prof(1) + TIMER - t
     t = TIMER : DrawPlanetSun : prof(2) = prof(2) + TIMER - t
-    t = TIMER : DrawShips : SpaceFurniture : prof(3) = prof(3) + TIMER - t
+    t = TIMER : DrawShips : Explosions : SpaceFurniture : prof(3) = prof(3) + TIMER - t
     t = TIMER : DrawDash      : prof(4) = prof(4) + TIMER - t
     ViewName
   ELSE
@@ -20,6 +20,7 @@ SUB DrawFrame
     DrawStardust
     DrawPlanetSun
     DrawShips
+    Explosions
     SpaceFurniture
     DrawDash
     ViewName
@@ -64,6 +65,12 @@ END SUB
 ' The original frames the space view with a two pixel border, and puts
 ' crosshairs at the centre of any view that has a laser fitted.
 SUB SpaceFurniture
+  ' The laser is drawn as two lines converging on the crosshairs from the
+  ' bottom corners of the view, for the couple of frames after a shot.
+  IF lasFlash > 0 THEN
+    LINE 40, VIEWH - 2, VCX - 4 + RND * 8, VCY, 1, cWhite
+    LINE SCRW - 40, VIEWH - 2, VCX - 4 + RND * 8, VCY, 1, cWhite
+  ENDIF
   LINE 0, 0, SCRW - 2, 0, 1, cWhite
   BOX 0, 0, 2, VIEWH, 0, cWhite, cWhite
   BOX SCRW - 2, 0, 2, VIEWH, 0, cWhite, cWhite

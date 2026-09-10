@@ -80,7 +80,7 @@ DIM INTEGER sTyp(NSLOT-1), sBp(NSLOT-1), sObj(NSLOT-1)
 DIM FLOAT sX(NSLOT-1), sY(NSLOT-1), sZ(NSLOT-1)
 DIM FLOAT sQ(4, NSLOT-1)           ' orientation quaternion w,x,y,z,m
 DIM INTEGER sSpd(NSLOT-1), sAcc(NSLOT-1), sRol(NSLOT-1), sPit(NSLOT-1)
-DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1)
+DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1), sExp(NSLOT-1)
 DIM INTEGER nUsed                  ' slots in use, 0..NSLOT
 
 ' Ship blueprint statistics, indexed by blueprint 0..NBP-1.
@@ -127,6 +127,12 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 
 ' The market: seventeen commodities, priced from the system's economy and
 ' the one random byte drawn on arrival.
+' Combat.  The laser does not travel: firing tests what is lined up and
+' hits it at once, so the only timing is how often it can be fired and
+' how hot it has got.
+CONST LASPULSE = 4                 ' frames between pulse laser shots
+DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+
 ' Arrival distances are in units of the step the original's sign byte moves in.
 CONST UNIT = 65536                 ' one step of the original's sign byte
 CONST LAUNCHSPD = 12               ' speed immediately after launching
@@ -230,18 +236,24 @@ DO
   ELSE
     ReadKeys
   ENDIF
-  IF kQuit THEN EXIT DO
+  IF kQuit OR dead THEN EXIT DO
   UpdatePlayer
+  IF kFire THEN FireLaser
+  IF lasTimer > 0 THEN lasTimer = lasTimer - 1
+  IF lasFlash > 0 THEN lasFlash = lasFlash - 1
   tStage = TIMER
   MoveShips
+  Tactics
+  Recharge
   StationCheck
   prof(5) = prof(5) + TIMER - tStage
   DrawFrame
   FRAMEBUFFER COPY F, N, B
   mcnt = (mcnt + 1) AND 255
   frames = frames + 1
+  IF frames = 15 THEN DumpSlots
   IF DEMOFRAMES > 0 THEN
-    IF frames = 30 OR frames = 110 OR frames = 190 OR frames = 250 THEN SaveShot frames
+    IF frames = 40 OR frames = 80 OR frames = 120 OR frames = 250 THEN SaveShot frames
     IF frames >= DEMOFRAMES THEN EXIT DO
   ENDIF
 LOOP
@@ -251,6 +263,9 @@ CloseAll
 FRAMEBUFFER CLOSE
 MODE 1
 PRINT "frames"; frames; "  average"; STR$(frameMs, 4, 2); " ms per frame"
+PRINT "shots"; shots; " hits"; hits; "  kills"; kills; "  cash"; cashTenths / 10; " Cr  rank "; RankName$()
+PRINT "energy"; pEnergy; " fore shield"; pFsh; " laser temp"; pLasT; " fuel"; pFuel / 10; " LY"
+PRINT "slots in use"; nUsed; "  dead"; dead; "  witchspace"; inWitch
 IF PROFILE THEN
   PRINT "  CLS      "; STR$(prof(0) / frames, 5, 2); " ms"
   PRINT "  stardust "; STR$(prof(1) / frames, 5, 2); " ms"
@@ -804,7 +819,7 @@ SUB DrawFrame
     t = TIMER : CLS           : prof(0) = prof(0) + TIMER - t
     t = TIMER : DrawStardust  : prof(1) = prof(1) + TIMER - t
     t = TIMER : DrawPlanetSun : prof(2) = prof(2) + TIMER - t
-    t = TIMER : DrawShips : SpaceFurniture : prof(3) = prof(3) + TIMER - t
+    t = TIMER : DrawShips : Explosions : SpaceFurniture : prof(3) = prof(3) + TIMER - t
     t = TIMER : DrawDash      : prof(4) = prof(4) + TIMER - t
     ViewName
   ELSE
@@ -812,6 +827,7 @@ SUB DrawFrame
     DrawStardust
     DrawPlanetSun
     DrawShips
+    Explosions
     SpaceFurniture
     DrawDash
     ViewName
@@ -856,6 +872,12 @@ END SUB
 ' The original frames the space view with a two pixel border, and puts
 ' crosshairs at the centre of any view that has a laser fitted.
 SUB SpaceFurniture
+  ' The laser is drawn as two lines converging on the crosshairs from the
+  ' bottom corners of the view, for the couple of frames after a shot.
+  IF lasFlash > 0 THEN
+    LINE 40, VIEWH - 2, VCX - 4 + RND * 8, VCY, 1, cWhite
+    LINE SCRW - 40, VIEWH - 2, VCX - 4 + RND * 8, VCY, 1, cWhite
+  ENDIF
   LINE 0, 0, SCRW - 2, 0, 1, cWhite
   BOX 0, 0, 2, VIEWH, 0, cWhite, cWhite
   BOX SCRW - 2, 0, 2, VIEWH, 0, cWhite, cWhite
@@ -1302,6 +1324,9 @@ SUB TestScene
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
   cashTenths = 1000 : holdSize = 20
+  ' A new commander carries a pulse laser on the front view only.
+  lasPower = 15 : lasTimer = 0 : lasFlash = 0
+  kills = 0 : dead = 0 : energyUnit = 0
   vw = 0 : inWitch = 0
   InitStardust
   LoadMarket
@@ -1323,14 +1348,21 @@ SUB TestScene
   LaunchState
 
   ' Some traffic to look at.
-  MATH Q_EULER RAD(20), 0, 0, qA() : qA(4) = 1
-  n = NewShip(T_COBRA3, 900, 150, 3500, qA())
-  IF n >= 0 THEN sSpd(n) = 12
+  ' A Cobra coming straight at us with its AI off - a trader, which flies
+  ' on and does not evade, so a fixed forward shot can actually connect.
+  MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
+  n = NewShip(T_COBRA3, 0, 0, 9000, qA())
+  IF n >= 0 THEN sSpd(n) = 12 : sAI(n) = 0
+  ' And a hostile Viper, which does evade and does shoot back.
   MATH Q_EULER RAD(-70), RAD(10), 0, qA() : qA(4) = 1
   n = NewShip(T_VIPER, -1200, -300, 5000, qA())
-  IF n >= 0 THEN sSpd(n) = 20
+  IF n >= 0 THEN sSpd(n) = 20 : sAI(n) = 128 OR (24 * 2)
+  ' An asteroid dead ahead and tumbling.  It has no AI at all, so it
+  ' cannot evade, and it is the one thing a fixed forward shot is certain
+  ' to connect with - which is what makes it the honest test of the whole
+  ' hit, damage, explode and score path.
   MATH Q_EULER RAD(30), RAD(20), RAD(10), qA() : qA(4) = 1
-  n = NewShip(T_ASTEROID, 400, 600, 2200, qA())
+  n = NewShip(T_ASTEROID, 0, 0, 4000, qA())
   IF n >= 0 THEN sPit(n) = 127
 END SUB
 
@@ -1342,18 +1374,15 @@ SUB DemoInput(f AS INTEGER)
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   SELECT CASE f
-    CASE 0 TO 29    : kFaster = 1                  ' build up speed
-    CASE 30 TO 79   : kRollR = 1                   ' roll right
-    CASE 80 TO 109  : kUp = 1                      ' and pull up
-    CASE 110 TO 139 : vw = 1                       ' look behind
-    CASE 140 TO 169 : vw = 2                       ' look left
-    CASE 170 TO 199 : vw = 3                       ' look right
+    CASE 0 TO 9     : kFaster = 1                  ' ease forward only
+    CASE 20 TO 240  : kFire = 1                    ' hold the trigger down
+    CASE 160 TO 179 : vw = 1                       ' look behind
+    CASE 180 TO 199 : vw = 3                       ' and to the right
     CASE 200 TO 209 : vw = 0
-    CASE 210 TO 259 : kRollL = 1 : kDn = 1         ' roll and dive together
   END SELECT
   ' Halfway through, jump somewhere: this rebuilds the whole bubble from
   ' the destination's seeds and charges the tank for the distance.
-  IF f = 205 THEN
+  IF f = 250 THEN
     Hyperspace selSys
   ENDIF
   SELECT CASE f
@@ -1363,6 +1392,24 @@ END SUB
 
 SUB SaveShot(f AS INTEGER)
   SAVE IMAGE "A:/fly" + STR$(f) + ".bmp"
+END SUB
+
+' One-shot diagnostic: what is actually in the bubble, and would the
+' laser's alignment test accept it?
+SUB DumpSlots
+  LOCAL INTEGER n
+  PRINT "slots at frame 60, nUsed"; nUsed; " lasPower"; lasPower
+  FOR n = 0 TO nUsed - 1
+    PRINT "  "; n; " typ"; sTyp(n); " bp"; sBp(n); " obj"; sObj(n);
+    PRINT " x"; STR$(sX(n), 0, 0); " y"; STR$(sY(n), 0, 0); " z"; STR$(sZ(n), 0, 0);
+    IF sBp(n) >= 0 THEN
+      PRINT " area"; bArea(sBp(n)); " ene"; sEne(n); " ai"; sAI(n);
+      IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 AND sZ(n) > 0 THEN
+        IF sX(n)*sX(n) + sY(n)*sY(n) < bArea(sBp(n)) THEN PRINT " <- IN THE SIGHTS";
+      ENDIF
+    ENDIF
+    PRINT
+  NEXT n
 END SUB
 
 ' =====================================================================
@@ -1842,6 +1889,250 @@ SUB StationCheck
     IF n >= 0 THEN sRol(n) = 255 : sAI(n) = 1
   ENDIF
 END SUB
+
+' =====================================================================
+'  Combat: lasers, damage, explosions, and what the other ships do
+'
+'  The laser does not travel.  Pressing fire tests whatever is lined up
+'  in the crosshairs and hits it immediately, which is why Elite is about
+'  pointing rather than leading a target.  The test is on the lateral
+'  offset alone and does not consider range at all: a ship is hittable
+'  when it is within 256 units of the line of sight in both axes and its
+'  squared offset is inside the blueprint's targetable area.
+'
+'  Ships fight back on a schedule rather than every frame - one slot in
+'  eight per frame - which is what keeps a busy bubble affordable and
+'  gives the AI its slightly considered feel.
+' =====================================================================
+
+' --- the player fires
+SUB FireLaser
+  LOCAL INTEGER n, best, bestz, dmg
+  IF lasTimer > 0 THEN EXIT SUB
+  IF pLasT >= 242 THEN EXIT SUB          ' too hot to fire
+  IF lasPower = 0 THEN EXIT SUB          ' no laser on this view
+  ' Every shot heats the gun by eight; it loses one a frame.
+  pLasT = pLasT + 8
+  IF pLasT > 255 THEN pLasT = 255
+  lasFlash = 2
+  ' A beam refires every frame, a pulse every ten of the original's ticks.
+  IF lasPower >= 128 THEN lasTimer = 0 ELSE lasTimer = LASPULSE
+
+  ' Whatever is lined up and nearest gets hit.
+  best = -1 : bestz = 999999
+  FOR n = 2 TO nUsed - 1
+    IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
+      IF sZ(n) > 0 AND sZ(n) < bestz THEN
+        IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 THEN
+          IF sX(n) * sX(n) + sY(n) * sY(n) < bArea(sBp(n)) THEN
+            best = n : bestz = sZ(n)
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+  NEXT n
+  shots = shots + 1
+  IF best < 0 THEN EXIT SUB
+  hits = hits + 1
+
+  dmg = lasPower AND 127
+  sEne(best) = sEne(best) - dmg
+  ' Anything hit turns on us, whatever it was doing before.
+  IF sAI(best) < 128 THEN sAI(best) = sAI(best) OR 128
+  IF sEne(best) <= 0 THEN
+    IF sTyp(best) = T_STATION THEN
+      sEne(best) = bEne(sBp(best))       ' a station cannot be shot down
+    ELSE
+      Explode best
+    ENDIF
+  ENDIF
+END SUB
+
+' Start a ship exploding.  The cloud grows for a while and then goes out,
+' and the ship is only removed when it does.
+SUB Explode(n AS INTEGER)
+  sExp(n) = 18
+  sSpd(n) = 0
+  sAI(n) = 0
+  ' Anything destroyed counts towards the combat rating, and pays out
+  ' whatever bounty its blueprint carries - which is nothing for most
+  ' things and half a credit for an asteroid.
+  kills = kills + 1
+  cashTenths = cashTenths + bBty(sBp(n))
+  DropObject n
+END SUB
+
+' Advance every cloud, and draw it.  The original scatters points around
+' each of the ship's projected vertices; ours scatters them around the
+' ship's centre with the same growth curve, which reads the same at these
+' sizes and costs a fraction of the vertex work.
+SUB Explosions
+  LOCAL INTEGER n, i, px, py, sz, cnt
+  n = 2
+  DO WHILE n < nUsed
+    IF sTyp(n) <> 0 AND sExp(n) > 0 THEN
+      sExp(n) = sExp(n) + 4
+      IF sExp(n) > 128 THEN
+        KillShip n
+      ELSE
+        ViewXform n
+        IF tz > NEARZ THEN
+          px = VCX + SGN(tx) * ((VPLANE * ABS(tx)) \ tz)
+          py = VCY - SGN(ty) * ((VPLANE * ABS(ty)) \ tz)
+          sz = sExp(n) * VPLANE / tz
+          IF sz > 60 THEN sz = 60
+          IF sz > 0 THEN
+            cnt = bExp(sBp(n))
+            IF cnt > 20 THEN cnt = 20
+            FOR i = 0 TO cnt
+              spx(i) = px + (RND * 2 - 1) * sz
+              spy(i) = py + (RND * 2 - 1) * sz
+            NEXT i
+            FOR i = cnt + 1 TO 4 * NSTAR - 1 : spx(i) = -1 : NEXT i
+            PIXEL spx(), spy(), spc()
+          ENDIF
+        ENDIF
+        n = n + 1
+      ENDIF
+    ELSE
+      n = n + 1
+    ENDIF
+  LOOP
+END SUB
+
+' --- what the other ships do
+'
+' One slot in eight each frame, as the original schedules it.  A ship
+' points itself at us or away, decides whether to shoot, and nudges its
+' speed to close or open the range.
+SUB Tactics
+  LOCAL INTEGER n, dmg
+  LOCAL FLOAT d, cnt, nx, ny, nz
+  FOR n = 2 TO nUsed - 1
+    IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
+      IF (sAI(n) AND 128) <> 0 THEN
+        IF ((mcnt XOR n) AND 7) = 0 THEN
+          d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
+          IF d > 1 THEN
+            ' How squarely is it facing us?  Its nose against the
+            ' direction from it to us, both unit vectors.
+            NoseVec n
+            nx = qV(1) * qV(4) : ny = qV(2) * qV(4) : nz = qV(3) * qV(4)
+            cnt = (-sX(n) * nx - sY(n) * ny - sZ(n) * nz) / d
+
+            ' Shooting: only from close in, and only when pointed almost
+            ' straight at us.  A near miss still flashes and makes a noise.
+            IF d < 8192 AND cnt > 0.917 THEN
+              dmg = bLas(sBp(n)) * 2
+              IF cnt > 0.972 THEN
+                HitPlayer dmg
+              ENDIF
+            ENDIF
+
+            ' Steering.  Very close in it breaks away; otherwise it turns
+            ' towards us with a probability set by how aggressive it is.
+            IF d < 1024 THEN
+              sPit(n) = 3 : sRol(n) = 5
+            ELSE
+              IF (INT(RND * 128) OR 128) < sAI(n) THEN
+                TurnTowards n, cnt
+              ELSE
+                sPit(n) = 3
+              ENDIF
+            ENDIF
+
+            ' Speed: close if we are ahead of it, back off if too near.
+            IF cnt > 0.85 THEN
+              sAcc(n) = 3
+            ELSEIF cnt < -0.7 THEN
+              sAcc(n) = -1
+            ENDIF
+          ENDIF
+        ENDIF
+      ENDIF
+    ENDIF
+  NEXT n
+END SUB
+
+' Set the roll and pitch counters so the ship swings towards us.  The
+' original works out the sign from the dot products of its roof and side
+' vectors with the direction to the target; the counters themselves are
+' small fixed values, so a ship turns at a fixed rate rather than
+' proportionally.
+SUB TurnTowards(n AS INTEGER, cnt AS FLOAT)
+  LOCAL FLOAT rx, ry, rz, sx2, sy2, sz2, dr, ds, m
+  LOCAL INTEGER i
+  MATH SLICE sQ(), , n, qA()
+  MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
+  rx = qV(1) : ry = qV(2) : rz = qV(3)
+  MATH Q_VECTOR 1, 0, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
+  sx2 = qV(1) : sy2 = qV(2) : sz2 = qV(3)
+  m = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
+  IF m < 1 THEN EXIT SUB
+  dr = (-sX(n) * rx - sY(n) * ry - sZ(n) * rz) / m
+  ds = (-sX(n) * sx2 - sY(n) * sy2 - sZ(n) * sz2) / m
+  ' Pitch towards, and roll so the turn happens in the shortest plane.
+  IF dr > 0 THEN sPit(n) = 3 ELSE sPit(n) = 3 OR 128
+  IF (sRol(n) AND 127) < 16 THEN
+    IF ds > 0 THEN sRol(n) = 5 ELSE sRol(n) = 5 OR 128
+  ENDIF
+END SUB
+
+' Damage to us.  The forward shield takes it while facing the shot, then
+' energy; running out is the end.
+SUB HitPlayer(dmg AS INTEGER)
+  LOCAL INTEGER dleft
+  dleft = dmg
+  IF pFsh >= dleft THEN
+    pFsh = pFsh - dleft
+    EXIT SUB
+  ENDIF
+  dleft = dleft - pFsh
+  pFsh = 0
+  pEnergy = pEnergy - dleft
+  IF pEnergy <= 0 THEN
+    pEnergy = 0
+    dead = 1
+  ENDIF
+END SUB
+
+' Once every eight frames the shields recharge from the energy banks, and
+' the banks recharge themselves - the same schedule the original uses.
+SUB Recharge
+  IF (mcnt AND 7) <> 0 THEN EXIT SUB
+  IF pEnergy >= 128 THEN
+    IF pFsh < 255 THEN pFsh = pFsh + 1 : pEnergy = pEnergy - 1
+    IF pAsh < 255 THEN pAsh = pAsh + 1 : pEnergy = pEnergy - 1
+  ENDIF
+  pEnergy = pEnergy + 1 + energyUnit
+  IF pEnergy > 255 THEN pEnergy = 255
+  IF pLasT > 0 THEN pLasT = pLasT - 1
+END SUB
+
+' Combat rating, from the number of kills.
+FUNCTION RankName$()
+  LOCAL INTEGER k
+  k = kills
+  IF k < 8 THEN
+    RankName$ = "Harmless"
+  ELSEIF k < 16 THEN
+    RankName$ = "Mostly Harmless"
+  ELSEIF k < 32 THEN
+    RankName$ = "Poor"
+  ELSEIF k < 64 THEN
+    RankName$ = "Average"
+  ELSEIF k < 128 THEN
+    RankName$ = "Above Average"
+  ELSEIF k < 512 THEN
+    RankName$ = "Competent"
+  ELSEIF k < 2560 THEN
+    RankName$ = "Dangerous"
+  ELSEIF k < 6400 THEN
+    RankName$ = "Deadly"
+  ELSE
+    RankName$ = "ELITE"
+  ENDIF
+END FUNCTION
 
 ' ======================================================================
 ' ship blueprint data (generated by elite_tools/blueprints.py)
