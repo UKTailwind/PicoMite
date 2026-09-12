@@ -266,12 +266,26 @@
                         uint32_t *p = (uint32_t *)HDMIlines[line_to_load];
                         uint8_t l, d, s;
                         int pp = (Line_quad)*MODE_H_X_ACTIVE_PIXELS / 8;
+                        /* Top-layer alias guard - see HDMIloopBTH640's
+                           SCREENMODE2 for the full explanation: with no
+                           FRAMEBUFFER LAYER TOP created SecondLayer still
+                           points AT DisplayBuf, so reading it as the top layer
+                           makes every non-transparent pixel drawn on N win over
+                           the layer. Alias the top-layer slot to the layer,
+                           with the layer's own transparent index. */
+                        uint8_t *ss = SecondLayer;
+                        uint8_t transparent16s = (uint8_t)transparents;
+                        if (ss == DisplayBuf)
+                        {
+                            ss = LayerBuf;
+                            transparent16s = (uint8_t)transparent;
+                        }
                         for (int i = 0; i < MODE_H_X_ACTIVE_PIXELS / 8; i++)
                         {
                             l = LayerBuf[pp + i];
                             d = DisplayBuf[pp + i];
-                            s = SecondLayer[pp + i];
-                            if ((s & 0xf) != transparents)
+                            s = ss[pp + i];
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = map16quads[s & 0xf];
                             }
@@ -289,7 +303,7 @@
                             d >>= 4;
                             l >>= 4;
                             s >>= 4;
-                            if ((s & 0xf) != transparents)
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = map16quads[s & 0xf];
                             }
@@ -342,12 +356,26 @@
                         uint8_t *p = (uint8_t *)HDMIlines[line_to_load];
                         uint8_t l, d, s;
                         int pp = (Line_quad)*MODE_H_X_ACTIVE_PIXELS / 4;
+                        /* Top-layer alias guard - see HDMIloopBTH640's
+                           SCREENMODE2 for the full explanation: with no
+                           FRAMEBUFFER LAYER TOP created SecondLayer still
+                           points AT DisplayBuf, so reading it as the top layer
+                           makes every non-transparent pixel drawn on N win over
+                           the layer. Alias the top-layer slot to the layer,
+                           with the layer's own transparent index. */
+                        uint8_t *ss = SecondLayer;
+                        uint8_t transparent16s = (uint8_t)transparents;
+                        if (ss == DisplayBuf)
+                        {
+                            ss = LayerBuf;
+                            transparent16s = (uint8_t)transparent;
+                        }
                         for (int i = 0; i < MODE_H_X_ACTIVE_PIXELS / 4; i++)
                         {
                             l = LayerBuf[pp + i];
                             d = DisplayBuf[pp + i];
-                            s = SecondLayer[pp + i];
-                            if (s != transparents)
+                            s = ss[pp + i];
+                            if (s != transparent16s)
                             {
                                 *p++ = s;
                                 *p++ = s;
@@ -453,12 +481,28 @@
                         uint16_t *p = (uint16_t *)HDMIlines[line_to_load];
                         uint8_t l, d, s;
                         int pp = (Line_dup)*vgaloop4;
+                        /* Top-layer alias guard (same as HDMIloop0 and the VGA
+                           scanout). With no FRAMEBUFFER LAYER TOP created,
+                           SecondLayer still points AT DisplayBuf, so reading it
+                           as the top layer makes every non-transparent DISPLAY
+                           pixel win over the layer — i.e. anything drawn on N
+                           appears IN FRONT of the layer. Point the top-layer
+                           slot at the layer instead, with the layer's own
+                           transparent index, so the composite degenerates to
+                           the correct layer-over-display. */
+                        uint8_t *ss = SecondLayer;
+                        uint8_t transparent16s = (uint8_t)transparents;
+                        if (ss == DisplayBuf)
+                        {
+                            ss = LayerBuf;
+                            transparent16s = (uint8_t)transparent;
+                        }
                         for (int i = 0; i < vgaloop4; i++)
                         {
                             l = LayerBuf[pp + i];
                             d = DisplayBuf[pp + i];
-                            s = SecondLayer[pp + i];
-                            if ((s & 0xf) != transparents)
+                            s = ss[pp + i];
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = (uint16_t)map16quads[s & 0xf];
                             }
@@ -476,7 +520,7 @@
                             d >>= 4;
                             l >>= 4;
                             s >>= 4;
-                            if ((s & 0xf) != transparents)
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = (uint16_t)map16quads[s & 0xf];
                             }
@@ -640,12 +684,26 @@
                         uint32_t *p = (uint32_t *)HDMIlines[line_to_load];
                         uint8_t l, d, s;
                         int pp = (Line_quad)*MODE_H_W_ACTIVE_PIXELS / 8;
+                        /* Top-layer alias guard - see HDMIloopBTH640's
+                           SCREENMODE2 for the full explanation: with no
+                           FRAMEBUFFER LAYER TOP created SecondLayer still
+                           points AT DisplayBuf, so reading it as the top layer
+                           makes every non-transparent pixel drawn on N win over
+                           the layer. Alias the top-layer slot to the layer,
+                           with the layer's own transparent index. */
+                        uint8_t *ss = SecondLayer;
+                        uint8_t transparent16s = (uint8_t)transparents;
+                        if (ss == DisplayBuf)
+                        {
+                            ss = LayerBuf;
+                            transparent16s = (uint8_t)transparent;
+                        }
                         for (int i = 0; i < MODE_H_W_ACTIVE_PIXELS / 8; i++)
                         {
                             l = LayerBuf[pp + i];
                             d = DisplayBuf[pp + i];
-                            s = SecondLayer[pp + i];
-                            if ((s & 0xf) != transparents)
+                            s = ss[pp + i];
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = map16quads[s & 0xf];
                             }
@@ -663,7 +721,7 @@
                             d >>= 4;
                             l >>= 4;
                             s >>= 4;
-                            if ((s & 0xf) != transparents)
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = map16quads[s & 0xf];
                             }
@@ -716,12 +774,26 @@
                         uint8_t *p = (uint8_t *)HDMIlines[line_to_load];
                         uint8_t l, d, s;
                         int pp = (Line_quad)*MODE_H_W_ACTIVE_PIXELS / 4;
+                        /* Top-layer alias guard - see HDMIloopBTH640's
+                           SCREENMODE2 for the full explanation: with no
+                           FRAMEBUFFER LAYER TOP created SecondLayer still
+                           points AT DisplayBuf, so reading it as the top layer
+                           makes every non-transparent pixel drawn on N win over
+                           the layer. Alias the top-layer slot to the layer,
+                           with the layer's own transparent index. */
+                        uint8_t *ss = SecondLayer;
+                        uint8_t transparent16s = (uint8_t)transparents;
+                        if (ss == DisplayBuf)
+                        {
+                            ss = LayerBuf;
+                            transparent16s = (uint8_t)transparent;
+                        }
                         for (int i = 0; i < MODE_H_W_ACTIVE_PIXELS / 4; i++)
                         {
                             l = LayerBuf[pp + i];
                             d = DisplayBuf[pp + i];
-                            s = SecondLayer[pp + i];
-                            if (s != transparents)
+                            s = ss[pp + i];
+                            if (s != transparent16s)
                             {
                                 *p++ = s;
                                 *p++ = s;
@@ -864,12 +936,26 @@
                         uint32_t *p = (uint32_t *)HDMIlines[line_to_load];
                         uint8_t l, d, s;
                         int pp = (Line_quad)*MODE_H_L_ACTIVE_PIXELS / 8;
+                        /* Top-layer alias guard - see HDMIloopBTH640's
+                           SCREENMODE2 for the full explanation: with no
+                           FRAMEBUFFER LAYER TOP created SecondLayer still
+                           points AT DisplayBuf, so reading it as the top layer
+                           makes every non-transparent pixel drawn on N win over
+                           the layer. Alias the top-layer slot to the layer,
+                           with the layer's own transparent index. */
+                        uint8_t *ss = SecondLayer;
+                        uint8_t transparent16s = (uint8_t)transparents;
+                        if (ss == DisplayBuf)
+                        {
+                            ss = LayerBuf;
+                            transparent16s = (uint8_t)transparent;
+                        }
                         for (int i = 0; i < MODE_H_L_ACTIVE_PIXELS / 8; i++)
                         {
                             l = LayerBuf[pp + i];
                             d = DisplayBuf[pp + i];
-                            s = SecondLayer[pp + i];
-                            if ((s & 0xf) != transparents)
+                            s = ss[pp + i];
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = map16quads[s & 0xf];
                             }
@@ -887,7 +973,7 @@
                             d >>= 4;
                             l >>= 4;
                             s >>= 4;
-                            if ((s & 0xf) != transparents)
+                            if ((s & 0xf) != transparent16s)
                             {
                                 *p++ = map16quads[s & 0xf];
                             }
@@ -940,12 +1026,26 @@
                         uint8_t *p = (uint8_t *)HDMIlines[line_to_load];
                         uint8_t l, d, s;
                         int pp = (Line_quad)*MODE_H_L_ACTIVE_PIXELS / 4;
+                        /* Top-layer alias guard - see HDMIloopBTH640's
+                           SCREENMODE2 for the full explanation: with no
+                           FRAMEBUFFER LAYER TOP created SecondLayer still
+                           points AT DisplayBuf, so reading it as the top layer
+                           makes every non-transparent pixel drawn on N win over
+                           the layer. Alias the top-layer slot to the layer,
+                           with the layer's own transparent index. */
+                        uint8_t *ss = SecondLayer;
+                        uint8_t transparent16s = (uint8_t)transparents;
+                        if (ss == DisplayBuf)
+                        {
+                            ss = LayerBuf;
+                            transparent16s = (uint8_t)transparent;
+                        }
                         for (int i = 0; i < MODE_H_L_ACTIVE_PIXELS / 4; i++)
                         {
                             l = LayerBuf[pp + i];
                             d = DisplayBuf[pp + i];
-                            s = SecondLayer[pp + i];
-                            if (s != transparents)
+                            s = ss[pp + i];
+                            if (s != transparent16s)
                             {
                                 *p++ = s;
                                 *p++ = s;
