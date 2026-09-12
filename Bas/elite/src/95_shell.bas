@@ -78,6 +78,7 @@ SUB RunFlight
     DockCheck
     prof(5) = prof(5) + TIMER - tStage
     DrawFrame
+    IF demoMode THEN DemoCaption
     FRAMEBUFFER COPY F, N, B
     mcnt = (mcnt + 1) AND 255
     frames = frames + 1
@@ -165,6 +166,7 @@ END SUB
 ' here costs nothing.  KEYDOWN is not used because every call to it
 ' empties the console buffer INKEY$ reads from.
 FUNCTION DockKey() AS INTEGER
+  IF demoMode THEN DockKey = DemoKey() : EXIT FUNCTION
   LOCAL k$ LENGTH 2
   DO
     k$ = INKEY$
@@ -202,8 +204,14 @@ SUB DrawDocked
   END SELECT
 END SUB
 
+' The footer says what the keys do - except while the demo is playing,
+' when the only key that matters is any of them.
 SUB DockFooter(t$)
-  TEXT VCX, SCRH - 9, t$, "CT", 7, 1, cGrey
+  IF demoMode THEN
+    TEXT VCX, SCRH - 9, "DEMONSTRATION - PRESS ANY KEY TO PLAY", "CT", 7, 1, cGrey
+  ELSE
+    TEXT VCX, SCRH - 9, t$, "CT", 7, 1, cGrey
+  ENDIF
 END SUB
 
 ' The four arrows mean different things on different screens: a row on a

@@ -13,8 +13,12 @@ EquipTable
 
 IF DEMOFRAMES = 0 THEN
 
-  NewGame
-  RunGame
+  IF DEMOPLAY THEN
+    RunDemo
+  ELSE
+    NewGame
+    RunGame
+  ENDIF
 
 ELSE
 

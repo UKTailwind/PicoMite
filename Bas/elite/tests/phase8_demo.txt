@@ -1,0 +1,76 @@
+Phase 8 - the attract demo, and the four bugs it found
+======================================================
+PC3, PicoMiteHDMIWEB V6.03.02b3 at 378 MHz, MODE 2.
+
+The demo
+--------
+A game of Elite that plays itself, for filming.  It stands in for the
+keyboard at the two places the shell reads one - DockKey and ReadKeys - so
+every screen, every shot and the docking at the end are the game's own code.
+One pass takes 186 seconds and then starts again; any key hands the controls
+to whoever pressed it, escape stops.
+
+  at Lave      status, market prices, buy eight tonnes of food and six of
+               textiles, fit a missile, a larger hold, an E.C.M. and a beam
+               laser, walk the galactic chart, read the system data, the
+               short range chart, the hold, the commander, launch
+  outbound     accelerate, bank, the four views, a Cobra Mk III on the lane,
+               a Viper that fights back, an asteroid killed with a missile,
+               an incoming missile answered with the E.C.M., the information
+               screens from the cockpit, hyperspace
+  arrival      the sun astern, two pirates, the station, the docking
+               computer, and in
+  docked       sell the cargo at the far end and count the money
+
+The flying is not a recording.  A recorded dogfight misses by the second
+frame, because the ships evade, so DemoAim flies the way the docking
+computer does: it reads where the target is and pushes the controls a held
+key would.  It fires on the test the laser itself applies rather than on a
+guess at it, which is the difference between 10 shots for 10 hits and 73
+shots for 8.
+
+Three things are compressed and marked where they happen: the demo's
+commander starts with 2500 credits so the shop is worth visiting, the safe
+zone is declared behind us rather than flown out of, and the planet is moved
+to where the station's orbit brings it into range.  Everything else is played.
+
+Four bugs, all found by making the game play itself
+---------------------------------------------------
+1  A slot was not fully cleared when it was reused.  NewShip set fourteen of
+   the sixteen fields; sExp and sTgt kept whatever the last occupant left.
+   A slot whose last occupant blew up therefore held an explosion counter
+   past 128, and the next ship given that slot was killed on its first frame
+   - no cloud, no kill, just gone.  The second ship in every fight vanished.
+   CopySlot had the matching hole: compacting the table moved the ships but
+   not their explosion state.
+
+2  A station created by StationCheck faced the wrong way.  It was built with
+   an identity orientation, so its nose - and its slot - pointed away from
+   the side a ship arrives from, and the second docking test could never
+   pass.  Every approach to a station found in flight ended as a crash,
+   however well it was flown.  Only the hand-placed stations in the test
+   scenes were ever dockable.
+
+3  The docking computer could not match a spinning station.  It nudged the
+   roll by 30 out of 127, which works out at about a quarter of the rate the
+   station turns, so it bounced off the slot indefinitely.  It now rolls the
+   way the arithmetic says widens the alignment - the sign of rx * ry - and
+   at full deflection, and goes in first time.
+
+4  A missile aimed at the player went off the moment it was launched.  The
+   loop that steers missiles reads the target slot first and treats anything
+   negative as a dead target; -2, which means "us", was read that way.
+
+Program memory
+--------------
+elite.bas had grown past what the PicoMite will hold, and AUTOSAVE gives up
+part way through without saying so on the console - the rest of the transfer
+is left echoing at the command prompt, and the symptom is a program that
+looks transferred and will not run.  build.py now strips comments, blank
+lines and indentation from the assembled program: 141 KB becomes 75 KB.  The
+sources keep their comments; elite.bas is the artefact.
+
+Captures
+--------
+  captures/demo_docking.png   the station dead ahead on the computer's approach
+  captures/demo_viper.png     a fight, with the Viper on the scanner

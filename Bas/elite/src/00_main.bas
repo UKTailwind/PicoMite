@@ -252,3 +252,14 @@ CONST SCR_LONG = 4, SCR_SHORT = 5, SCR_DATA = 6
 CONST CMDRFILE = "A:/cmdr.txt"
 DIM INTEGER quitGame, dscreen, dsel, dbuy
 
+' ------------------------------------------------------ the attract demo
+' A game that plays itself, for showing the thing off.  It stands in for
+' the keyboard rather than replacing any of the game, so any key at all
+' hands the controls back to whoever pressed it.
+CONST DEMOPLAY = 1                 ' 1 starts in the demo, 0 straight into a game
+CONST DEMOLOOP = 1                 ' and the demo starts over when it ends
+CONST DEMOREAD = 3000              ' how long an information screen is held
+DIM INTEGER demoMode, demoStop, demoStep, demoLeg, demoTick, demoTgt
+DIM INTEGER dkKey(127), dkWait(127), dkCount
+DIM demoCap$ LENGTH 40
+

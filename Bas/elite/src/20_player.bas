@@ -10,6 +10,7 @@
 ' =====================================================================
 
 SUB ReadKeys
+  IF demoMode THEN DemoFly : EXIT SUB
   LOCAL INTEGER i, k, hnow, hnew
   LOCAL kb$ LENGTH 2
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0

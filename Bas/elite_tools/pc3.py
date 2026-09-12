@@ -11,8 +11,24 @@ Usage:
 """
 import re, sys, time
 import serial
+import serial.tools.list_ports
 
-PORT = "COM3"
+# The UART bridge re-enumerates on a different number whenever it is moved
+# to another USB socket, so find it rather than insisting on one name.
+def find_port(preferred="COM3"):
+    ports = list(serial.tools.list_ports.comports())
+    names = [p.device for p in ports]
+    if preferred in names:
+        return preferred
+    ch340 = [p.device for p in ports if "1A86:7523" in (p.hwid or "").upper()]
+    if len(ch340) == 1:
+        return ch340[0]
+    if len(names) == 1:
+        return names[0]
+    raise IOError("cannot tell which port the PC3 is on: %s" % (names or "none"))
+
+
+PORT = None
 BAUD = 115200
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]|\x1b[=>]|\r")
 CHAR_GAP = 0.002
@@ -21,8 +37,9 @@ FAST_LINE_GAP = 0.006   # AUTOSAVE N: no echo coming back, so lines can go out q
 
 
 class PC3:
-    def __init__(self, port=PORT):
-        self.s = serial.Serial(port, BAUD, timeout=0.05, write_timeout=2)
+    def __init__(self, port=None):
+        self.port = port or find_port()
+        self.s = serial.Serial(self.port, BAUD, timeout=0.05, write_timeout=2)
         self.log = []
 
     def close(self):
