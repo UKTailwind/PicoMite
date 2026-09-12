@@ -1321,6 +1321,21 @@ void cmd_framebuffer(void)
  */
 
 #ifdef PICOMITEVGA
+/* Release one framebuffer/layer allocation, but ONLY if it came from the
+   MMBasic heap. Buffers small enough to fit are placed INSIDE the static
+   framebuffer pool (DisplayBuf + N * ScreenSize) by CREATE / CREATE 2 /
+   LAYER / LAYER TOP; those must never reach FreeMemory. Testing the pointer
+   against the pool is allocation-agnostic, so the close path can no longer
+   drift out of step with the per-mode allocation conditions — it had, and
+   the mode 5 layer and the mode 2 / mode 5 top layer were never freed at
+   all. DisplayBuf is always FRAMEBUFFER, so the pool test also covers the
+   "not allocated" case. */
+static void freeframebuffer(unsigned char *p)
+{
+    if (p < FRAMEBUFFER || p >= FRAMEBUFFER + framebuffersize)
+        FreeMemory((void *)p);
+}
+
 void closeframebuffer(char layer)
 {
 #ifdef PICOMITEVGA
@@ -1334,117 +1349,48 @@ void closeframebuffer(char layer)
     {
         if (WriteBuf == FrameBuf)
             WriteBuf = DisplayBuf;
-        switch (DISPLAY_TYPE)
-        {
-        case SCREENMODE1:
-        case SCREENMODE2:
-#ifdef rp2350
-            if (ScreenSize < framebuffersize / 3)
-                FrameBuf = DisplayBuf;
-            else
-                FreeMemory((void *)FrameBuf);
-#else
-            FreeMemory((void *)FrameBuf);
-#endif
-            break;
-#ifdef rp2350
-        case SCREENMODE3:
-            FreeMemory((void *)FrameBuf);
-            break;
-#ifdef HDMI
-        case SCREENMODE4:
-        case SCREENMODE5:
-            FreeMemory((void *)FrameBuf);
-            break;
-#endif
-#endif
-        }
+        freeframebuffer(FrameBuf);
+        FrameBuf = DisplayBuf;
     }
     if (LayerBuf != DisplayBuf && (layer == 'A' || layer == 'L'))
     {
         if (WriteBuf == LayerBuf)
             WriteBuf = DisplayBuf;
-        volatile unsigned char *temp = LayerBuf;
-        switch (DISPLAY_TYPE)
-        {
-        case SCREENMODE2:
-            transparent = 0;
-        case SCREENMODE1:
-#ifdef rp2350
-            if (ScreenSize < framebuffersize / 2)
-                LayerBuf = DisplayBuf;
-            else
-            {
-                LayerBuf = DisplayBuf;
-                FreeMemory((void *)temp);
-            }
-#else
-            LayerBuf = DisplayBuf;
-            FreeMemory((void *)temp);
-#endif
-            break;
-#ifdef rp2350
-        case SCREENMODE3:
-            LayerBuf = DisplayBuf;
-            FreeMemory((void *)temp);
-            break;
-#ifdef HDMI
-        case SCREENMODE4:
-            LayerBuf = DisplayBuf;
-            FreeMemory((void *)temp);
-            break;
-        case SCREENMODE5:
-            LayerBuf = DisplayBuf;
-            transparent = 0;
-            break;
-#endif
-#endif
-        }
+        freeframebuffer(LayerBuf);
+        LayerBuf = DisplayBuf;
+        transparent = 0;
     }
     if (SecondFrame != DisplayBuf && (layer == 'A' || layer == '2'))
     {
-        FreeMemory((void *)SecondFrame);
+        if (WriteBuf == SecondFrame)
+            WriteBuf = DisplayBuf;
+        freeframebuffer(SecondFrame);
+        SecondFrame = DisplayBuf;
     }
     if (SecondLayer != DisplayBuf && (layer == 'A' || layer == 'T'))
     {
-        if (WriteBuf == LayerBuf)
+        /* Was testing WriteBuf against LayerBuf, so closing the top layer
+           while writing to it left WriteBuf pointing at freed memory. */
+        if (WriteBuf == SecondLayer)
             WriteBuf = DisplayBuf;
-        volatile unsigned char *temp = SecondLayer;
-        switch (DISPLAY_TYPE)
-        {
-        case SCREENMODE2:
-            transparents = 0;
-            SecondLayer = DisplayBuf;
-            break;
-        case SCREENMODE1:
-            SecondLayer = DisplayBuf;
-            FreeMemory((void *)temp);
-            break;
-#ifdef rp2350
-        case SCREENMODE3:
-            SecondLayer = DisplayBuf;
-            FreeMemory((void *)temp);
-            break;
-#ifdef HDMI
-        case SCREENMODE4:
-            SecondLayer = DisplayBuf;
-            FreeMemory((void *)temp);
-            break;
-        case SCREENMODE5:
-            SecondLayer = DisplayBuf;
-            transparents = 0;
-            break;
-#endif
-#endif
-        }
+        freeframebuffer(SecondLayer);
+        SecondLayer = DisplayBuf;
+        transparents = 0;
     }
-    WriteBuf = (unsigned char *)FRAMEBUFFER;
-    DisplayBuf = (unsigned char *)FRAMEBUFFER;
-    LayerBuf = (unsigned char *)FRAMEBUFFER;
-    FrameBuf = (unsigned char *)FRAMEBUFFER;
-    SecondLayer = (unsigned char *)FRAMEBUFFER;
-    SecondFrame = (unsigned char *)FRAMEBUFFER;
-    transparent = 0;
+    /* Only a full close resets everything. This used to run unconditionally,
+       so FRAMEBUFFER CLOSE F/L/T/2 silently dropped the pointers to the
+       buffers it had NOT closed — leaking them and making them vanish from
+       the display. Each block above now restores its own pointer. */
+    if (layer == 'A')
+    {
+        WriteBuf = (unsigned char *)FRAMEBUFFER;
+        DisplayBuf = (unsigned char *)FRAMEBUFFER;
+        LayerBuf = (unsigned char *)FRAMEBUFFER;
+        FrameBuf = (unsigned char *)FRAMEBUFFER;
+        SecondLayer = (unsigned char *)FRAMEBUFFER;
+        SecondFrame = (unsigned char *)FRAMEBUFFER;
+        transparent = 0;
+    }
 }
 /*  @endcond */
 
@@ -1678,12 +1624,14 @@ void cmd_framebuffer(void)
         }
         else if (checkstring(p, (unsigned char *)"L"))
         {
-            closeframebuffer('T');
+            /* 'L' is the layer buffer and 'T' the top layer - these two were
+               transposed, so each freed the other's allocation. */
+            closeframebuffer('L');
 #ifdef rp2350
         }
         else if (checkstring(p, (unsigned char *)"T"))
         {
-            closeframebuffer('L');
+            closeframebuffer('T');
         }
         else if (checkstring(p, (unsigned char *)"2"))
         {
