@@ -54,7 +54,10 @@ SUB Missiles
   LOCAL INTEGER n, t
   LOCAL FLOAT dx, dy, dz, d
   FOR n = 2 TO nUsed - 1
-    IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN
+    ' A missile aimed at us is left to the second loop: its target is not
+    ' a slot at all, and the test below would read that as a dead one and
+    ' set it off the moment it was launched.
+    IF sTyp(n) = T_MISSILE AND sExp(n) = 0 AND sTgt(n) <> -2 THEN
       t = sTgt(n)
       ' The target may have died, or been shuffled down the table.
       IF t < 0 OR t >= nUsed THEN

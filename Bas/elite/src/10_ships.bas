@@ -95,6 +95,12 @@ FUNCTION NewShip(t AS INTEGER, x AS FLOAT, y AS FLOAT, z AS FLOAT, q() AS FLOAT)
   sObj(n) = 0
   sSpd(n) = 0 : sAcc(n) = 0 : sRol(n) = 0 : sPit(n) = 0
   sFlg(n) = 0 : sAI(n) = 0
+  ' Every field the slot carries has to be cleared, not most of them.  A
+  ' slot that last held something which blew up keeps its explosion
+  ' counter, and the next ship to be given that slot is killed on its
+  ' first frame - no cloud, no kill, just gone - which is exactly what
+  ' the second ship in every fight used to do.
+  sExp(n) = 0 : sTgt(n) = -1
   IF t < T_PLANET THEN
     sBp(n) = tBp(t)
     sEne(n) = bEne(sBp(n))
@@ -122,6 +128,8 @@ SUB KillShip(n AS INTEGER)
   NEXT i
   sTyp(nUsed - 1) = 0
   sObj(nUsed - 1) = 0
+  sExp(nUsed - 1) = 0
+  sTgt(nUsed - 1) = -1
   nUsed = nUsed - 1
 END SUB
 
@@ -134,8 +142,10 @@ SUB CopySlot(d AS INTEGER, s AS INTEGER)
   sSpd(d) = sSpd(s) : sAcc(d) = sAcc(s)
   sRol(d) = sRol(s) : sPit(d) = sPit(s)
   sEne(d) = sEne(s) : sAI(d) = sAI(s) : sFlg(d) = sFlg(s)
+  sExp(d) = sExp(s) : sTgt(d) = sTgt(s)
   IF sObj(d) > 0 THEN objOwn(sObj(d)) = d
   sTyp(s) = 0 : sObj(s) = 0
+  sExp(s) = 0 : sTgt(s) = -1
 END SUB
 
 ' ------------------------------------------------- Draw3D object pool

@@ -94,7 +94,7 @@ END SUB
 ' the same controls a player uses, and so is this.
 SUB DockingComputer
   LOCAL INTEGER n
-  LOCAL FLOAT d, ux, uy, uz, rx
+  LOCAL FLOAT d, ux, uy, uz, rx, ry
   n = SLOT_STAR
   IF sTyp(n) <> T_STATION THEN EXIT SUB
   d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
@@ -117,12 +117,20 @@ SUB DockingComputer
     pPitch = JCENTRE
   ENDIF
 
-  ' Roll to match the slot once we are pointing at it.
+  ' Roll to match the slot once we are pointing at it.  Our own roll moves
+  ' the slot's up vector by rx' = rx + alpha * ry, so the direction that
+  ' widens the component the docking test measures is the one whose sign
+  ' matches rx * ry.  It has to be a full deflection: the station turns a
+  ' sixteenth of a radian a frame and a gentle nudge cannot keep up with
+  ' it, which is why a computer-flown approach used to bounce off the slot
+  ' over and over instead of going in.
   IF uz > 0.9 THEN
     MATH SLICE sQ(), , n, qA()
     MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
-    rx = qV(1)
-    IF ABS(rx) < DOCKROLL THEN pRoll = JCENTRE + 30
+    rx = qV(1) : ry = qV(2)
+    IF ABS(rx) < DOCKROLL THEN
+      IF rx * ry > 0 THEN pRoll = 255 ELSE pRoll = 1
+    ENDIF
   ENDIF
 
   ' And close, gently.

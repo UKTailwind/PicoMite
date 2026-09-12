@@ -137,7 +137,11 @@ SUB StationCheck
   IF ABS(px) < SAFEZONE AND ABS(py) < SAFEZONE AND ABS(pz) < SAFEZONE THEN
     inSafe = 1
     IF sTyp(SLOT_STAR) <> 0 THEN KillShip SLOT_STAR
-    MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
+    ' Turned to face away from the planet, which is the side a ship
+    ' arrives from and so the side the slot has to be on.  Left pointing
+    ' the other way - as this was - the second docking test can never pass
+    ' and every approach ends as a crash, however well it is flown.
+    MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
     n = NewShip(T_STATION, px, py, pz, qA())
     IF n >= 0 THEN sRol(n) = 255 : sAI(n) = 1
   ENDIF
