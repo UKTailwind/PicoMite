@@ -81,10 +81,20 @@ SUB RunFlight
     DrawFrame
     IF demoMode THEN DemoCaption
     FRAMEBUFFER COPY F, N, B
+    IF kPause THEN PauseGame
     mcnt = (mcnt + 1) AND 255
     frames = frames + 1
   LOOP UNTIL dead OR docked
   tFlight = tFlight + TIMER - t0
+END SUB
+
+' Stop the world.  The frame that is already on the screen stays there, so
+' this is also how to look at something for longer than it lasts.
+SUB PauseGame
+  LOCAL INTEGER k
+  TEXT VCX, VIEWH - 12, "PAUSED", "CT", 7, 1, cWhite
+  FRAMEBUFFER COPY F, N
+  k = WaitKey(0)
 END SUB
 
 ' Hyperspace.  Only outside the safe zone, only if the tank will cover it,

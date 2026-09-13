@@ -2352,10 +2352,17 @@ prof(5) = prof(5) + TIMER - tStage
 DrawFrame
 IF demoMode THEN DemoCaption
 FRAMEBUFFER COPY F, N, B
+IF kPause THEN PauseGame
 mcnt = (mcnt + 1) AND 255
 frames = frames + 1
 LOOP UNTIL dead OR docked
 tFlight = tFlight + TIMER - t0
+END SUB
+SUB PauseGame
+LOCAL INTEGER k
+TEXT VCX, VIEWH - 12, "PAUSED", "CT", 7, 1, cWhite
+FRAMEBUFFER COPY F, N
+k = WaitKey(0)
 END SUB
 SUB JumpAway
 IF inSafe THEN EXIT SUB
