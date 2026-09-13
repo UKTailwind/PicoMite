@@ -10,7 +10,7 @@ Usage:
   pc3.py run file.bas [timeout_s]    AUTOSAVE the file into program memory, RUN, capture output
   pc3.py put local devpath           send a file to the device over XMODEM
 """
-import re, sys, time
+import os, re, sys, time
 import serial
 import serial.tools.list_ports
 
@@ -19,6 +19,13 @@ import serial.tools.list_ports
 def find_port(preferred="COM3"):
     ports = list(serial.tools.list_ports.comports())
     names = [p.device for p in ports]
+    # An explicit choice wins: there can be more than one CH340 on the bench,
+    # and talking to the wrong board is worse than refusing to guess.
+    forced = os.environ.get("PC3_PORT")
+    if forced:
+        if forced not in names:
+            raise IOError("PC3_PORT=%s is not present; found %s" % (forced, names))
+        return forced
     if preferred in names:
         return preferred
     ch340 = [p.device for p in ports if "1A86:7523" in (p.hwid or "").upper()]
@@ -26,7 +33,7 @@ def find_port(preferred="COM3"):
         return ch340[0]
     if len(names) == 1:
         return names[0]
-    raise IOError("cannot tell which port the PC3 is on: %s" % (names or "none"))
+    raise IOError("cannot tell which port the PC3 is on: %s - set PC3_PORT" % (names or "none"))
 
 
 PORT = None

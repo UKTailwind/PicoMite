@@ -10,6 +10,7 @@ LoadStats
 ProbeObjects
 SetupViews
 EquipTable
+LoadSounds
 
 IF DEMOFRAMES = 0 THEN
 
@@ -79,6 +80,7 @@ ELSE
 ENDIF
 
 IF dead THEN DeathScreen : PAUSE 1500
+SoundOff
 CloseAll
 FRAMEBUFFER CLOSE
 MODE 1

@@ -25,6 +25,7 @@ SUB FireLaser
   lasFlash = 2
   ' A beam refires every frame, a pulse every ten of the original's ticks.
   IF lasPower >= 128 THEN lasTimer = 0 ELSE lasTimer = LASPULSE
+  Sfx SFX_LASER
 
   ' Whatever is lined up and nearest gets hit.
   best = -1 : bestz = 999999
@@ -61,6 +62,9 @@ END SUB
 ' and the ship is only removed when it does.
 SUB Explode(n AS INTEGER)
   sExp(n) = 18
+  ' Both halves of it, as the original plays them.
+  Sfx SFX_BOOM
+  Sfx SFX_BOOMT
   sSpd(n) = 0
   sAI(n) = 0
   ' Anything destroyed counts towards the combat rating, and pays out
@@ -204,6 +208,7 @@ END SUB
 SUB HitPlayer(dmg AS INTEGER)
   LOCAL INTEGER dleft
   dleft = dmg
+  Sfx SFX_HIT
   IF pFsh >= dleft THEN
     pFsh = pFsh - dleft
     EXIT SUB

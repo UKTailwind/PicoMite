@@ -89,6 +89,7 @@ FUNCTION WaitKey(ms AS INTEGER) AS INTEGER
   LOCAL k$ LENGTH 2
   t = TIMER + ms
   DO
+    SoundService
     k$ = INKEY$
     IF k$ <> "" THEN WaitKey = ASC(k$) : EXIT FUNCTION
   LOOP UNTIL ms > 0 AND TIMER > t

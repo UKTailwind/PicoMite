@@ -84,6 +84,7 @@ SUB RunFlight
     IF kPause THEN PauseGame
     mcnt = (mcnt + 1) AND 255
     frames = frames + 1
+    SoundService
   LOOP UNTIL dead OR docked
   tFlight = tFlight + TIMER - t0
 END SUB

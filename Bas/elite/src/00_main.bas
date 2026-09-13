@@ -247,6 +247,18 @@ CONST CPY = 187
 CONST CPR = 9
 CONST PROFILE = 1                  ' accumulate per-stage frame times
 
+' ---------------------------------------------------------------- sound
+' The original's ten effects; see 45_sound.bas for how its SFX table
+' converts.  SOUNDON 0 plays the game in silence.
+CONST SOUNDON = 1
+CONST NSFX = 9
+CONST SFX_LASER = 0, SFX_HIT = 1, SFX_BOOM = 2, SFX_BOOMT = 3, SFX_BEEP = 4
+CONST SFX_BOOP = 5, SFX_LAUNCH = 6, SFX_HYPER = 7, SFX_ECM = 8
+DIM INTEGER sfxCh(NSFX-1), sfxWv(NSFX-1), sfxF0(NSFX-1), sfxF1(NSFX-1)
+DIM INTEGER sfxMs(NSFX-1), sfxVol(NSFX-1), sfxWb(NSFX-1)
+DIM INTEGER chWv(4), chF0(4), chF1(4), chVol(4), chWb(4), chLast(4)
+DIM FLOAT chT0(4), chT1(4)
+
 ' ------------------------------------------------------- the game shell
 ' Which docked or information screen is showing, and what the market
 ' screen's action key does.

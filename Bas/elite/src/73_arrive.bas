@@ -96,7 +96,8 @@ SUB Hyperspace(target AS INTEGER)
   GotoSystem gGal, target
   SysData
   d = SysDist(hx, hy, sysX, sysY * 2)
-  IF d > pFuel THEN EXIT SUB
+  IF d > pFuel THEN Sfx SFX_BOOP : EXIT SUB
+  Sfx SFX_HYPER
   pFuel = pFuel - d
   homeSys = target
   homeX = sysX

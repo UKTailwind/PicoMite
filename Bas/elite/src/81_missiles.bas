@@ -16,7 +16,7 @@
 ' Lock on to whatever is lined up, the same alignment test the laser uses.
 SUB TargetMissile
   LOCAL INTEGER n, best, bestz
-  IF pMissl = 0 THEN EXIT SUB
+  IF pMissl = 0 THEN Sfx SFX_BOOP : EXIT SUB
   best = -1 : bestz = 999999
   FOR n = 2 TO nUsed - 1
     IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 AND sTyp(n) <> T_MISSILE THEN
@@ -29,7 +29,12 @@ SUB TargetMissile
       ENDIF
     ENDIF
   NEXT n
-  IF best >= 0 THEN msLock = best
+  IF best >= 0 THEN
+    msLock = best
+    Sfx SFX_BEEP
+  ELSE
+    Sfx SFX_BOOP
+  ENDIF
 END SUB
 
 ' Launch one at whatever is locked.  It appears just ahead of us already
@@ -46,6 +51,7 @@ SUB LaunchMissile
   sTgt(n) = msLock
   pMissl = pMissl - 1
   msLock = -1
+  Sfx SFX_LAUNCH
 END SUB
 
 ' Everything a missile does, every frame.  It turns towards whatever it is
@@ -128,6 +134,7 @@ SUB FireECM
   LOCAL INTEGER n
   IF ecmActive > 0 THEN EXIT SUB
   ecmActive = ECMFRAMES
+  Sfx SFX_ECM
   FOR n = 2 TO nUsed - 1
     IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN Explode n
   NEXT n
@@ -138,6 +145,7 @@ SUB ECMService
     ecmActive = ecmActive - 1
     pEnergy = pEnergy - 1
     IF pEnergy < 0 THEN pEnergy = 0
+    IF ecmActive = 0 THEN SfxStop SFX_ECM
   ENDIF
 END SUB
 

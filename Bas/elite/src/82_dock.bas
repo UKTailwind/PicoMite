@@ -147,6 +147,7 @@ END SUB
 ' a moment; ours does the same and then hands back a flying ship.
 SUB LaunchTunnel
   LOCAL INTEGER i, k, r
+  Sfx SFX_LAUNCH
   FOR i = 0 TO 23
     CLS
     FOR k = 0 TO 5

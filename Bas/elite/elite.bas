@@ -130,6 +130,14 @@ CONST CPX = 244
 CONST CPY = 187
 CONST CPR = 9
 CONST PROFILE = 1
+CONST SOUNDON = 1
+CONST NSFX = 9
+CONST SFX_LASER = 0, SFX_HIT = 1, SFX_BOOM = 2, SFX_BOOMT = 3, SFX_BEEP = 4
+CONST SFX_BOOP = 5, SFX_LAUNCH = 6, SFX_HYPER = 7, SFX_ECM = 8
+DIM INTEGER sfxCh(NSFX-1), sfxWv(NSFX-1), sfxF0(NSFX-1), sfxF1(NSFX-1)
+DIM INTEGER sfxMs(NSFX-1), sfxVol(NSFX-1), sfxWb(NSFX-1)
+DIM INTEGER chWv(4), chF0(4), chF1(4), chVol(4), chWb(4), chLast(4)
+DIM FLOAT chT0(4), chT1(4)
 CONST SCR_STATUS = 0, SCR_INVENT = 1, SCR_MARKET = 2, SCR_EQUIP = 3
 CONST SCR_LONG = 4, SCR_SHORT = 5, SCR_DATA = 6
 CONST CMDRFILE = "A:/cmdr.txt"
@@ -147,6 +155,7 @@ LoadStats
 ProbeObjects
 SetupViews
 EquipTable
+LoadSounds
 IF DEMOFRAMES = 0 THEN
 DO
 titleKey = TitleScreen()
@@ -207,6 +216,7 @@ LOOP
 tFlight = TIMER - tFrame
 ENDIF
 IF dead THEN DeathScreen : PAUSE 1500
+SoundOff
 CloseAll
 FRAMEBUFFER CLOSE
 MODE 1
@@ -860,6 +870,84 @@ ENDIF
 NEXT i
 PIXEL spx(), spy(), spc()
 END SUB
+SUB LoadSounds
+LOCAL INTEGER i
+RESTORE dat_sfx
+FOR i = 0 TO NSFX - 1
+READ sfxCh(i), sfxWv(i), sfxF0(i), sfxF1(i), sfxMs(i), sfxVol(i), sfxWb(i)
+NEXT i
+FOR i = 1 TO 4 : chT1(i) = 0 : chLast(i) = -1 : NEXT i
+END SUB
+SUB Sfx(n AS INTEGER)
+LOCAL INTEGER c
+IF SOUNDON = 0 THEN EXIT SUB
+c = sfxCh(n)
+chWv(c) = sfxWv(n)
+chF0(c) = sfxF0(n) : chF1(c) = sfxF1(n)
+chVol(c) = sfxVol(n) : chWb(c) = sfxWb(n)
+chT0(c) = TIMER
+chT1(c) = TIMER + sfxMs(n)
+chLast(c) = chF0(c)
+PlayCh c, chWv(c), chF0(c), chVol(c)
+END SUB
+SUB SfxStop(n AS INTEGER)
+LOCAL INTEGER c
+IF SOUNDON = 0 THEN EXIT SUB
+c = sfxCh(n)
+IF chT1(c) = 0 THEN EXIT SUB
+chT1(c) = 0
+PLAY SOUND c, B, O
+END SUB
+SUB SoundService
+LOCAL INTEGER c, f
+LOCAL FLOAT t, k
+IF SOUNDON = 0 THEN EXIT SUB
+t = TIMER
+FOR c = 1 TO 4
+IF chT1(c) > 0 THEN
+IF t >= chT1(c) THEN
+chT1(c) = 0
+PLAY SOUND c, B, O
+ELSE
+k = (t - chT0(c)) / (chT1(c) - chT0(c))
+f = chF0(c) + (chF1(c) - chF0(c)) * k
+IF chWb(c) THEN
+IF (INT(t / 45) AND 1) = 1 THEN f = f * 3 \ 4
+ENDIF
+IF f < 1 THEN f = 1
+IF f <> chLast(c) THEN
+PlayCh c, chWv(c), f, chVol(c)
+chLast(c) = f
+ENDIF
+ENDIF
+ENDIF
+NEXT c
+END SUB
+SUB PlayCh(c AS INTEGER, w AS INTEGER, f AS INTEGER, v AS INTEGER)
+SELECT CASE w
+CASE 0 : PLAY SOUND c, B, Q, f, v
+CASE 1 : PLAY SOUND c, B, N, f, v
+CASE ELSE : PLAY SOUND c, B, P, f, v
+END SELECT
+END SUB
+SUB SoundOff
+LOCAL INTEGER c
+FOR c = 1 TO 4
+chT1(c) = 0
+PLAY SOUND c, B, O
+NEXT c
+PLAY STOP
+END SUB
+dat_sfx:
+DATA 1, 0, 900, 122, 800, 12, 0
+DATA 1, 0, 230, 150, 400, 15, 0
+DATA 2, 1, 3000, 200, 1300, 18, 0
+DATA 3, 0, 3891, 400, 1200, 10, 0
+DATA 3, 0, 1839, 1839, 50, 15, 0
+DATA 3, 0, 145, 145, 400, 18, 0
+DATA 2, 1, 800, 200, 600, 15, 0
+DATA 2, 2, 200, 2400, 800, 15, 0
+DATA 4, 0, 1997, 1997, 1200, 12, 1
 SUB DashStatic
 STATIC INTEGER wordcount = (SCRH - DASHY) * SCRW \ 16
 STATIC INTEGER store(wordcount - 1)
@@ -1419,7 +1507,8 @@ hx = homeX : hy = homeY
 GotoSystem gGal, target
 SysData
 d = SysDist(hx, hy, sysX, sysY * 2)
-IF d > pFuel THEN EXIT SUB
+IF d > pFuel THEN Sfx SFX_BOOP : EXIT SUB
+Sfx SFX_HYPER
 pFuel = pFuel - d
 homeSys = target
 homeX = sysX
@@ -1474,6 +1563,7 @@ pLasT = pLasT + 8
 IF pLasT > 255 THEN pLasT = 255
 lasFlash = 2
 IF lasPower >= 128 THEN lasTimer = 0 ELSE lasTimer = LASPULSE
+Sfx SFX_LASER
 best = -1 : bestz = 999999
 FOR n = 2 TO nUsed - 1
 IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
@@ -1503,6 +1593,8 @@ ENDIF
 END SUB
 SUB Explode(n AS INTEGER)
 sExp(n) = 18
+Sfx SFX_BOOM
+Sfx SFX_BOOMT
 sSpd(n) = 0
 sAI(n) = 0
 kills = kills + 1
@@ -1607,6 +1699,7 @@ END SUB
 SUB HitPlayer(dmg AS INTEGER)
 LOCAL INTEGER dleft
 dleft = dmg
+Sfx SFX_HIT
 IF pFsh >= dleft THEN
 pFsh = pFsh - dleft
 EXIT SUB
@@ -1654,7 +1747,7 @@ ENDIF
 END FUNCTION
 SUB TargetMissile
 LOCAL INTEGER n, best, bestz
-IF pMissl = 0 THEN EXIT SUB
+IF pMissl = 0 THEN Sfx SFX_BOOP : EXIT SUB
 best = -1 : bestz = 999999
 FOR n = 2 TO nUsed - 1
 IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 AND sTyp(n) <> T_MISSILE THEN
@@ -1667,7 +1760,12 @@ ENDIF
 ENDIF
 ENDIF
 NEXT n
-IF best >= 0 THEN msLock = best
+IF best >= 0 THEN
+msLock = best
+Sfx SFX_BEEP
+ELSE
+Sfx SFX_BOOP
+ENDIF
 END SUB
 SUB LaunchMissile
 LOCAL INTEGER n
@@ -1681,6 +1779,7 @@ sAI(n) = 128 OR 126
 sTgt(n) = msLock
 pMissl = pMissl - 1
 msLock = -1
+Sfx SFX_LAUNCH
 END SUB
 SUB Missiles
 LOCAL INTEGER n, t
@@ -1744,6 +1843,7 @@ SUB FireECM
 LOCAL INTEGER n
 IF ecmActive > 0 THEN EXIT SUB
 ecmActive = ECMFRAMES
+Sfx SFX_ECM
 FOR n = 2 TO nUsed - 1
 IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN Explode n
 NEXT n
@@ -1753,6 +1853,7 @@ IF ecmActive > 0 THEN
 ecmActive = ecmActive - 1
 pEnergy = pEnergy - 1
 IF pEnergy < 0 THEN pEnergy = 0
+IF ecmActive = 0 THEN SfxStop SFX_ECM
 ENDIF
 END SUB
 SUB EjectCargo(n AS INTEGER)
@@ -1867,6 +1968,7 @@ ENDIF
 END SUB
 SUB LaunchTunnel
 LOCAL INTEGER i, k, r
+Sfx SFX_LAUNCH
 FOR i = 0 TO 23
 CLS
 FOR k = 0 TO 5
@@ -2300,6 +2402,7 @@ LOCAL FLOAT t
 LOCAL k$ LENGTH 2
 t = TIMER + ms
 DO
+SoundService
 k$ = INKEY$
 IF k$ <> "" THEN WaitKey = ASC(k$) : EXIT FUNCTION
 LOOP UNTIL ms > 0 AND TIMER > t
@@ -2355,6 +2458,7 @@ FRAMEBUFFER COPY F, N, B
 IF kPause THEN PauseGame
 mcnt = (mcnt + 1) AND 255
 frames = frames + 1
+SoundService
 LOOP UNTIL dead OR docked
 tFlight = tFlight + TIMER - t0
 END SUB

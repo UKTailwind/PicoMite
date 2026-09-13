@@ -1,0 +1,67 @@
+Phase 11 - sound
+================
+PC3, PicoMiteHDMIWEB at 378 MHz, OPTION AUDIO I2S GP10,GP22.
+
+Where the effects come from
+---------------------------
+The 6502 source carries them as an SFX table of ten entries, each being what
+the BBC's SOUND statement was handed: channel, amplitude or envelope number,
+pitch, duration.  Two conversions get us there.  BBC pitch is quarter-semitones
+with 53 as middle C, so pitch p is 261.63 * 2^((p - 53) / 48) hertz; duration
+is in twentieths of a second.  Channel 0 is the noise channel, where the pitch
+picks the kind of noise rather than a note - 0 to 3 periodic, 4 to 7 white -
+and channels 1 to 3 are the square waves of the BBC's sound chip, which is why
+every tone here is PLAY SOUND type Q.
+
+Five of the ten are exactly the original's numbers.  The other five ask for
+sound envelopes 1 to 4, and those were set up by the cassette loader rather
+than by the game, so they are in nothing we have.  An envelope sweeps pitch
+across the life of a note, so each of those five is approximated by a sweep
+between two frequencies and is marked as approximated in the table and in
+tests/sfxtest.bas, which plays all ten by name so they can be judged by ear.
+
+  0   laser, ours              approximated (envelope 1)
+  8   hit by lasers            approximated (envelope 2)
+  24  explosion, noise half    exact, white noise 1.3 s
+  16  explosion, tone half     approximated (envelope 3)
+  32  short high beep          exact, 1839 Hz for 50 ms
+  40  long low beep            exact, 145 Hz for 400 ms
+  48  missile away / launch    exact, low white noise 0.6 s
+  56  hyperspace               approximated (envelope 2), periodic noise
+  64  E.C.M.                   approximated (envelope 4), runs until the burst ends
+
+How it runs
+-----------
+Nothing blocks.  Sfx starts an effect on one of the four PLAY SOUND slots and
+SoundService - called from the frame loop and from any wait for a key - slides
+the pitch and switches the slot off when its time is up.  It works off the
+clock rather than counting frames, because it is also called from the tight
+spin in WaitKey, and it only issues a PLAY SOUND when the pitch it wants has
+actually moved.
+
+A PLAY SOUND waveform is a keyword and not a string, so it cannot come from a
+variable; PlayCh selects it with a SELECT CASE.  Note also that the real
+argument order is channel, position, type, frequency, volume - the manual's
+own summary line has type and position the other way round.
+
+What it costs
+-------------
+Measured on one build, same demo, 130 seconds each:
+
+  fully silent                            19.78 ms per frame
+  audio engine started, nothing played    21.61 ms per frame
+  sound working                           23.04 ms per frame
+
+So about 1.8 ms a frame is the I2S engine merely being engaged - once PLAY
+SOUND has been used at all, the mixer runs whether or not anything is sounding
+- and about another 1.4 ms is the effects themselves.  51 frames a second
+becomes 43.  That is a real cost and it buys a great deal; the BBC managed
+somewhere between six and twelve.
+
+SOUNDON 0 in 00_main.bas plays the game in silence and gets the 19.78 back.
+
+Not verified
+------------
+Whether any of it sounds right.  It was written from the numbers and checked
+for running clean, frame cost and correct triggering; nobody has listened to
+it yet.  tests/sfxtest.bas exists for that.
