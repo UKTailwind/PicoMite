@@ -6,9 +6,16 @@ come from the published 6502 source, so Lave is the Lave you remember.
 
 ## Getting it running
 
-You need a PicoMite HDMI build and a screen. It was written and timed on a PC3
-running PicoMiteHDMIWEB at 378 MHz, where it holds about 18 ms a frame; it will
-run slower on a slower clock. The program sets `MODE 2` itself.
+You need a PicoMite HDMI build and a screen, and the firmware must be
+**version 6.03.02b4 or above**. `PRINT MM.VER` at the prompt: it must report
+6.030204 or more. Earlier firmware will not do - b3 and before had `MAX3D` set
+to 8, where the bubble wants 12 objects for the station and a full complement
+of ships, and the `DRAW3D` and `FRAMEBUFFER CLOSE` fixes this leans on all
+landed after b3 was released.
+
+It was written and timed on a PC3 running PicoMiteHDMIWEB at 378 MHz, where it
+holds about 18 ms a frame; it will run slower on a slower clock. The program
+sets `MODE 2` itself.
 
 Load the program over the console with the crunching form of AUTOSAVE, which
 strips the comments as it receives - the full source is more than program
