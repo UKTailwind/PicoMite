@@ -205,8 +205,10 @@ def check(text):
 
 
 # The PicoMite keeps the program tokenised in flash and there is not much room;
-# a comment costs the same as code.  Past this, AUTOSAVE gives up part way through
-# and the rest of the transfer is left echoing at the command prompt.
+# a comment costs the same as code.  Past this, AUTOSAVE stops with "Not enough
+# memory", but the rest of the transfer is echoed at the prompt and scrolls that
+# away - the reliable sign is a missing "Saved nnn bytes" report.  AUTOSAVE C
+# and LOAD ,C crunch on the way in and avoid the whole problem.
 PROGRAM_LIMIT = 130000
 
 

@@ -12,8 +12,8 @@ run slower on a slower clock. The program sets `MODE 2` itself.
 
 Load the program over the console with the crunching form of AUTOSAVE, which
 strips the comments as it receives - the full source is more than program
-memory will hold, and `AUTOSAVE` without the `C` gives up part way through
-without saying so:
+memory will hold, and plain `AUTOSAVE` stops with `Not enough memory` part way
+through:
 
 ```
 AUTOSAVE C

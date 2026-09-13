@@ -63,10 +63,11 @@ Four bugs, all found by making the game play itself
 
 Program memory
 --------------
-elite.bas had grown past what the PicoMite will hold, and AUTOSAVE gives up
-part way through without saying so on the console - the rest of the transfer
-is left echoing at the command prompt, and the symptom is a program that
-looks transferred and will not run.  build.py now strips comments, blank
+elite.bas had grown past what the PicoMite will hold.  AUTOSAVE does say so -
+"Error : Not enough memory" - but the rest of the transfer is then echoed at
+the command prompt and scrolls the message away, so what you actually see is a
+program that looks transferred and will not run.  The reliable sign is a
+transfer that ended without the "Saved nnn bytes" report.  build.py now strips comments, blank
 lines and indentation from the assembled program: 141 KB becomes 75 KB.  The
 sources keep their comments; elite.bas is the artefact.
 
