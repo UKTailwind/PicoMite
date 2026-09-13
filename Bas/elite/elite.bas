@@ -77,6 +77,7 @@ CONST DOCKROLL = 0.833
 CONST MSTURN = 0.22
 CONST ECMFRAMES = 24
 DIM INTEGER msLock, ecmActive, legal, docked, dockComp
+DIM INTEGER ecmMine
 DIM INTEGER spawnEV
 CONST UNIT = 65536
 CONST LAUNCHSPD = 12
@@ -1644,6 +1645,7 @@ Sfx SFX_BOOMT
 sSpd(n) = 0
 sAI(n) = 0
 kills = kills + 1
+IF kills > 0 AND (kills AND 255) = 0 THEN Message "RIGHT ON COMMANDER!"
 cashTenths = cashTenths + bBty(sBp(n))
 IF bBty(sBp(n)) > 0 THEN Message STR$(bBty(sBp(n)) / 10) + " CR"
 NoteKill n
@@ -1704,6 +1706,12 @@ IF d < 8192 AND cnt > 0.917 AND (sAI(n) AND 126) <> 0 THEN
 dmg = bLas(sBp(n)) * 2
 IF cnt > 0.972 THEN
 HitPlayer dmg
+ENDIF
+ENDIF
+IF sEne(n) * 8 < bEne(sBp(n)) AND sTyp(n) <> T_THARGOID THEN
+IF (sFlg(n) AND 1) = 0 AND INT(RND * 256) >= 230 THEN
+sFlg(n) = sFlg(n) OR 1
+BailOut n
 ENDIF
 ENDIF
 IF sEne(n) * 2 < bEne(sBp(n)) AND sMis(n) > 0 AND ecmActive = 0 THEN
@@ -1859,7 +1867,11 @@ sEne(t) = 0
 Explode t
 ENDIF
 ELSE
+IF INT(RND * 256) < 16 AND (sAI(t) AND 1) <> 0 THEN
+EnemyECM
+ELSE
 HomeOn n, dx, dy, dz, d
+ENDIF
 ENDIF
 ENDIF
 ENDIF
@@ -1898,14 +1910,25 @@ qA(4) = 1
 MATH INSERT sQ(), , n, qA()
 END SUB
 SUB FireECM
-LOCAL INTEGER n
 IF eqOwned(EQ_ECM) = 0 THEN Sfx SFX_BOOP : EXIT SUB
 IF ecmActive > 0 THEN EXIT SUB
 ecmActive = ECMFRAMES
+ecmMine = 1
 Sfx SFX_ECM
+KillMissiles
+END SUB
+SUB EnemyECM
+IF ecmActive > 0 THEN EXIT SUB
+ecmActive = ECMFRAMES
+ecmMine = 0
+Sfx SFX_ECM
+KillMissiles
+END SUB
+SUB KillMissiles
+LOCAL INTEGER n
 FOR n = 2 TO nUsed - 1
 IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN
-IF sTgt(n) = -2 THEN Message "MISSILE JAMMED"
+Message "MISSILE JAMMED"
 Explode n
 ENDIF
 NEXT n
@@ -1928,8 +1951,10 @@ END SUB
 SUB ECMService
 IF ecmActive > 0 THEN
 ecmActive = ecmActive - 1
+IF ecmMine THEN
 pEnergy = pEnergy - 1
 IF pEnergy < 0 THEN pEnergy = 0
+ENDIF
 IF ecmActive = 0 THEN SfxStop SFX_ECM
 ENDIF
 END SUB
@@ -2320,6 +2345,13 @@ holdSize = 20 : pMissl = 0 : energyUnit = 0
 legal = 0
 Sfx SFX_LAUNCH
 DoDock
+END SUB
+SUB BailOut(n AS INTEGER)
+LOCAL INTEGER m
+m = NewFacing(T_ESCAPE, sX(n), sY(n), sZ(n), 0)
+IF m < 0 THEN EXIT SUB
+sAI(m) = 254
+sSpd(m) = bSpd(sBp(m))
 END SUB
 SUB InSystemJump
 LOCAL INTEGER n

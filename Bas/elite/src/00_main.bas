@@ -158,6 +158,8 @@ CONST DOCKROLL = 0.833             ' 80 of 96: the slot within 33.6 deg of level
 CONST MSTURN = 0.22                ' how hard a missile swings onto a bearing
 CONST ECMFRAMES = 24               ' how long one burst runs, and drains energy
 DIM INTEGER msLock, ecmActive, legal, docked, dockComp
+' Whose E.C.M. is going off: only ours costs us energy to run.
+DIM INTEGER ecmMine
 ' The original's EV: how many spawning passes to sit out before the next
 ' bounty hunter or pack of pirates, so the bubble does not fill up at once.
 DIM INTEGER spawnEV

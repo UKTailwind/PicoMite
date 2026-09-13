@@ -156,23 +156,34 @@ column on the system data screen is telling you.
 
 ## How close is this to the real thing
 
-The galaxy, the market, the ship blueprints, the flight model, the tactics, the
-spawning and the docking tests are all the original's, so the parts that are
-here behave as they should. Ships are wireframe with the hidden faces removed,
-decided from the blueprint's own face normals, which is how the original does
-it. The cassette version has no missions, so none are missing.
+Almost everything the cassette version does, it now does. The galaxy, the
+market, the ship blueprints, the flight model, the tactics, the spawning, the
+legal model and all five docking tests are the original's own arithmetic.
+Ships are wireframe with the hidden faces removed, decided from the blueprint's
+own face normals, as the original decides it. The cassette version has no
+missions, and no mining or military lasers, so none of those are missing.
 
-These are not here yet, and all of them are in the cassette original:
+The sound is the original's ten effects, converted from the SFX table in its
+source. Five of the ten are its exact numbers; the other five ask for sound
+envelopes that the cassette *loader* defined rather than the game, so those are
+approximated by a pitch sweep and are marked as approximated in the table and
+in `tests/sfxtest.bas`, which plays all ten by name so they can be judged.
 
-- **Sound.** There is none at all - no laser, no explosions, no E.C.M., no
-  docking. This is the biggest single difference from a BBC Micro.
-- **The system name as you arrive.** The other in-flight messages are there.
-- **Lasers per view.** The original sells front, rear, left and right mounts
-  separately; here one laser serves every view.
-- **The hyperspace effect.** The jump is instant. Launching has its tunnel.
+What is left:
 
-And one thing that is wrong rather than absent: the E.C.M. and the docking
-computer work whether or not you have bought them.
+- **The hyperspace countdown.** The jump happens at once behind its tunnel of
+  rings; the original counts down from 15 while you keep flying, and you can be
+  attacked during it.
+- **No indicator for the safe zone.** Getting clear of it to hyperspace takes
+  about half a minute of flying away from the station and nothing tells you
+  when you are out; press `H` and see.
+- **Equipment cannot be damaged.** In the original a hit can take out your
+  E.C.M.
 
-Getting clear of the safe zone to hyperspace takes that half a minute of flying
-and there is no indicator telling you when you are out; press `H` and see.
+Everything else on this list has been closed: sound, in-flight messages, the
+per-view laser mounts, cargo scooping and fuel scoops, the altitude and cabin
+temperature gauges with the planet and the sun that drive them, collisions,
+the escape pod, the energy bomb, the in-system jump, the other seven galaxies,
+ships that fire missiles at you and jam yours with their own E.C.M., pilots
+who bail out of a dying ship, and equipment that has to be bought before it
+works.

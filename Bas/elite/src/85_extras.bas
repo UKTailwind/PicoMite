@@ -40,6 +40,17 @@ SUB EscapePod
   DoDock
 END SUB
 
+' The pilot leaves.  The pod is given the original's own AI flag of 254 -
+' full aggression, no E.C.M. - which sends it towards the planet rather than
+' towards us, and it is worth scooping: an escape pod is slaves.
+SUB BailOut(n AS INTEGER)
+  LOCAL INTEGER m
+  m = NewFacing(T_ESCAPE, sX(n), sY(n), sZ(n), 0)
+  IF m < 0 THEN EXIT SUB
+  sAI(m) = 254
+  sSpd(m) = bSpd(sBp(m))
+END SUB
+
 SUB InSystemJump
   LOCAL INTEGER n
   IF inWitch OR inSafe THEN Sfx SFX_BOOP : EXIT SUB

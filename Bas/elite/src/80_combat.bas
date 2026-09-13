@@ -77,6 +77,8 @@ SUB Explode(n AS INTEGER)
   ' whatever bounty its blueprint carries - which is nothing for most
   ' things and half a credit for an asteroid.
   kills = kills + 1
+  ' The original says something when the tally's low byte wraps.
+  IF kills > 0 AND (kills AND 255) = 0 THEN Message "RIGHT ON COMMANDER!"
   cashTenths = cashTenths + bBty(sBp(n))
   ' The original announces what the kill was worth.
   IF bBty(sBp(n)) > 0 THEN Message STR$(bBty(sBp(n)) / 10) + " CR"
@@ -159,6 +161,18 @@ SUB Tactics
               dmg = bLas(sBp(n)) * 2
               IF cnt > 0.972 THEN
                 HitPlayer dmg
+              ENDIF
+            ENDIF
+
+            ' Out of energy and out of luck: in the last eighth of its
+            ' banks a ship has one chance in ten, each time it is serviced,
+            ' of the pilot deciding to leave.  Thargoids have nobody to
+            ' send.  The original allows this more than once per ship; we
+            ' allow it once, so a wreck does not shed a fleet of pods.
+            IF sEne(n) * 8 < bEne(sBp(n)) AND sTyp(n) <> T_THARGOID THEN
+              IF (sFlg(n) AND 1) = 0 AND INT(RND * 256) >= 230 THEN
+                sFlg(n) = sFlg(n) OR 1
+                BailOut n
               ENDIF
             ENDIF
 

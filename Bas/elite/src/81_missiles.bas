@@ -87,7 +87,13 @@ SUB Missiles
             Explode t
           ENDIF
         ELSE
-          HomeOn n, dx, dy, dz, d
+          ' Six times in a hundred the quarry looks up, and if it has an
+          ' E.C.M. that is the end of the missile.
+          IF INT(RND * 256) < 16 AND (sAI(t) AND 1) <> 0 THEN
+            EnemyECM
+          ELSE
+            HomeOn n, dx, dy, dz, d
+          ENDIF
         ENDIF
       ENDIF
     ENDIF
@@ -137,14 +143,32 @@ END SUB
 ' One burst destroys every missile in the bubble, ours included, and
 ' costs energy to do it.
 SUB FireECM
-  LOCAL INTEGER n
   IF eqOwned(EQ_ECM) = 0 THEN Sfx SFX_BOOP : EXIT SUB
   IF ecmActive > 0 THEN EXIT SUB
   ecmActive = ECMFRAMES
+  ecmMine = 1
   Sfx SFX_ECM
+  KillMissiles
+END SUB
+
+' A ship with an E.C.M. sets it off when a missile comes for it, which is
+' what the 600 credits are really buying: everyone's missiles go, ours
+' included, and the original gives the target a six per cent chance of
+' noticing each time the missile is serviced.
+SUB EnemyECM
+  IF ecmActive > 0 THEN EXIT SUB
+  ecmActive = ECMFRAMES
+  ecmMine = 0
+  Sfx SFX_ECM
+  KillMissiles
+END SUB
+
+' One burst takes every missile in the bubble, whoever fired it.
+SUB KillMissiles
+  LOCAL INTEGER n
   FOR n = 2 TO nUsed - 1
     IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN
-      IF sTgt(n) = -2 THEN Message "MISSILE JAMMED"
+      Message "MISSILE JAMMED"
       Explode n
     ENDIF
   NEXT n
@@ -171,8 +195,10 @@ END SUB
 SUB ECMService
   IF ecmActive > 0 THEN
     ecmActive = ecmActive - 1
-    pEnergy = pEnergy - 1
-    IF pEnergy < 0 THEN pEnergy = 0
+    IF ecmMine THEN
+      pEnergy = pEnergy - 1
+      IF pEnergy < 0 THEN pEnergy = 0
+    ENDIF
     IF ecmActive = 0 THEN SfxStop SFX_ECM
   ENDIF
 END SUB
