@@ -49,6 +49,10 @@ SUB RunDemo
     dscreen = SCR_STATUS
     dbuy = 1
     DemoPickTarget
+    ' Show the keys on the way in, so anyone watching can read them.
+    DrawControls
+    IF DemoHold(DEMOHELP, 0) = 27 THEN demoStop = 1 : EXIT DO
+    IF demoMode = 0 THEN EXIT DO
     RunGame
   LOOP UNTIL demoStop OR DEMOLOOP = 0
   demoMode = 0
@@ -73,7 +77,9 @@ FUNCTION DemoKey() AS INTEGER
   IF demoMode = 0 THEN DemoKey = k : EXIT FUNCTION
   demoStep = demoStep + 1
   ' Launching starts a flight leg, and the flight timeline with it.
-  IF k = 145 THEN demoLeg = demoLeg + 1 : demoTick = 0
+  ' F1 is also how the shop is told which mount to fit a laser to, and that
+  ' is not a launch.
+  IF k = 145 AND demoAsk = 0 THEN demoLeg = demoLeg + 1 : demoTick = 0
   DemoKey = k
 END FUNCTION
 
@@ -130,47 +136,46 @@ SUB DemoLeg1
     CASE 1 TO 55    : kFaster = 1
     CASE 90 TO 145  : kRollR = 1
     CASE 185 TO 240 : kRollL = 1
-    CASE 280        : vw = 1 : demoCap$ = "REAR VIEW: LAVE STATION BEHIND US"
-    CASE 360        : vw = 2 : demoCap$ = "LEFT VIEW"
-    CASE 420        : vw = 3 : demoCap$ = "RIGHT VIEW"
-    CASE 480        : vw = 0 : demoCap$ = ""
-    CASE 510        : demoTgt = DemoSpawn(T_COBRA3, 0, 200, 5000, 14, 0, 0)
+    ' Each view is held long enough for the dust to be seen moving through it.
+    CASE 300        : vw = 1 : demoCap$ = "REAR VIEW: LAVE STATION BEHIND US"
+    CASE 660        : vw = 2 : demoCap$ = "LEFT VIEW"
+    CASE 1020       : vw = 3 : demoCap$ = "RIGHT VIEW"
+    CASE 1380       : vw = 0 : demoCap$ = ""
+    CASE 1430       : demoTgt = DemoSpawn(T_COBRA3, 0, 200, 1800, 14, 0, 0)
                       demoCap$ = "A COBRA MK III ON THE SPACE LANE"
-    CASE 620        : demoCap$ = "IN THE SIGHTS"
-    CASE 900        : demoCap$ = ""
-    CASE 930        : demoTgt = DemoSpawn(T_VIPER, -1800, 500, 6000, 20, 128 OR 48, 180)
+    CASE 1530       : demoCap$ = "IN THE SIGHTS"
+    CASE 1780       : demoCap$ = ""
+    CASE 1810       : demoTgt = DemoSpawn(T_VIPER, -700, 200, 2200, 20, 128 OR 48, 180)
                       demoCap$ = "POLICE: THEY HAVE SEEN THE SLAVES"
-    CASE 1540       : demoCap$ = "AN ASTEROID"
-                      demoTgt = DemoSpawn(T_ASTEROID, 300, -200, 4000, 0, 0, 180)
+    CASE 2330       : demoCap$ = "AN ASTEROID"
+                      demoTgt = DemoSpawn(T_ASTEROID, 150, -100, 1500, 0, 0, 180)
                       IF demoTgt >= 0 THEN sPit(demoTgt) = 127
-    CASE 1740       : demoCap$ = "MISSILE LOCKED"
-    CASE 1810       : kMissile = 1 : demoCap$ = "MISSILE AWAY"
-    CASE 1960       : demoCap$ = ""
-    CASE 2000       : DemoIncoming
+    CASE 2530       : demoCap$ = "MISSILE LOCKED"
+    CASE 2600       : kMissile = 1 : demoCap$ = "MISSILE AWAY"
+    CASE 2750       : demoCap$ = ""
+    CASE 2790       : DemoIncoming
                       demoCap$ = "INCOMING MISSILE"
-    CASE 2110       : kECM = 1 : demoCap$ = "E.C.M."
-    CASE 2200       : demoCap$ = ""
-    CASE 2230       : kChart = 4          ' market prices, from the cockpit
-    CASE 2260       : kChart = 1          ' the galactic chart
-    CASE 2290       : kChart = 3          ' and what is known about the target
-    CASE 2330       : DemoPickTarget
+    CASE 2900       : kECM = 1 : demoCap$ = "E.C.M."
+    CASE 2990       : demoCap$ = ""
+    CASE 3020       : kChart = 4          ' market prices, from the cockpit
+    CASE 3050       : kChart = 1          ' the galactic chart
+    CASE 3080       : kChart = 3          ' and what is known about the target
+    CASE 3120       : DemoPickTarget
                       ' Compressed: an hour of cruising out of the safe zone.
                       inSafe = 0
                       demoCap$ = "CLEAR OF THE SAFE ZONE"
-    CASE 2380       : kJump = 1 : demoCap$ = "HYPERSPACE"
-    CASE 2400       : demoLeg = 2 : demoTick = 0 : demoCap$ = ""
+    CASE 3170       : kJump = 1 : demoCap$ = "HYPERSPACE"
+    CASE 3200       : demoLeg = 2 : demoTick = 0 : demoCap$ = ""
   END SELECT
-  ' The chases.  Which slot is worth flying at changes as things die, so
-  ' the target is looked up rather than remembered.
-  IF demoTick > 530 AND demoTick < 900 THEN DemoAim demoTgt, 1
-  IF demoTick > 950 AND demoTick < 1500 THEN DemoAim DemoNearestFoe(), 1
+  IF demoTick > 1450 AND demoTick < 1780 THEN DemoAim demoTgt, 1
+  IF demoTick > 1830 AND demoTick < 2310 THEN DemoAim DemoNearestFoe(), 1
   ' Lining up for the missile: the laser is held off so it does not do the
   ' job first, and the lock is asked for over a stretch rather than on one
   ' tick, because it only takes when the target is inside the sights.
-  IF demoTick > 1550 AND demoTick < 1809 THEN DemoAim demoTgt, 0
-  IF demoTick > 1740 AND demoTick < 1809 THEN kTarget = 1
-  IF demoTick > 1815 AND demoTick < 1950 THEN DemoAim demoTgt, 0
-  IF demoTick > 3000 THEN kQuit = 1
+  IF demoTick > 2340 AND demoTick < 2599 THEN DemoAim demoTgt, 0
+  IF demoTick > 2530 AND demoTick < 2599 THEN kTarget = 1
+  IF demoTick > 2605 AND demoTick < 2740 THEN DemoAim demoTgt, 0
+  IF demoTick > 3900 THEN kQuit = 1
 END SUB
 
 ' --- leg two: the new system, a fight, and the way in
@@ -180,9 +185,9 @@ SUB DemoLeg2
     CASE 2 TO 55    : kFaster = 1
     CASE 90         : vw = 1 : demoCap$ = "THE SUN, BEHIND US"
     CASE 190        : vw = 0 : demoCap$ = ""
-    CASE 240        : demoTgt = DemoSpawn(T_MAMBA, 1400, -300, 6000, 24, 128 OR 56, 180)
+    CASE 240        : demoTgt = DemoSpawn(T_MAMBA, 500, -150, 2200, 24, 128 OR 56, 180)
                       demoCap$ = "PIRATES"
-    CASE 250        : demoTgt = DemoSpawn(T_SIDEWINDER, -1600, 400, 7000, 22, 128 OR 56, 180)
+    CASE 250        : demoTgt = DemoSpawn(T_SIDEWINDER, -600, 150, 2600, 22, 128 OR 56, 180)
     CASE 900        : demoCap$ = ""
     CASE 940        : DemoCloseOnStation
                       demoCap$ = "THE STATION IS IN RANGE"
@@ -196,7 +201,9 @@ SUB DemoLeg2
   IF demoTick > 260 AND demoTick < 900 THEN DemoAim DemoNearestFoe(), 1
   ' Nothing in a demo may stick: if the approach has not finished by now,
   ' something went wrong, so end this run and start the next one.
-  IF demoTick > 3600 THEN kQuit = 1
+  ' The approach takes the best part of a minute at the original's pace, so
+  ' the watchdog has to be patient enough to let it finish.
+  IF demoTick > 5200 THEN kQuit = 1
 END SUB
 
 ' --- flying at something
@@ -279,7 +286,7 @@ END FUNCTION
 SUB DemoIncoming
   LOCAL INTEGER n
   MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
-  n = NewShip(T_MISSILE, 1800, 0, 6500, qA())
+  n = NewShip(T_MISSILE, 700, 0, 2400, qA())
   IF n >= 0 THEN
     sSpd(n) = bSpd(sBp(n))
     sAI(n) = 128 OR 126
@@ -301,7 +308,7 @@ SUB DemoCloseOnStation
   dSpeed = 8
   sX(SLOT_PLANET) = 0
   sY(SLOT_PLANET) = 0
-  sZ(SLOT_PLANET) = 2 * PRADIUS + 7000
+  sZ(SLOT_PLANET) = 2 * PRADIUS + 3000
   ' StationCheck only looks every thirty-two frames; this makes it look on
   ' this one, while the planet is still exactly where it was put.
   mcnt = 0

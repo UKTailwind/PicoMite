@@ -237,14 +237,16 @@ END SUB
 ' Which mount?  The original puts up the four views and waits for a number.
 FUNCTION AskView() AS INTEGER
   LOCAL INTEGER k
+  demoAsk = 1
   DO
     BOX 44, 92, 232, 52, 1, cWhite, cBlack
     TEXT VCX, 102, "WHICH MOUNT?", "CT", 7, 1, cWhite
     TEXT VCX, 122, "F1 fore  F2 aft  F3 left  F4 right", "CT", 7, 1, cYellow
     FRAMEBUFFER COPY F, N
     k = DockKey()
-    IF k = 27 THEN AskView = -1 : EXIT FUNCTION
+    IF k = 27 THEN demoAsk = 0 : AskView = -1 : EXIT FUNCTION
   LOOP UNTIL k >= 145 AND k <= 148
+  demoAsk = 0
   AskView = k - 145
 END FUNCTION
 

@@ -67,7 +67,7 @@ DIM INTEGER gs0, gs1, gs2, gSys, gGal
 DIM INTEGER sysX, sysY, sysGov, sysEco, sysTech, sysPop, sysProd, sysRad
 DIM INTEGER homeX, homeY, homeSys, curX, curY, selSys, inWitch
 CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRION"
-CONST LASPULSE = 4
+CONST LASPULSE = 2
 DIM INTEGER lasTimer, lasFlash, kills, dead, energyUnit, shots, hits
 DIM INTEGER lasView(3)
 CONST DOCKRANGE = 280
@@ -75,7 +75,7 @@ CONST DOCKFACE = 0.896
 CONST DOCKCONE = 0.927
 CONST DOCKROLL = 0.833
 CONST MSTURN = 0.22
-CONST ECMFRAMES = 24
+CONST ECMFRAMES = 32
 DIM INTEGER msLock, ecmActive, legal, docked, dockComp
 DIM INTEGER ecmMine
 DIM INTEGER spawnEV
@@ -138,6 +138,10 @@ CONST CPX = 244
 CONST CPY = 187
 CONST CPR = 9
 CONST PROFILE = 1
+CONST TICKRATE = 12
+CONST TICKMAX = 0.5
+DIM FLOAT tick, tickAcc, tickPrev
+DIM INTEGER tickWhole
 CONST MSGX = 90, MSGY = 160, MSGTIME = 1800
 DIM msgText$ LENGTH 40
 DIM FLOAT msgUntil
@@ -158,7 +162,9 @@ CONST TITLEPIC = "A:/title.jpg"    ' drawn by elite_tools/titlescreen.py
 CONST TITLEWAIT = 20000
 CONST DEMOLOOP = 1
 CONST DEMOREAD = 3000
+CONST DEMOHELP = 9000
 DIM INTEGER demoMode, demoStop, demoStep, demoLeg, demoTick, demoTgt, demoTakeover
+DIM INTEGER demoAsk
 DIM INTEGER dkKey(127), dkWait(127), dkCount
 DIM demoCap$ LENGTH 40
 SetupScreen
@@ -528,6 +534,7 @@ ENDIF
 END SUB
 SUB UpdatePlayer
 LOCAL INTEGER d
+IF tickWhole THEN
 IF kRollL THEN
 pRoll = Recentre(pRoll, -JROLLSTEP)
 ELSEIF kRollR THEN
@@ -547,6 +554,7 @@ IF dSpeed < MAXSPEED THEN dSpeed = dSpeed + 1
 ENDIF
 IF kSlower THEN dSpeed = dSpeed - 1
 IF dSpeed < 1 THEN dSpeed = 1
+ENDIF
 d = ABS(pRoll - JCENTRE)
 alp1 = d \ 4
 IF alp1 < 8 THEN alp1 = alp1 \ 2
@@ -582,9 +590,11 @@ Spring = v
 END FUNCTION
 SUB MoveShips
 LOCAL INTEGER n, i, mag, dir, gone
-LOCAL FLOAT k
-MATH Q_CREATE -alpha, 0, 0, 1, qA()
-MATH Q_CREATE beta, 1, 0, 0, qB()
+LOCAL FLOAT k, aT, bT
+aT = alpha * tick
+bT = beta * tick
+MATH Q_CREATE -aT, 0, 0, 1, qA()
+MATH Q_CREATE bT, 1, 0, 0, qB()
 MATH Q_MULT qB(), qA(), qP()
 n = 0
 DO WHILE n < nUsed
@@ -593,22 +603,22 @@ n = n + 1
 ELSE
 IF sBp(n) >= 0 AND sSpd(n) <> 0 THEN
 NoseVec n
-sX(n) = sX(n) + qV(1) * qV(4) * sSpd(n) * NPCSPEED
-sY(n) = sY(n) + qV(2) * qV(4) * sSpd(n) * NPCSPEED
-sZ(n) = sZ(n) + qV(3) * qV(4) * sSpd(n) * NPCSPEED
+sX(n) = sX(n) + qV(1) * qV(4) * sSpd(n) * NPCSPEED * tick
+sY(n) = sY(n) + qV(2) * qV(4) * sSpd(n) * NPCSPEED * tick
+sZ(n) = sZ(n) + qV(3) * qV(4) * sSpd(n) * NPCSPEED * tick
 ENDIF
-IF sAcc(n) <> 0 THEN
+IF sAcc(n) <> 0 AND tickWhole THEN
 mag = sSpd(n) + sAcc(n)
 IF mag < 0 OR mag > 127 THEN mag = 0
 IF mag > bSpd(sBp(n)) THEN mag = bSpd(sBp(n))
 sSpd(n) = mag
 sAcc(n) = 0
 ENDIF
-k = sY(n) - alpha * sX(n)
-sZ(n) = sZ(n) + beta * k
-sY(n) = k - beta * sZ(n)
-sX(n) = sX(n) + alpha * sY(n)
-sZ(n) = sZ(n) - dSpeed
+k = sY(n) - aT * sX(n)
+sZ(n) = sZ(n) + bT * k
+sY(n) = k - bT * sZ(n)
+sX(n) = sX(n) + aT * sY(n)
+sZ(n) = sZ(n) - dSpeed * tick
 IF sBp(n) >= 0 THEN
 MATH SLICE sQ(), , n, qA()
 MATH Q_MULT qP(), qA(), qC()
@@ -616,19 +626,19 @@ mag = sPit(n) AND 127
 IF mag <> 0 THEN
 dir = 1
 IF (sPit(n) AND 128) <> 0 THEN dir = -1
-MATH Q_CREATE dir * SELFROT, 1, 0, 0, qB()
+MATH Q_CREATE dir * SELFROT * tick, 1, 0, 0, qB()
 qA() = qC()
 MATH Q_MULT qA(), qB(), qC()
-IF mag <> 127 THEN sPit(n) = (mag - 1) OR (sPit(n) AND 128)
+IF mag <> 127 AND tickWhole THEN sPit(n) = (mag - 1) OR (sPit(n) AND 128)
 ENDIF
 mag = sRol(n) AND 127
 IF mag <> 0 THEN
 dir = 1
 IF (sRol(n) AND 128) <> 0 THEN dir = -1
-MATH Q_CREATE dir * SELFROT, 0, 0, 1, qB()
+MATH Q_CREATE dir * SELFROT * tick, 0, 0, 1, qB()
 qA() = qC()
 MATH Q_MULT qA(), qB(), qC()
-IF mag <> 127 THEN sRol(n) = (mag - 1) OR (sRol(n) AND 128)
+IF mag <> 127 AND tickWhole THEN sRol(n) = (mag - 1) OR (sRol(n) AND 128)
 ENDIF
 MATH INSERT sQ(), , n, qC()
 sQ(4, n) = 1
@@ -805,9 +815,10 @@ IF (v AND 128) <> 0 THEN SdSM = -(v AND 127) ELSE SdSM = (v AND 127)
 END FUNCTION
 SUB DrawStardust
 LOCAL INTEGER i, zh, np, sx, sy, sy2, r
-LOCAL FLOAT q, x, y, z, a, b, h, qb, d, dsg, ratsg
-a = alp2 * alp1
-b = bet2 * bet1
+LOCAL FLOAT q, x, y, z, a, b, h, qb, d, dsg, ratsg, sp
+a = alp2 * alp1 * tick
+b = bet2 * bet1 * tick
+sp = dSpeed * tick
 np = 0
 ARRAY SET -1, spx()
 IF vw > 1 THEN
@@ -821,8 +832,8 @@ FOR i = 0 TO NSTAR - 1
 x = stX(i) : y = stY(i) : z = stZ(i)
 IF vw = 0 THEN
 zh = z
-q = (INT(64 * dSpeed / zh)) OR 1
-z = z - dSpeed / 4
+q = (INT(64 * sp / zh)) OR 1
+z = z - sp / 4
 y = y + FIX(y) * q / 256
 x = x + FIX(x) * q / 256
 y = y - a * FIX(x) / 256
@@ -837,10 +848,10 @@ z = (INT(RND * 256)) OR 144
 ENDIF
 ELSEIF vw = 1 THEN
 zh = z
-q = (INT(64 * dSpeed / zh)) OR 1
+q = (INT(64 * sp / zh)) OR 1
 x = x - FIX(x) * q / 256
 y = y - FIX(y) * q / 256
-z = z + dSpeed / 4
+z = z + sp / 4
 y = y + a * FIX(x) / 256
 x = x - a * FIX(y) / 256
 h = FIX(y)
@@ -863,7 +874,7 @@ ELSE
 zh = z
 d = INT(zh / 8)
 IF d < 1 THEN d = 1
-x = x + dsg * dSpeed / d
+x = x + dsg * sp / d
 x = x + b * FIX(y) / 256
 y = y - b * FIX(x) / 256
 h = FIX(y)
@@ -897,6 +908,26 @@ ENDIF
 ENDIF
 NEXT i
 PIXEL spx(), spy(), spc()
+END SUB
+SUB NextTick
+LOCAL FLOAT now
+now = TIMER
+tick = (now - tickPrev) * TICKRATE / 1000
+IF tick > TICKMAX THEN tick = TICKMAX
+IF tick < 0 THEN tick = 0
+tickPrev = now
+tickAcc = tickAcc + tick
+tickWhole = 0
+IF tickAcc >= 1 THEN
+tickAcc = tickAcc - 1
+tickWhole = 1
+ENDIF
+END SUB
+SUB ResetTick
+tickPrev = TIMER
+tickAcc = 0
+tick = 0
+tickWhole = 0
 END SUB
 SUB LoadSounds
 LOCAL INTEGER i
@@ -1063,8 +1094,8 @@ LOCAL INTEGER v
 v = p
 IF v < 0 THEN v = 0
 IF v > 15 THEN v = 15
-BOX x + 1, y, DW, 4, 0, cBlack, cBlack
-BOX x + 1 + v * 2.5, y, 3, 4, 0, cYellow, cYellow
+BOX x + 1, y, DW, 3, 0, cBlack, cBlack
+BOX x + 1 + v * 2.5, y, 3, 3, 0, cYellow, cYellow
 END SUB
 SUB MissileBlocks
 LOCAL INTEGER i, c
@@ -1564,6 +1595,7 @@ d = SysDist(hx, hy, sysX, sysY * 2)
 IF d > pFuel THEN Sfx SFX_BOOP : EXIT SUB
 Sfx SFX_HYPER
 HyperTunnel
+ResetTick
 pFuel = pFuel - d
 homeSys = target
 homeX = sysX
@@ -1666,7 +1698,7 @@ LOCAL INTEGER n, i, px, py, sz, cnt
 n = 2
 DO WHILE n < nUsed
 IF sTyp(n) <> 0 AND sExp(n) > 0 THEN
-sExp(n) = sExp(n) + 4
+IF tickWhole THEN sExp(n) = sExp(n) + 4
 IF sExp(n) > 128 THEN
 KillShip n
 ELSE
@@ -1902,9 +1934,9 @@ LOCAL FLOAT nx, ny, nz, ax, ay, az, m
 IF d < 1 THEN EXIT SUB
 NoseVec n
 nx = qV(1) * qV(4) : ny = qV(2) * qV(4) : nz = qV(3) * qV(4)
-nx = nx + (dx / d - nx) * MSTURN
-ny = ny + (dy / d - ny) * MSTURN
-nz = nz + (dz / d - nz) * MSTURN
+nx = nx + (dx / d - nx) * MSTURN * tick
+ny = ny + (dy / d - ny) * MSTURN * tick
+nz = nz + (dz / d - nz) * MSTURN * tick
 m = SQR(nx * nx + ny * ny + nz * nz)
 IF m < 0.0001 THEN EXIT SUB
 nx = nx / m : ny = ny / m : nz = nz / m
@@ -2605,14 +2637,16 @@ END SELECT
 END SUB
 FUNCTION AskView() AS INTEGER
 LOCAL INTEGER k
+demoAsk = 1
 DO
 BOX 44, 92, 232, 52, 1, cWhite, cBlack
 TEXT VCX, 102, "WHICH MOUNT?", "CT", 7, 1, cWhite
 TEXT VCX, 122, "F1 fore  F2 aft  F3 left  F4 right", "CT", 7, 1, cYellow
 FRAMEBUFFER COPY F, N
 k = DockKey()
-IF k = 27 THEN AskView = -1 : EXIT FUNCTION
+IF k = 27 THEN demoAsk = 0 : AskView = -1 : EXIT FUNCTION
 LOOP UNTIL k >= 145 AND k <= 148
+demoAsk = 0
 AskView = k - 145
 END FUNCTION
 SUB BuyFuel
@@ -2718,8 +2752,8 @@ TEXT VCX, 218, "H FOR THE CONTROLS", "CT", 7, 1, cCyan
 ENDIF
 FRAMEBUFFER COPY F, N
 END SUB
-SUB ControlsScreen
-LOCAL INTEGER y, k
+SUB DrawControls
+LOCAL INTEGER y
 CLS
 TEXT VCX, 1, "FLIGHT", "CT", 7, 1, cWhite
 LINE 0, 11, SCRW - 1, 11, 1, cCyan
@@ -2750,6 +2784,10 @@ KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 9
 KeyLine y, "F fills the tank", "S save, L load" : y = y + 9
 TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cDim
 FRAMEBUFFER COPY F, N
+END SUB
+SUB ControlsScreen
+LOCAL INTEGER k
+DrawControls
 k = WaitKey(0)
 END SUB
 SUB KeyLine(y AS INTEGER, lb$, v$)
@@ -2782,7 +2820,9 @@ END SUB
 SUB RunFlight
 LOCAL FLOAT t0
 t0 = TIMER
+ResetTick
 DO
+NextTick
 ReadKeys
 IF kQuit THEN
 IF eqOwned(EQ_POD) THEN
@@ -2810,13 +2850,18 @@ IF kChart > 0 THEN
 tStage = TIMER
 InfoScreen kChart
 t0 = t0 + TIMER - tStage
+ResetTick
 ENDIF
+IF tickWhole THEN
 IF lasTimer > 0 THEN lasTimer = lasTimer - 1
 IF lasFlash > 0 THEN lasFlash = lasFlash - 1
+ENDIF
 tStage = TIMER
 MoveShips
 Contact
 Missiles
+DockCheck
+IF tickWhole THEN
 Tactics
 ECMService
 Recharge
@@ -2826,13 +2871,13 @@ CabinTemp
 StationCheck
 StationPolice
 SpawnTraffic
-DockCheck
+mcnt = (mcnt + 1) AND 255
+ENDIF
 prof(5) = prof(5) + TIMER - tStage
 DrawFrame
 IF demoMode THEN DemoCaption
 FRAMEBUFFER COPY F, N, B
 IF kPause THEN PauseGame
-mcnt = (mcnt + 1) AND 255
 frames = frames + 1
 SoundService
 LOOP UNTIL dead OR docked
@@ -2843,6 +2888,7 @@ LOCAL INTEGER k
 TEXT VCX, VIEWH - 12, "PAUSED", "CT", 7, 1, cWhite
 FRAMEBUFFER COPY F, N
 k = WaitKey(0)
+ResetTick
 END SUB
 SUB JumpAway
 IF inSafe THEN EXIT SUB
@@ -3068,6 +3114,9 @@ docked = 1
 dscreen = SCR_STATUS
 dbuy = 1
 DemoPickTarget
+DrawControls
+IF DemoHold(DEMOHELP, 0) = 27 THEN demoStop = 1 : EXIT DO
+IF demoMode = 0 THEN EXIT DO
 RunGame
 LOOP UNTIL demoStop OR DEMOLOOP = 0
 demoMode = 0
@@ -3085,7 +3134,7 @@ ENDIF
 k = DemoHold(dkWait(demoStep), dkKey(demoStep))
 IF demoMode = 0 THEN DemoKey = k : EXIT FUNCTION
 demoStep = demoStep + 1
-IF k = 145 THEN demoLeg = demoLeg + 1 : demoTick = 0
+IF k = 145 AND demoAsk = 0 THEN demoLeg = demoLeg + 1 : demoTick = 0
 DemoKey = k
 END FUNCTION
 FUNCTION DemoHold(ms AS INTEGER, k AS INTEGER) AS INTEGER
@@ -3131,41 +3180,41 @@ SELECT CASE demoTick
 CASE 1 TO 55    : kFaster = 1
 CASE 90 TO 145  : kRollR = 1
 CASE 185 TO 240 : kRollL = 1
-CASE 280        : vw = 1 : demoCap$ = "REAR VIEW: LAVE STATION BEHIND US"
-CASE 360        : vw = 2 : demoCap$ = "LEFT VIEW"
-CASE 420        : vw = 3 : demoCap$ = "RIGHT VIEW"
-CASE 480        : vw = 0 : demoCap$ = ""
-CASE 510        : demoTgt = DemoSpawn(T_COBRA3, 0, 200, 5000, 14, 0, 0)
+CASE 300        : vw = 1 : demoCap$ = "REAR VIEW: LAVE STATION BEHIND US"
+CASE 660        : vw = 2 : demoCap$ = "LEFT VIEW"
+CASE 1020       : vw = 3 : demoCap$ = "RIGHT VIEW"
+CASE 1380       : vw = 0 : demoCap$ = ""
+CASE 1430       : demoTgt = DemoSpawn(T_COBRA3, 0, 200, 1800, 14, 0, 0)
 demoCap$ = "A COBRA MK III ON THE SPACE LANE"
-CASE 620        : demoCap$ = "IN THE SIGHTS"
-CASE 900        : demoCap$ = ""
-CASE 930        : demoTgt = DemoSpawn(T_VIPER, -1800, 500, 6000, 20, 128 OR 48, 180)
+CASE 1530       : demoCap$ = "IN THE SIGHTS"
+CASE 1780       : demoCap$ = ""
+CASE 1810       : demoTgt = DemoSpawn(T_VIPER, -700, 200, 2200, 20, 128 OR 48, 180)
 demoCap$ = "POLICE: THEY HAVE SEEN THE SLAVES"
-CASE 1540       : demoCap$ = "AN ASTEROID"
-demoTgt = DemoSpawn(T_ASTEROID, 300, -200, 4000, 0, 0, 180)
+CASE 2330       : demoCap$ = "AN ASTEROID"
+demoTgt = DemoSpawn(T_ASTEROID, 150, -100, 1500, 0, 0, 180)
 IF demoTgt >= 0 THEN sPit(demoTgt) = 127
-CASE 1740       : demoCap$ = "MISSILE LOCKED"
-CASE 1810       : kMissile = 1 : demoCap$ = "MISSILE AWAY"
-CASE 1960       : demoCap$ = ""
-CASE 2000       : DemoIncoming
+CASE 2530       : demoCap$ = "MISSILE LOCKED"
+CASE 2600       : kMissile = 1 : demoCap$ = "MISSILE AWAY"
+CASE 2750       : demoCap$ = ""
+CASE 2790       : DemoIncoming
 demoCap$ = "INCOMING MISSILE"
-CASE 2110       : kECM = 1 : demoCap$ = "E.C.M."
-CASE 2200       : demoCap$ = ""
-CASE 2230       : kChart = 4
-CASE 2260       : kChart = 1
-CASE 2290       : kChart = 3
-CASE 2330       : DemoPickTarget
+CASE 2900       : kECM = 1 : demoCap$ = "E.C.M."
+CASE 2990       : demoCap$ = ""
+CASE 3020       : kChart = 4
+CASE 3050       : kChart = 1
+CASE 3080       : kChart = 3
+CASE 3120       : DemoPickTarget
 inSafe = 0
 demoCap$ = "CLEAR OF THE SAFE ZONE"
-CASE 2380       : kJump = 1 : demoCap$ = "HYPERSPACE"
-CASE 2400       : demoLeg = 2 : demoTick = 0 : demoCap$ = ""
+CASE 3170       : kJump = 1 : demoCap$ = "HYPERSPACE"
+CASE 3200       : demoLeg = 2 : demoTick = 0 : demoCap$ = ""
 END SELECT
-IF demoTick > 530 AND demoTick < 900 THEN DemoAim demoTgt, 1
-IF demoTick > 950 AND demoTick < 1500 THEN DemoAim DemoNearestFoe(), 1
-IF demoTick > 1550 AND demoTick < 1809 THEN DemoAim demoTgt, 0
-IF demoTick > 1740 AND demoTick < 1809 THEN kTarget = 1
-IF demoTick > 1815 AND demoTick < 1950 THEN DemoAim demoTgt, 0
-IF demoTick > 3000 THEN kQuit = 1
+IF demoTick > 1450 AND demoTick < 1780 THEN DemoAim demoTgt, 1
+IF demoTick > 1830 AND demoTick < 2310 THEN DemoAim DemoNearestFoe(), 1
+IF demoTick > 2340 AND demoTick < 2599 THEN DemoAim demoTgt, 0
+IF demoTick > 2530 AND demoTick < 2599 THEN kTarget = 1
+IF demoTick > 2605 AND demoTick < 2740 THEN DemoAim demoTgt, 0
+IF demoTick > 3900 THEN kQuit = 1
 END SUB
 SUB DemoLeg2
 SELECT CASE demoTick
@@ -3173,9 +3222,9 @@ CASE 1          : demoCap$ = "ARRIVED AT " + SysName$()
 CASE 2 TO 55    : kFaster = 1
 CASE 90         : vw = 1 : demoCap$ = "THE SUN, BEHIND US"
 CASE 190        : vw = 0 : demoCap$ = ""
-CASE 240        : demoTgt = DemoSpawn(T_MAMBA, 1400, -300, 6000, 24, 128 OR 56, 180)
+CASE 240        : demoTgt = DemoSpawn(T_MAMBA, 500, -150, 2200, 24, 128 OR 56, 180)
 demoCap$ = "PIRATES"
-CASE 250        : demoTgt = DemoSpawn(T_SIDEWINDER, -1600, 400, 7000, 22, 128 OR 56, 180)
+CASE 250        : demoTgt = DemoSpawn(T_SIDEWINDER, -600, 150, 2600, 22, 128 OR 56, 180)
 CASE 900        : demoCap$ = ""
 CASE 940        : DemoCloseOnStation
 demoCap$ = "THE STATION IS IN RANGE"
@@ -3183,7 +3232,7 @@ CASE 950        : kDock = 1 : demoCap$ = "DOCKING COMPUTER ENGAGED"
 CASE 1150       : demoCap$ = ""
 END SELECT
 IF demoTick > 260 AND demoTick < 900 THEN DemoAim DemoNearestFoe(), 1
-IF demoTick > 3600 THEN kQuit = 1
+IF demoTick > 5200 THEN kQuit = 1
 END SUB
 SUB DemoAim(n AS INTEGER, fire AS INTEGER)
 LOCAL FLOAT d, ux, uy, uz
@@ -3242,7 +3291,7 @@ END FUNCTION
 SUB DemoIncoming
 LOCAL INTEGER n
 MATH Q_EULER RAD(180), 0, 0, qA() : qA(4) = 1
-n = NewShip(T_MISSILE, 1800, 0, 6500, qA())
+n = NewShip(T_MISSILE, 700, 0, 2400, qA())
 IF n >= 0 THEN
 sSpd(n) = bSpd(sBp(n))
 sAI(n) = 128 OR 126
@@ -3255,7 +3304,7 @@ pRoll = JCENTRE : pPitch = JCENTRE
 dSpeed = 8
 sX(SLOT_PLANET) = 0
 sY(SLOT_PLANET) = 0
-sZ(SLOT_PLANET) = 2 * PRADIUS + 7000
+sZ(SLOT_PLANET) = 2 * PRADIUS + 3000
 mcnt = 0
 END SUB
 SUB DemoPickTarget

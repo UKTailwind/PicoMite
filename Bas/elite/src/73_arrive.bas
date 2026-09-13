@@ -99,6 +99,7 @@ SUB Hyperspace(target AS INTEGER)
   IF d > pFuel THEN Sfx SFX_BOOP : EXIT SUB
   Sfx SFX_HYPER
   HyperTunnel
+  ResetTick
   pFuel = pFuel - d
   homeSys = target
   homeX = sysX

@@ -1,0 +1,67 @@
+Phase 15 - the pace of the game
+===============================
+Peter: "review the speed of gameplay vs the original. I suspect we are too fast
+and may need to interpolate positions more to slow it down.  Obviously we don't
+want to slow the actual framerate."
+
+He was right, and it was worse than too fast.  Every one of the original's
+constants is per iteration of its main loop, and we were applying them once per
+frame.  A BBC ran that loop something like ten or twelve times a second; we draw
+sixty.  So everything happened four or five times too quickly - and because it
+was tied to the frame rate, an empty bubble played faster than a busy one.
+
+The fix is not to slow the frame rate.  Each frame now works out how much of
+one of the original's iterations it represents - tick = TICKRATE * elapsed - and
+scales by it.  Motion stays as smooth as the frame rate allows while happening
+at the original's pace, which is what interpolation means here.  Anything the
+original did once per iteration rather than continuously waits for tickWhole,
+true on the frames where a whole iteration has gone by: the counters, the
+schedules, the joystick spring, the tactics, the spawner.
+
+  continuous, scaled by tick   ship and player movement, both rotations, the
+                               stardust, a missile's turn, the station's spin
+  discrete, on tickWhole       mcnt and everything keyed off it, tactics,
+                               recharge, the laser and E.C.M. counters, the
+                               explosion clouds, the ships' own roll and pitch
+                               counters, the stick and the throttle
+
+Measured, TICKRATE 12:
+
+  full speed          1600 units a second -> 480
+  station revolution  2.5 seconds -> 8.4
+  frame independence  a headless loop at 1313 frames a second produced exactly
+                      12 iterations a second of motion
+
+480 units a second puts the planet, at three to seven units, seven to sixteen
+minutes away - which is why the original has an in-system jump.  TICKRATE is one
+constant in 00_main.bas and is the only thing to change if this is still wrong.
+
+Two constants were in frames and are now in iterations: the pulse laser fires
+every 2 (the original documents five a second; at twelve iterations that is the
+nearest whole number) and the E.C.M. runs 32, which is the original's own count.
+
+Three bugs found on the way
+---------------------------
+The stardust stopped dead.  The edit that scaled it inserted "sp = dSpeed *
+tick" and then replaced every dSpeed in the routine with sp - including the one
+in that line, which became "sp = sp * tick" against a fresh local.  So the speed
+was zero and the dust hung in the air as two vertical lines.  Blanket renames
+should not include the line being introduced.
+
+The demo skipped its first leg entirely.  DemoKey treats F1 as a launch, and F1
+is also how the equipment shop is told which mount to fit a laser to, so buying
+the beam laser counted as a launch.  There is a flag for that now.
+
+The roll and dive/climb gauges had no bottom line.  Every gauge frame is five
+high from y - 1, so its bottom edge is at y + 3; the bars fill three rows and
+leave it alone, but Pointer filled four and rubbed it out.  Pointer fills three
+now, like everything else on the dashboard.
+
+And the demo
+------------
+Each of the left, right and rear views is held six seconds, measured, so the
+dust can be seen moving through them.  The staged encounters come in three
+times nearer, since everything closes three times slower.  The docking window
+is long enough again - the approach takes about 45 seconds from 3000 units,
+measured on its own, and the demo now completes it.  The controls page is shown
+for nine seconds on the way in, so anyone watching can read the keys.

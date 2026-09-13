@@ -142,7 +142,10 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 ' Combat.  The laser does not travel: firing tests what is lined up and
 ' hits it at once, so the only timing is how often it can be fired and
 ' how hot it has got.
-CONST LASPULSE = 4                 ' frames between pulse laser shots
+' Iterations between pulse laser shots.  The original's LASCT is 10 at 50 Hz,
+' which it documents as five pulses a second; at twelve iterations a second
+' the nearest whole number is 2.
+CONST LASPULSE = 2
 DIM INTEGER lasTimer, lasFlash, kills, dead, energyUnit, shots, hits
 ' A mount for each view, holding that laser's power, as the original: 15 is
 ' a pulse laser and 143 a beam.  A new commander has one on the front only.
@@ -156,7 +159,7 @@ CONST DOCKCONE = 0.927             ' how nearly dead ahead it must be
 CONST DOCKROLL = 0.833             ' 80 of 96: the slot within 33.6 deg of level
 
 CONST MSTURN = 0.22                ' how hard a missile swings onto a bearing
-CONST ECMFRAMES = 24               ' how long one burst runs, and drains energy
+CONST ECMFRAMES = 32               ' the original's countdown, in iterations
 DIM INTEGER msLock, ecmActive, legal, docked, dockComp
 ' Whose E.C.M. is going off: only ours costs us energy to run.
 DIM INTEGER ecmMine
@@ -259,6 +262,24 @@ CONST CPY = 187
 CONST CPR = 9
 CONST PROFILE = 1                  ' accumulate per-stage frame times
 
+' ------------------------------------------------------------------- time
+' The original's constants are all per iteration of its main loop, and that
+' loop ran at something like ten or twelve times a second on a 2 MHz 6502.
+' Ours draws forty frames a second, so applying them once a frame made
+' everything three or four times too quick - and, worse, tied the speed of
+' the game to the frame rate, so a busy bubble played slower than an empty
+' one.  Instead each frame works out how much of one of the original's
+' iterations it represents and scales by that: motion stays as smooth as
+' the frame rate allows while happening at the original's pace.
+'
+' Anything the original did once per iteration rather than continuously -
+' the counters, the schedules, the joystick spring - is gated on tickWhole
+' instead, which is true on the frames where a whole iteration has elapsed.
+CONST TICKRATE = 12                ' the original's main loop, times a second
+CONST TICKMAX = 0.5                ' never let one frame move the world further
+DIM FLOAT tick, tickAcc, tickPrev
+DIM INTEGER tickWhole
+
 ' ---------------------------------------------------------------- sound
 ' The original's ten effects; see 45_sound.bas for how its SFX table
 ' converts.  SOUNDON 0 plays the game in silence.
@@ -293,7 +314,11 @@ CONST TITLEPIC = "A:/title.jpg"    ' drawn by elite_tools/titlescreen.py
 CONST TITLEWAIT = 20000            ' idle this long on the title and the demo runs
 CONST DEMOLOOP = 1                 ' and the demo starts over when it ends
 CONST DEMOREAD = 3000              ' how long an information screen is held
+CONST DEMOHELP = 9000              ' and how long the controls page is shown
 DIM INTEGER demoMode, demoStop, demoStep, demoLeg, demoTick, demoTgt, demoTakeover
+' Set while the equipment shop is asking which laser mount, so the demo's F1
+' answer is not mistaken for a launch.
+DIM INTEGER demoAsk
 DIM INTEGER dkKey(127), dkWait(127), dkCount
 DIM demoCap$ LENGTH 40
 

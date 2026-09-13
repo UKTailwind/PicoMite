@@ -74,6 +74,10 @@ END SUB
 ' ended up.
 SUB UpdatePlayer
   LOCAL INTEGER d
+  ' The stick and the throttle move in the original's steps, once per one of
+  ' its iterations.  The angles they imply are worked out every frame, because
+  ' those are what the motion is scaled by.
+  IF tickWhole THEN
   ' --- roll and pitch.  A held key pushes the rate away from centre, but
   '     it cannot cross the centre in one press: if the step would take it
   '     to the far side, it stops dead at centre instead.  That is the
@@ -103,10 +107,12 @@ SUB UpdatePlayer
   IF kSlower THEN dSpeed = dSpeed - 1
   IF dSpeed < 1 THEN dSpeed = 1
 
+  ENDIF
+
   ' --- the rotation angles.  Both curves are deliberately non-linear:
   '     small deflections are halved again, which gives fine control near
   '     centre and a hard bank at the extremes.  Roll reaches 31/256 of a
-  '     radian a frame, pitch only 8/256, so a ship rolls nearly four
+  '     radian per iteration, pitch only 8/256, so a ship rolls nearly four
   '     times as fast as it pitches - which is why Elite is flown by
   '     rolling onto a target and then pulling.
   d = ABS(pRoll - JCENTRE)

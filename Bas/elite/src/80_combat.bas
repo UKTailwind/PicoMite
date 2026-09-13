@@ -98,7 +98,8 @@ SUB Explosions
   n = 2
   DO WHILE n < nUsed
     IF sTyp(n) <> 0 AND sExp(n) > 0 THEN
-      sExp(n) = sExp(n) + 4
+      ' The cloud grows once per one of the original's iterations.
+      IF tickWhole THEN sExp(n) = sExp(n) + 4
       IF sExp(n) > 128 THEN
         KillShip n
       ELSE

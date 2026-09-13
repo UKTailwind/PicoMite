@@ -155,13 +155,21 @@ class PC3:
         """Receive one file from the device's XMODEM SEND (CRC mode, 128 or 1024 byte packets)."""
         SOH, STX, EOT, ACK, NAK, CAN = 1, 2, 4, 6, 0x15, 0x18
         data, expected, start = b"", 1, time.time()
+        polls = 0
         self.s.reset_input_buffer()
         self.s.write(b"C")
         while time.time() - start < timeout:
             hdr = self._read_exact(1, time.time() + 1.5)
             if not hdr:
                 if not data:
-                    self.s.write(b"C")      # keep asking until the first packet arrives
+                    # Ask again, but not for ever.  If nothing is sending, these
+                    # C characters are going to a BASIC prompt, where they land
+                    # on the screen and in the input of anything running.
+                    polls += 1
+                    if polls > 8:
+                        self.s.write(bytes([CAN, CAN]))
+                        raise TimeoutError("nothing answered %d XMODEM requests" % polls)
+                    self.s.write(b"C")
                 continue
             c = hdr[0]
             if c == EOT:
@@ -244,7 +252,15 @@ class PC3:
         """Fetch a file from the device: XMODEM SEND on the console, receive it here."""
         self.drain(0.05)
         self.send_line('XMODEM S "%s"' % devpath)
-        time.sleep(0.5)
+        # A file the device cannot find is answered with an error and a return
+        # to the prompt.  Notice that before polling, or the receiver spends its
+        # whole timeout spraying C characters at the console.
+        early, t0 = "", time.time()
+        while time.time() - t0 < 1.5:
+            early += self._read()
+            if "rror" in early:
+                raise IOError("XMODEM SEND refused: %s"
+                              % " ".join(ANSI.sub("", early).split())[:120])
         data = self.xmodem_receive(timeout)
         self.wait_prompt(15)
         return data

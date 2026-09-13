@@ -44,8 +44,8 @@ SUB DrawTitle
 END SUB
 
 ' Everything the ship answers to, on one screen.
-SUB ControlsScreen
-  LOCAL INTEGER y, k
+SUB DrawControls
+  LOCAL INTEGER y
   CLS
   TEXT VCX, 1, "FLIGHT", "CT", 7, 1, cWhite
   LINE 0, 11, SCRW - 1, 11, 1, cCyan
@@ -79,6 +79,12 @@ SUB ControlsScreen
 
   TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cDim
   FRAMEBUFFER COPY F, N
+END SUB
+
+' The page on its own, waited on, which is what H from the title does.
+SUB ControlsScreen
+  LOCAL INTEGER k
+  DrawControls
   k = WaitKey(0)
 END SUB
 

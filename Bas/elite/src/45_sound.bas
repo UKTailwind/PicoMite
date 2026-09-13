@@ -44,6 +44,33 @@
 '  two tunnels, both key waits and HoldFor all call it.
 ' =====================================================================
 
+' How much of one of the original's iterations this frame is worth.  A long
+' frame is clamped rather than allowed to move the world a long way at once,
+' which is what would otherwise happen coming back from a chart or a tunnel.
+SUB NextTick
+  LOCAL FLOAT now
+  now = TIMER
+  tick = (now - tickPrev) * TICKRATE / 1000
+  IF tick > TICKMAX THEN tick = TICKMAX
+  IF tick < 0 THEN tick = 0
+  tickPrev = now
+  tickAcc = tickAcc + tick
+  tickWhole = 0
+  IF tickAcc >= 1 THEN
+    tickAcc = tickAcc - 1
+    tickWhole = 1
+  ENDIF
+END SUB
+
+' Starting or restarting the clock, so the first frame after a pause does not
+' count the pause.
+SUB ResetTick
+  tickPrev = TIMER
+  tickAcc = 0
+  tick = 0
+  tickWhole = 0
+END SUB
+
 SUB LoadSounds
   LOCAL INTEGER i
   RESTORE dat_sfx

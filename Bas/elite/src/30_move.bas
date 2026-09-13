@@ -10,13 +10,17 @@
 
 SUB MoveShips
   LOCAL INTEGER n, i, mag, dir, gone
-  LOCAL FLOAT k
+  LOCAL FLOAT k, aT, bT
+  ' The player's turn for this frame, which is a fraction of the turn the
+  ' original made in one iteration.
+  aT = alpha * tick
+  bT = beta * tick
 
   ' The player's rotation, as a quaternion, built once for the frame.
   ' To first order the original's position transform is a rotation of
   ' -alpha about the nose axis followed by +beta about the side axis.
-  MATH Q_CREATE -alpha, 0, 0, 1, qA()
-  MATH Q_CREATE beta, 1, 0, 0, qB()
+  MATH Q_CREATE -aT, 0, 0, 1, qA()
+  MATH Q_CREATE bT, 1, 0, 0, qB()
   MATH Q_MULT qB(), qA(), qP()
 
   ' A FOR loop fixes its limit when it starts, and killing a ship shortens
@@ -29,16 +33,16 @@ SUB MoveShips
       ' --- 1. the ship moves along its own nose (not the planet or sun)
       IF sBp(n) >= 0 AND sSpd(n) <> 0 THEN
         NoseVec n
-        sX(n) = sX(n) + qV(1) * qV(4) * sSpd(n) * NPCSPEED
-        sY(n) = sY(n) + qV(2) * qV(4) * sSpd(n) * NPCSPEED
-        sZ(n) = sZ(n) + qV(3) * qV(4) * sSpd(n) * NPCSPEED
+        sX(n) = sX(n) + qV(1) * qV(4) * sSpd(n) * NPCSPEED * tick
+        sY(n) = sY(n) + qV(2) * qV(4) * sSpd(n) * NPCSPEED * tick
+        sZ(n) = sZ(n) + qV(3) * qV(4) * sSpd(n) * NPCSPEED * tick
       ENDIF
 
       ' --- 2. acceleration is applied once and then forgotten.  The
       '     original tests bit 7 of the raw eight bit sum, so anything
       '     that lands in 128..255 is zeroed - an overshoot at the top
       '     stops the ship dead rather than pinning it at maximum.
-      IF sAcc(n) <> 0 THEN
+      IF sAcc(n) <> 0 AND tickWhole THEN
         mag = sSpd(n) + sAcc(n)
         IF mag < 0 OR mag > 127 THEN mag = 0
         IF mag > bSpd(sBp(n)) THEN mag = bSpd(sBp(n))
@@ -50,13 +54,13 @@ SUB MoveShips
       '     position.  Written exactly as the original does it: each
       '     line uses the value the line before it just produced, which
       '     is what makes this a rotation rather than a shear.
-      k = sY(n) - alpha * sX(n)
-      sZ(n) = sZ(n) + beta * k
-      sY(n) = k - beta * sZ(n)
-      sX(n) = sX(n) + alpha * sY(n)
+      k = sY(n) - aT * sX(n)
+      sZ(n) = sZ(n) + bT * k
+      sY(n) = k - bT * sZ(n)
+      sX(n) = sX(n) + aT * sY(n)
 
       ' --- 4. and the player's speed
-      sZ(n) = sZ(n) - dSpeed
+      sZ(n) = sZ(n) - dSpeed * tick
 
       ' --- 5. the same rotation applied to the ship's orientation
       IF sBp(n) >= 0 THEN
@@ -71,19 +75,19 @@ SUB MoveShips
         IF mag <> 0 THEN
           dir = 1
           IF (sPit(n) AND 128) <> 0 THEN dir = -1
-          MATH Q_CREATE dir * SELFROT, 1, 0, 0, qB()
+          MATH Q_CREATE dir * SELFROT * tick, 1, 0, 0, qB()
           qA() = qC()
           MATH Q_MULT qA(), qB(), qC()
-          IF mag <> 127 THEN sPit(n) = (mag - 1) OR (sPit(n) AND 128)
+          IF mag <> 127 AND tickWhole THEN sPit(n) = (mag - 1) OR (sPit(n) AND 128)
         ENDIF
         mag = sRol(n) AND 127
         IF mag <> 0 THEN
           dir = 1
           IF (sRol(n) AND 128) <> 0 THEN dir = -1
-          MATH Q_CREATE dir * SELFROT, 0, 0, 1, qB()
+          MATH Q_CREATE dir * SELFROT * tick, 0, 0, 1, qB()
           qA() = qC()
           MATH Q_MULT qA(), qB(), qC()
-          IF mag <> 127 THEN sRol(n) = (mag - 1) OR (sRol(n) AND 128)
+          IF mag <> 127 AND tickWhole THEN sRol(n) = (mag - 1) OR (sRol(n) AND 128)
         ENDIF
 
         MATH INSERT sQ(), , n, qC()

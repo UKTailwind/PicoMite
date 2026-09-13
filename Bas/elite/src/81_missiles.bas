@@ -121,9 +121,9 @@ SUB HomeOn(n AS INTEGER, dx AS FLOAT, dy AS FLOAT, dz AS FLOAT, d AS FLOAT)
   NoseVec n
   nx = qV(1) * qV(4) : ny = qV(2) * qV(4) : nz = qV(3) * qV(4)
   ' Turn the nose towards the bearing by a fixed fraction each frame.
-  nx = nx + (dx / d - nx) * MSTURN
-  ny = ny + (dy / d - ny) * MSTURN
-  nz = nz + (dz / d - nz) * MSTURN
+  nx = nx + (dx / d - nx) * MSTURN * tick
+  ny = ny + (dy / d - ny) * MSTURN * tick
+  nz = nz + (dz / d - nz) * MSTURN * tick
   m = SQR(nx * nx + ny * ny + nz * nz)
   IF m < 0.0001 THEN EXIT SUB
   nx = nx / m : ny = ny / m : nz = nz / m

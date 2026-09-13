@@ -213,9 +213,13 @@ END FUNCTION
 
 SUB DrawStardust
   LOCAL INTEGER i, zh, np, sx, sy, sy2, r
-  LOCAL FLOAT q, x, y, z, a, b, h, qb, d, dsg, ratsg
-  a = alp2 * alp1
-  b = bet2 * bet1
+  LOCAL FLOAT q, x, y, z, a, b, h, qb, d, dsg, ratsg, sp
+  ' The dust has to move by the same fraction of an iteration as everything
+  ' else, so the speed and the two angles are scaled once, here, rather than
+  ' in each of the four views below.
+  a = alp2 * alp1 * tick
+  b = bet2 * bet1 * tick
+  sp = dSpeed * tick
   np = 0
   ARRAY SET -1, spx()
   IF vw > 1 THEN
@@ -231,8 +235,8 @@ SUB DrawStardust
     IF vw = 0 THEN
       ' --- front: everything streams out from the centre
       zh = z
-      q = (INT(64 * dSpeed / zh)) OR 1
-      z = z - dSpeed / 4
+      q = (INT(64 * sp / zh)) OR 1
+      z = z - sp / 4
       y = y + FIX(y) * q / 256
       x = x + FIX(x) * q / 256
       y = y - a * FIX(x) / 256
@@ -248,10 +252,10 @@ SUB DrawStardust
     ELSEIF vw = 1 THEN
       ' --- rear: everything streams in towards the centre
       zh = z
-      q = (INT(64 * dSpeed / zh)) OR 1
+      q = (INT(64 * sp / zh)) OR 1
       x = x - FIX(x) * q / 256
       y = y - FIX(y) * q / 256
-      z = z + dSpeed / 4
+      z = z + sp / 4
       y = y + a * FIX(x) / 256
       x = x - a * FIX(y) / 256
       h = FIX(y)
@@ -276,7 +280,7 @@ SUB DrawStardust
       zh = z
       d = INT(zh / 8)
       IF d < 1 THEN d = 1
-      x = x + dsg * dSpeed / d
+      x = x + dsg * sp / d
       x = x + b * FIX(y) / 256
       y = y - b * FIX(x) / 256
       h = FIX(y)

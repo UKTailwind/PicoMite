@@ -47,7 +47,9 @@ END SUB
 SUB RunFlight
   LOCAL FLOAT t0
   t0 = TIMER
+  ResetTick
   DO
+    NextTick
     ReadKeys
     IF kQuit THEN
       ' The BBC used the ESCAPE key for the capsule, and so do we - but
@@ -79,29 +81,36 @@ SUB RunFlight
       tStage = TIMER
       InfoScreen kChart
       t0 = t0 + TIMER - tStage
+      ResetTick
     ENDIF
-    IF lasTimer > 0 THEN lasTimer = lasTimer - 1
-    IF lasFlash > 0 THEN lasFlash = lasFlash - 1
+    IF tickWhole THEN
+      IF lasTimer > 0 THEN lasTimer = lasTimer - 1
+      IF lasFlash > 0 THEN lasFlash = lasFlash - 1
+    ENDIF
     tStage = TIMER
+    ' Moving and touching are continuous and happen every frame; everything
+    ' else the original did once per iteration waits for a whole one.
     MoveShips
     Contact
     Missiles
-    Tactics
-    ECMService
-    Recharge
-    EnergyWarning
-    Altitude
-    CabinTemp
-    StationCheck
-    StationPolice
-    SpawnTraffic
     DockCheck
+    IF tickWhole THEN
+      Tactics
+      ECMService
+      Recharge
+      EnergyWarning
+      Altitude
+      CabinTemp
+      StationCheck
+      StationPolice
+      SpawnTraffic
+      mcnt = (mcnt + 1) AND 255
+    ENDIF
     prof(5) = prof(5) + TIMER - tStage
     DrawFrame
     IF demoMode THEN DemoCaption
     FRAMEBUFFER COPY F, N, B
     IF kPause THEN PauseGame
-    mcnt = (mcnt + 1) AND 255
     frames = frames + 1
     SoundService
   LOOP UNTIL dead OR docked
@@ -115,6 +124,7 @@ SUB PauseGame
   TEXT VCX, VIEWH - 12, "PAUSED", "CT", 7, 1, cWhite
   FRAMEBUFFER COPY F, N
   k = WaitKey(0)
+  ResetTick
 END SUB
 
 ' Hyperspace.  Only outside the safe zone, only if the tank will cover it,

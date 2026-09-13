@@ -96,14 +96,19 @@ SUB Bar(x AS INTEGER, y AS INTEGER, lv AS INTEGER, t1 AS INTEGER, hi AS INTEGER,
 END SUB
 
 ' Roll and dive/climb are centre-zero: one marker sliding over sixteen
-' positions with the centre at 8, and four rows deep rather than three.
+' positions with the centre at 8.
+'
+' Three rows deep, not four.  The frame around every gauge is five high from
+' y - 1, so its bottom line is at y + 3; a four-deep fill starting at y lands
+' on that line and rubs it out, which is why the roll and dive/climb gauges
+' were the only two on the dashboard missing their bottom edge.
 SUB Pointer(x AS INTEGER, y AS INTEGER, p AS INTEGER)
   LOCAL INTEGER v
   v = p
   IF v < 0 THEN v = 0
   IF v > 15 THEN v = 15
-  BOX x + 1, y, DW, 4, 0, cBlack, cBlack
-  BOX x + 1 + v * 2.5, y, 3, 4, 0, cYellow, cYellow
+  BOX x + 1, y, DW, 3, 0, cBlack, cBlack
+  BOX x + 1 + v * 2.5, y, 3, 3, 0, cYellow, cYellow
 END SUB
 
 ' Four missile blocks, filled from the left as missiles are carried.
