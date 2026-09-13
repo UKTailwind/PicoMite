@@ -99,7 +99,7 @@ DIM INTEGER tBp(13)                ' ship type 1..13 -> blueprint index
 DIM FLOAT mV(2, 39), mNrm(2, 15)
 DIM INTEGER mFc(31), mHost(31), mF(159), mEc(31), mFl(31)
 DIM INTEGER col(6)
-DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cGrey, cRed
+DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cDim, cRed, cSel
 
 ' Draw3D object pool.  objOwn(n) is the slot that owns object n, or -1.
 DIM INTEGER maxObj, objOwn(15)

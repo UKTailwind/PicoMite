@@ -49,7 +49,7 @@ DIM INTEGER tBp(13)
 DIM FLOAT mV(2, 39), mNrm(2, 15)
 DIM INTEGER mFc(31), mHost(31), mF(159), mEc(31), mFl(31)
 DIM INTEGER col(6)
-DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cGrey, cRed
+DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cDim, cRed, cSel
 DIM INTEGER maxObj, objOwn(15)
 DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
@@ -231,7 +231,7 @@ IF frames >= DEMOFRAMES THEN EXIT DO
 LOOP
 tFlight = TIMER - tFrame
 ENDIF
-IF dead THEN DeathScreen : PAUSE 1500
+IF dead THEN DeathScreen : HoldFor 1500
 SoundOff
 CloseAll
 FRAMEBUFFER CLOSE
@@ -424,11 +424,13 @@ MODE 2
 FRAMEBUFFER CREATE
 FRAMEBUFFER WRITE F
 Draw3D CAMERA 1, VPLANE, 0, 0, 0, PANY
-col(0) = RGB(WHITE) : col(1) = RGB(GRAY) : col(2) = RGB(BLUE)
+col(0) = RGB(WHITE) : col(1) = RGB(MIDGREEN) : col(2) = RGB(BLUE)
 col(3) = RGB(GREEN) : col(4) = RGB(RED) : col(5) = RGB(MAGENTA)
 col(6) = RGB(CYAN)
 cGreen = RGB(GREEN) : cYellow = RGB(YELLOW) : cWhite = RGB(WHITE)
-cBlack = RGB(BLACK) : cCyan = RGB(CYAN) : cGrey = RGB(64, 64, 64)
+cBlack = RGB(BLACK) : cCyan = RGB(CYAN)
+cDim = RGB(MIDGREEN)
+cSel = RGB(BLUE)
 cRed = RGB(RED)
 LOCAL INTEGER k
 FOR k = 0 TO NSEG - 1
@@ -956,6 +958,13 @@ CASE 1 : PLAY SOUND c, B, N, f, v
 CASE ELSE : PLAY SOUND c, B, P, f, v
 END SELECT
 END SUB
+SUB HoldFor(ms AS INTEGER)
+LOCAL FLOAT t
+t = TIMER + ms
+DO
+SoundService
+LOOP UNTIL TIMER > t
+END SUB
 SUB SoundOff
 LOCAL INTEGER c
 FOR c = 1 TO 4
@@ -1004,13 +1013,13 @@ BOX 0, DASHY, SCRW, SCRH - DASHY, 0, cBlack, cBlack
 LINE 0, DASHY, SCRW - 1, DASHY, 1, cCyan
 FOR i = 0 TO 5
 TEXT 17, DLY(i) - 1, LLAB$(i), "RT", 7, 1, cWhite
-BOX DL, DLY(i) - 1, DW + 2, 5, 1, cGrey, -1
+BOX DL, DLY(i) - 1, DW + 2, 5, 1, cDim, -1
 NEXT i
 FOR i = 0 TO 6
 TEXT 303, DRY(i) - 1, RLAB$(i), "LT", 7, 1, cWhite
-BOX DR, DRY(i) - 1, DW + 2, 5, 1, cGrey, -1
+BOX DR, DRY(i) - 1, DW + 2, 5, 1, cDim, -1
 NEXT i
-CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cGrey, -1
+CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cDim, -1
 MEMORY COPY INTEGER fadd, addr, wordcount
 ELSE
 MEMORY COPY INTEGER addr, fadd, wordcount
@@ -1096,7 +1105,7 @@ IF sTyp(n) = 0 THEN EXIT SUB
 m = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
 IF m < 1 THEN EXIT SUB
 BOX CPX - CPR - 4, CPY - CPR - 3, 2 * CPR + 9, 2 * CPR + 7, 0, cBlack, cBlack
-CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cGrey, -1
+CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cDim, -1
 px = CPX + CPR * 1.25 * sX(n) / m
 py = CPY - CPR * sY(n) / m
 IF sZ(n) >= 0 THEN
@@ -1645,9 +1654,9 @@ Sfx SFX_BOOMT
 sSpd(n) = 0
 sAI(n) = 0
 kills = kills + 1
-IF kills > 0 AND (kills AND 255) = 0 THEN Message "RIGHT ON COMMANDER!"
 cashTenths = cashTenths + bBty(sBp(n))
 IF bBty(sBp(n)) > 0 THEN Message STR$(bBty(sBp(n)) / 10) + " CR"
+IF kills > 0 AND (kills AND 255) = 0 THEN Message "RIGHT ON COMMANDER!"
 NoteKill n
 EjectCargo n
 DropObject n
@@ -2072,6 +2081,7 @@ SUB LaunchTunnel
 LOCAL INTEGER i, k, r
 Sfx SFX_LAUNCH
 FOR i = 0 TO 23
+SoundService
 CLS
 FOR k = 0 TO 5
 r = ((i + k * 4) MOD 24) * 7 + 8
@@ -2085,6 +2095,7 @@ END SUB
 SUB HyperTunnel
 LOCAL INTEGER i, k, r, c
 FOR i = 0 TO 31
+SoundService
 CLS
 FOR k = 0 TO 6
 r = ((i + k * 5) MOD 35) * 5 + 4
@@ -2481,7 +2492,7 @@ TEXT 180, y, STR$(cargo(i)) + " " + mkUnit$(i), "LT", 7, 1, cYellow
 y = y + 10
 ENDIF
 NEXT i
-IF y = 53 THEN TEXT 20, y, "Nothing in the hold.", "LT", 7, 1, cGrey
+IF y = 53 THEN TEXT 20, y, "Nothing in the hold.", "LT", 7, 1, cDim
 END SUB
 SUB MarketScreen(sel AS INTEGER)
 LOCAL INTEGER i, y, c
@@ -2490,23 +2501,23 @@ GotoSystem gGal, homeSys
 SysData
 TEXT VCX, 3, SysName$() + " MARKET PRICES", "CT", 7, 1, cWhite
 LINE 0, 15, SCRW - 1, 15, 1, cWhite
-TEXT 20, 18, "PRODUCT", "LT", 7, 1, cGrey
-TEXT 150, 18, "UNIT", "LT", 7, 1, cGrey
-TEXT 190, 18, "PRICE", "LT", 7, 1, cGrey
-TEXT 245, 18, "FOR SALE", "LT", 7, 1, cGrey
-TEXT 300, 18, "HELD", "LT", 7, 1, cGrey
+TEXT 20, 18, "PRODUCT", "LT", 7, 1, cDim
+TEXT 150, 18, "UNIT", "LT", 7, 1, cDim
+TEXT 190, 18, "PRICE", "LT", 7, 1, cDim
+TEXT 238, 18, "FOR SALE", "LT", 7, 1, cDim
+TEXT 292, 18, "HELD", "LT", 7, 1, cDim
 y = 29
 FOR i = 0 TO NGOODS - 1
 c = cWhite
 IF i = sel THEN
 c = cYellow
-BOX 16, y - 1, 292, 9, 0, RGB(32, 32, 64), RGB(32, 32, 64)
+BOX 16, y - 1, 292, 9, 0, cSel, cSel
 ENDIF
 TEXT 20, y, mkName$(i), "LT", 7, 1, c
 TEXT 150, y, mkUnit$(i), "LT", 7, 1, c
 TEXT 190, y, PriceStr$(mkPrice(i)), "LT", 7, 1, c
-TEXT 250, y, STR$(mkStock(i)), "LT", 7, 1, c
-TEXT 302, y, STR$(cargo(i)), "LT", 7, 1, c
+TEXT 245, y, STR$(mkStock(i)), "LT", 7, 1, c
+TEXT 300, y, STR$(cargo(i)), "LT", 7, 1, c
 y = y + 9
 NEXT i
 TEXT 20, y + 4, "Cash: " + STR$(cashTenths / 10) + " Cr", "LT", 7, 1, cWhite
@@ -2548,10 +2559,10 @@ y = y + 11
 FOR i = 0 TO NEQUIP - 1
 IF eqTech(i) <= sysTech + 1 THEN
 c = cWhite
-IF eqOwned(i) THEN c = cGrey
+IF eqOwned(i) THEN c = cDim
 IF i = sel THEN
 c = cYellow
-BOX 16, y - 1, 292, 9, 0, RGB(32, 32, 64), RGB(32, 32, 64)
+BOX 16, y - 1, 292, 9, 0, cSel, cSel
 ENDIF
 TEXT 20, y, eqName$(i), "LT", 7, 1, c
 TEXT 220, y, STR$(eqPrice(i)) + " Cr", "LT", 7, 1, c
@@ -2567,8 +2578,14 @@ IF cashTenths < eqPrice(i) * 10 THEN EXIT SUB
 IF i = EQ_PULSE OR i = EQ_BEAM THEN
 v = AskView()
 IF v < 0 THEN EXIT SUB
+IF i = EQ_PULSE THEN
 IF lasView(v) <> 0 THEN Sfx SFX_BOOP : EXIT SUB
-IF i = EQ_PULSE THEN lasView(v) = LAS_PULSE ELSE lasView(v) = LAS_BEAM
+lasView(v) = LAS_PULSE
+ELSE
+IF lasView(v) >= 128 THEN Sfx SFX_BOOP : EXIT SUB
+IF lasView(v) <> 0 THEN cashTenths = cashTenths + eqPrice(EQ_PULSE) * 10
+lasView(v) = LAS_BEAM
+ENDIF
 cashTenths = cashTenths - eqPrice(i) * 10
 EXIT SUB
 ENDIF
@@ -2731,7 +2748,7 @@ y = y + 11
 KeyLine y, "F1 Launch", "F2 buy, F3 sell" : y = y + 9
 KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 9
 KeyLine y, "F fills the tank", "S save, L load" : y = y + 9
-TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cGrey
+TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cDim
 FRAMEBUFFER COPY F, N
 k = WaitKey(0)
 END SUB
@@ -2927,9 +2944,9 @@ END SELECT
 END SUB
 SUB DockFooter(t$)
 IF demoMode THEN
-TEXT VCX, SCRH - 9, "DEMONSTRATION - PRESS ANY KEY TO PLAY", "CT", 7, 1, cGrey
+TEXT VCX, SCRH - 9, "DEMONSTRATION - PRESS ANY KEY TO PLAY", "CT", 7, 1, cDim
 ELSE
-TEXT VCX, SCRH - 9, t$, "CT", 7, 1, cGrey
+TEXT VCX, SCRH - 9, t$, "CT", 7, 1, cDim
 ENDIF
 END SUB
 SUB DockUp
@@ -3076,6 +3093,7 @@ LOCAL FLOAT t
 LOCAL kb$ LENGTH 2
 t = TIMER + ms
 DO
+SoundService
 kb$ = INKEY$
 IF kb$ <> "" THEN
 demoStop = 1
@@ -3265,7 +3283,7 @@ SysData
 END SUB
 SUB DemoCaption
 IF demoCap$ = "" THEN EXIT SUB
-TEXT VCX, VIEWH - 26, demoCap$, "CT", 7, 1, cGrey
+TEXT VCX, VIEWH - 26, demoCap$, "CT", 7, 1, cDim
 END SUB
 SUB DemoScript
 LOCAL INTEGER i, k, w

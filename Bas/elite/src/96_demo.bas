@@ -83,6 +83,9 @@ FUNCTION DemoHold(ms AS INTEGER, k AS INTEGER) AS INTEGER
   LOCAL kb$ LENGTH 2
   t = TIMER + ms
   DO
+    ' Without this the whole docked half of the demo is a blocking wait, and
+    ' anything started during it plays until the next effect replaces it.
+    SoundService
     kb$ = INKEY$
     IF kb$ <> "" THEN
       demoStop = 1
@@ -333,7 +336,7 @@ END SUB
 ' What the demo is doing, in the empty rows under the space view.
 SUB DemoCaption
   IF demoCap$ = "" THEN EXIT SUB
-  TEXT VCX, VIEWH - 26, demoCap$, "CT", 7, 1, cGrey
+  TEXT VCX, VIEWH - 26, demoCap$, "CT", 7, 1, cDim
 END SUB
 
 ' --- the docked script

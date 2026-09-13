@@ -100,7 +100,7 @@ SUB InventoryScreen
       y = y + 10
     ENDIF
   NEXT i
-  IF y = 53 THEN TEXT 20, y, "Nothing in the hold.", "LT", 7, 1, cGrey
+  IF y = 53 THEN TEXT 20, y, "Nothing in the hold.", "LT", 7, 1, cDim
 END SUB
 
 ' --- the market
@@ -111,23 +111,23 @@ SUB MarketScreen(sel AS INTEGER)
   SysData
   TEXT VCX, 3, SysName$() + " MARKET PRICES", "CT", 7, 1, cWhite
   LINE 0, 15, SCRW - 1, 15, 1, cWhite
-  TEXT 20, 18, "PRODUCT", "LT", 7, 1, cGrey
-  TEXT 150, 18, "UNIT", "LT", 7, 1, cGrey
-  TEXT 190, 18, "PRICE", "LT", 7, 1, cGrey
-  TEXT 245, 18, "FOR SALE", "LT", 7, 1, cGrey
-  TEXT 300, 18, "HELD", "LT", 7, 1, cGrey
+  TEXT 20, 18, "PRODUCT", "LT", 7, 1, cDim
+  TEXT 150, 18, "UNIT", "LT", 7, 1, cDim
+  TEXT 190, 18, "PRICE", "LT", 7, 1, cDim
+  TEXT 238, 18, "FOR SALE", "LT", 7, 1, cDim
+  TEXT 292, 18, "HELD", "LT", 7, 1, cDim
   y = 29
   FOR i = 0 TO NGOODS - 1
     c = cWhite
     IF i = sel THEN
       c = cYellow
-      BOX 16, y - 1, 292, 9, 0, RGB(32, 32, 64), RGB(32, 32, 64)
+      BOX 16, y - 1, 292, 9, 0, cSel, cSel
     ENDIF
     TEXT 20, y, mkName$(i), "LT", 7, 1, c
     TEXT 150, y, mkUnit$(i), "LT", 7, 1, c
     TEXT 190, y, PriceStr$(mkPrice(i)), "LT", 7, 1, c
-    TEXT 250, y, STR$(mkStock(i)), "LT", 7, 1, c
-    TEXT 302, y, STR$(cargo(i)), "LT", 7, 1, c
+    TEXT 245, y, STR$(mkStock(i)), "LT", 7, 1, c
+    TEXT 300, y, STR$(cargo(i)), "LT", 7, 1, c
     y = y + 9
   NEXT i
   TEXT 20, y + 4, "Cash: " + STR$(cashTenths / 10) + " Cr", "LT", 7, 1, cWhite
@@ -180,10 +180,10 @@ SUB EquipScreen(sel AS INTEGER)
     ' Only what this system is advanced enough to sell.
     IF eqTech(i) <= sysTech + 1 THEN
       c = cWhite
-      IF eqOwned(i) THEN c = cGrey
+      IF eqOwned(i) THEN c = cDim
       IF i = sel THEN
         c = cYellow
-        BOX 16, y - 1, 292, 9, 0, RGB(32, 32, 64), RGB(32, 32, 64)
+        BOX 16, y - 1, 292, 9, 0, cSel, cSel
       ENDIF
       TEXT 20, y, eqName$(i), "LT", 7, 1, c
       TEXT 220, y, STR$(eqPrice(i)) + " Cr", "LT", 7, 1, c
@@ -203,8 +203,17 @@ SUB BuyEquip(i AS INTEGER)
   IF i = EQ_PULSE OR i = EQ_BEAM THEN
     v = AskView()
     IF v < 0 THEN EXIT SUB
-    IF lasView(v) <> 0 THEN Sfx SFX_BOOP : EXIT SUB
-    IF i = EQ_PULSE THEN lasView(v) = LAS_PULSE ELSE lasView(v) = LAS_BEAM
+    IF i = EQ_PULSE THEN
+      ' A pulse will not go where anything is already mounted.
+      IF lasView(v) <> 0 THEN Sfx SFX_BOOP : EXIT SUB
+      lasView(v) = LAS_PULSE
+    ELSE
+      ' A beam will replace a pulse, and the original hands back what the
+      ' pulse cost when it does.  Only another beam is refused.
+      IF lasView(v) >= 128 THEN Sfx SFX_BOOP : EXIT SUB
+      IF lasView(v) <> 0 THEN cashTenths = cashTenths + eqPrice(EQ_PULSE) * 10
+      lasView(v) = LAS_BEAM
+    ENDIF
     cashTenths = cashTenths - eqPrice(i) * 10
     EXIT SUB
   ENDIF

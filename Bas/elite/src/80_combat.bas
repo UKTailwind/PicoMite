@@ -77,11 +77,13 @@ SUB Explode(n AS INTEGER)
   ' whatever bounty its blueprint carries - which is nothing for most
   ' things and half a credit for an asteroid.
   kills = kills + 1
-  ' The original says something when the tally's low byte wraps.
-  IF kills > 0 AND (kills AND 255) = 0 THEN Message "RIGHT ON COMMANDER!"
   cashTenths = cashTenths + bBty(sBp(n))
-  ' The original announces what the kill was worth.
+  ' The original announces what the kill was worth, and says something else
+  ' when the tally's low byte wraps.  That one goes second: a message
+  ' replaces whatever is on the line, and being told you are getting good at
+  ' this is worth more than being told an asteroid was worth half a credit.
   IF bBty(sBp(n)) > 0 THEN Message STR$(bBty(sBp(n)) / 10) + " CR"
+  IF kills > 0 AND (kills AND 255) = 0 THEN Message "RIGHT ON COMMANDER!"
   NoteKill n
   EjectCargo n
   DropObject n

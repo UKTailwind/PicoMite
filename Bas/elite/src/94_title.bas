@@ -77,7 +77,7 @@ SUB ControlsScreen
   KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 9
   KeyLine y, "F fills the tank", "S save, L load" : y = y + 9
 
-  TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cGrey
+  TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cDim
   FRAMEBUFFER COPY F, N
   k = WaitKey(0)
 END SUB

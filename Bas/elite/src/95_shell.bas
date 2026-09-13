@@ -235,9 +235,9 @@ END SUB
 ' when the only key that matters is any of them.
 SUB DockFooter(t$)
   IF demoMode THEN
-    TEXT VCX, SCRH - 9, "DEMONSTRATION - PRESS ANY KEY TO PLAY", "CT", 7, 1, cGrey
+    TEXT VCX, SCRH - 9, "DEMONSTRATION - PRESS ANY KEY TO PLAY", "CT", 7, 1, cDim
   ELSE
-    TEXT VCX, SCRH - 9, t$, "CT", 7, 1, cGrey
+    TEXT VCX, SCRH - 9, t$, "CT", 7, 1, cDim
   ENDIF
 END SUB
 

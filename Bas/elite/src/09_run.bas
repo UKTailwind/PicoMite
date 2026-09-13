@@ -84,7 +84,7 @@ ELSE
 
 ENDIF
 
-IF dead THEN DeathScreen : PAUSE 1500
+IF dead THEN DeathScreen : HoldFor 1500
 SoundOff
 CloseAll
 FRAMEBUFFER CLOSE

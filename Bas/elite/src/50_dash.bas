@@ -42,13 +42,13 @@ SUB DashStatic
     ' ours x 0..19 left of the left column, x 300..319 right of the right.
     FOR i = 0 TO 5
       TEXT 17, DLY(i) - 1, LLAB$(i), "RT", 7, 1, cWhite
-      BOX DL, DLY(i) - 1, DW + 2, 5, 1, cGrey, -1
+      BOX DL, DLY(i) - 1, DW + 2, 5, 1, cDim, -1
     NEXT i
     FOR i = 0 TO 6
       TEXT 303, DRY(i) - 1, RLAB$(i), "LT", 7, 1, cWhite
-      BOX DR, DRY(i) - 1, DW + 2, 5, 1, cGrey, -1
+      BOX DR, DRY(i) - 1, DW + 2, 5, 1, cDim, -1
     NEXT i
-    CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cGrey, -1
+    CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cDim, -1
     MEMORY COPY INTEGER fadd, addr, wordcount
   ELSE
     MEMORY COPY INTEGER addr, fadd, wordcount
@@ -159,7 +159,7 @@ SUB DrawCompass
   m = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
   IF m < 1 THEN EXIT SUB
   BOX CPX - CPR - 4, CPY - CPR - 3, 2 * CPR + 9, 2 * CPR + 7, 0, cBlack, cBlack
-  CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cGrey, -1
+  CIRCLE CPX, CPY, CPR + 2, 1, 1.25, cDim, -1
   px = CPX + CPR * 1.25 * sX(n) / m
   py = CPY - CPR * sY(n) / m
   IF sZ(n) >= 0 THEN

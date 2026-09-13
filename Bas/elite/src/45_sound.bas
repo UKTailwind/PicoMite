@@ -37,9 +37,11 @@
 '  is fifty rattles a second.  Only the wavetable types - Q, T, W, S, P, U -
 '  take a frequency in hertz.
 '
-'  Nothing here blocks.  Sfx starts an effect; SoundService, called from the
-'  frame loop and from any wait for a key, slides the pitch and switches the
-'  channel off when its time is up.
+'  Nothing here blocks.  Sfx starts an effect; SoundService slides the pitch
+'  and switches the channel off when its time is up - and it has to be called
+'  from EVERY wait, not only the frame loop, or an effect started just before
+'  a blocking one plays until something else replaces it.  The frame loop, the
+'  two tunnels, both key waits and HoldFor all call it.
 ' =====================================================================
 
 SUB LoadSounds
@@ -112,6 +114,15 @@ SUB PlayCh(c AS INTEGER, w AS INTEGER, f AS INTEGER, v AS INTEGER)
     CASE 1 : PLAY SOUND c, B, N, f, v      ' white noise
     CASE ELSE : PLAY SOUND c, B, P, f, v   ' periodic noise
   END SELECT
+END SUB
+
+' A pause that still lets the sound finish, for the places that want one.
+SUB HoldFor(ms AS INTEGER)
+  LOCAL FLOAT t
+  t = TIMER + ms
+  DO
+    SoundService
+  LOOP UNTIL TIMER > t
 END SUB
 
 SUB SoundOff

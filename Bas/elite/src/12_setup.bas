@@ -8,13 +8,24 @@ SUB SetupScreen
   ' Draw3D's own centre is (W/2, H/2-1); pany lifts it to the space
   ' view's centre so ships sit above the dashboard, not behind it.
   Draw3D CAMERA 1, VPLANE, 0, 0, 0, PANY
-  col(0) = RGB(WHITE) : col(1) = RGB(GRAY) : col(2) = RGB(BLUE)
+  ' Every one of these has to be one of the sixteen the screen actually has,
+  ' or it is rounded to the nearest and rarely to the one you meant: GRAY,
+  ' which was here, is not in the palette at all.  In practice the ships are
+  ' drawn entirely in col(0), because every blueprint edge is colour 0.
+  col(0) = RGB(WHITE) : col(1) = RGB(MIDGREEN) : col(2) = RGB(BLUE)
   col(3) = RGB(GREEN) : col(4) = RGB(RED) : col(5) = RGB(MAGENTA)
   col(6) = RGB(CYAN)
   ' Pre-resolved so the drawing loops assign a variable rather than call
   ' RGB(), which the trace cache cannot compile.
   cGreen = RGB(GREEN) : cYellow = RGB(YELLOW) : cWhite = RGB(WHITE)
-  cBlack = RGB(BLACK) : cCyan = RGB(CYAN) : cGrey = RGB(64, 64, 64)
+  cBlack = RGB(BLACK) : cCyan = RGB(CYAN)
+  ' Secondary text and the outlines of the scanner and compass.  This was
+  ' RGB(64, 64, 64), which a sixteen colour screen rounds to MYRTLE - a
+  ' green so dark it can barely be read.
+  cDim = RGB(MIDGREEN)
+  ' The band behind the chosen row.  RGB(32, 32, 64) was rounded to black,
+  ' so the selection could not be seen at all.
+  cSel = RGB(BLUE)
   cRed = RGB(RED)
   ' One turn of the unit circle, for the planet's surface ellipses.
   LOCAL INTEGER k
