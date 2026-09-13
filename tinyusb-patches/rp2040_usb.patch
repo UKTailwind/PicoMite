@@ -1,6 +1,6 @@
 --- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
 +++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
-@@ -48,6 +48,69 @@
+@@ -48,6 +48,79 @@
  
  critical_section_t rp2usb_lock;
  
@@ -23,10 +23,20 @@
 +#define PM_USB_FAULT_BUFCTRL16 3u
 +#define PM_USB_FAULT_NCODES    4u /* codes 1..3 */
 +volatile uint16_t pm_usb_fault_n[PM_USB_FAULT_NCODES];
++/* Which endpoint the LAST fault of each code happened on - the single most
++   useful thing to know, because rp2usb_buffer_start() arms EVERY endpoint
++   class through bufctrl_write32(), so the code alone cannot distinguish a
++   control-pipe problem from an interrupt-endpoint one.
++     BUFCTRL32/16 -> low 16 bits of the buffer-control register address, i.e.
++       the host DPRAM offset: 0x080 = EPX (control/bulk), 0x088 = interrupt
++       endpoint 1, 0x090 = IEP2, 0x098 = IEP3 ... (+8 per endpoint).
++     DATA_SEQ     -> ep_addr | dev_addr<<8 of whatever EPX was doing. */
++volatile uint16_t pm_usb_fault_ep[PM_USB_FAULT_NCODES];
 +volatile uint16_t pm_usb_fault_total;
-+void __tusb_irq_path_func(pm_usb_fault_note)(uint8_t code) {
++void __tusb_irq_path_func(pm_usb_fault_note)(uint8_t code, uint16_t info) {
 +  if (code < PM_USB_FAULT_NCODES && pm_usb_fault_n[code] != 0xFFFFu) {
 +    pm_usb_fault_n[code]++;
++    pm_usb_fault_ep[code] = info;
 +  }
 +  if (pm_usb_fault_total != 0xFFFFu) {
 +    pm_usb_fault_total++;
@@ -70,7 +80,7 @@
  //--------------------------------------------------------------------+
  // Implementation
  //--------------------------------------------------------------------+
-@@ -118,7 +181,13 @@
+@@ -118,7 +191,13 @@
    const uint32_t current    = *buf_reg;
    const uint32_t avail_mask = USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16);
    if (current & value & avail_mask) {
@@ -80,23 +90,23 @@
 +     * or a buffer abandoned on error).  Dropping the stale arming is exactly
 +     * what the caller is about to do anyway, so clear it and re-arm rather
 +     * than killing MMBasic. */
-+    pm_usb_fault_note(PM_USB_FAULT_BUFCTRL32);
++    pm_usb_fault_note(PM_USB_FAULT_BUFCTRL32, (uint16_t)(uintptr_t)buf_reg);
 +    *buf_reg = 0;
    }
    *buf_reg = value & ~(USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16)); // write other bits first
  
-@@ -136,7 +205,9 @@
+@@ -136,7 +215,9 @@
  void __tusb_irq_path_func(bufctrl_write16)(io_rw_16 *buf_reg16, uint16_t value) {
    const uint16_t current = *buf_reg16;
    if (current & value & USB_BUF_CTRL_AVAIL) {
 -    panic("buf_ctrl @ 0x%lX already available", (uintptr_t)buf_reg16);
 +    /* PicoMite: was panic() - see bufctrl_write32(). */
-+    pm_usb_fault_note(PM_USB_FAULT_BUFCTRL16);
++    pm_usb_fault_note(PM_USB_FAULT_BUFCTRL16, (uint16_t)(uintptr_t)buf_reg16);
 +    *buf_reg16 = 0;
    }
    *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
  
-@@ -196,7 +267,18 @@
+@@ -196,7 +277,18 @@
    if (ep_reg != NULL) {
      uint32_t ep_ctrl = *ep_reg;
    #if CFG_TUH_ENABLED
@@ -116,7 +126,7 @@
    #else
      const bool force_single = false;
    #endif
-@@ -230,6 +312,9 @@
+@@ -230,6 +322,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -126,7 +136,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -356,6 +441,16 @@
+@@ -356,6 +451,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;

@@ -1836,6 +1836,7 @@ void USB_sound_service(void)
      BUFCTRL32 = EPX (control/bulk) buffer re-armed while still available
      BUFCTRL16 = interrupt-endpoint buffer re-armed while still available */
 extern volatile unsigned short pm_usb_fault_n[];
+extern volatile unsigned short pm_usb_fault_ep[];
 extern volatile unsigned short pm_usb_fault_total;
 void USB_fault_service(void)
 {
@@ -1862,6 +1863,14 @@ void USB_fault_service(void)
 			continue;
 		MMPrintString((char *)fault_name[c]);
 		IntToStr(buff, v, 10);
+		MMPrintString(buff);
+		/* Where it happened.  For BUFCTRL32/16 this is the host DPRAM offset
+		   of the buffer-control register - 80 = EPX (control/bulk), 88 = the
+		   first interrupt endpoint, 90 the second, +8 each - which is the
+		   only way to tell a control-pipe fault from an interrupt-endpoint
+		   one.  For DATA_SEQ it is ep_addr | dev_addr<<8. */
+		MMPrintString(" @");
+		IntToStr(buff, pm_usb_fault_ep[c], 16);
 		MMPrintString(buff);
 	}
 	MMPrintString("]\r\n");

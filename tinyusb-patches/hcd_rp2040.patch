@@ -44,7 +44,7 @@
 +#endif
 +
 +/* PicoMite: USB host fault record - rp2040_usb.c (patched). */
-+void pm_usb_fault_note(uint8_t code);
++void pm_usb_fault_note(uint8_t code, uint16_t info);
 +#define PM_USB_FAULT_DATA_SEQ 1u
 +
 +/* PicoMite: restore TinyUSB 0.20's RX-timeout tolerance for CONTROL
@@ -177,7 +177,7 @@
        } else {
          epx_switch_request = true;
        }
-@@ -396,7 +498,14 @@
+@@ -396,7 +498,15 @@
  
    if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
@@ -189,11 +189,12 @@
 +     * after a STOP_TRANS, which is the only way EPX can be switched on RP2040
 +     * (no HAS_STOP_EPX_ON_NAK).  Clear the latch, record it, and let the SIE
 +     * retry and usbh time the pipe out - exactly what 0.20 did. */
-+    pm_usb_fault_note(PM_USB_FAULT_DATA_SEQ);
++    pm_usb_fault_note(PM_USB_FAULT_DATA_SEQ,
++                      (uint16_t)(epx->ep_addr | ((uint16_t)epx->dev_addr << 8)));
    }
  }
  
-@@ -502,6 +611,16 @@
+@@ -502,6 +612,16 @@
          *ep_reg           = 0;
        }
  
@@ -210,7 +211,7 @@
        ep->max_packet_size = 0; // mark as unused
      }
    }
-@@ -551,6 +670,12 @@
+@@ -551,6 +671,12 @@
  
    if (ep->transfer_type != TUSB_XFER_INTERRUPT) {
      ep->dpram_buf = usbh_dpram->epx_data;
