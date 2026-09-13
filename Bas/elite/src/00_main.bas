@@ -170,6 +170,8 @@ CONST SRDY = 2                     ' and down
 
 ' Equipment on offer, gated by the system's technology level.
 CONST NEQUIP = 8
+' Row 4 of the shop is the fuel scoops, which both kinds of scooping need.
+CONST EQ_SCOOPS = 4
 DIM eqName$(NEQUIP-1) LENGTH 20
 DIM INTEGER eqPrice(NEQUIP-1), eqTech(NEQUIP-1), eqOwned(NEQUIP-1)
 

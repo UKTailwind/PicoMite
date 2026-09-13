@@ -85,6 +85,11 @@ temperature, altitude. Down the right: speed, roll, dive/climb, and the four
 energy banks. Red means trouble in both directions - a high reading is bad for
 speed and the temperatures, a low one is bad for everything else.
 
+The altitude bar is your height above the planet, and it reads full until you
+are within about 65000 units of it; fly to one planet radius and you are dead.
+Cabin temperature climbs as you approach the sun, reaches the fuel scooping
+threshold at about 32000 units, and kills you at about 22400.
+
 The ellipse is the scanner. Each contact is a dash with a stick down to the
 plane you are flying in, so the stick tells you how far above or below you it
 is. Yellow is a missile. The dial to its right is the compass: it points at the
@@ -158,15 +163,9 @@ These are not here yet, and all of them are in the cassette original:
 
 - **Sound.** There is none at all - no laser, no explosions, no E.C.M., no
   docking. This is the biggest single difference from a BBC Micro.
-- **Cargo scooping and fuel scoops.** Kills drop canisters and you cannot pick
-  them up, so part of the economy is missing.
 - **The escape pod, the energy bomb, and the in-system jump.**
 - **The other seven galaxies.** The galactic hyperdrive can be bought and does
   nothing.
-- **Altitude and cabin temperature.** Both gauges are fixed at a dummy value.
-  In the original the altitude bar is your height above the planet and you can
-  fly into it, and cabin temperature rises near the sun - which is what makes
-  fuel scooping both possible and dangerous.
 - **The system name as you arrive.** The other in-flight messages are there.
 - **Lasers per view.** The original sells front, rear, left and right mounts
   separately; here one laser serves every view.

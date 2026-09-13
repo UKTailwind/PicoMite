@@ -1,0 +1,51 @@
+Phase 13 - altitude, heat, scooping and collisions
+==================================================
+All four were missing; the altitude and cabin temperature bars on the dashboard
+were nailed to dummy values and nothing could be flown into.
+
+The original looks at the planet on frame 10 of every 32 and at the sun on
+frame 20 - which is why those two bars step rather than slide - and both work
+on the middle bytes of the coordinates, so both are skipped entirely while
+anything is a whole unit away in any axis.  An altitude bar reading full means
+no more than "further off than 65536".
+
+Altitude is sixteen times the square root of q - 37, where q is the sum of the
+squares of the coordinates in high bytes divided by 256 again.  The planet's
+radius is 96 high bytes, which by that same arithmetic is 36, and the original
+subtracts 37 rather than 36 so that exactly one radius is fatal too.
+
+Cabin temperature is 285 - q for the sun, so 30 in deep space, 224 at the fuel
+scooping threshold and over 255 - fatal - close in.  Scooping takes a tenth of
+a light year for every eight of speed.
+
+Scooping needs fuel scoops fitted and the thing below us: you fly over the top
+of a canister to take it in.  Anything else within 256 units is a collision.  A
+canister holds a random item up to computers, an escape pod holds slaves and a
+Thargon counts as alien items.
+
+Measured by putting the planet, the sun and single objects at chosen distances
+and calling the routines directly:
+
+  planet 70000    altitude 255   the gauge reads full beyond one unit
+  planet 60000    altitude 213
+  planet 49152    altitude 166   two radii out
+  planet 30000    altitude 65
+  planet 24700    DEAD
+  planet 24576    DEAD           exactly one radius, as the original intends
+
+  sun 65000       cabin 33       just off the deep-space 30
+  sun 40000       cabin 190
+  sun 32000       cabin 224      exactly the scooping threshold
+  sun 30000       cabin 231      fuel 2.0 -> 2.5 light years at speed 40
+  sun 22000       cabin 256      DEAD
+
+  canister below, scoops      taken, "Food" in the hold, no damage
+  canister above, scoops      collision, 32 off the shield, not taken
+  canister below, no scoops   collision
+  escape pod below, scoops    taken as slaves, which is the original's rule
+  a Viper at touching range   collision
+
+In the demo the altitude bar now runs 209, 170, 134, 120, 117, 91, 65 on the
+way in and back up again as the fighting swings the planet off the axis, and
+reads full again after a jump.  Nothing died, which is right: it never flew
+straight at the planet for long enough.

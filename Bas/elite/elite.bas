@@ -83,6 +83,7 @@ CONST SRCY = 90
 CONST SRDX = 5
 CONST SRDY = 2
 CONST NEQUIP = 8
+CONST EQ_SCOOPS = 4
 DIM eqName$(NEQUIP-1) LENGTH 20
 DIM INTEGER eqPrice(NEQUIP-1), eqTech(NEQUIP-1), eqOwned(NEQUIP-1)
 CONST NGOODS = 17
@@ -201,10 +202,13 @@ IF lasTimer > 0 THEN lasTimer = lasTimer - 1
 IF lasFlash > 0 THEN lasFlash = lasFlash - 1
 tStage = TIMER
 MoveShips
+Contact
 Missiles
 Tactics
 ECMService
 Recharge
+Altitude
+CabinTemp
 StationCheck
 StationPolice
 SpawnTraffic
@@ -2167,6 +2171,102 @@ ENDIF
 NEXT n
 CountType = c
 END FUNCTION
+SUB Altitude
+LOCAL FLOAT q, xh, yh, zh
+IF (mcnt AND 31) <> 10 THEN EXIT SUB
+pAltit = 255
+IF inWitch THEN EXIT SUB
+IF sTyp(SLOT_PLANET) = 0 THEN EXIT SUB
+IF ABS(sX(SLOT_PLANET)) >= UNIT THEN EXIT SUB
+IF ABS(sY(SLOT_PLANET)) >= UNIT THEN EXIT SUB
+IF ABS(sZ(SLOT_PLANET)) >= UNIT THEN EXIT SUB
+xh = sX(SLOT_PLANET) / 256
+yh = sY(SLOT_PLANET) / 256
+zh = sZ(SLOT_PLANET) / 256
+q = (xh * xh + yh * yh + zh * zh) / 256
+IF q > 255 THEN EXIT SUB
+q = q - 37
+IF q < 0 THEN Perish : EXIT SUB
+pAltit = 16 * SQR(q)
+IF pAltit > 255 THEN pAltit = 255
+IF pAltit = 0 THEN Perish
+END SUB
+SUB CabinTemp
+LOCAL FLOAT q, xh, yh, zh
+LOCAL INTEGER got
+IF (mcnt AND 31) <> 20 THEN EXIT SUB
+pCabT = 30
+IF inWitch THEN EXIT SUB
+IF inSafe THEN EXIT SUB
+IF sTyp(SLOT_STAR) <> T_SUN THEN EXIT SUB
+IF ABS(sX(SLOT_STAR)) >= UNIT THEN EXIT SUB
+IF ABS(sY(SLOT_STAR)) >= UNIT THEN EXIT SUB
+IF ABS(sZ(SLOT_STAR)) >= UNIT THEN EXIT SUB
+xh = sX(SLOT_STAR) / 256
+yh = sY(SLOT_STAR) / 256
+zh = sZ(SLOT_STAR) / 256
+q = (xh * xh + yh * yh + zh * zh) / 256
+IF q > 255 THEN EXIT SUB
+pCabT = 285 - q
+IF pCabT > 255 THEN Perish : EXIT SUB
+IF pCabT < 224 THEN EXIT SUB
+IF eqOwned(EQ_SCOOPS) = 0 THEN EXIT SUB
+got = dSpeed \ 8
+IF got = 0 THEN EXIT SUB
+pFuel = pFuel + got
+IF pFuel > 70 THEN pFuel = 70
+Message "FUEL SCOOPS ON"
+END SUB
+SUB Contact
+LOCAL INTEGER n, t
+n = 2
+DO WHILE n < nUsed
+IF Touching(n) THEN
+t = sTyp(n)
+IF Scoopable(t) AND eqOwned(EQ_SCOOPS) <> 0 AND sY(n) < 0 THEN
+ScoopIt n, t
+ELSE
+HitPlayer 32
+Explode n
+n = n + 1
+ENDIF
+ELSE
+n = n + 1
+ENDIF
+LOOP
+END SUB
+FUNCTION Touching(n AS INTEGER) AS INTEGER
+Touching = 0
+IF sTyp(n) = 0 OR sBp(n) < 0 OR sExp(n) > 0 THEN EXIT FUNCTION
+IF ABS(sX(n)) >= 256 OR ABS(sY(n)) >= 256 OR ABS(sZ(n)) >= 256 THEN EXIT FUNCTION
+Touching = 1
+END FUNCTION
+FUNCTION Scoopable(t AS INTEGER) AS INTEGER
+Scoopable = 0
+IF t = T_CANISTER OR t = T_ESCAPE OR t = T_THARGON THEN Scoopable = 1
+END FUNCTION
+SUB ScoopIt(n AS INTEGER, t AS INTEGER)
+LOCAL INTEGER item
+SELECT CASE t
+CASE T_ESCAPE  : item = 3
+CASE T_THARGON : item = 16
+CASE ELSE      : item = INT(RND * 8)
+END SELECT
+IF item < 13 AND HoldUsed() >= holdSize THEN
+Sfx SFX_BOOP
+ELSE
+cargo(item) = cargo(item) + 1
+Message mkName$(item)
+Sfx SFX_BEEP
+ENDIF
+KillShip n
+END SUB
+SUB Perish
+pEnergy = 0
+dead = 1
+Sfx SFX_BOOM
+Sfx SFX_BOOMT
+END SUB
 SUB EquipTable
 LOCAL INTEGER i
 RESTORE dat_equip
@@ -2500,11 +2600,14 @@ IF lasTimer > 0 THEN lasTimer = lasTimer - 1
 IF lasFlash > 0 THEN lasFlash = lasFlash - 1
 tStage = TIMER
 MoveShips
+Contact
 Missiles
 Tactics
 ECMService
 Recharge
 EnergyWarning
+Altitude
+CabinTemp
 StationCheck
 StationPolice
 SpawnTraffic

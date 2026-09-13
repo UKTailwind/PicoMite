@@ -69,11 +69,14 @@ SUB RunFlight
     IF lasFlash > 0 THEN lasFlash = lasFlash - 1
     tStage = TIMER
     MoveShips
+    Contact
     Missiles
     Tactics
     ECMService
     Recharge
     EnergyWarning
+    Altitude
+    CabinTemp
     StationCheck
     StationPolice
     SpawnTraffic
