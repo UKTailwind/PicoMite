@@ -1,0 +1,46 @@
+Phase 10 - the title screen
+===========================
+PC3, PicoMiteHDMIWEB V6.03.02b3 at 378 MHz, MODE 2.
+
+The picture
+-----------
+elite_tools/titlescreen.py draws it and saves elite/data/title.jpg: a
+hidden-line Cobra Mk III over a starfield, the lettering, two cyan rules and
+the prompts.  The ship is rendered from Bas/elite/data/ships.json - the same
+blueprint numbers the game flies, extracted from the published 6502 source by
+blueprints.py - with the faces culled against their own stored normals, which
+is how the game decides visibility too.  No artwork was copied from anywhere;
+this is the original title screen's design drawn from our own data.
+
+Two things had to be got right for a 16-colour screen.  The picture is flat
+black with bright lines, which is what survives both the JPEG and the palette;
+and every colour used is one the palette actually has.  The first version
+wrote the lower prompt in mid grey and the PC3 quantised it to magenta.
+
+A 320x240 baseline JPEG at quality 95 with no chroma subsampling comes to 29 KB
+and picojpeg decodes it straight into the framebuffer with LOAD JPG.  The
+result on the screen is indistinguishable from the PNG: captures/title.png is
+a screen grab from the PC3, not the source image.
+
+The flow
+--------
+  title           any key plays, H shows the controls, ESC quits
+  idle 20 s       the demo starts, as an arcade cabinet does
+  key in the demo stops it and starts a game with a new commander, not the
+                  demo's, which has been given money it did not earn
+  ESC in a game   back to the title
+
+Verified in that order on the hardware: a key at the title gave a 100 Cr
+commander, a twenty second wait started the demo, a key during it gave another
+100 Cr commander, and escape at the title ended the program.
+
+If title.jpg is not on the drive the screen still works - it draws the words
+instead - so the program alone is not broken by a missing file.
+
+The controls page is captures/title_controls.png.
+
+Getting the file there
+----------------------
+pc3.py grew a sender: "pc3.py put local A:/title.jpg" runs XMODEM R on the
+device and does the sending here, answering in CRC or checksum mode depending
+on which the receiver asks for.

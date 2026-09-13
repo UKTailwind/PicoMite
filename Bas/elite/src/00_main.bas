@@ -253,16 +253,18 @@ CONST PROFILE = 1                  ' accumulate per-stage frame times
 CONST SCR_STATUS = 0, SCR_INVENT = 1, SCR_MARKET = 2, SCR_EQUIP = 3
 CONST SCR_LONG = 4, SCR_SHORT = 5, SCR_DATA = 6
 CONST CMDRFILE = "A:/cmdr.txt"
-DIM INTEGER quitGame, dscreen, dsel, dbuy
+DIM INTEGER quitGame, dscreen, dsel, dbuy, titleKey
 
 ' ------------------------------------------------------ the attract demo
 ' A game that plays itself, for showing the thing off.  It stands in for
 ' the keyboard rather than replacing any of the game, so any key at all
 ' hands the controls back to whoever pressed it.
-CONST DEMOPLAY = 1                 ' 1 starts in the demo, 0 straight into a game
+CONST DEMOPLAY = 1                 ' 1 lets an idle title screen start the demo
+CONST TITLEPIC = "A:/title.jpg"    ' drawn by elite_tools/titlescreen.py
+CONST TITLEWAIT = 20000            ' idle this long on the title and the demo runs
 CONST DEMOLOOP = 1                 ' and the demo starts over when it ends
 CONST DEMOREAD = 3000              ' how long an information screen is held
-DIM INTEGER demoMode, demoStop, demoStep, demoLeg, demoTick, demoTgt
+DIM INTEGER demoMode, demoStop, demoStep, demoLeg, demoTick, demoTgt, demoTakeover
 DIM INTEGER dkKey(127), dkWait(127), dkCount
 DIM demoCap$ LENGTH 40
 

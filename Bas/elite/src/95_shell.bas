@@ -168,11 +168,7 @@ END SUB
 ' empties the console buffer INKEY$ reads from.
 FUNCTION DockKey() AS INTEGER
   IF demoMode THEN DockKey = DemoKey() : EXIT FUNCTION
-  LOCAL k$ LENGTH 2
-  DO
-    k$ = INKEY$
-  LOOP UNTIL k$ <> ""
-  DockKey = ASC(k$)
+  DockKey = WaitKey(0)
 END FUNCTION
 
 SUB DrawDocked

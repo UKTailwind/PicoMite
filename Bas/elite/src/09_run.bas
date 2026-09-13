@@ -13,12 +13,20 @@ EquipTable
 
 IF DEMOFRAMES = 0 THEN
 
-  IF DEMOPLAY THEN
-    RunDemo
-  ELSE
-    NewGame
-    RunGame
-  ENDIF
+  ' Title, game, title.  Escape on the title is the way out; waiting there
+  ' starts the demo, and any key during the demo takes the controls.
+  DO
+    titleKey = TitleScreen()
+    IF titleKey = 27 THEN EXIT DO
+    IF titleKey = 0 AND DEMOPLAY THEN
+      RunDemo
+      IF demoTakeover = 0 THEN titleKey = -1
+    ENDIF
+    IF titleKey <> -1 THEN
+      NewGame
+      RunGame
+    ENDIF
+  LOOP
 
 ELSE
 

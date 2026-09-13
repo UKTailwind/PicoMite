@@ -29,6 +29,7 @@
 
 SUB RunDemo
   demoStop = 0
+  demoTakeover = 0
   DemoScript
   DO
     demoMode = 1
@@ -46,7 +47,7 @@ SUB RunDemo
     dbuy = 1
     DemoPickTarget
     RunGame
-  LOOP UNTIL demoStop OR demoMode = 0 OR DEMOLOOP = 0
+  LOOP UNTIL demoStop OR DEMOLOOP = 0
   demoMode = 0
 END SUB
 
@@ -81,14 +82,15 @@ FUNCTION DemoHold(ms AS INTEGER, k AS INTEGER) AS INTEGER
   DO
     kb$ = INKEY$
     IF kb$ <> "" THEN
-      IF kb$ = CHR$(27) THEN
-        demoStop = 1
-        DemoHold = 27
-        EXIT FUNCTION
-      ENDIF
+      demoStop = 1
       demoMode = 0
       demoCap$ = ""
-      DemoHold = ASC(kb$)
+      quitGame = 1
+      ' Escape goes back to the title; anything else means somebody wants
+      ' a game of their own, and they get a new commander rather than the
+      ' demo's, which has been given money it did not earn.
+      IF kb$ <> CHR$(27) THEN demoTakeover = 1
+      DemoHold = 27
       EXIT FUNCTION
     ENDIF
   LOOP UNTIL TIMER > t
@@ -100,9 +102,11 @@ SUB DemoFly
   LOCAL kb$ LENGTH 2
   kb$ = INKEY$
   IF kb$ <> "" THEN
-    IF kb$ = CHR$(27) THEN demoStop = 1 : kQuit = 1 : EXIT SUB
+    demoStop = 1
     demoMode = 0
     demoCap$ = ""
+    kQuit = 1
+    IF kb$ <> CHR$(27) THEN demoTakeover = 1
     EXIT SUB
   ENDIF
   kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0

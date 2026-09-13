@@ -133,11 +133,13 @@ CONST PROFILE = 1
 CONST SCR_STATUS = 0, SCR_INVENT = 1, SCR_MARKET = 2, SCR_EQUIP = 3
 CONST SCR_LONG = 4, SCR_SHORT = 5, SCR_DATA = 6
 CONST CMDRFILE = "A:/cmdr.txt"
-DIM INTEGER quitGame, dscreen, dsel, dbuy
+DIM INTEGER quitGame, dscreen, dsel, dbuy, titleKey
 CONST DEMOPLAY = 1
+CONST TITLEPIC = "A:/title.jpg"    ' drawn by elite_tools/titlescreen.py
+CONST TITLEWAIT = 20000
 CONST DEMOLOOP = 1
 CONST DEMOREAD = 3000
-DIM INTEGER demoMode, demoStop, demoStep, demoLeg, demoTick, demoTgt
+DIM INTEGER demoMode, demoStop, demoStep, demoLeg, demoTick, demoTgt, demoTakeover
 DIM INTEGER dkKey(127), dkWait(127), dkCount
 DIM demoCap$ LENGTH 40
 SetupScreen
@@ -146,12 +148,18 @@ ProbeObjects
 SetupViews
 EquipTable
 IF DEMOFRAMES = 0 THEN
-IF DEMOPLAY THEN
+DO
+titleKey = TitleScreen()
+IF titleKey = 27 THEN EXIT DO
+IF titleKey = 0 AND DEMOPLAY THEN
 RunDemo
-ELSE
+IF demoTakeover = 0 THEN titleKey = -1
+ENDIF
+IF titleKey <> -1 THEN
 NewGame
 RunGame
 ENDIF
+LOOP
 ELSE
 IF DEMOSCENE = 3 THEN
 DockedScreens
@@ -2227,6 +2235,76 @@ DATA "Fuel Scoops",525,5
 DATA "Energy Unit",1500,8
 DATA "Docking Computer",1500,9
 DATA "Galactic Hyperdrive",5000,10
+FUNCTION TitleScreen() AS INTEGER
+LOCAL INTEGER k
+DO
+DrawTitle
+k = WaitKey(TITLEWAIT)
+IF k <> 72 AND k <> 104 THEN
+TitleScreen = k
+EXIT FUNCTION
+ENDIF
+ControlsScreen
+LOOP
+END FUNCTION
+SUB DrawTitle
+CLS
+IF DIR$(TITLEPIC, FILE) <> "" THEN
+LOAD JPG TITLEPIC
+ELSE
+TEXT VCX, 40, "E L I T E", "CT", 1, 4, cWhite
+LINE 24, 100, SCRW - 25, 100, 1, cCyan
+TEXT VCX, 130, "after Bell and Braben, 1984", "CT", 7, 1, cWhite
+LINE 24, 190, SCRW - 25, 190, 1, cCyan
+TEXT VCX, 202, "PRESS ANY KEY TO PLAY", "CT", 7, 1, cYellow
+TEXT VCX, 218, "H FOR THE CONTROLS", "CT", 7, 1, cCyan
+ENDIF
+FRAMEBUFFER COPY F, N
+END SUB
+SUB ControlsScreen
+LOCAL INTEGER y, k
+CLS
+TEXT VCX, 2, "FLIGHT", "CT", 7, 1, cWhite
+LINE 0, 13, SCRW - 1, 13, 1, cCyan
+y = 17
+KeyLine y, "Roll", "< >  or left/right" : y = y + 10
+KeyLine y, "Pitch", "S X  or up/down" : y = y + 10
+KeyLine y, "Speed", "SPACE faster, / slower" : y = y + 10
+KeyLine y, "Fire", "A" : y = y + 10
+KeyLine y, "Missile", "T locks on, M fires" : y = y + 10
+KeyLine y, "E.C.M.", "E" : y = y + 10
+KeyLine y, "Docking computer", "C" : y = y + 10
+KeyLine y, "Hyperspace", "H, outside the zone" : y = y + 10
+KeyLine y, "Views", "F1 fore, F2 aft" : y = y + 10
+KeyLine y, "", "F3 left, F4 right" : y = y + 14
+TEXT VCX, y, "SCREENS, FLYING OR DOCKED", "CT", 7, 1, cWhite
+y = y + 12
+KeyLine y, "F5 Galactic chart", "F8 Market prices" : y = y + 10
+KeyLine y, "F6 Short range", "F9 Status" : y = y + 10
+KeyLine y, "F7 System data", "F10 Inventory" : y = y + 14
+TEXT VCX, y, "DOCKED", "CT", 7, 1, cWhite
+y = y + 12
+KeyLine y, "F1 Launch", "F2 buy, F3 sell" : y = y + 10
+KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 10
+KeyLine y, "F fills the tank", "S save, L load" : y = y + 10
+TEXT VCX, SCRH - 10, "any key goes back", "CT", 7, 1, cGrey
+FRAMEBUFFER COPY F, N
+k = WaitKey(0)
+END SUB
+SUB KeyLine(y AS INTEGER, lb$, v$)
+TEXT 14, y, lb$, "LT", 7, 1, cYellow
+TEXT 150, y, v$, "LT", 7, 1, cWhite
+END SUB
+FUNCTION WaitKey(ms AS INTEGER) AS INTEGER
+LOCAL FLOAT t
+LOCAL k$ LENGTH 2
+t = TIMER + ms
+DO
+k$ = INKEY$
+IF k$ <> "" THEN WaitKey = ASC(k$) : EXIT FUNCTION
+LOOP UNTIL ms > 0 AND TIMER > t
+WaitKey = 0
+END FUNCTION
 SUB RunGame
 quitGame = 0
 frames = 0
@@ -2346,11 +2424,7 @@ END SELECT
 END SUB
 FUNCTION DockKey() AS INTEGER
 IF demoMode THEN DockKey = DemoKey() : EXIT FUNCTION
-LOCAL k$ LENGTH 2
-DO
-k$ = INKEY$
-LOOP UNTIL k$ <> ""
-DockKey = ASC(k$)
+DockKey = WaitKey(0)
 END FUNCTION
 SUB DrawDocked
 SELECT CASE dscreen
@@ -2490,6 +2564,7 @@ dbuy = 1
 END SUB
 SUB RunDemo
 demoStop = 0
+demoTakeover = 0
 DemoScript
 DO
 demoMode = 1
@@ -2506,7 +2581,7 @@ dscreen = SCR_STATUS
 dbuy = 1
 DemoPickTarget
 RunGame
-LOOP UNTIL demoStop OR demoMode = 0 OR DEMOLOOP = 0
+LOOP UNTIL demoStop OR DEMOLOOP = 0
 demoMode = 0
 END SUB
 FUNCTION DemoKey() AS INTEGER
@@ -2532,14 +2607,12 @@ t = TIMER + ms
 DO
 kb$ = INKEY$
 IF kb$ <> "" THEN
-IF kb$ = CHR$(27) THEN
 demoStop = 1
-DemoHold = 27
-EXIT FUNCTION
-ENDIF
 demoMode = 0
 demoCap$ = ""
-DemoHold = ASC(kb$)
+quitGame = 1
+IF kb$ <> CHR$(27) THEN demoTakeover = 1
+DemoHold = 27
 EXIT FUNCTION
 ENDIF
 LOOP UNTIL TIMER > t
@@ -2549,9 +2622,11 @@ SUB DemoFly
 LOCAL kb$ LENGTH 2
 kb$ = INKEY$
 IF kb$ <> "" THEN
-IF kb$ = CHR$(27) THEN demoStop = 1 : kQuit = 1 : EXIT SUB
+demoStop = 1
 demoMode = 0
 demoCap$ = ""
+kQuit = 1
+IF kb$ <> CHR$(27) THEN demoTakeover = 1
 EXIT SUB
 ENDIF
 kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0

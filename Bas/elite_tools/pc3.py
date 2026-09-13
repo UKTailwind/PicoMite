@@ -8,6 +8,7 @@ Usage:
   pc3.py probe                       board identity, options, memory
   pc3.py cmd "PRINT MM.VER" [...]    run interactive commands
   pc3.py run file.bas [timeout_s]    AUTOSAVE the file into program memory, RUN, capture output
+  pc3.py put local devpath           send a file to the device over XMODEM
 """
 import re, sys, time
 import serial
@@ -180,6 +181,58 @@ class PC3:
             self.s.write(bytes([ACK]))      # duplicate of the previous block: ACK, don't store
         raise TimeoutError("XMODEM receive timed out with %d bytes" % len(data))
 
+    def xmodem_send(self, devpath, data, timeout=180.0):
+        """Send one file to the device: XMODEM R on the console, we do the sending.
+
+        The receiver asks with 'C' for CRC mode or NAK for the old checksum, and
+        we answer in whichever it asked for.  Short files are padded to the
+        128-byte block with ctrl-Z, which is what every XMODEM has always done.
+        """
+        SOH, EOT, ACK, NAK, CAN = 1, 4, 6, 0x15, 0x18
+        self.drain(0.05)
+        self.send_line('XMODEM R "%s"' % devpath)
+        time.sleep(0.3)
+        crc, t0 = None, time.time()
+        while time.time() - t0 < 30:
+            b = self.s.read(1)
+            if not b:
+                continue
+            if b[0] == ord("C"):
+                crc = True
+                break
+            if b[0] == NAK:
+                crc = False
+                break
+        if crc is None:
+            raise TimeoutError("the device never asked for the file")
+        blk, pos = 1, 0
+        while pos < len(data):
+            chunk = data[pos:pos + 128]
+            chunk = chunk + b"" * (128 - len(chunk))
+            pkt = bytes([SOH, blk & 0xFF, (~blk) & 0xFF]) + chunk
+            if crc:
+                c = crc16(chunk)
+                pkt += bytes([c >> 8, c & 0xFF])
+            else:
+                pkt += bytes([sum(chunk) & 0xFF])
+            for _ in range(10):
+                self.s.write(pkt)
+                r = self._read_exact(1, time.time() + 5)
+                if r and r[0] == ACK:
+                    break
+                if r and r[0] == CAN:
+                    raise IOError("the device cancelled the transfer")
+            else:
+                raise IOError("block %d was never acknowledged" % blk)
+            pos += 128
+            blk += 1
+        for _ in range(5):
+            self.s.write(bytes([EOT]))
+            r = self._read_exact(1, time.time() + 3)
+            if r and r[0] == ACK:
+                break
+        return self.wait_prompt(30)
+
     def grab(self, devpath, timeout=180.0):
         """Fetch a file from the device: XMODEM SEND on the console, receive it here."""
         self.drain(0.05)
@@ -232,6 +285,12 @@ def main():
             if saved is None:
                 print("WARNING: no 'Saved' confirmation")
             print(b.run(to))
+        elif what == "put":
+            # pc3.py put <local file> <device path>
+            local, dev = sys.argv[2], sys.argv[3]
+            data = open(local, "rb").read()
+            b.xmodem_send(dev, data)
+            print("%s -> %s (%d bytes)" % (local, dev, len(data)))
         elif what == "grab":
             # pc3.py grab <device path> <local file> [more pairs...]; .bmp is also written as .png
             pairs = sys.argv[2:]
