@@ -46,10 +46,15 @@ SUB LoadMesh(b AS INTEGER)
   FOR j = 0 TO bNf0(b) - 1 : READ mNrm(0, j), mNrm(1, j), mNrm(2, j) : NEXT j
   FOR j = 0 TO bNfv(b) - 1 : READ mF(j) : NEXT j
   ' Ships are white lines, as on the BBC; the fill colours only matter
-  ' when the solid renderer is switched on.
+  ' when faces are asked for, which is the station always and everything
+  ' else only under the solid renderer.
   FOR j = 0 TO bNf(b) - 1
     mEc(j) = 0
-    mFl(j) = 1 + (mHost(j) MOD 6)
+    IF b = BP_CORIOLIS THEN
+      mFl(j) = C_FILL
+    ELSE
+      mFl(j) = 1 + (mHost(j) MOD 6)
+    ENDIF
   NEXT j
   bSize(b) = 0
   FOR j = 0 TO bNv0(b) - 1
@@ -164,13 +169,17 @@ END SUB
 ' as a mesh; there are fewer objects than slots, so they are handed out
 ' on a first come basis and the rest of the bubble shows up as dots.
 SUB GetObject(n AS INTEGER)
-  LOCAL INTEGER o, b
+  LOCAL INTEGER o, b, faces
   IF sObj(n) > 0 THEN EXIT SUB
   FOR o = 1 TO maxObj
     IF objOwn(o) < 0 THEN
       b = sBp(n)
       LoadMesh b
-      IF solidMode THEN
+      faces = solidMode
+      IF STNSOLID THEN
+        IF b = BP_CORIOLIS THEN faces = 1
+      ENDIF
+      IF faces THEN
         Draw3D CREATE o, bNv(b), bNf(b), 1, mV(), mFc(), mF(), col(), mEc(), mFl()
       ELSE
         Draw3D CREATE o, bNv(b), bNf(b), 1, mV(), mFc(), mF(), col(), mEc()

@@ -98,7 +98,7 @@ DIM INTEGER tBp(13)                ' ship type 1..13 -> blueprint index
 ' 33 vertices, 25 polygons, 80 face-vertex entries).
 DIM FLOAT mV(2, 39), mNrm(2, 15)
 DIM INTEGER mFc(31), mHost(31), mF(159), mEc(31), mFl(31)
-DIM INTEGER col(6)
+DIM INTEGER col(7)
 DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cDim, cRed, cSel
 
 ' Draw3D object pool.  objOwn(n) is the slot that owns object n, or -1.
@@ -195,6 +195,9 @@ DIM INTEGER cargo(NGOODS-1), holdSize, cashTenths
 
 ' Rendering options and the view transform's output.
 DIM INTEGER solidMode, showDot
+' The station is the one mesh given faces as well as edges, so that it
+' blots out the planet behind it instead of showing its lines through.
+CONST BP_CORIOLIS = 6, C_FILL = 7, STNSOLID = 1
 DIM FLOAT tx, ty, tz
 
 ' ------------------------ constants belonging to the other modules

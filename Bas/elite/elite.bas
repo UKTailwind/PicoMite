@@ -48,7 +48,7 @@ DIM INTEGER bGun(NBP-1), bExp(NBP-1), bSize(NBP-1)
 DIM INTEGER tBp(13)
 DIM FLOAT mV(2, 39), mNrm(2, 15)
 DIM INTEGER mFc(31), mHost(31), mF(159), mEc(31), mFl(31)
-DIM INTEGER col(6)
+DIM INTEGER col(7)
 DIM INTEGER cGreen, cYellow, cWhite, cBlack, cCyan, cDim, cRed, cSel
 DIM INTEGER maxObj, objOwn(15)
 DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
@@ -98,6 +98,7 @@ DIM INTEGER mkBase(NGOODS-1), mkFact(NGOODS-1), mkQty(NGOODS-1), mkMask(NGOODS-1
 DIM INTEGER mkPrice(NGOODS-1), mkStock(NGOODS-1), mkByte
 DIM INTEGER cargo(NGOODS-1), holdSize, cashTenths
 DIM INTEGER solidMode, showDot
+CONST BP_CORIOLIS = 6, C_FILL = 7, STNSOLID = 1
 DIM FLOAT tx, ty, tz
 CONST JCENTRE = 128
 CONST JROLLSTEP = 7
@@ -297,7 +298,11 @@ FOR j = 0 TO bNf0(b) - 1 : READ mNrm(0, j), mNrm(1, j), mNrm(2, j) : NEXT j
 FOR j = 0 TO bNfv(b) - 1 : READ mF(j) : NEXT j
 FOR j = 0 TO bNf(b) - 1
 mEc(j) = 0
+IF b = BP_CORIOLIS THEN
+mFl(j) = C_FILL
+ELSE
 mFl(j) = 1 + (mHost(j) MOD 6)
+ENDIF
 NEXT j
 bSize(b) = 0
 FOR j = 0 TO bNv0(b) - 1
@@ -384,13 +389,17 @@ sTyp(s) = 0 : sObj(s) = 0
 sExp(s) = 0 : sTgt(s) = -1
 END SUB
 SUB GetObject(n AS INTEGER)
-LOCAL INTEGER o, b
+LOCAL INTEGER o, b, faces
 IF sObj(n) > 0 THEN EXIT SUB
 FOR o = 1 TO maxObj
 IF objOwn(o) < 0 THEN
 b = sBp(n)
 LoadMesh b
-IF solidMode THEN
+faces = solidMode
+IF STNSOLID THEN
+IF b = BP_CORIOLIS THEN faces = 1
+ENDIF
+IF faces THEN
 Draw3D CREATE o, bNv(b), bNf(b), 1, mV(), mFc(), mF(), col(), mEc(), mFl()
 ELSE
 Draw3D CREATE o, bNv(b), bNf(b), 1, mV(), mFc(), mF(), col(), mEc()
@@ -432,7 +441,7 @@ FRAMEBUFFER WRITE F
 Draw3D CAMERA 1, VPLANE, 0, 0, 0, PANY
 col(0) = RGB(WHITE) : col(1) = RGB(MIDGREEN) : col(2) = RGB(BLUE)
 col(3) = RGB(GREEN) : col(4) = RGB(RED) : col(5) = RGB(MAGENTA)
-col(6) = RGB(CYAN)
+col(6) = RGB(CYAN) : col(C_FILL) = RGB(BLACK)
 cGreen = RGB(GREEN) : cYellow = RGB(YELLOW) : cWhite = RGB(WHITE)
 cBlack = RGB(BLACK) : cCyan = RGB(CYAN)
 cDim = RGB(MIDGREEN)

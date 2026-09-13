@@ -159,6 +159,51 @@ Where you are matters as much as what you have done. An anarchy spawns roughly
 four times the pirates of a Corporate State, which is what the government
 column on the system data screen is telling you.
 
+## What the later BBC versions had
+
+This is a port of the cassette version, which is the one most people played and
+the smallest of the family. Elite went on being rewritten, and the BBC Micro
+disc version, the 6502 Second Processor version and the BBC Master all carry
+things that are simply not in the cassette game and so are not here either.
+
+From the **disc version** (and the Master, which is built on it):
+
+- A second space station, the Dodo, at the safer end of a system.
+- Rock hermits: an asteroid that turns out to be a trading post.
+- Mining lasers and military lasers, and asteroids worth splitting for gems.
+- A real docking computer that flies you in, which is where our flown approach
+  comes from.
+- The two missions: the Constrictor, and the Thargoid documents run.
+- The long system descriptions, built from an extended token table - the
+  cassette game's descriptions are much shorter and drawn from a smaller set.
+- Finding a system by typing its name, and moving the chart cursor a long way
+  with SHIFT.
+- Buying and selling a stated number of tonnes rather than one at a time.
+- The ship hangar drawn when you dock, with your ship and anything else in it.
+- Kill credit for cargo canisters, asteroids, escape pods and Thargons, not
+  just for ships.
+- The energy bomb killing a Constrictor, a disc access menu and printer
+  support.
+- Ships carrying the NEWB flags - the pirate, trader, hostile, cop and innocent
+  markers that the disc version's spawner works from. Ours reproduces the
+  cassette version's own spawning rules instead.
+
+From the **6502 Second Processor version**, which had a whole second computer
+to spend:
+
+- The Cougar, a ship that appears nowhere else.
+- Colour in space - four colours rather than two - eight on the dashboard
+  rather than four, and six colours on the scanner telling you what each blip
+  is. We already draw more colour than the cassette version did, but not on
+  that scheme.
+- Sixteen hyperspace rings instead of eight, and a screenshot key.
+- Logarithm tables for the multiplies, and support for the Bitstik.
+
+None of this is difficult in the way the cassette game was difficult: the
+blueprints for the Dodo, the Cougar and the rest are published, and the
+extended token table is only data. It is a question of program memory, which
+is the one thing here that is genuinely tight.
+
 ## How close is this to the real thing
 
 Almost everything the cassette version does, it now does. The galaxy, the
@@ -167,6 +212,16 @@ legal model and all five docking tests are the original's own arithmetic.
 Ships are wireframe with the hidden faces removed, decided from the blueprint's
 own face normals, as the original decides it. The cassette version has no
 missions, and no mining or military lasers, so none of those are missing.
+
+Two things here are deliberately not the original's. One is the flown docking
+approach described above. The other is the space station, which is given black
+faces behind its white edges so that it blots out the planet, the sun and the
+stardust instead of showing their lines straight through itself - on a BBC the
+station is hollow like everything else, and a planet's great circles run across
+its face. Every other ship is left hollow, as it should be. Switch the station
+back with `STNSOLID = 0` in `00_main.bas`; filling it costs about eight tenths
+of a millisecond a frame at docking range and does not move the frame rate,
+which is paced by the display rather than by the drawing.
 
 The sound is the original's ten effects, converted from the SFX table in its
 source. Five of the ten are its exact numbers; the other five ask for sound

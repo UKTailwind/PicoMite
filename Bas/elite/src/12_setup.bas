@@ -14,7 +14,7 @@ SUB SetupScreen
   ' drawn entirely in col(0), because every blueprint edge is colour 0.
   col(0) = RGB(WHITE) : col(1) = RGB(MIDGREEN) : col(2) = RGB(BLUE)
   col(3) = RGB(GREEN) : col(4) = RGB(RED) : col(5) = RGB(MAGENTA)
-  col(6) = RGB(CYAN)
+  col(6) = RGB(CYAN) : col(C_FILL) = RGB(BLACK)
   ' Pre-resolved so the drawing loops assign a variable rather than call
   ' RGB(), which the trace cache cannot compile.
   cGreen = RGB(GREEN) : cYellow = RGB(YELLOW) : cWhite = RGB(WHITE)
