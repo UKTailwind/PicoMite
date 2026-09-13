@@ -106,7 +106,7 @@
    }
    *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
  
-@@ -196,7 +277,18 @@
+@@ -196,7 +277,34 @@
    if (ep_reg != NULL) {
      uint32_t ep_ctrl = *ep_reg;
    #if CFG_TUH_ENABLED
@@ -121,12 +121,28 @@
 +     * but synced both halves per interrupt rather than trusting
 +     * BUF_CPU_SHOULD_HANDLE.  Control transfers are small; the cost is
 +     * nil.  (Pico Computer 3, 2026-09-01, ports/rp2/rp2040_usb.patch) */
++    /* ...but NOT on a chip with RP2040-E4.  That erratum applies exactly to
++     * host SINGLE-BUFFERED MULTI-PACKET transfers: the controller writes
++     * completion status to the BUF1 half, leaves BUF0 intact, and can run an
++     * EXTRA packet before the buf_status interrupt.  The extra packet shows up
++     * as ERROR_DATA_SEQ and the still-armed BUF0 as "buf_ctrl already
++     * available" on the next arm - both on EP0, which is what an RP2040
++     * VGAUSB board reports on every keyboard plug (DATA_SEQ @180 = dev 1
++     * ep 0x80, BUFCTRL32 @80 = epx_buf_ctrl).  The E4 handling below only
++     * corrects WHICH buffer is read; it does not stop the extra packet.
++     * So force single-buffering on the control pipe only where it is safe -
++     * RP2350, where the PC3 problem above was found and where E4 does not
++     * exist.  On RP2040 EP0 goes back to double-buffered, which is what
++     * TinyUSB 0.20 did and why b1 was clean.  Interrupt endpoints keep
++     * force_single on both chips: they are single-packet per arming, so the
++     * multi-packet precondition for E4 never applies to them. */
 +    const bool force_single = rp2usb_is_host_mode() &&
-+                              (ep->interrupt_num > 0 || tu_edpt_number(ep->ep_addr) == 0);
++                              (ep->interrupt_num > 0 ||
++                               (tu_edpt_number(ep->ep_addr) == 0 && !CFG_TUSB_RP2_ERRATA_E4));
    #else
      const bool force_single = false;
    #endif
-@@ -230,6 +322,9 @@
+@@ -230,6 +338,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -136,7 +152,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -356,6 +451,16 @@
+@@ -356,6 +467,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;
