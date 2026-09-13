@@ -146,18 +146,40 @@ Where you are matters as much as what you have done. An anarchy spawns roughly
 four times the pirates of a Corporate State, which is what the government
 column on the system data screen is telling you.
 
-## Rough edges
+## How close is this to the real thing
 
-The E.C.M. and the docking computer work whether or not you have bought them -
-nothing checks. Fuel scoops and the galactic hyperdrive can be bought and then
-do nothing at all. The extra cargo bay, the beam laser, the energy unit and
-missiles all work.
+The galaxy, the market, the ship blueprints, the flight model, the tactics, the
+spawning and the docking tests are all the original's, so the parts that are
+here behave as they should. Ships are wireframe with the hidden faces removed,
+decided from the blueprint's own face normals, which is how the original does
+it. The cassette version has no missions, so none are missing.
+
+These are not here yet, and all of them are in the cassette original:
+
+- **Sound.** There is none at all - no laser, no explosions, no E.C.M., no
+  docking. This is the biggest single difference from a BBC Micro.
+- **In-flight messages.** No "INCOMING MISSILE", no bounty announcements, no
+  system name as you arrive.
+- **Cargo scooping and fuel scoops.** Kills drop canisters and you cannot pick
+  them up, so part of the economy is missing.
+- **The escape pod, the energy bomb, and the in-system jump.**
+- **The other seven galaxies.** The galactic hyperdrive can be bought and does
+  nothing.
+- **Altitude and cabin temperature.** Both gauges are fixed at a dummy value.
+  In the original the altitude bar is your height above the planet and you can
+  fly into it, and cabin temperature rises near the sun - which is what makes
+  fuel scooping both possible and dangerous.
+- **Lasers per view.** The original sells front, rear, left and right mounts
+  separately; here one laser serves every view.
+- **The hyperspace effect.** The jump is instant. Launching has its tunnel.
+
+And two things that are wrong rather than absent:
+
+- The laser does not know which way you are looking. Firing and missile locking
+  both test the ship's position in world coordinates, so in the rear, left and
+  right views the crosshairs show one ship and the shot hits whatever is in
+  front of you.
+- The E.C.M. and the docking computer work whether or not you have bought them.
 
 Getting clear of the safe zone to hyperspace takes that half a minute of flying
 and there is no indicator telling you when you are out; press `H` and see.
-
-Not here yet: the escape pod, the energy bomb, cargo scooping, the in-system
-jump, and the Constrictor mission.
-
-Ships are wireframe with the hidden faces removed, decided from the blueprint's
-own face normals, which is how the original does it.
