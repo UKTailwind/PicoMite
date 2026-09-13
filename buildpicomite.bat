@@ -6,7 +6,6 @@ set "start_time=%time%"
 echo Build started at: %start_time%
 echo.
 
-set "fixed_string=V6.03.02b3"
 set "extension=.uf2"
 set "directory=../uf2/"
 set "generator=NMake Makefiles"
@@ -16,6 +15,14 @@ set "hexfile=PicoMite.hex"
 set "failed_target="
 set "active_build_dir="
 set "exit_code=0"
+
+:: Take the version straight from Version.h so the .uf2 names can never drift
+:: from the firmware they contain - bumping VERSION is the only edit needed.
+call :read_version
+if errorlevel 1 (
+    endlocal
+    exit /b 1
+)
 
 :: Recover from a previous interrupted run that left a stray "build" directory
 :: (one of buildRP2040L / buildRP2350L was renamed to build but never renamed back)
@@ -114,6 +121,29 @@ call :elapsed_time "%start_time%" "%end_time%"
 
 endlocal
 exit /b %exit_code%
+
+:read_version
+:: Read the firmware version out of Version.h, which holds a single line of the
+:: form   #define VERSION "6.03.02b4"   and set fixed_string to V<version>, the
+:: suffix every .uf2 file name carries. Version.h is located relative to this
+:: script (%~dp0) rather than the current directory, because the build
+:: subroutines chdir into the build directory.
+:: The %%~V modifier strips the surrounding quotes from the "6.03.02b4" token.
+set "fixed_string="
+if not exist "%~dp0Version.h" (
+    echo ERROR: "%~dp0Version.h" not found - cannot determine the firmware version.
+    exit /b 1
+)
+for /f "tokens=3" %%V in ('findstr /b /c:"#define VERSION" "%~dp0Version.h"') do (
+    if not defined fixed_string set "fixed_string=V%%~V"
+)
+if not defined fixed_string (
+    echo ERROR: no #define VERSION line in "%~dp0Version.h".
+    exit /b 1
+)
+echo Building version %fixed_string% ^(from Version.h^)
+echo.
+exit /b 0
 
 :recover_build_dir
 :: If a leftover "build" directory exists, rename it back to whichever of the
