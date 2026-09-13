@@ -68,7 +68,8 @@ DIM INTEGER sysX, sysY, sysGov, sysEco, sysTech, sysPop, sysProd, sysRad
 DIM INTEGER homeX, homeY, homeSys, curX, curY, selSys, inWitch
 CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRION"
 CONST LASPULSE = 4
-DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+DIM INTEGER lasTimer, lasFlash, kills, dead, energyUnit, shots, hits
+DIM INTEGER lasView(3)
 CONST DOCKRANGE = 280
 CONST DOCKFACE = 0.896
 CONST DOCKCONE = 0.927
@@ -84,8 +85,10 @@ CONST SRCX = 130
 CONST SRCY = 90
 CONST SRDX = 5
 CONST SRDY = 2
-CONST NEQUIP = 10
-CONST EQ_SCOOPS = 4, EQ_POD = 5, EQ_BOMB = 6, EQ_GALHYP = 9
+CONST NEQUIP = 11
+CONST EQ_ECM = 2, EQ_PULSE = 3, EQ_BEAM = 4, EQ_SCOOPS = 5, EQ_POD = 6
+CONST EQ_BOMB = 7, EQ_ENERGY = 8, EQ_DOCK = 9, EQ_GALHYP = 10
+CONST LAS_PULSE = 15, LAS_BEAM = 143
 DIM eqName$(NEQUIP-1) LENGTH 20
 DIM INTEGER eqPrice(NEQUIP-1), eqTech(NEQUIP-1), eqOwned(NEQUIP-1)
 CONST NGOODS = 17
@@ -198,7 +201,9 @@ IF kFire THEN FireLaser
 IF kTarget THEN TargetMissile
 IF kMissile THEN LaunchMissile
 IF kECM THEN FireECM
-IF kDock THEN dockComp = 1 - dockComp
+IF kDock THEN
+IF eqOwned(EQ_DOCK) THEN dockComp = 1 - dockComp ELSE Sfx SFX_BOOP
+ENDIF
 IF dockComp THEN DockingComputer
 IF lasTimer > 0 THEN lasTimer = lasTimer - 1
 IF lasFlash > 0 THEN lasFlash = lasFlash - 1
@@ -961,11 +966,11 @@ END SUB
 dat_sfx:
 DATA 1, 0, 900, 122, 800, 12, 0
 DATA 1, 0, 230, 150, 400, 15, 0
-DATA 2, 1, 3000, 200, 1300, 18, 0
-DATA 3, 0, 3891, 400, 1200, 10, 0
+DATA 2, 1, 2, 2, 1300, 18, 0
+DATA 3, 0, 3891, 150, 400, 10, 0
 DATA 3, 0, 1839, 1839, 50, 15, 0
 DATA 3, 0, 145, 145, 400, 18, 0
-DATA 2, 1, 800, 200, 600, 15, 0
+DATA 2, 1, 12, 12, 600, 15, 0
 DATA 2, 2, 200, 2400, 800, 15, 0
 DATA 4, 0, 1997, 1997, 1200, 12, 1
 SUB Message(t$)
@@ -1115,7 +1120,8 @@ pRoll = JCENTRE : pPitch = JCENTRE
 pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
 pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
 cashTenths = 1000 : holdSize = 20
-lasPower = 15 : lasTimer = 0 : lasFlash = 0
+lasView(0) = LAS_PULSE : lasView(1) = 0 : lasView(2) = 0 : lasView(3) = 0
+lasTimer = 0 : lasFlash = 0
 kills = 0 : dead = 0 : energyUnit = 0 : legal = 0
 shots = 0 : hits = 0
 docked = 0 : dockComp = 0 : msLock = -1
@@ -1178,7 +1184,7 @@ SAVE IMAGE "A:/fly" + STR$(f) + ".bmp"
 END SUB
 SUB DumpSlots
 LOCAL INTEGER n
-PRINT "slots at frame 60, nUsed"; nUsed; " lasPower"; lasPower
+PRINT "slots at frame 60, nUsed"; nUsed; " fore laser"; lasView(0)
 FOR n = 0 TO nUsed - 1
 PRINT "  "; n; " typ"; sTyp(n); " bp"; sBp(n); " obj"; sObj(n);
 PRINT " x"; STR$(sX(n), 0, 0); " y"; STR$(sY(n), 0, 0); " z"; STR$(sZ(n), 0, 0);
@@ -1197,7 +1203,7 @@ pRoll = JCENTRE : pPitch = JCENTRE
 pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
 pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
 cashTenths = 1000 : holdSize = 20
-lasPower = 15 : kills = 0 : dead = 0 : docked = 0
+lasView(0) = LAS_PULSE : kills = 0 : dead = 0 : docked = 0
 vw = 0 : inWitch = 0 : msLock = -1
 InitStardust
 LoadMarket
@@ -1221,7 +1227,7 @@ IF n >= 0 THEN sRol(n) = 255 : sAI(n) = 1
 dSpeed = 0
 inSafe = 1
 mcnt = 0
-dockComp = 1
+eqOwned(EQ_DOCK) = 1 : dockComp = 1
 END SUB
 SUB DockInput(f AS INTEGER)
 kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
@@ -1233,7 +1239,7 @@ SUB DockedScreens
 LOCAL INTEGER n, i
 pFuel = 44 : cashTenths = 1000 : holdSize = 20
 pEnergy = 255 : pFsh = 255 : pAsh = 255 : pMissl = 3
-lasPower = 15 : kills = 20 : legal = 0 : docked = 1 : energyUnit = 0
+lasView(0) = LAS_PULSE : kills = 20 : legal = 0 : docked = 1 : energyUnit = 0
 gGal = 1
 LoadMarket
 EquipTable
@@ -1250,7 +1256,7 @@ mkByte = 0
 MakeMarket sysEco, mkByte
 FOR i = 1 TO 5 : BuyOne 0 : NEXT i
 FOR i = 1 TO 3 : BuyOne 12 : NEXT i
-eqOwned(2) = 1
+eqOwned(EQ_ECM) = 1
 MarketScreen 6
 FRAMEBUFFER COPY F, N
 SAVE IMAGE "A:/dock_market.bmp"
@@ -1547,6 +1553,7 @@ SysData
 d = SysDist(hx, hy, sysX, sysY * 2)
 IF d > pFuel THEN Sfx SFX_BOOP : EXIT SUB
 Sfx SFX_HYPER
+HyperTunnel
 pFuel = pFuel - d
 homeSys = target
 homeX = sysX
@@ -1596,11 +1603,11 @@ SUB FireLaser
 LOCAL INTEGER n, best, bestz, dmg
 IF lasTimer > 0 THEN EXIT SUB
 IF pLasT >= 242 THEN EXIT SUB
-IF lasPower = 0 THEN EXIT SUB
+IF lasView(vw) = 0 THEN EXIT SUB
 pLasT = pLasT + 8
 IF pLasT > 255 THEN pLasT = 255
 lasFlash = 2
-IF lasPower >= 128 THEN lasTimer = 0 ELSE lasTimer = LASPULSE
+IF lasView(vw) >= 128 THEN lasTimer = 0 ELSE lasTimer = LASPULSE
 Sfx SFX_LASER
 best = -1 : bestz = 999999
 FOR n = 2 TO nUsed - 1
@@ -1618,7 +1625,7 @@ NEXT n
 shots = shots + 1
 IF best < 0 THEN EXIT SUB
 hits = hits + 1
-dmg = lasPower AND 127
+dmg = lasView(vw) AND 127
 sEne(best) = sEne(best) - dmg
 IF sAI(best) < 128 THEN sAI(best) = sAI(best) OR 128
 IF sEne(best) <= 0 THEN
@@ -1892,6 +1899,7 @@ MATH INSERT sQ(), , n, qA()
 END SUB
 SUB FireECM
 LOCAL INTEGER n
+IF eqOwned(EQ_ECM) = 0 THEN Sfx SFX_BOOP : EXIT SUB
 IF ecmActive > 0 THEN EXIT SUB
 ecmActive = ECMFRAMES
 Sfx SFX_ECM
@@ -2043,6 +2051,21 @@ CLS
 FOR k = 0 TO 5
 r = ((i + k * 4) MOD 24) * 7 + 8
 BOX VCX - r * 1.25, VCY - r, r * 2.5, r * 2, 1, cWhite, -1
+NEXT k
+DrawDash
+ViewName
+FRAMEBUFFER COPY F, N, B
+NEXT i
+END SUB
+SUB HyperTunnel
+LOCAL INTEGER i, k, r, c
+FOR i = 0 TO 31
+CLS
+FOR k = 0 TO 6
+r = ((i + k * 5) MOD 35) * 5 + 4
+c = cWhite
+IF (k AND 1) <> 0 THEN c = cCyan
+CIRCLE VCX, VCY, r, 1, 1.25, c, -1
 NEXT k
 DrawDash
 ViewName
@@ -2292,7 +2315,8 @@ LOCAL INTEGER i
 IF eqOwned(EQ_POD) = 0 THEN Sfx SFX_BOOP : EXIT SUB
 FOR i = 0 TO NGOODS - 1 : cargo(i) = 0 : NEXT i
 FOR i = 0 TO NEQUIP - 1 : eqOwned(i) = 0 : NEXT i
-lasPower = 15 : holdSize = 20 : pMissl = 0 : energyUnit = 0
+lasView(0) = LAS_PULSE : lasView(1) = 0 : lasView(2) = 0 : lasView(3) = 0
+holdSize = 20 : pMissl = 0 : energyUnit = 0
 legal = 0
 Sfx SFX_LAUNCH
 DoDock
@@ -2339,6 +2363,7 @@ curX = homeX : curY = homeY
 mkByte = INT(RND * 256)
 MakeMarket sysEco, mkByte
 Sfx SFX_HYPER
+HyperTunnel
 ArriveInSystem
 Message "GALACTIC HYPERSPACE"
 END SUB
@@ -2367,10 +2392,31 @@ DataLine y, "Rating", RankName$() : y = y + 14
 TEXT 20, y, "Equipment:", "LT", 7, 1, cWhite : y = y + 11
 IF eqOwned(1) THEN TEXT 30, y, "Large Cargo Bay", "LT", 7, 1, cYellow : y = y + 10
 IF eqOwned(2) THEN TEXT 30, y, "E.C.M. System", "LT", 7, 1, cYellow : y = y + 10
-IF eqOwned(4) THEN TEXT 30, y, "Fuel Scoops", "LT", 7, 1, cYellow : y = y + 10
-IF eqOwned(6) THEN TEXT 30, y, "Docking Computer", "LT", 7, 1, cYellow : y = y + 10
-IF lasPower >= 128 THEN TEXT 30, y, "Beam Laser", "LT", 7, 1, cYellow : y = y + 10
+IF eqOwned(EQ_SCOOPS) THEN TEXT 30, y, "Fuel Scoops", "LT", 7, 1, cYellow : y = y + 10
+IF eqOwned(EQ_POD) THEN TEXT 30, y, "Escape Pod", "LT", 7, 1, cYellow : y = y + 10
+IF eqOwned(EQ_BOMB) THEN TEXT 30, y, "Energy Bomb", "LT", 7, 1, cYellow : y = y + 10
+IF eqOwned(EQ_ENERGY) THEN TEXT 30, y, "Energy Unit", "LT", 7, 1, cYellow : y = y + 10
+IF eqOwned(EQ_DOCK) THEN TEXT 30, y, "Docking Computer", "LT", 7, 1, cYellow : y = y + 10
+IF eqOwned(EQ_GALHYP) THEN TEXT 30, y, "Galactic Hyperdrive", "LT", 7, 1, cYellow : y = y + 10
+LOCAL INTEGER v
+FOR v = 0 TO 3
+IF lasView(v) <> 0 THEN
+TEXT 30, y, ViewWord$(v) + LaserWord$(lasView(v)), "LT", 7, 1, cYellow
+y = y + 10
+ENDIF
+NEXT v
 END SUB
+FUNCTION ViewWord$(v AS INTEGER)
+SELECT CASE v
+CASE 0 : ViewWord$ = "Fore "
+CASE 1 : ViewWord$ = "Aft "
+CASE 2 : ViewWord$ = "Left "
+CASE ELSE : ViewWord$ = "Right "
+END SELECT
+END FUNCTION
+FUNCTION LaserWord$(p AS INTEGER)
+IF p >= 128 THEN LaserWord$ = "Beam Laser" ELSE LaserWord$ = "Pulse Laser"
+END FUNCTION
 FUNCTION CondName$()
 IF docked THEN
 CondName$ = "Docked"
@@ -2483,18 +2529,43 @@ NEXT i
 TEXT 20, y + 5, "Cash: " + STR$(cashTenths / 10) + " Cr", "LT", 7, 1, cWhite
 END SUB
 SUB BuyEquip(i AS INTEGER)
-IF eqOwned(i) THEN EXIT SUB
+LOCAL INTEGER v
 IF eqTech(i) > sysTech + 1 THEN EXIT SUB
 IF cashTenths < eqPrice(i) * 10 THEN EXIT SUB
+IF i = EQ_PULSE OR i = EQ_BEAM THEN
+v = AskView()
+IF v < 0 THEN EXIT SUB
+IF lasView(v) <> 0 THEN Sfx SFX_BOOP : EXIT SUB
+IF i = EQ_PULSE THEN lasView(v) = LAS_PULSE ELSE lasView(v) = LAS_BEAM
+cashTenths = cashTenths - eqPrice(i) * 10
+EXIT SUB
+ENDIF
+IF eqOwned(i) THEN EXIT SUB
+IF i = 0 THEN
+IF pMissl >= 4 THEN EXIT SUB
+cashTenths = cashTenths - eqPrice(i) * 10
+pMissl = pMissl + 1
+EXIT SUB
+ENDIF
 cashTenths = cashTenths - eqPrice(i) * 10
 eqOwned(i) = 1
 SELECT CASE i
-CASE 0 : IF pMissl < 4 THEN pMissl = pMissl + 1 : eqOwned(0) = 0
 CASE 1 : holdSize = 35
-CASE 3 : lasPower = 143 OR 128
-CASE 7 : energyUnit = 1
+CASE EQ_ENERGY : energyUnit = 1
 END SELECT
 END SUB
+FUNCTION AskView() AS INTEGER
+LOCAL INTEGER k
+DO
+BOX 44, 92, 232, 52, 1, cWhite, cBlack
+TEXT VCX, 102, "WHICH MOUNT?", "CT", 7, 1, cWhite
+TEXT VCX, 122, "F1 fore  F2 aft  F3 left  F4 right", "CT", 7, 1, cYellow
+FRAMEBUFFER COPY F, N
+k = DockKey()
+IF k = 27 THEN AskView = -1 : EXIT FUNCTION
+LOOP UNTIL k >= 145 AND k <= 148
+AskView = k - 145
+END FUNCTION
 SUB BuyFuel
 LOCAL INTEGER cost
 cost = (70 - pFuel) * 2
@@ -2511,7 +2582,7 @@ SUB SaveCommander(f$)
 LOCAL INTEGER i, fn
 fn = 1
 OPEN f$ FOR OUTPUT AS #fn
-PRINT #fn, "elite-commander 1"
+PRINT #fn, "elite-commander 2"
 PRINT #fn, gGal
 PRINT #fn, homeSys
 PRINT #fn, cashTenths
@@ -2520,7 +2591,7 @@ PRINT #fn, holdSize
 PRINT #fn, kills
 PRINT #fn, legal
 PRINT #fn, pMissl
-PRINT #fn, lasPower
+FOR i = 0 TO 3 : PRINT #fn, lasView(i) : NEXT i
 PRINT #fn, energyUnit
 FOR i = 0 TO NGOODS - 1 : PRINT #fn, cargo(i) : NEXT i
 FOR i = 0 TO NEQUIP - 1 : PRINT #fn, eqOwned(i) : NEXT i
@@ -2534,7 +2605,7 @@ IF DIR$(f$, FILE) = "" THEN EXIT FUNCTION
 fn = 1
 OPEN f$ FOR INPUT AS #fn
 LINE INPUT #fn, hd$
-IF LEFT$(hd$, 16) <> "elite-commander " THEN
+IF hd$ <> "elite-commander 2" THEN
 CLOSE #fn
 EXIT FUNCTION
 ENDIF
@@ -2546,7 +2617,7 @@ INPUT #fn, holdSize
 INPUT #fn, kills
 INPUT #fn, legal
 INPUT #fn, pMissl
-INPUT #fn, lasPower
+FOR i = 0 TO 3 : INPUT #fn, lasView(i) : NEXT i
 INPUT #fn, energyUnit
 FOR i = 0 TO NGOODS - 1 : INPUT #fn, cargo(i) : NEXT i
 FOR i = 0 TO NEQUIP - 1 : INPUT #fn, eqOwned(i) : NEXT i
@@ -2564,7 +2635,8 @@ dat_equip:
 DATA "Missile",30,1
 DATA "Large Cargo Bay",400,4
 DATA "E.C.M. System",600,3
-DATA "Beam Laser",1000,4
+DATA "Extra Pulse Lasers",400,4
+DATA "Extra Beam Lasers",1000,4
 DATA "Fuel Scoops",525,5
 DATA "Escape Pod",600,6
 DATA "Energy Bomb",900,7
@@ -2677,7 +2749,9 @@ IF kFire THEN FireLaser
 IF kTarget THEN TargetMissile
 IF kMissile THEN LaunchMissile
 IF kECM THEN FireECM
-IF kDock THEN dockComp = 1 - dockComp
+IF kDock THEN
+IF eqOwned(EQ_DOCK) THEN dockComp = 1 - dockComp ELSE Sfx SFX_BOOP
+ENDIF
 IF dockComp THEN DockingComputer
 IF kJump THEN JumpAway
 IF kBomb THEN EnergyBomb
@@ -2939,6 +3013,7 @@ demoTgt = -1
 demoCap$ = ""
 NewCommander
 cashTenths = 25000
+eqOwned(EQ_DOCK) = 1
 ClearSlots
 docked = 1
 dscreen = SCR_STATUS
@@ -3199,7 +3274,9 @@ DATA 32,1300
 DATA 129,700
 DATA 32,1300
 DATA 129,700
-DATA 32,1800
+DATA 129,700
+DATA 32,700
+DATA 145,1500
 DATA 149,3000
 DATA 131,400
 DATA 131,400

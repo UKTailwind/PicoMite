@@ -1,7 +1,11 @@
 ' Play each of Elite's ten sounds in turn, named, so they can be judged by
 ' ear.  Standalone: it carries its own copy of the table from 45_sound.bas.
 '
-' The five marked "approximated" ask for one of the BBC's sound envelopes,
+' For PLAY SOUND type N the frequency is NOT a pitch - it is how many output
+' samples each random value is held for, so at 44100 a 2 is a bright hiss and
+' an 800 is about fifty rattles a second.  Only the wavetable types take hertz.
+'
+' The four marked "approximated" ask for one of the BBC's sound envelopes,
 ' which the cassette loader defined and the game's source does not carry, so
 ' those are a sweep between two frequencies rather than the real thing.  Tell
 ' me which ones are wrong and what they should sound like.
@@ -114,10 +118,10 @@ END SUB
 dat_sfx:
 DATA "laser, ours (approximated)",      1, 0, 900, 122, 800, 12, 0
 DATA "hit by lasers (approximated)",    1, 0, 230, 150, 400, 15, 0
-DATA "explosion, noise half",           2, 1, 3000, 200, 1300, 18, 0
-DATA "explosion, tone half (approx)",   3, 0, 3891, 400, 1200, 10, 0
+DATA "explosion, noise half (exact)",   2, 1, 2, 2, 1300, 18, 0
+DATA "explosion, tone half (approx)",   3, 0, 3891, 150, 400, 10, 0
 DATA "short high beep (exact)",         3, 0, 1839, 1839, 50, 15, 0
 DATA "long low beep (exact)",           3, 0, 145, 145, 400, 18, 0
-DATA "missile away / launch (exact)",   2, 1, 800, 200, 600, 15, 0
+DATA "missile away / launch (exact)",   2, 1, 12, 12, 600, 15, 0
 DATA "hyperspace (approximated)",       2, 2, 200, 2400, 800, 15, 0
 DATA "E.C.M. (approximated)",           4, 0, 1997, 1997, 1200, 12, 1

@@ -30,10 +30,16 @@
 '  by a sweep between two frequencies and marked as such below.  The other
 '  five are exactly the original's numbers.
 '
+'  Two traps in PLAY SOUND.  Its arguments are channel, position, type - the
+'  manual's summary line has the last two the other way round.  And for type
+'  N the frequency is not a pitch at all: it is the number of output samples
+'  each random value is held for, so at 44100 a 2 is a bright hiss and an 800
+'  is fifty rattles a second.  Only the wavetable types - Q, T, W, S, P, U -
+'  take a frequency in hertz.
+'
 '  Nothing here blocks.  Sfx starts an effect; SoundService, called from the
 '  frame loop and from any wait for a key, slides the pitch and switches the
-'  channel off when its time is up.  A PLAY SOUND waveform is a keyword and
-'  not a string, so it cannot come out of a variable - hence PlayCh.
+'  channel off when its time is up.
 ' =====================================================================
 
 SUB LoadSounds
@@ -128,16 +134,24 @@ dat_sfx:
 DATA 1, 0, 900, 122, 800, 12, 0
 ' SFX 8: hit by lasers.  Pitch 44 is 230 Hz; envelope 2 approximated.
 DATA 1, 0, 230, 150, 400, 15, 0
-' SFX 24: the noise half of an explosion, white noise, 1.3 seconds.
-DATA 2, 1, 3000, 200, 1300, 18, 0
-' SFX 16: the tone half.  Pitch 240 is 3891 Hz; envelope 3 approximated.
-DATA 3, 0, 3891, 400, 1200, 10, 0
+' SFX 24: the noise half of an explosion.  White noise at the brightest the
+' PicoMite makes, held constant, because the original gives this one a fixed
+' amplitude and no envelope.  For type N the frequency is not a pitch: it is
+' the number of output samples each random value is held for, so 2 at 44100
+' is a hiss and 800 would be about fifty rattles a second.
+DATA 2, 1, 2, 2, 1300, 18, 0
+' SFX 16: the tone half.  Pitch 240 is 3891 Hz; envelope 3 is approximated by
+' dropping it hard and quickly, so it reads as a crack rather than a whistle,
+' and the noise above carries the rest of the second.
+DATA 3, 0, 3891, 150, 400, 10, 0
 ' SFX 32: short high beep.  Pitch 188, one twentieth of a second.  Exact.
 DATA 3, 0, 1839, 1839, 50, 15, 0
 ' SFX 40: long low beep.  Pitch 12, four twentieths.  Exact.
 DATA 3, 0, 145, 145, 400, 18, 0
-' SFX 48: missile away, or our own launch.  Low white noise, 0.6 seconds.
-DATA 2, 1, 800, 200, 600, 15, 0
+' SFX 48: missile away, or our own launch.  The original asks for the noise
+' channel's low setting rather than its brightest, so a longer dwell - and
+' constant, again because there is no envelope on this one.
+DATA 2, 1, 12, 12, 600, 15, 0
 ' SFX 56: hyperspace.  The noise channel with envelope 2; pitch 96 lands on
 ' periodic noise.  Rising, because it is a drive spinning up.
 DATA 2, 2, 200, 2400, 800, 15, 0
