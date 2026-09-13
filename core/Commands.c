@@ -2487,7 +2487,7 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 	else
 	{
 #endif
-		if (*filename && !FileLoadProgram(buf, false))
+		if (*filename && !FileLoadProgram(buf, false, false))
 			return;
 #ifdef rp2350
 	}
@@ -4574,7 +4574,7 @@ void MIPS16 do_chain(unsigned char *cmdline)
 	SaveContext();
 	ClearVars(0, false);
 	InitHeap(false);
-	if (*buf && !FileLoadProgram(buf, true))
+	if (*buf && !FileLoadProgram(buf, true, false))
 		return;
 	ClearRuntime(false);
 	if (PrepareProgram(true))

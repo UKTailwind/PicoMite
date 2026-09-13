@@ -525,7 +525,7 @@ extern "C"
         /* ============================================================================
          * Function declarations - Program loading
          * ============================================================================ */
-        int FileLoadProgram(unsigned char *fname, bool chain);
+        int FileLoadProgram(unsigned char *fname, bool chain, bool crunch);
         int FileLoadCMM2Program(char *fname, bool message);
 
         /* ============================================================================

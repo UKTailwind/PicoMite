@@ -3937,7 +3937,7 @@ static int fm_run_bas_program(const char *filename, const char *fullpath)
     if (filename && filename[0])
     {
         if (snprintf((char *)runarg, sizeof(runarg), "\"%s\",", filename) < (int)sizeof(runarg))
-            loaded = FileLoadProgram(runarg, false);
+            loaded = FileLoadProgram(runarg, false, false);
     }
 
     // Fallback for edge cases where current drive/path has not yet been fully applied.
@@ -3946,7 +3946,7 @@ static int fm_run_bas_program(const char *filename, const char *fullpath)
         if (snprintf((char *)runarg, sizeof(runarg), "\"%s\",", fullpath) < (int)sizeof(runarg))
         {
             cmdline = (unsigned char *)"FM";
-            loaded = FileLoadProgram(runarg, false);
+            loaded = FileLoadProgram(runarg, false, false);
             cmdline = saved_cmdline;
         }
     }

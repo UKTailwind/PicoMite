@@ -3614,7 +3614,7 @@ int FileLoadCMM2Program(char *fname, bool message)
 }
 #endif
 // load a file into program memory
-int FileLoadProgram(unsigned char *fname, bool chain)
+int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
 {
     int fnbr;
     char *p, *buf;
@@ -3652,6 +3652,14 @@ int FileLoadProgram(unsigned char *fname, bool chain)
     p += strlen(q);
     *p++ = '\r';
     *p++ = '\n';
+    // The '#<drive><path> header above must always be written raw: CrunchData()
+    // discards everything following a ' so crunching it would destroy the record of
+    // where the program came from (MM.INFO(CURRENT), MM.INFO(PATH), the LIST/SAVE
+    // suppression and the line count adjustment in CountLines() all depend on it).
+    // Initialise the crunch state machine only now - the c==0 call resets its
+    // statics (which persist from any earlier AUTOSAVE/XMODEM) and emits nothing.
+    if (crunch)
+        CrunchData((unsigned char **)&p, 0);
     while (!FileEOF(fnbr))
     { // while waiting for the end of file
         if ((p - buf) >= EDIT_BUFFER_SIZE - 2048 - 512)
@@ -3661,7 +3669,10 @@ int FileLoadProgram(unsigned char *fname, bool chain)
         {
             if (c == TAB)
                 c = ' ';
-            *p++ = c; // get the input into RAM
+            if (crunch)
+                CrunchData((unsigned char **)&p, c); // discard comments, blank lines and redundant spaces
+            else
+                *p++ = c; // get the input into RAM
         }
     }
     *p = 0; // terminate the string in RAM
@@ -4300,7 +4311,7 @@ void LoadPNG(unsigned char *p)
 void MIPS16 cmd_load(void)
 {
     int oldfont = PromptFont;
-    int autorun = false;
+    int autorun = false, crunch = false;
     unsigned char *p;
 
     p = checkstring(cmdline, (unsigned char *)"CONTEXT");
@@ -4362,22 +4373,25 @@ void MIPS16 cmd_load(void)
         return;
     }
 #endif
-    getcsargs(&cmdline, 3);
+    getcsargs(&cmdline, 5);
     CloseAudio(1);
     if (!(argc & 1) || argc == 0)
         SyntaxError();
     ;
-    if (argc == 3)
-    {
-        if (mytoupper(*argv[2]) == 'R')
-            autorun = true;
-        else
+    for (int i = 2; i < argc; i += 2)
+    { // R (autorun) and C (crunch) are single letters and may appear in either order
+        int opt = mytoupper(argv[i][0]);
+        if ((opt != 'R' && opt != 'C') || argv[i][1] != 0)
             SyntaxError();
         ;
+        if (opt == 'R')
+            autorun = true;
+        else
+            crunch = true;
     }
-    else if (CurrentLinePtr != NULL)
+    if (!autorun && CurrentLinePtr != NULL)
         StandardError(10);
-    if (!FileLoadProgram(argv[0], false))
+    if (!FileLoadProgram(argv[0], false, crunch))
     {
         SetFont(oldfont);
         PromptFont = oldfont;
