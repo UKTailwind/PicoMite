@@ -329,7 +329,7 @@ END SUB
 ' What the demo is doing, in the empty rows under the space view.
 SUB DemoCaption
   IF demoCap$ = "" THEN EXIT SUB
-  TEXT VCX, VIEWH - 12, demoCap$, "CT", 7, 1, cGrey
+  TEXT VCX, VIEWH - 26, demoCap$, "CT", 7, 1, cGrey
 END SUB
 
 ' --- the docked script

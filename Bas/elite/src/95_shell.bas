@@ -73,6 +73,7 @@ SUB RunFlight
     Tactics
     ECMService
     Recharge
+    EnergyWarning
     StationCheck
     StationPolice
     SpawnTraffic

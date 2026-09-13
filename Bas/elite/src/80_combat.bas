@@ -28,13 +28,19 @@ SUB FireLaser
   Sfx SFX_LASER
 
   ' Whatever is lined up and nearest gets hit.
+  ' In the ship's own coordinates, not the world's: the crosshairs are
+  ' drawn in the view being looked through, so the shot has to be tested
+  ' there too.  Testing world z instead - which is what this did - meant
+  ' that in the rear, left and right views the sight showed one ship and
+  ' the laser hit whatever happened to be ahead.
   best = -1 : bestz = 999999
   FOR n = 2 TO nUsed - 1
     IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
-      IF sZ(n) > 0 AND sZ(n) < bestz THEN
-        IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 THEN
-          IF sX(n) * sX(n) + sY(n) * sY(n) < bArea(sBp(n)) THEN
-            best = n : bestz = sZ(n)
+      ViewXform n
+      IF tz > 0 AND tz < bestz THEN
+        IF ABS(tx) < 256 AND ABS(ty) < 256 THEN
+          IF tx * tx + ty * ty < bArea(sBp(n)) THEN
+            best = n : bestz = tz
           ENDIF
         ENDIF
       ENDIF
@@ -72,6 +78,8 @@ SUB Explode(n AS INTEGER)
   ' things and half a credit for an asteroid.
   kills = kills + 1
   cashTenths = cashTenths + bBty(sBp(n))
+  ' The original announces what the kill was worth.
+  IF bBty(sBp(n)) > 0 THEN Message STR$(bBty(sBp(n)) / 10) + " CR"
   NoteKill n
   EjectCargo n
   DropObject n
@@ -151,6 +159,15 @@ SUB Tactics
               dmg = bLas(sBp(n)) * 2
               IF cnt > 0.972 THEN
                 HitPlayer dmg
+              ENDIF
+            ENDIF
+
+            ' A missile, if it is hurt enough to want to spend one.  An
+            ' E.C.M. burst - ours or anyone's - stops it trying.
+            IF sEne(n) * 2 < bEne(sBp(n)) AND sMis(n) > 0 AND ecmActive = 0 THEN
+              IF INT(RND * 32) < sMis(n) THEN
+                sMis(n) = sMis(n) - 1
+                EnemyMissile n
               ENDIF
             ENDIF
 

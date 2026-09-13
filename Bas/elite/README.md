@@ -158,8 +158,6 @@ These are not here yet, and all of them are in the cassette original:
 
 - **Sound.** There is none at all - no laser, no explosions, no E.C.M., no
   docking. This is the biggest single difference from a BBC Micro.
-- **In-flight messages.** No "INCOMING MISSILE", no bounty announcements, no
-  system name as you arrive.
 - **Cargo scooping and fuel scoops.** Kills drop canisters and you cannot pick
   them up, so part of the economy is missing.
 - **The escape pod, the energy bomb, and the in-system jump.**
@@ -169,17 +167,13 @@ These are not here yet, and all of them are in the cassette original:
   In the original the altitude bar is your height above the planet and you can
   fly into it, and cabin temperature rises near the sun - which is what makes
   fuel scooping both possible and dangerous.
+- **The system name as you arrive.** The other in-flight messages are there.
 - **Lasers per view.** The original sells front, rear, left and right mounts
   separately; here one laser serves every view.
 - **The hyperspace effect.** The jump is instant. Launching has its tunnel.
 
-And two things that are wrong rather than absent:
-
-- The laser does not know which way you are looking. Firing and missile locking
-  both test the ship's position in world coordinates, so in the rear, left and
-  right views the crosshairs show one ship and the shot hits whatever is in
-  front of you.
-- The E.C.M. and the docking computer work whether or not you have bought them.
+And one thing that is wrong rather than absent: the E.C.M. and the docking
+computer work whether or not you have bought them.
 
 Getting clear of the safe zone to hyperspace takes that half a minute of flying
 and there is no indicator telling you when you are out; press `H` and see.

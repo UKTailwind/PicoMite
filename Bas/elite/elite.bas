@@ -38,6 +38,7 @@ DIM FLOAT sQ(4, NSLOT-1)
 DIM INTEGER sSpd(NSLOT-1), sAcc(NSLOT-1), sRol(NSLOT-1), sPit(NSLOT-1)
 DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1), sExp(NSLOT-1)
 DIM INTEGER sTgt(NSLOT-1)
+DIM INTEGER sMis(NSLOT-1)
 DIM INTEGER nUsed
 DIM bName$(NBP-1) LENGTH 16
 DIM INTEGER bNv(NBP-1), bNf(NBP-1), bNfv(NBP-1), bNf0(NBP-1), bNv0(NBP-1)
@@ -130,6 +131,9 @@ CONST CPX = 244
 CONST CPY = 187
 CONST CPR = 9
 CONST PROFILE = 1
+CONST MSGX = 90, MSGY = 160, MSGTIME = 1800
+DIM msgText$ LENGTH 40
+DIM FLOAT msgUntil
 CONST SOUNDON = 1
 CONST NSFX = 9
 CONST SFX_LASER = 0, SFX_HIT = 1, SFX_BOOM = 2, SFX_BOOMT = 3, SFX_BEEP = 4
@@ -315,9 +319,11 @@ sObj(n) = 0
 sSpd(n) = 0 : sAcc(n) = 0 : sRol(n) = 0 : sPit(n) = 0
 sFlg(n) = 0 : sAI(n) = 0
 sExp(n) = 0 : sTgt(n) = -1
+sMis(n) = 0
 IF t < T_PLANET THEN
 sBp(n) = tBp(t)
 sEne(n) = bEne(sBp(n))
+sMis(n) = bMis(sBp(n))
 GetObject n
 ELSE
 sBp(n) = -1
@@ -354,7 +360,7 @@ MATH INSERT sQ(), , d, qA()
 sSpd(d) = sSpd(s) : sAcc(d) = sAcc(s)
 sRol(d) = sRol(s) : sPit(d) = sPit(s)
 sEne(d) = sEne(s) : sAI(d) = sAI(s) : sFlg(d) = sFlg(s)
-sExp(d) = sExp(s) : sTgt(d) = sTgt(s)
+sExp(d) = sExp(s) : sTgt(d) = sTgt(s) : sMis(d) = sMis(s)
 IF sObj(d) > 0 THEN objOwn(sObj(d)) = d
 sTyp(s) = 0 : sObj(s) = 0
 sExp(s) = 0 : sTgt(s) = -1
@@ -645,6 +651,7 @@ t = TIMER : DrawPlanetSun : prof(2) = prof(2) + TIMER - t
 t = TIMER : DrawShips : Explosions : SpaceFurniture : prof(3) = prof(3) + TIMER - t
 t = TIMER : DrawDash      : prof(4) = prof(4) + TIMER - t
 ViewName
+DrawMessage
 ELSE
 CLS
 DrawStardust
@@ -654,6 +661,7 @@ Explosions
 SpaceFurniture
 DrawDash
 ViewName
+DrawMessage
 ENDIF
 END SUB
 SUB DrawShips
@@ -948,6 +956,24 @@ DATA 3, 0, 145, 145, 400, 18, 0
 DATA 2, 1, 800, 200, 600, 15, 0
 DATA 2, 2, 200, 2400, 800, 15, 0
 DATA 4, 0, 1997, 1997, 1200, 12, 1
+SUB Message(t$)
+msgText$ = t$
+msgUntil = TIMER + MSGTIME
+END SUB
+SUB DrawMessage
+IF msgText$ = "" THEN EXIT SUB
+IF TIMER > msgUntil THEN
+msgText$ = ""
+EXIT SUB
+ENDIF
+TEXT MSGX, MSGY, msgText$, "LT", 7, 1, cWhite
+END SUB
+SUB EnergyWarning
+IF (mcnt AND 31) <> 10 THEN EXIT SUB
+IF pEnergy >= 50 THEN EXIT SUB
+Message "ENERGY LOW"
+Sfx SFX_BEEP
+END SUB
 SUB DashStatic
 STATIC INTEGER wordcount = (SCRH - DASHY) * SCRW \ 16
 STATIC INTEGER store(wordcount - 1)
@@ -1567,10 +1593,11 @@ Sfx SFX_LASER
 best = -1 : bestz = 999999
 FOR n = 2 TO nUsed - 1
 IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
-IF sZ(n) > 0 AND sZ(n) < bestz THEN
-IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 THEN
-IF sX(n) * sX(n) + sY(n) * sY(n) < bArea(sBp(n)) THEN
-best = n : bestz = sZ(n)
+ViewXform n
+IF tz > 0 AND tz < bestz THEN
+IF ABS(tx) < 256 AND ABS(ty) < 256 THEN
+IF tx * tx + ty * ty < bArea(sBp(n)) THEN
+best = n : bestz = tz
 ENDIF
 ENDIF
 ENDIF
@@ -1599,6 +1626,7 @@ sSpd(n) = 0
 sAI(n) = 0
 kills = kills + 1
 cashTenths = cashTenths + bBty(sBp(n))
+IF bBty(sBp(n)) > 0 THEN Message STR$(bBty(sBp(n)) / 10) + " CR"
 NoteKill n
 EjectCargo n
 DropObject n
@@ -1657,6 +1685,12 @@ IF d < 8192 AND cnt > 0.917 AND (sAI(n) AND 126) <> 0 THEN
 dmg = bLas(sBp(n)) * 2
 IF cnt > 0.972 THEN
 HitPlayer dmg
+ENDIF
+ENDIF
+IF sEne(n) * 2 < bEne(sBp(n)) AND sMis(n) > 0 AND ecmActive = 0 THEN
+IF INT(RND * 32) < sMis(n) THEN
+sMis(n) = sMis(n) - 1
+EnemyMissile n
 ENDIF
 ENDIF
 IF d < 1024 THEN
@@ -1751,10 +1785,11 @@ IF pMissl = 0 THEN Sfx SFX_BOOP : EXIT SUB
 best = -1 : bestz = 999999
 FOR n = 2 TO nUsed - 1
 IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 AND sTyp(n) <> T_MISSILE THEN
-IF sZ(n) > 0 AND sZ(n) < bestz THEN
-IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 THEN
-IF sX(n) * sX(n) + sY(n) * sY(n) < bArea(sBp(n)) THEN
-best = n : bestz = sZ(n)
+ViewXform n
+IF tz > 0 AND tz < bestz THEN
+IF ABS(tx) < 256 AND ABS(ty) < 256 THEN
+IF tx * tx + ty * ty < bArea(sBp(n)) THEN
+best = n : bestz = tz
 ENDIF
 ENDIF
 ENDIF
@@ -1770,7 +1805,11 @@ END SUB
 SUB LaunchMissile
 LOCAL INTEGER n
 IF pMissl = 0 OR msLock < 0 THEN EXIT SUB
-IF sTyp(msLock) = 0 OR sExp(msLock) > 0 THEN msLock = -1 : EXIT SUB
+IF sTyp(msLock) = 0 OR sExp(msLock) > 0 THEN
+msLock = -1
+Message "TARGET LOST"
+EXIT SUB
+ENDIF
 MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
 n = NewShip(T_MISSILE, 0, -28, 200, qA())
 IF n < 0 THEN EXIT SUB
@@ -1845,8 +1884,26 @@ IF ecmActive > 0 THEN EXIT SUB
 ecmActive = ECMFRAMES
 Sfx SFX_ECM
 FOR n = 2 TO nUsed - 1
-IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN Explode n
+IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN
+IF sTgt(n) = -2 THEN Message "MISSILE JAMMED"
+Explode n
+ENDIF
 NEXT n
+END SUB
+SUB EnemyMissile(n AS INTEGER)
+LOCAL INTEGER m
+IF sTyp(n) = T_THARGOID THEN
+m = NewFacing(T_THARGON, sX(n), sY(n) - 30, sZ(n), 180)
+IF m >= 0 THEN sAI(m) = 128 OR 126 : sSpd(m) = bSpd(sBp(m))
+EXIT SUB
+ENDIF
+m = NewFacing(T_MISSILE, sX(n), sY(n) - 30, sZ(n), 180)
+IF m < 0 THEN EXIT SUB
+sSpd(m) = bSpd(sBp(m))
+sAI(m) = 128 OR 126
+sTgt(m) = -2
+Message "INCOMING MISSILE"
+Sfx SFX_LAUNCH
 END SUB
 SUB ECMService
 IF ecmActive > 0 THEN
@@ -2447,6 +2504,7 @@ Missiles
 Tactics
 ECMService
 Recharge
+EnergyWarning
 StationCheck
 StationPolice
 SpawnTraffic
@@ -2904,7 +2962,7 @@ SysData
 END SUB
 SUB DemoCaption
 IF demoCap$ = "" THEN EXIT SUB
-TEXT VCX, VIEWH - 12, demoCap$, "CT", 7, 1, cGrey
+TEXT VCX, VIEWH - 26, demoCap$, "CT", 7, 1, cGrey
 END SUB
 SUB DemoScript
 LOCAL INTEGER i, k, w

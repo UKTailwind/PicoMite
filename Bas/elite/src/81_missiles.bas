@@ -18,12 +18,14 @@ SUB TargetMissile
   LOCAL INTEGER n, best, bestz
   IF pMissl = 0 THEN Sfx SFX_BOOP : EXIT SUB
   best = -1 : bestz = 999999
+  ' The same view coordinates the laser uses.
   FOR n = 2 TO nUsed - 1
     IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 AND sTyp(n) <> T_MISSILE THEN
-      IF sZ(n) > 0 AND sZ(n) < bestz THEN
-        IF ABS(sX(n)) < 256 AND ABS(sY(n)) < 256 THEN
-          IF sX(n) * sX(n) + sY(n) * sY(n) < bArea(sBp(n)) THEN
-            best = n : bestz = sZ(n)
+      ViewXform n
+      IF tz > 0 AND tz < bestz THEN
+        IF ABS(tx) < 256 AND ABS(ty) < 256 THEN
+          IF tx * tx + ty * ty < bArea(sBp(n)) THEN
+            best = n : bestz = tz
           ENDIF
         ENDIF
       ENDIF
@@ -42,7 +44,11 @@ END SUB
 SUB LaunchMissile
   LOCAL INTEGER n
   IF pMissl = 0 OR msLock < 0 THEN EXIT SUB
-  IF sTyp(msLock) = 0 OR sExp(msLock) > 0 THEN msLock = -1 : EXIT SUB
+  IF sTyp(msLock) = 0 OR sExp(msLock) > 0 THEN
+    msLock = -1
+    Message "TARGET LOST"
+    EXIT SUB
+  ENDIF
   MATH Q_EULER 0, 0, 0, qA() : qA(4) = 1
   n = NewShip(T_MISSILE, 0, -28, 200, qA())
   IF n < 0 THEN EXIT SUB
@@ -136,8 +142,29 @@ SUB FireECM
   ecmActive = ECMFRAMES
   Sfx SFX_ECM
   FOR n = 2 TO nUsed - 1
-    IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN Explode n
+    IF sTyp(n) = T_MISSILE AND sExp(n) = 0 THEN
+      IF sTgt(n) = -2 THEN Message "MISSILE JAMMED"
+      Explode n
+    ENDIF
   NEXT n
+END SUB
+
+' A ship with its energy down and a missile left would rather spend it than
+' go on trading laser fire.  A Thargoid lets a Thargon off instead.
+SUB EnemyMissile(n AS INTEGER)
+  LOCAL INTEGER m
+  IF sTyp(n) = T_THARGOID THEN
+    m = NewFacing(T_THARGON, sX(n), sY(n) - 30, sZ(n), 180)
+    IF m >= 0 THEN sAI(m) = 128 OR 126 : sSpd(m) = bSpd(sBp(m))
+    EXIT SUB
+  ENDIF
+  m = NewFacing(T_MISSILE, sX(n), sY(n) - 30, sZ(n), 180)
+  IF m < 0 THEN EXIT SUB
+  sSpd(m) = bSpd(sBp(m))
+  sAI(m) = 128 OR 126
+  sTgt(m) = -2                      ' -2 is us
+  Message "INCOMING MISSILE"
+  Sfx SFX_LAUNCH
 END SUB
 
 SUB ECMService

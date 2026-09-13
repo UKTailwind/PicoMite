@@ -15,6 +15,7 @@ SUB DrawFrame
     t = TIMER : DrawShips : Explosions : SpaceFurniture : prof(3) = prof(3) + TIMER - t
     t = TIMER : DrawDash      : prof(4) = prof(4) + TIMER - t
     ViewName
+    DrawMessage
   ELSE
     CLS
     DrawStardust
@@ -24,6 +25,7 @@ SUB DrawFrame
     SpaceFurniture
     DrawDash
     ViewName
+    DrawMessage
   ENDIF
 END SUB
 

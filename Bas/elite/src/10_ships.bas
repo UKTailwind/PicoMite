@@ -101,9 +101,11 @@ FUNCTION NewShip(t AS INTEGER, x AS FLOAT, y AS FLOAT, z AS FLOAT, q() AS FLOAT)
   ' first frame - no cloud, no kill, just gone - which is exactly what
   ' the second ship in every fight used to do.
   sExp(n) = 0 : sTgt(n) = -1
+  sMis(n) = 0
   IF t < T_PLANET THEN
     sBp(n) = tBp(t)
     sEne(n) = bEne(sBp(n))
+    sMis(n) = bMis(sBp(n))
     GetObject n
   ELSE
     sBp(n) = -1                     ' planet and sun are drawn by hand
@@ -151,7 +153,7 @@ SUB CopySlot(d AS INTEGER, s AS INTEGER)
   sSpd(d) = sSpd(s) : sAcc(d) = sAcc(s)
   sRol(d) = sRol(s) : sPit(d) = sPit(s)
   sEne(d) = sEne(s) : sAI(d) = sAI(s) : sFlg(d) = sFlg(s)
-  sExp(d) = sExp(s) : sTgt(d) = sTgt(s)
+  sExp(d) = sExp(s) : sTgt(d) = sTgt(s) : sMis(d) = sMis(s)
   IF sObj(d) > 0 THEN objOwn(sObj(d)) = d
   sTyp(s) = 0 : sObj(s) = 0
   sExp(s) = 0 : sTgt(s) = -1

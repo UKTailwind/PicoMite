@@ -83,6 +83,7 @@ DIM FLOAT sQ(4, NSLOT-1)           ' orientation quaternion w,x,y,z,m
 DIM INTEGER sSpd(NSLOT-1), sAcc(NSLOT-1), sRol(NSLOT-1), sPit(NSLOT-1)
 DIM INTEGER sEne(NSLOT-1), sAI(NSLOT-1), sFlg(NSLOT-1), sExp(NSLOT-1)
 DIM INTEGER sTgt(NSLOT-1)   ' a missile's quarry: a slot, or -2 for us
+DIM INTEGER sMis(NSLOT-1)   ' missiles this ship still has to fire at us
 DIM INTEGER nUsed                  ' slots in use, 0..NSLOT
 
 ' Ship blueprint statistics, indexed by blueprint 0..NBP-1.
@@ -250,6 +251,11 @@ CONST PROFILE = 1                  ' accumulate per-stage frame times
 ' ---------------------------------------------------------------- sound
 ' The original's ten effects; see 45_sound.bas for how its SFX table
 ' converts.  SOUNDON 0 plays the game in silence.
+' In-flight messages, at the original's column 9 of row 22.
+CONST MSGX = 90, MSGY = 160, MSGTIME = 1800
+DIM msgText$ LENGTH 40
+DIM FLOAT msgUntil
+
 CONST SOUNDON = 1
 CONST NSFX = 9
 CONST SFX_LASER = 0, SFX_HIT = 1, SFX_BOOM = 2, SFX_BOOMT = 3, SFX_BEEP = 4

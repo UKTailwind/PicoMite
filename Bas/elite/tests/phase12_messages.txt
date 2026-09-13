@@ -1,0 +1,49 @@
+Phase 12 - the laser's view, in-flight messages, and missiles fired at you
+=========================================================================
+
+The laser did not know which way you were looking
+-------------------------------------------------
+FireLaser and TargetMissile both tested the ship's position in world
+coordinates - sZ(n) > 0 and the lateral offset from sX and sY - while the
+crosshairs are drawn in whichever view is being looked through.  In the front
+view the two agree, so it was invisible; in the rear, left and right views the
+sight showed one ship and the shot hit whatever happened to be ahead.  Both now
+run ViewXform first and test tx, ty and tz, which is what the drawing does.
+
+In-flight messages
+------------------
+The original writes them at column 9 of row 22 and clears them after 22 main
+loop iterations.  Ours runs four or five times faster than a BBC did, so
+counting frames would flash them past; the delay is a time instead, set to sit
+where the original's did in seconds.
+
+Five, all from the original's token list:
+
+  the bounty, as "0.5 CR"    on a kill, exactly what the blueprint pays
+  TARGET LOST                when the ship a missile was locked on to dies
+  MISSILE JAMMED             when an E.C.M. burst kills a missile aimed at us
+  INCOMING MISSILE           when a ship fires one at us
+  ENERGY LOW                 with a beep, on the tenth frame of every block of
+                             thirty-two, when the banks are under fifty - which
+                             is the original's own schedule
+
+Ships fire missiles at you
+--------------------------
+This was missing entirely, and it is what makes the E.C.M. worth its 600
+credits.  The original's rule, from TACTICS: a ship that is down to less than
+half its energy, still has a missile, and is not being jammed by an E.C.M. -
+anyone's - rolls a random number under 32 against the number of missiles it has
+left, and fires if it wins.  A Thargoid releases a Thargon instead.  Each ship
+now carries its blueprint's missile count and spends it.
+
+Verified by giving the demo's Viper ten energy and four missiles: "INCOMING
+MISSILE" appeared and the missile flew.  The bounty message was photographed
+in normal play - captures/message.png - reading 0.5 CR for an asteroid.
+
+Frame rate
+----------
+Three runs of the same build gave 25.01, 27.30 and 27.07 ms a frame.  That 2.3
+ms spread is the traffic: the spawner puts a different number of ships in the
+bubble every time, so single-run comparisons between builds are not worth much
+at this resolution.  What can be said is that the game now sits around 25 to 27
+ms a frame, 37 to 40 a second, with sound on and traffic about.
