@@ -68,9 +68,12 @@ far end. Press any key during the demo and you get a game of your own.
 | `E` | E.C.M., which destroys every missile in the area |
 | `C` | docking computer on and off |
 | `H` | hyperspace |
+| `J` | in-system jump, when nothing but rocks is about |
+| `G` | galactic hyperdrive, if one is fitted |
+| `Tab` | energy bomb |
+| `Esc` | escape pod if one is fitted, otherwise back to the title |
 | `P` | pause |
 | `F1` `F2` `F3` `F4` | fore, aft, left, right views |
-| `Esc` | back to the title |
 
 `F5` to `F10` reach the same six screens whether you are flying or docked:
 galactic chart, short range chart, system data, market prices, status,
@@ -163,9 +166,6 @@ These are not here yet, and all of them are in the cassette original:
 
 - **Sound.** There is none at all - no laser, no explosions, no E.C.M., no
   docking. This is the biggest single difference from a BBC Micro.
-- **The escape pod, the energy bomb, and the in-system jump.**
-- **The other seven galaxies.** The galactic hyperdrive can be bought and does
-  nothing.
 - **The system name as you arrive.** The other in-flight messages are there.
 - **Lasers per view.** The original sells front, rear, left and right mounts
   separately; here one laser serves every view.

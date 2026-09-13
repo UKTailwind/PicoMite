@@ -39,6 +39,9 @@ SUB ReadKeys
       CASE 69, 101       : hnow = hnow OR KB_ECM         ' E
       CASE 67, 99        : hnow = hnow OR KB_DOCK        ' C
       CASE 72, 104       : hnow = hnow OR KB_JUMP        ' H
+      CASE 9             : hnow = hnow OR KB_BOMB        ' TAB, as the BBC
+      CASE 74, 106       : hnow = hnow OR KB_HOP         ' J
+      CASE 71, 103       : hnow = hnow OR KB_GAL         ' G
       CASE 149 TO 154    : hnow = hnow OR (KB_SCREEN << (k - 149))
     END SELECT
   NEXT i
@@ -55,6 +58,9 @@ SUB ReadKeys
   kECM = (hnew AND KB_ECM) <> 0
   kDock = (hnew AND KB_DOCK) <> 0
   kJump = (hnew AND KB_JUMP) <> 0
+  kBomb = (hnew AND KB_BOMB) <> 0
+  kHop = (hnew AND KB_HOP) <> 0
+  kGal = (hnew AND KB_GAL) <> 0
   kChart = 0
   IF (hnew AND KB_SCREENS) <> 0 THEN
     FOR i = 0 TO 5

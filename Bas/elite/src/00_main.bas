@@ -110,12 +110,14 @@ DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 ' Keyboard flags, refreshed once per frame.
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
 DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock, kJump, kChart
+DIM INTEGER kBomb, kHop, kGal
 ' KEYDOWN reports what is held, not what has just been pressed, so the
 ' one-shot keys are turned into edges against the previous frame's set.
 DIM INTEGER kHeld
 CONST KB_TARGET = 1, KB_MISSILE = 2, KB_ECM = 4, KB_DOCK = 8, KB_JUMP = 16
 CONST KB_SCREEN = 32               ' F5, then one bit per key up to F10
 CONST KB_SCREENS = 32+64+128+256+512+1024
+CONST KB_BOMB = 2048, KB_HOP = 4096, KB_GAL = 8192
 
 ' Frame timing.  tFlight accumulates only the time spent flying, so the
 ' average is not diluted by however long the player spends docked.
@@ -169,9 +171,9 @@ CONST SRDX = 5                     ' our pixels per galaxy unit across
 CONST SRDY = 2                     ' and down
 
 ' Equipment on offer, gated by the system's technology level.
-CONST NEQUIP = 8
-' Row 4 of the shop is the fuel scoops, which both kinds of scooping need.
-CONST EQ_SCOOPS = 4
+CONST NEQUIP = 10
+' Rows of the shop that other code has to know about by name.
+CONST EQ_SCOOPS = 4, EQ_POD = 5, EQ_BOMB = 6, EQ_GALHYP = 9
 DIM eqName$(NEQUIP-1) LENGTH 20
 DIM INTEGER eqPrice(NEQUIP-1), eqTech(NEQUIP-1), eqOwned(NEQUIP-1)
 

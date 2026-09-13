@@ -113,6 +113,7 @@ SUB DemoFly
   kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
   kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
   kJump = 0 : kChart = 0 : kPause = 0
+  kBomb = 0 : kHop = 0 : kGal = 0
   demoTick = demoTick + 1
   IF demoLeg <= 1 THEN DemoLeg1 ELSE DemoLeg2
 END SUB

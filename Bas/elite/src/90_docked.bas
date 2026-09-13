@@ -180,7 +180,7 @@ SUB BuyEquip(i AS INTEGER)
     CASE 0 : IF pMissl < 4 THEN pMissl = pMissl + 1 : eqOwned(0) = 0
     CASE 1 : holdSize = 35
     CASE 3 : lasPower = 143 OR 128           ' beam laser
-    CASE 5 : energyUnit = 1
+    CASE 7 : energyUnit = 1
   END SELECT
 END SUB
 
@@ -266,6 +266,8 @@ DATA "Large Cargo Bay",400,4
 DATA "E.C.M. System",600,3
 DATA "Beam Laser",1000,4
 DATA "Fuel Scoops",525,5
+DATA "Escape Pod",600,6
+DATA "Energy Bomb",900,7
 DATA "Energy Unit",1500,8
 DATA "Docking Computer",1500,9
 DATA "Galactic Hyperdrive",5000,10

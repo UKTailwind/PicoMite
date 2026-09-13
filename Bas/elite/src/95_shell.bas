@@ -49,7 +49,17 @@ SUB RunFlight
   t0 = TIMER
   DO
     ReadKeys
-    IF kQuit THEN quitGame = 1 : EXIT DO
+    IF kQuit THEN
+      ' The BBC used the ESCAPE key for the capsule, and so do we - but
+      ' only when one is fitted, so there is always a way out of a game.
+      IF eqOwned(EQ_POD) THEN
+        EscapePod
+        EXIT DO
+      ELSE
+        quitGame = 1
+        EXIT DO
+      ENDIF
+    ENDIF
     UpdatePlayer
     IF kFire THEN FireLaser
     IF kTarget THEN TargetMissile
@@ -58,6 +68,9 @@ SUB RunFlight
     IF kDock THEN dockComp = 1 - dockComp
     IF dockComp THEN DockingComputer
     IF kJump THEN JumpAway
+    IF kBomb THEN EnergyBomb
+    IF kHop THEN InSystemJump
+    IF kGal THEN GalacticJump
     IF kChart > 0 THEN
       ' The information screens stop the clock as well as the universe,
       ' so the time spent reading one is not counted as time flying.

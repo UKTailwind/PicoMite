@@ -1,0 +1,45 @@
+Phase 14 - the energy bomb, the escape pod, the in-system jump, the galaxies
+============================================================================
+Four more of the original's, all of them equipment that does something drastic.
+
+  Energy bomb     TAB, as the BBC.  Kills everything in the bubble, and is
+                  gone once used.  A station is immune, though in practice that
+                  guard never fires: stations only ever live in slot 1 and the
+                  loop starts at 2.
+  Escape pod      ESC, which is the key the BBC used.  It leaves the ship, its
+                  cargo and everything fitted to it behind, hands you a bare
+                  Cobra with a pulse laser, and clears your record, because
+                  whoever they pull out of the capsule is somebody new.
+  In-system jump  J.  Moves the whole bubble one unit closer, which is the
+                  original's way of crossing the distance between a planet and
+                  its sun without flying it.  Refused while anything but rocks
+                  and cargo is about, inside the station's zone, in witchspace,
+                  or with the planet within two units ahead.
+  Galactic drive  G.  Rotates the galaxy's six seed bytes one place left, which
+                  is the whole of how the eight galaxies differ, and puts you
+                  at whatever system is nearest to (96, 96).  One use, and it
+                  clears your record too.
+
+ESC needed thought.  It is the original's escape pod key and it is also the way
+out of a game in this port, so it now launches the pod when one is fitted and
+quits when one is not.  Nothing is lost by that: the pod takes you straight to
+the station, and ESC on a docked screen still quits.
+
+The shop gained two rows, Escape Pod at 600 and Energy Bomb at 900, inserted
+after the fuel scoops where the original has them.  Their tech levels are 6 and
+7, so Lave sells the pod and not the bomb.
+
+Measured by giving a commander each item and calling the routine:
+
+  energy bomb            two ships in the bubble, none whole afterwards, and
+                         the bomb spent
+  escape pod             docked, legal status 200 -> 0, nine tonnes of slaves
+                         gone, scoops gone, beam laser back to a pulse, hold
+                         back to twenty
+  in-system jump, Viper  refused, planet did not move
+  in-system jump, rock   planet moved exactly 1.00 unit
+  galactic jump          galaxy 1 LAVE -> galaxy 2 ORORRA, legal 150 -> 0,
+                         drive spent
+
+The controls page carries the four new keys; it had to be tightened to nine
+pixel rows to fit them, and captures/title_controls.png is the result.

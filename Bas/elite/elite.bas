@@ -54,10 +54,12 @@ DIM INTEGER maxObj, objOwn(15)
 DIM FLOAT qA(4), qB(4), qC(4), qV(4), qP(4), vwQ(4, 3)
 DIM INTEGER kRollL, kRollR, kUp, kDn, kFaster, kSlower, kFire, kQuit
 DIM INTEGER kView, kPause, kTarget, kMissile, kECM, kDock, kJump, kChart
+DIM INTEGER kBomb, kHop, kGal
 DIM INTEGER kHeld
 CONST KB_TARGET = 1, KB_MISSILE = 2, KB_ECM = 4, KB_DOCK = 8, KB_JUMP = 16
 CONST KB_SCREEN = 32
 CONST KB_SCREENS = 32+64+128+256+512+1024
+CONST KB_BOMB = 2048, KB_HOP = 4096, KB_GAL = 8192
 DIM FLOAT frameMs, tFrame, tStage, tFlight
 DIM INTEGER frames
 DIM FLOAT prof(5)
@@ -82,8 +84,8 @@ CONST SRCX = 130
 CONST SRCY = 90
 CONST SRDX = 5
 CONST SRDY = 2
-CONST NEQUIP = 8
-CONST EQ_SCOOPS = 4
+CONST NEQUIP = 10
+CONST EQ_SCOOPS = 4, EQ_POD = 5, EQ_BOMB = 6, EQ_GALHYP = 9
 DIM eqName$(NEQUIP-1) LENGTH 20
 DIM INTEGER eqPrice(NEQUIP-1), eqTech(NEQUIP-1), eqOwned(NEQUIP-1)
 CONST NGOODS = 17
@@ -492,6 +494,9 @@ CASE 77, 109       : hnow = hnow OR KB_MISSILE
 CASE 69, 101       : hnow = hnow OR KB_ECM
 CASE 67, 99        : hnow = hnow OR KB_DOCK
 CASE 72, 104       : hnow = hnow OR KB_JUMP
+CASE 9             : hnow = hnow OR KB_BOMB
+CASE 74, 106       : hnow = hnow OR KB_HOP
+CASE 71, 103       : hnow = hnow OR KB_GAL
 CASE 149 TO 154    : hnow = hnow OR (KB_SCREEN << (k - 149))
 END SELECT
 NEXT i
@@ -503,6 +508,9 @@ kMissile = (hnew AND KB_MISSILE) <> 0
 kECM = (hnew AND KB_ECM) <> 0
 kDock = (hnew AND KB_DOCK) <> 0
 kJump = (hnew AND KB_JUMP) <> 0
+kBomb = (hnew AND KB_BOMB) <> 0
+kHop = (hnew AND KB_HOP) <> 0
+kGal = (hnew AND KB_GAL) <> 0
 kChart = 0
 IF (hnew AND KB_SCREENS) <> 0 THEN
 FOR i = 0 TO 5
@@ -2267,6 +2275,73 @@ dead = 1
 Sfx SFX_BOOM
 Sfx SFX_BOOMT
 END SUB
+SUB EnergyBomb
+LOCAL INTEGER n
+IF eqOwned(EQ_BOMB) = 0 THEN Sfx SFX_BOOP : EXIT SUB
+eqOwned(EQ_BOMB) = 0
+FOR n = 2 TO nUsed - 1
+IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
+IF sTyp(n) <> T_STATION THEN Explode n
+ENDIF
+NEXT n
+Sfx SFX_BOOM
+Message "ENERGY BOMB"
+END SUB
+SUB EscapePod
+LOCAL INTEGER i
+IF eqOwned(EQ_POD) = 0 THEN Sfx SFX_BOOP : EXIT SUB
+FOR i = 0 TO NGOODS - 1 : cargo(i) = 0 : NEXT i
+FOR i = 0 TO NEQUIP - 1 : eqOwned(i) = 0 : NEXT i
+lasPower = 15 : holdSize = 20 : pMissl = 0 : energyUnit = 0
+legal = 0
+Sfx SFX_LAUNCH
+DoDock
+END SUB
+SUB InSystemJump
+LOCAL INTEGER n
+IF inWitch OR inSafe THEN Sfx SFX_BOOP : EXIT SUB
+FOR n = 2 TO nUsed - 1
+IF sTyp(n) <> 0 AND sBp(n) >= 0 THEN
+IF sTyp(n) <> T_ASTEROID AND sTyp(n) <> T_CANISTER AND sTyp(n) <> T_ESCAPE THEN
+Sfx SFX_BOOP
+EXIT SUB
+ENDIF
+ENDIF
+NEXT n
+IF sTyp(SLOT_PLANET) <> 0 AND sZ(SLOT_PLANET) > 0 THEN
+IF FarAxis(SLOT_PLANET) < 2 * UNIT THEN Sfx SFX_BOOP : EXIT SUB
+ENDIF
+IF sTyp(SLOT_PLANET) <> 0 THEN sZ(SLOT_PLANET) = sZ(SLOT_PLANET) - UNIT
+IF sTyp(SLOT_STAR) <> 0 THEN sZ(SLOT_STAR) = sZ(SLOT_STAR) - UNIT
+Sfx SFX_LAUNCH
+END SUB
+FUNCTION FarAxis(n AS INTEGER) AS FLOAT
+LOCAL FLOAT m
+m = ABS(sX(n))
+IF ABS(sY(n)) > m THEN m = ABS(sY(n))
+IF ABS(sZ(n)) > m THEN m = ABS(sZ(n))
+FarAxis = m
+END FUNCTION
+SUB GalacticJump
+IF eqOwned(EQ_GALHYP) = 0 THEN Sfx SFX_BOOP : EXIT SUB
+eqOwned(EQ_GALHYP) = 0
+legal = 0
+gGal = gGal + 1
+IF gGal > 8 THEN gGal = 1
+SetGalaxy gGal
+curX = 96 : curY = 96
+FindSystem curX, curY
+homeSys = selSys
+GotoSystem gGal, homeSys
+SysData
+homeX = sysX : homeY = sysY * 2
+curX = homeX : curY = homeY
+mkByte = INT(RND * 256)
+MakeMarket sysEco, mkByte
+Sfx SFX_HYPER
+ArriveInSystem
+Message "GALACTIC HYPERSPACE"
+END SUB
 SUB EquipTable
 LOCAL INTEGER i
 RESTORE dat_equip
@@ -2417,7 +2492,7 @@ SELECT CASE i
 CASE 0 : IF pMissl < 4 THEN pMissl = pMissl + 1 : eqOwned(0) = 0
 CASE 1 : holdSize = 35
 CASE 3 : lasPower = 143 OR 128
-CASE 5 : energyUnit = 1
+CASE 7 : energyUnit = 1
 END SELECT
 END SUB
 SUB BuyFuel
@@ -2491,6 +2566,8 @@ DATA "Large Cargo Bay",400,4
 DATA "E.C.M. System",600,3
 DATA "Beam Laser",1000,4
 DATA "Fuel Scoops",525,5
+DATA "Escape Pod",600,6
+DATA "Energy Bomb",900,7
 DATA "Energy Unit",1500,8
 DATA "Docking Computer",1500,9
 DATA "Galactic Hyperdrive",5000,10
@@ -2523,30 +2600,34 @@ END SUB
 SUB ControlsScreen
 LOCAL INTEGER y, k
 CLS
-TEXT VCX, 2, "FLIGHT", "CT", 7, 1, cWhite
-LINE 0, 13, SCRW - 1, 13, 1, cCyan
-y = 17
-KeyLine y, "Roll", "< >  or left/right" : y = y + 10
-KeyLine y, "Pitch", "S X  or up/down" : y = y + 10
-KeyLine y, "Speed", "SPACE faster, / slower" : y = y + 10
-KeyLine y, "Fire", "A" : y = y + 10
-KeyLine y, "Missile", "T locks on, M fires" : y = y + 10
-KeyLine y, "E.C.M.", "E" : y = y + 10
-KeyLine y, "Docking computer", "C" : y = y + 10
-KeyLine y, "Hyperspace", "H, outside the zone" : y = y + 10
-KeyLine y, "Views", "F1 fore, F2 aft" : y = y + 10
-KeyLine y, "", "F3 left, F4 right" : y = y + 14
+TEXT VCX, 1, "FLIGHT", "CT", 7, 1, cWhite
+LINE 0, 11, SCRW - 1, 11, 1, cCyan
+y = 14
+KeyLine y, "Roll", "< >  or left/right" : y = y + 9
+KeyLine y, "Pitch", "S X  or up/down" : y = y + 9
+KeyLine y, "Speed", "SPACE faster, / slower" : y = y + 9
+KeyLine y, "Fire", "A" : y = y + 9
+KeyLine y, "Missile", "T locks on, M fires" : y = y + 9
+KeyLine y, "E.C.M.", "E" : y = y + 9
+KeyLine y, "Docking computer", "C" : y = y + 9
+KeyLine y, "Hyperspace", "H, outside the zone" : y = y + 9
+KeyLine y, "In-system jump", "J, with nothing about" : y = y + 9
+KeyLine y, "Galactic jump", "G, if one is fitted" : y = y + 9
+KeyLine y, "Energy bomb", "TAB" : y = y + 9
+KeyLine y, "Escape pod", "ESC, if one is fitted" : y = y + 9
+KeyLine y, "Views", "F1 fore, F2 aft" : y = y + 9
+KeyLine y, "", "F3 left, F4 right" : y = y + 12
 TEXT VCX, y, "SCREENS, FLYING OR DOCKED", "CT", 7, 1, cWhite
-y = y + 12
-KeyLine y, "F5 Galactic chart", "F8 Market prices" : y = y + 10
-KeyLine y, "F6 Short range", "F9 Status" : y = y + 10
-KeyLine y, "F7 System data", "F10 Inventory" : y = y + 14
+y = y + 11
+KeyLine y, "F5 Galactic chart", "F8 Market prices" : y = y + 9
+KeyLine y, "F6 Short range", "F9 Status" : y = y + 9
+KeyLine y, "F7 System data", "F10 Inventory" : y = y + 12
 TEXT VCX, y, "DOCKED", "CT", 7, 1, cWhite
-y = y + 12
-KeyLine y, "F1 Launch", "F2 buy, F3 sell" : y = y + 10
-KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 10
-KeyLine y, "F fills the tank", "S save, L load" : y = y + 10
-TEXT VCX, SCRH - 10, "any key goes back", "CT", 7, 1, cGrey
+y = y + 11
+KeyLine y, "F1 Launch", "F2 buy, F3 sell" : y = y + 9
+KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 9
+KeyLine y, "F fills the tank", "S save, L load" : y = y + 9
+TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cGrey
 FRAMEBUFFER COPY F, N
 k = WaitKey(0)
 END SUB
@@ -2582,7 +2663,15 @@ LOCAL FLOAT t0
 t0 = TIMER
 DO
 ReadKeys
-IF kQuit THEN quitGame = 1 : EXIT DO
+IF kQuit THEN
+IF eqOwned(EQ_POD) THEN
+EscapePod
+EXIT DO
+ELSE
+quitGame = 1
+EXIT DO
+ENDIF
+ENDIF
 UpdatePlayer
 IF kFire THEN FireLaser
 IF kTarget THEN TargetMissile
@@ -2591,6 +2680,9 @@ IF kECM THEN FireECM
 IF kDock THEN dockComp = 1 - dockComp
 IF dockComp THEN DockingComputer
 IF kJump THEN JumpAway
+IF kBomb THEN EnergyBomb
+IF kHop THEN InSystemJump
+IF kGal THEN GalacticJump
 IF kChart > 0 THEN
 tStage = TIMER
 InfoScreen kChart
@@ -2905,6 +2997,7 @@ kRollL = 0 : kRollR = 0 : kUp = 0 : kDn = 0
 kFaster = 0 : kSlower = 0 : kFire = 0 : kQuit = 0
 kTarget = 0 : kMissile = 0 : kECM = 0 : kDock = 0
 kJump = 0 : kChart = 0 : kPause = 0
+kBomb = 0 : kHop = 0 : kGal = 0
 demoTick = demoTick + 1
 IF demoLeg <= 1 THEN DemoLeg1 ELSE DemoLeg2
 END SUB

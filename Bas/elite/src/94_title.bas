@@ -47,33 +47,37 @@ END SUB
 SUB ControlsScreen
   LOCAL INTEGER y, k
   CLS
-  TEXT VCX, 2, "FLIGHT", "CT", 7, 1, cWhite
-  LINE 0, 13, SCRW - 1, 13, 1, cCyan
-  y = 17
-  KeyLine y, "Roll", "< >  or left/right" : y = y + 10
-  KeyLine y, "Pitch", "S X  or up/down" : y = y + 10
-  KeyLine y, "Speed", "SPACE faster, / slower" : y = y + 10
-  KeyLine y, "Fire", "A" : y = y + 10
-  KeyLine y, "Missile", "T locks on, M fires" : y = y + 10
-  KeyLine y, "E.C.M.", "E" : y = y + 10
-  KeyLine y, "Docking computer", "C" : y = y + 10
-  KeyLine y, "Hyperspace", "H, outside the zone" : y = y + 10
-  KeyLine y, "Views", "F1 fore, F2 aft" : y = y + 10
-  KeyLine y, "", "F3 left, F4 right" : y = y + 14
+  TEXT VCX, 1, "FLIGHT", "CT", 7, 1, cWhite
+  LINE 0, 11, SCRW - 1, 11, 1, cCyan
+  y = 14
+  KeyLine y, "Roll", "< >  or left/right" : y = y + 9
+  KeyLine y, "Pitch", "S X  or up/down" : y = y + 9
+  KeyLine y, "Speed", "SPACE faster, / slower" : y = y + 9
+  KeyLine y, "Fire", "A" : y = y + 9
+  KeyLine y, "Missile", "T locks on, M fires" : y = y + 9
+  KeyLine y, "E.C.M.", "E" : y = y + 9
+  KeyLine y, "Docking computer", "C" : y = y + 9
+  KeyLine y, "Hyperspace", "H, outside the zone" : y = y + 9
+  KeyLine y, "In-system jump", "J, with nothing about" : y = y + 9
+  KeyLine y, "Galactic jump", "G, if one is fitted" : y = y + 9
+  KeyLine y, "Energy bomb", "TAB" : y = y + 9
+  KeyLine y, "Escape pod", "ESC, if one is fitted" : y = y + 9
+  KeyLine y, "Views", "F1 fore, F2 aft" : y = y + 9
+  KeyLine y, "", "F3 left, F4 right" : y = y + 12
 
   TEXT VCX, y, "SCREENS, FLYING OR DOCKED", "CT", 7, 1, cWhite
-  y = y + 12
-  KeyLine y, "F5 Galactic chart", "F8 Market prices" : y = y + 10
-  KeyLine y, "F6 Short range", "F9 Status" : y = y + 10
-  KeyLine y, "F7 System data", "F10 Inventory" : y = y + 14
+  y = y + 11
+  KeyLine y, "F5 Galactic chart", "F8 Market prices" : y = y + 9
+  KeyLine y, "F6 Short range", "F9 Status" : y = y + 9
+  KeyLine y, "F7 System data", "F10 Inventory" : y = y + 12
 
   TEXT VCX, y, "DOCKED", "CT", 7, 1, cWhite
-  y = y + 12
-  KeyLine y, "F1 Launch", "F2 buy, F3 sell" : y = y + 10
-  KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 10
-  KeyLine y, "F fills the tank", "S save, L load" : y = y + 10
+  y = y + 11
+  KeyLine y, "F1 Launch", "F2 buy, F3 sell" : y = y + 9
+  KeyLine y, "F4 Equip ship", "SPACE buys one" : y = y + 9
+  KeyLine y, "F fills the tank", "S save, L load" : y = y + 9
 
-  TEXT VCX, SCRH - 10, "any key goes back", "CT", 7, 1, cGrey
+  TEXT VCX, SCRH - 9, "any key goes back", "CT", 7, 1, cGrey
   FRAMEBUFFER COPY F, N
   k = WaitKey(0)
 END SUB
