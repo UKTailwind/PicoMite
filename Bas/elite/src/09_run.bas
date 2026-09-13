@@ -53,7 +53,9 @@ ELSE
     IF kTarget THEN TargetMissile
     IF kMissile THEN LaunchMissile
     IF kECM THEN FireECM
-    IF kDock THEN dockComp = 1 - dockComp
+    IF kDock THEN
+      IF eqOwned(EQ_DOCK) THEN dockComp = 1 - dockComp ELSE Sfx SFX_BOOP
+    ENDIF
     IF dockComp THEN DockingComputer
     IF lasTimer > 0 THEN lasTimer = lasTimer - 1
     IF lasFlash > 0 THEN lasFlash = lasFlash - 1

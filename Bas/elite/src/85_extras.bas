@@ -33,7 +33,8 @@ SUB EscapePod
   FOR i = 0 TO NGOODS - 1 : cargo(i) = 0 : NEXT i
   FOR i = 0 TO NEQUIP - 1 : eqOwned(i) = 0 : NEXT i
   ' A new ship, as bare as the one you started with.
-  lasPower = 15 : holdSize = 20 : pMissl = 0 : energyUnit = 0
+  lasView(0) = LAS_PULSE : lasView(1) = 0 : lasView(2) = 0 : lasView(3) = 0
+  holdSize = 20 : pMissl = 0 : energyUnit = 0
   legal = 0
   Sfx SFX_LAUNCH
   DoDock
@@ -90,6 +91,7 @@ SUB GalacticJump
   mkByte = INT(RND * 256)
   MakeMarket sysEco, mkByte
   Sfx SFX_HYPER
+  HyperTunnel
   ArriveInSystem
   Message "GALACTIC HYPERSPACE"
 END SUB

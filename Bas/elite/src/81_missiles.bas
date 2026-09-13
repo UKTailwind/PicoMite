@@ -138,6 +138,7 @@ END SUB
 ' costs energy to do it.
 SUB FireECM
   LOCAL INTEGER n
+  IF eqOwned(EQ_ECM) = 0 THEN Sfx SFX_BOOP : EXIT SUB
   IF ecmActive > 0 THEN EXIT SUB
   ecmActive = ECMFRAMES
   Sfx SFX_ECM

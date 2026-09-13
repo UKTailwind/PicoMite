@@ -143,7 +143,10 @@ CONST DIGRAPHS = "ALLEXEGEZACEBISOUSESARMAINDIREA?ERATENBERALAVETIEDORQUANTEISRI
 ' hits it at once, so the only timing is how often it can be fired and
 ' how hot it has got.
 CONST LASPULSE = 4                 ' frames between pulse laser shots
-DIM INTEGER lasTimer, lasPower, lasFlash, kills, dead, energyUnit, shots, hits
+DIM INTEGER lasTimer, lasFlash, kills, dead, energyUnit, shots, hits
+' A mount for each view, holding that laser's power, as the original: 15 is
+' a pulse laser and 143 a beam.  A new commander has one on the front only.
+DIM INTEGER lasView(3)
 ' Docking.  All five approach tests are angles, expressed as fractions of
 ' a unit vector: about 26 degrees off the slot's face, 22 degrees off dead
 ' ahead, and 34 degrees of roll.
@@ -171,9 +174,11 @@ CONST SRDX = 5                     ' our pixels per galaxy unit across
 CONST SRDY = 2                     ' and down
 
 ' Equipment on offer, gated by the system's technology level.
-CONST NEQUIP = 10
+CONST NEQUIP = 11
 ' Rows of the shop that other code has to know about by name.
-CONST EQ_SCOOPS = 4, EQ_POD = 5, EQ_BOMB = 6, EQ_GALHYP = 9
+CONST EQ_ECM = 2, EQ_PULSE = 3, EQ_BEAM = 4, EQ_SCOOPS = 5, EQ_POD = 6
+CONST EQ_BOMB = 7, EQ_ENERGY = 8, EQ_DOCK = 9, EQ_GALHYP = 10
+CONST LAS_PULSE = 15, LAS_BEAM = 143
 DIM eqName$(NEQUIP-1) LENGTH 20
 DIM INTEGER eqPrice(NEQUIP-1), eqTech(NEQUIP-1), eqOwned(NEQUIP-1)
 

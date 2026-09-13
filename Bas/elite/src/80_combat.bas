@@ -18,13 +18,13 @@ SUB FireLaser
   LOCAL INTEGER n, best, bestz, dmg
   IF lasTimer > 0 THEN EXIT SUB
   IF pLasT >= 242 THEN EXIT SUB          ' too hot to fire
-  IF lasPower = 0 THEN EXIT SUB          ' no laser on this view
+  IF lasView(vw) = 0 THEN EXIT SUB       ' nothing mounted on this view
   ' Every shot heats the gun by eight; it loses one a frame.
   pLasT = pLasT + 8
   IF pLasT > 255 THEN pLasT = 255
   lasFlash = 2
   ' A beam refires every frame, a pulse every ten of the original's ticks.
-  IF lasPower >= 128 THEN lasTimer = 0 ELSE lasTimer = LASPULSE
+  IF lasView(vw) >= 128 THEN lasTimer = 0 ELSE lasTimer = LASPULSE
   Sfx SFX_LASER
 
   ' Whatever is lined up and nearest gets hit.
@@ -50,7 +50,7 @@ SUB FireLaser
   IF best < 0 THEN EXIT SUB
   hits = hits + 1
 
-  dmg = lasPower AND 127
+  dmg = lasView(vw) AND 127
   sEne(best) = sEne(best) - dmg
   ' Anything hit turns on us, whatever it was doing before.
   IF sAI(best) < 128 THEN sAI(best) = sAI(best) OR 128

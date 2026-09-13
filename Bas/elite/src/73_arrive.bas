@@ -98,6 +98,7 @@ SUB Hyperspace(target AS INTEGER)
   d = SysDist(hx, hy, sysX, sysY * 2)
   IF d > pFuel THEN Sfx SFX_BOOP : EXIT SUB
   Sfx SFX_HYPER
+  HyperTunnel
   pFuel = pFuel - d
   homeSys = target
   homeX = sysX

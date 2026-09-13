@@ -160,6 +160,25 @@ SUB LaunchTunnel
   NEXT i
 END SUB
 
+' The jump.  The original winds the drive up behind a tunnel of rings; ours
+' uses circles where the launch tunnel uses squares, so the two read as
+' different things happening.
+SUB HyperTunnel
+  LOCAL INTEGER i, k, r, c
+  FOR i = 0 TO 31
+    CLS
+    FOR k = 0 TO 6
+      r = ((i + k * 5) MOD 35) * 5 + 4
+      c = cWhite
+      IF (k AND 1) <> 0 THEN c = cCyan
+      CIRCLE VCX, VCY, r, 1, 1.25, c, -1
+    NEXT k
+    DrawDash
+    ViewName
+    FRAMEBUFFER COPY F, N, B
+  NEXT i
+END SUB
+
 ' A station we have attacked sends police after us, on the same schedule
 ' that spawns everything else.
 SUB StationPolice

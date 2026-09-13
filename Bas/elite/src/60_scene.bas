@@ -19,7 +19,8 @@ SUB NewCommander
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
   cashTenths = 1000 : holdSize = 20
   ' A new commander carries a pulse laser on the front view only.
-  lasPower = 15 : lasTimer = 0 : lasFlash = 0
+  lasView(0) = LAS_PULSE : lasView(1) = 0 : lasView(2) = 0 : lasView(3) = 0
+  lasTimer = 0 : lasFlash = 0
   kills = 0 : dead = 0 : energyUnit = 0 : legal = 0
   shots = 0 : hits = 0
   docked = 0 : dockComp = 0 : msLock = -1
@@ -109,7 +110,7 @@ END SUB
 ' laser's alignment test accept it?
 SUB DumpSlots
   LOCAL INTEGER n
-  PRINT "slots at frame 60, nUsed"; nUsed; " lasPower"; lasPower
+  PRINT "slots at frame 60, nUsed"; nUsed; " fore laser"; lasView(0)
   FOR n = 0 TO nUsed - 1
     PRINT "  "; n; " typ"; sTyp(n); " bp"; sBp(n); " obj"; sObj(n);
     PRINT " x"; STR$(sX(n), 0, 0); " y"; STR$(sY(n), 0, 0); " z"; STR$(sZ(n), 0, 0);
@@ -133,7 +134,7 @@ SUB DockScene
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pFuel = 70
   pCabT = 30 : pLasT = 0 : pAltit = 200 : pMissl = 3
   cashTenths = 1000 : holdSize = 20
-  lasPower = 15 : kills = 0 : dead = 0 : docked = 0
+  lasView(0) = LAS_PULSE : kills = 0 : dead = 0 : docked = 0
   vw = 0 : inWitch = 0 : msLock = -1
   InitStardust
   LoadMarket
@@ -160,7 +161,7 @@ SUB DockScene
   dSpeed = 0
   inSafe = 1
   mcnt = 0
-  dockComp = 1
+  eqOwned(EQ_DOCK) = 1 : dockComp = 1
 END SUB
 
 SUB DockInput(f AS INTEGER)
@@ -176,7 +177,7 @@ SUB DockedScreens
   LOCAL INTEGER n, i
   pFuel = 44 : cashTenths = 1000 : holdSize = 20
   pEnergy = 255 : pFsh = 255 : pAsh = 255 : pMissl = 3
-  lasPower = 15 : kills = 20 : legal = 0 : docked = 1 : energyUnit = 0
+  lasView(0) = LAS_PULSE : kills = 20 : legal = 0 : docked = 1 : energyUnit = 0
   gGal = 1
   LoadMarket
   EquipTable
@@ -195,7 +196,7 @@ SUB DockedScreens
   ' Trade a little so the screens have something to show.
   FOR i = 1 TO 5 : BuyOne 0 : NEXT i        ' five tonnes of food
   FOR i = 1 TO 3 : BuyOne 12 : NEXT i       ' and some minerals
-  eqOwned(2) = 1                            ' fitted with E.C.M.
+  eqOwned(EQ_ECM) = 1                       ' fitted with E.C.M.
 
   MarketScreen 6
   FRAMEBUFFER COPY F, N

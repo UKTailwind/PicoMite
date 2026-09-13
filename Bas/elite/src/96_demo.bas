@@ -41,6 +41,9 @@ SUB RunDemo
     NewCommander
     ' A demo commander with something to spend and room to fill.
     cashTenths = 25000
+    ' And a docking computer, which Lave's technology level cannot sell:
+    ' without it the demo could not show the approach at all.
+    eqOwned(EQ_DOCK) = 1
     ClearSlots
     docked = 1
     dscreen = SCR_STATUS
@@ -376,8 +379,10 @@ DATA 129,700           ' a larger hold
 DATA 32,1300
 DATA 129,700           ' an E.C.M. system
 DATA 32,1300
-DATA 129,700           ' and a beam laser
-DATA 32,1800
+DATA 129,700           ' past the pulse lasers
+DATA 129,700           ' to the beam lasers
+DATA 32,700
+DATA 145,1500          ' F1: on the fore mount
 DATA 149,3000          ' F5, the galactic chart
 DATA 131,400           ' walk the cursor across it
 DATA 131,400

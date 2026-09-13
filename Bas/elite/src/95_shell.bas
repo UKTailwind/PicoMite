@@ -65,7 +65,9 @@ SUB RunFlight
     IF kTarget THEN TargetMissile
     IF kMissile THEN LaunchMissile
     IF kECM THEN FireECM
-    IF kDock THEN dockComp = 1 - dockComp
+    IF kDock THEN
+      IF eqOwned(EQ_DOCK) THEN dockComp = 1 - dockComp ELSE Sfx SFX_BOOP
+    ENDIF
     IF dockComp THEN DockingComputer
     IF kJump THEN JumpAway
     IF kBomb THEN EnergyBomb

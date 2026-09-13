@@ -36,10 +36,33 @@ SUB StatusScreen
   TEXT 20, y, "Equipment:", "LT", 7, 1, cWhite : y = y + 11
   IF eqOwned(1) THEN TEXT 30, y, "Large Cargo Bay", "LT", 7, 1, cYellow : y = y + 10
   IF eqOwned(2) THEN TEXT 30, y, "E.C.M. System", "LT", 7, 1, cYellow : y = y + 10
-  IF eqOwned(4) THEN TEXT 30, y, "Fuel Scoops", "LT", 7, 1, cYellow : y = y + 10
-  IF eqOwned(6) THEN TEXT 30, y, "Docking Computer", "LT", 7, 1, cYellow : y = y + 10
-  IF lasPower >= 128 THEN TEXT 30, y, "Beam Laser", "LT", 7, 1, cYellow : y = y + 10
+  IF eqOwned(EQ_SCOOPS) THEN TEXT 30, y, "Fuel Scoops", "LT", 7, 1, cYellow : y = y + 10
+  IF eqOwned(EQ_POD) THEN TEXT 30, y, "Escape Pod", "LT", 7, 1, cYellow : y = y + 10
+  IF eqOwned(EQ_BOMB) THEN TEXT 30, y, "Energy Bomb", "LT", 7, 1, cYellow : y = y + 10
+  IF eqOwned(EQ_ENERGY) THEN TEXT 30, y, "Energy Unit", "LT", 7, 1, cYellow : y = y + 10
+  IF eqOwned(EQ_DOCK) THEN TEXT 30, y, "Docking Computer", "LT", 7, 1, cYellow : y = y + 10
+  IF eqOwned(EQ_GALHYP) THEN TEXT 30, y, "Galactic Hyperdrive", "LT", 7, 1, cYellow : y = y + 10
+  LOCAL INTEGER v
+  FOR v = 0 TO 3
+    IF lasView(v) <> 0 THEN
+      TEXT 30, y, ViewWord$(v) + LaserWord$(lasView(v)), "LT", 7, 1, cYellow
+      y = y + 10
+    ENDIF
+  NEXT v
 END SUB
+
+FUNCTION ViewWord$(v AS INTEGER)
+  SELECT CASE v
+    CASE 0 : ViewWord$ = "Fore "
+    CASE 1 : ViewWord$ = "Aft "
+    CASE 2 : ViewWord$ = "Left "
+    CASE ELSE : ViewWord$ = "Right "
+  END SELECT
+END FUNCTION
+
+FUNCTION LaserWord$(p AS INTEGER)
+  IF p >= 128 THEN LaserWord$ = "Beam Laser" ELSE LaserWord$ = "Pulse Laser"
+END FUNCTION
 
 FUNCTION CondName$()
   IF docked THEN
@@ -171,18 +194,50 @@ SUB EquipScreen(sel AS INTEGER)
 END SUB
 
 SUB BuyEquip(i AS INTEGER)
-  IF eqOwned(i) THEN EXIT SUB
+  LOCAL INTEGER v
   IF eqTech(i) > sysTech + 1 THEN EXIT SUB
   IF cashTenths < eqPrice(i) * 10 THEN EXIT SUB
+  ' A laser is not owned once and for all: there is a mount for each of the
+  ' four views and one can be bought for each, which is why these two rows
+  ' never grey out until every mount is full.
+  IF i = EQ_PULSE OR i = EQ_BEAM THEN
+    v = AskView()
+    IF v < 0 THEN EXIT SUB
+    IF lasView(v) <> 0 THEN Sfx SFX_BOOP : EXIT SUB
+    IF i = EQ_PULSE THEN lasView(v) = LAS_PULSE ELSE lasView(v) = LAS_BEAM
+    cashTenths = cashTenths - eqPrice(i) * 10
+    EXIT SUB
+  ENDIF
+  IF eqOwned(i) THEN EXIT SUB
+  ' A missile is the other thing that can be bought again and again, up to
+  ' the four the racks hold.
+  IF i = 0 THEN
+    IF pMissl >= 4 THEN EXIT SUB
+    cashTenths = cashTenths - eqPrice(i) * 10
+    pMissl = pMissl + 1
+    EXIT SUB
+  ENDIF
   cashTenths = cashTenths - eqPrice(i) * 10
   eqOwned(i) = 1
   SELECT CASE i
-    CASE 0 : IF pMissl < 4 THEN pMissl = pMissl + 1 : eqOwned(0) = 0
     CASE 1 : holdSize = 35
-    CASE 3 : lasPower = 143 OR 128           ' beam laser
-    CASE 7 : energyUnit = 1
+    CASE EQ_ENERGY : energyUnit = 1
   END SELECT
 END SUB
+
+' Which mount?  The original puts up the four views and waits for a number.
+FUNCTION AskView() AS INTEGER
+  LOCAL INTEGER k
+  DO
+    BOX 44, 92, 232, 52, 1, cWhite, cBlack
+    TEXT VCX, 102, "WHICH MOUNT?", "CT", 7, 1, cWhite
+    TEXT VCX, 122, "F1 fore  F2 aft  F3 left  F4 right", "CT", 7, 1, cYellow
+    FRAMEBUFFER COPY F, N
+    k = DockKey()
+    IF k = 27 THEN AskView = -1 : EXIT FUNCTION
+  LOOP UNTIL k >= 145 AND k <= 148
+  AskView = k - 145
+END FUNCTION
 
 SUB BuyFuel
   LOCAL INTEGER cost
@@ -208,7 +263,7 @@ SUB SaveCommander(f$)
   LOCAL INTEGER i, fn
   fn = 1
   OPEN f$ FOR OUTPUT AS #fn
-  PRINT #fn, "elite-commander 1"
+  PRINT #fn, "elite-commander 2"
   PRINT #fn, gGal
   PRINT #fn, homeSys
   PRINT #fn, cashTenths
@@ -217,7 +272,7 @@ SUB SaveCommander(f$)
   PRINT #fn, kills
   PRINT #fn, legal
   PRINT #fn, pMissl
-  PRINT #fn, lasPower
+  FOR i = 0 TO 3 : PRINT #fn, lasView(i) : NEXT i
   PRINT #fn, energyUnit
   FOR i = 0 TO NGOODS - 1 : PRINT #fn, cargo(i) : NEXT i
   FOR i = 0 TO NEQUIP - 1 : PRINT #fn, eqOwned(i) : NEXT i
@@ -232,7 +287,7 @@ FUNCTION LoadCommander(f$) AS INTEGER
   fn = 1
   OPEN f$ FOR INPUT AS #fn
   LINE INPUT #fn, hd$
-  IF LEFT$(hd$, 16) <> "elite-commander " THEN
+  IF hd$ <> "elite-commander 2" THEN
     CLOSE #fn
     EXIT FUNCTION
   ENDIF
@@ -244,7 +299,7 @@ FUNCTION LoadCommander(f$) AS INTEGER
   INPUT #fn, kills
   INPUT #fn, legal
   INPUT #fn, pMissl
-  INPUT #fn, lasPower
+  FOR i = 0 TO 3 : INPUT #fn, lasView(i) : NEXT i
   INPUT #fn, energyUnit
   FOR i = 0 TO NGOODS - 1 : INPUT #fn, cargo(i) : NEXT i
   FOR i = 0 TO NEQUIP - 1 : INPUT #fn, eqOwned(i) : NEXT i
@@ -264,7 +319,8 @@ dat_equip:
 DATA "Missile",30,1
 DATA "Large Cargo Bay",400,4
 DATA "E.C.M. System",600,3
-DATA "Beam Laser",1000,4
+DATA "Extra Pulse Lasers",400,4
+DATA "Extra Beam Lasers",1000,4
 DATA "Fuel Scoops",525,5
 DATA "Escape Pod",600,6
 DATA "Energy Bomb",900,7
