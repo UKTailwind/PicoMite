@@ -2073,7 +2073,7 @@ ClearSlots
 END SUB
 SUB DockingComputer
 LOCAL INTEGER n
-LOCAL FLOAT d, ux, uy, uz, rx, ry
+LOCAL FLOAT d, ux, uy, uz, rx, ry, e
 n = SLOT_STAR
 IF sTyp(n) <> T_STATION THEN EXIT SUB
 d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
@@ -2097,16 +2097,18 @@ IF uz > 0.9 THEN
 MATH SLICE sQ(), , n, qA()
 MATH Q_VECTOR 0, 1, 0, qB() : MATH Q_ROTATE qA(), qB(), qV()
 rx = qV(1) : ry = qV(2)
-IF ABS(rx) < DOCKROLL THEN
-IF rx * ry > 0 THEN pRoll = 255 ELSE pRoll = 1
-ENDIF
+e = ABS(ry) * 400
+IF e > 127 THEN e = 127
+IF rx * ry > 0 THEN pRoll = JCENTRE + e ELSE pRoll = JCENTRE - e
 ENDIF
 IF d > 4000 THEN
-dSpeed = 20
-ELSEIF d > 1200 THEN
-dSpeed = 8
+dSpeed = 32
+ELSEIF d > 1500 THEN
+dSpeed = 18
+ELSEIF d > 500 THEN
+dSpeed = 10
 ELSE
-dSpeed = 3
+dSpeed = 4
 ENDIF
 END SUB
 SUB LaunchTunnel

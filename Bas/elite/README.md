@@ -139,7 +139,12 @@ the slot - which means rolling to match a station that will not stop turning.
 
 Below speed 5 a failed approach is a bump. Above it, it is the end of you.
 
-The docking computer (`C`) does the whole thing, including the rolling.
+The docking computer (`C`) does the whole thing, including the rolling - and
+that is ours, not the original's. In the cassette version pressing `C` docks
+you instantly; the flown approach only appeared in the later 6502 Second
+Processor and Master versions. You have to buy the computer either way: a new
+commander has a front pulse laser, three missiles, seven light years of fuel
+and nothing else, so every docking is hand-flown until you can afford 1500 Cr.
 
 ## The law
 
@@ -174,6 +179,11 @@ What is left:
 - **The hyperspace countdown.** The jump happens at once behind its tunnel of
   rings; the original counts down from 15 while you keep flying, and you can be
   attacked during it.
+- **The pace.** Every one of the original's constants is per iteration of its
+  main loop, which ran at something like ten or twelve a second. The game now
+  scales by how much of one of those iterations each frame is worth, so the
+  speed no longer depends on the frame rate, but the rate itself - `TICKRATE`
+  in `00_main.bas` - is an estimate rather than a measured fact.
 - **No indicator for the safe zone.** Getting clear of it to hyperspace takes
   about half a minute of flying away from the station and nothing tells you
   when you are out; press `H` and see.
