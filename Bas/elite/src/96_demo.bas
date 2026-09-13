@@ -128,7 +128,7 @@ SUB DemoLeg1
     CASE 620        : demoCap$ = "IN THE SIGHTS"
     CASE 900        : demoCap$ = ""
     CASE 930        : demoTgt = DemoSpawn(T_VIPER, -1800, 500, 6000, 20, 128 OR 48, 180)
-                      demoCap$ = "A VIPER, AND IT HAS SEEN US"
+                      demoCap$ = "POLICE: THEY HAVE SEEN THE SLAVES"
     CASE 1540       : demoCap$ = "AN ASTEROID"
                       demoTgt = DemoSpawn(T_ASTEROID, 300, -200, 4000, 0, 0, 180)
                       IF demoTgt >= 0 THEN sPit(demoTgt) = 127
@@ -356,7 +356,9 @@ DATA 32,300
 DATA 32,300
 DATA 32,300
 DATA 32,600
-DATA 129,500           ' down to textiles
+DATA 129,400           ' down to the slaves, which is asking for trouble
+DATA 129,300
+DATA 129,400
 DATA 32,400
 DATA 32,300
 DATA 32,300
@@ -392,7 +394,9 @@ DATA 32,300
 DATA 32,300
 DATA 32,300
 DATA 32,600
-DATA 129,500           ' down to textiles
+DATA 129,400           ' down to the slaves
+DATA 129,300
+DATA 129,400
 DATA 32,400
 DATA 32,300
 DATA 32,300

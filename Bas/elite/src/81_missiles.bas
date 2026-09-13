@@ -159,10 +159,8 @@ END SUB
 ' Shooting a police ship makes an outlaw of you, and the station will send
 ' more of them.
 SUB NoteKill(n AS INTEGER)
-  IF sTyp(n) = T_VIPER THEN
-    legal = legal + 64
-    IF legal > 255 THEN legal = 255
-  ENDIF
+  ' Shooting the sheriff puts our record straight to fugitive.
+  IF sTyp(n) = T_VIPER THEN legal = legal OR 64
 END SUB
 
 FUNCTION LegalName$()

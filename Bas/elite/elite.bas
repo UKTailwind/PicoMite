@@ -73,6 +73,7 @@ CONST DOCKROLL = 0.833
 CONST MSTURN = 0.22
 CONST ECMFRAMES = 24
 DIM INTEGER msLock, ecmActive, legal, docked, dockComp
+DIM INTEGER spawnEV
 CONST UNIT = 65536
 CONST LAUNCHSPD = 12
 CONST CHTOP = 24
@@ -185,6 +186,7 @@ ECMService
 Recharge
 StationCheck
 StationPolice
+SpawnTraffic
 DockCheck
 prof(5) = prof(5) + TIMER - tStage
 DrawFrame
@@ -304,6 +306,10 @@ sBp(n) = -1
 sEne(n) = 0
 ENDIF
 IF n >= nUsed THEN nUsed = n + 1
+END FUNCTION
+FUNCTION NewFacing(t AS INTEGER, x AS FLOAT, y AS FLOAT, z AS FLOAT, hdg AS INTEGER) AS INTEGER
+MATH Q_EULER RAD(hdg), 0, 0, qA() : qA(4) = 1
+NewFacing = NewShip(t, x, y, z, qA())
 END FUNCTION
 SUB KillShip(n AS INTEGER)
 LOCAL INTEGER i
@@ -1350,6 +1356,8 @@ SUB ArriveInSystem
 LOCAL INTEGER n, pz, sz, sx, ptype
 ClearSlots
 SysData
+legal = legal \ 2
+spawnEV = 0
 pz = (((gs0 >> 8) AND 7) + 6) \ 2
 IF pz < 3 THEN pz = 3
 ptype = T_PLANET
@@ -1384,6 +1392,8 @@ ENDIF
 dSpeed = LAUNCHSPD
 inSafe = 1
 mcnt = 0
+legal = legal OR Contraband()
+IF legal > 255 THEN legal = 255
 END SUB
 FUNCTION CanReach(target AS INTEGER) AS INTEGER
 LOCAL INTEGER d, hx, hy
@@ -1532,13 +1542,18 @@ LOCAL FLOAT d, cnt, nx, ny, nz
 FOR n = 2 TO nUsed - 1
 IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
 IF (sAI(n) AND 128) <> 0 THEN
+IF inSafe THEN
+IF sTyp(n) < T_COBRA3 THEN
+IF sTyp(n) <> T_VIPER THEN sAI(n) = sAI(n) AND 129
+ENDIF
+ENDIF
 IF ((mcnt XOR n) AND 7) = 0 THEN
 d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
 IF d > 1 THEN
 NoseVec n
 nx = qV(1) * qV(4) : ny = qV(2) * qV(4) : nz = qV(3) * qV(4)
 cnt = (-sX(n) * nx - sY(n) * ny - sZ(n) * nz) / d
-IF d < 8192 AND cnt > 0.917 THEN
+IF d < 8192 AND cnt > 0.917 AND (sAI(n) AND 126) <> 0 THEN
 dmg = bLas(sBp(n)) * 2
 IF cnt > 0.972 THEN
 HitPlayer dmg
@@ -1745,10 +1760,7 @@ sRol(m) = 130 : sPit(m) = 5
 NEXT i
 END SUB
 SUB NoteKill(n AS INTEGER)
-IF sTyp(n) = T_VIPER THEN
-legal = legal + 64
-IF legal > 255 THEN legal = 255
-ENDIF
+IF sTyp(n) = T_VIPER THEN legal = legal OR 64
 END SUB
 FUNCTION LegalName$()
 IF legal = 0 THEN
@@ -1876,6 +1888,118 @@ IF sTyp(SLOT_STAR) = T_STATION THEN sAI(SLOT_STAR) = sAI(SLOT_STAR) OR 128
 legal = legal + 64
 IF legal > 255 THEN legal = 255
 END SUB
+SUB SpawnTraffic
+IF mcnt <> 0 THEN EXIT SUB
+IF docked OR dead OR inWitch THEN EXIT SUB
+IF INT(RND * 256) < 35 THEN
+IF CountType(T_ASTEROID) < 3 THEN
+IF SpawnBenign() THEN EXIT SUB
+ENDIF
+ENDIF
+IF inSafe THEN EXIT SUB
+IF SpawnPolice() THEN EXIT SUB
+SpawnHostiles
+END SUB
+FUNCTION SpawnBenign() AS INTEGER
+LOCAL INTEGER n, t
+LOCAL FLOAT x, y, z
+SpawnBenign = 0
+z = 38 * 256
+x = INT(RND * 256)
+IF RND < 0.5 THEN x = x + 512
+IF RND < 0.5 THEN x = -x
+y = INT(RND * 256)
+IF RND < 0.5 THEN y = -y
+IF RND < 0.5 THEN
+n = NewFacing(T_COBRA3, x, y, z, 180)
+IF n >= 0 THEN
+sAI(n) = 0
+sSpd(n) = 16 + INT(RND * 16)
+sRol(n) = INT(RND * 128)
+ENDIF
+SpawnBenign = 1
+EXIT FUNCTION
+ENDIF
+IF inSafe THEN SpawnBenign = 1 : EXIT FUNCTION
+t = T_ASTEROID
+IF INT(RND * 256) < 5 THEN t = T_CANISTER
+n = NewFacing(t, x, y, z, 180)
+IF n >= 0 THEN
+IF RND < 0.5 THEN
+sSpd(n) = 16 + INT(RND * 16)
+sRol(n) = INT(RND * 256) OR 111
+ELSE
+sPit(n) = INT(RND * 256) OR 127
+ENDIF
+ENDIF
+END FUNCTION
+FUNCTION SpawnPolice() AS INTEGER
+LOCAL INTEGER bad, n
+bad = Contraband() * 2
+IF CountType(T_VIPER) > 0 THEN bad = bad OR legal
+IF INT(RND * 256) < bad THEN n = Aggressor(T_VIPER, 0)
+SpawnPolice = 0
+IF CountType(T_VIPER) > 0 THEN SpawnPolice = 1
+END FUNCTION
+SUB SpawnHostiles
+LOCAL INTEGER r, i, t, ai, cnt, n
+spawnEV = spawnEV - 1
+IF spawnEV >= 0 THEN EXIT SUB
+spawnEV = 0
+r = INT(RND * 256)
+IF sysGov <> 0 THEN
+IF r >= 90 THEN EXIT SUB
+IF (r AND 7) < sysGov THEN EXIT SUB
+ENDIF
+r = INT(RND * 256)
+IF r >= 200 THEN
+cnt = INT(RND * 4)
+spawnEV = cnt
+FOR i = 0 TO cnt
+t = INT(RND * 4) OR 1
+n = Aggressor(t, 0)
+NEXT i
+EXIT SUB
+ENDIF
+spawnEV = spawnEV + 1
+t = (r AND 3) + 3
+ai = 192
+IF INT(RND * 256) >= 200 THEN ai = ai OR 1
+IF t = T_THARGOID THEN
+IF INT(RND * 256) >= 200 THEN
+IF Aggressor(T_THARGOID, ai) >= 0 THEN n = Aggressor(T_THARGON, 129)
+ENDIF
+EXIT SUB
+ENDIF
+n = Aggressor(t, ai)
+END SUB
+FUNCTION Aggressor(t AS INTEGER, ai AS INTEGER) AS INTEGER
+LOCAL INTEGER n, a
+LOCAL FLOAT x, y
+x = 8192 : IF RND < 0.5 THEN x = -x
+y = 8192 : IF RND < 0.5 THEN y = -y
+a = ai
+IF a = 0 THEN
+a = 192
+IF INT(RND * 256) >= 245 THEN a = a OR 1
+ENDIF
+n = NewFacing(t, x, y, 8192, 180)
+IF n >= 0 THEN sAI(n) = a
+Aggressor = n
+END FUNCTION
+FUNCTION Contraband() AS INTEGER
+Contraband = (cargo(3) + cargo(6)) * 2 + cargo(10)
+END FUNCTION
+FUNCTION CountType(t AS INTEGER) AS INTEGER
+LOCAL INTEGER n, c
+c = 0
+FOR n = 2 TO nUsed - 1
+IF sTyp(n) = t THEN
+IF sExp(n) = 0 THEN c = c + 1
+ENDIF
+NEXT n
+CountType = c
+END FUNCTION
 SUB EquipTable
 LOCAL INTEGER i
 RESTORE dat_equip
@@ -2144,6 +2268,7 @@ ECMService
 Recharge
 StationCheck
 StationPolice
+SpawnTraffic
 DockCheck
 prof(5) = prof(5) + TIMER - tStage
 DrawFrame
@@ -2450,7 +2575,7 @@ demoCap$ = "A COBRA MK III ON THE SPACE LANE"
 CASE 620        : demoCap$ = "IN THE SIGHTS"
 CASE 900        : demoCap$ = ""
 CASE 930        : demoTgt = DemoSpawn(T_VIPER, -1800, 500, 6000, 20, 128 OR 48, 180)
-demoCap$ = "A VIPER, AND IT HAS SEEN US"
+demoCap$ = "POLICE: THEY HAVE SEEN THE SLAVES"
 CASE 1540       : demoCap$ = "AN ASTEROID"
 demoTgt = DemoSpawn(T_ASTEROID, 300, -200, 4000, 0, 0, 180)
 IF demoTgt >= 0 THEN sPit(demoTgt) = 127
@@ -2618,7 +2743,9 @@ DATA 32,300
 DATA 32,300
 DATA 32,300
 DATA 32,600
-DATA 129,500
+DATA 129,400
+DATA 129,300
+DATA 129,400
 DATA 32,400
 DATA 32,300
 DATA 32,300
@@ -2653,7 +2780,9 @@ DATA 32,300
 DATA 32,300
 DATA 32,300
 DATA 32,600
-DATA 129,500
+DATA 129,400
+DATA 129,300
+DATA 129,400
 DATA 32,400
 DATA 32,300
 DATA 32,300

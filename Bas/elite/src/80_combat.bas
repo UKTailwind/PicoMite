@@ -122,6 +122,16 @@ SUB Tactics
   FOR n = 2 TO nUsed - 1
     IF sTyp(n) <> 0 AND sBp(n) >= 0 AND sExp(n) = 0 THEN
       IF (sAI(n) AND 128) <> 0 THEN
+        ' Even a pirate will not start something inside the station's
+        ' no-fire zone, so its aggression is taken away while it is in
+        ' there - bit 7 stays, so it still flies, it just will not fight.
+        ' The police and anything bigger than a Mamba are not covered by
+        ' that understanding, and neither are the Thargoids.
+        IF inSafe THEN
+          IF sTyp(n) < T_COBRA3 THEN
+            IF sTyp(n) <> T_VIPER THEN sAI(n) = sAI(n) AND 129
+          ENDIF
+        ENDIF
         IF ((mcnt XOR n) AND 7) = 0 THEN
           d = SQR(sX(n)*sX(n) + sY(n)*sY(n) + sZ(n)*sZ(n))
           IF d > 1 THEN
@@ -133,7 +143,7 @@ SUB Tactics
 
             ' Shooting: only from close in, and only when pointed almost
             ' straight at us.  A near miss still flashes and makes a noise.
-            IF d < 8192 AND cnt > 0.917 THEN
+            IF d < 8192 AND cnt > 0.917 AND (sAI(n) AND 126) <> 0 THEN
               dmg = bLas(sBp(n)) * 2
               IF cnt > 0.972 THEN
                 HitPlayer dmg

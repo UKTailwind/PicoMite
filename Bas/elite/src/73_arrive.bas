@@ -19,6 +19,10 @@ SUB ArriveInSystem
   LOCAL INTEGER n, pz, sz, sx, ptype
   ClearSlots
   SysData
+  ' Arriving somewhere new halves what is on our record: nobody this far
+  ' away has heard the details, and the original is as forgiving as that.
+  legal = legal \ 2
+  spawnEV = 0
   ' Planet: three to seven units straight ahead, and it carries a crater
   ' or an equator depending on a bit of the system's technology level.
   pz = (((gs0 >> 8) AND 7) + 6) \ 2
@@ -64,6 +68,10 @@ SUB LaunchState
   dSpeed = LAUNCHSPD
   inSafe = 1
   mcnt = 0
+  ' Leaving the station with a hold full of contraband can only make
+  ' matters worse, and the police outside will already know.
+  legal = legal OR Contraband()
+  IF legal > 255 THEN legal = 255
 END SUB
 
 ' Can we get there on what is in the tank?

@@ -56,6 +56,7 @@ ELSE
     Recharge
     StationCheck
     StationPolice
+    SpawnTraffic
     DockCheck
     prof(5) = prof(5) + TIMER - tStage
     DrawFrame

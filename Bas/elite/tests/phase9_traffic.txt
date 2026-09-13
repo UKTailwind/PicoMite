@@ -1,0 +1,64 @@
+Phase 9 - the traffic, and what the law makes of you
+====================================================
+PC3, PicoMiteHDMIWEB V6.03.02b3 at 378 MHz, MODE 2.
+
+Until now nothing arrived in the bubble on its own: launch from Lave and the
+system was empty, and the demo had to stage its own encounters.  This is the
+original's own spawning, taken from the main game loop (parts 2 to 4 of
+elite-source.asm), which runs once every 256 frames and makes three decisions
+in order, any of which can end the pass:
+
+  1  something harmless - a trader, an asteroid, a cargo canister
+  2  the police, if our record or our cargo hold warrants it
+  3  a bounty hunter, a Thargoid, or a pack of pirates
+
+The police test is the one that ties the game together.  It weighs the hold -
+slaves and narcotics count double, firearms once - doubles the result, and if
+a Viper is already in the bubble it takes the worse of that and our legal
+record, because by then they have scanned us.  A random byte is drawn against
+the total.
+
+Measured, 400 spawning passes per row, calling SpawnTraffic directly from a
+cleared bubble so each pass is independent:
+
+  situation                                  trader rock can POLICE  hostiles
+  clean hold, clean record, Corporate State      39   33    0      0        33
+  clean hold, clean record, ANARCHY              81   23    3      0       153
+  ten tonnes of slaves, clean record             32   19    1     53        37
+  empty hold, but a fugitive                     43   27    0      0        36
+  fugitive, twenty tonnes of slaves, anarchy     52   35    0    111       104
+
+Two things in that table are the original's behaviour and not mistakes.  An
+anarchy is four times as dangerous as a Corporate State, which is the whole
+point of the government column on the chart.  And a fugitive with an empty
+hold attracts no new police at all: the test only consults our record when a
+Viper is already watching, so it is what we are carrying that calls them out,
+and our record that decides how it escalates once they are there.
+
+The rest of the legal model came with it, all from the original:
+
+  launching with contraband   legal = legal OR contraband, so leaving Lave
+                              with six tonnes of slaves makes us an Offender
+                              before we have even cleared the slot
+  arriving somewhere new      legal = legal \ 2 - nobody that far away has
+                              heard the details
+  shooting a police ship      legal = legal OR 64, an instant Fugitive
+  inside the safe zone        a pirate's aggression bits are cleared while it
+                              is in there, and it cannot fire; police, traders
+                              and Thargoids are not part of that understanding
+
+In the demo
+-----------
+The demo now buys six tonnes of slaves at Lave rather than textiles, so the
+whole chain is on screen: Offender at launch, a Viper on the way out, Fugitive
+when it is shot down, halved to 38 on arrival, and two more police waiting at
+the far end.  Traffic turns up on its own as well - the bubble runs at three
+to six ships where it used to sit at two - and the demo still docks and sells
+at a profit, 405 Cr to 613 Cr.
+
+A trap worth recording
+----------------------
+A FUNCTION cannot be called as a bare statement in MMBasic.  Writing
+"Aggressor T_VIPER, 0" for a FUNCTION compiles, and then fails at run time
+inside the function with "AGGRESSOR is not declared" pointing at the line that
+sets the return value - an error that says nothing about the real cause.

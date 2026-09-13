@@ -112,6 +112,15 @@ FUNCTION NewShip(t AS INTEGER, x AS FLOAT, y AS FLOAT, z AS FLOAT, q() AS FLOAT)
   IF n >= nUsed THEN nUsed = n + 1
 END FUNCTION
 
+' A ship at x, y, z turned hdg degrees about the vertical.  180 faces us,
+' which is how the original creates almost everything: its ZINF leaves a
+' new ship's nose vector at (0, 0, -1), pointing back down the z axis at
+' the player.
+FUNCTION NewFacing(t AS INTEGER, x AS FLOAT, y AS FLOAT, z AS FLOAT, hdg AS INTEGER) AS INTEGER
+  MATH Q_EULER RAD(hdg), 0, 0, qA() : qA(4) = 1
+  NewFacing = NewShip(t, x, y, z, qA())
+END FUNCTION
+
 ' Remove a slot.  The original shuffles the table down to close the gap
 ' so the loop over ships never sees a hole; we do the same, because the
 ' AI and the scanner both walk the table in order.
