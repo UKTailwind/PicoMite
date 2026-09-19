@@ -157,7 +157,7 @@ Renders all visible tiles to a destination buffer. This is the core rendering co
 | Parameter | Description |
 |-----------|-------------|
 | `id` | Tilemap slot number |
-| `dest` | Destination buffer: L (Layer), F (Framebuffer), N (Display), T (Top layer - RP2350 VGA) |
+| `dest` | Destination buffer: L (Layer), F (Framebuffer), N (Display), T (Top layer - RP2350 VGA/HDMI), 2 (Framebuffer 2 - RP2350 VGA/HDMI) |
 | `viewX, viewY` | Pixel offset into the world (viewport top-left corner, supports sub-tile precision) |
 | `screenX, screenY` | Where on the destination buffer to start drawing |
 | `viewW, viewH` | Size of the visible viewport in pixels |

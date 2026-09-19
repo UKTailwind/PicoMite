@@ -1046,10 +1046,11 @@ the top bit in the width and height
 ~BLIT FLASH
 BLIT FLASH from, to, xin, yin, xout, yout, width, height [,colour]
 
-Copies an area of a specific 'from' image slot to a 'to' framebuffer N, F, or
-L.  Slots 1 to 3 are the flash slots; on an RP2350 with PSRAM, slots 4 to 8
-are the RAM slots 1 to 5 (see FLASH LOAD IMAGE).  'xin' and 'yin' define the
-top left of the area of 'width' and 'height' on the image to be copied.
+Copies an area of a specific 'from' image slot to a 'to' framebuffer N, F, L,
+T or 2 (T and 2 are only available on RP2350 VGA and HDMI builds).  Slots 1 to
+3 are the flash slots; on an RP2350 with PSRAM, slots 4 to 8 are the RAM slots
+1 to 5 (see FLASH LOAD IMAGE).  'xin' and 'yin' define the top left of the
+area of 'width' and 'height' on the image to be copied.
 'xout' and 'yout' define the top left of the area on the target framebuffer to
 receive the copy.
 The optional parameter colour defines a pixel colour in the image which will
@@ -1061,13 +1062,14 @@ white
 ~BLIT FRAMEBUFFER
 BLIT FRAMEBUFFER from, to, xin, yin, xout, yout, width, height [,colour]
 
-Copies an area of a specific 'from' framebuffer N, F, or L to another
-different 'to' framebuffer N, F, or L. 'xin' and 'yin' define the top left of
-the area of 'width' and 'height' on the source framebuffer to be copied.
-'xout' and 'yout' define the top left of the area on the target framebuffer to
-receive the copy. The optional parameter colour defines a pixel colour on the
-source which will not be copied. If omitted all pixels are copied. The colour
-is specified as a number between 0 and 15 representing:
+Copies an area of a specific 'from' framebuffer N, F, L, T or 2 to another
+different 'to' framebuffer N, F, L, T or 2 (T and 2 are only available on
+RP2350 VGA and HDMI builds). 'xin' and 'yin' define the top left of the area
+of 'width' and 'height' on the source framebuffer to be copied. 'xout' and
+'yout' define the top left of the area on the target framebuffer to receive
+the copy. The optional parameter colour defines a pixel colour on the source
+which will not be copied. If omitted all pixels are copied. The colour is
+specified as a number between 0 and 15 representing:
 Black, Blue, Myrtle, Cobalt, Midgreen, Cerulean, green, cyan, red, magenta,
 rust, fuchsia, brown, lilac, yellow and white
 Requires both a framebuffer and a layer buffer to have been created to
@@ -14389,7 +14391,7 @@ command.
   Parameter  Description
   id  Tilemap slot number
   dest  Destination buffer: L (Layer), F (Framebuffer), N (Display), T (Top
-  layer - RP2350 VGA)
+  layer - RP2350 VGA/HDMI), 2 (Framebuffer 2 - RP2350 VGA/HDMI)
   viewX, viewY  Pixel offset into the world (viewport top-left corner,
   supports sub-tile precision)
   screenX, screenY  Where on the destination buffer to start drawing
