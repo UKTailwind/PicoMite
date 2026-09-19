@@ -1703,10 +1703,19 @@ Sub FollowKid
   Local INTEGER tt, tb
   If oAction = 2 Or oAction = 6 Then Exit Sub
   If (cFace And &H80) Then tb = cBlockX - 1 Else tb = cBlockX + 1
+  ' A gate that has risen is not in his way.  Asking the raw block type made a
+  ' guard turn back at an open gate instead of following through it, which is
+  ' the same mistake the screen-crossing test made on the way into room 8.
   tt = RdBlock(cScrn, tb, cBlockY)
+  If tt = T_GATE Then
+    If GateOpen(cScrn, tb, cBlockY) Then tt = 0
+  End If
   If Barrier(tt) <> 0 Then droppedOut = 0 : AiBack : Exit Sub
   If noFloor(tt) = 0 Then AiFwd : Exit Sub
   tt = RdBlock(cScrn, tb, cBlockY + 1)
+  If tt = T_GATE Then
+    If GateOpen(cScrn, tb, cBlockY + 1) Then tt = 0
+  End If
   If tt = T_SPIKES Or tt = T_LOOSE Or Barrier(tt) <> 0 Or noFloor(tt) Then droppedOut = 0 : AiBack : Exit Sub
   If cBlockY + 1 <> oBlockY Then droppedOut = 0 : AiBack : Exit Sub
   AiFwd
@@ -2740,6 +2749,18 @@ Sub ApplyPalette
 End Sub
 
 '-----------------------------------------------------------------------------
+' The block he would arrive in, with a gate that has risen far enough counted
+' as clear.  The barrier check does this and the crossing test did not, so a
+' gate standing on a room boundary stayed shut as far as crossing was
+' concerned however far it had opened - and on the first level every gate that
+' matters is on a boundary.
+Function EntryBlock(bx As INTEGER, by As INTEGER) As INTEGER
+  EntryBlock = BlockAt(cScrn, bx, by)
+  If EntryBlock = T_GATE Then
+    If GateOpen(cScrn, bx, by) Then EntryBlock = 0
+  End If
+End Function
+
 Sub GetScreens(scr As INTEGER)
   sLeft  = level(OFF_MAP + (scr - 1) * 4)
   sRight = level(OFF_MAP + (scr - 1) * 4 + 1)
@@ -2751,6 +2772,7 @@ End Sub
 ' Walking off an edge moves him to the adjoining screen.  Screen zero means
 ' there is nothing there, so he stays put and the edge behaves as a wall.
 Function CrossScreen() As INTEGER
+  Local INTEGER edge
   CrossScreen = 0
   ' You cannot cross into a wall.  A barrier in the entry block of the next
   ' screen behaves as a wall at THIS screen's edge: stop him here and bump.
@@ -2761,13 +2783,15 @@ Function CrossScreen() As INTEGER
   ' pillar at the edge of the room next door and the wall below it is not in the
   ' way at all.  Action 2 is the hang.
   If cBlockX < 0 Then
-    If sLeft = 0 Or (cAction <> 2 And Barrier(BlockAt(cScrn, cBlockX, cBlockY))) Then
+    edge = EntryBlock(cBlockX, cBlockY)
+    If sLeft = 0 Or (cAction <> 2 And Barrier(edge) <> 0) Then
       cBlockX = 0 : cX = 58 : WallBump : Exit Function
     End If
     cScrn = sLeft : cBlockX = cBlockX + COLS : cX = cX + SCRNW
     CrossScreen = 1 : cutDir = 0
   ElseIf cBlockX >= COLS Then
-    If sRight = 0 Or (cAction <> 2 And Barrier(BlockAt(cScrn, cBlockX, cBlockY))) Then
+    edge = EntryBlock(cBlockX, cBlockY)
+    If sRight = 0 Or (cAction <> 2 And Barrier(edge) <> 0) Then
       cBlockX = COLS - 1 : cX = 58 + 139 : WallBump : Exit Function
     End If
     cScrn = sRight : cBlockX = cBlockX - COLS : cX = cX - SCRNW
