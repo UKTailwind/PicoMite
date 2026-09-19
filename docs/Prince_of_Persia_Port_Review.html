@@ -880,7 +880,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
     <thead><tr><th>Risk</th><th>Assessment</th><th>Mitigation</th></tr></thead>
     <tbody>
       <tr><td>Game content leaking into the build</td><td><span class="pill warn">Medium</span> One converter emitting <code>DATA</code> statements for convenience undoes the whole distribution model</td><td>Converters write data files only; a release check that greps the packaged <code>.bas</code> for table data and refuses on a hit</td></tr>
-      <tr><td>Trademark</td><td><span class="pill warn">Medium</span> A live mark with products shipping now; the likeliest trigger for a takedown request</td><td>A neutral name chosen at Phase&nbsp;0, not at release. Renaming late is how Picanoid happened</td></tr>
+      <tr><td>Trademark</td><td><span class="pill ok">Closed</span> The package is a BASIC program and a Python script. It carries no artwork, no rooms, no animation and no music, and it will not run until the player has converted their own copy</td><td>Named <strong>Pico Persia</strong>. What anyone does with the two files afterwards is theirs to decide</td></tr>
       <tr><td>Tokenised program size</td><td><span class="pill warn">Medium</span> Twelve thousand lines of source logic against a 144&nbsp;KB cap</td><td>Every table external from day one; the library CSUB route held in reserve; measure at the end of each phase rather than at the end of the project</td></tr>
       <tr><td>The control state machine</td><td><span class="pill warn">Medium</span> 2,700 lines where a wrong threshold is invisible until it is unplayable</td><td>The recorded demo as a regression test: it diverges visibly the moment a threshold is wrong</td></tr>
       <tr><td>Sound authenticity</td><td><span class="pill warn">Medium</span> Speaker-click routines re-created by ear</td><td>Accept it. Thrust and Arkanoid both ended here and both sound right</td></tr>
@@ -904,8 +904,13 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
       <li><strong>D1 &mdash; Distribution. Engine and converter, no content.</strong> The program is freely
       distributable because it holds no game data: the converter runs on the player&rsquo;s machine, against their
       own clone of the published repository, named on the command line. No vendored assets, no bundled samples, no
-      built-in download. A neutral product name, chosen at Phase&nbsp;0. Free, and never pre-installed on hardware
-      that is sold. The supporting rule is that no converter may emit a line of BASIC.</li>
+      built-in download. Free, and never pre-installed on hardware that is sold. The supporting rule is that no
+      converter may emit a line of BASIC.</li>
+      <li><strong>D8 &mdash; Name. <em>Pico Persia</em>.</strong> What is being supplied is a BASIC program and a
+      Python script, neither of which holds any of the game. The program will not start until the player has run
+      the converter against a copy they obtained themselves, and what they do with it after that is theirs to
+      decide. On that footing the name is a description of what the program is for. The design documents still
+      name the original, because they are about porting it; the product carries the new name.</li>
     </ol>
   </div>
 

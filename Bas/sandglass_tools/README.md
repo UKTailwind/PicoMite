@@ -1,4 +1,9 @@
-# Asset converter
+# Pico Persia
+
+A dungeon game for the PicoComputer 3, in the style of the Apple II original.
+The player's manual is in `docs/Pico_Persia_Player_Manual.html`.
+
+## Asset converter
 
 This directory holds the converter. It reads a copy of the published Apple II
 source release that **you** supply, and writes the data files the engine needs

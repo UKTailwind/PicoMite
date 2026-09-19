@@ -287,7 +287,7 @@ musName(16) = "heartbeat"
 home = MM.Info(Path)
 If home = "NONE" Then home = "A:/"
 
-Print "--- player: Phase 4 assembled"
+Print "--- Pico Persia"
 ReadLayout
 LoadBytes home + "blocks.dat", blocksLen, blocks()
 LoadBytes home + "seq.dat", seqLen, seqb()
