@@ -213,6 +213,9 @@ Const SEQ_JUMPHANGLONG = 24
 Const SEQ_JUMPBACKHANG = 16
 Const SEQ_HIGHJUMP = 28
 Const JUMPBACK_THRES = 6
+' The low five bits of a frame's check byte: how far in from the left edge
+' of the image his base X sits.  Ffootmark in the original.
+Const FFOOTMARK = &H1F
 Dim INTEGER nJumpHang, pstep, pTimer, playDone
 ' Two characters.  The engine works on the c* set; a record holds the other.
 ' Record: posn x y face bx by action xvel yvel seq scrn id sword life falling stunned
@@ -1011,9 +1014,33 @@ End Sub
 '
 ' Without this the character walks the whole width of the screen while the floor
 ' test keeps reading the cell he started in, so he can never step off anything.
+' THE BASE X.  The original does not measure a character from his coordinate.
+' Every pose records how many pixels to count in from the left edge of its
+' image, in the low five bits of the frame's check byte, and the frame's own
+' displacement counts too.  That point is his base X, and both the block he is
+' standing in and every distance are taken from it.
+'
+' It is not a small correction: the foot offset runs from nought to seventeen
+' pixels depending on the pose and a block is fourteen wide, so measuring from
+' the raw coordinate can put him in the wrong block outright.  That is what
+' made the last frame of a running jump's take-off look as though it had left
+' the floor when the original still has him on it.
+Function BaseX() As INTEGER
+  Local INTEGER f, d
+  BaseX = cX
+  If cPosn < 1 Then Exit Function
+  f = (cPosn - 1) * frmEntry
+  If f + 4 >= frmLen Then Exit Function
+  d = Sgn8(frmb(f + 2)) - (frmb(f + 4) And FFOOTMARK)
+  If (cFace And &H80) Then BaseX = (cX - d) And &HFF Else BaseX = (cX + d) And &HFF
+End Function
+
+' GETBASEBLOCK: which block he is in, from his base X and not his coordinate.
 Sub RereadBlocks
-  If cX < 2 Then cBlockX = -4 : Exit Sub
-  cBlockX = (cX - 2) \ 14 - 4
+  Local INTEGER bx
+  bx = BaseX()
+  If bx < 2 Then cBlockX = -4 : Exit Sub
+  cBlockX = (bx - 2) \ 14 - 4
 End Sub
 
 '-----------------------------------------------------------------------------
@@ -1204,17 +1231,6 @@ Sub Settle
     ' that are mid-climb or mid-step do not carry it.  Without this gate the
     ' first frame of a climb was stepped straight off the empty block he was
     ' climbing out of.
-    ' INTERPRETATION.  Pose 38 is runjump-5, the frame the take-off run ends
-    ' on, and its frame entry still carries the check-the-floor mark while
-    ' 39 to 43 do not.  The jump's run-up is fourteen units and pose 38 sits
-    ' nineteen from the take-off, so with the lead distance the original asks
-    ' for, pose 38 ALWAYS falls five pixels beyond the edge and every running
-    ' jump turned into a step off the end, however well aimed.  The routine
-    ' that reconciles this, CHECKFLOOR, is one of the stubs the release does
-    ' not carry; the likeliest answer is that it measures from the trailing
-    ' foot rather than the centre.  Until that is known, pose 38 is treated as
-    ' airborne, which is what the sequence data says it is.
-    If cPosn = 38 Then Exit Sub
     If cPosn >= 1 Then
       If (frmb((cPosn - 1) * frmEntry + 4) And &H40) = 0 Then Exit Sub
     End If
@@ -2266,10 +2282,13 @@ Function DoStepFwd() As INTEGER
 End Function
 
 ' How far he is from the front edge of the block he is in, 0 to 13.
+' GETDIST: how far from his base X to the end of the block that point is in.
 Function GetDist() As INTEGER
-  Local INTEGER lo
-  lo = 14 * (cBlockX + 4) + 2
-  If (cFace And &H80) Then GetDist = cX - lo Else GetDist = lo + 13 - cX
+  Local INTEGER lo, bx, b
+  bx = BaseX()
+  If bx < 2 Then b = -4 Else b = (bx - 2) \ 14 - 4
+  lo = 14 * (b + 4) + 2
+  If (cFace And &H80) Then GetDist = bx - lo Else GetDist = lo + 13 - bx
 End Function
 
 ' Move him n units the way he faces (negative is back).
