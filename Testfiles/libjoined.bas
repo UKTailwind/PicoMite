@@ -12,7 +12,7 @@ End Function
 Sub LibHello(what$)
   Print "  LibHello says: "; what$
 End Sub
-' libcsub.bas - part two: nothing but a CSUB.  The hex text is dropped as the
+' libcsub.bas - part two: nothing but a CSUB.  The hex text is dropped as the
 ' file streams past; only the binary reaches the library.
 CSUB CHECKSUM
 	00000000
@@ -30,3 +30,4 @@ DefineFont #8
 	0024247E 3C583E18 00187C1A 10086462 00864620 76386C38 0076CCDC 00301818 
 	00000000 
 End DefineFont
+
