@@ -2377,10 +2377,79 @@ Function RunCtrl() As INTEGER
   End If
   If jstkX > 0 Then RunCtrl = SEQ_RUNTURN : nRunTurn = nRunTurn + 1 : Exit Function
   If jstkY < 0 Then
-    If clrU < 0 Then clrU = 1 : RunCtrl = SEQ_RUNJUMP : nRunJump = nRunJump + 1
+    If clrU < 0 Then RunCtrl = DoRunjump()
     Exit Function
   End If
   If clrD < 0 Then clrD = 1 : RunCtrl = SEQ_DIVEROLL : nRoll = nRoll + 1
+End Function
+
+' DORUNJUMP.  A running jump is not "press up and leave the ground".  The
+' original waits for the right moment and then nudges him onto it, which is why
+' its jumps land and why pressing up at any other time appears to do nothing.
+'
+' Three things it does that this port did not.  He must be in FULL run, pose
+' seven or later, so the press is ignored through the first half-second of
+' acceleration.  It looks one block ahead for the edge he is running at.  And
+' when it finds one it compares the distance he has to cover with the distance
+' the jump covers, and if he is within a few pixels either way it shifts him by
+' that difference so the take-off is right.  Too far away and it does nothing
+' at all and tries again next frame, so you can press up early and he will
+' leave the ground when he gets there.
+'
+' From CTRL.S.  The five numbers are its own.
+Const RJCHANGE = 4        ' how far he moves in the frame being projected
+Const RJLOOKAHEAD = 1     ' blocks to look ahead for an edge
+Const RJLEADDIST = 14     ' the run-up the jump itself needs
+Const RJMAXFUJBAK = 8     ' pixels it will shift him back to make it work
+Const RJMAXFUJFWD = 2     ' and forward
+
+Function DoRunjump() As INTEGER
+  Local INTEGER n, px, bx, t, dist, diff
+  DoRunjump = 0
+  If cPosn < 7 Then Exit Function                  ' not yet at full speed
+  n = 0
+  px = AddCharX(RJCHANGE)
+  bx = BlockOfX(px)
+  Do
+    If (cFace And &H80) Then bx = bx - 1 Else bx = bx + 1
+    t = RdBlock(cScrn, bx, cBlockY)
+    If t = T_SPIKES Then Exit Do
+    If noFloor(t) Then Exit Do
+    n = n + 1
+    If n > RJLOOKAHEAD Then
+      ' Nothing to aim at.  Jump anyway, which is what a long jump on a long
+      ' floor is.
+      clrU = 1 : nRunJump = nRunJump + 1
+      DoRunjump = SEQ_RUNJUMP
+      Exit Function
+    End If
+  Loop
+  ' How far to the end of the floor, and how that compares with the jump.
+  dist = DistFromX(px, bx) + 14 * n
+  diff = dist - RJLEADDIST
+  If diff >= RJMAXFUJFWD And diff < 128 Then Exit Function    ' too far off yet
+  If diff < -RJMAXFUJBAK Then diff = -3                       ' too late; tidy it
+  cX = (cX + Choice((cFace And &H80) <> 0, -(diff + RJCHANGE), diff + RJCHANGE)) And &HFF
+  RereadBlocks
+  clrU = 1 : nRunJump = nRunJump + 1
+  DoRunjump = SEQ_RUNJUMP
+End Function
+
+' His position a frame from now, the way he faces.
+Function AddCharX(n As INTEGER) As INTEGER
+  If (cFace And &H80) Then AddCharX = (cX - n) And &HFF Else AddCharX = (cX + n) And &HFF
+End Function
+
+' The block a given x sits in, and how far that x is from its front edge.
+Function BlockOfX(x As INTEGER) As INTEGER
+  If x < 2 Then BlockOfX = -4 Else BlockOfX = (x - 2) \ 14 - 4
+End Function
+
+Function DistFromX(x As INTEGER, bx As INTEGER) As INTEGER
+  Local INTEGER lo, b
+  b = BlockOfX(x)
+  lo = 14 * (b + 4) + 2
+  If (cFace And &H80) Then DistFromX = x - lo Else DistFromX = lo + 13 - x
 End Function
 
 '-----------------------------------------------------------------------------
