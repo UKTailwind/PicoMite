@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Player's Manual</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin:2.2rem 0 .2rem}
+h3{font-size:1.12rem;font-weight:600;margin:1.4rem 0 .2rem}
+p{margin:.7rem 0;max-width:68ch}
+ul,ol{max-width:72ch;padding-left:1.3rem}
+li{margin:.35rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.88em;background:var(--code-bg);padding:.08em .35em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1000px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line);padding:2.6rem 0 2rem}
+header.hero .wrap{padding-bottom:0}
+header.hero h1{color:#fff}
+header.hero p{color:#AFC0CE;max-width:62ch}
+table{border-collapse:collapse;width:100%;max-width:72ch;margin:.9rem 0;font-size:.95rem}
+th,td{text-align:left;padding:.45rem .6rem;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.85rem;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+td:first-child{white-space:nowrap;font-weight:600}
+.note{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:6px;padding:.85rem 1rem;margin:1.1rem 0;max-width:72ch}
+.note.gold{border-left-color:var(--gold);background:var(--gold-bg)}
+.note p{margin:.35rem 0}
+.note .eyebrow{color:var(--muted)}
+ol.steps{counter-reset:step;list-style:none;padding-left:0}
+ol.steps>li{counter-increment:step;position:relative;padding-left:2.6rem;margin:1.6rem 0}
+ol.steps>li::before{content:counter(step);position:absolute;left:0;top:.05rem;width:1.9rem;height:1.9rem;border-radius:50%;background:var(--accent);color:#fff;font-family:"Chakra Petch",sans-serif;font-weight:700;display:grid;place-items:center;font-size:.95rem}
+ol.steps>li>h3{margin-top:0}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.12rem .5rem;border-radius:999px;border:1px solid currentColor}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.no{color:var(--bad)}
+footer{border-top:1px solid var(--line);margin-top:3rem;padding-top:1.2rem;color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">PicoComputer 3</div>
+    <h1>Player's Manual</h1>
+    <p>A dungeon game for the PC3, in the style of the Apple II original. The
+    program is here; the game's pictures, rooms and animation are not. You
+    supply those yourself from a copy you obtain, and a converter turns them
+    into the form the PC3 reads.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="note gold">
+  <div class="eyebrow">Read this first</div>
+  <p><strong>Nothing of the game is included here.</strong> This package holds an
+  engine and a converter, both written from scratch. It contains no artwork, no
+  rooms, no animation and no sound. Until you have run the converter over your
+  own copy of the published source release, it will not start.</p>
+  <p>That is deliberate. The source release is published but grants no rights to
+  the game's content, so the content is not ours to pass on. It stays yours, on
+  your machine.</p>
+</div>
+
+<h2>What you need</h2>
+
+<ul>
+  <li><strong>A PicoComputer 3</strong> running recent MMBasic, with a keyboard
+  and a display. Sound needs an audio output configured; without one the game
+  runs silently rather than refusing to start.</li>
+  <li><strong>Python 3.8 or later</strong> on a PC, to run the converter once.</li>
+  <li><strong>Your own copy of the published Apple II source release</strong>,
+  obtained by you. The converter never downloads anything.</li>
+</ul>
+
+<h2>Setting it up</h2>
+
+<ol class="steps">
+
+<li>
+<h3>Get the source release</h3>
+<p>Clone or download the published Apple II source release yourself, to a folder
+on your PC. The converter needs the folder that contains the <code>Images</code>
+and <code>Levels</code> directories; it will find them whether you point it at
+the top of your copy or at the source folder inside it.</p>
+</li>
+
+<li>
+<h3>Convert the assets</h3>
+<pre><code>python convert.py --source &lt;your copy&gt; --out &lt;output folder&gt;</code></pre>
+<p>This reads your copy and writes a set of data files onto your machine. It
+takes a few seconds. <code>convert.log</code> records what it read and produced,
+which is worth keeping if anything looks wrong later.</p>
+<p>By default it converts what the game itself needs and packs the artwork into
+four image sheets. Add <code>--set full</code> to convert the introduction and
+ending artwork as well, which needs a fifth sheet and leaves no room on the
+board for anything else.</p>
+<table>
+  <tr><th>File</th><th>What it is</th></tr>
+  <tr><td>sheet1.bmp …</td><td>all the artwork, already in the display's colour format</td></tr>
+  <tr><td>art.bin</td><td>where every picture sits in which sheet</td></tr>
+  <tr><td>levels.dat</td><td>the fifteen levels</td></tr>
+  <tr><td>frames.dat, seq.dat</td><td>the animation: every pose, and the sequences that order them</td></tr>
+  <tr><td>blocks.dat, tables.idx</td><td>how a room is built, and where everything else is</td></tr>
+  <tr><td>sounds.dat</td><td>the twenty sound effects, as a pitch and a length each</td></tr>
+  <tr><td>cutroom.bmp</td><td>the princess's room, for the scenes between levels, if your copy has it</td></tr>
+</table>
+</li>
+
+<li>
+<h3>Build the program</h3>
+<pre><code>python build.py player.bas -o player.min.bas</code></pre>
+<p>The engine is written to be read, and nearly a third of it is explanation.
+MMBasic keeps the whole text in memory, so the comments have to come out before
+it will fit. This removes them and nothing else.</p>
+</li>
+
+<li>
+<h3>Copy everything to the board</h3>
+<p>Put the converted data files and the program in the same folder on the
+board's drive. Copy <code>player.min.bas</code> across <em>as</em>
+<code>player.bas</code>.</p>
+<p>Any method will do. On a board with networking the fastest is TFTP; otherwise
+use the SD card, or send the files down the console.</p>
+</li>
+
+<li>
+<h3>Run it</h3>
+<pre><code>RUN "player.bas"</code></pre>
+<p>It reports what it found as it loads, including whether sound is available.
+If a file is missing it will say so.</p>
+</li>
+
+</ol>
+
+<h2>Controls</h2>
+
+<p>Everything is done with the four arrow keys and one action key.</p>
+
+<div class="note">
+  <div class="eyebrow">The action key</div>
+  <p><strong>Either shift key.</strong> The space bar does exactly the same, for
+  keyboards that will not report shift. Wherever the tables below say
+  <em>action</em>, that is the key they mean.</p>
+</div>
+
+<table>
+  <tr><th>Key</th><th>What it does</th></tr>
+  <tr><td>Shift or Space</td><td>The action key, written as <em>action</em> below. On its own it does nothing; it changes what the other keys do.</td></tr>
+  <tr><td>Left, Right</td><td>Run. Tapped from standing he starts to run; held, he keeps going.</td></tr>
+  <tr><td>Up</td><td>Jump. Standing under a ledge he jumps and catches it; with a run-up it becomes a running jump. At an open exit he climbs the stairs.</td></tr>
+  <tr><td>Down</td><td>Crouch. From a crouch, press a direction to crawl.</td></tr>
+  <tr><td>Shift + direction</td><td>A careful step, exactly as far as the edge in front of him. Press again at the edge and he tests the ground with a foot; again and he steps off.</td></tr>
+  <tr><td>Shift while falling</td><td>Reach for a ledge. Hold it as you go over an edge and he will catch what he can.</td></tr>
+  <tr><td>Shift while hanging</td><td>Hold on. Let go and he drops. Press up instead and he climbs.</td></tr>
+  <tr><td>Shift, standing still</td><td>Take what is in front of him. He crouches first; press again and he picks it up.</td></tr>
+  <tr><td>Escape</td><td>Stop playing and return to the prompt.</td></tr>
+</table>
+
+<h3>With a sword</h3>
+
+<p>He draws it by himself when an enemy comes into view, and puts it away when
+the danger has passed.</p>
+
+<table>
+  <tr><th>Key</th><th>What it does</th></tr>
+  <tr><td>Shift or Space</td><td>Strike.</td></tr>
+  <tr><td>Up</td><td>Block. Timed against his blade it turns the blow aside.</td></tr>
+  <tr><td>Forward, Back</td><td>Advance and retreat.</td></tr>
+  <tr><td>Down</td><td>Lower the sword and put it away.</td></tr>
+</table>
+
+<h2>Playing</h2>
+
+<p>You have sixty minutes to get through the dungeon. The clock runs whenever
+you are alive, and speaks up as it passes each mark. Run out and the game is
+over wherever you stand.</p>
+
+<p>The bar at the bottom left is your strength. Each square is one blow or one
+bad landing. The bar at the bottom right belongs to whoever you are fighting.
+Lose your last square and you die, and the level starts again.</p>
+
+<h3>Things worth knowing</h3>
+
+<ul>
+  <li><strong>A fall of one storey hurts, two kills.</strong> Catching a ledge on
+  the way down costs nothing, so reach for one whenever you go over an edge.</li>
+  <li><strong>Loose floors give way</strong> a moment after you stand on them,
+  and take whatever is underneath with them.</li>
+  <li><strong>Pressure plates raise gates</strong>, sometimes a room away. A
+  plate stays down only briefly, so a gate you opened will close again.</li>
+  <li><strong>Spikes spring when you walk over them.</strong> Walking carefully
+  over sprung spikes is safe; running or landing on them is not.</li>
+  <li><strong>Potions do different things.</strong> Most restore you, one makes
+  you stronger for good, one turns the world upside down and one is poison.
+  There is no way to tell which is which except by drinking it.</li>
+  <li><strong>The guards will not let you past.</strong> Unarmed you have no
+  chance at all, so find the sword before you meet one.</li>
+</ul>
+
+<h2>Optional extras</h2>
+
+<h3>A title screen</h3>
+<p>Put a <code>title.bmp</code> beside the data files and it is shown until you
+press a key. Leave it out and the game starts straight away. A 640 by 480
+picture fits the screen exactly.</p>
+
+<h3>The scenes between levels</h3>
+<p>The game cuts away to the princess's room on the way into levels 2, 4, 6, 8,
+9 and 12, and at both endings. The picture is held for a few seconds and any key
+moves you on.</p>
+<p>The converter finds the picture and writes <code>cutroom.bmp</code> without
+being asked, so there is nothing to do. If your copy does not have it the scenes
+are skipped and the game plays exactly as before.</p>
+
+<h3>Music</h3>
+<p>The game asks for sixteen tunes by name. None are supplied and none are
+needed: with no music present every cue is simply ignored. If you want music,
+obtain your own copies and put them in a <code>music</code> folder beside the
+data as WAV files named after the cue: <code>danger</code>,
+<code>sword</code>, <code>potion</code>, <code>stairs</code>,
+<code>upstairs</code>, <code>victory</code> and <code>tragic</code> are the ones
+the game currently reaches.</p>
+<p>The files must be PCM WAV, mono or stereo, eight or sixteen bit, up to 48 kHz.
+The board plays one thing at a time, so a sound effect is dropped while a tune
+is playing rather than cutting the tune short.</p>
+
+<h2>What is here, and what is not</h2>
+
+<p>This is an unfinished port, honestly labelled.</p>
+
+<table>
+  <tr><th>Working</th><th></th></tr>
+  <tr><td>Running, jumping, climbing</td><td><span class="pill ok">yes</span> every move the original has, including the careful step and the ledge catch</td></tr>
+  <tr><td>The rooms</td><td><span class="pill ok">yes</span> all fifteen levels, both sets of scenery</td></tr>
+  <tr><td>Traps and machinery</td><td><span class="pill ok">yes</span> plates, gates, spikes, loose floors, slicers, torches, the exit</td></tr>
+  <tr><td>Guards and sword fighting</td><td><span class="pill ok">yes</span> including the skeleton and the shadow</td></tr>
+  <tr><td>The clock, potions, the mirror</td><td><span class="pill ok">yes</span></td></tr>
+  <tr><td>Sound effects</td><td><span class="pill ok">yes</span> all twenty</td></tr>
+  <tr><td>The scenes between levels</td><td><span class="pill ok">yes</span> shown as the picture of the room, rather than animated in it</td></tr>
+  <tr><td colspan="2" style="border:none;height:.6rem"></td></tr>
+  <tr><th>Not yet</th><th></th></tr>
+  <tr><td>The music</td><td><span class="pill warn">bring your own</span> the tunes are not in the published source, only the player that played them</td></tr>
+  <tr><td>The ending</td><td><span class="pill warn">partly</span> reaching the princess wins and the clock running out loses, and both are now shown in her room, but without the animation the original plays there</td></tr>
+  <tr><td>The last two opponents</td><td><span class="pill warn">partly</span> the shadow appears and fights, but the meeting on the twelfth level does not resolve, and the vizier is not done</td></tr>
+  <tr><td>The later levels</td><td><span class="pill warn">untested</span> nobody has played past the second yet</td></tr>
+</table>
+
+<h2>If something goes wrong</h2>
+
+<table>
+  <tr><th>What you see</th><th>What it means</th></tr>
+  <tr><td>It will not start, and names a file</td><td>The converter has not been run, or not everything was copied across. Check the list in step two.</td></tr>
+  <tr><td>No sound</td><td>The board has no audio output configured. The game says so as it loads and then runs silently.</td></tr>
+  <tr><td>Not enough memory</td><td>The program was copied across with its comments still in it. Run the build step and copy the stripped file.</td></tr>
+  <tr><td>Destination array too small</td><td>The data files and the program are from different versions. Convert and build again from the same copy.</td></tr>
+  <tr><td>The colours look wrong</td><td>Expected in a saved screenshot, which does not carry the game's palette. On the display itself they should be right.</td></tr>
+</table>
+
+<footer>
+  <p>An unofficial port. It is not affiliated with or endorsed by the authors or
+  publishers of the original game, and it contains none of their work. The
+  engine and the converter are original.</p>
+</footer>
+
+</div>
+</body>
+</html>

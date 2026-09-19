@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Prince of Persia on the PicoComputer 3</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.4rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:68ch}
+ul,ol{max-width:72ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li p{margin:.25rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.88em;background:var(--code-bg);padding:.08em .35em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{display:grid;grid-template-columns:1fr minmax(260px,420px);gap:2rem;align-items:center;padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:60ch}
+header.hero img{width:100%;height:auto;display:block;border:1px solid #222C36;image-rendering:pixelated}
+@media (max-width:720px){header.hero .wrap{grid-template-columns:1fr}}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.12rem;max-width:66ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p{max-width:none}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0}
+.decide p{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.92rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+td.num,th.num{text-align:right}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.72rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.12em .5em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.6rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:70ch}
+.ref{font-size:.85rem;color:var(--muted)}
+figure{margin:1.2rem 0;max-width:100%}
+figure img{max-width:100%;height:auto;display:block;border:1px solid var(--line);image-rendering:pixelated}
+figcaption{font-size:.85rem;color:var(--muted);margin-top:.4rem;max-width:70ch}
+.figrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.2rem;align-items:start}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div>
+      <div class="eyebrow">Conversion review &middot; PicoMite MMBasic &middot; September 2026</div>
+      <h1>Prince of Persia on the PicoComputer 3</h1>
+      <p>What it would actually take to bring Jordan Mechner&rsquo;s 1989 Apple&nbsp;II <em>Prince of Persia</em> to the PC3 in MMBasic, measured against the released source rather than guessed at: what the original is, what the PicoMite gives us, what has to be transcribed, what can be deleted, and the one constraint that is not technical at all.</p>
+      <p class="ref">Every number in this document was measured from the released repository &mdash; the 6502 sources, the sixteen image tables and the fifteen level files &mdash; not taken from secondary accounts.</p>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+<nav class="toc" aria-label="Sections">
+  <a href="#verdict">The verdict</a>
+  <a href="#rights">Distribution</a>
+  <a href="#budget">Platform budget</a>
+  <a href="#original">What the original is</a>
+  <a href="#measure">The measurements</a>
+  <a href="#arch">Architecture</a>
+  <a href="#assets">The asset pipeline</a>
+  <a href="#delete">What we delete</a>
+  <a href="#phases">Phases</a>
+  <a href="#risks">Risks</a>
+  <a href="#decisions">Decisions</a>
+  <a href="#sources">Sources</a>
+</nav>
+
+<section id="verdict">
+  <div class="eyebrow">The argument</div>
+  <h2>The most comfortable frame budget of any port so far, attached to the largest body of code</h2>
+
+  <p class="lede">Prince of Persia is not a performance problem. It is a transcription problem, and an unusually
+  well-posed one, because what was released is the <em>actual source</em> &mdash; labelled, commented, and
+  structured into named modules &mdash; not a reverse-engineered disassembly. Against that, it is the biggest
+  body of game logic we have looked at: roughly 20,000 lines of 6502 across 29 files, of which about 12,000
+  lines are game behaviour that has to come across.</p>
+
+  <p>The decisive number is in the game&rsquo;s own timekeeping. <code>SPECIALK.S</code> defines a game minute as
+  725 frames and its author annotated the constant with a note that the actual frame rate is approximately eleven
+  a second. That is 83&nbsp;milliseconds a frame. Thrust had 30&nbsp;ms and Exile 40&nbsp;ms. We have more than
+  twice Exile&rsquo;s budget for a game that, once the Apple&nbsp;II&rsquo;s memory-banking and disk machinery is
+  stripped out, does considerably less per frame than Exile does.</p>
+
+  <p>The renderer is cheap, because the PicoMite already has the primitive the original spends a third of its
+  code emulating. Prince of Persia&rsquo;s <code>HIRES.S</code> is 1,293 lines of shift tables, carry bytes,
+  five opacity modes and a &ldquo;peel&rdquo; buffer, all of it there to move a masked bitmap across a screen
+  whose bytes hold seven pixels apiece. <code>BLIT FLASH</code> with a transparent colour does the same job in
+  one call, and the RAM image slots added in b11 hold every image the game owns with room to spare.</p>
+
+  <p>The risk is not the frame rate and not the memory. It is volume, it is the music that was never released with
+  the source, and it is the discipline needed to keep the game&rsquo;s own content out of the thing we hand
+  people.</p>
+
+  <div class="decide">
+    <div class="eyebrow">In one line</div>
+    <p>Technically the easiest of the four ports we have scoped, and by a wide margin the longest. It ships as an
+    engine that reads data the player converts for themselves, which is settled in the next section and shapes the
+    build from the first line written.</p>
+  </div>
+</section>
+
+<section id="rights">
+  <div class="eyebrow">Settled &mdash; and it shapes the build</div>
+  <h2>We ship the engine. The player converts the data.</h2>
+
+  <p>Mechner&rsquo;s README is unusually direct and is worth taking at face value rather than as boilerplate. He
+  released the code as a historical artifact, says he has no objection to anyone studying, modifying or running it,
+  and then states plainly that this grants no rights to Prince of Persia itself, and that Ubisoft alone has the
+  right to make and distribute Prince of Persia games.</p>
+
+  <p>Those two halves point in different directions, and the port is built to sit on the permissive one. What we
+  write is a translation of published code into another language, which is a modification, and modification is
+  invited. What we must never hand anyone is the game&rsquo;s content. So the deliverable is an engine plus a
+  converter, and the content reaches a player only by their own hand, from their own copy of the published
+  repository.</p>
+
+  <p>This is the model ScummVM, OpenRCT2, DevilutionX and CorsixTH have all run on for years. It is also a pattern
+  this repository already uses: the Exile census harness takes a path to Jon Saffron&rsquo;s world generator rather
+  than vendoring it, and the generator is in <code>.gitignore</code> precisely so it cannot be shipped by
+  accident.</p>
+
+  <div class="decide">
+    <div class="eyebrow">The rule that makes it work</div>
+    <p><strong>Nothing that is data in the original may become text in the program.</strong> Not the 415 frame
+    definitions, not the 114 animation sequences, not the 15 level blueprints, not one image. The obvious build
+    would paste those tables into the <code>.bas</code> as arrays, and that would put the game&rsquo;s content
+    straight back into the thing we distribute. Every one of them is a converter output, written to a data file
+    beside the artwork, loaded at run time.</p>
+    <p>The program that ships therefore contains the interpreter, the renderer and the game logic, and no game data
+    at all. It does nothing until a player points it at their own converted files. This is the same discipline the
+    144&nbsp;KB program limit already demands, so it costs nothing to adopt and it is worth adopting for both
+    reasons at once.</p>
+  </div>
+
+  <h3>Three conditions</h3>
+  <div class="grid2">
+    <div class="card">
+      <h3>The converter takes a path</h3>
+      <p>It reads the player&rsquo;s own clone of the published repository, named on the command line. No vendored
+      assets, no bundled sample data, and no built-in download. Fetching the files on the player&rsquo;s behalf is
+      the one thing that would turn a tool into a distribution channel.</p>
+    </div>
+    <div class="card">
+      <h3>A neutral name</h3>
+      <p>The trademark is the real exposure, not the code: it is live, it has products shipping now, and it is what
+      triggers takedown requests in practice. It is also the cheapest thing to fix, and the Picanoid rename is the
+      precedent. The engine is named for what it is and says factually which data it reads.</p>
+    </div>
+    <div class="card">
+      <h3>No charge, no bundle</h3>
+      <p>Free, and never pre-installed on hardware that is sold. Non-commercial status is most of what keeps this
+      model unchallenged, and there is nothing to gain by testing it.</p>
+    </div>
+  </div>
+
+  <p class="note">Two things this does not claim. It is not legal advice, and the residual risk is a takedown
+  request rather than damages. Set against the earlier ports, though, the position is better on the axis that
+  matters most: Thrust and Exile were built on disassemblies carrying no licence at all, where this carries an
+  explicit invitation to modify the code. It is the name, and only the name, where this one sits worse.</p>
+</section>
+
+<section id="budget">
+  <div class="eyebrow">Ground truth</div>
+  <h2>What the PC3 gives us</h2>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Item</th><th>Value</th><th>Where it comes from</th></tr></thead>
+    <tbody>
+      <tr class="rec"><td>Frame budget</td><td>83&nbsp;ms at the original&rsquo;s own rate, against 30&nbsp;ms for Thrust and 40&nbsp;ms for Exile</td><td>725 frames per game minute, <code>SPECIALK.S</code></td></tr>
+      <tr><td>Screen</td><td>MODE&nbsp;2, 320&times;240, 16 colours. The game&rsquo;s 280&times;192 sits inside it at 1:1 with a 20-pixel side border, no scaling and no resampling</td><td><code>EQ.S</code> screen constants</td></tr>
+      <tr><td>Colours needed</td><td>Four. Bit&nbsp;7 is set on every one of the 95,869 image bytes, so the whole game is drawn in one Apple palette group: black, white, blue, orange</td><td>Measured across all sixteen tables</td></tr>
+      <tr class="rec"><td>Image slots</td><td>Eight on the RP2350 &mdash; three in flash, five in PSRAM &mdash; at 144&nbsp;KB each, so 1.1&nbsp;MB of addressable artwork</td><td><code>MAXIMAGESLOTS</code>, added in 6.03.02b11</td></tr>
+      <tr><td>Artwork to store</td><td>157&nbsp;KB for one level&rsquo;s working set, 273&nbsp;KB with both facings pre-mirrored, 571&nbsp;KB for every image in the game with both facings</td><td>Measured, converted to RGB121 at two pixels a byte</td></tr>
+      <tr><td>Level data</td><td>15 files of 2,304 bytes &mdash; 34,560 bytes for the entire game world, permanently resident</td><td>Measured; matches the <code>EQ.S</code> blueprint layout byte for byte</td></tr>
+      <tr><td>Sprite drawing</td><td><code>BLIT FLASH</code> takes a transparent colour but has no mirror; <code>SPRITE SHOW</code> mirrors in modes 4 to 7 but needs heap buffers</td><td><code>graphics/Blit.c</code>, <code>graphics/Sprite.c</code></td></tr>
+      <tr><td>Double buffering</td><td><code>FRAMEBUFFER CREATE F</code> plus <code>COPY F,N</code>; MODE&nbsp;2 with an F buffer is 76,800&nbsp;B and fits the cut-down pool</td><td>Proven in Thrust, Exile, Arkanoid</td></tr>
+      <tr><td>Program memory</td><td>144&nbsp;KB tokenised on HDMIWEB. Thrust was 66&nbsp;KB of source, Chuckie Egg 53&nbsp;KB</td><td><code>MAX_PROG_SIZE</code></td></tr>
+      <tr><td>Input</td><td><code>KEYDOWN</code> reports up to six held keys; the original needs three at once at most</td><td>Established</td></tr>
+      <tr><td>Sound</td><td><code>PLAY SOUND</code> and <code>PLAY BBC SOUND</code> on four channels; <code>PLAY MODFILE</code> for music</td><td>Established</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>Only one row of that table is tight, and it is the program memory. Twelve thousand lines of 6502 do not
+  become twelve thousand lines of MMBasic &mdash; a great deal of it is register shuffling and bank switching that
+  collapses to nothing &mdash; but this is the first port where the tokenised size cap is a live concern rather
+  than a footnote. Every table stays out of the program text from the first line written, and the
+  CSUB-in-the-library route is held in reserve.</p>
+</section>
+
+<section id="original">
+  <div class="eyebrow">The original</div>
+  <h2>Six subsystems, and only four of them are ours to port</h2>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Module</th><th class="num">Lines</th><th>What it is</th><th>Port</th></tr></thead>
+    <tbody>
+      <tr><td><code>FRAMEADV</code></td><td class="num">1,528</td><td>Builds the draw lists for a frame and redraws only the blocks that changed</td><td><span class="pill warn">Partly</span></td></tr>
+      <tr><td><code>CTRL</code></td><td class="num">1,440</td><td>The player&rsquo;s state machine: what a held key means given the current pose, floor and obstacle</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>MOVER</code></td><td class="num">1,344</td><td>The world&rsquo;s moving parts &mdash; spikes, slicers, gates, loose floors, pressure plates, falling debris</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>HIRES</code></td><td class="num">1,293</td><td>The bitmap blitter: shifts, carries, five opacity modes, background peel and restore</td><td><span class="pill ok">Delete</span></td></tr>
+      <tr><td><code>GRAFIX</code></td><td class="num">1,292</td><td>The auxiliary-memory thunk layer &mdash; every cross-bank call in the game goes through it</td><td><span class="pill ok">Delete</span></td></tr>
+      <tr><td><code>AUTO</code></td><td class="num">1,283</td><td>The guard AI and the demo playback recorder</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>CTRLSUBS</code></td><td class="num">1,283</td><td>The helpers the control machine leans on: reach tests, ledge grabs, landing choices</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>SUBS</code></td><td class="num">1,230</td><td>Level transitions, screen linking, timers, the mirror, the potions</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>SEQTABLE</code></td><td class="num">1,187</td><td>114 named animation sequences written in a 15-opcode byte code</td><td><span class="pill acc">Convert</span></td></tr>
+      <tr><td><code>TOPCTRL</code></td><td class="num">1,068</td><td>The main loop, level restart, the 60-minute clock</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>COLL</code></td><td class="num">924</td><td>Collision: character against block, character against character, sword reach</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>SPECIALK</code></td><td class="num">898</td><td>Keyboard and joystick, the sound queue, the game clock, the cheat keys</td><td><span class="pill warn">Partly</span></td></tr>
+      <tr><td><code>MASTER</code></td><td class="num">824</td><td>Disk loading, bank switching, the attract sequence</td><td><span class="pill ok">Mostly delete</span></td></tr>
+      <tr><td><code>GAMEBG</code></td><td class="num">771</td><td>Strength meters, messages, torches, the hourglass, the flasks</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>MISC</code></td><td class="num">690</td><td>Odds and ends, including the random number generator</td><td><span class="pill acc">Transcribe</span></td></tr>
+      <tr><td><code>UNPACK</code></td><td class="num">577</td><td>The title-screen decompressor and fade routines</td><td><span class="pill ok">Delete</span></td></tr>
+      <tr><td><code>FRAMEDEF</code></td><td class="num">437</td><td>The frame table: for each pose, its image, sword image, movement and collision box</td><td><span class="pill acc">Convert</span></td></tr>
+      <tr><td colspan="4" class="ref">Plus <code>HRTABLES</code> (215), <code>SOUND</code> (191), <code>BOOT</code> (155) and nine smaller equate and data files. Whole-repository total: 30,889 lines, 20,022 of them neither blank nor comment.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>The animation system is the game</h3>
+
+  <p>Everything that makes Prince of Persia feel like Prince of Persia lives in two tables and an interpreter,
+  and all three are small. <code>FRAMEDEF.S</code> holds 415 frame definitions in five bytes each: the image to
+  draw, which sword image goes with it, how far the character moves in x and y that frame, and a packed
+  collision descriptor. <code>SEQTABLE.S</code> holds 114 named sequences &mdash; the run cycle, the hanging drop,
+  the block-to-strike, the stair climb &mdash; written in a byte code of fifteen instructions that can jump, turn
+  the character round, change floor level, alter x or y, set the action class, trigger a fall, test
+  weightlessness, kill, and advance the level.</p>
+
+  <p>That is a virtual machine, and porting a virtual machine is the most reliable kind of transcription there is:
+  the interpreter is perhaps 150 lines of MMBasic, and the sequences themselves are data that a Python script
+  converts once and never touches again. Get the interpreter exactly right and every movement in the game is
+  exactly right, including the ones nobody can describe in words.</p>
+
+  <h3>The world is a blueprint, not a bitmap</h3>
+
+  <p>A level is 24 screens of 30 blocks, ten across and three down. Each block carries a type from a list of 30
+  &mdash; floor, spikes, gate, loose floor, pressure plate, torch, mirror, exit, slicer &mdash; and a one-byte
+  modifier. Alongside that sits a link table saying which screen lies left, right, above and below each screen,
+  a 96-byte map, and 256 bytes of starting information: where the Kid begins, which way he faces, where the sword
+  lies, and the block, facing, position and behaviour program for each of up to 24 guards.</p>
+
+  <p>The whole thing is 2,304 bytes, and the layout in the released equates accounts for all of it with nothing
+  left over. That is a format you can trust without a single guess, which is not something we have had before.
+  Across the fifteen levels only 28 of the 30 block types are ever used, and 42 guards are placed in the entire
+  game.</p>
+
+  <h3>A block draws in five pieces</h3>
+
+  <p>The reason the original&rsquo;s renderer is more complicated than it looks is that a block is not one image.
+  It is up to five, drawn in a fixed order: a back section, a middle section, a front-of-middle section, a floor
+  section, and a foreground piece that draws over the character. Each has its own image number, its own vertical
+  offset, and in two cases its own mask. This is how a character walks <em>behind</em> a pillar and <em>in front
+  of</em> the back wall on a machine with no sprite priority hardware, and it has to be reproduced exactly or the
+  depth reads wrong. A block&rsquo;s appearance also depends on the block to its left and the row below, which is
+  why the draw loop carries the preceding block&rsquo;s identity forward.</p>
+</section>
+
+<section id="measure">
+  <div class="eyebrow">Evidence</div>
+  <h2>The measurements that shape the port</h2>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>957 images, 671,083 pixels</h3>
+      <p>Sixteen image tables parse cleanly against the format documented in <code>HIRES.S</code>: a pointer table
+      indexed from one, then each image as a width in bytes, a height in lines, and packed rows. No compression, no
+      surprises. One level&rsquo;s working set is 468 of them.</p>
+    </div>
+    <div class="card">
+      <h3>The artwork is effectively one bit a pixel</h3>
+      <p>The Apple&rsquo;s palette-select bit is set on 100.0% of image bytes in every table. There is no per-byte
+      palette decision to carry across. A pixel is on or off, and its colour follows from its position: black,
+      white, blue and orange, four of MODE&nbsp;2&rsquo;s sixteen.</p>
+    </div>
+    <div class="card">
+      <h3>Every character image faces left</h3>
+      <p>The frame tables note it explicitly, and the right-facing half of the game is produced by a mirror bit in
+      the opacity byte. <code>BLIT FLASH</code> has no mirror. Pre-mirroring the 290 character images at build time
+      costs 117&nbsp;KB and removes the problem entirely.</p>
+    </div>
+    <div class="card">
+      <h3>83 milliseconds a frame</h3>
+      <p>725 frames to a game minute, sixty game minutes to a game: 43,500 frames, 12.08 a second. The Apple never
+      locked to the display at all &mdash; the rate was whatever the redraw cost, and the clock was calibrated to
+      the average.</p>
+    </div>
+    <div class="card">
+      <h3>One opponent at a time</h3>
+      <p>The blueprint reserves 24 guard slots a level and the busiest level uses six, but the engine tracks a
+      single opponent. The per-frame character load is the Kid, at most one opponent, and the occasional mouse or
+      falling debris.</p>
+    </div>
+    <div class="card">
+      <h3>Twenty sound effects, sixteen tunes, none of them portable</h3>
+      <p>The effects are speaker-toggle routines with hand-counted delays &mdash; they describe a waveform, not a
+      note, and cannot be transcribed. The music player is in the support tree; the songs it plays are not in the
+      repository at all.</p>
+    </div>
+  </div>
+</section>
+
+<section id="arch">
+  <div class="eyebrow">Design</div>
+  <h2>Architecture for the port</h2>
+
+  <h3>Redraw everything, every frame</h3>
+
+  <p>The largest single file in the game exists to avoid work we no longer need to avoid. <code>FRAMEADV.S</code>
+  maintains eight redraw buffers, tracks which of the 30 blocks changed, saves the background behind each
+  character before drawing it and peels it off afterwards &mdash; all so the Apple did not have to repaint
+  8&nbsp;KB at 1&nbsp;MHz. With 83&nbsp;ms and a framebuffer, the port clears the F buffer, walks the 30 blocks
+  drawing their five sections in order, draws the characters, draws the foreground pieces over them, draws the
+  meters, and copies. The peel machinery, the redraw buffers and the dirty-block bookkeeping all go.</p>
+
+  <p>What must survive from that file is the <em>order</em>, not the optimisation: the plane model of background,
+  middle, objects, foreground and messages, and the rule that a block&rsquo;s appearance depends on its
+  neighbours. Those are correctness, not speed.</p>
+
+  <p><strong>Measured on the board, not inferred.</strong> The background pieces turn out to be small: 178 of them
+  across the two dungeon tables, median 21&nbsp;by&nbsp;12 pixels, largest 112&nbsp;by&nbsp;64. A frame of 150
+  <code>BLIT FLASH</code> calls at the median size costs 6.0&nbsp;ms of drawing, and 14.3&nbsp;ms including the
+  BASIC loop that issues them and the present. At the largest size the game owns, 150 calls cost 14.6&nbsp;ms of
+  drawing and 22.9&nbsp;ms all in. The framebuffer copy is 0.09&nbsp;ms.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Per frame, 150 blits, mean of 50</th><th class="num">Drawing</th><th class="num">All in</th></tr></thead>
+    <tbody>
+      <tr><td>BASIC loop alone, no drawing</td><td class="num">&mdash;</td><td class="num">8.16&nbsp;ms</td></tr>
+      <tr class="rec"><td>Median background piece, 21&times;12</td><td class="num">6.04&nbsp;ms</td><td class="num">14.29&nbsp;ms</td></tr>
+      <tr><td>Largest piece in the game, 112&times;64</td><td class="num">14.64&nbsp;ms</td><td class="num">22.89&nbsp;ms</td></tr>
+      <tr><td>Framebuffer copy</td><td class="num">&mdash;</td><td class="num">0.09&nbsp;ms</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <p>So a typical frame spends 14&nbsp;ms of its 83, and the pathological frame 23. Two things make those figures
+  conservative: the board was at 315&nbsp;MHz rather than the 378 the plan recommends, and the 150 blits are an
+  upper bound, since many blocks leave several of their five sections empty. The renderer is settled, and the
+  interesting result is the one underneath it &mdash; more than half the cost is the interpreter issuing the calls,
+  not the drawing. That is where the frame budget will actually go, and it is an argument for keeping the per-block
+  loop lean rather than for worrying about blit sizes.</p>
+
+  <h3>Twelve frames a second, exactly</h3>
+
+  <p>At 378&nbsp;MHz the PC3 runs 640&times;480 at 60&nbsp;Hz, and presenting one frame in five gives exactly
+  12.000&nbsp;fps against the original&rsquo;s 12.083. A sixty-minute game would run about twenty-five seconds
+  long, which nobody can perceive and which keeps the interpreter at its fastest clock. The alternative &mdash;
+  315&nbsp;MHz for a 75&nbsp;Hz display &mdash; divides to 12.5, which is further out and costs interpreter
+  speed.</p>
+
+  <p class="note">As with Thrust and Arkanoid, the per-frame constants are integers and must not be rescaled. The
+  sequence byte code moves a character by whole pixels per frame; the timers count frames. Change the tick rate
+  and every one of them is wrong together, which is the failure mode that is hardest to see because nothing looks
+  broken &mdash; the game just plays wrong.</p>
+
+  <h3>Artwork in PSRAM image slots</h3>
+
+  <p>The b11 RAM image slots land exactly where this port needs them. Everything the game owns, both facings
+  pre-mirrored, is 571&nbsp;KB &mdash; four of the five PSRAM slots, leaving the three flash slots free and the
+  library slot untouched. Nothing needs loading between levels, which deletes the whole of the original&rsquo;s
+  set-management logic and the disk track tables that feed it.</p>
+
+  <p>Slots are volatile, so the installer writes them once per run from a bitmap on the A: drive, the same pattern
+  Arkanoid uses. A 320&times;240 image loads into a RAM slot in 28&nbsp;ms, so a cold start costs well under a
+  second.</p>
+
+  <h3>One pixel grid, no scaling</h3>
+
+  <p>280&times;192 centred in 320&times;240 is the authentic grid at 1:1. The 20-pixel side borders and 24-pixel
+  top and bottom are roughly what an Apple&nbsp;II displayed into an overscanned television. Resist the temptation
+  to stretch it: the artwork was drawn for pixels of this shape, and MODE&nbsp;2 pixels on the PC3 are close
+  enough to the Apple&rsquo;s that the proportions come out right by doing nothing.</p>
+</section>
+
+<section id="assets">
+  <div class="eyebrow">Pipeline</div>
+  <h2>Getting the data across</h2>
+
+  <p>Four converters, all offline Python, all validated before a line of game logic is written. This is the pattern
+  that worked for Thrust, Exile and Arkanoid and there is no reason to depart from it.</p>
+
+  <p>One rule governs all four, and it comes from the distribution decision rather than from engineering: <strong>a
+  converter writes a data file, never a line of BASIC.</strong> The temptation with the smaller tables is to emit
+  them as <code>DATA</code> statements and paste them into the program, which is how the earlier ports handled
+  tables of this size. Here that would carry the game&rsquo;s content into the file we distribute. Everything below
+  lands on the player&rsquo;s drive as its own file, produced on their machine, from their copy of the published
+  repository, named to the converter on the command line.</p>
+
+  <p class="ref">The program-size cap points the same way, so nothing is given up. What does change is the loader:
+  the engine reads four files at startup rather than carrying three of them in its own text, and it must fail
+  clearly and kindly when they are not there, because a player who has not run the converter yet is the normal
+  first-run case rather than an error.</p>
+
+  <div class="phase">
+    <div class="num">1<small>Images</small></div>
+    <div>
+      <h3>Image tables to one RGB121 sheet per slot</h3>
+      <p>Walk the pointer table, decode each image from its width and height header, expand the packed rows applying
+      the Apple colour rule, emit both facings for character tables, and pack the lot into sheets with an index. The
+      output is a bitmap per slot plus an index file giving every image its origin, width and height, read at
+      startup like the rest.</p>
+      <p class="ref">Validation: render a known frame and compare against an emulator screenshot pixel for pixel, as
+      the Exile sprite sheet was validated.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">2<small>Levels</small></div>
+    <div>
+      <h3>Fifteen blueprints to one data file</h3>
+      <p>The layout is fully documented in the equates and the files match it exactly. Emit all fifteen as a single
+      file read with <code>MEMORY INPUT</code> into an integer array at startup &mdash; 34,560 bytes, trivial on a
+      machine with 6&nbsp;MB of PSRAM free.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">3<small>Frames</small></div>
+    <div>
+      <h3>Frame definitions to a table file</h3>
+      <p>415 rows of five bytes, plus the two alternate sets that re-point the same poses at the opponent&rsquo;s
+      image table. The packed collision descriptor should be unpacked into its fields once, at conversion time,
+      rather than masked at runtime in the interpreter. Read into an integer array at startup, not embedded.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">4<small>Sequences</small></div>
+    <div>
+      <h3>Byte code to byte code</h3>
+      <p>The 114 sequences assemble into a byte stream with absolute addresses for the jumps. The converter resolves
+      the labels to array indices and emits the same stream with the same semantics. The MMBasic interpreter for it
+      is a <code>SELECT CASE</code> over fifteen opcodes.</p>
+      <p class="ref">This is the highest-value converter in the set and the one to write first, because the
+      interpreter can be exercised against it long before anything is drawn.</p>
+    </div>
+  </div>
+</section>
+
+<section id="delete">
+  <div class="eyebrow">Scope</div>
+  <h2>What we delete, and what is simply missing</h2>
+
+  <h3>Deleted &mdash; about 4,400 lines of Apple II plumbing</h3>
+  <ul>
+    <li><strong>The blitter</strong> (<code>HIRES</code>, <code>HRTABLES</code>, <code>HRPARAMS</code>, 1,560
+    lines). Shift tables, carry tables, mirror tables, mask tables, five opacity modes and the peel buffer.
+    Replaced by one firmware call.</li>
+    <li><strong>The bank-switching layer</strong> (<code>GRAFIX</code>, 1,292 lines). The game runs in auxiliary
+    memory and reaches main memory through a jump table; every graphics call in the game is really two calls and a
+    pair of soft-switch writes. All of it evaporates.</li>
+    <li><strong>Disk everything.</strong> The custom 18-sector format, the loader, the track tables, the
+    side-two prompts. Also the two folders of disk routines and the entire copy-protection tree, which are not
+    game logic at all.</li>
+    <li><strong>The title-screen decompressor</strong> (<code>UNPACK</code>, 577 lines), which unpacks double
+    hi-res images the repository does not contain.</li>
+  </ul>
+
+  <h3>Missing from the release &mdash; decide what to do about each</h3>
+  <ul>
+    <li><strong>The music.</strong> The player is in the support tree, credited to Kyle Freeman&rsquo;s Music
+    System&nbsp;II of 1986 and adapted in July 1989, and it contains no songs. The sixteen game tunes and the title
+    music were loaded from disk tracks and are not in the repository in any form. They would have to be recovered
+    from a disk image or re-transcribed by ear.</li>
+    <li><strong>The title and cutscene screens.</strong> The attract sequence unpacks double hi-res images by
+    address, and those images are not here either. The artist&rsquo;s working files in the support tree hold a
+    great deal of packed material but not, on inspection, the finished title screens.</li>
+    <li><strong>The sound effects.</strong> Present as code, but as speaker-toggle loops with hand-counted delays.
+    They have to be re-created as <code>PLAY SOUND</code> effects by ear. Thrust and Arkanoid both hit this and it
+    was a day&rsquo;s work each; twenty effects here rather than seventeen.</li>
+  </ul>
+
+  <h3>Worth keeping that you might not expect</h3>
+  <p>The demo and attract playback in <code>AUTO.S</code> is a recorded input stream replayed through the normal
+  control path. That is free once the control path works, and it doubles as the best regression test the port could
+  have: record a run, replay it, and any divergence in the state machine shows up as the Kid walking into a
+  wall.</p>
+</section>
+
+<section id="phases">
+  <div class="eyebrow">Plan</div>
+  <h2>Phases</h2>
+
+  <div class="phase">
+    <div class="num">0<small>Spike</small></div>
+    <div>
+      <h3>Prove the frame, settle the budget <span class="pill ok">Done</span></h3>
+      <div class="meta">Done on a b11 board. See the architecture section for the figures.</div>
+      <p>A sheet written by the converter loads into a PSRAM image slot in 40&nbsp;ms and blits back pixel for
+      pixel: every sampled point matched the pattern it was written with, so the four-bit BMP writer, the slot load
+      and the blit path are all exact, with no vertical flip and no palette drift. A frame of 150 blits costs
+      14.3&nbsp;ms of the 83&nbsp;ms budget. The renderer is a non-issue and needs no CSUB.</p>
+      <p class="ref">Two findings worth carrying forward. More than half the frame cost is the interpreter issuing
+      the calls rather than the drawing, so the per-block loop is what to keep lean. And the <code>Pixel</code>
+      statement takes an RGB colour, not a colour index, so a test cannot learn the index mapping by drawing it;
+      compare against the firmware's own palette table instead. That cost one wrong run.</p>
+      <p class="ref">The spike deliberately uses a generated test pattern rather than converted artwork, so it
+      needs no game data and puts none on the board.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">1<small>Data</small></div>
+    <div>
+      <h3>The four converters <span class="pill ok">Done</span></h3>
+      <div class="meta">All four run and are validated. One tool, one command.</div>
+      <p>Images, levels, frame definitions and sequences all convert. The frame table and the sequences are not
+      binaries in the release but assembler source, so the converter carries a small two-pass assembler covering the
+      dozen directives those two modules use. Both assemble to exactly their declared layouts: 240 frames of five
+      bytes with the alternate sets at the stated offsets, and 114 sequences.</p>
+      <p>Every address in the sequence module is rebased to an offset at conversion time, so the engine never needs
+      to know what address the original was assembled at. A validator then walks all 114 sequences through the
+      fifteen opcodes, which tests the assembler, the rebasing and the operand counts together: step into the middle
+      of an instruction and the walk runs off the end. It does not. 2,406 instructions, 1,358 frame references, no
+      problems.</p>
+      <p class="ref">Two things caught here rather than in Phase&nbsp;2. The sequence pointer table cannot be sized
+      from its first entry, because entry one does not point at the byte after the table &mdash; another sequence is
+      assembled in between; count the leading addresses instead. And the artwork needs four image slots, not five,
+      once the intro-only tables are left out, which matters because the fifth RAM slot is where a library lives.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">2<small>Engine</small></div>
+    <div>
+      <h3>The sequence interpreter and the frame table <span class="pill ok">Done</span></h3>
+      <div class="meta">Running on the board, and exact.</div>
+      <p>Fifteen opcodes in a <code>SELECT CASE</code>, driven from the converted data with no world around it. The
+      board walks all 114 sequences and reports 2,406 instructions and 1,358 frame references, which is what the
+      host-side walker counts from the same bytes. Exact agreement is the evidence: a wrong operand count steps into
+      the middle of an instruction, and the totals diverge or the walk leaves the data.</p>
+      <p class="ref">The data loads through <code>MEMORY INPUT</code> into a packed array and then
+      <code>MEMORY UNPACK</code> at eight bits, which gives one byte per array element. That is the form to keep,
+      because the interpreter then indexes the byte code directly rather than calling a function per byte.</p>
+      <p class="ref">Cost, measured: about 139&nbsp;&micro;s per byte-code instruction, consistent with the roughly
+      9&nbsp;&micro;s a statement the Phase&nbsp;0 loop showed and with Thrust's array-access figures. That sounds
+      slow against an 83&nbsp;ms frame until you count what a frame actually runs: the interpreter advances each
+      character by one frame, which is a few instructions, so three active characters cost one to two milliseconds.
+      The whole-sequence walk is a test, not a workload.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">3<small>World</small></div>
+    <div>
+      <h3>Blueprint rendering and screen linking <span class="pill warn">In progress</span></h3>
+      <div class="meta">Data and drawing load settled. The on-board render is written but not yet run.</div>
+      <p>The block tables are converted and checked. A piece number under $80 names an image in the first
+      background table and one at or above it names the second, less $80; that rule holds for every entry of every
+      piece table, with no value falling outside its table. Thirty block types, twenty-eight of which are ever
+      used, and a type draws at most five sections.</p>
+      <p><strong>The drawing load is now known rather than assumed.</strong> Across all 360 screens in the game the
+      busiest draws 120 sections and the median 86. The renderer runs on the board against converted artwork in
+      four PSRAM slots, and a real screen of 100 sections costs 17.6&nbsp;ms, so the busiest in the game is about
+      46&nbsp;ms at 315&nbsp;MHz, or 38 at the 378 the plan asks for.</p>
+
+      <div class="tablewrap">
+      <table>
+        <thead><tr><th>Per section, drawing one screen</th><th class="num">Cost</th></tr></thead>
+        <tbody>
+          <tr><td>Resolving each section inside the draw loop</td><td class="num">2,298&nbsp;&micro;s</td></tr>
+          <tr><td>Resolved once at load time, two-dimensional tables</td><td class="num">198&nbsp;&micro;s</td></tr>
+          <tr class="rec"><td>Same, flattened to one dimension</td><td class="num">176&nbsp;&micro;s</td></tr>
+          <tr><td>The blit alone, from Phase&nbsp;0</td><td class="num">~40&nbsp;&micro;s</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p>That table is the whole lesson of the phase. Walking a lookup chain per section cost fifty-seven times the
+      drawing it fed; resolving every section of every block type once at load time removed it. What remains is not
+      indexing but argument evaluation: a blit takes nine arguments, each costs about 13&nbsp;&micro;s to evaluate,
+      and that is three times the blit. Flattening the tables from two dimensions to one bought only eleven per
+      cent, which says the floor is the interpreter reading arguments, not how they are stored.</p>
+
+      <p class="note"><strong>The lever, if the worst screens prove too tight:</strong> compose the static sections
+      of each block type into a single image at conversion time. Fifty-seven of the 150 possible sections are
+      empty and only fourteen block types have a foreground piece, so a screen would fall from about 100 blits to
+      roughly 44. The foreground piece must stay separate because it draws over the character, and animated blocks
+      such as gates and spikes would keep their own path. This changes the converter, so it is a decision rather
+      than a tidy-up.</p>
+      <p class="ref">One coupling removed on the way: the converter now publishes each table's number by name,
+      because which tables are present depends on which artwork set is converted. An engine that hard-coded them
+      drew from the wrong table and reported the wrong image count, which is exactly the kind of fault that looks
+      like a rendering bug.</p>
+      <p><strong>The neighbour model is the part that is easy to get wrong, and the first version had it wrong.</strong>
+      A block's sections do not all come from that block. The floor and back sections belong to the block itself, the
+      middle section to the block on its left, and the front-of-middle section to the block below and to the left, and
+      they draw in that reverse order rather than the order the tables are written in. Reading all five from the block
+      itself produces a plausible-looking screen that is quietly incorrect.</p>
+
+      <p>The renderer now sources each section from the right block and draws the foreground piece in a second pass,
+      after the point where characters will go, which is what lets a character walk behind a pillar. Resolving
+      neighbours cost about four milliseconds a frame until the screen's block types were unpacked once into a grid
+      padded with an empty row and column, so a neighbour off the edge reads as empty with no test at all. That is the
+      same lesson a third time: the work belongs outside the loop.</p>
+
+      <div class="tablewrap">
+      <table>
+        <thead><tr><th>One screen, 90 sections</th><th class="num">Per frame</th><th class="num">Busiest screen</th></tr></thead>
+        <tbody>
+          <tr><td>Sections read from the wrong block</td><td class="num">17.6&nbsp;ms</td><td class="num">46&nbsp;ms</td></tr>
+          <tr><td>Correct neighbours, tested per block</td><td class="num">25.2&nbsp;ms</td><td class="num">66&nbsp;ms</td></tr>
+          <tr class="rec"><td>Correct neighbours, padded grid</td><td class="num">21.6&nbsp;ms</td><td class="num">56&nbsp;ms</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p class="note"><strong>Since revised.</strong> The middle-section decision tree, the state-byte variants and
+      the neighbour sourcing are now in. What I had been calling the mask passes turned out not to be masks at all:
+      those four routines draw the <em>moving</em> parts, spikes, slicers, gates, loose floors and torches, which is
+      Phase&nbsp;5 work. The static renderer is therefore structurally complete; only animated objects remain.</p>
+
+      <p>At the planned clock the busiest screen costs about 47&nbsp;ms of the 83, leaving roughly 36 for the game
+      itself. That is workable but not comfortable, and it is the argument for one of the two levers already
+      identified: composing the static sections at conversion time, or moving the draw loop into a CSUB.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">4<small>Control</small></div>
+    <div>
+      <h3>The player state machine <span class="pill warn">In progress</span></h3>
+      <div class="meta">The frame advance, the floor test, landing, the ledge grab and the moving-parts hooks are in and
+      exact against host references. A scripted coverage pass reaches 115 of the 240 poses. Sword and guard
+      handling are Phase&nbsp;6.</div>
+      <p><strong>Two bookkeeping errors were found late and are worth recording, because neither produced an error
+      and both survived every visual check.</strong> Screens are numbered from one, and the blueprint's planes are
+      laid out from screen one at offset zero: the engine indexed them by the screen number itself, so every room
+      was read one screen along while the map of neighbours was read correctly. He fell out of one room into a
+      room that was not below it, and the scenarios had been sited against rooms that did not exist. The second:
+      the <code>jaru</code> instruction takes no operand. The sequence walk could not tell, because
+      <code>jaru,79</code> parses either way, and reading it as an operand silently dropped the touch-ceiling pose.
+      The dispatcher in <code>COLL.S</code> is the only authority on operand counts; the sequences are not.</p>
+      <p>The foundation is in and verified: the character record, and the frame advance that turns a sequence into
+      movement. One advance runs the byte code until it reaches a frame number, updating the character on the way,
+      and that frame becomes the pose. Every sequence was run for twenty-four frames on the board and the resulting
+      states checksummed: 2,736 advances, nothing stalled, and the checksum matches the host reference exactly.</p>
+
+      <p><strong>One distinction is worth stating because getting it wrong would be invisible and everywhere.</strong>
+      The <code>chx</code> and <code>chy</code> instructions move the character, and only <code>chx</code> is adjusted
+      for which way he faces. The frame table's own displacements are <em>drawing</em> offsets, applied when the
+      sprite is positioned and never to the character's position. Treating them as movement would make everything
+      drift, in a way that looks like bad physics rather than a bookkeeping error.</p>
+
+      <p class="ref">Facing is minus one for left, which is how every character image is drawn, and zero for right,
+      which is mirrored. Moving forward while facing left decreases x. Cost is 587&nbsp;&micro;s an advance, which
+      is a few byte-code instructions at the rate Phase&nbsp;2 measured; a frame advances each character once, so
+      three characters cost under two milliseconds.</p>
+
+      <p><strong>The input layer is done, and it is worth copying exactly rather than inventing.</strong> The
+      original tracks three axes and, separately, a "fresh press" flag for each direction and the button. A flag
+      goes negative on the frame a press appears and is set once something acts on it, so one press cannot be
+      consumed twice. Holding a key is a different input from pressing it, and several states depend on the
+      difference: standing still and holding back turns you round, while a fresh press of back with the button down
+      is a measured step.</p>
+
+      <p>The neat piece is the facing normalisation. Forward and back are mirrored once on the way in and once on
+      the way out, so every branch of the decision tree reasons in forward and back terms and never in left and
+      right. One normalisation at the edge removes a facing test from every branch inside.</p>
+
+      <p>Also done: the pose dispatch, which works out what the character is doing from the previous frame number
+      rather than from a stored state, and the movement half of the standing state. Twenty-one checks pass on the
+      board.</p>
+
+      <p class="note"><strong>What that testing does and does not prove.</strong> These checks compare the engine
+      against the specification written down here, which for the input layer is the original's own documented
+      model. They do not prove the port behaves like the original, because nothing here has been compared against
+      it running. That comparison needs an emulator or a person who knows how the game feels, and it is the right
+      check to apply at the end of the phase rather than the middle.</p>
+
+      <p><strong>The floor test is done and exact.</strong> Every frame the engine asks whether the character is
+      standing on something, falling towards it, or passing through it. Run over every cell of every screen of a
+      real level at a spread of heights, 3,600 cases, the board matches the host reference on every count and on
+      the checksum.</p>
+
+      <p>Two things there are worth knowing because neither is guessable. The block under his feet is his own cell,
+      because the row index names the floor he stands on rather than the space he occupies. And a solid block counts
+      as <em>no floor</em>, which looks like a bug until you see it handled separately: you do not stand on a solid
+      block, you are pushed out to one side of it. Eight of the thirty block types are in that no-floor set.</p>
+
+      <p><strong>Coverage, not just correctness.</strong> A scripted-scenario harness now reports which paths actually
+      execute, and its first run was sobering: 70% of the animation had never run, two of three landing severities had
+      never fired, and the ledge grab had never once succeeded. Chasing those found five real defects the rule tests
+      could not see, among them a stun timer that was never decremented, a reach that carried the character out of the
+      only column where a grab could work, and a block lookup that rewrote the caller's coordinates through MMBasic's
+      by-reference parameters. Every one was found by a frame-by-frame trace or an exhaustive comparison, and none by
+      inspection. The grab, the bump, all three landings, cross-screen falls, the stoop and stand-up, the running jump,
+      the dive-roll and the turn at speed are now proven to execute, and coverage has gone from 63 to 105 of the 240
+      poses. One more of the defects deserves a line: the floor test was running regardless of the action class, so
+      any jump that crossed a gap was turned into a freefall the instant it left the floor. The original dispatches
+      that test on the action class, and once the port did too, a single run added seventeen poses.</p>
+
+      <p class="note"><strong>The one that could never have been seen.</strong> The frame table is one-based: the
+      original subtracts one from the frame number before multiplying by five. The port had indexed it by the frame
+      number since the phase began, so every pose was drawn with the <em>next</em> frame's image and offsets. Adjacent
+      frames of a rotoscoped run look almost identical, which is why weeks of watching the character would not have
+      found it. It surfaced only because the same wrong index made a climb frame appear to carry a floor-check flag
+      that belongs to its neighbour, and the trace of that climb would not add up.</p>
+
+      <p>What remains is the bulk: the rest of <code>CTRL</code> and <code>CTRLSUBS</code>. The standing state alone
+      reaches into the sword, the opponent's distance and the decision to go on guard, which belong with the guards
+      in a later phase; and the ledge grab with its lead time, the landing choice by fall distance, the bump and the
+      drink are all still to come. Still most of a week's work, and still where the port either feels right or does
+      not.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">5<small>World logic</small></div>
+    <div>
+      <h3>Traps, gates and the level machinery <span class="pill warn">In progress</span></h3>
+      <div class="meta">The state machines are done and exact. Drawing is in. The exit and the level transition,
+      the potions and the strength meter are in. The mirror, the timer and the closing-gate knock-aside are not
+      started.</div>
+      <p><code>MOVER</code> and <code>SUBS</code>: spikes, slicers, loose floors, pressure plates and the gates they
+      drive, rubble, the exit, the mirror, the potions, the level timer and the level transitions.</p>
+      <p><strong>One mechanism drives all of it.</strong> A block's state byte in the blueprint is advanced once a
+      frame for every object on a transition list; floors in free fall are a second, shorter list. A plate's state
+      is its index into the link table, whose timer field counts it back up; a gate's state is its height, and
+      above fully open it becomes the timer that closes it again; a spike pit's state counts out, holds with the
+      high bit set, and counts back; a loose floor counts down to letting go, or wobbles with the high bit set. The
+      transcription (<code>moverref.py</code>, <code>movertest.bas</code>) was checked by scripting a run on level
+      one that raises two gates, closes one of them while it is still rising, springs spikes twice, drops a floor
+      through an empty row onto the one below, crushes a plate to rubble and lets a floor fall on the character, and
+      a second run on level three's slicers. Three hundred and one hundred and twenty frames, the blueprint and both
+      lists checksummed after every frame, and the board agrees with the host exactly on both.</p>
+      <p class="ref">The mover module is code, not data, so its constants are read from it by an assembler that
+      skips instructions. Its equates refer to the data modules, which are assembled first and handed over; a table
+      inside a code module is read relative to the nearest label. The random generator that picks a torch's flame
+      is four instructions and is reproduced with the same seed on both sides.</p>
+      <p><strong>Drawing follows the original's split.</strong> The static background keeps everything whose picture
+      is fixed; anything that depends on state is left out and drawn fresh every frame from the live blueprint,
+      before the character: a gate's grille as a bottom piece, as many eight-line middle pieces as fit and a part
+      piece to finish; spikes by how far out; a loose floor by its wobble; a plate by whether its timer is running;
+      a slicer by its stroke; a torch by its flame. A block that changes type, a floor that has gone or a plate
+      crushed to rubble, marks the background stale and it is rebuilt before the next frame. The frame costs
+      about 38&nbsp;ms of the 83 on a screen with two gates, two plates, two torches and a loose floor.</p>
+      <p><strong>The exit exposed a converter fault that no test had caught.</strong> The stairs sequence keeps a
+      disabled alternative inside a <code>do 0 &hellip; fin</code> block. The assembler had been treating
+      conditional assembly as listing control and emitting the block, so the sequence walked, checksummed and
+      played correctly right up to the point where it should have ended the level, and instead put him back
+      on his feet. Conditional assembly is now honoured, the sequence data is seven bytes shorter, and every
+      reference number was regenerated. Verified by still: level one's plate opens its door, he climbs the
+      stairs, and level two begins at its own start block with the door behind him closed.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">6<small>Guards</small></div>
+    <div>
+      <h3>Sword fighting <span class="pill warn">In progress</span></h3>
+      <div class="meta">Guards are placed, think, follow into the next screen, fight and die; the player draws, strikes,
+      blocks, advances and retreats; he bumps off a guard's blade with his own sheathed; common and special guards
+      wear different colours; level three's skeleton rises from its bones and cannot be killed. Not yet: the
+      shadow and the vizier, which belong with the cut scenes.</div>
+      <p><strong>The guard is the same character with a different mind.</strong> The engine works on one set of
+      character variables; the other character lives in a record and the two are swapped in and out each frame,
+      as the original does with its kid and shadow blocks. The guard's controller presses the same stick and
+      buttons the player has, and the shared fight controls do the rest. His temperament comes from twelve
+      columns of probabilities, one per skill level, indexed by the same eight-bit random generator; the
+      converter reads those tables out of the AI module. Strike detection is the original's: a blade at full
+      stretch within range stabs unless the other is blocking, in which case the striker is turned aside and,
+      if he is a guard, his blocking is impaired for a few frames.</p>
+      <p class="ref">Two drawing facts came out of the first stills: a right-facing image sits to the <em>left</em>
+      of its anchor, which the edge computation in the source states and nothing else does; and the sword's
+      offset is added facing right and subtracted facing left. Both were wrong for every mirrored frame drawn
+      until then and nobody could have told from a walking figure alone.</p>
+      <p>The level-one walkthrough now meets the guard on the third screen, stops, draws, fights him to the
+      death, sheathes, and goes on to the exit.</p>
+      <div class="meta">Four days.</div>
+      <p><code>AUTO</code> and the fighting half of <code>COLL</code>: the guard behaviour programs, the strike,
+      block and advance sequences, the strength meters, and the grace periods and patience timers that make guards
+      feel like opponents rather than obstacles.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">7<small>Finish</small></div>
+    <div>
+      <h3>Sound, messages, the clock, the interludes <span class="pill warn">In progress</span></h3>
+      <div class="meta">The clock, the messages, the twenty sound effects and the cut-away scenes are in. The music
+      is not in the released source, and the attract demo is not started.</div>
+      <p><strong>The effects ported because they are not recordings.</strong> Each is a short routine that flips the
+      one-bit speaker through a shared helper, so it reduces to a pitch and a count of flips, and the converter
+      turns those into a frequency and a length from the processor's clock rate. The only liberty is a floor on the
+      duration: played literally most of them last under a millisecond, which no modern sound chip would make
+      audible. The music is a different matter, since the cue names are in the source but the tunes are not.</p>
+      <div class="meta">Three days.</div>
+      <p>Twenty effects by ear, the message boxes, the hourglass and torches, the sixty-minute clock, and the
+      recorded demo replayed as both attract mode and regression test.</p>
+      <p><strong>The interludes are the picture, not the choreography.</strong> The game cuts away to the
+      princess&rsquo;s room on the way into levels 2, 4, 6, 8, 9 and 12 and at both endings, and the scene
+      routines that place and animate her, the vizier and the mouse are all in the source, down to the frame
+      counts. What is missing is the thing they animate over. The room is a full-screen packed picture, held on
+      the shipped disk as a block number rather than as a file; the copy that is in the release is the
+      artist&rsquo;s composite, with the princess and the vizier already painted into it. Drawing the engine&rsquo;s
+      own characters on top of that would put two of each in the room, so a scene is shown as the picture itself,
+      held, with any key to skip. That is very close to what an interlude looks like anyway: the princess and the
+      vizier, waiting, while the sand runs. The endings now happen there rather than as a line of text.</p>
+      <p class="ref">The packed form took a decompressor of its own, in <code>packpic.py</code>. The compression is
+      trivial, one escape byte and a run length; the work is the order, because the bytes follow the path the
+      original&rsquo;s unpacker takes through the Apple&rsquo;s interleaved screen rather than reading order. The
+      decoder reproduces that walk literally instead of trying to state it as a formula.</p>
+      <p class="ref">One trap worth recording. A picture loaded into an image slot has its colours matched against
+      the display&rsquo;s standard palette to recover the pixel values, and the match reads the file&rsquo;s colour
+      channels in the opposite order, so a file written with the game&rsquo;s own colours comes back with every
+      value changed. The room is therefore written with the standard palette, exactly as the artwork sheets are,
+      and the game&rsquo;s palette does the rest at display time. <code>SAVE IMAGE</code> writes its palette in that
+      same reversed order, which is why the first stills of the room looked blue and sent this a long way down the
+      wrong road.</p>
+    </div>
+  </div>
+
+  <p class="ref">Roughly four weeks of evenings, against Thrust&rsquo;s seven phases and Exile&rsquo;s larger plan.
+  The estimate is honest about volume and optimistic about nothing except the renderer, which genuinely is easy
+  here.</p>
+</section>
+
+<section id="risks">
+  <div class="eyebrow">Risks</div>
+  <h2>What could go wrong</h2>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th>Risk</th><th>Assessment</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Game content leaking into the build</td><td><span class="pill warn">Medium</span> One converter emitting <code>DATA</code> statements for convenience undoes the whole distribution model</td><td>Converters write data files only; a release check that greps the packaged <code>.bas</code> for table data and refuses on a hit</td></tr>
+      <tr><td>Trademark</td><td><span class="pill warn">Medium</span> A live mark with products shipping now; the likeliest trigger for a takedown request</td><td>A neutral name chosen at Phase&nbsp;0, not at release. Renaming late is how Picanoid happened</td></tr>
+      <tr><td>Tokenised program size</td><td><span class="pill warn">Medium</span> Twelve thousand lines of source logic against a 144&nbsp;KB cap</td><td>Every table external from day one; the library CSUB route held in reserve; measure at the end of each phase rather than at the end of the project</td></tr>
+      <tr><td>The control state machine</td><td><span class="pill warn">Medium</span> 2,700 lines where a wrong threshold is invisible until it is unplayable</td><td>The recorded demo as a regression test: it diverges visibly the moment a threshold is wrong</td></tr>
+      <tr><td>Sound authenticity</td><td><span class="pill warn">Medium</span> Speaker-click routines re-created by ear</td><td>Accept it. Thrust and Arkanoid both ended here and both sound right</td></tr>
+      <tr><td>Music</td><td><span class="pill warn">Medium</span> Not in the repository at all</td><td>Either drop it, or recover it from a disk image as a separate exercise. Do not let it block the port</td></tr>
+      <tr><td>Renderer cost</td><td><span class="pill ok">Closed</span> Measured at 14.3&nbsp;ms of 83, on a slower clock than the plan asks for</td><td>None needed. No CSUB, no dirty-block scheme</td></tr>
+      <tr><td>Interpreter cost of the draw loop</td><td><span class="pill warn">Medium</span> 8.2 of the 14.3&nbsp;ms is BASIC issuing the calls, before any game logic runs</td><td>Keep the per-block loop lean and measure it again once the five-section decomposition is real, since that loop grows</td></tr>
+      <tr><td>Artwork storage</td><td><span class="pill ok">Closed</span> Four image slots for the playable set; the fifth holds the interlude picture</td><td>The converter defaults to the four-slot set. The room picture goes in the slot after it, so nothing is swapped at a level change</td></tr>
+      <tr><td>Data format guesswork</td><td><span class="pill ok">Low</span></td><td>There is none. This is the actual source, and the formats are documented in it</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section id="decisions">
+  <div class="eyebrow">Decisions</div>
+  <h2>D1 is taken. The rest are recommendations.</h2>
+
+  <div class="decide">
+    <div class="eyebrow">Taken</div>
+    <ol>
+      <li><strong>D1 &mdash; Distribution. Engine and converter, no content.</strong> The program is freely
+      distributable because it holds no game data: the converter runs on the player&rsquo;s machine, against their
+      own clone of the published repository, named on the command line. No vendored assets, no bundled samples, no
+      built-in download. A neutral product name, chosen at Phase&nbsp;0. Free, and never pre-installed on hardware
+      that is sold. The supporting rule is that no converter may emit a line of BASIC.</li>
+    </ol>
+  </div>
+
+  <div class="decide">
+    <div class="eyebrow">Still open &mdash; recommendation given in each case</div>
+    <ol start="2">
+      <li><strong>D2 &mdash; Tick rate.</strong> 12.000&nbsp;fps, one present in five at 60&nbsp;Hz, CPU at
+      378&nbsp;MHz. Do not rescale any per-frame constant.</li>
+      <li><strong>D3 &mdash; Screen.</strong> 280&times;192 at 1:1, centred in MODE&nbsp;2&rsquo;s 320&times;240,
+      four colours from the palette.</li>
+      <li><strong>D4 &mdash; Mirroring.</strong> Pre-mirror the character images at conversion time and draw
+      everything with <code>BLIT FLASH</code> and a transparent colour. Do not use sprite buffers.</li>
+      <li><strong>D5 &mdash; Redraw.</strong> Full redraw into the F buffer every frame. Delete the peel and
+      dirty-block machinery; keep the plane order and the block dependencies.</li>
+      <li><strong>D6 &mdash; Artwork residency.</strong> Everything in PSRAM image slots at startup, nothing
+      swapped between levels.</li>
+      <li><strong>D7 &mdash; Music.</strong> Ship without it initially. Decide separately whether recovering the
+      songs from a disk image is a project you want.</li>
+      <li><strong>D8 &mdash; Controls.</strong> <code>KEYDOWN</code> with the original&rsquo;s key layout and a
+      modern alternative; gamepad optional and later.</li>
+    </ol>
+  </div>
+</section>
+
+<section id="sources">
+  <div class="eyebrow">Sources</div>
+  <h2>Where this came from</h2>
+  <ul>
+    <li>The released repository, <code>jmechner/Prince-of-Persia-Apple-II</code>: 582 files, of which the 29
+    assembler sources, the sixteen image tables and the fifteen level files under <code>01 POP Source</code> are
+    the game proper. Everything measured in this document was measured from those.</li>
+    <li>The README&rsquo;s statement of what the release does and does not grant, which drives the rights section
+    above.</li>
+    <li>Fabien Sanglard&rsquo;s code review of the same source, useful for context on the 6502 and the module
+    structure, though it does not cover the formats measured here.</li>
+    <li>Our own precedents: the Thrust port, the Exile design review, the Arkanoid port plan and the Elite port
+    plan, for the phase structure, the converter-first discipline and the platform figures.</li>
+    <li>The firmware itself for every PicoMite figure quoted: <code>configuration.h</code> for the slot and memory
+    limits, <code>graphics/Blit.c</code> and <code>graphics/Sprite.c</code> for what the drawing primitives
+    actually take.</li>
+  </ul>
+</section>
+
+<footer>
+  <p>Prince of Persia on the PicoComputer 3 &mdash; conversion review, September 2026. Measurements taken directly
+  from the released source; nothing in this document is quoted from secondary accounts. Prince of Persia is the
+  property of its rights holders; see the rights section.</p>
+</footer>
+</div>
+</body>
+</html>

@@ -93,3 +93,6 @@ Bas/elite_tools/cache/
 /Bas/sandglass/*.idx
 /Bas/sandglass/*.dat
 Prince-of-Persia-Apple-II/
+Bas/sandglass_tools/music/
+Bas/sandglass_tools/*.min.bas
+Bas/sandglass_tools/*.map
