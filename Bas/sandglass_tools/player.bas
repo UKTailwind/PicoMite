@@ -94,6 +94,11 @@ Const SEQ_TURN = 5
 Const SEQ_RUNTURN = 6
 Const SEQ_DIVEROLL = 26
 Const SEQ_FREEFALL = 12
+' The four falls a step off an edge can turn into, besides a plain one.  Which
+' one is chosen by the pose he was in, and getting this wrong is why a running
+' jump dropped straight down instead of carrying across.
+Const SEQ_STEPFALL = 7 : Const SEQ_JUMPFALL = 18
+Const SEQ_STEPFALL2 = 19 : Const SEQ_RJUMPFALL = 21
 Const SEQ_RUNSTOP = 13
 Const SEQ_JUMPUP = 14
 Const SEQ_SOFTLAND = 17
@@ -435,11 +440,21 @@ For frame = 1 To maxFrames
     If deadTimer > 24 Then StartLevel curLevel : Print "  restart"
   End If
 
-  If TRACE_PLAY And (frame And 7) = 0 Then
-    Print "  " + Pad$(Str$(frame),3) + " " + note + " " + Pad$(Str$(cPosn),4);
-    Print Pad$(Str$(cX),5) + Pad$(Str$(cY),5) + Pad$(Str$(cBlockX),4) + ",";
-    Print Pad$(Str$(cBlockY),2) + Pad$(Str$(cAction),4) + Pad$(Str$(cYVel),5);
-    Print "  " + lastWhat
+  ' One line only when something changes.  At twelve frames a second an
+  ' unfiltered trace is unreadable and the interesting frame scrolls away.
+  If TRACE_PLAY Then
+    traceLine = "pose" + Pad$(Str$(cPosn),4) + " x" + Pad$(Str$(cX),4)
+    traceLine = traceLine + " y" + Pad$(Str$(cY),4)
+    traceLine = traceLine + " blk" + Pad$(Str$(cBlockX),3) + "," + Str$(cBlockY)
+    traceLine = traceLine + Choice((cFace And &H80) <> 0, " <", " >")
+    traceLine = traceLine + " up" + Str$(jstkY) + " fresh" + Pad$(Str$(clrU),3)
+    traceLine = traceLine + "  " + lastWhat
+    If rjWhat <> "" Then traceLine = traceLine + "  | " + rjWhat
+    If jumpWhat <> "" Then traceLine = traceLine + "  | " + jumpWhat
+    If traceLine <> lastTrace Then
+      Print Pad$(Str$(frame),4) + " " + traceLine
+      lastTrace = traceLine
+    End If
   End If
 
   ' Clear first.  The background does not cover every pixel - fifty-seven of
@@ -1178,6 +1193,17 @@ Sub Settle
     ' that are mid-climb or mid-step do not carry it.  Without this gate the
     ' first frame of a climb was stepped straight off the empty block he was
     ' climbing out of.
+    ' INTERPRETATION.  Pose 38 is runjump-5, the frame the take-off run ends
+    ' on, and its frame entry still carries the check-the-floor mark while
+    ' 39 to 43 do not.  The jump's run-up is fourteen units and pose 38 sits
+    ' nineteen from the take-off, so with the lead distance the original asks
+    ' for, pose 38 ALWAYS falls five pixels beyond the edge and every running
+    ' jump turned into a step off the end, however well aimed.  The routine
+    ' that reconciles this, CHECKFLOOR, is one of the stubs the release does
+    ' not carry; the likeliest answer is that it measures from the trailing
+    ' foot rather than the centre.  Until that is known, pose 38 is treated as
+    ' airborne, which is what the sequence data says it is.
+    If cPosn = 38 Then Exit Sub
     If cPosn >= 1 Then
       If (frmb((cPosn - 1) * frmEntry + 4) And &H40) = 0 Then Exit Sub
     End If
@@ -1188,7 +1214,7 @@ Sub Settle
     ' him oscillate - step off, land, step off - once a frame.
     If noFloor(t) Then
       cFalling = 1 : cAction = ACT_FALLING : cYVel = 0
-      cSeq = seqTab(SEQ_FREEFALL)
+      cSeq = seqTab(FallSeq())
       lastWhat = "step off" : nStepOff = nStepOff + 1
     End If
     Exit Sub
@@ -2474,6 +2500,30 @@ Function DistFromX(x As INTEGER, bx As INTEGER) As INTEGER
 End Function
 
 '-----------------------------------------------------------------------------
+' STARTFALL's choice of sequence.  Walking off an edge is not one thing: the
+' pose he is in when the floor runs out decides what the fall looks like and,
+' more to the point, where he ends up.  A running jump crosses the edge at
+' pose 44 and continues through the air; a plain freefall for that case drops
+' him into the gap he was clearing, which is what made running jumps useless
+' however well they were aimed.
+'
+' The default is a step off, not a freefall.  From CTRL.S, STARTFALL.
+Function FallSeq() As INTEGER
+  If cPosn = 9 Then FallSeq = SEQ_STEPFALL : Exit Function       ' run-12
+  If cPosn = 13 Then FallSeq = SEQ_STEPFALL2 : Exit Function     ' run-16
+  If cPosn = 26 Then FallSeq = SEQ_JUMPFALL : Exit Function      ' standjump-19
+  If cPosn = 44 Then FallSeq = SEQ_RJUMPFALL : Exit Function     ' runjump-11
+  If cPosn >= 81 And cPosn < 86 Then
+    ' Letting go of a ledge: nudged clear of the face he was hanging on.
+    cX = AddCharX(5)
+    RereadBlocks
+    FallSeq = SEQ_STEPFALL2
+    Exit Function
+  End If
+  If cPosn >= 150 And cPosn < 180 Then FallSeq = SEQ_FIGHTFALL : Exit Function
+  FallSeq = SEQ_STEPFALL
+End Function
+
 Function Advance() As INTEGER
   Local INTEGER n, op, d
   For n = 1 To GUARD
@@ -2693,14 +2743,20 @@ Function CrossScreen() As INTEGER
   CrossScreen = 0
   ' You cannot cross into a wall.  A barrier in the entry block of the next
   ' screen behaves as a wall at THIS screen's edge: stop him here and bump.
+  ' A hanging character is not standing in the block his feet are over: he is
+  ' holding the ledge ABOVE and in front, and that is the block that has to be
+  ' clear.  Testing the one at his feet refuses a grab made across a screen
+  ' boundary, which is how you leave room 2 on the first level: the ledge is the
+  ' pillar at the edge of the room next door and the wall below it is not in the
+  ' way at all.  Action 2 is the hang.
   If cBlockX < 0 Then
-    If sLeft = 0 Or Barrier(BlockAt(cScrn, cBlockX, cBlockY)) Then
+    If sLeft = 0 Or (cAction <> 2 And Barrier(BlockAt(cScrn, cBlockX, cBlockY))) Then
       cBlockX = 0 : cX = 58 : WallBump : Exit Function
     End If
     cScrn = sLeft : cBlockX = cBlockX + COLS : cX = cX + SCRNW
     CrossScreen = 1 : cutDir = 0
   ElseIf cBlockX >= COLS Then
-    If sRight = 0 Or Barrier(BlockAt(cScrn, cBlockX, cBlockY)) Then
+    If sRight = 0 Or (cAction <> 2 And Barrier(BlockAt(cScrn, cBlockX, cBlockY))) Then
       cBlockX = COLS - 1 : cX = 58 + 139 : WallBump : Exit Function
     End If
     cScrn = sRight : cBlockX = cBlockX - COLS : cX = cX - SCRNW
