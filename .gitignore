@@ -77,3 +77,19 @@ Bas/elite_tools/cache/
 /docs/Arkanoid_Port_Plan.html
 /Bas/arkanoid.bas
 /Bas/arkanoid_field.bas
+
+# ---- Asset-converter inputs and outputs, never carried ----
+# The engine in Bas/sandglass ships with no game data in it: the player points
+# the converter at their own copy of the published source release and it writes
+# the data files onto their machine.  Nothing that conversion touches belongs in
+# this repository, so a stray clone or a test run cannot be committed by
+# accident.
+/Bas/sandglass_tools/out/
+/Bas/sandglass_tools/*.bmp
+/Bas/sandglass_tools/*.idx
+/Bas/sandglass_tools/*.dat
+/Bas/sandglass_tools/convert.log
+/Bas/sandglass/*.bmp
+/Bas/sandglass/*.idx
+/Bas/sandglass/*.dat
+Prince-of-Persia-Apple-II/
