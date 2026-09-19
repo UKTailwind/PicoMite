@@ -448,6 +448,7 @@ For frame = 1 To maxFrames
     traceLine = traceLine + " blk" + Pad$(Str$(cBlockX),3) + "," + Str$(cBlockY)
     traceLine = traceLine + Choice((cFace And &H80) <> 0, " <", " >")
     traceLine = traceLine + " up" + Str$(jstkY) + " fresh" + Pad$(Str$(clrU),3)
+    traceLine = traceLine + " act" + Str$(cAction)
     traceLine = traceLine + "  " + lastWhat
     If rjWhat <> "" Then traceLine = traceLine + "  | " + rjWhat
     If jumpWhat <> "" Then traceLine = traceLine + "  | " + jumpWhat
@@ -1087,6 +1088,16 @@ End Sub
 Sub HitBarrier
   Local INTEGER ahead, t, lo, hi
   If cFalling Then Exit Sub
+  ' Only a man on the ground can walk into something.  Bit 6 of the frame's
+  ' check byte is the on-the-ground mark - the same bit the floor test uses -
+  ' and every hanging and climbing pose has it clear, as do the airborne
+  ' frames of a jump.  Without this gate the wall a man hangs in front of was
+  ' treated as one he had walked into, so it shoved him off the ledge the
+  ' instant he caught it; across a room boundary that looked like the catch
+  ' being refused outright.
+  If cPosn >= 1 Then
+    If (frmb((cPosn - 1) * frmEntry + 4) And &H40) = 0 Then Exit Sub
+  End If
 
   ' Test the block AHEAD of him, not the one he is in.  Letting him walk into a
   ' barrier and pushing him back out afterwards is what made him jitter against
