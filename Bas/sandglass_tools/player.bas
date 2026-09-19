@@ -1269,12 +1269,18 @@ Sub SaveChar(r() As INTEGER)
   r(0) = cPosn : r(1) = cX : r(2) = cY : r(3) = cFace : r(4) = cBlockX : r(5) = cBlockY
   r(6) = cAction : r(7) = cXVel : r(8) = cYVel : r(9) = cSeq : r(10) = cScrn : r(11) = cID
   r(12) = cSword : r(13) = cLife : r(14) = cFalling : r(15) = stunned
+  ' The careful step's counter belongs to the character, not to the game.  The
+  ' original keeps it in the character block, between the screen and the id; it
+  ' was a bare global here, so the guard's turn wrote over the player's and the
+  ' step machine lost its place whenever anyone else was on screen.
+  r(16) = cRepeat
 End Sub
 
 Sub LoadChar(r() As INTEGER)
   cPosn = r(0) : cX = r(1) : cY = r(2) : cFace = r(3) : cBlockX = r(4) : cBlockY = r(5)
   cAction = r(6) : cXVel = r(7) : cYVel = r(8) : cSeq = r(9) : cScrn = r(10) : cID = r(11)
   cSword = r(12) : cLife = r(13) : cFalling = r(14) : stunned = r(15)
+  cRepeat = r(16)
 End Sub
 
 Sub SetOp(r() As INTEGER)
