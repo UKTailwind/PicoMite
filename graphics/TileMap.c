@@ -277,7 +277,7 @@ static uint16_t *tilemap_read_data(unsigned char *label, int count)
     return buf;
 }
 
-/* Parse a destination buffer letter (L, F, N, T) and return the buffer pointer */
+/* Parse a destination buffer letter (L, F, N, T, 2) and return the buffer pointer */
 static unsigned char *tilemap_get_dest(unsigned char *token)
 {
     if (checkstring(token, (unsigned char *)"L"))
@@ -290,6 +290,12 @@ static unsigned char *tilemap_get_dest(unsigned char *token)
 #ifdef rp2350
     else if (checkstring(token, (unsigned char *)"T"))
         return SecondLayer;
+    else if (checkstring(token, (unsigned char *)"2"))
+    {
+        if (SecondFrame == DisplayBuf)
+            error("Frame buffer 2 not created");
+        return SecondFrame;
+    }
 #endif
 #else
     else if (checkstring(token, (unsigned char *)"N"))
