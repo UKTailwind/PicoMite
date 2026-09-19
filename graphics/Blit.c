@@ -752,6 +752,12 @@ int blitother(void)
 #ifdef rp2350
         else if (checkstring(argv[0], (unsigned char *)"T"))
             s = SecondLayer;
+        else if (checkstring(argv[0], (unsigned char *)"2"))
+        {
+            if (SecondFrame == DisplayBuf)
+                error("Frame buffer 2 not created");
+            s = SecondFrame;
+        }
 #endif
 #else
         else if (checkstring(argv[0], (unsigned char *)"N"))
@@ -770,6 +776,12 @@ int blitother(void)
 #ifdef rp2350
         else if (checkstring(argv[2], (unsigned char *)"T"))
             d = SecondLayer;
+        else if (checkstring(argv[2], (unsigned char *)"2"))
+        {
+            if (SecondFrame == DisplayBuf)
+                error("Frame buffer 2 not created");
+            d = SecondFrame;
+        }
 #endif
 #else
         else if (checkstring(argv[2], (unsigned char *)"N"))
