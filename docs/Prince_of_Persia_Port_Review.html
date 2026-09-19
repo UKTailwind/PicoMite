@@ -856,13 +856,16 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
       trivial, one escape byte and a run length; the work is the order, because the bytes follow the path the
       original&rsquo;s unpacker takes through the Apple&rsquo;s interleaved screen rather than reading order. The
       decoder reproduces that walk literally instead of trying to state it as a formula.</p>
-      <p class="ref">One trap worth recording. A picture loaded into an image slot has its colours matched against
-      the display&rsquo;s standard palette to recover the pixel values, and the match reads the file&rsquo;s colour
-      channels in the opposite order, so a file written with the game&rsquo;s own colours comes back with every
-      value changed. The room is therefore written with the standard palette, exactly as the artwork sheets are,
-      and the game&rsquo;s palette does the rest at display time. <code>SAVE IMAGE</code> writes its palette in that
-      same reversed order, which is why the first stills of the room looked blue and sent this a long way down the
-      wrong road.</p>
+      <p class="ref">One trap worth recording, and it cost a day. A picture drawn straight to the screen has its
+      colours matched against the palette that is live at the time, so a file whose colours are not already the
+      game&rsquo;s comes out in the wrong ones. Loading it into an image slot and blitting it instead copies the
+      pixel values untouched, which is how the artwork sheets already reach the screen, so that is what the room
+      does. <strong>The trap is the check, not the fix.</strong> <code>SAVE IMAGE</code> writes its palette with
+      the colour channels in the opposite order to the one it reads them back in, so a saved frame is not only
+      shifted in colour but permuted in value: a pixel written as twelve is saved as five and coloured as five.
+      Read literally it says the whole palette is scrambled, which is wrong and which led to a pickup being given
+      its colour in the wrong slot. The permutation is its own inverse and runs 0&nbsp;8&nbsp;2&nbsp;10&nbsp;4&nbsp;12&nbsp;6&nbsp;14&nbsp;1&nbsp;9&nbsp;3&nbsp;11&nbsp;5&nbsp;13&nbsp;7&nbsp;15.
+      Undo it before judging any colour from a screenshot, or look at the display.</p>
     </div>
   </div>
 

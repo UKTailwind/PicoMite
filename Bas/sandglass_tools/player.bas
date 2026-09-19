@@ -226,6 +226,10 @@ Dim INTEGER aBgSet, aChSet
 ' a guard, and what he does depends entirely on which level he is on.
 Dim INTEGER aShad6a, aShad5, aShad12, aShadProg5
 Dim INTEGER kFlaskScrn, kFlaskX, kFlaskY, kSwordScrn, kSwordX, kSwordY, kShadStr
+' The pickups.  The original draws these three from code rather than from the
+' block tables, which is why a sword lying on the floor was invisible here: the
+' table lookup for its block type is empty and the port drew plain floor.
+Dim INTEGER kSpecialFlask, kSwordGleam0, kSwordGleam1, nSwordsDrawn
 Dim INTEGER playCount, preRecPtr, shadowAction, nShadows
 Dim INTEGER kMirScrn, kMirX, kMirY, nMirrors, nMerges
 Const T_MIRROR = 13
@@ -362,6 +366,12 @@ fightScript = "..<<<<....>>>>>>>>>>>>>>........B...B...^..B...B..^..B...>..B...B
 Const TRACE_PLAY = 0
 ' Frame to save a still on, or 0 for a clean run.
 Const SNAPSHOT = 0
+' Begin play somewhere other than the start of level one, so a later level can
+' be looked at without playing up to it.  Level 0 for a real game.
+Const BEGINLEVEL = 0
+Const BEGINSCRN = 1
+Const BEGINBX = 0
+Const BEGINBY = 0
 tWork = 0
 If DEMO <> 0 Then ShowTitle
 pstep = 0 : pTimer = 0 : playDone = 0
@@ -372,6 +382,11 @@ If DEMO = 3 Then gotSword = 1 : ResetCharAt 3, 1, 1, 1 : exitOpen = 1 : ComposeB
 If DEMO = 3 Then fightScript = "..<<<<....>>>>>>>>........B...B...^..B...B..^..B...B...B...B..B...B...B...B...B..."
 ' The walkthrough meets the guard on screen 3, so it carries the sword.
 If DEMO = 1 Then gotSword = 1
+If BEGINLEVEL <> 0 Then
+  ResetCharAt BEGINLEVEL, BEGINSCRN, BEGINBX, BEGINBY
+  EnterScreen cScrn, cBlockY
+  ComposeBackground
+End If
 If DEMO = 4 Then maxFrames = 60000 Else maxFrames = 900
 For frame = 1 To maxFrames
   tStart = Timer
@@ -633,6 +648,7 @@ Print "  careful steps    "; Str$(nSteps); "  gate shoves "; Str$(nGateKnocks); 
 LoadLevel 13 : curLevel = 13 : exitOpen = 0
 DeadEnemy
 Print "  vizier's death   "; Choice(exitOpen = 1, "opens the way out", "FAILS TO OPEN IT")
+Print "  pickups          swords drawn "; Str$(nSwordsDrawn)
 Print "  scenes           "; Str$(nCuts); " shown"
 Print "  shadows          "; Str$(nShadows); "  mirrors placed "; Str$(nMirrors); "  merges "; Str$(nMerges)
 Print "  ending           "; Choice(gameOver = 2, "won", Choice(gameOver = 1, "out of time", "still playing"))
@@ -2691,13 +2707,25 @@ Sub DrawScreen(scr As INTEGER)
 End Sub
 
 Sub DrawFront(scr As INTEGER)
-  Local INTEGER r, c, dy, x, yb, k, row, n
+  Local INTEGER r, c, dy, x, yb, k, row, n, tall
   For r = 0 To ROWS - 1
     dy = blocks(gBlockBot + r + 1) : yb = ORIGINY + dy : row = r * TPW
     For c = 0 To COLS - 1
       k = 128 + tp(row + c + 1)
       x = ORIGINX + c * BLOCKW
-      If secOn(k) Then
+      ' Potions come in two bottles.  Kinds two, three and four use the taller
+      ' one; kinds nought, one and five use the short one the tables name.  It
+      ' hangs from the same line, so its bottom edge is taken from the short
+      ' one's rather than from a table of its own.
+      tall = 0
+      If secOn(k) And tp(row + c + 1) = T_FLASK Then
+        n = ts(row + c + 1) >> 5
+        If n >= 2 And n <= 4 Then
+          PutBg kSpecialFlask, x + secDX(k), yb + secDY(k) + secH(k) - 1
+          tall = 1
+        End If
+      End If
+      If secOn(k) And tall = 0 Then
         n = tp(row + c + 1)
         If n = 3 Or n >= 27 Then
           Blit Flash secSheet(k),2,secSX(k),secSY(k),x+secDX(k),yb+secDY(k),secW(k),secH(k),OPAQUE
@@ -2769,6 +2797,13 @@ Sub DrawMovers
           If t = T_UPLATE And GetTimer(st) >= 2 Then te = T_FLOOR
           PutBg blocks(pPieceD + te), x, dy
           PutBg blocks(pPieceA + te), x, ay + Sgn8(blocks(pPieceAY + te))
+        Case T_SWORD
+          If st = 1 Then
+            PutSword kSwordGleam1, x, ay
+          Else
+            PutSword kSwordGleam0, x, ay
+          End If
+          nSwordsDrawn = nSwordsDrawn + 1
         Case T_SPIKES
           PutBg blocks(aSpikeA + SpikeIdx(st)), x, ay - 1
         Case T_SLICER
@@ -3018,14 +3053,37 @@ Sub PutBg(num As INTEGER, x As INTEGER, ybot As INTEGER)
   Blit Flash imSheet,2,imSX,imSY,x,py,imW,imH,TRANSP
 End Sub
 
+' THE SWORD ON THE FLOOR.  Drawn opaquely, because its picture is a strip of
+' floor with the blade lying in it and the original stores rather than ORs it.
+'
+' It is also taken from the dungeon's second table by name rather than from
+' whichever set the level uses.  The two sword pictures are only in that one:
+' the palace table has a single-pixel placeholder where the first should be and
+' nothing at all where the second should be.  That is not an oversight in the
+' release.  The game has THREE scenery sets and the release carries two, so the
+' level the sword lies on, which asks for the third, already falls back to the
+' palace set here.  Taking the sword from the table that has it is the smaller
+' of the two wrongs: the alternative is no sword at all.
+Sub PutSword(num As INTEGER, x As INTEGER, ybot As INTEGER)
+  Local INTEGER py
+  If BgImgFrom(bg2Dun, num - &H80) = 0 Then Exit Sub
+  py = ybot - imH + 1
+  If x < 0 Or py < 0 Or x + imW > 320 Or py + imH > 240 Then Exit Sub
+  Blit Flash imSheet,2,imSX,imSY,x,py,imW,imH,OPAQUE
+End Sub
+
 Function BgImg(num As INTEGER) As INTEGER
-  Local INTEGER tbl, img, rec
-  BgImg = 0
   If num < &H80 Then
-    tbl = T_BG1 : img = num
+    BgImg = BgImgFrom(T_BG1, num)
   Else
-    tbl = T_BG2 : img = num - &H80
+    BgImg = BgImgFrom(T_BG2, num - &H80)
   End If
+End Function
+
+Function BgImgFrom(tbl As INTEGER, img As INTEGER) As INTEGER
+  Local INTEGER rec
+  BgImgFrom = 0
+  If tbl = 0 Then Exit Function
   If img < 1 Or img > artCount(tbl) Then Exit Function
   rec = (artFirst(tbl) + (img - 1) * artFacings(tbl)) * 9 + artBase
   imSheet = SLOT + art(rec) - 1
@@ -3034,7 +3092,7 @@ Function BgImg(num As INTEGER) As INTEGER
   imW  = art(rec+5) Or (art(rec+6) << 8)
   imH  = art(rec+7) Or (art(rec+8) << 8)
   If imW < 1 Or imH < 1 Then Exit Function
-  BgImg = 1
+  BgImgFrom = 1
 End Function
 
 Sub BuildSections
@@ -3497,6 +3555,15 @@ Sub TrigTorch(scrn As INTEGER, loc As INTEGER)
   AddTrob
 End Sub
 
+' A sword on the floor gleams every few seconds.  Its state is a countdown, set
+' to something short the first time so the screen does not open with every
+' sword flashing at once.
+Sub TrigSword(scrn As INTEGER, loc As INTEGER)
+  oLoc = loc : oScrn = scrn : oDir = 1
+  SetSpec scrn, loc, Rnd8() And &H1F
+  AddTrob
+End Sub
+
 Sub TrigSlicer(scrn As INTEGER, loc As INTEGER, newstate As INTEGER)
   Local INTEGER st
   st = BSpec(scrn, loc)
@@ -3541,6 +3608,7 @@ Sub EnterScreen(scrn As INTEGER, row As INTEGER)
   LoadKidWOp
   For loc = 0 To 29
     If BType(s, loc) = T_TORCH Then TrigTorch s, loc
+    If BType(s, loc) = T_SWORD Then TrigSword s, loc
   Next loc
   AddSlicers s, row
 End Sub
@@ -3576,6 +3644,7 @@ Sub AnimObj(k As INTEGER)
   End If
   Select Case t
     Case T_TORCH  : AnimTorch
+    Case T_SWORD  : AnimSword
     Case T_UPLATE, T_PLATE : AnimPlate
     Case T_SPIKES : AnimSpikes
     Case T_LOOSE  : AnimFloor
@@ -3586,6 +3655,15 @@ Sub AnimObj(k As INTEGER)
     Case Else     : StopObj
   End Select
   If oScrn <> 0 Then SetSpec oScrn, oLoc, oState
+End Sub
+
+' One tick of the countdown.  At one the sword shows its gleaming picture, and
+' at zero the count is reset to between forty and a hundred and three frames.
+Sub AnimSword
+  If oDir < 0 Then Exit Sub
+  If oScrn <> visScrn Then StopObj : Exit Sub
+  oState = (oState - 1) And &HFF
+  If oState = 0 Then oState = (Rnd8() And &H3F) + 40
 End Sub
 
 Sub AnimTorch
@@ -4294,6 +4372,9 @@ Sub ReadLayout
           Case "const_swordscrn": kSwordScrn = v
           Case "const_swordx"   : kSwordX = v
           Case "const_swordy"   : kSwordY = v
+          Case "const_specialflask" : kSpecialFlask = v
+          Case "const_swordgleam0"  : kSwordGleam0 = v
+          Case "const_swordgleam1"  : kSwordGleam1 = v
           Case "const_shadstrength" : kShadStr = v
           Case "const_mirscrn"  : kMirScrn = v
           Case "const_mirx"     : kMirX = v

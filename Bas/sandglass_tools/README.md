@@ -53,6 +53,30 @@ the engine.
 `--set game` (the default) leaves out the artwork only the intro and ending use,
 and fits four image slots. `--set full` converts every table and needs five.
 
+## Things you can pick up
+
+A flask and a sword drawn in the stone's own colours are nearly impossible to
+spot, so their solid pixels are given a colour of their own: green for a potion,
+gold for a blade. Only the solid pixels change. The dither around them stays
+with the scenery, which matters for the sword, because its picture is a strip of
+floor with the blade lying in it and colouring the whole image would tint the
+floor.
+
+Nothing else in the artwork uses either colour. They are set at the top of
+`convert.py`, beside the rest of the palette, and can be changed there.
+
+## Testing a later level
+
+Four constants near the top of the engine begin play somewhere other than the
+start of level one, so a later level can be looked at without playing up to it:
+
+    Const BEGINLEVEL = 0        ' 0 for a real game
+    Const BEGINSCRN = 1
+    Const BEGINBX = 0
+    Const BEGINBY = 0
+
+`Const SNAPSHOT = n` saves that frame's picture to the drive beside the data.
+
 ## The interludes
 
 The game cuts away to the princess's room on the way into levels 2, 4, 6, 8, 9

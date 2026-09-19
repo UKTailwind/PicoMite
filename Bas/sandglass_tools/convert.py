@@ -58,6 +58,24 @@ GROUP_PLAYER = (4, 5, 6)
 GROUP_OPPONENT = (8, 9, 10)
 GROUP_CUTSCENE = (12, 13, 14)
 
+# Things that can be picked up.  A flask and a sword drawn in the stone's own
+# colours are almost impossible to spot, so their solid pixels go in a colour of
+# their own.  Only the solid slot changes: the two dither slots stay with the
+# scenery, which matters for the sword, whose picture is a strip of floor with
+# the blade lying in it.  Colouring the whole image would tint the floor.
+PICKUP_FLASK_SOLID = 12
+PICKUP_SWORD_SOLID = 13
+
+# The pieces that are a pickup and nothing else, by image number.  Checked
+# against every block-piece, variant and animation table in the background data:
+# no other block draws any of them, so recolouring them changes nothing else.
+PICKUP_SOLID = {
+    0x87: PICKUP_FLASK_SOLID,   # the flask
+    0x95: PICKUP_FLASK_SOLID,   # the taller flask, for potion kinds 2 to 4
+    0x99: PICKUP_SWORD_SOLID,   # the sword, resting
+    0xB3: PICKUP_SWORD_SOLID,   # the sword, gleaming
+}
+
 # What those slots actually look like.  MODE 2's sixteen entries are
 # programmable, so these are a choice rather than a constraint: warm stone for
 # the architecture, a pale figure against it, and cool steel for the guards so
@@ -85,6 +103,26 @@ PALETTE = {
     14: 0xE0CDD6,   # cutscene
     15: 0xFFFFFF,   # kept white for anything that wants it
 }
+
+# The two pickup colours.  A pixel value written into a sheet IS the palette
+# slot it is drawn in, so these are indexed by the value itself.  Both are
+# otherwise unlit: nothing in the playable artwork writes 12 or 13.
+#
+# Both are deliberately much brighter than the stone.  Brightness is what the
+# eye picks an object out by, and a colour of the same brightness as the wall
+# reads as dull however different its hue.
+#
+# A WARNING FOR ANYONE CHECKING THIS FROM A SCREENSHOT.  `SAVE IMAGE` does not
+# write the pixel values as they are.  It permutes them, because it writes its
+# palette with the colour channels in the opposite order to the one it reads
+# them back in.  The permutation is its own inverse and runs
+#     0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+#     0 8 2 10 4 12 6 14 1 9 3 11 5 13 7 15
+# so a saved frame shows a pickup written as 12 in slot 5 and coloured as slot
+# 5, which is not what the display shows at all.  Undo it before judging any
+# colour from a screenshot, or trust the display instead.
+PALETTE[PICKUP_FLASK_SOLID] = 0x00FF44
+PALETTE[PICKUP_SWORD_SOLID] = 0xF5C542
 
 LEVEL_COUNT = 15
 SOURCE_SUBDIR = "01 POP Source"
@@ -188,8 +226,13 @@ def convert_images(src, outdir, log, wanted):
                 "Refusing to guess." % name)
         pixels = 0
         for img in images:
+            # A pickup keeps the scenery's dither and takes its own solid
+            # colour.  Only the second scenery table holds any of them.
+            solid = group[2]
+            if name.startswith("BGTAB2"):
+                solid = PICKUP_SOLID.get(img.index + 0x80, solid)
             rows = appleimg.decode(img, even=group[0], odd=group[1],
-                                   solid=group[2])
+                                   solid=solid)
             if is_char:
                 # No black in a figure: fill the enclosed holes with its own
                 # colour instead of masking them out.  See fill_interior.
@@ -384,7 +427,10 @@ VARIANT_TABLES = [
 ]
 
 VARIANT_CONSTANTS = ["numpans", "numblox", "numbpans",
-                     "panelb0", "panelc0", "archpanel"]
+                     "panelb0", "panelc0", "archpanel",
+                     # The pickups, which the original draws from code rather
+                     # than from the block tables.
+                     "specialflask", "swordgleam0", "swordgleam1"]
 
 # The moving parts.  A gate, a spike pit, a loose floor, a slicer and a torch
 # each animate by their state byte, and these tables turn a state into the
