@@ -3324,7 +3324,7 @@ LIBRARY DISK SAVE fname$
 or
 LIBRARY DISK LOAD fname$
 or
-LIBRARY LOAD fname$ [, O] [, RAM]
+LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]
 
 The library is a special segment of program memory that can contain program
 code such as subroutines, functions and CFunctions. These routines are not

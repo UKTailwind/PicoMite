@@ -6189,7 +6189,7 @@ LIBRARY DISK SAVE fname$
 or
 LIBRARY DISK LOAD fname$
 or
-LIBRARY LOAD fname$ [, O] [, RAM]
+LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]
 
 The library is a special segment of program memory that can contain program
 code such as subroutines, functions and CFunctions.  These routines are not
@@ -6228,6 +6228,14 @@ therefore use it on every run at no cost.  If a different library is already
 installed MMBasic will ask for confirmation before replacing it; the option O
 (or OVERWRITE) suppresses the question.  After a library has been installed
 the program is restarted automatically so that the new library is initialised.
+More than one filename may be given, separated by commas.  The files are read
+in the order listed and concatenated into a single library, which lets the
+parts of a library be kept in separate source files and assembled on the
+board.  A bare O, OVERWRITE or RAM anywhere in the list is the option of that
+name rather than a filename; a filename is always a string expression, so a
+quoted "O" is a filename.  Up to eight files, and nothing is written until
+every one of them has been read, so a mistyped name in the last file leaves
+the existing library untouched.
 RAM asks for the library to go into RAM slot 5 (image slot 8) in PSRAM instead
 of flash, which is possible on an RP2350 with OPTION PSRAM.  While it is there
 it takes the place of the flash library, which is left exactly as it was, so a

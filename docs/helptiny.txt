@@ -2035,7 +2035,7 @@ LIBRARY DISK SAVE fname$
 or
 LIBRARY DISK LOAD fname$
 or
-LIBRARY LOAD fname$ [, O] [, RAM]
+LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]
 
 ~LINE
 LINE  x1, y1, x2, y2 [,[-] LW [, C]]
