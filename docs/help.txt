@@ -4386,6 +4386,23 @@ FRAMEBUFFER MERGE col,A - aborts the continuous updates In addition deleting
 either the layerbuf or framebuffer, ctrl-C, or END will abort the automatic
 update as well.
 
+FRAMEBUFFER MERGE [colour] [,b]
+
+RP2350 only: Copies framebuffer "2" over framebuffer "F" into the physical
+display "N" in a single pass. Pixels in "2" that are set to the optional
+transparent colour show the "F" pixel instead. The colour is specified as a
+number 0-15 (modes 2 and 3), an RGB888 colour (mode 4) or 0-255 (mode 5) and
+defaults to 0. In mode 1 the two buffers are combined. The layer buffers "L"
+and "T" are not involved and continue to be applied automatically over the
+result.
+If the optional parameter 'b' is specified the merge waits until the Monitor
+enters frame blanking before it starts, so the display is rewritten ahead of
+the scan and tearing is avoided. This is the alternative to a live layer for
+programs that draw sprites over a background: the display only changes when
+MERGE is commanded. Framebuffer "2" and the layer buffer "L" share the same
+pre-allocated video memory when it is large enough for them; whichever is
+created first uses it and the other is allocated from variable memory.
+
 ~FRAMEBUFFER SYNC
 FRAMEBUFFER SYNC
 

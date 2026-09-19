@@ -2463,6 +2463,12 @@ col - writes the contents of the framebuffer to the physical display
 overwriting any pixels in the framebuffer that are in the layerbuffer not set
 to the transparent colour  "col".
 
+FRAMEBUFFER MERGE [colour] [,b]
+
+RP2350 only: Copies framebuffer "2" over framebuffer "F" into the physical
+display "N" in a single pass. Pixels in "2" that are set to the optional
+transparent colour show the "F" pixel instead.
+
 ~FRAMEBUFFER SYNC
 FRAMEBUFFER SYNC
 

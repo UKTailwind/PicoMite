@@ -55,6 +55,91 @@ extern volatile int QVgaScanLine;
         * @cond                                                          \
         * The following section will be excluded from the documentation. \
         */
+#if !defined(PICOMITEVGA) || defined(rp2350)
+/* Word-wide transparency merge, one lane per pixel. A word of layer[] is
+   compared lane-by-lane against t (the transparent colour replicated into
+   every lane); lanes that differ come from the layer, the rest from the
+   frame. low is every lane's bits below its top bit, high is every lane's
+   top bit, shift moves a lane's top bit to its bit 0 and lanemax is one
+   full lane of ones. The zero test is the classic SWAR one: a lane of
+   (z & low) + low has its top bit set exactly when the low bits are not
+   all zero, ORing z itself in covers a set top bit, and the lanes never
+   carry into each other. Lanes: 4-bit (0x77777777, 0x88888888, 3, 0xF),
+   8-bit (0x7F7F7F7F, 0x80808080, 7, 0xFF), 16-bit (0x7FFF7FFF,
+   0x80008000, 15, 0xFFFF). The big framebuffers live in PSRAM, so
+   reading them a word at a time is what makes the merge fast. */
+static void merge_words(uint32_t *d, const uint32_t *f, const uint32_t *l, int n, uint32_t t, uint32_t low, uint32_t high, int shift, uint32_t lanemax)
+{
+    while (n--)
+    {
+        uint32_t v = *l++;
+        uint32_t z = v ^ t;
+        uint32_t mask = ((((z & low) + low) | z) & high) >> shift;
+        mask *= lanemax;
+        *d++ = (v & mask) | (*f++ & ~mask);
+    }
+}
+#endif
+
+#if defined(PICOMITEVGA) && defined(rp2350)
+/* Whole-buffer merge for FRAMEBUFFER MERGE on VGA/HDMI. F and 2 are usually
+   in PSRAM (GetMemory sends anything over half the heap there), and reading
+   two PSRAM streams alternately in one loop defeats the QMI's sequential
+   bursts: measured 16-21 ms for a 150 KB mode 3 merge against a 4.4 ms
+   memcpy of one buffer. Staging each source through SRAM with memcpy, then
+   merging from SRAM, gets close to the two-memcpy floor. 256 bytes per
+   stage keeps the stack cost small (core 0 only). */
+#define MERGE_STAGE_BYTES 256
+static void merge_buffers(uint8_t *d, const uint8_t *f, const uint8_t *l, int bytes, uint32_t t, uint32_t low, uint32_t high, int shift, uint32_t lanemax)
+{
+    uint32_t fs[MERGE_STAGE_BYTES / 4], ls[MERGE_STAGE_BYTES / 4];
+    while (bytes > 0)
+    {
+        int n = bytes > MERGE_STAGE_BYTES ? MERGE_STAGE_BYTES : bytes;
+        memcpy(fs, f, n);
+        memcpy(ls, l, n);
+        merge_words((uint32_t *)d, fs, ls, n >> 2, t, low, high, shift, lanemax);
+        d += n;
+        f += n;
+        l += n;
+        bytes -= n;
+    }
+}
+#elif !defined(PICOMITEVGA)
+/* Composite one run of RGB121 (two pixels per byte) pixels: each nibble of
+   layer[] whose value is the transparent colour is replaced by the matching
+   nibble of frame[], everything else comes from layer[]. dst may alias frame
+   (in-place merge) because frame is read before dst is written. Used by the
+   LCD merge()/blitmerge() paths. */
+static void merge_scanline(uint8_t *dst, const uint8_t *frame, const uint8_t *layer, int width, uint8_t colour)
+{
+    uint8_t highcolour = colour << 4;
+    int x = 0;
+
+    /* All three word-aligned (the full-width LCD merge and every VGA/HDMI
+       call): do the bulk four bytes at a time, then finish any tail below.
+       An unaligned region (blitmerge at an odd x0) takes the byte loop;
+       the M0+ cannot do unaligned word loads. */
+    if (!(((uintptr_t)dst | (uintptr_t)frame | (uintptr_t)layer) & 3))
+    {
+        merge_words((uint32_t *)dst, (const uint32_t *)frame, (const uint32_t *)layer, width >> 2, colour * 0x11111111u, 0x77777777u, 0x88888888u, 3, 0xFu);
+        x = width & ~3;
+    }
+    for (; x < width; x++)
+    {
+        uint8_t f = frame[x];
+        uint8_t s = layer[x];
+        uint8_t top = s & 0xF0;
+        uint8_t bottom = s & 0x0F;
+        if (top == highcolour)
+            top = f & 0xF0;
+        if (bottom == colour)
+            bottom = f & 0x0F;
+        dst[x] = top | bottom;
+    }
+}
+#endif
+
 #ifndef PICOMITEVGA
 void restorepanel(void)
 {
@@ -828,28 +913,6 @@ void copyframetoscreen(uint8_t *s, int xstart, int xend, int ystart, int yend, i
    still holds a whole scanline up to HRes 2560 - far beyond any panel. */
 #define MERGE_BATCH_BYTES 1280
 
-// Core merge logic - optimized with reduced branching
-static inline void merge_scanline(uint8_t *dst, const uint8_t *src, int width, uint8_t colour)
-{
-    uint8_t highcolour = colour << 4;
-
-    for (int x = 0; x < width; x++)
-    {
-        uint8_t src_pixel = src[x];
-        uint8_t top = src_pixel & 0xF0;
-        uint8_t bottom = src_pixel & 0x0F;
-
-        // Skip if both pixels are transparent
-        if (top == highcolour && bottom == colour)
-            continue;
-
-        // Branchless merge: use source pixel if not transparent, else keep destination
-        uint8_t new_top = (top != highcolour) ? top : (dst[x] & 0xF0);
-        uint8_t new_bottom = (bottom != colour) ? bottom : (dst[x] & 0x0F);
-        dst[x] = new_top | new_bottom;
-    }
-}
-
 void merge(uint8_t colour)
 {
     if (LayerBuf == NULL || FrameBuf == NULL)
@@ -858,8 +921,9 @@ void merge(uint8_t colour)
     uint8_t *d = FrameBuf;
     int bytes_per_line = HRes / 2;
 
-    // Batch buffer for multiple scanlines - as many as the fixed budget holds
-    uint8_t BatchBuf[MERGE_BATCH_BYTES];
+    // Batch buffer for multiple scanlines - as many as the fixed budget holds.
+    // Word-aligned so merge_scanline can take its word-wide path.
+    uint8_t BatchBuf[MERGE_BATCH_BYTES] __attribute__((aligned(4)));
     int batch_lines = MERGE_BATCH_BYTES / bytes_per_line;
     if (batch_lines < 1)
         batch_lines = 1;
@@ -890,11 +954,8 @@ void merge(uint8_t colour)
             uint8_t *src_line = s + curr_y * bytes_per_line;
             uint8_t *frame_line = d + curr_y * bytes_per_line;
 
-            // Copy framebuffer line to batch buffer
-            memcpy(dst_line, frame_line, bytes_per_line);
-
-            // Merge layer into batch buffer
-            merge_scanline(dst_line, src_line, bytes_per_line, colour);
+            // Merge the layer over the framebuffer line straight into the batch buffer
+            merge_scanline(dst_line, frame_line, src_line, bytes_per_line, colour);
         }
 
         // Send entire batch to screen in one call
@@ -963,7 +1024,7 @@ void blitmerge(int x0, int y0, int w, int h, uint8_t colour)
             memcpy(dst_line, frame_line, bytes_per_line);
 
             // Merge only the specified region
-            merge_scanline(dst_line + x0_bytes, src_line + x0_bytes, w_bytes, colour);
+            merge_scanline(dst_line + x0_bytes, dst_line + x0_bytes, src_line + x0_bytes, w_bytes, colour);
         }
 
         // Send entire batch to screen in one call
@@ -1448,9 +1509,20 @@ void cmd_framebuffer(void)
             getcsargs(&p, 1);
             switch (DISPLAY_TYPE)
             {
+            /* Framebuffer 2 and the layer share pool slot 1 (DisplayBuf +
+               ScreenSize): MERGE is the alternative to a live layer, so
+               whichever is created first takes the slot and the other one
+               falls back to the heap. A layer that then lands in PSRAM is
+               refused by LAYER's own check below. */
             case SCREENMODE2:
             case SCREENMODE1:
-                SecondFrame = GetMemory(ScreenSize);
+#ifdef HDMI
+            case SCREENMODE5:
+#endif
+                if (ScreenSize < framebuffersize / 2 && LayerBuf != DisplayBuf + ScreenSize)
+                    SecondFrame = DisplayBuf + ScreenSize;
+                else
+                    SecondFrame = GetMemory(ScreenSize);
                 break;
 #ifdef rp2350
             case SCREENMODE3:
@@ -1458,9 +1530,6 @@ void cmd_framebuffer(void)
                 break;
 #ifdef HDMI
             case SCREENMODE4:
-                SecondFrame = GetMemory(ScreenSize);
-                break;
-            case SCREENMODE5:
                 SecondFrame = GetMemory(ScreenSize);
                 break;
 #endif
@@ -1577,7 +1646,7 @@ void cmd_framebuffer(void)
                 colour = transparent | (transparent << 4);
             case SCREENMODE1:
 #ifdef rp2350
-                if (ScreenSize < framebuffersize / 2)
+                if (ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
                     LayerBuf = DisplayBuf + ScreenSize;
                 else
                     LayerBuf = GetMemory(ScreenSize);
@@ -1601,7 +1670,7 @@ void cmd_framebuffer(void)
                     RGBtransparent = 0;
                 break;
             case SCREENMODE5:
-                if (ScreenSize < framebuffersize / 2)
+                if (ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
                     LayerBuf = DisplayBuf + ScreenSize;
                 else
                     LayerBuf = GetMemory(ScreenSize);
@@ -1728,6 +1797,93 @@ void cmd_framebuffer(void)
             ;
         }
     }
+#ifdef rp2350
+    else if ((p = checkstring(cmdline, (unsigned char *)"MERGE")))
+    {
+        /* FRAMEBUFFER MERGE [colour] [,B]
+           Composite framebuffer 2 over framebuffer F, treating pixels of
+           "colour" in 2 as transparent, and write the result to the display
+           buffer N in one pass. This is the VGA/HDMI counterpart of the LCD
+           MERGE: the live layers L and T are untouched and core 1 still
+           composites them over N. The transparency rule for each mode is
+           the one the core 1 scanline loops apply to the layer buffer
+           (VGA.c / HDMI.c), so MERGE and LAYER look identical. ",B" waits
+           for the vertical blank first; N is then rewritten top-down ahead
+           of the beam, which avoids tearing whenever the merge outruns the
+           frame. */
+        if (FrameBuf == DisplayBuf)
+            StandardError(38);
+        if (SecondFrame == DisplayBuf)
+            error("Frame buffer 2 not created");
+        getcsargs(&p, 3);
+        int colour = 0;
+        if (argc >= 1 && *argv[0])
+        {
+            switch (DISPLAY_TYPE)
+            {
+            case SCREENMODE2:
+            case SCREENMODE3:
+                colour = getint(argv[0], 0, 15);
+                break;
+#ifdef HDMI
+            case SCREENMODE4:
+                colour = RGB555(getColour((char *)argv[0], 0));
+                break;
+            case SCREENMODE5:
+                colour = getint(argv[0], 0, 255);
+                break;
+#endif
+            default:
+                /* mode 1 has no transparency: the two buffers are ORed */
+                break;
+            }
+        }
+        if (argc == 3)
+        {
+            if (!checkstring(argv[2], (unsigned char *)"B"))
+                SyntaxError();
+#ifdef HDMI
+            while (v_scanline != 0)
+            {
+            }
+#else
+            while (QVgaScanLine != 0)
+            {
+            }
+#endif
+        }
+        /* N is rewritten underneath the GUI cursor: erase it first, and hold
+           the periodic refresh off for the whole pass so its save buffer is
+           taken from the finished image, not a half-merged one. */
+        CursorHide();
+        CursorSuspend = true;
+        switch (DISPLAY_TYPE)
+        {
+        /* ScreenSize is a whole number of words in every mode/resolution
+           (MODEnSIZE in Screens.h), so there is no byte tail. */
+        case SCREENMODE2:
+        case SCREENMODE3: /* RGB121, one pixel per nibble lane */
+            merge_buffers(DisplayBuf, FrameBuf, SecondFrame, ScreenSize, (uint32_t)colour * 0x11111111u, 0x77777777u, 0x88888888u, 3, 0xFu);
+            break;
+#ifdef HDMI
+        case SCREENMODE4: /* RGB555, one pixel per 16-bit lane */
+            merge_buffers(DisplayBuf, FrameBuf, SecondFrame, ScreenSize, (uint32_t)colour * 0x00010001u, 0x7FFF7FFFu, 0x80008000u, 15, 0xFFFFu);
+            break;
+        case SCREENMODE5: /* RGB332, one pixel per byte lane */
+            merge_buffers(DisplayBuf, FrameBuf, SecondFrame, ScreenSize, (uint32_t)colour * 0x01010101u, 0x7F7F7F7Fu, 0x80808080u, 7, 0xFFu);
+            break;
+#endif
+        default: /* SCREENMODE1: 1 bit per pixel, OR the buffers */
+        {
+            uint32_t *d = (uint32_t *)DisplayBuf, *f = (uint32_t *)FrameBuf, *s = (uint32_t *)SecondFrame;
+            for (int i = 0; i < ScreenSize / 4; i++)
+                d[i] = f[i] | s[i];
+            break;
+        }
+        }
+        CursorSuspend = false;
+    }
+#endif
     else if ((p = checkstring(cmdline, (unsigned char *)"WAIT")))
     {
 #ifdef HDMI
