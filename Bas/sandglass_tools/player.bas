@@ -256,6 +256,14 @@ Const SEQ_FASTSHEATHE = 93
 ' The careful step.  step1 to step13 move that many units, fullstep a whole
 ' block, testfoot pokes a foot out without leaving the edge.
 Const SEQ_STEP1 = 29 : Const SEQ_FULLSTEP = 42 : Const SEQ_TESTFOOT = 44
+' The running jump's aiming constants, from CTRL.S.  These live up here with
+' the rest: a Const only exists once the line has run, and everything below the
+' main body never does.
+Const RJCHANGE = 4        ' how far he moves in the frame being projected
+Const RJLOOKAHEAD = 1     ' blocks to look ahead for an edge
+Const RJLEADDIST = 14     ' the run-up the jump itself needs
+Const RJMAXFUJBAK = 8     ' pixels it will shift him back to make it work
+Const RJMAXFUJFWD = 2     ' and forward
 Dim INTEGER cRepeat, nSteps, invert, nInverts, nGateKnocks
 ' The sixteen tunes the original asks for by name.  The player supplies the
 ' files; a cue whose file is missing simply does not play, which is the
@@ -2396,13 +2404,6 @@ End Function
 ' at all and tries again next frame, so you can press up early and he will
 ' leave the ground when he gets there.
 '
-' From CTRL.S.  The five numbers are its own.
-Const RJCHANGE = 4        ' how far he moves in the frame being projected
-Const RJLOOKAHEAD = 1     ' blocks to look ahead for an edge
-Const RJLEADDIST = 14     ' the run-up the jump itself needs
-Const RJMAXFUJBAK = 8     ' pixels it will shift him back to make it work
-Const RJMAXFUJFWD = 2     ' and forward
-
 Function DoRunjump() As INTEGER
   Local INTEGER n, px, bx, t, dist, diff
   DoRunjump = 0
