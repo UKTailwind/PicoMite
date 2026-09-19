@@ -452,6 +452,7 @@ For frame = 1 To maxFrames
   DrawFront cScrn
   DrawMeter
   DrawMessage
+  DrawScrnNo cScrn
   DrawFrameNo frame
   If invert Then FlipBuffer
   tWork = tWork + (Timer - tStart)
@@ -3028,6 +3029,14 @@ Sub ShowTitle
   ApplyPalette
   FrameBuffer Write 2
   CLS Map(TRANSP)
+End Sub
+
+' The room number, under the message line.  Nothing in the original shows this.
+' It is here so that a player and whoever they are asking for help can name the
+' same room: the rooms are numbered in the level data and the map, the routes
+' and the positions of everything are all quoted in those numbers.
+Sub DrawScrnNo(n As INTEGER)
+  Text 160, ORIGINY + 186, "ROOM " + Str$(n), "CT", 7, 1, Map(15)
 End Sub
 
 ' The frame number, top left, so a frame that looks wrong can be named and
