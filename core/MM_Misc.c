@@ -1917,6 +1917,9 @@ void cmd_ireturn(void)
     MMerrline = Saveerrline;
 }
 
+/* How many source files one LIBRARY LOAD may concatenate.  Only bounds the
+   local array of argument pointers; the real ceiling is the library slot. */
+#define MAXLIBFILES 8
 void MIPS16 cmd_library(void)
 {
     unsigned char *tp;
@@ -2227,11 +2230,15 @@ void MIPS16 cmd_library(void)
     /********************************************************************************************************************
     ******* LIBRARY LOAD ************************************************************************************************
 
-      LIBRARY LOAD fname$ [, O]
+      LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]
 
-      Puts a BASIC file into the library from inside a running program, so a
-      program can guarantee its own library rather than relying on somebody
-      having typed LIBRARY SAVE first.
+      Puts one or more BASIC files into the library from inside a running
+      program, so a program can guarantee its own library rather than relying
+      on somebody having typed LIBRARY SAVE first.  Several files are
+      concatenated in the order given and become one library, which lets the
+      parts of it be kept in separate source files.  A bare O, OVERWRITE or RAM
+      anywhere in the list is the option of that name; a filename is always a
+      string expression, so a quoted "O" is still a filename.
 
       It has to run before the program declares anything.  The library's own
       top level - its CONSTs and DIMs - is executed at RUN, before the
@@ -2270,18 +2277,27 @@ void MIPS16 cmd_library(void)
            command it no longer says anything about where we are.  We need it
            both to know we are in a program at all and to put it back. */
         unsigned char *savedline = CurrentLinePtr;
-        getcsargs(&tp, 5);
-        if (!(argc == 1 || argc == 3 || argc == 5))
+        unsigned char *files[MAXLIBFILES];
+        int nfiles = 0;
+        getcsargs(&tp, MAXLIBFILES * 2 + 3);
+        if (argc == 0 || (argc & 1) == 0)
             SyntaxError();
-        for (int k = 2; k < argc; k += 2)
+        for (int k = 0; k < argc; k += 2)
         {
             if (checkstring(argv[k], (unsigned char *)"O") || checkstring(argv[k], (unsigned char *)"OVERWRITE"))
                 overwrite = 1;
             else if (checkstring(argv[k], (unsigned char *)"RAM"))
                 wantram = 1; /* prefer the RAM library slot; flash when there is no PSRAM */
             else
-                SyntaxError();
+            {
+                /* anything else is a source file; they are concatenated in order */
+                if (nfiles >= MAXLIBFILES)
+                    error("No more than % files", MAXLIBFILES);
+                files[nfiles++] = argv[k];
+            }
         }
+        if (nfiles == 0)
+            SyntaxError();
         (void)wantram; /* only read on the RP2350, where the RAM slot exists */
         /* Must be the program's first statement.  Counting variables cannot
            tell us that: by the time the program's first line runs, the
@@ -2343,7 +2359,7 @@ void MIPS16 cmd_library(void)
             if (haslib)
                 skiphash = Option.LIBRARY_HASH;
         }
-        loaded = FileLoadLibrary(argv[0], &hash, &image, &libbin, &libbinlen, &libnfix, skiphash);
+        loaded = FileLoadLibrary(files, nfiles, &hash, &image, &libbin, &libbinlen, &libnfix, skiphash);
 #ifdef rp2350
         if (rambase)
         {

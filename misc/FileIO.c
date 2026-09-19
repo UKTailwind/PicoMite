@@ -3864,12 +3864,22 @@ static unsigned char *MIPS16 lib_firstword(unsigned char *s, const char *word)
    text and bin may be NULL, which is the measuring pass - what comes out of a library file
    is wildly lopsided (sefunc.bas is 86 KB of which 752 bytes are BASIC), so guessing a size
    for either would mean reserving far more than the whole file to be safe. */
-static int MIPS16 lib_scan(int fnbr, uint32_t *hashout, unsigned char *text, uint32_t *textlen,
-                           unsigned char *bin, uint32_t *binlen, uint32_t binmax, int *nfixout)
+#define LIB_HASH_SEED 2166136261u /* FNV-1a, folded across every file in order */
+/* Scan one library source file.  'hash', 'nfixout' and 'nrecout' are RUNNING
+   TOTALS, seeded by the caller and updated here, so several files can be fed
+   through in turn and come out as one library: the hash then covers every file
+   in order (adding, removing or reordering one changes it), and the embedded
+   routine count spans the whole set rather than restarting per file - which
+   matters, because MAXCFUNCTION also sizes fixed arrays elsewhere.  'textlen'
+   and 'binlen' are this file's own contribution; the caller accumulates them
+   and advances 'text' and 'bin' by them for the next file. */
+static int MIPS16 lib_scan(int fnbr, uint32_t *hash, unsigned char *text, uint32_t *textlen,
+                           unsigned char *bin, uint32_t *binlen, uint32_t binmax, int *nfixout,
+                           int *nrecout)
 {
-    int c, prevchar = 0, incsub = 0, isfont, nrec = 0, nfix = 0;
+    int c, prevchar = 0, incsub = 0, isfont, nrec = *nrecout, nfix = *nfixout;
     unsigned char *p, *t = text;
-    uint32_t tl = 0, bl = 0, recstart = 0, h = 2166136261u;
+    uint32_t tl = 0, bl = 0, recstart = 0, h = *hash;
 
     while (!FileEOF(fnbr))
     {
@@ -4001,58 +4011,91 @@ static int MIPS16 lib_scan(int fnbr, uint32_t *hashout, unsigned char *text, uin
         error("Missing END declaration");
     }
     if (t)
-        *t = 0;
-    *hashout = h;
+        *t = 0; /* the next file's text overwrites this, so only the last one's survives */
+    *hash = h;
     *textlen = tl;
     *binlen = bl;
     *nfixout = nfix;
+    *nrecout = nrec;
     return true;
 }
 
 /* Read the file, and hand back the BASIC with every hex body removed, the binary those bodies
    became, and a hash of the file. Touches no flash: the caller decides whether to write. */
-int MIPS16 FileLoadLibrary(unsigned char *fname, uint32_t *hashout, unsigned char **image,
+/* Read one library, assembled from 'nfiles' source files in the order given.
+   Two passes over the whole set: the first measures and hashes and allocates
+   nothing, so when the library already holds exactly this set that is the whole
+   job and no flash is touched; the second fills the buffers, each file's text
+   and binary records appended after the last.  Both the text and the records
+   stay in file order, which is what lets SaveLibraryImage match each CSUB to
+   its record without knowing there was more than one file.
+
+   NOTHING is written anywhere until every file has been read, so a bad name in
+   the last one fails before the library is disturbed. */
+int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashout, unsigned char **image,
                            unsigned char **binout, uint32_t *binlenout, int *nfixout, uint32_t skiphash)
 {
-    int fnbr, fsize, nfix;
-    unsigned char *bin = NULL, *text;
-    uint32_t textlen = 0, binlen = 0;
+    int fnbr, fsize, nfix = 0, nrec = 0, i;
+    unsigned char *bin = NULL, *text, *t, *b;
+    uint32_t textlen = 0, binlen = 0, tl, bl, used = 0, h = LIB_HASH_SEED;
     char *fp;
 
     if (!InitSDCard())
         return false;
-    fp = (char *)getFstring(fname);
-    AppendDefaultExtension(fp, ".bas");
-    fsize = FileSize(fp);
-    if (fsize <= 0)
-        error("File not found");
-    if (fsize > MAX_PROG_SIZE)
-        error("File size % cannot exceed %", fsize, MAX_PROG_SIZE);
 
-    /* Pass one measures and hashes, and allocates nothing. When the library already holds
-       this file that is the whole job - a program that installs its own library must not
-       erase and rewrite flash on every RUN. */
-    fnbr = FindFreeFileNbr();
-    if (!BasicFileOpen(fp, fnbr, FA_READ))
-        return false;
-    lib_scan(fnbr, hashout, NULL, &textlen, NULL, &binlen, 0xFFFFFFFF, &nfix);
-    FileClose(fnbr);
+    for (i = 0; i < nfiles; i++)
+    {
+        fp = (char *)getFstring(fnames[i]);
+        AppendDefaultExtension(fp, ".bas");
+        fsize = FileSize(fp);
+        if (fsize <= 0)
+            error("File not found");
+        if (fsize > MAX_PROG_SIZE)
+            error("File size % cannot exceed %", fsize, MAX_PROG_SIZE);
+        fnbr = FindFreeFileNbr();
+        if (!BasicFileOpen(fp, fnbr, FA_READ))
+            return false;
+        tl = bl = 0;
+        lib_scan(fnbr, &h, NULL, &tl, NULL, &bl, 0xFFFFFFFF, &nfix, &nrec);
+        FileClose(fnbr);
+        textlen += tl;
+        binlen += bl;
+    }
+    *hashout = h;
     /* skiphash is the hash of what the target already holds - the option's
        record for flash, the tag in the slot for a RAM library - and zero when
        it was written by some route other than LIBRARY LOAD (LIBRARY SAVE, or a
-       DELETE), so it cannot be claimed to hold this file and the work must be
+       DELETE), so it cannot be claimed to hold these files and the work must be
        done. */
-    if (skiphash && skiphash == *hashout)
+    if (skiphash && skiphash == h)
         return false; /* already exactly this - nothing to do, and nothing allocated */
 
     text = GetTempMemory(textlen + 4);
     if (binlen)
         bin = GetTempMemory(binlen);
-    fnbr = FindFreeFileNbr();
-    if (!BasicFileOpen(fp, fnbr, FA_READ))
-        return false;
-    lib_scan(fnbr, hashout, text, &textlen, bin, &binlen, binlen, &nfix);
-    FileClose(fnbr);
+
+    t = text;
+    b = bin;
+    h = LIB_HASH_SEED;
+    nfix = nrec = 0;
+    for (i = 0; i < nfiles; i++)
+    {
+        fp = (char *)getFstring(fnames[i]);
+        AppendDefaultExtension(fp, ".bas");
+        fnbr = FindFreeFileNbr();
+        if (!BasicFileOpen(fp, fnbr, FA_READ))
+            return false;
+        tl = 0;
+        bl = binlen - used;
+        lib_scan(fnbr, &h, t, &tl, b, &bl, bl, &nfix, &nrec);
+        FileClose(fnbr);
+        t += tl;
+        if (b)
+        {
+            b += bl;
+            used += bl;
+        }
+    }
 
     *image = text;
     *binout = bin;

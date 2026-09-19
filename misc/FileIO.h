@@ -536,7 +536,7 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
         /* LIBRARY LOAD "file.bas". The reader hands back the BASIC with every hex
            body removed and the binary those bodies became; the writer puts them in
            the library. Split so the hash can be checked before any flash is erased. */
-        int FileLoadLibrary(unsigned char *fname, uint32_t *hashout, unsigned char **image,
+        int FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashout, unsigned char **image,
                             unsigned char **binout, uint32_t *binlenout, int *nfixout, uint32_t skiphash);
         void SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t binlen, int nfix, unsigned char *base);
         /* ============================================================================
