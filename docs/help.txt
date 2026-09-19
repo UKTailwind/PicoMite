@@ -4331,7 +4331,12 @@ current display mode
 FRAMEBUFFER CREATE  2
 
 RP2350 only: Creates a second framebuffer "2" with a colour space and
-resolution to match the current display mode
+resolution to match the current display mode. In modes 1, 2 and 5 it is placed
+in the pre-allocated video memory that the layer buffer "L" would otherwise
+use, provided that memory is large enough and the layer has not already been
+created; otherwise, and always in modes 3 and 4, it is allocated from variable
+memory, which on boards with PSRAM may be PSRAM. It is intended for use with
+FRAMEBUFFER MERGE as the alternative to a live layer.
 
 ~FRAMEBUFFER LAYER
 FRAMEBUFFER LAYER
@@ -4346,7 +4351,10 @@ current display mode. The optional parameter colour is specified as a number
 0-15 (modes 2 and 3), RGB888 colour (mode 4) or 0-255 (mode 5) and specifies a
 colour which is ignored when the layer is applied to the display. In display
 modes where automatic layer application is not supported a layer buffer acts
-as another framebuffer.
+as another framebuffer. If framebuffer "2" already occupies the pre-allocated
+video memory the layer is allocated from variable memory instead, and if that
+would place it in PSRAM the command fails because PSRAM is too slow for the
+display driver.
 
 ~FRAMEBUFFER LAYER TOP
 FRAMEBUFFER LAYER TOP [colour]
