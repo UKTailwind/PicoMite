@@ -5236,7 +5236,10 @@ int FileEOF(int fnbr)
     }
     else
     {
-        i = (lfs_file_tell(&lfs, FileTable[fnbr].lfsptr) == lfs_file_size(&lfs, FileTable[fnbr].lfsptr));
+        /* At the end OR past it.  LittleFS allows a seek beyond the end of a
+           file, and an equality test then answers "not at the end" for a
+           position there is nothing to read from - where FAT answers true. */
+        i = (lfs_file_tell(&lfs, FileTable[fnbr].lfsptr) >= lfs_file_size(&lfs, FileTable[fnbr].lfsptr));
     }
     return i;
 }

@@ -335,8 +335,8 @@ with `Index out of bounds` at startup from `B:` while working from `A:`.
 Both phases are in, tested on a PicoMiteHDMIWEB RP2350B with an SD card.
 
 `Testfiles/SeekBulkReadTest.bas` runs the checks of section 8 on `A:` and `B:`
-and needs `seektest.bin` on each - 4096 bytes, byte *i* = *i* MOD 251.
-Thirteen of its fourteen checks pass; the fourteenth is section 10 below.
+and needs `seektest.bin` on each - 4096 bytes, byte *i* = *i* MOD 251. All
+fourteen pass, and the two drives now answer identically on every one of them.
 
 The original failure serves as the end-to-end proof. The Prince of Pico engine
 before commit `7385d46` did `Seek` then `Memory Input`; from `B:/board` on the
@@ -348,20 +348,25 @@ end without repeating or skipping a line.
 
 Phase 2 gave back 136 bytes of flash.
 
-## 10. Still open: EOF past the end on the flash filesystem
+## 10. EOF past the end on the flash filesystem
 
-`SEEK` beyond the end of a file and then `EOF()` answers true on an SD card and
-**false** on the flash filesystem. The FAT side is section 4b; the flash side is
-untouched by any of this and reads
+`SEEK` beyond the end of a file and then `EOF()` answered true on an SD card
+and **false** on the flash filesystem. The FAT side of that is section 4b; the
+flash side was a separate defect that predates this work and read
 
 ```c
-i = (lfs_file_tell(&lfs, FileTable[fnbr].lfsptr) == lfs_file_size(&lfs, FileTable[fnbr].lfsptr));
+i = (lfs_file_tell(...) == lfs_file_size(...));
 ```
 
 LittleFS allows a seek past the end, so `tell` is then greater than `size` and
-the equality fails. `>=` would make the two filesystems agree. Not changed
-here: it is a separate defect, it predates this work, and it wants its own
-decision about whether a position beyond the end counts as end of file.
+the equality fails - reporting "not at the end" for a position there is nothing
+to read from. Now `>=`, so the two filesystems agree.
+
+It changes nothing for sequential reading: at the last byte `tell` is
+`size - 1`, and the only positions where `>=` and `==` differ are ones a seek
+past the end put you in. The two `COPY` loops that compare `tell != size` are
+left alone - they read a freshly opened file forwards, so `tell` cannot
+overshoot.
 
 ## 11. Risks
 
