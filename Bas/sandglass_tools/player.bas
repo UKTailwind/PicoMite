@@ -3082,7 +3082,37 @@ Function DoJumpup() As INTEGER
       Exit Function
     End If
   End If
-  If noFloor(above) Then DoJumpup = SEQ_HIGHJUMP Else DoJumpup = SEQ_JUMPUP
+  DoJumpup = DoJumphigh()
+End Function
+
+' CTRL.S DoJumphigh: a jump straight up with no ledge to catch.  Whether he
+' reaches the ceiling is asked of the block over his HAND, not the one over
+' his feet:
+'     jsr getbasex / clc / adc #jumpupangle / clc / adc ztemp / jsr getblockx
+' with jumpupangle -6 and jumpupreach 0, so the hand is six pixels left of his
+' base whichever way he faces.  getblockx is the plain conversion, while this
+' port's block number is getblockxp with the angle of seven already taken off,
+' so the same point is base+1 here.
+'
+' And the answer under a solid block is to touch the ceiling - "cmp #block /
+' beq :jumpup" comes BEFORE the space test, because a solid block is one of
+' the things cmpspace calls clear.  The port asked noFloor of the block over
+' his feet, which says yes to a solid block, so he jumped high through the
+' ceiling of a room he was standing under.
+Function DoJumphigh() As INTEGER
+  Local INTEGER d, t
+  ' "jsr getfwddist / cmp #4 / bcs :ok / cpx #1 ;barrier? / bne :ok" - up
+  ' against something, he is backed off three before he goes.
+  d = GetFwdDist()
+  If d < 4 And fwdKind = 1 Then MoveFwd d - 3
+  t = RdBlock(cScrn, BlockOfX((BaseX() + 1) And &HFF), cBlockY - 1)
+  If t = T_BLOCK Then
+    DoJumphigh = SEQ_JUMPUP
+  ElseIf noFloor(t) = 0 Then
+    DoJumphigh = SEQ_JUMPUP
+  Else
+    DoJumphigh = SEQ_HIGHJUMP
+  End If
 End Function
 
 ' The jump that ends hanging from the ledge in front: a long one from four

@@ -39,3 +39,37 @@ WANT JUMPHANG 1
 WANT ACTION 2
 WANT ALIVE 1
 END
+
+' CTRL.S DoJumphigh, section 4: whether there is a ceiling to reach is asked
+' of the block over his HAND, not the one over his feet -
+'     jsr getbasex / clc / adc #jumpupangle / clc / adc ztemp / jsr getblockx
+' with jumpupangle -6 and jumpupreach 0 - and the answer under a solid block
+' is jumpup, touching the ceiling.  "cmp #block / beq :jumpup" comes before
+' the space test, because a solid block is one of the things cmpspace calls
+' clear.  The port asked noFloor of the block over his feet, which says yes to
+' a solid block, so he jumped clean up through the ceiling of the room he was
+' standing in.
+'
+' The whole top row of screen 2 on level 1 is solid over columns 2 to 5, and
+' open over columns 0 and 1.  Seventeen frames into the jump the difference is
+' plain: under the ceiling he has not left the floor line at all.
+
+SCEN under a ceiling he only reaches up to it
+AT 1 2 3 1
+SEED 17
+RUN ..^^^^^^^^^^^^^^^
+WANT Y 118
+WANT POSN 82
+WANT BY 1
+END
+
+' Two blocks along, with nothing above him, the same key is the high jump and
+' he leaves the ground.
+SCEN with nothing above him he jumps
+AT 1 2 1 1
+SEED 17
+RUN ..^^^^^^^^^^^^^^^
+WANT Y 112
+WANT POSN 79
+WANT BY 1
+END
