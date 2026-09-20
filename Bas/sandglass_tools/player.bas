@@ -253,7 +253,7 @@ Dim INTEGER kMirScrn, kMirX, kMirY, nMirrors, nMerges
 ' level and negative afterwards, which is how the rest of the level knows
 ' the meeting is over: the shadow is not put back in the room, and the
 ' bridge to the last screen is there to be walked on.
-Dim INTEGER mergeTimer, nBridge, shadHold
+Dim INTEGER mergeTimer, nBridge, shadHold, mouseTimer, nMice, mouseTurned
 Const T_MIRROR = 13
 ' The enemy image set each level loads (MISC.S chset), and the tables.
 Dim INTEGER tSet(6), chSet(15), bgSet(15)
@@ -268,6 +268,18 @@ Dim INTEGER bg1Dun, bg2Dun, bg1Pal, bg2Pal, usingBg
 Dim INTEGER sndF(19), sndD(19), soundOn
 Dim INTEGER frmSword, nStrikes, nBlocks, nStabs, nGuardsDead, nEngarde, cutDir, nTransfers
 Const SEQ_ENGARDE = 55 : Const SEQ_ADVANCE = 56 : Const SEQ_RETREAT = 57
+' The mouse.  Sequence 105 is the run - two poses and twelve pixels a
+' cycle - and 107 stops him, sits him up, turns him round and drops back
+' into the run.  His poses are 186 to 188, images 68 to 70 of CHTAB2,
+' twenty-one by four and fourteen by ten: he is the only character in the
+' game who is wider than he is tall.
+Const SEQ_MOUSERUN = 105 : Const SEQ_MOUSETURN = 107
+Const MOUSE_ID = 24
+' MISC.S MOUSERESCUE: in at x 200, round again at 166 - which is the
+' up-plate's own block - and gone when he is back where he came from.
+Const MOUSE_START = 200 : Const MOUSE_TURN = 166
+' TOPCTRL.S misctimers counts this out before sending him.
+Const MOUSE_WAIT = 150
 Const SEQ_STRIKE = 58 : Const SEQ_TURNENGARDE = 60 : Const SEQ_STRIKEBLOCK = 61
 Const SEQ_READYBLOCK = 62 : Const SEQ_LANDENGARDE = 63 : Const SEQ_BLOCKTOSTRIKE = 66
 Const SEQ_BLOCKEDSTRIKE = 69 : Const SEQ_DROPDEAD = 71 : Const SEQ_STABBED = 74
@@ -935,6 +947,7 @@ End Sub
 ' see whom, the player, the guard, then the blows they exchanged.
 Sub GameFrame
   KeepTime
+  MiscTimers
   AnimMobs
   AnimTrans
   BonesRise
@@ -982,7 +995,7 @@ Sub StepCharacter
     want = HangCtrl()
   ElseIf cFalling = 0 And cSword = 2 And cAction < 2 Then
     want = FightCtrl()
-  ElseIf cFalling = 0 And cID >= 2 Then
+  ElseIf cFalling = 0 And cID >= 2 And cID <> MOUSE_ID Then
     want = GuardCtrl()
   ElseIf cFalling = 0 And stunned = 0 Then
     If cPosn = 109 Then
@@ -1436,6 +1449,7 @@ Sub CheckAlert
   Local INTEGER xk, xg, x, xe, tt, s
   enemyAlert = 0
   If gdPresent = 0 Then Exit Sub
+  If gRec(11) = MOUSE_ID Then Exit Sub    ' he is not an enemy
   If kRec(0) = 0 Or (kRec(0) >= 219 And kRec(0) < 229) Then Exit Sub
   If kRec(13) = 0 Or gRec(13) = 0 Then Exit Sub
   If kRec(10) <> gRec(10) Or kRec(5) <> gRec(5) Then Exit Sub
@@ -1474,6 +1488,7 @@ Sub AutoCtrl
   If gdTimer > 0 Then gdTimer = gdTimer - 1
   If refract > 0 Then refract = refract - 1
   If cID = 1 Then ShadowProg : Exit Sub
+  If cID = MOUSE_ID Then MouseProg : Exit Sub
   If cSword < 2 Then GuardAlert Else GuardEnGarde
 End Sub
 
@@ -2178,6 +2193,59 @@ End Sub
 
 ' BONESRISE: level 3's skeleton.  With the exit open, stepping up to the
 ' bones on the first screen brings them to their feet, sword in hand.
+' TOPCTRL.S misctimers, the eighth level.  Screen 16's way out is a gate the
+' kid cannot reach the plate for: he is shut in.  A hundred and fifty frames
+' after the level's exit opens, while he is in that room, a mouse is sent in;
+' it runs to the plate, presses it and leaves, and that is how he gets out.
+' The port had no timer, no mouse and no id for one, so the room was a trap.
+Sub MiscTimers
+  If curLevel <> 8 Or visScrn <> 16 Or exitOpen = 0 Then Exit Sub
+  mouseTimer = mouseTimer + 1
+  If mouseTimer = MOUSE_WAIT Then MouseRescue
+End Sub
+
+' MISC.S MOUSERESCUE.  He takes the one slot the game keeps for somebody
+' other than the player, as he does in the original, and he is built the way
+' the skeleton above is built.
+Sub MouseRescue
+  If gdPresent Then Exit Sub
+  SaveChar kRec()
+  cScrn = visScrn : cBlockY = 0 : cY = floory(1)
+  cX = MOUSE_START : RereadBlocks
+  cFace = &HFF : cID = MOUSE_ID : cSword = 0 : cAction = 1
+  cFalling = 0 : stunned = 0 : cXVel = 0 : cYVel = 0
+  cPosn = 0 : cSeq = seqTab(SEQ_MOUSERUN) : mouseTurned = 0
+  If Advance() = 0 Then lastWhat = "STALLED"
+  guardProg = 3 : cLife = &HFF
+  maxOppStr = 1 : oppStr = 1 : chgOppStr = 0
+  alertGuard = 0 : refract = 0 : justBlocked = 0 : droppedOut = 0
+  SaveChar gRec()
+  guardColor = blocks(aBasicColor + curLevel) Xor blocks(aSpecialColor + guardProg)
+  If HEADLESS = 0 Then GuardPalette guardColor
+  gdPresent = 1 : nMice = nMice + 1
+  gdBlock(cScrn) = 255
+  LoadKidWOp
+  lastWhat = "a mouse comes in"
+End Sub
+
+' AUTO.S MouseProg: in at the right, round again at the plate, and out.  The
+' turn is the sequence's own aboutface, so nothing here touches his facing.
+Sub MouseProg
+  If (cFace And &H80) Then
+    ' Once, and only once: put back to the head of the turn every frame he
+    ' stood on the plate for ever playing its first pose.
+    If cX <= MOUSE_TURN And mouseTurned = 0 Then
+      mouseTurned = 1
+      cSeq = seqTab(SEQ_MOUSETURN)
+    End If
+    Exit Sub
+  End If
+  If cX >= MOUSE_START Then
+    gdPresent = 0 : oppStr = 0 : gRec(13) = 0
+    lastWhat = "the mouse is gone"
+  End If
+End Sub
+
 Sub BonesRise
   Local INTEGER tt
   If curLevel <> 3 Or gdPresent Or visScrn <> 1 Or exitOpen = 0 Then Exit Sub
@@ -2319,6 +2387,10 @@ End Function
 Sub UpdateGuard
   Local INTEGER s
   If gdPresent = 0 Then Exit Sub
+  ' The mouse is not kept for the next visit: he came, he did his errand, and
+  ' leaving the room is the end of him.  Saved like a guard he would be back
+  ' as one, standing where he happened to be.
+  If gRec(11) = MOUSE_ID Then gdPresent = 0 : oppStr = 0 : Exit Sub
   s = gRec(10)
   gdBlock(s) = gRec(5) * COLS + gRec(4)
   gdX(s) = gRec(1) : gdFace(s) = gRec(3) : gdProg(s) = guardProg
@@ -2742,6 +2814,9 @@ Function FrameRow() As INTEGER
   p = cPosn
   FrameRow = p - 1
   If cID = 0 Then Exit Function          ' only the player uses the main set
+  ' and the mouse, whose poses are in it: sent down the guards' alternate set
+  ' they land on rows that hold nothing and he is drawn as empty air.
+  If cID = MOUSE_ID Then Exit Function
   If p >= 102 And p < 107 Then p = p + 70
   If p >= 150 And p < 190 Then FrameRow = frmCount + (p - 150)
 End Function
@@ -4564,7 +4639,13 @@ Sub LoadLevel(n As INTEGER)
   SelectBackground n
   If origStrength = 0 Then origStrength = kInitMaxStr
   maxKidStr = origStrength : kidStr = maxKidStr : chgKidStr = 0
-  deadTimer = 0 : weightless = 0 : mergeTimer = 0
+  deadTimer = 0 : weightless = 0 : mergeTimer = 0 : mouseTimer = 0
+  ' Every level begins with its way out shut.  Nothing put this back, so
+  ' once any level's exit had been opened every level after it started
+  ' with exitOpen set - which on the third level raises the skeleton the
+  ' moment the room is entered, and on the eighth would send the mouse in
+  ' before the door is open.
+  exitOpen = 0
   Open home + "levels.dat" For Input As #1
   Seek #1, n * LEVELBYTES + 1
   Memory Input #1, LEVELBYTES, packed()
@@ -4977,6 +5058,8 @@ Function ScenValue(what As STRING) As INTEGER
     Case "SHADOWS" : ScenValue = nShadows
     Case "MERGES"  : ScenValue = nMerges
     Case "BRIDGE"  : ScenValue = nBridge
+    Case "MICE"    : ScenValue = nMice
+    Case "OPPID"   : ScenValue = Choice(gdPresent, gRec(11), -1)
     Case Else      : Error "unknown expectation " + what
   End Select
 End Function
@@ -5003,7 +5086,7 @@ Sub ScZero
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
   nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0
-  nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0
+  nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0
 End Sub
 
 ' One line saying where he is and what he is doing, the same shape every

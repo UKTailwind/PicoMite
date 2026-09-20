@@ -1,0 +1,44 @@
+' scen/level8.txt - finding 1.4: level 8 has no mouse.
+'
+' Screen 16's top row is
+'   0 floor  1 torch  2 floor  3 GATE  4..6 space  7 up-plate  8 floor  9 GATE
+' and the plate at column 7 is the one that lifts those gates.  The kid cannot
+' reach it: he comes in at the left and the gate at column 3 is shut.
+'
+' TOPCTRL.S misctimers counts a hundred and fifty frames once the level's way
+' out is open and he is in that room, then MISC.S MOUSERESCUE sends a mouse in
+' at x 200 running left.  AUTO.S MouseProg turns him round at x 166 - which is
+' the plate's own block - and is done with him when he is back at 200.  He
+' presses the plate on the way, and that is how the player gets out.
+'
+' The port had no mouse, no id for one and no timer, so the room was a trap.
+
+SCEN a mouse comes in and presses the plate
+AT 8 16 0 0
+OPEN 1
+SEED 17
+RUN ........................................................................................................................................................................................................
+WANT MICE 1
+WANT PLATES GE 1
+WANT OPPID -1
+WANT ALIVE 1
+END
+
+' The control: he comes because the way out is open and the kid is in that
+' room, not merely because the level is the eighth one.
+SCEN no mouse while the way out is shut
+AT 8 16 0 0
+SEED 17
+RUN ........................................................................................................................................................................................................
+WANT MICE 0
+WANT PLATES 0
+END
+
+' And it is the eighth level, not any level with a room numbered sixteen.
+SCEN and none on another level
+AT 12 15 7 0
+OPEN 1
+SEED 17
+RUN ........................................................................................................................................................................................................
+WANT MICE 0
+END
