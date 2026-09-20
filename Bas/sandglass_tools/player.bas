@@ -244,6 +244,8 @@ Dim INTEGER milestone
 Dim INTEGER kidStr, maxKidStr, chgKidStr, origStrength, lastPotion, gotSword
 Dim INTEGER deadTimer, nPotions, kInitMaxStr, kMaxMaxStr, kWtlessTimer, kDeadEnough
 Const T_SWORD = 22
+' How far open the exit's stair animation runs: 43 frames of four.
+Const EXITOPENVAL = 43 * 4
 Const SEQ_DRINK = 78
 Const SEQ_PICKUPSWORD = 91
 Const SEQ_CLIMBSTAIRS = 70
@@ -834,6 +836,7 @@ Sub StartLevel(n As INTEGER)
   numTrans = 0 : numMob = 0
   SaveChar kRec()
   EnterScreen cScrn, cBlockY
+  Entrance
   composedScrn = -1
 End Sub
 
@@ -4293,6 +4296,28 @@ Sub AddTrob
   numTrans = numTrans + 1
 End Sub
 
+' MOVER.S CLOSEEXIT: open the exit all the way and let it slam shut.
+Sub CloseExit(scrn As INTEGER, loc As INTEGER)
+  oScrn = scrn : oLoc = loc
+  SetSpec scrn, loc, EXITOPENVAL
+  oDir = 3                                  ' coming down fast
+  AddTrob
+End Sub
+
+' TOPCTRL.S entrance: the door the player came in by slams shut behind him as
+' the level starts.  It looks through all thirty blocks of his own screen for
+' the exit and closes that one.  The port never did it, so on any level whose
+' first screen has a door it simply stood open for the rest of the game.
+Sub Entrance
+  Local INTEGER loc
+  For loc = 29 To 0 Step -1
+    If BType(cScrn, loc) = T_EXIT Then
+      CloseExit cScrn, loc
+      Exit Sub
+    End If
+  Next loc
+End Sub
+
 ' CUESONG: ask for a tune.  music/<name>.wav beside the rest of the data.
 ' A missing file is not an error, it is the ordinary case: the game is
 ' playable with no music at all.
@@ -4752,11 +4777,26 @@ Sub AnimGate
 End Sub
 
 Sub AnimExit
+  Local INTEGER x, old
   If oDir < 0 Then Exit Sub
-  If oDir >= 3 Then Exit Sub
+  ' MOVER.S animexit ":downfast" - a direction of three or more is the exit
+  ' coming down fast, which is how the player's own entrance slams behind him.
+  ' It accelerates through the same velocity table the gates use.
+  If oDir >= 3 Then
+    x = oDir
+    If x < kMaxGateVel Then x = x + 1 : oDir = x
+    old = oState
+    oState = (old - blocks(aGateVel + x)) And &HFF
+    If old <= blocks(aGateVel + x) Then
+      StopObj
+      oState = 0
+      AddSound 15
+    End If
+    Exit Sub
+  End If
   AddSound 11
   oState = (oState + 4) And &HFF
-  If oState >= 43 * 4 Then
+  If oState >= EXITOPENVAL Then
     StopObj
     AddSound 2
     exitOpen = 1
@@ -5588,6 +5628,18 @@ Sub RunScenarios
           Print "  ok:   " + nm + " is type " + Str$(got)
         Else
           Print "  FAIL: " + nm + " should be type " + Str$(bwant) + " but is " + Str$(got)
+          fails = fails + 1
+        End If
+      Case "WANTSPEC"
+        ' The same, for the modifier byte: how far a gate or an exit has got.
+        got = BSpec(ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,4)) * COLS + ScNum(ScWord$(ln,3)))
+        bwant = ScNum(ScWord$(ln, 5))
+        tests = tests + 1
+        nm = "spec " + ScWord$(ln,2) + " " + ScWord$(ln,3) + "," + ScWord$(ln,4)
+        If got = bwant Then
+          Print "  ok:   " + nm + " is " + Str$(got)
+        Else
+          Print "  FAIL: " + nm + " should be " + Str$(bwant) + " but is " + Str$(got)
           fails = fails + 1
         End If
       Case "END"

@@ -1,0 +1,44 @@
+' scen/entrance.txt - section 3: the entrance slam.
+'
+' TOPCTRL.S entrance:
+'     lda KidScrn / jsr calcblue
+'     ldy #29
+'     :loop lda (BlueType),y / and #idmask / cmp #exit / bne :cont
+'     lda KidScrn / jmp closeexit  ;& return
+'     :cont dey / bpl :loop
+'
+' and MOVER.S CLOSEEXIT opens it all the way and lets it fall:
+'     lda #emaxval / sta (BlueSpec),y  ;all the way open
+'     lda #3 / sta trdirec             ;coming down fast
+'     jmp addtrob
+'
+' The door the player walked in by slams shut behind him as the level starts.
+' It is not a corner case: he starts one block from an exit on ten of the
+' thirteen levels, and the port left every one of them standing there doing
+' nothing.  animexit's ":downfast" branch, which drives it, was missing too -
+' the port's exit could only ever open.
+'
+' Level 2 starts at screen 5 block 3,1 with the exit at 2,1, right beside him.
+
+SCEN the door he came in by slams shut behind him
+START 2
+SEED 17
+RUN .
+' Thrown open to 43*4 and already coming down on the first frame.
+WANTSPEC 5 2 1 132
+RUN .....
+' Shut, and shut is not the same as open: the way out of the level is still
+' to be earned.
+WANTSPEC 5 2 1 0
+WANT OPEN 0
+WANT ALIVE 1
+END
+
+' The level whose start screen has no exit is left alone.  Level 7 begins on
+' screen 17, and the only exit on the level is on screen 3.
+SCEN a start screen with no door is left alone
+START 7
+SEED 17
+RUN .
+WANTSPEC 3 3 2 0
+END
