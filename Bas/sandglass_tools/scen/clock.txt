@@ -1,0 +1,41 @@
+' scen/clock.txt - finding 2.15: the clock on the last levels.
+'
+' TOPCTRL.S NextFrame:
+'     lda level / cmp #14 / bcs :stopped
+'                 cmp #13 / bcc :ticking
+'                 lda exitopen / bne :stopped
+'     :ticking jsr keeptime
+' so from the fourteenth level the clock has stopped for good, and on the
+' thirteenth it stops the moment the vizier is dead.  And running out of time
+' is checked with "lda level / cmp #13 / bcs :safe": it loses on levels one to
+' twelve and no later.
+'
+' The port had the vizier case and neither of the others - it kept counting
+' through the tower, and ended the game at zero whatever level he was on.
+
+SCEN the clock still ends the game on the twelfth level
+AT 12 15 6 0
+CLOCK 99999
+RUN .
+WANT OVER 1
+WANT MINLEFT 0
+END
+
+' From the thirteenth on he has his one chance to finish, and the clock cannot
+' take it away from him.
+SCEN but not on the thirteenth
+AT 13 1 3 0
+CLOCK 99999
+RUN .
+WANT OVER 0
+WANT MINLEFT 0
+END
+
+' And in the tower it has stopped altogether: ten frames go by and the count
+' has not moved.
+SCEN the clock does not run on the fourteenth
+START 14
+CLOCK 1000
+RUN ..........
+WANT CLOCK 1000
+END

@@ -743,7 +743,7 @@ Print "  pickups          swords drawn "; Str$(nSwordsDrawn)
 Print "  scenes           "; Str$(nCuts); " shown"
 Print "  shadows          "; Str$(nShadows); "  mirrors placed "; Str$(nMirrors); "  merges "; Str$(nMerges)
 Print "  ending           "; Choice(gameOver = 2, "won", Choice(gameOver = 1, "out of time", "still playing"))
-gameOver = 0 : frameCount = GAMEMINUTES * FRAMESPERMIN
+gameOver = 0 : curLevel = 1 : frameCount = GAMEMINUTES * FRAMESPERMIN
 GetMinLeft
 Print "  clock runs out   "; Choice(gameOver = 1, "ends the game", "FAILS TO END THE GAME"); " - "; msgText
 Print "  stairs climbed   "; Str$(nStairs); "  potions "; Str$(nPotions); "  strength "; Str$(kidStr); "/"; Str$(maxKidStr)
@@ -2213,7 +2213,15 @@ End Sub
 ' but only when nothing else is on screen.
 Sub KeepTime
   If curLevel = 0 Or kRec(13) = 0 Then Exit Sub
-  ' On the last level the clock stops the moment he falls.
+  ' TOPCTRL.S NextFrame:
+  '     lda level / cmp #14 / bcs :stopped
+  '                 cmp #13 / bcc :ticking
+  '                 lda exitopen / bne :stopped
+  '     :ticking jsr keeptime
+  ' From the fourteenth level the clock has stopped for good, and on the
+  ' thirteenth it stops the moment the vizier is dead.  The port had the
+  ' second of those and kept counting through the tower.
+  If curLevel >= 14 Then Exit Sub
   If curLevel = 13 And exitOpen Then Exit Sub
   frameCount = frameCount + 1
   GetMinLeft
@@ -2235,7 +2243,11 @@ Sub GetMinLeft
   secLeft = (togo * 60) \ FRAMESPERMIN
   If togo = 0 Then
     outOfTime = 1
-    If gameOver = 0 Then
+    ' "lda level / cmp #13 / bcs :safe" - running out of time loses on levels
+    ' one to twelve.  From the thirteenth on he has his one chance to finish
+    ' and the clock cannot take it away from him.  The port ended the game at
+    ' zero whatever level he was on.
+    If curLevel < 13 And gameOver = 0 Then
       gameOver = 1
       message = MSG_TIME : msgText = "TIME UP" : msgTimer = 200
     End If
@@ -5068,6 +5080,7 @@ End Sub
 '   FLOAT n               the float potion is in him for n more frames
 '   OPEN n                the level's way out is open
 '   SEED n                the random seed, so that a run repeats
+'   CLOCK n               wind the game clock on to frame n
 '   SPEC scrn bx by v     hold one block's modifier byte at a value
 '   TYPE scrn bx by v     put a block type where the scenario needs one
 '   ENTER                 arrive at the screen he is on, again
@@ -5174,6 +5187,7 @@ Sub RunScenarios
       Case "FLOAT" : weightless = ScNum(ScWord$(ln, 2))
       Case "OPEN"  : exitOpen = ScNum(ScWord$(ln, 2))
       Case "SEED"  : rndSeed  = ScNum(ScWord$(ln, 2))
+      Case "CLOCK" : frameCount = ScNum(ScWord$(ln, 2)) : GetMinLeft
       Case "TRACE" : tr       = ScNum(ScWord$(ln, 2))
       Case "RUN"
         codes = ScRest$(ln, 2)
@@ -5318,6 +5332,8 @@ Function ScenValue(what As STRING) As INTEGER
     Case "FWDTYPE" : ScenValue = fwdType
     Case "REPEAT"  : ScenValue = cRepeat
     Case "KNOCKS"  : ScenValue = nGateKnocks
+    Case "CLOCK"   : ScenValue = frameCount
+    Case "MINLEFT" : ScenValue = minLeft
     Case "BASEX"   : ScenValue = BaseX()
     Case "DROPS"   : ScenValue = nDrop
     Case "STRIKES" : ScenValue = nStrikes
