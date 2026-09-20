@@ -1513,6 +1513,20 @@ Sub DeadEnemy
   lastWhat = "the way out opens"
 End Sub
 
+' AUTO.S stealsword: on the twelfth level, cutting right into screen 18 is
+' the moment the shadow takes the sword.  The block simply goes from the room
+' he has just left - REMOVEOBJ, the same as picking anything else up - and
+' AddGuard's test for the sword being gone is what puts the shadow on that
+' screen from then on.  Without this the sword stayed where it was, the
+' shadow was never added, and the level could not be finished.
+Sub StealSword
+  If curLevel <> 12 Or cScrn <> 18 Then Exit Sub
+  If BType(kSwordScrn, kSwordY * COLS + kSwordX) <> T_SWORD Then Exit Sub
+  SetType kSwordScrn, kSwordY * COLS + kSwordX, T_FLOOR
+  SetSpec kSwordScrn, kSwordY * COLS + kSwordX, 0
+  lastWhat = "the sword is gone"
+End Sub
+
 ' MIRAPPEAR: on the fourth level the mirror is not part of the room.  It is
 ' put there the moment the exit opens, which is what makes the way out lead
 ' past it.
@@ -2851,6 +2865,7 @@ Function CrossScreen() As INTEGER
     End If
     cScrn = sRight : cBlockX = cBlockX - COLS : cX = cX - SCRNW
     CrossScreen = 1 : cutDir = 1
+    StealSword
   ElseIf cBlockY >= ROWS Then
     ' The sixth level is finished by falling off its first screen.  AUTO.S
     ' cutchar refuses to cut down from there, so he never arrives anywhere -
@@ -4684,6 +4699,7 @@ End Sub
 '   TRACE n               from here on, print a line for every frame
 '   RUN codes             one character a frame; use as many lines as needed
 '   WANT what [op] n      an expectation, checked at END
+'   WANTBLOCK s bx by ty  what the blueprint should say, checked here
 '   END                   check the expectations and say how it went
 '
 ' Input codes are the ones ApplyCode knows: . nothing  > forward  < back
@@ -4701,7 +4717,7 @@ Sub RunScenarios
   ' for names that are never more than a word long.
   Local STRING wName(15) LENGTH 12, wOp(15) LENGTH 2
   Local STRING ln, w, nm, codes
-  Local INTEGER wVal(15), nw, i, got, ok, tests, fails, tr
+  Local INTEGER wVal(15), nw, i, got, ok, tests, fails, tr, bwant
 
   HEADLESS = 1
   Print
@@ -4773,6 +4789,20 @@ Sub RunScenarios
           End If
         Else
           Print "  ?? too many expectations in one scenario"
+        End If
+      Case "WANTBLOCK"
+        ' What the blueprint should say, checked where it is written rather
+        ' than saved up for END: a scenario that changes a room wants to know
+        ' that at the point it changed it.
+        got = BType(ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,4)) * COLS + ScNum(ScWord$(ln,3)))
+        bwant = ScNum(ScWord$(ln, 5))
+        tests = tests + 1
+        nm = "block " + ScWord$(ln,2) + " " + ScWord$(ln,3) + "," + ScWord$(ln,4)
+        If got = bwant Then
+          Print "  ok:   " + nm + " is type " + Str$(got)
+        Else
+          Print "  FAIL: " + nm + " should be type " + Str$(bwant) + " but is " + Str$(got)
+          fails = fails + 1
         End If
       Case "END"
         Print "  ran " + Str$(scenFrames) + " frames, ended " + ScState$()
@@ -4853,6 +4883,8 @@ Function ScenValue(what As STRING) As INTEGER
     Case "DROPS"   : ScenValue = nDrop
     Case "STRIKES" : ScenValue = nStrikes
     Case "GUARDS"  : ScenValue = nGuardsDead
+    Case "SHADOWS" : ScenValue = nShadows
+    Case "MERGES"  : ScenValue = nMerges
     Case Else      : Error "unknown expectation " + what
   End Select
 End Function
@@ -4879,7 +4911,7 @@ Sub ScZero
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
   nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0
-  nStrikes = 0 : nGuardsDead = 0
+  nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0
 End Sub
 
 ' One line saying where he is and what he is doing, the same shape every

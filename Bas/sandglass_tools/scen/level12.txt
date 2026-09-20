@@ -1,0 +1,30 @@
+' scen/level12.txt - finding 1.5, the five reasons the twelfth level cannot
+' be finished.  One scenario per reason, in the order the review lists them.
+
+' 1. AUTO.S stealsword.  Cutting right into screen 18 is when the shadow
+' takes the sword: the block goes from screen 15 (1,0), and AddGuard's test
+' for it being gone is what puts the shadow there from then on.
+'
+' Screen 21 row 0 is empty out to column 6, then floor, pillar and the
+' up-plate at 9, and its right is screen 18.  He faces left when he is put
+' down, so he is turned round first and then run at the join.
+SCEN cutting right into screen 18 takes the sword
+AT 12 21 9 0
+SEED 17
+WANTBLOCK 15 1 0 22
+RUN ..<<<<....>>>>>>>>>>>>>>>>
+WANTBLOCK 15 1 0 1
+WANT SCRN 18
+WANT ALIVE 1
+END
+
+' The control: the sword is not taken by wandering about screen 21.  Without
+' it the check above would be satisfied by a change that removed the sword at
+' the start of the level, which is not what the original does.
+SCEN the sword stays put until he cuts right
+AT 12 21 9 0
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>
+WANTBLOCK 15 1 0 22
+WANT SCRN 21
+END
