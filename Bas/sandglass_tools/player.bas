@@ -1283,6 +1283,16 @@ Sub Settle
     If noFloor(t) Then
       cFalling = 1 : cAction = ACT_FALLING : cYVel = 0
       cSeq = seqTab(FallSeq())
+      ' CTRL.S startfall puts the sword away.  Left drawn, the landing runs
+      ' softland's crouch with FightCtrl in charge, and FightCtrl takes no
+      ' input from that pose: he crouches where he lands until something
+      ' kills him.  Retreating off a ledge is the ordinary way out of a
+      ' fight, so this was a soft-lock in the one move you most want.
+      cSword = 0
+      ' And it tells whoever he was fighting that he has gone over the edge.
+      ' Nothing ever set this, so FollowKid never ran and no guard ever came
+      ' down after him.
+      If cID = 0 Then droppedOut = 1
       lastWhat = "step off" : nStepOff = nStepOff + 1
     End If
     Exit Sub
@@ -5098,6 +5108,8 @@ Function ScenValue(what As STRING) As INTEGER
     Case "OPPFALL" : ScenValue = gRec(14)
     Case "MAXOPP"  : ScenValue = maxOppStr
     Case "SWORD"   : ScenValue = gotSword
+    Case "DRAWN"   : ScenValue = cSword
+    Case "DROPPED" : ScenValue = droppedOut
     Case "OPEN"    : ScenValue = exitOpen
     Case "OVER"    : ScenValue = gameOver
     Case "DONE"    : ScenValue = levelDone
@@ -5164,7 +5176,7 @@ Function ScState$() As STRING
   t = "blk " + Str$(cBlockX) + "," + Str$(cBlockY) + " scr " + Str$(cScrn)
   t = t + " x " + Str$(cX) + " y " + Str$(cY) + " posn " + Str$(cPosn)
   t = t + " act " + Str$(cAction) + " fall " + Str$(cFalling)
-  t = t + " yv " + Str$(cYVel) + " life " + Str$(cLife) + " d " + Str$(GetDist())
+  t = t + " yv " + Str$(cYVel) + " sw " + Str$(cSword) + " life " + Str$(cLife) + " d " + Str$(GetDist())
   ' Whoever else is on the screen, since half of what a scenario asks about
   ' is what he is doing: pose, x, block, sword, life and what is left of him.
   If gdPresent Then

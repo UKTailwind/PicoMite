@@ -1,0 +1,45 @@
+' scen/engarde.txt - finding 2.2: going over an edge with the sword out.
+'
+' CTRL.S startfall puts the sword away as the fall begins, and for the player
+' it also sets droppedout.  The port did neither.
+'
+' Left drawn, the landing runs softland's crouch and FightCtrl is in charge of
+' pose 109, which takes no input: he crouches where he lands until something
+' kills him.  Retreating off a ledge is the ordinary way out of a fight, so
+' this was a soft-lock in the one move you most want.  And droppedout is what
+' tells the guard the kid has gone over the edge; nothing ever set it, so
+' FollowKid never ran and nobody ever came down after him.
+'
+' Level 1 screen 3 is the guard's room and has no ledge in it, so one is made
+' under him once the fight is going: the sword-fight script from the coverage
+' pass leaves him en garde at column 4, and that floor is then taken away with
+' somewhere put below to land on.  How the floor went does not matter - what
+' is being tested is what a step-off does to a character with his sword out.
+
+SCEN dropping out of a fight does not leave him crouching
+AT 1 3 2 1
+SWORD 1
+SEED 17
+RUN ..<<<<....>>>>>>>>>>>>>>........B...B...^..B
+TYPE 3 3 2 1
+TYPE 3 4 2 1
+TYPE 3 5 2 1
+TYPE 3 4 1 0
+TYPE 3 3 1 0
+RUN ........................
+WANT DRAWN 0
+WANT DROPPED 1
+WANT POSN 15
+WANT BY 2
+WANT ALIVE 1
+END
+
+' The control: an ordinary step-off with no sword drawn is unchanged.
+SCEN an unarmed step-off is as it was
+AT 1 1 3 0
+X 100
+SEED 17
+RUN ..v.......
+WANT DRAWN 0
+WANT ALIVE 1
+END
