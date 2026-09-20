@@ -4032,6 +4032,51 @@ static int MIPS16 lib_scan(int fnbr, uint32_t *hash, unsigned char *text, uint32
 
    NOTHING is written anywhere until every file has been read, so a bad name in
    the last one fails before the library is disturbed. */
+/* Is the library image structurally sound?  This is the library's equivalent
+   of the Option.Magic check at boot, and it exists for the same reason: a
+   corrupt library hangs PrepareProgram before any input is possible, and
+   because a uf2 only writes BELOW FLASH_TARGET_OFFSET, reflashing the firmware
+   leaves the library exactly where it was - so the board cannot be recovered
+   by reflashing it.  Walk the image with a bound and refuse it if anything is
+   out of place; the caller then clears the option and the board comes up.
+
+   The walk deliberately mirrors PrepareProgramExt's: the tokenised text, then
+   the zero padding, then the 0xff that marks the start of the binaries, then
+   the chain of records, each of which must fit inside the slot. */
+int LibraryImageValid(const unsigned char *lib)
+{
+    const unsigned char *p = lib;
+    const unsigned char *const limit = lib + MAX_PROG_SIZE;
+    const unsigned int *cfp, *cfplimit;
+
+    if (lib == NULL || *p != T_NEWLINE)
+        return 0; /* every library starts with a tokenised line */
+    while (p + 1 < limit && !(p[0] == 0 && p[1] == 0))
+        p++;
+    if (p + 1 >= limit)
+        return 0; /* the text never ended inside the slot */
+    p += 2;
+    while (p < limit && *p == 0)
+        p++; /* the padding to the next block */
+    if (p >= limit || *p != 0xff)
+        return 0; /* the marker that starts the binaries is missing */
+    p++;
+    cfp = (const unsigned int *)(((uintptr_t)p + 3) & ~(uintptr_t)3);
+    cfplimit = (const unsigned int *)limit;
+    while (cfp < cfplimit && *cfp != 0xffffffffu)
+    {
+        unsigned int words;
+        cfp++; /* over the address word, or the font number */
+        if (cfp >= cfplimit)
+            return 0;
+        words = (*cfp + 4) / sizeof(unsigned int);
+        if (words == 0 || words > (unsigned int)(cfplimit - cfp))
+            return 0; /* a size that does not fit the slot */
+        cfp += words;
+    }
+    return cfp < cfplimit; /* the chain has to end inside the slot */
+}
+
 int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashout, unsigned char **image,
                            unsigned char **binout, uint32_t *binlenout, int *nfixout, uint32_t skiphash)
 {

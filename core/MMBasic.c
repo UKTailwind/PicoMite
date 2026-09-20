@@ -959,7 +959,14 @@ int MIPS16 PrepareProgram(int ErrAbort)
 int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, int ErrAbort)
 {
     unsigned int *cfp;
-    while (*p != 0xff)
+    /* Every region this is asked to scan - program memory, the library, a RAM
+       slot - is MAX_PROG_SIZE long.  A corrupt image used to walk straight past
+       the end of it: flash is memory mapped so every read succeeds, and the
+       loops below only stop on a byte value, so a bad image could wander for
+       megabytes and hang the interpreter before the prompt was reachable.
+       Bound every walk to the region and stop rather than run away. */
+    unsigned char *const plimit = p + MAX_PROG_SIZE;
+    while (*p != 0xff && p < plimit)
     {
         p = GetNextCommand(p, &CurrentLinePtr, NULL);
         if (*p == 0)
@@ -1205,10 +1212,10 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
             }
         }
 #endif
-        while (*p)
+        while (*p && p < plimit)
             p++; // look for the zero marking the start of the next element
     }
-    while (*p == 0)
+    while (*p == 0 && p < plimit)
         p++;                                                        // the end of the program can have multiple zeros
     p++;                                                            // step over the terminating 0xff
     *CFunPtr = (unsigned char *)(((unsigned int)p + 0b11) & ~0b11); // CFunction flash (if it exists) starts on the next word address after the program in flash
@@ -1217,13 +1224,28 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
     CurrentLinePtr = NULL;
     // now, step through the CFunction area looking for fonts to add to the font table
     // Bit 7 on the last address byte is used to identify a font.
-    cfp = *(unsigned int **)CFunPtr;
-    while (*cfp != 0xffffffff)
     {
-        if (*cfp & 0x80000000)
-            FontTable[*cfp & (FONT_TABLE_SIZE - 1)] = (unsigned char *)(cfp + 2);
-        cfp++;
-        cfp += (*cfp + 4) / sizeof(unsigned int);
+        unsigned int *const cfplimit = (unsigned int *)plimit;
+        cfp = *(unsigned int **)CFunPtr;
+        while (cfp < cfplimit && *cfp != 0xffffffff)
+        {
+            unsigned int words;
+            if (*cfp & 0x80000000)
+            {
+                if (cfp + 2 < cfplimit)
+                    FontTable[*cfp & (FONT_TABLE_SIZE - 1)] = (unsigned char *)(cfp + 2);
+            }
+            cfp++;
+            if (cfp >= cfplimit)
+                break;
+            /* One rubbish size word used to send this anywhere; and a size in
+               the last few counts of the range wraps to zero words, which is an
+               endless loop.  Neither can leave the region now. */
+            words = (*cfp + 4) / sizeof(unsigned int);
+            if (words == 0 || words > (unsigned int)(cfplimit - cfp))
+                break;
+            cfp += words;
+        }
     }
     return i;
 }

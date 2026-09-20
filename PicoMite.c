@@ -3614,6 +3614,10 @@ uint32_t testPSRAM(void)
             !(Option.Autorun >= 0 && Option.Autorun <= MAXFLASHSLOTS + 1) ||
             Option.CPU_Speed < MIN_CPU || Option.CPU_Speed > MAX_CPU ||
             Option.PROG_FLASH_SIZE != MAX_PROG_SIZE ||
+            /* the library flag is either "none" or "the whole slot"; anything
+               else is corruption, and it decides whether the image below is
+               walked at all */
+            !(Option.LIBRARY_FLASH_SIZE == 0 || Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE) ||
 #if !(defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
             /* CYW43 builds legitimately run with heartbeatpin==0 and
                NoHeartbeat==0 (LED on the wireless chip), so this pair
@@ -4319,6 +4323,28 @@ uint32_t testPSRAM(void)
             if (Option.Refresh)
                 Display_Refresh();
 #endif
+            /* Check the library before anything walks it.  A corrupt one used
+               to hang PrepareProgram below at every boot, before the prompt was
+               reachable, and a firmware reflash did not help because a uf2 only
+               writes below FLASH_TARGET_OFFSET and so leaves the library alone.
+               Discarding it here lets the board recover itself on the next boot
+               with no special tooling. */
+            if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && !LibraryImageValid(LibMemory))
+            {
+                /* Erase it as well as clearing the flag.  Leaving the rubbish
+                   in the slot only moves the problem: FLASH LIST walks slot 3
+                   as a program whatever the flag says, and expanding a garbage
+                   token overruns its line buffer and faults.  Erase FIRST, so
+                   a power cut here leaves the slot empty with the flag still
+                   set, which this same check discards cleanly on the next boot. */
+                FlashWriteInit(LIBRARY_FLASH);
+                safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
+                enable_interrupts_pico();
+                Option.LIBRARY_FLASH_SIZE = 0;
+                Option.LIBRARY_HASH = 0;
+                SaveOptions();
+                MMPrintString("Library was corrupt and has been discarded\r\n");
+            }
             if (PrepareProgram(true))
             {
                 // Error in program - print message but continue to prompt
