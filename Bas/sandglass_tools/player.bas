@@ -547,6 +547,7 @@ For frame = 1 To maxFrames
   FrameBuffer Write 2
   CLS Map(TRANSP)
   DrawMovers
+  DrawReflection
   DrawChar
   If gdPresent Then
     SaveChar kRec() : LoadShadWOp : DrawChar : LoadKidWOp
@@ -3515,6 +3516,52 @@ Function FrameRowOf(id As INTEGER, posn As INTEGER) As INTEGER
   End If
   If p >= 150 And p < 190 Then FrameRowOf = frmCount + (p - 150)
 End Function
+
+' MISC.S REFLECTION.  Standing in the mirror's block, the kid's reflection is
+' drawn in it: the same pose, mirrored about the mirror's own line and facing
+' the other way, cropped so that only the part of him that is IN the mirror
+' shows.
+'     jsr getunderft / cmp #mirror / bne rts
+'     jsr getreflect / lda dmirr / bmi rts
+'     jsr setupchar
+'     ldx CharBlockY / inx / lda BlockTop,x / cmp FCharY / bcs rts
+'     sta FCharCU                       ;crop upper edge to the top of the row
+'     lda CharBlockX / asl / asl / clc / adc #1 / sta FCharCL   ;and the left
+'     jmp addreflobj
+' The mirroring is the one SmashMirror already uses when the reflection comes
+' to life and walks out of the glass.  getreflect itself is in none of the
+' source files that can be reached, and dmirr with it; the left crop does the
+' same work, since a kid on the wrong side of the glass has his reflection
+' cropped away to nothing.
+Sub DrawReflection
+  Local INTEGER sx, sf, f, dx, px, py, cl, cu, w, h, ox, oy
+  If curLevel <> 4 Then Exit Sub
+  If BlockAt(cScrn, cBlockX, cBlockY) <> T_MIRROR Then Exit Sub
+  sx = cX : sf = cFace
+  cX = ((blocks(gBlockEdge + cBlockX + 5) + 10) * 2 - cX) And &HFF
+  cFace = cFace Xor &HFF
+  If CharImg() Then
+    f = FrameRow() * frmEntry
+    dx = Sgn8(frmb(f + 2))
+    If (cFace And &H80) Then px = (cX - dx) And &HFF Else px = (cX + dx) And &HFF
+    px = ORIGINX + ((px - 58) And &HFF) * 2
+    If (cFace And &H80) = 0 Then px = px - imW + 1
+    py = ORIGINY + ((cY + vertDist + Sgn8(frmb(f + 3))) And &HFF) - imH + 1
+    cl = ORIGINX + cBlockX * BLOCKW
+    cu = ORIGINY + blocks(gBlockBot + cBlockY)
+    ox = 0 : oy = 0
+    If px < cl Then ox = cl - px
+    If py < cu Then oy = cu - py
+    w = imW - ox : h = imH - oy
+    If w > 0 And h > 0 Then
+      px = px + ox : py = py + oy
+      If px >= 0 And py >= 0 And px + w <= 320 And py + h <= 240 Then
+        Blit Flash imSheet,2,imSX+ox,imSY+oy,px,py,w,h,TRANSP
+      End If
+    End If
+  End If
+  cX = sx : cFace = sf
+End Sub
 
 Sub DrawChar
   Local INTEGER f, dx, px, py, ax

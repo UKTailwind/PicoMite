@@ -53,6 +53,25 @@ END
 ' smacks him into the wall under every ledge he reaches for and the grab stops
 ' working altogether.  So HitBarrier still leaves the air alone.
 '
+' Three findings come back to this one gap, and none can be closed without it:
+'   - the mid-air wall hit, below;
+'   - COLL.S ENEMYCOLL, which wants an en-garde fighter in action 1 and never
+'     sees one, because HitBarrier has already put him in action 5;
+'   - MISC.S REFLECTION, which wants him standing IN the mirror's block.  A
+'     mirror is a barrier, so he is stopped one block short of the glass and
+'     his reflection is never drawn.  The original lets him in because the bar
+'     is a plane part way through the block rather than the whole of it.
+'
+' Three findings come back to this one gap, and none of them can be closed
+' without it:
+'   - the mid-air wall hit, below;
+'   - COLL.S ENEMYCOLL, which wants an en-garde fighter in action 1 and never
+'     sees him, because HitBarrier has already put him in action 5;
+'   - MISC.S REFLECTION, which wants him standing IN the mirror's block.  A
+'     mirror is a barrier, so he is stopped one block short of the glass and
+'     his reflection is never drawn.  The original lets him in because the bar
+'     is a plane part way through the block rather than the whole of it.
+'
 ' Level 1 screen 1 has floor at columns 3 to 7 and solid block at 8 and 9.  A
 ' running jump from column 3 meets that wall at the top of its arc, nineteen
 ' frames in, and goes INTO block 8 - inside the wall - to be pushed back out
