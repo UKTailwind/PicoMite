@@ -1,17 +1,17 @@
-' discover_guards.txt - where the levels put their guards, and where the
-' engine puts them.  Prints; asserts nothing.
+' discover_guards.txt - where the levels put their guards.  Prints; asserts
+' nothing.
 '
-' This is the evidence for finding 2.5.  The level says the guard on level 1
-' screen 3 stands at block 7 and gives his x as 170; the engine, asked which
-' block he is in, answers 8.  The two differ because his block is worked out
-' from his BASE, and his base is his drawing anchor plus the thirteen-pixel
-' footmark of the en-garde pose, which carries it into the next block.
+' GDTAB reads the level's own guard table.  It says the guard on level 1
+' screen 3 stands at block 7 with his x at 170; ask the engine which block he
+' is in and it answers 8.  That is not the angle: it is his base, which is his
+' drawing anchor plus the thirteen-pixel footmark of the en-garde pose, and
+' CTRLSUBS.S GETBASEBLOCK works the same way - BlockTable(170 + 13 - 7) is 8
+' in the original too.  ADDGUARD sets CharBlockX from CharX rather than from
+' the base when it first puts him down, and the next frame's GETBASEBLOCK
+' overwrites it, so the original lands on 8 as well.
 '
-' Adopting the original's perspective angle - block from base - 9, front edge
-' at 14*(b+4)+9, kid start +14 - does NOT change that answer: it was tried and
-' he still comes out at 8.  What it does change is where the kid stands
-' relative to the scenery, and the distance between the two of them, which is
-' what a fight turns on.
+' Kept because it is the measurement finding 2.5 wants and neither the review
+' nor the port had it.
 FIND 1 22
 GDTAB 1
 GDTAB 3

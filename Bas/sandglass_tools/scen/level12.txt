@@ -159,7 +159,7 @@ TYPE 15 1 0 1
 ENTER
 SWORD 1
 SEED 17
-RUN ..>>>>>>>>........B...B...^..B...B..^..B...>..B...B...^..B...B...>..B..
+RUN ..>>>>>>>>........B..>B..>^..B..>B..^>.B
 WANT MAXSTR 3
 WANT MAXOPP 4
 WANT STR 3
@@ -176,7 +176,7 @@ TYPE 15 1 0 1
 ENTER
 SWORD 1
 SEED 17
-RUN ..>>>>>>>>........B...B...^..B...B..^..B...>..B...B...^..B...B...>..B...B..B...^..B...B...B...B...B...B...B...B...B...B..
+RUN ..>>>>>>>>........B..>B..>^..B..>B..^>.B..>>..B..>B..>^..B..>B..>>..B..>B..B..>^..B..>B..>B..>B..>B..>B..>B..>B..>B..>B..
 WANT OPPSTR 0
 WANT GUARDS 1
 WANT STR 0
@@ -213,7 +213,7 @@ RUN ..........
 WANT SHADOWS 1
 WANT OPPPOSN 15
 WANT OPPFALL 0
-WANT X 163
+WANT X 170
 END
 
 SCEN and drops once the kid is well into the room

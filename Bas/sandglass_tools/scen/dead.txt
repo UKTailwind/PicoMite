@@ -19,8 +19,10 @@ SWORD 1
 SEED 17
 RUN ..<<<<....>>>>>>>>>>>>>>........B...B...^..B...B...^..B...B...>..B...B..B...^..B...B...B...B...B...B...B...B...B...B..
 WANT GUARDS 1
+TYPE 3 4 2 1
+TYPE 3 5 2 1
 TYPE 3 6 2 1
-TYPE 3 7 2 1
+TYPE 3 5 1 0
 TYPE 3 6 1 0
 RUN ..............
 WANT OPPBY 2
@@ -32,6 +34,7 @@ END
 ' screen 3's bottom row is solid, so there is nowhere for him to land.
 SCEN a guard who falls out of the room is gone
 AT 1 3 2 1
+TYPE 3 7 1 0
 TYPE 3 8 1 0
 SEED 17
 RUN ..................

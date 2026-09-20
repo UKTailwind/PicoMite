@@ -9,11 +9,15 @@
 ' the rest of the game.
 '
 ' Level 1 screen 3 is the guard's room.  The floor is taken out from under
-' him where he stands, and the row below given something to land on.
+' him where he stands, and the row below given something to land on.  Both
+' of columns 7 and 8 go, because his base sits on the boundary between
+' them while he stands en garde and crosses it as he falls.
 
 SCEN a guard lands en garde, not in the crouch
 AT 1 3 2 1
+TYPE 3 7 2 1
 TYPE 3 8 2 1
+TYPE 3 7 1 0
 TYPE 3 8 1 0
 SEED 17
 RUN .......
@@ -26,7 +30,9 @@ END
 ' separate thing.
 SCEN and he gets up again
 AT 1 3 2 1
+TYPE 3 7 2 1
 TYPE 3 8 2 1
+TYPE 3 7 1 0
 TYPE 3 8 1 0
 SEED 17
 RUN ..........
@@ -38,7 +44,7 @@ END
 ' softland is for.
 SCEN the player still lands in his own crouch
 AT 1 1 3 0
-X 100
+X 107
 SEED 17
 RUN ..v.......
 WANT POSN 109

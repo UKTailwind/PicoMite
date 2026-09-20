@@ -156,6 +156,18 @@ Dim INTEGER poseSeen(256), scenFrames, loadedLevel
 Dim INTEGER palette(15)
 Const OFF_MAP = 1952
 Const SCRNW = 140                ' ten blocks of fourteen units
+' CTRLSUBS.S GETBASEBLOCK is "getbasex" then "getblockxp", and GETBLOCKXP is
+'     sec / sbc #angle / tay / lda BlockTable,y
+' so a character's block is BlockTable(base - angle) with angle = 7.
+' BlockTable itself is "screen x -> block number" over 14-wide blocks starting
+' at 2, which is the port's (x - 2) \ 14 - 4; what the port left out is the
+' angle.  It compensated by putting the kid down at BlockEdge + 7 instead of
+' the original's BlockEdge + angle + 7, so his BLOCK came out right while his
+' x was seven pixels light - and InitGuards, BonesRise, TryStairs, DoImpale
+' and SmashMirror all use the original's absolute constants, so the distance
+' between the kid and anyone else was wrong by those seven pixels.
+Const ANGLE = 7
+Const BLOCKLO = 2 + ANGLE        ' a block's front edge, less 14 * (b + 4)
 Const SECMAX = 5 * 32
 ' The middle section depends on the neighbour's TYPE *and* its STATE byte, so
 ' unlike the others it cannot be precomputed per type alone.  States are small,
@@ -377,7 +389,7 @@ BuildSections
 ' with nothing under it - he drops in from the ceiling, as the game opens.
 cScrn = level(OFF_INFO + 64)
 cBlockX = level(OFF_INFO + 65) Mod COLS : cBlockY = level(OFF_INFO + 65) \ COLS
-cX = 58 + cBlockX * 14 + 7 : cY = floory(cBlockY + 1)
+cX = 58 + cBlockX * 14 + 7 + ANGLE : cY = floory(cBlockY + 1)
 cFace = level(OFF_INFO + 66) : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF : cFalling = 0
 ' For now the demo starts on screen 5 instead, the first room with plates and
 ' gates: a torch, an up-plate that raises the gate beside it and the one at the
@@ -757,7 +769,7 @@ Sub StartLevel(n As INTEGER)
   If n = 1 Then CueSong 3                 ' danger, as the first level opens
   cScrn = level(OFF_INFO + 64)
   cBlockX = level(OFF_INFO + 65) Mod COLS : cBlockY = level(OFF_INFO + 65) \ COLS
-  cX = 58 + cBlockX * 14 + 7 : cY = floory(cBlockY + 1)
+  cX = 58 + cBlockX * 14 + 7 + ANGLE : cY = floory(cBlockY + 1)
   cFace = level(OFF_INFO + 66) : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF
   cFalling = 0 : stunned = 0 : cPosn = 15
   cSeq = seqTab(SEQ_STAND)
@@ -902,7 +914,7 @@ Sub ResetCharAt(lvl As INTEGER, scrn As INTEGER, bx As INTEGER, by As INTEGER)
   ' one scenario dropped must be back for the next.
   LoadLevel lvl : loadedLevel = lvl
   cScrn = scrn : cBlockX = bx : cBlockY = by
-  cX = 58 + cBlockX * 14 + 7 : cY = floory(cBlockY + 1)
+  cX = 58 + cBlockX * 14 + 7 + ANGLE : cY = floory(cBlockY + 1)
   cFace = &HFF : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF
   cFalling = 0 : stunned = 0 : cPosn = 15
   cSeq = seqTab(SEQ_STAND)
@@ -1084,8 +1096,8 @@ End Function
 Sub RereadBlocks
   Local INTEGER bx
   bx = BaseX()
-  If bx < 2 Then cBlockX = -4 : Exit Sub
-  cBlockX = (bx - 2) \ 14 - 4
+  If bx < BLOCKLO Then cBlockX = -4 : Exit Sub
+  cBlockX = (bx - BLOCKLO) \ 14 - 4
 End Sub
 
 '-----------------------------------------------------------------------------
@@ -1112,7 +1124,7 @@ Sub TryGrab(idx As INTEGER)
   End If
   ' Align to the edge of his block on the side he faces: the original's
   ' distance-to-edge step on a successful grab.
-  If (cFace And &H80) Then cX = 14 * (cBlockX + 4) + 2 Else cX = 14 * (cBlockX + 4) + 15
+  If (cFace And &H80) Then cX = 14 * (cBlockX + 4) + BLOCKLO Else cX = 14 * (cBlockX + 4) + BLOCKLO + 13
   cY = floory(idx)
   cYVel = 0
   cFalling = 0
@@ -1198,9 +1210,9 @@ Sub HitBarrier
   If Barrier(t) <> 0 And cBlockX >= 0 And cBlockX < COLS Then
     ' Push him back to the near edge of the block he came from.
     If (cFace And &H80) Then
-      cX = 14 * (cBlockX + 1 + 4) + 2          ' left edge of the block to his right
+      cX = 14 * (cBlockX + 1 + 4) + BLOCKLO     ' left edge of the block to his right
     Else
-      cX = 14 * (cBlockX - 1 + 4) + 2 + 13     ' right edge of the block to his left
+      cX = 14 * (cBlockX - 1 + 4) + BLOCKLO + 13 ' right edge of the block to his left
     End If
     RereadBlocks
     GoTo dobump
@@ -1216,7 +1228,7 @@ Sub HitBarrier
   If Barrier(t) = 0 Then Exit Sub
 
   ' At the edge of his own block with the wall next: stop him there.
-  lo = 14 * (cBlockX + 4) + 2
+  lo = 14 * (cBlockX + 4) + BLOCKLO
   hi = lo + 13
   If (cFace And &H80) Then
     If cX > lo Then Exit Sub                 ' still room to walk
@@ -1502,12 +1514,12 @@ Sub CheckAlert
     x = xk : xe = xg
   End If
   s = kRec(10)
-  tt = RdBlock(s, (x - 2) \ 14 - 4, kRec(5))
+  tt = RdBlock(s, (x - BLOCKLO) \ 14 - 4, kRec(5))
   If tt = T_SLICER Then x = x + 14
-  tt = RdBlock(s, (xe - 2) \ 14 - 4, kRec(5))
+  tt = RdBlock(s, (xe - BLOCKLO) \ 14 - 4, kRec(5))
   If tt = T_GATE Then xe = xe - 14
   Do While x <= xe
-    tt = RdBlock(s, (x - 2) \ 14 - 4, kRec(5))
+    tt = RdBlock(s, (x - BLOCKLO) \ 14 - 4, kRec(5))
     If tt = T_BLOCK Or tt = 7 Or tt = 12 Then enemyAlert = 0 : Exit Sub
     If tt = T_LOOSE Or tt = T_SLICER Then
       enemyAlert = 1
@@ -2351,7 +2363,7 @@ Sub EnemyColl
   ElseIf Barrier(t) = 0 Then
     Exit Sub
   End If
-  lo = 14 * (cBlockX + 4) + 2
+  lo = 14 * (cBlockX + 4) + BLOCKLO
   If (cFace And &H80) Then cX = lo + 14 Else cX = lo - 1
   RereadBlocks
   cSeq = seqTab(SEQ_BUMPENGBACK) : cAction = 5
@@ -2496,8 +2508,8 @@ End Function
 Function GetDist() As INTEGER
   Local INTEGER lo, bx, b
   bx = BaseX()
-  If bx < 2 Then b = -4 Else b = (bx - 2) \ 14 - 4
-  lo = 14 * (b + 4) + 2
+  If bx < BLOCKLO Then b = -4 Else b = (bx - BLOCKLO) \ 14 - 4
+  lo = 14 * (b + 4) + BLOCKLO
   If (cFace And &H80) Then GetDist = bx - lo Else GetDist = lo + 13 - bx
 End Function
 
@@ -2784,13 +2796,13 @@ End Function
 
 ' The block a given x sits in, and how far that x is from its front edge.
 Function BlockOfX(x As INTEGER) As INTEGER
-  If x < 2 Then BlockOfX = -4 Else BlockOfX = (x - 2) \ 14 - 4
+  If x < BLOCKLO Then BlockOfX = -4 Else BlockOfX = (x - BLOCKLO) \ 14 - 4
 End Function
 
 Function DistFromX(x As INTEGER, bx As INTEGER) As INTEGER
   Local INTEGER lo, b
   b = BlockOfX(x)
-  lo = 14 * (b + 4) + 2
+  lo = 14 * (b + 4) + BLOCKLO
   If (cFace And &H80) Then DistFromX = x - lo Else DistFromX = lo + 13 - x
 End Function
 
@@ -3080,14 +3092,14 @@ Function CrossScreen() As INTEGER
   If cBlockX < 0 Then
     edge = EntryBlock(cBlockX, cBlockY)
     If sLeft = 0 Or (cAction <> 2 And Barrier(edge) <> 0) Then
-      cBlockX = 0 : cX = 58 : WallBump : Exit Function
+      cBlockX = 0 : cX = 58 + ANGLE : WallBump : Exit Function
     End If
     cScrn = sLeft : cBlockX = cBlockX + COLS : cX = cX + SCRNW
     CrossScreen = 1 : cutDir = 0
   ElseIf cBlockX >= COLS Then
     edge = EntryBlock(cBlockX, cBlockY)
     If sRight = 0 Or (cAction <> 2 And Barrier(edge) <> 0) Then
-      cBlockX = COLS - 1 : cX = 58 + 139 : WallBump : Exit Function
+      cBlockX = COLS - 1 : cX = 58 + ANGLE + 139 : WallBump : Exit Function
     End If
     cScrn = sRight : cBlockX = cBlockX - COLS : cX = cX - SCRNW
     CrossScreen = 1 : cutDir = 1

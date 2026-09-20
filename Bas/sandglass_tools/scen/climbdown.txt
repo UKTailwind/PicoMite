@@ -15,11 +15,11 @@
 ' things down did - pose 102 is the first frame of stepfall, 107 the first
 ' of the crouch.  The fall itself is cut short a few frames later: his base
 ' never crosses into the empty block, so the floor test finds the floor he
-' is still standing over and sets him back down.  That is finding 2.5, the
-' two x conventions, and it is not this one.
+' is still standing over and sets him back down.  That is the stepfall
+' sequence's own chx values, which net to zero, and it is not this finding.
 SCEN down at the edge, with the drop in front, steps off
 AT 1 1 3 0
-X 100
+X 107
 SEED 17
 RUN ..v
 WANT POSN 102
@@ -32,7 +32,7 @@ END
 SCEN down with the drop behind him climbs down it
 AT 1 1 3 0
 FACE 0
-X 107
+X 114
 SEED 17
 RUN ..v.......................
 WANT CLIMBDOWN 1

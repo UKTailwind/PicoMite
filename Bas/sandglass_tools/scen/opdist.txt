@@ -1,0 +1,36 @@
+' scen/opdist.txt - finding 2.5: the distance between two characters.
+'
+' CTRLSUBS.S GETBASEBLOCK is "getbasex" then "getblockxp", and GETBLOCKXP is
+'   sec / sbc #angle / tay / lda BlockTable,y
+' with angle = 7 in GAMEEQ.S.  So a character's block is BlockTable(base minus
+' angle).  BlockTable is fourteen-wide blocks starting at screen x 2, which is
+' the port's own (x - 2) \ 14 - 4; the angle is what it left out.
+'
+' It compensated by putting the kid down at BlockEdge + 7 rather than the
+' original's BlockEdge + angle + 7, so his BLOCK came out right while his x was
+' seven pixels light.  Guards are placed by InitGuards at BlockEdge + 14, the
+' original's own constant, so every distance between the kid and anybody else
+' was out by those seven pixels - which is what the fight AI's thresholds are
+' measured against.
+'
+' The test: the level puts the guard on screen 3 at block 7 (GDTAB says so).
+' Stand the kid in block 2 and they are five blocks apart, so the distance
+' between them should be five times fourteen exactly.  It was 77.
+
+SCEN five blocks apart is seventy pixels
+AT 1 3 2 1
+SEED 17
+RUN .
+WANT OPPX 170
+WANT X 100
+WANT OPDIST -70
+END
+
+' And three blocks apart is forty-two.  It was 49.
+SCEN three blocks apart is forty-two
+AT 1 3 4 1
+SEED 17
+RUN .
+WANT X 128
+WANT OPDIST -42
+END

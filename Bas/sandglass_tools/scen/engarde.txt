@@ -37,7 +37,7 @@ END
 ' The control: an ordinary step-off with no sword drawn is unchanged.
 SCEN an unarmed step-off is as it was
 AT 1 1 3 0
-X 100
+X 107
 SEED 17
 RUN ..v.......
 WANT DRAWN 0
