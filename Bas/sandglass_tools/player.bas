@@ -1193,7 +1193,7 @@ End Sub
 ' let him cross into the next screen and only then be pushed back out, so he
 ' ping-ponged over the join and the background was rebuilt every frame.
 Sub TryGrab(idx As INTEGER)
-  Local INTEGER saved, ahead, above, aboveinf
+  Local INTEGER saved, ahead, above
   saved = cX
   ' The reach goes BACKWARDS, not forwards.  When you run off a ledge the ledge
   ' you are grabbing for is behind you, so a left-facing character reaches to
@@ -1202,8 +1202,7 @@ Sub TryGrab(idx As INTEGER)
   RereadBlocks
   If (cFace And &H80) Then ahead = cBlockX - 1 Else ahead = cBlockX + 1
   above = BlockAt(cScrn, cBlockX, cBlockY - 1)
-  aboveinf = BlockAt(cScrn, ahead, cBlockY - 1)
-  If CanGrab(above, aboveinf) = 0 Then
+  If CanGrabAt(above, cScrn, ahead, cBlockY - 1) = 0 Then
     cX = saved : RereadBlocks : Exit Sub
   End If
   ' CTRL.S fallon :ok - "jsr getdist / jsr addcharx / sta CharX".  It is his
@@ -1225,6 +1224,24 @@ End Sub
 '-----------------------------------------------------------------------------
 ' Clear above him, and a solid ledge above and in front.  Two block types can
 ' only be caught from one side, which is why facing is tested here.
+' CHECKLEDGE has one test that needs the block's STATE and not just its type:
+'     cmp #loose / bne :notloose
+'     bit tempstate / bne :no   ;floor is already loose
+' A loose floor that has begun to go is not something to hang from.  The port
+' let him catch one that was on its way down, which is the one moment it is
+' certainly not there.  CanGrab itself stays a function of the two types, so
+' that the host reference in animref.py --mode grabrule and grabtest.bas keep
+' pinning it; this is the layer above, where the block can be looked up.
+Function CanGrabAt(above As INTEGER, scrn As INTEGER, bx As INTEGER, by As INTEGER) As INTEGER
+  Local INTEGER front
+  front = RdBlock(scrn, bx, by)
+  CanGrabAt = CanGrab(above, front)
+  If CanGrabAt = 0 Then Exit Function
+  If front = T_LOOSE Then
+    If BSpec(tScrn, tBY * COLS + tBX) <> 0 Then CanGrabAt = 0
+  End If
+End Function
+
 Function CanGrab(above As INTEGER, aboveinf As INTEGER) As INTEGER
   CanGrab = 0
   If above = 20 Then Exit Function
@@ -3017,7 +3034,7 @@ Function DoDown() As INTEGER
       ' checkledge(getbehind, getunderft): the block behind has to be one he
       ' can hang in and the one he is standing in has to have the floor whose
       ' edge he hangs from.
-      If CanGrab(BlockAt(cScrn, behind, cBlockY), under) Then
+      If CanGrabAt(BlockAt(cScrn, behind, cBlockY), cScrn, cBlockX, cBlockY) Then
         ' Facing left with a gate underfoot, it has to be high enough to get
         ' under, the same threshold the climb up the other way uses.
         If (cFace And &H80) = 0 Or RdBlock(cScrn, cBlockX, cBlockY) <> T_GATE Then
@@ -3041,7 +3058,7 @@ Function DoDown() As INTEGER
 End Function
 
 Function DoJumpup() As INTEGER
-  Local INTEGER ahead, behind, above, aboveinf, abovebeh, dist
+  Local INTEGER ahead, behind, above, abovebeh, dist
   clrU = 1
   If (cFace And &H80) Then
     ahead = cBlockX - 1 : behind = cBlockX + 1
@@ -3049,10 +3066,9 @@ Function DoJumpup() As INTEGER
     ahead = cBlockX + 1 : behind = cBlockX - 1
   End If
   above = BlockAt(cScrn, cBlockX, cBlockY - 1)
-  aboveinf = BlockAt(cScrn, ahead, cBlockY - 1)
   abovebeh = BlockAt(cScrn, behind, cBlockY - 1)
-  If CanGrab(above, aboveinf) Then DoJumpup = DoJumphang() : Exit Function
-  If CanGrab(abovebeh, above) Then
+  If CanGrabAt(above, cScrn, ahead, cBlockY - 1) Then DoJumpup = DoJumphang() : Exit Function
+  If CanGrabAt(abovebeh, cScrn, cBlockX, cBlockY - 1) Then
     dist = GetDist()
     If dist >= JUMPBACK_THRES Then
       If noFloor(BlockAt(cScrn, behind, cBlockY)) Then

@@ -53,3 +53,50 @@ WANT CLIMBS 1
 WANT BY 1
 WANT ALIVE 1
 END
+
+' CTRLSUBS.S CHECKLEDGE has one test that needs the block's state and not
+' just its type:
+'     cmp #loose / bne :notloose
+'     bit tempstate / bne :no  ;floor is already loose
+' A loose floor that has begun to go is not something to hang from, and the
+' port let him catch one on its way down - the one moment it is certainly not
+' there to be caught.
+'
+' The same falling-short jump as above, with the ledge he reaches for made a
+' loose floor.  Whole, he catches it; already on the move, he does not and
+' lands where the fall was taking him.
+
+SCEN a loose floor still whole can be caught
+AT 1 8 7 1
+TYPE 8 1 1 0
+TYPE 8 2 1 0
+TYPE 8 3 1 0
+TYPE 8 1 2 1
+TYPE 8 2 2 1
+' (The block was a torch, and its flame state is left in the modifier byte by
+' the type change, so it is cleared here rather than read as a floor already
+' going.)
+TYPE 8 0 1 11
+SPEC 8 0 1 0
+SEED 17
+RUN ..>>>>>>>>JFFFFFFFFFFFFFFFFF
+WANT GRABS 1
+WANT BX 0
+WANT BY 2
+END
+
+SCEN one already on its way down cannot
+AT 1 8 7 1
+TYPE 8 1 1 0
+TYPE 8 2 1 0
+TYPE 8 3 1 0
+TYPE 8 1 2 1
+TYPE 8 2 2 1
+TYPE 8 0 1 11
+SPEC 8 0 1 1
+SEED 17
+RUN ..>>>>>>>>JFFFFFFFFFFFFFFFFF
+WANT GRABS 0
+WANT BY 2
+WANT ALIVE 1
+END
