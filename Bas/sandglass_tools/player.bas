@@ -1399,25 +1399,44 @@ Sub Settle
     Exit Sub
   End If
 
-  If weightless Then
-    cYVel = cYVel + WTLESS_ACCEL
-    If cYVel > WTLESS_TERMVEL Then cYVel = WTLESS_TERMVEL
-  Else
-    cYVel = cYVel + FALL_ACCEL
-    If cYVel > FALL_TERMVEL Then cYVel = FALL_TERMVEL
+  ' SUBS.S GRAVITY begins "lda CharAction / cmp #4 / bne rts", so it does
+  ' nothing at all until the fall is a freefall.  The first frames of a fall
+  ' are action 3, where the sequence's own chy opcodes are what move him, and
+  ' the port accelerated him through those as well: every fall started about
+  ' thirty pixels too low and reached the floor a frame early.
+  If cAction = ACT_FALLING Then
+    If weightless Then
+      cYVel = cYVel + WTLESS_ACCEL
+      If cYVel > WTLESS_TERMVEL Then cYVel = WTLESS_TERMVEL
+    Else
+      cYVel = cYVel + FALL_ACCEL
+      If cYVel > FALL_TERMVEL Then cYVel = FALL_TERMVEL
+    End If
   End If
-  ' SUBS.S ADDFALL carries the horizontal velocity through a freefall as well
-  ' as the vertical one.  The port set cXVel from the sequence and then never
-  ' moved him with it, so every fall was dead vertical: the one pixel a frame
-  ' that a step off an edge drifts was missing, and with it the ledge the
-  ' seventh level opens by dropping onto.
-  If cXVel <> 0 Then
+  ' SUBS.S ADDFALL adds the vertical velocity whatever the action, and carries
+  ' the horizontal one only in a freefall.  The port set cXVel from the
+  ' sequence and then never moved him with it, so every fall was dead
+  ' vertical: the one pixel a frame that a step off an edge drifts was
+  ' missing, and with it the ledge the seventh level opens by dropping onto.
+  cY = (cY + cYVel) And &HFF
+  If cAction = ACT_FALLING And cXVel <> 0 Then
     cX = AddCharX(cXVel)
     RereadBlocks
   End If
-  cY = (cY + cYVel) And &HFF
   idx = cBlockY + 1
   If idx > 4 Then Exit Sub
+  ' CHECKFLOOR sends action 3 in the falling poses to fallon, not to falling:
+  ' while the fall is still the sequence's, the only thing asked is whether
+  ' there is a ledge to catch.  The floor plane is not tested until action 4.
+  If cAction = 3 Then
+    If cPosn >= 102 And cPosn <= 105 Then
+      If btn < 0 And cLife And cYVel < GRAB_SPEED And cY + GRAB_LEAD >= floory(idx) Then
+        nGates = nGates + 1
+        TryGrab idx
+      End If
+    End If
+    Exit Sub
+  End If
   If cY < floory(idx) Then
     ' Still in the air.  Three gates before a ledge is even looked for: the
     ' button held, falling slowly enough to catch anything, and close enough to

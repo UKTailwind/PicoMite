@@ -44,3 +44,24 @@ WANT DEATHS 0
 WANT HARD 0
 WANT SCRN 1
 END
+
+' (e) SUBS.S GRAVITY begins "lda CharAction / cmp #4 / bne rts", so it does
+' nothing until the fall is a freefall.  The first four frames of a fall are
+' action 3 and belong to the sequence: its own chy opcodes move him down 3, 6,
+' 9 and 12, and the setfall at the end of them is what seeds the velocity the
+' freefall then accelerates.  The port ran gravity from the step-off frame as
+' well, so those four frames were moved twice and every fall was thirty pixels
+' lower by the fourth of them, and reached the floor a frame early.
+'
+' Walking off the ledge at column three of screen 1, twenty frames in, he is
+' on the fourth of those frames: down 30 from 55, and still carrying no
+' velocity of his own.
+SCEN the first frames of a fall are the sequence's, not gravity's
+AT 1 1 5 0
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>>>>>
+WANT Y 85
+WANT YVEL 0
+WANT FALLING 1
+WANT ACTION 3
+END

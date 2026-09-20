@@ -16,7 +16,7 @@
 SCEN the first level starts him facing right and dropping in
 START 1
 SEED 17
-RUN ......
+RUN ........
 WANT FACE 0
 WANT POSN 107
 END
