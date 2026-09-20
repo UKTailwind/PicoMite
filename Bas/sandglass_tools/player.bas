@@ -1812,6 +1812,12 @@ Sub AutoCtrl
   If cSword < 2 Then GuardAlert Else GuardEnGarde
 End Sub
 
+' CTRL.S clrall: every press not yet acted on is forgotten, and the caller
+' then marks the one it is acting on.
+Sub ClrAll
+  clrB = 0 : clrF = 0 : clrU = 0 : clrD = 0
+End Sub
+
 Sub AiFwd
   clrF = -1 : jstkX = -1
 End Sub
@@ -3237,10 +3243,21 @@ End Function
 Function RunCtrl() As INTEGER
   RunCtrl = 0
   If jstkX = 0 Then
-    If cPosn = 7 Or cPosn = 11 Then RunCtrl = SEQ_RUNSTOP
+    ' CTRL.S ":rs jsr ]clr / sta clrF".  Stopping a run throws away every
+    ' press that has not been acted on, and the same at ":runturn".  The port
+    ' kept them, so a key still held as he stopped was still a fresh press
+    ' afterwards: tap up too late in a run and he stopped and then jumped on
+    ' the spot, off a press made while he was still running.
+    If cPosn = 7 Or cPosn = 11 Then
+      ClrAll : clrF = 1
+      RunCtrl = SEQ_RUNSTOP
+    End If
     Exit Function
   End If
-  If jstkX > 0 Then RunCtrl = SEQ_RUNTURN : nRunTurn = nRunTurn + 1 : Exit Function
+  If jstkX > 0 Then
+    ClrAll : clrB = 1
+    RunCtrl = SEQ_RUNTURN : nRunTurn = nRunTurn + 1 : Exit Function
+  End If
   If jstkY < 0 Then
     If clrU < 0 Then RunCtrl = DoRunjump()
     Exit Function

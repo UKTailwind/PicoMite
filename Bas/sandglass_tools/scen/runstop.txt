@@ -1,0 +1,37 @@
+' scen/runstop.txt - section 4: what stopping a run does to the keys.
+'
+' CTRL.S "running":
+'     :rs jsr ]clr / sta clrF / lda #runstop / jmp jumpseq
+'     :runturn jsr ]clr / sta clrB / lda #runturn / jmp jumpseq
+' and ]clr is clrall, which zeroes clrB, clrF, clrU and clrD - every press
+' made and not yet acted on.  Stopping or turning out of a run throws them
+' away and the caller then marks the one it is acting on.
+'
+' The port kept them, so a key held as he stopped was still a fresh press
+' afterwards.  It shows in the button-held branch of "standing", which is the
+' one that reads the press flags rather than the stick: tap up a moment too
+' late at the end of a run, with the action key down, and he stopped and then
+' jumped on the spot from the press he made while still running.
+'
+' Screen 2 of level 1 is a plain floor all the way along.  He runs six frames,
+' then up and the button go down together on the frame the run stops.
+
+SCEN a press left over from a run does not act after it
+AT 1 2 8 1
+SEED 17
+RUN ..>>>>>>UUUUUUUUUUUUUUUU
+WANT POSN 15
+WANT Y 118
+WANT BY 1
+END
+
+' The control: let the key up and press it again and it is a fresh press like
+' any other, and he jumps.  (B is the button alone, so up is released for
+' three frames in the middle.)
+SCEN a press made after the stop still acts
+AT 1 2 8 1
+SEED 17
+RUN ..>>>>>>UUUUUUUUUUBBBUUUUUU
+WANT POSN 72
+WANT BY 1
+END
