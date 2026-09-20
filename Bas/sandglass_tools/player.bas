@@ -782,6 +782,11 @@ End Sub
 
 Sub StartLevel(n As INTEGER)
   LoadLevel n : loadedLevel = n
+  ' TOPCTRL.S RESTART: "lda level / cmp #1 / bne :gotswd / lda #0 / sta
+  ' gotsword ;Start Level 1 w/o sword".  The port kept it, so after picking
+  ' the sword up on the first level and dying he restarted armed - with the
+  ' sword still lying on the floor where he had found it.
+  If n = 1 Then gotSword = 0
   cID = 0 : cSword = 0 : gdPresent = 0
   message = MSG_LEVEL : msgLevel = n : msgTimer = LEVELTIMER
   invert = 0
@@ -1529,7 +1534,12 @@ Function OpDist() As INTEGER
   Local INTEGER d
   If cScrn <> opScrn Then OpDist = 127 : Exit Function
   d = oX - cX
-  If d > 127 Or d < -127 Then d = 127
+  ' CTRLSUBS.S GETOPDIST clamps the two directions separately: the ":neg"
+  ' branch loads 127 and then negates it, so an opponent a long way BEHIND
+  ' comes back as -127.  The port clamped both ways to +127, which reports
+  ' a man far behind as a man far in front.
+  If d > 127 Then d = 127
+  If d < -127 Then d = -127
   If (cFace And &H80) Then d = -d
   If ((cFace Xor oFace) And &H80) Then
     If (d And &HFF) < 127 - ESTWIDTH Then d = d + ESTWIDTH

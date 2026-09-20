@@ -1,0 +1,25 @@
+' scen/sword.txt - section 3: the sword after a death on the first level.
+'
+' TOPCTRL.S RESTART, which is what a death runs:
+'     lda level / cmp #1 / bne :gotswd
+'     lda #0 / sta gotsword ;Start Level 1 w/o sword
+'
+' The port kept it.  So on the first level, having picked the sword up and
+' then died, he came back armed - and the sword was still lying on the floor
+' where he had found it, to be picked up again.
+
+SCEN starting the first level again takes the sword back
+AT 1 3 2 1
+SWORD 1
+START 1
+WANT SWORD 0
+END
+
+' The control: on any other level he keeps it, which is the whole point of
+' carrying it up through the palace.
+SCEN but he keeps it on the levels after
+AT 1 3 2 1
+SWORD 1
+START 5
+WANT SWORD 1
+END
