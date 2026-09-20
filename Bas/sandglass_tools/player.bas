@@ -5528,9 +5528,25 @@ Sub LoadLevel(n As INTEGER)
   ' moment the room is entered, and on the eighth would send the mouse in
   ' before the door is open.
   exitOpen = 0
+  ' Read up to the level wanted and keep the last, rather than seeking to it.
+  '
+  ' SEEK followed by MEMORY INPUT does not work on an SD card.  MEMORY INPUT is
+  ' a bulk read, and FileIO.c's FileGetData reads straight from the FatFS file
+  ' pointer, while SEEK leaves the logical position somewhere else: positionfile
+  ' for a FAT volume does f_lseek to the 512 boundary BELOW the target and then
+  ' reads a 512-byte buffer, so the FatFS pointer ends up at the boundary ABOVE
+  ' it with the true position held as an offset into that buffer.  The bulk read
+  ' never looks at the buffer, so it starts up to 512 bytes late.  On the flash
+  ' filesystem the other branch seeks exactly and it is right, which is why this
+  ' went unnoticed: it fails only when the data is on B: rather than A:.
+  '
+  ' Reading through costs at most fourteen blocks of 2304 bytes, once per level
+  ' change, and needs no seek and no second buffer.
+  Local INTEGER i
   Open home + "levels.dat" For Input As #1
-  Seek #1, n * LEVELBYTES + 1
-  Memory Input #1, LEVELBYTES, packed()
+  For i = 0 To n
+    Memory Input #1, LEVELBYTES, packed()
+  Next i
   Close #1
   Memory Unpack packed(), level(), LEVELBYTES, 8
   startScrn = level(OFF_INFO + 64)
