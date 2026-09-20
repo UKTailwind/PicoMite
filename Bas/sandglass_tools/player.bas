@@ -4247,8 +4247,11 @@ End Sub
 
 ' DECSTR: take strength.  Taking as much as he has, or more, kills him and
 ' returns 0; otherwise the loss is queued for the end of the frame.
+' Anyone who is not the player debits his OWN meter.  The test used to be
+' "two or more", which left the shadow - who is one - taking his damage out
+' of the player's meter, on every level he appears on.
 Function DecStr(n As INTEGER) As INTEGER
-  If cID >= 2 Then
+  If cID >= 1 Then
     If n >= oppStr Then
       chgOppStr = -oppStr : DecStr = 0
     Else
@@ -4269,6 +4272,15 @@ End Function
 ' is death.
 Sub ChgMeters
   Local INTEGER n
+  ' MISC.S UNHOLY, and the twelfth level's half of TOPCTRL.S chgmeters: the
+  ' kid and his shadow are one person, so a blow to either is felt by both,
+  ' and the shadow's death is his.  Without it the meeting could be settled
+  ' with the sword, which is the one thing it must not be: the level is
+  ' finished by putting the sword away and walking into him.
+  If curLevel = 12 And gdPresent And gRec(11) = 1 And mergeTimer >= 0 Then
+    If chgOppStr < 0 And chgKidStr = 0 Then chgKidStr = chgOppStr
+    If chgKidStr < 0 And chgOppStr = 0 Then chgOppStr = chgKidStr
+  End If
   If chgOppStr <> 0 Then
     n = oppStr + chgOppStr
     If n <= maxOppStr Then oppStr = n
@@ -4279,7 +4291,9 @@ Sub ChgMeters
         gRec(13) = 0 : nGuardsDead = nGuardsDead + 1 : CueSong 7
         DeadEnemy
       End If
-      If cID >= 2 Then cLife = 0
+      If cID >= 1 Then cLife = 0
+      ' Killing the shadow is killing himself.
+      If curLevel = 12 And gRec(11) = 1 And mergeTimer >= 0 Then chgKidStr = -kidStr
     End If
   End If
   If chgKidStr = 0 Then Exit Sub
@@ -4914,6 +4928,9 @@ Function ScenValue(what As STRING) As INTEGER
     Case "FLOAT"   : ScenValue = weightless
     Case "ALIVE"   : ScenValue = Choice(cLife <> 0, 1, 0)
     Case "STR"     : ScenValue = kidStr
+    Case "MAXSTR"  : ScenValue = maxKidStr
+    Case "OPPSTR"  : ScenValue = oppStr
+    Case "MAXOPP"  : ScenValue = maxOppStr
     Case "SWORD"   : ScenValue = gotSword
     Case "OPEN"    : ScenValue = exitOpen
     Case "OVER"    : ScenValue = gameOver

@@ -139,3 +139,59 @@ RUN ..<<<<....>>>>>>>>>>>>
 WANT DONE 0
 WANT SCRN NE 23
 END
+
+' 5. MISC.S UNHOLY and the twelfth level's half of TOPCTRL.S chgmeters: the
+' kid and his shadow are one person, so a blow to either is felt by both and
+' the shadow's death is his own.  Related, and the reason the port's
+' behaviour was odder than the review describes: DecStr sent anyone with an
+' id of one - which is what the shadow is - down the PLAYER's branch, so the
+' kid's own blows came out of the kid's meter and the shadow was never
+' touched at all.  Measured on the board before the change: after the fight
+' below the shadow still had all four of his, and the kid was dead.
+'
+' The script is the one the sword-fight coverage scenario uses.  Both meters
+' fall together, one for one, which is the mirroring.
+SCEN a blow on the twelfth level is felt by both
+AT 12 15 6 0
+TYPE 15 1 0 1
+ENTER
+SWORD 1
+SEED 17
+RUN ..>>>>>>>>........B...B...^..B...B..^..B...>..B..
+WANT MAXSTR 3
+WANT MAXOPP 4
+WANT STR 2
+WANT OPPSTR 3
+WANT ALIVE 1
+END
+
+' Fought to the end, both die.  The meeting cannot be settled with the sword,
+' which is the point of the level: it is finished by putting the sword away
+' and walking into him.
+SCEN killing the shadow is killing himself
+AT 12 15 6 0
+TYPE 15 1 0 1
+ENTER
+SWORD 1
+SEED 17
+RUN ..>>>>>>>>........B...B...^..B...B..^..B...>..B...B...^..B...B...>..B...B..B...^..B...B...B...B...B...B...B...B...B...B..
+WANT OPPSTR 0
+WANT GUARDS 1
+WANT STR 0
+WANT ALIVE 0
+END
+
+' The control: this is the twelfth level and nowhere else.  The same script
+' against the guard on level 1 screen 3 takes two off him and nothing off the
+' player, which is also what shows that giving a character with an id of one
+' his own meter has not given every character the player's.
+SCEN elsewhere a blow costs only the one who takes it
+AT 1 3 2 1
+SWORD 1
+SEED 17
+RUN ..<<<<....>>>>>>>>>>>>>>........B...B...^..B...B..^..B...>..B..
+WANT MAXSTR 3
+WANT STR 3
+WANT OPPSTR 2
+WANT ALIVE 1
+END
