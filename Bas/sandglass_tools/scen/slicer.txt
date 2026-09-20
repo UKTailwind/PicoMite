@@ -1,0 +1,32 @@
+' scen/slicer.txt - finding 1.1 of the independent review: a slicer is a
+' barrier only while it is shut, and the port made it a permanent wall.
+'
+' Level 4 screen 12, top row, is
+'    0 pillar  1 floor  2 floor  3 SLICER  4 pillar  5 space  6 up-plate
+' and the review names this slicer as the one that has to be passed to reach
+' the up-plate that opens the gate on screen 14.  He faces left when he is
+' put down, so forward is towards lower columns and the slicer is the first
+' thing he meets.
+
+SCEN he gets past a slicer that is not shut
+AT 4 12 4 0
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+WANT BX LE 2
+WANT SCRN 12
+WANT ALIVE 1
+END
+
+' The other half of the same rule, and the reason the first scenario is not
+' satisfied by simply deleting slicers: held shut, the blades are a wall.
+' The state to hold it at is printed at the top of every run.
+SCEN a slicer held shut is still a wall
+AT 4 12 4 0
+SEED 17
+SPEC 12 3 0 2
+RUN ..>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+WANT BX 4
+WANT SCRN 12
+WANT ALIVE 1
+WANT BUMPS GT 0
+END

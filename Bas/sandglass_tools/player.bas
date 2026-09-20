@@ -389,6 +389,12 @@ Const BEGINLEVEL = 0
 Const BEGINSCRN = 1
 Const BEGINBX = 0
 Const BEGINBY = 0
+' A scenario file beside the program turns the engine into a test rig and
+' nothing is played: see RunScenarios at the foot of this file.  Everything
+' the scenarios need is built by now, and with no such file this costs one
+' directory lookup.
+If Dir$(home + "scen.txt", FILE) <> "" Then RunScenarios : End
+
 tWork = 0
 If DEMO <> 0 Then ShowTitle
 pstep = 0 : pTimer = 0 : playDone = 0
@@ -4615,3 +4621,323 @@ Sub ReadLayout
   Loop
   Close #2
 End Sub
+
+'=============================================================================
+' The scenario harness.
+'
+' A file called scen.txt beside this program turns the engine into a test rig:
+' the game is not played at all, the scenarios in that file are, with nothing
+' drawn and no pacing, and what each one expected is checked when it ends.
+'
+' The point is that a reported bug and the fix for it can each be demonstrated
+' without anybody watching a screen, and that writing a new case costs a few
+' lines of text rather than an edit and a two-minute upload of this program.
+' The engine goes to the board once; the scenarios go as often as needed.
+'
+' Directives are obeyed in the order they are read, one to a line.  Blank
+' lines, and anything after an apostrophe, are ignored.
+'
+'   FIND lvl type         where every block of that type is on that level
+'   SHOW lvl scrn         one screen's blocks, and what it joins onto
+'   SCEN name...          begin a scenario
+'   AT lvl scrn bx by     put him there: fresh level, counters back to zero
+'   SWORD n               he is carrying the sword
+'   OPEN n                the level's way out is open
+'   SEED n                the random seed, so that a run repeats
+'   SPEC scrn bx by v     hold one block's modifier byte at a value
+'   TRACE n               from here on, print a line for every frame
+'   RUN codes             one character a frame; use as many lines as needed
+'   WANT what [op] n      an expectation, checked at END
+'   END                   check the expectations and say how it went
+'
+' Input codes are the ones ApplyCode knows: . nothing  > forward  < back
+' ^ up  v down  F forward and button  B button  U up and button  J jump.
+' WANT's operators are EQ NE LT GT LE GE, EQ if left out, and "what" is any
+' of the names ScenValue knows - one it does not know stops the run rather
+' than quietly reading zero.
+'
+' FIND and SHOW are how a scenario gets written at all: no game data leaves
+' the board, so the blueprint cannot be read from the host, and guessing at
+' the geometry is how every early scenario went wrong.
+Sub RunScenarios
+  ' The expectation arrays are given a length: a string array otherwise takes
+  ' 256 bytes an element, and these two would be eight kilobytes between them
+  ' for names that are never more than a word long.
+  Local STRING wName(15) LENGTH 12, wOp(15) LENGTH 2
+  Local STRING ln, w, nm, codes
+  Local INTEGER wVal(15), nw, i, got, ok, tests, fails, tr
+
+  HEADLESS = 1
+  Print
+  Print "--- scenarios, nothing drawn"
+  ' The states a scenario needs in order to write a SPEC line, since they come
+  ' from the converted layout and not from anything the host can see.
+  Print "  slicer: shut at " + Str$(kSlicerExt) + ", back at " + Str$(kSlicerRet) + ", cycle " + Str$(kSliceTimer)
+  Open home + "scen.txt" For Input As #3
+  Do While Not Eof(#3)
+    Line Input #3, ln
+    ln = ScClean$(ln)
+    w = UCase$(ScWord$(ln, 1))
+    Select Case w
+      Case ""
+        ' a blank line, or a line that was nothing but a comment
+      Case "FIND"
+        ScFind ScNum(ScWord$(ln, 2)), ScNum(ScWord$(ln, 3))
+      Case "SHOW"
+        ScShow ScNum(ScWord$(ln, 2)), ScNum(ScWord$(ln, 3))
+      Case "SCEN"
+        nm = ScRest$(ln, 2) : nw = 0 : tr = 0
+        Print
+        Print "scen: " + nm
+      Case "AT"
+        ResetCharAt ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,3)), ScNum(ScWord$(ln,4)), ScNum(ScWord$(ln,5))
+        ScZero
+      Case "SPEC"
+        ScSpec ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,3)), ScNum(ScWord$(ln,4)), ScNum(ScWord$(ln,5))
+      Case "SWORD" : gotSword = ScNum(ScWord$(ln, 2))
+      Case "OPEN"  : exitOpen = ScNum(ScWord$(ln, 2))
+      Case "SEED"  : rndSeed  = ScNum(ScWord$(ln, 2))
+      Case "TRACE" : tr       = ScNum(ScWord$(ln, 2))
+      Case "RUN"
+        codes = ScRest$(ln, 2)
+        For i = 1 To Len(codes)
+          ApplyCode Mid$(codes, i, 1)
+          GameFrame
+          scenFrames = scenFrames + 1
+          If tr Then Print "      f" + Str$(scenFrames) + " " + Mid$(codes, i, 1) + " " + ScState$()
+        Next i
+      Case "WANT"
+        If nw < 15 Then
+          nw = nw + 1
+          wName(nw) = UCase$(ScWord$(ln, 2))
+          wOp(nw) = UCase$(ScWord$(ln, 3))
+          ' The operator may be left out, in which case word three is the value.
+          If Len(wOp(nw)) = 2 And Instr("EQ NE LT GT LE GE", wOp(nw)) > 0 Then
+            wVal(nw) = ScNum(ScWord$(ln, 4))
+          Else
+            wVal(nw) = ScNum(wOp(nw)) : wOp(nw) = "EQ"
+          End If
+        Else
+          Print "  ?? too many expectations in one scenario"
+        End If
+      Case "END"
+        Print "  ran " + Str$(scenFrames) + " frames, ended " + ScState$()
+        For i = 1 To nw
+          got = ScenValue(wName(i))
+          ok = 0
+          Select Case wOp(i)
+            Case "EQ" : If got =  wVal(i) Then ok = 1
+            Case "NE" : If got <> wVal(i) Then ok = 1
+            Case "LT" : If got <  wVal(i) Then ok = 1
+            Case "GT" : If got >  wVal(i) Then ok = 1
+            Case "LE" : If got <= wVal(i) Then ok = 1
+            Case "GE" : If got >= wVal(i) Then ok = 1
+          End Select
+          tests = tests + 1
+          If ok Then
+            Print "  ok:   " + wName(i) + " " + wOp(i) + " " + Str$(wVal(i))
+          Else
+            Print "  FAIL: " + wName(i) + " " + wOp(i) + " " + Str$(wVal(i)) + " but it is " + Str$(got)
+            fails = fails + 1
+          End If
+        Next i
+        nw = 0
+      Case Else
+        Print "  ?? " + ln
+    End Select
+  Loop
+  Close #3
+  Print
+  Print "SCENARIOS: " + Str$(tests - fails) + " of " + Str$(tests) + " checks passed"
+  If fails = 0 Then Print "PASS" Else Print "FAIL"
+  FrameBuffer Close
+  ' Put the colours back, or the console is left unreadable.
+  Map Reset
+  Map Set
+  Option Console Both
+End Sub
+
+' What a scenario is allowed to ask about.  An unknown name is an error and
+' not a zero: a misspelt expectation that quietly passes is worse than none.
+Function ScenValue(what As STRING) As INTEGER
+  Select Case what
+    Case "BX"      : ScenValue = cBlockX
+    Case "BY"      : ScenValue = cBlockY
+    Case "SCRN"    : ScenValue = cScrn
+    Case "LEVEL"   : ScenValue = curLevel
+    Case "X"       : ScenValue = cX
+    Case "Y"       : ScenValue = cY
+    Case "FACE"    : ScenValue = cFace
+    Case "POSN"    : ScenValue = cPosn
+    Case "SEQ"     : ScenValue = cSeq
+    Case "ACTION"  : ScenValue = cAction
+    Case "FALLING" : ScenValue = cFalling
+    Case "ALIVE"   : ScenValue = Choice(cLife <> 0, 1, 0)
+    Case "STR"     : ScenValue = kidStr
+    Case "SWORD"   : ScenValue = gotSword
+    Case "OPEN"    : ScenValue = exitOpen
+    Case "OVER"    : ScenValue = gameOver
+    Case "DONE"    : ScenValue = levelDone
+    Case "FRAMES"  : ScenValue = scenFrames
+    ' The counters, all of them zeroed by AT, so these say what this scenario
+    ' did rather than what the whole run has done so far.
+    Case "BUMPS"   : ScenValue = nBumps
+    Case "FELL"    : ScenValue = nStepOff
+    Case "LANDED"  : ScenValue = nSoft + nMed + nHard
+    Case "HARD"    : ScenValue = nHard
+    Case "GRABS"   : ScenValue = nGrabs
+    Case "GATES"   : ScenValue = nGates
+    Case "CROSS"   : ScenValue = nCross
+    Case "DEATHS"  : ScenValue = nDead
+    Case "IMPALED" : ScenValue = nImpaled
+    Case "PLATES"  : ScenValue = nPlates
+    Case "STEPS"   : ScenValue = nSteps
+    Case "CLIMBS"  : ScenValue = nClimb
+    Case "DROPS"   : ScenValue = nDrop
+    Case "STRIKES" : ScenValue = nStrikes
+    Case "GUARDS"  : ScenValue = nGuardsDead
+    Case Else      : Error "unknown expectation " + what
+  End Select
+End Function
+
+' Put a block's modifier byte where a scenario needs it, and take that block
+' out of the list of moving things so that nothing winds it on again.  A
+' slicer left to itself cycles, which is right for the game and useless for a
+' test: this is how a scenario says "shut, and staying shut".
+Sub ScSpec(s As INTEGER, bx As INTEGER, by As INTEGER, v As INTEGER)
+  Local INTEGER k, loc
+  loc = by * COLS + bx
+  SetSpec s, loc, v
+  For k = 0 To numTrans - 1
+    If trLoc(k) = loc And trScrn(k) = s Then trDir(k) = -1
+  Next k
+  Print "  spec scr " + Str$(s) + " blk " + Str$(bx) + "," + Str$(by) + " held at " + Str$(v)
+End Sub
+
+' AT starts a scenario from a known slate.
+Sub ScZero
+  scenFrames = 0
+  nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
+  nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
+  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0
+  nStrikes = 0 : nGuardsDead = 0
+End Sub
+
+' One line saying where he is and what he is doing, the same shape every
+' frame, so that two runs can be compared with a text diff.
+Function ScState$() As STRING
+  Local STRING t
+  t = "blk " + Str$(cBlockX) + "," + Str$(cBlockY) + " scr " + Str$(cScrn)
+  t = t + " x " + Str$(cX) + " y " + Str$(cY) + " posn " + Str$(cPosn)
+  t = t + " act " + Str$(cAction) + " fall " + Str$(cFalling)
+  t = t + " yv " + Str$(cYVel) + " life " + Str$(cLife)
+  ScState$ = t
+End Function
+
+' Where every block of a type is on a level.
+Sub ScFind(lv As INTEGER, ty As INTEGER)
+  Local INTEGER s, loc, n
+  LoadLevel lv : loadedLevel = lv
+  Print "find: level " + Str$(lv) + " type " + Str$(ty)
+  For s = 1 To 24
+    For loc = 0 To 29
+      If BType(s, loc) = ty Then
+        Print "  scr " + Str$(s) + " blk " + Str$(loc Mod COLS) + "," + Str$(loc \ COLS) + " spec " + Str$(BSpec(s, loc))
+        n = n + 1
+      End If
+    Next loc
+  Next s
+  Print "  " + Str$(n) + " of them"
+End Sub
+
+' One screen laid out: the block types, the modifier bytes beneath them, and
+' the four screens this one joins onto.
+Sub ScShow(lv As INTEGER, s As INTEGER)
+  Local INTEGER r, c
+  Local STRING t, u
+  LoadLevel lv : loadedLevel = lv
+  Print "show: level " + Str$(lv) + " screen " + Str$(s)
+  For r = 0 To ROWS - 1
+    t = "  row " + Str$(r) + " type" : u = "          spec"
+    For c = 0 To COLS - 1
+      t = t + Pad$(Str$(BType(s, r * COLS + c)), 4)
+      u = u + Pad$(Str$(BSpec(s, r * COLS + c)), 4)
+    Next c
+    Print t
+    Print u
+  Next r
+  t = "  left " + Str$(level(OFF_MAP + (s - 1) * 4))
+  t = t + " right " + Str$(level(OFF_MAP + (s - 1) * 4 + 1))
+  t = t + " up " + Str$(level(OFF_MAP + (s - 1) * 4 + 2))
+  t = t + " down " + Str$(level(OFF_MAP + (s - 1) * 4 + 3))
+  Print t
+End Sub
+
+' ---- the small amount of text handling the directives need ------------------
+
+' Tabs count as spaces, and a comment is everything after an apostrophe that
+' is not inside quotes - the same rule the build script uses on this file.
+Function ScClean$(s As STRING) As STRING
+  Local INTEGER i, q
+  Local STRING t, ch
+  For i = 1 To Len(s)
+    ch = Mid$(s, i, 1)
+    If ch = Chr$(34) Then q = 1 - q
+    If ch = Chr$(39) And q = 0 Then Exit For
+    If ch = Chr$(9) Or ch = Chr$(13) Then ch = " "
+    t = t + ch
+  Next i
+  ' trailing spaces would otherwise be frames of no input
+  Do While Len(t) > 0 And Right$(t, 1) = " "
+    t = Left$(t, Len(t) - 1)
+  Loop
+  ScClean$ = t
+End Function
+
+' The nth space-separated word, or "" past the end of the line.
+Function ScWord$(s As STRING, n As INTEGER) As STRING
+  Local INTEGER i, k, st, l
+  l = Len(s) : i = 1
+  ScWord$ = ""
+  Do
+    Do
+      If i > l Then Exit Function
+      If Mid$(s, i, 1) <> " " Then Exit Do
+      i = i + 1
+    Loop
+    st = i
+    Do
+      If i > l Then Exit Do
+      If Mid$(s, i, 1) = " " Then Exit Do
+      i = i + 1
+    Loop
+    k = k + 1
+    If k = n Then ScWord$ = Mid$(s, st, i - st) : Exit Function
+  Loop
+End Function
+
+' The line from its nth word on, with the spacing inside it kept.
+Function ScRest$(s As STRING, n As INTEGER) As STRING
+  Local INTEGER i, k, l
+  l = Len(s) : i = 1
+  ScRest$ = ""
+  Do
+    Do
+      If i > l Then Exit Function
+      If Mid$(s, i, 1) <> " " Then Exit Do
+      i = i + 1
+    Loop
+    k = k + 1
+    If k = n Then ScRest$ = Mid$(s, i) : Exit Function
+    Do
+      If i > l Then Exit Function
+      If Mid$(s, i, 1) = " " Then Exit Do
+      i = i + 1
+    Loop
+  Loop
+End Function
+
+' Val on a word, as an integer.
+Function ScNum(s As STRING) As INTEGER
+  If s = "" Then ScNum = 0 Else ScNum = Val(s)
+End Function

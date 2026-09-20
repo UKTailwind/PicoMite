@@ -190,6 +190,48 @@ changes, rerun it and copy its numbers into the test's `EXP_` constants.
 `player.bas` is the assembled engine. It runs a short visual demo, then a
 headless coverage pass of scripted scenarios and prints what each reached.
 
+## Scenarios
+
+The tests above each pin one piece of the engine against a reference written
+on the host. That works where the original is small and self-contained, and
+stops working for the game itself: the rules for what the character may walk
+into involve the blueprint, the moving parts and his own state at once, and a
+transcription of all that would be a second thing to keep right.
+
+So the engine is the test rig. A file called `scen.txt` beside `player.bas` on
+the board makes it play scenarios instead of the game, with nothing drawn and
+no pacing, and check where the character ended up:
+
+    SCEN he gets past a slicer that is not shut
+    AT 4 12 4 0
+    RUN ..>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+    WANT BX LE 2
+    WANT ALIVE 1
+    END
+
+`AT` is level, screen, block across and block down in the original numbering;
+`RUN` is one character a frame, the same codes the demo scripts use; `WANT`
+checks one of the names `ScenValue` knows when the scenario ends. The full
+list of directives is in the comment above `RunScenarios`.
+
+    python run_scentest.py scen/slicer.txt            put the file and run it
+    python run_scentest.py scen/slicer.txt --engine   put the engine too
+
+The engine goes to the board once and takes two minutes; a scenario goes in
+under a second, which is what makes it worth writing one per reported bug.
+`--engine` takes a path, so the same scenarios can be run against an older
+build to show that they do notice the bug before they are trusted to show it
+is gone. `--clean` takes `scen.txt` off the board again so the next `RUN`
+plays the game.
+
+No converted data ever leaves the board, so the blueprint cannot be read on
+the host and a scenario cannot be written by guessing at the geometry.
+`FIND lvl type` lists every block of a type on a level and `SHOW lvl scrn`
+lays one screen out with its exits, which is how the example above knew where
+that slicer was and what was on either side of it.
+
+`scen/` holds the scenarios. Each one names the finding it came from.
+
 ## Notes
 
 - The converter reads only the files you point it at and writes only into the

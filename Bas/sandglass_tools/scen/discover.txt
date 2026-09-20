@@ -1,0 +1,10 @@
+' discover.txt - print blueprint, play nothing.
+'
+' The review names the slicer on level 4 screen 12 and the two on level 5
+' screen 24 as the ones that stop those levels being finished.  No game data
+' leaves the board, so where they actually are, and what is either side of
+' them, has to be asked of the board itself.
+FIND 4 18
+SHOW 4 12
+FIND 5 18
+SHOW 5 24
