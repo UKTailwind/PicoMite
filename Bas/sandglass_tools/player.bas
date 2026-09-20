@@ -326,6 +326,9 @@ Const RJLEADDIST = 14     ' the run-up the jump itself needs
 Const RJMAXFUJBAK = 8     ' pixels it will shift him back to make it work
 Const RJMAXFUJFWD = 2     ' and forward
 Dim INTEGER cRepeat, nSteps, invert, nInverts, nGateKnocks
+' What GetFwdDist found in the way: 0 the edge of his own block, 1 a
+' barrier, 2 clear - and the block type it looked at.
+Dim INTEGER fwdKind, fwdType
 ' The sixteen tunes the original asks for by name.  The player supplies the
 ' files; a cue whose file is missing simply does not play, which is the
 ' normal case and the one that is tested.  The audio output does one thing
@@ -1427,7 +1430,7 @@ Function StandCtrl() As INTEGER
   End If
   If jstkY > 0 Then StandCtrl = DoDown() : Exit Function
   If jstkY < 0 Then StandCtrl = DoUp() : Exit Function
-  If jstkX < 0 Then StandCtrl = SEQ_STARTRUN : Exit Function
+  If jstkX < 0 Then StandCtrl = DoStartrun() : Exit Function
   If jstkX > 0 Then StandCtrl = SEQ_TURN : Exit Function
 End Function
 
@@ -2479,28 +2482,54 @@ End Sub
 ' edge of the block he stands in.  Already on that edge, the first press
 ' tests the ground with a foot and the second commits, off the edge or
 ' through into the next block.  A barrier is stepped up to without the test.
+' COLL.S GETFWDDIST: how far a careful step goes, and what is in the way.
+' Clear floor ahead is a full natural step of eleven; space or a loose board
+' is a step to the edge of his own block, and then the foot test; a plate, the
+' sword or a flask is a step to the edge with no foot test; a barrier is a
+' step up to the barrier.  The port always stepped to the edge of its own
+' block whatever was next, so on open floor every block boundary produced a
+' foot test and no step was ever the right length.
+'
+' fwdKind comes back as 0 for the edge, 1 for a barrier, 2 for clear - the
+' original's X register - and fwdType as the block it looked at.
+Function GetFwdDist() As INTEGER
+  Local INTEGER bx
+  If (cFace And &H80) Then bx = cBlockX - 1 Else bx = cBlockX + 1
+  fwdType = RdBlock(cScrn, bx, cBlockY)
+  If fwdType = T_GATE Then
+    If GateOpen(cScrn, bx, cBlockY) Then fwdType = T_SPACE
+  ElseIf fwdType = T_SLICER Then
+    If SlicerShut(cScrn, bx, cBlockY) = 0 Then fwdType = T_SPACE
+  End If
+  If Barrier(fwdType) <> 0 Then
+    ' INTERPRETATION: the original measures to the barrier's own edge from the
+    ' image (DBarr); the near edge of his block is as close as this gets.
+    fwdKind = 1 : GetFwdDist = GetDist() : Exit Function
+  End If
+  If noFloor(fwdType) Or fwdType = T_LOOSE Then
+    fwdKind = 0 : GetFwdDist = GetDist() : Exit Function
+  End If
+  If fwdType = T_PLATE Or fwdType = T_DPLATE Or fwdType = T_UPLATE Then
+    fwdKind = 2 : GetFwdDist = GetDist() : Exit Function
+  End If
+  If fwdType = T_SWORD Or fwdType = T_FLASK Then
+    fwdKind = 2 : GetFwdDist = GetDist() : Exit Function
+  End If
+  fwdKind = 2 : GetFwdDist = 11
+End Function
+
 Function DoStepFwd() As INTEGER
-  Local INTEGER d, t, bx, barr
+  Local INTEGER d
   clrF = 1 : clrBtn = 1
   nSteps = nSteps + 1
-  d = GetDist()
-  If (cFace And &H80) Then bx = cBlockX - 1 Else bx = cBlockX + 1
-  t = RdBlock(cScrn, bx, cBlockY)
-  barr = 0
-  If t = T_GATE Then
-    If GateOpen(cScrn, bx, cBlockY) = 0 Then barr = 1
-  ElseIf t = T_SLICER Then
-    If SlicerShut(cScrn, bx, cBlockY) Then barr = 1
-  ElseIf Barrier(t) <> 0 Then
-    barr = 1
-  End If
-  If d > 0 Then
+  d = GetFwdDist()
+  If d <> 0 Then
     cRepeat = d
     DoStepFwd = SEQ_STEP1 - 1 + d
     lastWhat = "step " + Str$(d)
     Exit Function
   End If
-  If barr = 0 And cRepeat <> 0 Then
+  If fwdKind <> 1 And cRepeat <> 0 Then
     cRepeat = 0
     DoStepFwd = SEQ_TESTFOOT
     lastWhat = "tests the ground"
@@ -2509,6 +2538,18 @@ Function DoStepFwd() As INTEGER
   cRepeat = 11
   DoStepFwd = SEQ_STEP1 - 1 + 11
   lastWhat = "steps through"
+End Function
+
+' CTRL.S DoStartrun: within eight pixels of a solid barrier he steps instead
+' of running, so that he walks up to a wall rather than slamming into it.  A
+' slicer is excepted - running at one is how you get past it - and an open
+' gate is not a barrier by the time the question is asked.
+Function DoStartrun() As INTEGER
+  DoStartrun = SEQ_STARTRUN
+  If GetFwdDist() >= 8 Then Exit Function
+  If fwdKind <> 1 Or fwdType = T_SLICER Then Exit Function
+  If clrF >= 0 Then DoStartrun = 0 : Exit Function
+  DoStartrun = DoStepFwd()
 End Function
 
 ' How far he is from the front edge of the block he is in, 0 to 13.
@@ -5257,6 +5298,10 @@ Function ScenValue(what As STRING) As INTEGER
     Case "POTIONS" : ScenValue = nPotions
     Case "STOOPS"  : ScenValue = nStoop
     Case "DIST"    : ScenValue = GetDist()
+    Case "FWDDIST" : ScenValue = GetFwdDist()
+    Case "FWDKIND" : ScenValue = fwdKind
+    Case "FWDTYPE" : ScenValue = fwdType
+    Case "REPEAT"  : ScenValue = cRepeat
     Case "BASEX"   : ScenValue = BaseX()
     Case "DROPS"   : ScenValue = nDrop
     Case "STRIKES" : ScenValue = nStrikes

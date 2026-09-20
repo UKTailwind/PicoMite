@@ -1,0 +1,53 @@
+' scen/step.txt - finding 2.9: how far a careful step goes.
+'
+' COLL.S GETFWDDIST looks at the block in FRONT of him, not just at where the
+' edge of his own block is.  Clear floor ahead is a full natural step of
+' eleven; space or a loose board is a step to the edge and then the foot test;
+' a plate, the sword or a flask is a step to the edge with no foot test; a
+' barrier is a step up to the barrier.  It hands back the kind as well as the
+' distance, and CTRL.S DoStepfwd uses the kind to decide whether to test the
+' ground at all.
+'
+' The port measured to the edge of its own block whatever was next, so on open
+' floor every block boundary produced a foot test and no step was ever the
+' right length.
+'
+' Level 1 screen 3's middle row is floor all the way across.  He is put one
+' pixel from the edge of his block, where the old rule would take a one-pixel
+' step; the new one takes the whole eleven.
+
+SCEN a careful step on open floor is a full step
+AT 1 3 4 1
+X 119
+SEED 17
+RUN ..F..........
+WANT FWDKIND 2
+WANT REPEAT 11
+WANT X 108
+WANT STEPS 1
+END
+
+' With a gap ahead it is still a step to the edge and then the foot test, as
+' it always was.  Level 1 screen 8's middle row has floor at block 5 and
+' nothing at block 4.
+SCEN a careful step up to a gap still tests the ground
+AT 1 8 5 1
+SEED 17
+RUN ..F..........F..........F..........F..........F..........
+WANT STEPS GE 3
+WANT FELL GE 1
+WANT BY GE 2
+END
+
+' And CTRL.S DoStartrun: within eight pixels of a solid barrier, forward steps
+' rather than runs.  A wall is put in front of him to run at.
+SCEN forward close to a wall steps instead of running
+AT 1 3 4 1
+TYPE 3 3 1 20
+X 119
+SEED 17
+RUN ..>
+WANT FWDKIND 1
+WANT POSN 121
+WANT STEPS 1
+END
