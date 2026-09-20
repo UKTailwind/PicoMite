@@ -1,0 +1,36 @@
+' scen/guards.txt - finding 2.13: how guards are put down and picked up again.
+'
+' Four corrections, all out of AUTO.S.
+'
+' updateguard begins
+'     lda ShadID / cmp #1 / beq ]rts ;not for shadman
+'                 cmp #24 / beq ]rts ;or mouse
+' so neither the shadow nor the mouse is kept for the next visit.  The port
+' saved the shadow, so an ordinary guard turned up standing where the thief or
+' the mirror shadow had been left.
+'
+' What it stores is the row and nothing else -
+'     lda #0 ;arbitrary--ADDGUARD will reconstruct CharBlockX from CharX
+' - because the column comes back from his x.  The port stored the column too,
+' and a guard's column can be -2 to 11 since his x is clamped to the screen,
+' so one left near an edge came back on the wrong row entirely.
+'
+' AddNormalGd gives the third level guard id 4, the skeleton, with his sword
+' out and landengarde rather than the alert stand.  The port always used id 2.
+'
+' And the clamp that keeps a guard on his screen must not be put on the
+' shadow.  That is what this tests.  On level 5 the thief steals the potion
+' and runs out of the room to the left, and Shad5 is done with him at x 15 -
+' but the clamp holds him at 40, so he never gets there.  Before this change
+' he stands at the left-hand wall of screen 24 for the rest of the game.
+'
+' The gate he comes through is raised by hand rather than played up to.
+
+SCEN the thief leaves the room when he is done
+AT 5 24 6 0
+SPEC 24 1 0 100
+SEED 17
+RUN ..........................................................................................
+WANT OPPID -1
+WANT ALIVE 1
+END

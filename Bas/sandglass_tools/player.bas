@@ -1061,8 +1061,13 @@ Sub StepCharacter
     FirstGuard
     If CrossScreen() Then lastWhat = "-> screen " + Str$(cScrn) : nCross = nCross + 1
   Else
-    If cX < 40 Then cX = 40
-    If cX > 215 Then cX = 215
+    ' The clamp keeps a guard on the screen he belongs to.  It must not be put
+    ' on the shadow: on the fourth level he runs off to the right until his x
+    ' wraps below eighty and he is gone, and held at 215 he never goes.
+    If cID >= 2 Then
+      If cX < 40 Then cX = 40
+      If cX > 215 Then cX = 215
+    End If
     RereadBlocks
   End If
   If cID = 0 Then CheckGate
@@ -2185,10 +2190,20 @@ Sub AddGuard(scrn As INTEGER)
   cPosn = 0 : cBlockX = b Mod COLS : cBlockY = b \ COLS
   cY = floory(cBlockY + 1)
   cX = gdX(s) : RereadBlocks
-  cFace = gdFace(s) : cID = 2 : cScrn = s
+  cFace = gdFace(s) : cScrn = s
+  ' AUTO.S AddNormalGd: "lda level / cmp #3 / bne :3 / lda #4 ;skel".  The
+  ' third level's guard is the skeleton, and he comes up with his sword out in
+  ' landengarde rather than the alert stand.  The port made him an ordinary
+  ' guard, so once that room had been left and revisited the skeleton was a
+  ' mortal man.
+  If curLevel = 3 Then cID = 4 Else cID = 2
   cFalling = 0 : stunned = 0 : cXVel = 0 : cYVel = 0 : cAction = 1
   If gdSeq(s) = 0 Then
-    cSword = 0 : cSeq = seqTab(SEQ_ALERTSTAND)
+    If cID = 4 Then
+      cSword = 2 : cSeq = seqTab(SEQ_LANDENGARDE)
+    Else
+      cSword = 0 : cSeq = seqTab(SEQ_ALERTSTAND)
+    End If
   Else
     cSeq = gdSeq(s) : cSword = 2
   End If
@@ -2479,12 +2494,17 @@ End Function
 Sub UpdateGuard
   Local INTEGER s
   If gdPresent = 0 Then Exit Sub
-  ' The mouse is not kept for the next visit: he came, he did his errand, and
-  ' leaving the room is the end of him.  Saved like a guard he would be back
-  ' as one, standing where he happened to be.
-  If gRec(11) = MOUSE_ID Then gdPresent = 0 : oppStr = 0 : Exit Sub
+  ' AUTO.S updateguard: "lda ShadID / cmp #1 / beq ]rts ;not for shadman /
+  ' cmp #24 / beq ]rts ;or mouse".  Neither is kept for the next visit.  The
+  ' port saved the shadow, so an ordinary guard turned up standing where the
+  ' thief or the mirror shadow had been left.
+  If gRec(11) = 1 Or gRec(11) = MOUSE_ID Then gdPresent = 0 : oppStr = 0 : Exit Sub
   s = gRec(10)
-  gdBlock(s) = gRec(5) * COLS + gRec(4)
+  ' "lda #0 ;arbitrary--ADDGUARD will reconstruct CharBlockX from CharX".
+  ' Only the row is kept.  The port stored the column too, and a guard's
+  ' column can be -2 to 11 because his x is clamped to the screen, so one left
+  ' near an edge came back on the wrong row entirely.
+  gdBlock(s) = gRec(5) * COLS
   gdX(s) = gRec(1) : gdFace(s) = gRec(3) : gdProg(s) = guardProg
   If gRec(13) = 0 Then gdSeq(s) = 0 Else gdSeq(s) = gRec(9)
   gdPresent = 0 : oppStr = 0
