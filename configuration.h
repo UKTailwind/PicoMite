@@ -129,7 +129,7 @@ extern "C"
       __end__ down to 0x2007E690 for 6512 bytes: one full page of arena
       growth plus ~2.4 KB.  Keep several KB of C-heap headroom here if
       BSS grows again; see [[heap-bss-overlap-on-rp2350]]. */
-#define FLASH_TARGET_OFFSET (1072 * 1024)
+#define FLASH_TARGET_OFFSET (1088 * 1024)
 #define HEAP_MEMORY_SIZE (152 * 1024)
 #define MagicKey 0xD340BBCD
 #endif
