@@ -195,3 +195,31 @@ WANT STR 3
 WANT OPPSTR 2
 WANT ALIVE 1
 END
+
+' Also in 1.5: AUTO.S FinalShad :hold keeps the shadow at the ceiling until
+' the kid is left of x 150, a little over half way across the room.  The drop
+' is a greeting; the port had him falling the moment the room was entered,
+' whether the kid was there to see it or not.
+'
+' Put down at column 7 the kid is at x 163, so the shadow waits.
+SCEN the shadow waits at the ceiling
+AT 12 15 7 0
+TYPE 15 1 0 1
+ENTER
+SEED 17
+RUN ..........
+WANT SHADOWS 1
+WANT OPPPOSN 15
+WANT OPPFALL 0
+WANT X 163
+END
+
+SCEN and drops once the kid is well into the room
+AT 12 15 7 0
+TYPE 15 1 0 1
+ENTER
+SEED 17
+RUN ..........>>>>>>>>>>>>>>
+WANT X LT 150
+WANT OPPPOSN GT 100
+END

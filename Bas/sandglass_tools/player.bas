@@ -253,7 +253,7 @@ Dim INTEGER kMirScrn, kMirX, kMirY, nMirrors, nMerges
 ' level and negative afterwards, which is how the rest of the level knows
 ' the meeting is over: the shadow is not put back in the room, and the
 ' bridge to the last screen is there to be walked on.
-Dim INTEGER mergeTimer, nBridge
+Dim INTEGER mergeTimer, nBridge, shadHold
 Const T_MIRROR = 13
 ' The enemy image set each level loads (MISC.S chset), and the tables.
 Dim INTEGER tSet(6), chSet(15), bgSet(15)
@@ -975,6 +975,8 @@ Sub StepCharacter
   If cID >= 1 Then
     If cID = 4 Then cSword = 2               ' a skeleton never sheathes
     AutoCtrl
+    ' Held at the ceiling: no advance, no fall, nothing.
+    If shadHold And cID = 1 Then Exit Sub
   End If
   If cFalling = 0 And cPosn >= 87 And cPosn < 100 Then
     want = HangCtrl()
@@ -1604,6 +1606,14 @@ End Sub
 ' him is what ends it: the two become one and the strength of both is
 ' yours.  It cannot be done by force, only by refusing to fight.
 Sub Shad12
+  ' Waiting at the ceiling: nothing of him moves, not the sequence and not the
+  ' fall, until the kid is left of x 150 - a little over half way across the
+  ' room.  StepCharacter is what honours it; this is where it ends.
+  If shadHold Then
+    If kRec(1) >= 150 Then Exit Sub
+    shadHold = 0
+    lastWhat = "the shadow drops"
+  End If
   If kRec(12) = 2 Then GuardEnGarde : Exit Sub
   If cSword = 2 Then
     If refract = 0 Then cSword = 0
@@ -1701,6 +1711,11 @@ Sub AddShadow(at As INTEGER)
   maxOppStr = kShadStr : oppStr = kShadStr : chgOppStr = 0
   alertGuard = 0 : refract = 0 : justBlocked = 0 : droppedOut = 0
   playCount = 0 : preRecPtr = 0
+  ' AUTO.S FinalShad :hold.  On the twelfth level he is up at the ceiling when
+  ' the room opens and stays there until the kid has come far enough in; the
+  ' drop is a greeting, not something that happens while he is still at the
+  ' door.  The port let him fall the moment the room was entered.
+  shadHold = Choice(curLevel = 12, 1, 0)
   If HEADLESS = 0 Then GuardPalette 3
   SaveChar gRec()
   gdPresent = 1 : nShadows = nShadows + 1
@@ -4768,7 +4783,9 @@ Sub RunScenarios
   ' The expectation arrays are given a length: a string array otherwise takes
   ' 256 bytes an element, and these two would be eight kilobytes between them
   ' for names that are never more than a word long.
-  Local STRING wName(15) LENGTH 12, wOp(15) LENGTH 2
+  ' wOp holds the operator, but when the operator is left out it holds the
+  ' value instead, so two characters is not enough: WANT X 163 overran it.
+  Local STRING wName(15) LENGTH 12, wOp(15) LENGTH 12
   Local STRING ln, w, nm, codes
   Local INTEGER wVal(15), nw, i, got, ok, tests, fails, tr, bwant
 
@@ -4930,6 +4947,10 @@ Function ScenValue(what As STRING) As INTEGER
     Case "STR"     : ScenValue = kidStr
     Case "MAXSTR"  : ScenValue = maxKidStr
     Case "OPPSTR"  : ScenValue = oppStr
+    Case "OPPPOSN" : ScenValue = gRec(0)
+    Case "OPPX"    : ScenValue = gRec(1)
+    Case "OPPY"    : ScenValue = gRec(2)
+    Case "OPPFALL" : ScenValue = gRec(14)
     Case "MAXOPP"  : ScenValue = maxOppStr
     Case "SWORD"   : ScenValue = gotSword
     Case "OPEN"    : ScenValue = exitOpen
@@ -4993,6 +5014,13 @@ Function ScState$() As STRING
   t = t + " x " + Str$(cX) + " y " + Str$(cY) + " posn " + Str$(cPosn)
   t = t + " act " + Str$(cAction) + " fall " + Str$(cFalling)
   t = t + " yv " + Str$(cYVel) + " life " + Str$(cLife)
+  ' Whoever else is on the screen, since half of what a scenario asks about
+  ' is what he is doing: pose, x, block, sword, life and what is left of him.
+  If gdPresent Then
+    t = t + " | gd id " + Str$(gRec(11)) + " p" + Str$(gRec(0)) + " x" + Str$(gRec(1))
+    t = t + " blk" + Str$(gRec(4)) + "," + Str$(gRec(5)) + " fall" + Str$(gRec(14))
+    t = t + " sw" + Str$(gRec(12)) + " life" + Str$(gRec(13)) + " str" + Str$(oppStr)
+  End If
   ScState$ = t
 End Function
 
