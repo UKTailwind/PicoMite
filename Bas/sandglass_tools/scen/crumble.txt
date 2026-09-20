@@ -1,0 +1,41 @@
+' scen/crumble.txt - section 3: the ceiling coming in on the thirteenth level.
+'
+' SUBS.S CRUMBLE:
+'     lda level / cmp #13 / bne ]rts
+'     lda VisScrn / cmp #23 / beq :1 / cmp #16 / bne ]rts
+' and then, for blocks 2 to 7 on the bottom row of the screen ABOVE, each
+' loose floor is given a random delay and brought down.  It is the floor
+' falling in behind him as he runs for the tower.  The port had none of it.
+'
+' Screen 16 has screen 1 above it, and screen 1 carries five loose floors on
+' its bottom row at columns 2, 3, 5, 6 and 7.
+
+SCEN arriving on screen 16 brings the floor above down
+AT 13 16 0 1
+SEED 17
+WANTBLOCK 1 2 2 11
+RUN ..............................................................
+WANTBLOCK 1 2 2 0
+WANTBLOCK 1 3 2 0
+WANTBLOCK 1 7 2 0
+END
+
+' The control, in the same breath: screen 17 is not the screen above 16, and
+' its two loose floors are left exactly where they were.
+SCEN and leaves the other rooms alone
+AT 13 16 0 1
+SEED 17
+RUN ..............................................................
+WANTBLOCK 17 2 2 11
+WANTBLOCK 17 3 2 11
+END
+
+' Screen 23 has screen 17 above it, and those are the two that go then.
+SCEN arriving on screen 23 brings down the other pair
+AT 13 23 0 1
+SEED 17
+WANTBLOCK 17 2 2 11
+RUN ..............................................................
+WANTBLOCK 17 2 2 0
+WANTBLOCK 17 3 2 0
+END

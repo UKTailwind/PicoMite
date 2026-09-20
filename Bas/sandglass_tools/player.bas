@@ -4332,6 +4332,24 @@ Sub EnterScreen(scrn As INTEGER, row As INTEGER)
     If BType(s, loc) = T_SWORD Then TrigSword s, loc
   Next loc
   AddSlicers s, row
+  Crumble s
+End Sub
+
+' SUBS.S CRUMBLE.  On the thirteenth level, arriving at screen 16 or screen 23
+' brings down the loose floors on the bottom row of the screen ABOVE, columns
+' two to seven, each after a delay of its own.  It is the ceiling coming in
+' behind him as he runs.  The port had none of it.
+Sub Crumble(s As INTEGER)
+  Local INTEGER above, c
+  If curLevel <> 13 Then Exit Sub
+  If s <> 16 And s <> 23 Then Exit Sub
+  above = level(OFF_MAP + (s - 1) * 4 + 2)
+  If above < 1 Or above > 24 Then Exit Sub
+  For c = 7 To 2 Step -1
+    If BType(above, 2 * COLS + c) = T_LOOSE Then
+      BreakLoose above, 2 * COLS + c, Rnd8() And &H1F
+    End If
+  Next c
 End Sub
 
 '---- ANIMTRANS: one step for everything in transition -------------------------
