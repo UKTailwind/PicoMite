@@ -1491,6 +1491,11 @@ Sub CheckAlert
   enemyAlert = 0
   If gdPresent = 0 Then Exit Sub
   If gRec(11) = MOUSE_ID Then Exit Sub    ' he is not an enemy
+  ' MISC.S CHECKALERT: neither is a shadow, except on the twelfth level
+  ' where he is the one you have come to meet.  Without this the kid drew
+  ' his sword at the shadow on levels 4, 5 and 6, and on six that is
+  ' exactly where the running jump the shadow copies has to be made.
+  If gRec(11) = 1 And curLevel <> 12 Then Exit Sub
   If kRec(0) = 0 Or (kRec(0) >= 219 And kRec(0) < 229) Then Exit Sub
   If kRec(13) = 0 Or gRec(13) = 0 Then Exit Sub
   If kRec(10) <> gRec(10) Or kRec(5) <> gRec(5) Then Exit Sub
@@ -1513,7 +1518,9 @@ Sub CheckAlert
     If tt = T_LOOSE Or tt = T_SLICER Then
       enemyAlert = 1
     ElseIf tt = T_GATE Then
-      If BSpec(tScrn, tBY * COLS + tBX) < 4 * 16 Then enemyAlert = 1
+      ' gfightthres is 28*4, not 4*16: a gate has to be a good deal
+      ' higher than that before it stops being in the way of a fight.
+      If BSpec(tScrn, tBY * COLS + tBX) < 28 * 4 Then enemyAlert = 1
     ElseIf noFloor(tt) Then
       enemyAlert = 1
     End If
@@ -5155,6 +5162,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "SWORD"   : ScenValue = gotSword
     Case "DRAWN"   : ScenValue = cSword
     Case "DROPPED" : ScenValue = droppedOut
+    Case "ALERT"   : ScenValue = enemyAlert
     Case "OPEN"    : ScenValue = exitOpen
     Case "OVER"    : ScenValue = gameOver
     Case "DONE"    : ScenValue = levelDone

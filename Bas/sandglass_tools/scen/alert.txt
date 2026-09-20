@@ -1,0 +1,36 @@
+' scen/alert.txt - finding 2.8: a shadow is not an enemy.
+'
+' MISC.S CHECKALERT gives alert 0 for a character with an id of one unless
+' the level is twelve, where he is the one you have come to meet.  The port
+' had no id test, so the kid treated the shadow on levels 4, 5 and 6 as
+' somebody to draw his sword at - and on six that is exactly where the
+' running jump the shadow copies has to be made from.
+'
+' Level 6 screen 1 is the shadow's room.  The blocks between them are open
+' air, so the alert reads 1 rather than 2 in the port and the auto-draw does
+' not follow from it here; what the test shows is the alert itself, which is
+' the thing CHECKALERT decides.
+
+SCEN the shadow on the sixth level raises no alert
+AT 6 1 8 1
+SWORD 1
+SEED 17
+RUN ....................
+WANT OPPID 1
+WANT ALERT 0
+WANT DRAWN 0
+END
+
+' The control: on the twelfth level he is not exempted, and the alert is
+' raised.  It reads 1 rather than 2 because of the two loose floors between
+' them on that row, which is what a loose floor does to an alert.
+SCEN on the twelfth level he is an enemy
+AT 12 15 6 0
+TYPE 15 1 0 1
+ENTER
+SWORD 1
+SEED 17
+RUN ....
+WANT OPPID 1
+WANT ALERT NE 0
+END
