@@ -1,0 +1,50 @@
+' scen/dead.txt - finding 2.4: a dead character still obeys the physics.
+'
+' StepCharacter left before Settle when cLife was zero.  In the original a
+' dead character still runs animchar, gravity, addfall and checkfloor - only
+' the control machine is skipped, because a corpse takes no input - and
+' hitflr sends him to hardland.  Without it a guard killed at an edge hung in
+' mid-air in his falling pose for the rest of the game.
+'
+' And AUTO.S CUTGUARD takes a guard off the screen once he has gone past the
+' foot of it.  The port's CutGuard only ever dealt with the player leaving a
+' room, so a guard who fell out of the bottom kept falling with his y wrapping
+' round, and was drawn again from the top of the same screen.
+
+' The guard on level 1 screen 3 is fought to death where he stands, and the
+' floor is then taken from under the body.
+SCEN a dead guard falls like anything else
+AT 1 3 2 1
+SWORD 1
+SEED 17
+RUN ..<<<<....>>>>>>>>>>>>>>........B...B...^..B...B...^..B...B...>..B...B..B...^..B...B...B...B...B...B...B...B...B...B..
+WANT GUARDS 1
+TYPE 3 6 2 1
+TYPE 3 7 2 1
+TYPE 3 6 1 0
+RUN ..............
+WANT OPPBY 2
+WANT OPPFALL 0
+END
+
+' And one who goes past the foot of the screen is taken off it rather than
+' left falling for ever.  The floor under him goes with nothing below it, and
+' screen 3's bottom row is solid, so there is nowhere for him to land.
+SCEN a guard who falls out of the room is gone
+AT 1 3 2 1
+TYPE 3 8 1 0
+SEED 17
+RUN ..................
+WANT GONE 1
+WANT OPPID -1
+END
+
+' The control: an ordinary guard, left alone, stays where he is.
+SCEN a guard standing on a floor stays on it
+AT 1 3 2 1
+SEED 17
+RUN ..................
+WANT GONE 0
+WANT OPPID 2
+WANT OPPBY 1
+END

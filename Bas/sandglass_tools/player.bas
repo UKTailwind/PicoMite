@@ -260,7 +260,7 @@ Dim INTEGER kMirScrn, kMirX, kMirY, nMirrors, nMerges
 ' level and negative afterwards, which is how the rest of the level knows
 ' the meeting is over: the shadow is not put back in the room, and the
 ' bridge to the last screen is there to be walked on.
-Dim INTEGER mergeTimer, nBridge, shadHold, mouseTimer, nMice, mouseTurned
+Dim INTEGER mergeTimer, nBridge, shadHold, mouseTimer, nMice, mouseTurned, nGuardsGone
 Const T_MIRROR = 13
 ' The enemy image set each level loads (MISC.S chset), and the tables.
 Dim INTEGER tSet(6), chSet(15), bgSet(15)
@@ -987,7 +987,15 @@ Sub StepCharacter
   ' missing floor repeated for ever: land, step off, fall, land.
   If cLife = 0 Then
     If cPosn = 15 Or cPosn = 166 Or cPosn = 158 Or cPosn = 171 Then cSeq = seqTab(SEQ_DROPDEAD)
-    If Advance() = 0 Then lastWhat = "STALLED"
+    If Advance() = 0 Then lastWhat = "STALLED" : Exit Sub
+    ' A corpse still obeys the physics.  The original runs animchar, gravity,
+    ' addfall and checkfloor for a dead character too; only the control
+    ' machine below is skipped, because a corpse takes no input.  Leaving the
+    ' physics out as well left a guard knocked off a ledge hanging in mid-air
+    ' in his falling pose for the rest of the game.
+    RereadBlocks
+    Settle
+    CutFallenGuard
     Exit Sub
   End If
   ' Anyone who is not the player thinks for himself.  Testing for two or
@@ -1035,6 +1043,7 @@ Sub StepCharacter
   If cID = 0 Then CheckGate
   EnemyColl
   Settle
+  CutFallenGuard
   CheckPress
   CheckSpikes
   CheckImpale
@@ -1335,11 +1344,18 @@ Sub Settle
   End If
   ' Sprung spikes under him take precedence over how hard he lands.
   t = RdBlock(cScrn, cBlockX, cBlockY)
-  If t = T_SPIKES Then
+  If t = T_SPIKES And cLife <> 0 Then
     If GetSpikes(tScrn, tBY * COLS + tBX) Then DoImpale : Exit Sub
   End If
   cY = floory(idx)
   cAction = 0 : cFalling = 0
+  ' hitflr sends a character who is already dead to hardland, whatever speed
+  ' he came down at, and there is nothing left to take off him.
+  If cLife = 0 Then
+    cSeq = seqTab(SEQ_HARDLAND) : lastWhat = "the body lands"
+    cYVel = 0
+    Exit Sub
+  End If
   ' CTRL.S hitflr.  The shadow lands softly however far he has fallen - he is
   ' not a thing that can be hurt by the ground.  Everyone else is judged on
   ' the speed, and a guard does not survive a medium fall where the player
@@ -2507,6 +2523,19 @@ End Sub
 ' out, lands en garde; only the player unarmed comes down into the crouch,
 ' which is FightCtrl's business and which a guard never gets out of - a guard
 ' who dropped a storey lay in it for the rest of the game.
+' AUTO.S CUTGUARD: a guard who has gone past the foot of the screen is taken
+' off it.  The port's CutGuard only ever dealt with the player leaving a room,
+' so a guard who fell out of the bottom - alive or dead - kept falling with
+' his y wrapping round, and was drawn again from the top of the same screen.
+Sub CutFallenGuard
+  If cID = 0 Or gdPresent = 0 Then Exit Sub
+  If cBlockY < ROWS Then Exit Sub
+  gdPresent = 0 : oppStr = 0 : gRec(13) = 0
+  If cScrn >= 1 And cScrn <= 24 Then gdBlock(cScrn) = 255
+  nGuardsGone = nGuardsGone + 1
+  lastWhat = "over the edge and gone"
+End Sub
+
 Function LandSeq() As INTEGER
   If cID >= 2 Or cSword = 2 Then LandSeq = SEQ_LANDENGARDE Else LandSeq = SEQ_SOFTLAND
 End Function
@@ -5156,6 +5185,8 @@ Function ScenValue(what As STRING) As INTEGER
     Case "BRIDGE"  : ScenValue = nBridge
     Case "MICE"    : ScenValue = nMice
     Case "OPPID"   : ScenValue = Choice(gdPresent, gRec(11), -1)
+    Case "OPPBY"   : ScenValue = gRec(5)
+    Case "GONE"    : ScenValue = nGuardsGone
     Case Else      : Error "unknown expectation " + what
   End Select
 End Function
@@ -5182,7 +5213,7 @@ Sub ScZero
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
   nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0
-  nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0
+  nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0 : nGuardsGone = 0
 End Sub
 
 ' One line saying where he is and what he is doing, the same shape every
