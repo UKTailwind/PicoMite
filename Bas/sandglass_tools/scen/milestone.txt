@@ -1,0 +1,47 @@
+' scen/milestone.txt - section 3: the third level has a checkpoint.
+'
+' AUTO.S milestone3:
+'     lda level / cmp #3 / bne ]rts
+'     lda #7 ;scrn to R of gate
+'     ]mcheck cmp CharScrn / bne ]rts
+'     lda #1 / sta milestone
+'     lda MaxKidStr / sta origstrength
+'
+' and SUBS.S STARTKID :special3:
+'     lda milestone / beq :nomile
+'     lda #-1 / sta KidStartFace
+'     lda #2  / sta KidStartScrn
+'     lda #6  / sta KidStartBlock ;put him just inside 1st gate...
+'     lda #7 / ldx #4 / ldy #0 / jsr rdblock
+'     lda #space / sta (BlueType),y ;remove loose floor...
+'
+' So once he has been past the first gate, a death puts him back just inside
+' it rather than at the start of the level, the loose floor he has already
+' brought down on screen 7 stays down, and whatever his strength had grown to
+' is banked.  The port had none of it and sent him back to the beginning.
+
+SCEN reaching screen 7 sets the checkpoint
+AT 3 7 5 0
+WANT MILESTONE 1
+END
+
+SCEN and starting again puts him back just inside the gate
+AT 3 7 5 0
+START 3
+WANT MILESTONE 1
+WANT SCRN 2
+WANT BX 6
+WANT BY 0
+WANT FACE 0
+WANTBLOCK 7 4 0 0
+END
+
+' The control: without it he starts where the level starts, and the loose
+' floor on screen 7 is still there.
+SCEN without the checkpoint the level starts where it always did
+START 1
+START 3
+WANT MILESTONE 0
+WANT SCRN NE 2
+WANTBLOCK 7 4 0 11
+END

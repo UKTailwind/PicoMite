@@ -236,6 +236,8 @@ Dim INTEGER aSlicerSeq, aSlicerTop, aSlicerBot, aSlicerBot2, aSlicerGap, aSlicer
 Dim INTEGER aTorchFlame, kFfalling, kLooseB, kGateBotORA, kGateB1
 Dim INTEGER imSheet, imSX, imSY, imW, imH, kGateMargin, kStairThres
 Dim INTEGER levelDone, startScrn, nStairs
+' AUTO.S milestone3: set once he has been past the first gate on level 3.
+Dim INTEGER milestone
 ' The strength meter, and what a potion did last.
 Dim INTEGER kidStr, maxKidStr, chgKidStr, origStrength, lastPotion, gotSword
 Dim INTEGER deadTimer, nPotions, kInitMaxStr, kMaxMaxStr, kWtlessTimer, kDeadEnough
@@ -781,7 +783,9 @@ Sub NextLevel
 End Sub
 
 Sub StartLevel(n As INTEGER)
+  Local INTEGER st, bl, fc
   LoadLevel n : loadedLevel = n
+  If n <> 3 Then milestone = 0
   ' TOPCTRL.S RESTART: "lda level / cmp #1 / bne :gotswd / lda #0 / sta
   ' gotsword ;Start Level 1 w/o sword".  The port kept it, so after picking
   ' the sword up on the first level and dying he restarted armed - with the
@@ -791,10 +795,27 @@ Sub StartLevel(n As INTEGER)
   message = MSG_LEVEL : msgLevel = n : msgTimer = LEVELTIMER
   invert = 0
   If n = 1 Then CueSong 3                 ' danger, as the first level opens
-  cScrn = level(OFF_INFO + 64)
-  cBlockX = level(OFF_INFO + 65) Mod COLS : cBlockY = level(OFF_INFO + 65) \ COLS
+  st = level(OFF_INFO + 64)
+  bl = level(OFF_INFO + 65)
+  fc = level(OFF_INFO + 66)
+  ' SUBS.S STARTKID :special3 - the third level's checkpoint:
+  '     lda milestone / beq :nomile
+  '     lda #-1 / sta KidStartFace
+  '     lda #2  / sta KidStartScrn
+  '     lda #6  / sta KidStartBlock ;put him just inside 1st gate...
+  '     lda #7 / ldx #4 / ldy #0 / jsr rdblock
+  '     lda #space / sta (BlueType),y ;remove loose floor...
+  ' Once he has been past the first gate, a death puts him back just inside it
+  ' rather than at the start of the level, and the loose floor he has already
+  ' brought down on screen 7 stays down.  The port had none of it.
+  If n = 3 And milestone Then
+    st = 2 : bl = 6 : fc = &HFF
+    SetType 7, 4, T_SPACE
+  End If
+  cScrn = st
+  cBlockX = bl Mod COLS : cBlockY = bl \ COLS
   cX = 58 + cBlockX * 14 + 7 + ANGLE : cY = floory(cBlockY + 1)
-  cFace = level(OFF_INFO + 66) Xor &HFF : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF
+  cFace = fc Xor &HFF : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF
   cFalling = 0 : stunned = 0 : cPosn = 15
   ' STARTKID starts him in a different sequence on each of the levels that
   ' need one: the first drops him in from the ceiling, the thirteenth has him
@@ -4374,6 +4395,17 @@ Sub EnterScreen(scrn As INTEGER, row As INTEGER)
   Next loc
   AddSlicers s, row
   Crumble s
+  Milestone3 s
+End Sub
+
+' AUTO.S milestone3: reaching screen 7 on the third level - the screen to the
+' right of the gate - sets the checkpoint and banks what his strength has
+' grown to, so that a death after it does not take that back either.
+Sub Milestone3(s As INTEGER)
+  If curLevel <> 3 Or s <> 7 Then Exit Sub
+  If milestone Then Exit Sub
+  milestone = 1
+  origStrength = maxKidStr
 End Sub
 
 ' SUBS.S CRUMBLE.  On the thirteenth level, arriving at screen 16 or screen 23
@@ -5483,6 +5515,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "REPEAT"  : ScenValue = cRepeat
     Case "KNOCKS"  : ScenValue = nGateKnocks
     Case "CLOCK"   : ScenValue = frameCount
+    Case "MILESTONE" : ScenValue = milestone
     Case "MINLEFT" : ScenValue = minLeft
     Case "BASEX"   : ScenValue = BaseX()
     Case "DROPS"   : ScenValue = nDrop
