@@ -1,0 +1,18 @@
+' discover_guards.txt - where the levels put their guards, and where the
+' engine puts them.  Prints; asserts nothing.
+'
+' This is the evidence for finding 2.5.  The level says the guard on level 1
+' screen 3 stands at block 7 and gives his x as 170; the engine, asked which
+' block he is in, answers 8.  The two differ because his block is worked out
+' from his BASE, and his base is his drawing anchor plus the thirteen-pixel
+' footmark of the en-garde pose, which carries it into the next block.
+'
+' Adopting the original's perspective angle - block from base - 9, front edge
+' at 14*(b+4)+9, kid start +14 - does NOT change that answer: it was tried and
+' he still comes out at 8.  What it does change is where the kid stands
+' relative to the scenery, and the distance between the two of them, which is
+' what a fight turns on.
+FIND 1 22
+GDTAB 1
+GDTAB 3
+GDTAB 12

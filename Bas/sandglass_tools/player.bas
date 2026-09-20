@@ -4938,6 +4938,7 @@ End Sub
 '
 '   FIND lvl type         where every block of that type is on that level
 '   SHOW lvl scrn         one screen's blocks, and what it joins onto
+'   GDTAB lvl            where the level says each screen's guard stands
 '   SCEN name...          begin a scenario
 '   AT lvl scrn bx by     put him there: fresh level, counters back to zero
 '   START lvl             begin the level where the level itself begins
@@ -4993,6 +4994,17 @@ Sub RunScenarios
         ScFind ScNum(ScWord$(ln, 2)), ScNum(ScWord$(ln, 3))
       Case "SHOW"
         ScShow ScNum(ScWord$(ln, 2)), ScNum(ScWord$(ln, 3))
+      Case "GDTAB"
+        ' What the level says about its guards.  It is the only way to tell
+        ' whether the engine ends up putting one where the blueprint asked
+        ' for him, which is the whole of finding 2.5.
+        LoadLevel ScNum(ScWord$(ln, 2)) : loadedLevel = curLevel
+        Print "gdtab: level " + Str$(curLevel)
+        For i = 1 To 24
+          If gdBlock(i) < 30 Then
+            Print "  scr " + Str$(i) + " blk " + Str$(gdBlock(i) Mod COLS) + "," + Str$(gdBlock(i) \ COLS) + " x " + Str$(gdX(i)) + " face " + Str$(gdFace(i)) + " prog " + Str$(gdProg(i))
+          End If
+        Next i
       Case "SCEN"
         nm = ScRest$(ln, 2) : nw = 0 : tr = 0
         Print
@@ -5157,6 +5169,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "DRAWN"   : ScenValue = cSword
     Case "DROPPED" : ScenValue = droppedOut
     Case "ALERT"   : ScenValue = enemyAlert
+    Case "OPDIST"  : ScenValue = OpDistS()
     Case "OPEN"    : ScenValue = exitOpen
     Case "OVER"    : ScenValue = gameOver
     Case "DONE"    : ScenValue = levelDone
@@ -5229,6 +5242,7 @@ Function ScState$() As STRING
   ' Whoever else is on the screen, since half of what a scenario asks about
   ' is what he is doing: pose, x, block, sword, life and what is left of him.
   If gdPresent Then
+    t = t + " dist " + Str$(OpDistS())
     t = t + " | gd id " + Str$(gRec(11)) + " p" + Str$(gRec(0)) + " x" + Str$(gRec(1))
     t = t + " blk" + Str$(gRec(4)) + "," + Str$(gRec(5)) + " fall" + Str$(gRec(14))
     t = t + " sw" + Str$(gRec(12)) + " life" + Str$(gRec(13)) + " str" + Str$(oppStr)

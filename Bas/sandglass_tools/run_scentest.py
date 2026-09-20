@@ -63,7 +63,7 @@ def main(argv=None):
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("scenfile", nargs="*",
                     help="scenario files, joined in the order given; with none, "
-                         "every scen/*.txt except discover.txt, which only prints")
+                         "every scen/*.txt except the discover ones, which only print")
     ap.add_argument("--engine", nargs="?", const="player.min.bas", default=None,
                     help="put the engine as well and LOAD it; takes a path, so "
                          "the same scenarios can be run against an older build "
@@ -77,7 +77,7 @@ def main(argv=None):
     names = args.scenfile
     if not names:
         names = sorted(glob.glob(os.path.join(here, "scen", "*.txt")))
-        names = [n for n in names if os.path.basename(n) != "discover.txt"]
+        names = [n for n in names if not os.path.basename(n).startswith("discover")]
     scen = b""
     for n in names:
         scen += (b"\n' ---- " + os.path.basename(n).encode() + b"\n"
