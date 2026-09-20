@@ -3,6 +3,10 @@
 A dungeon game for the PicoComputer 3, in the style of the Apple II original.
 The player's manual is in `docs/Pico_Persia_Player_Manual.html`.
 
+**None of the game's own data is included here, and what you convert must not
+be passed on.** See [Asset converter](#asset-converter) - it is the first thing
+to do, and the game will not start without it.
+
 ## The board
 
 **Firmware 6.03.02b12 or later.** The RAM image slots the artwork is loaded
@@ -27,53 +31,103 @@ SERIAL` on its first line - so the screen belongs to the game alone.
 
 ## Asset converter
 
-This directory holds the converter. It reads a copy of the published Apple II
-source release that **you** supply, and writes the data files the engine needs
-onto your own machine.
-
 Nothing here contains any of the game's artwork, levels, animation tables or
-music. The engine ships with no game data in it either, and will not run until
-you have done the step below. That is deliberate: the published source release
-is explicit that it grants no rights to the game itself, so the game's content
-is never ours to hand on. The code in this directory and in the engine is our
-own work, and the content stays yours.
+music, and the engine ships with none in it either. It will not run at all
+until you have fetched the game's own data and converted it yourself, which is
+what this section is for. The code in this directory and in the engine is our
+own work; the content is the game's, and it stays yours.
 
-## What you need
+### 1. Python
 
-1. Python 3.8 or later.
-2. Your own copy of the published source release, obtained by you. Clone or
-   download it yourself; this converter will not fetch anything for you.
+Python 3.8 or later. No packages beyond the standard library.
 
-## Converting
+### 2. The published source release
+
+The data comes from Jordan Mechner's own publication of the original Apple II
+source, on GitHub:
+
+**<https://github.com/jmechner/Prince-of-Persia-Apple-II>**
+
+Get your own copy of it. Either
 
 ```
-python convert.py --source <path to your copy> --out <output directory>
+git clone https://github.com/jmechner/Prince-of-Persia-Apple-II.git
 ```
 
-`--source` can point either at the top of your copy or at the source directory
-inside it. The converter finds `Images/` and `Levels/` and stops with a clear
-message if they are not there.
+or, on that page, **Code -> Download ZIP** and unpack it. The converter will
+not fetch anything for you: it reads only the files you point it at.
+
+What it needs from inside that copy is the directory `01 POP Source`, which
+holds `Images/` and `Levels/`. The interlude picture, `PAC.PROOM`, is looked
+for anywhere in the copy and is skipped if this one does not carry it.
+
+### 3. Convert
+
+Point `--source` at the top of your copy - the directory holding
+`01 POP Source` - or at `01 POP Source` itself. Either works.
+
+```
+python convert.py --source Prince-of-Persia-Apple-II --out popdata
+```
+
+On Windows, with the paths written out:
+
+```
+python convert.py --source C:\Users\you\Prince-of-Persia-Apple-II --out C:\Users\you\popdata
+```
+
+If `Images/` and `Levels/` are not where it looked it stops and says so rather
+than writing anything.
+
+`--set game` is the default and is what you want: it leaves out the artwork
+only the intro and the ending use, and fits four image slots. `--set full`
+converts every table and needs five.
 
 It writes:
 
-| File | What it is |
-|---|---|
-| `sheet1.bmp` … | the artwork, one file per image slot, already in the display's colour format |
-| `art.idx` | where each image sits in which sheet |
-| `levels.dat` | the fifteen level layouts |
-| `frames.dat`, `seq.dat` | the frame table and the animation byte code |
-| `blocks.dat`, `tables.idx` | how a block draws, the screen geometry, the movers' tables and constants, and where everything sits |
-| `sounds.dat` | the twenty sound effects, as a frequency and a length each |
-| `cutroom.bmp` | the princess's room, for the interludes, if your copy has it |
-| `convert.log` | a record of what was read and produced |
+| File | What it is | On the board |
+|---|---|---|
+| `sheet1.bmp` … `sheet4.bmp` | the artwork, one file per image slot, already in the display's colour format | yes |
+| `art.bin` | where each image sits in which sheet, as the engine reads it | yes |
+| `levels.dat` | the fifteen level layouts | yes |
+| `frames.dat`, `seq.dat` | the frame table and the animation byte code | yes |
+| `blocks.dat`, `tables.idx` | how a block draws, the screen geometry, the movers' tables and constants, and where everything sits | yes |
+| `sounds.dat` | the twenty sound effects, as a frequency and a length each | yes |
+| `cutroom.bmp` | the princess's room, for the interludes, if your copy has it | yes |
+| `art.idx` | the same index as `art.bin`, in text, for reading | no |
+| `convert.log` | a record of what was read and produced | no |
 
-Copy those onto the board's drive in the same directory as the engine, and run
-the engine.
+The thirteen marked **yes** go onto the board's drive, in the same directory as
+the engine - about 580 KB of it, three quarters of that the four sheets.
+`art.idx` and `convert.log` are for you to look at and the engine never opens
+them.
 
-### Options
+### 4. Keep what comes out to yourself
 
-`--set game` (the default) leaves out the artwork only the intro and ending use,
-and fits four image slots. `--set full` converts every table and needs five.
+**The converted files must not be distributed.** They are the game's own
+artwork, levels, animation tables and sound written into another format, and
+changing the format changes nothing about whose they are. The terms on the
+release are explicit:
+
+> As the author and copyright holder of this source code, I personally have no
+> problem with anyone studying it, modifying it, attempting to run it, etc.
+> Please understand that this does NOT constitute a grant of rights of any kind
+> in Prince of Persia, which is an ongoing Ubisoft game franchise. Ubisoft alone
+> has the right to make and distribute Prince of Persia games.
+>
+> - Jordan Mechner, in the release's own README
+
+So the output directory is for your machine and your own board. Do not commit
+it to a repository, put it in an archive or a disk image, attach it to a
+release, post it, or hand it to anyone else - and that goes for anything made
+out of it, the `sheetN.bmp` artwork on its own included. Nor for a board you
+pass on with the files already on its drive.
+
+Anyone else who wants to play fetches the release and runs the converter
+themselves, exactly as you have just done. That is the whole reason the
+converter exists rather than a pack of ready-made files.
+
+The music is not ours to pass on either - see [Music](#music-optional).
 
 ## Things you can pick up
 
@@ -281,8 +335,9 @@ list of directives is in the comment above `RunScenarios`.
     python run_scentest.py scen/slicer.txt --engine   put the engine too
     python run_scentest.py                            every scenario in scen/
 
-The engine goes to the board once and takes two minutes; a scenario goes in
-under a second, which is what makes it worth writing one per reported bug.
+The engine goes to the board once - seconds over TFTP, a couple of minutes over
+XMODEM - and a scenario goes in under a second, which is what makes it worth
+writing one per reported bug.
 `--engine` takes a path, so the same scenarios can be run against an older
 build to show that they do notice the bug before they are trusted to show it
 is gone. `--clean` takes `scen.txt` off the board again so the next `RUN`
@@ -300,7 +355,8 @@ that slicer was and what was on either side of it.
 
 - The converter reads only the files you point it at and writes only into the
   directory you name.
-- Converted output should stay on your machine. Please do not redistribute it.
+- Converted output stays on your machine and must not be redistributed - see
+  "Keep what comes out to yourself", above.
 - The colour rule follows the original hardware: a lit pixel on its own takes
   one of two colours depending on its position, and two or more together read as
   white. The converter checks that the source data uses a single palette group
