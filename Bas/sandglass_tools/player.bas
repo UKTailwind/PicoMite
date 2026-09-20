@@ -1144,6 +1144,8 @@ Sub HitBarrier
   t = BlockAt(cScrn, cBlockX, cBlockY)
   If t = T_GATE Then
     If GateOpen(cScrn, cBlockX, cBlockY) Then t = 0
+  ElseIf t = T_SLICER Then
+    If SlicerShut(cScrn, cBlockX, cBlockY) = 0 Then t = 0
   End If
   ' Barrier() returns a CLASS, not a flag, so it must be compared: AND is
   ' bitwise here, and 4 And 1 is 0.  That let him run straight into a solid
@@ -1163,6 +1165,8 @@ Sub HitBarrier
   t = BlockAt(cScrn, ahead, cBlockY)
   If t = T_GATE Then
     If GateOpen(cScrn, ahead, cBlockY) Then t = 0
+  ElseIf t = T_SLICER Then
+    If SlicerShut(cScrn, ahead, cBlockY) = 0 Then t = 0
   End If
   If Barrier(t) = 0 Then Exit Sub
 
@@ -1719,6 +1723,8 @@ Sub FollowKid
   tt = RdBlock(cScrn, tb, cBlockY)
   If tt = T_GATE Then
     If GateOpen(cScrn, tb, cBlockY) Then tt = 0
+  ElseIf tt = T_SLICER Then
+    If SlicerShut(cScrn, tb, cBlockY) = 0 Then tt = 0
   End If
   If Barrier(tt) <> 0 Then droppedOut = 0 : AiBack : Exit Sub
   If noFloor(tt) = 0 Then AiFwd : Exit Sub
@@ -2138,6 +2144,8 @@ Sub EnemyColl
   t = RdBlock(cScrn, cBlockX, cBlockY)
   If t = T_GATE Then
     If GateOpen(cScrn, cBlockX, cBlockY) Then Exit Sub
+  ElseIf t = T_SLICER Then
+    If SlicerShut(cScrn, cBlockX, cBlockY) = 0 Then Exit Sub
   ElseIf Barrier(t) = 0 Then
     Exit Sub
   End If
@@ -2255,6 +2263,8 @@ Function DoStepFwd() As INTEGER
   barr = 0
   If t = T_GATE Then
     If GateOpen(cScrn, bx, cBlockY) = 0 Then barr = 1
+  ElseIf t = T_SLICER Then
+    If SlicerShut(cScrn, bx, cBlockY) Then barr = 1
   ElseIf Barrier(t) <> 0 Then
     barr = 1
   End If
@@ -2713,6 +2723,21 @@ Function GateOpen(scrn As INTEGER, bx As INTEGER, by As INTEGER) As INTEGER
   If (st >> 2) + kGateMargin >= h Then GateOpen = 1
 End Function
 
+' A slicer is a wall only while its blade is down.  COLL.S CHECKCOLL tests
+' the block state against slicerExt and lets a character walk through at any
+' other point in the stroke; treating it as a permanent wall made every
+' slicer corridor impassable, which stops levels 4 and 5 being finished.
+' The top bit of the state is the bloodied flag, so mask it off.  Built like
+' GateOpen above: RdBlock resolves across a screen edge and leaves the
+' resolved location in tScrn/tBX/tBY for the spec read.
+Function SlicerShut(scrn As INTEGER, bx As INTEGER, by As INTEGER) As INTEGER
+  Local INTEGER st
+  SlicerShut = 1
+  If RdBlock(scrn, bx, by) <> T_SLICER Then Exit Function
+  st = BSpec(tScrn, tBY * COLS + tBX)
+  If (st And &H7F) <> kSlicerExt Then SlicerShut = 0
+End Function
+
 Function secSheetOf(tbl As INTEGER, img As INTEGER, facing As INTEGER) As INTEGER
   Local INTEGER rec
   rec = (artFirst(tbl) + (img - 1) * artFacings(tbl) + facing) * 9 + artBase
@@ -2756,6 +2781,8 @@ Function EntryBlock(bx As INTEGER, by As INTEGER) As INTEGER
   EntryBlock = BlockAt(cScrn, bx, by)
   If EntryBlock = T_GATE Then
     If GateOpen(cScrn, bx, by) Then EntryBlock = 0
+  ElseIf EntryBlock = T_SLICER Then
+    If SlicerShut(cScrn, bx, by) = 0 Then EntryBlock = 0
   End If
 End Function
 
