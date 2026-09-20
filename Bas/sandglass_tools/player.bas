@@ -124,7 +124,14 @@ Const SEQ_HANGFALL = 23
 Const SEQ_HANGSTRAIGHT = 25
 Const SEQ_CLIMBFAIL = 73
 Const GCLIMBTHRES = 6
-Const GRAB_REACH = 8      ' how far forward he stretches
+' CTRL.S fallon: "lda #grabreach / jsr addcharx / sta CharX", and
+' grabreach is MINUS eight.  addcharx adds in the direction he faces, so a
+' negative reach moves him BACKWARDS - which is right, because the ledge
+' you grab on the way down is the one you have just run off, and it is
+' behind you.  The port kept the sign in the code rather than the constant
+' and then stretched him forwards, putting the whole grab window sixteen
+' pixels from where it belongs.
+Const GRAB_REACH = -8     ' backwards, the way the ledge is
 Const STUN_TIME = 12
 Const SEQ_BUMPFALL = 45
 Const SEQ_HARDBUMP = 46
@@ -1114,7 +1121,7 @@ Sub TryGrab(idx As INTEGER)
   ' The reach goes BACKWARDS, not forwards.  When you run off a ledge the ledge
   ' you are grabbing for is behind you, so a left-facing character reaches to
   ' the right.  Reaching the way he faces moves him away from it.
-  If (cFace And &H80) Then cX = (cX - GRAB_REACH) And &HFF Else cX = (cX + GRAB_REACH) And &HFF
+  cX = AddCharX(GRAB_REACH)
   RereadBlocks
   If (cFace And &H80) Then ahead = cBlockX - 1 Else ahead = cBlockX + 1
   above = BlockAt(cScrn, cBlockX, cBlockY - 1)
@@ -1122,9 +1129,12 @@ Sub TryGrab(idx As INTEGER)
   If CanGrab(above, aboveinf) = 0 Then
     cX = saved : RereadBlocks : Exit Sub
   End If
-  ' Align to the edge of his block on the side he faces: the original's
-  ' distance-to-edge step on a successful grab.
-  If (cFace And &H80) Then cX = 14 * (cBlockX + 4) + BLOCKLO Else cX = 14 * (cBlockX + 4) + BLOCKLO + 13
+  ' CTRL.S fallon :ok - "jsr getdist / jsr addcharx / sta CharX".  It is his
+  ' BASE that is put on the block edge, not his coordinate, and that is what
+  ' makes CharBlockX the ledge column for the whole of the hang.  Setting cX
+  ' to the edge instead left the base a frame's offset away, so the hang then
+  ' had to go looking for the ledge one block over.
+  MoveFwd GetDist()
   cY = floory(idx)
   cYVel = 0
   cFalling = 0
@@ -2662,16 +2672,18 @@ End Function
 ' hanging, a solid block or a panel behind straightens the hang, and a ledge
 ' that crumbles away drops him.
 Function HangCtrl() As INTEGER
-  Local INTEGER above, under, behind, st
+  Local INTEGER above, under, behind, st, aboveSt
   HangCtrl = 0
-  ' INTERPRETATION: the ledge he hangs from is the block above and IN FRONT of
-  ' him - the one the grab rule validated - not the block directly overhead,
-  ' which for any catchable ledge is empty air.  The original reaches the same
-  ' block through a base-x alignment on the frame data that is not transcribed
-  ' here.  Both the climb and the "still there" check look at the ledge.
-  Local INTEGER ahead
-  If (cFace And &H80) Then ahead = cBlockX - 1 Else ahead = cBlockX + 1
-  above = BlockAt(cScrn, ahead, cBlockY - 1)
+  ' CTRL.S hanging reads getabove for the ledge and getunderft for what he is
+  ' hanging against, both at CharBlockX: the grab put his base on the ledge's
+  ' own edge, so the block he is holding is the one directly overhead.  The
+  ' port aligned his coordinate instead of his base and then went looking one
+  ' block in front, which reads the gap for a left-facer and two past it for a
+  ' right-facer - so a right-facing hang let go the moment anything two blocks
+  ' along was empty, the sheer-face test never fired, and a plate could not be
+  ' pressed by hanging from it.
+  above = RdBlock(cScrn, cBlockX, cBlockY - 1)
+  aboveSt = BSpec(tScrn, tBY * COLS + tBX)
   under = BlockAt(cScrn, cBlockX, cBlockY)
   If (cFace And &H80) Then behind = cBlockX + 1 Else behind = cBlockX - 1
   If stunned = 0 And jstkY < 0 Then
@@ -2682,7 +2694,7 @@ Function HangCtrl() As INTEGER
       If (cFace And &H80) = 0 Then
         HangCtrl = SEQ_CLIMBUP
       Else
-        st = level(720 + (cScrn - 1) * 30 + (cBlockY - 1) * COLS + cBlockX) >> 2
+        st = aboveSt >> 2
         If st < GCLIMBTHRES Then HangCtrl = SEQ_CLIMBFAIL Else HangCtrl = SEQ_CLIMBUP
       End If
     Else

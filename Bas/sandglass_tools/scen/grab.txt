@@ -1,0 +1,55 @@
+' scen/grab.txt - findings 2.6 and 2.7: catching a ledge, and hanging on it.
+'
+' CTRL.S fallon reaches for a ledge with
+'     lda CharX / sta savekidx / lda #grabreach / jsr addcharx / sta CharX
+' and grabreach is MINUS eight.  addcharx adds in the direction he faces, so
+' the reach goes BACKWARDS; the port kept the sign in the code instead of the
+' constant and stretched him forwards, putting the window sixteen pixels out.
+'
+' On a catch, fallon does
+'     jsr getdist / jsr addcharx / sta CharX
+' which puts his BASE on the block edge.  That is what makes CharBlockX the
+' ledge column, and CTRL.S hanging then reads getabove and getunderft at
+' CharBlockX for the whole of the hang.  The port aligned his coordinate
+' rather than his base and then looked one block in front, which reads the gap
+' for a left-facer and two past it for a right-facer.
+'
+' Level 1 screen 8's own gap is one block wide, and he steps off at its near
+' edge, where reaching back lands him on the ledge he has just left - so the
+' catch that is wanted here is the other one: a running jump that falls short.
+' The gap is widened to four blocks, with somewhere to land under it, and he
+' jumps into it and catches the far side.
+
+SCEN a running jump that falls short catches the far ledge
+AT 1 8 7 1
+TYPE 8 1 1 0
+TYPE 8 2 1 0
+TYPE 8 3 1 0
+TYPE 8 1 2 1
+TYPE 8 2 2 1
+SEED 17
+RUN ..>>>>>>>>JFFFFFFFFFFFFFFFF
+WANT GRABS 1
+WANT ACTION 2
+WANT BX 0
+WANT BY 2
+WANT ALIVE 1
+END
+
+' And hanging there, up with the button still held climbs him onto the ledge
+' he is holding - let go of the button and he drops instead.
+SCEN and he climbs up onto it
+AT 1 8 7 1
+TYPE 8 1 1 0
+TYPE 8 2 1 0
+TYPE 8 3 1 0
+TYPE 8 1 2 1
+TYPE 8 2 2 1
+SEED 17
+RUN ..>>>>>>>>JFFFFFFFFFFFFFFFF
+RUN UUUUUUUUUUUUUUUUUUUUUUUU
+WANT GRABS 1
+WANT CLIMBS 1
+WANT BY 1
+WANT ALIVE 1
+END
