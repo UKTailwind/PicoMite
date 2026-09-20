@@ -1,0 +1,55 @@
+' scen/stab.txt - section 3: what a sword does to a man with none.
+'
+' MISC.S STABCHAR ends:
+'     * stabbed when defenseless
+'     :DL lda #100
+'         jsr decstr
+'         lda #stabkill ;dropdead?
+'         jmp :killed
+'
+' :killed is not "play stabkill".  It is the code an ARMED man reaches when
+' his last point of strength goes, and it begins by asking whether he went
+' down at an edge:
+'     :killed jsr getbehind / cmp #space / bne :onground
+'             jsr getdist / cmp #4 / bcc :onground
+'             sec / sbc #14 / jsr addcharx / sta CharX
+'             inc CharBlockY / lda #fightfall / jsr jumpseq
+'
+' So a defenceless man run through at the lip of a drop goes over it, exactly
+' as a swordsman does.  The port sent him straight to stabkill, stood him up
+' on the floor line and killed him where he was.
+'
+' Level 1 screen 3 is the guard's room, floor along row 1.  He is put at
+' column 5 with his sword still in the wardrobe, the floor behind him taken
+' away and somewhere to land put under it, and he simply waits.
+
+SCEN run through at a lip, he goes over it
+AT 1 3 5 1
+FACE 0
+TYPE 3 4 1 0
+TYPE 3 4 2 1
+TYPE 3 3 2 1
+SEED 17
+RUN ........................
+' Knocked off the block he was standing in, into the one behind: BX 4, not 5.
+' And not by stepping off it - fightfall puts him over the edge outright, so
+' the step-off counter stays at nought.  The port left him standing at BX 5
+' until the death sequence happened to walk him backwards off the lip.
+WANT BX 4
+WANT BY 2
+WANT FELL 0
+WANT ALIVE 0
+WANT POSN 185
+END
+
+' The control: the same meeting in the middle of the floor kills him where he
+' stands, which is what stabkill is for.
+SCEN run through on solid floor, he drops where he stands
+AT 1 3 5 1
+FACE 0
+SEED 17
+RUN ........................
+WANT BY 1
+WANT ALIVE 0
+WANT FALLING 0
+END

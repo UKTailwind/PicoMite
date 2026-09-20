@@ -2349,24 +2349,36 @@ Sub StabChar
     If Advance() = 0 Then lastWhat = "STALLED"
     Exit Sub
   End If
-  If cSword <> 2 Then
-    If DecStr(100) = 0 Then cLife = cLife
-    cSeq = seqTab(SEQ_STABKILL) : lastWhat = "run through"
-  ElseIf DecStr(1) Then
-    cSeq = seqTab(SEQ_STABBED) : lastWhat = "stabbed"
-  Else
-    If (cFace And &H80) Then behind = cBlockX + 1 Else behind = cBlockX - 1
-    dist = GetDist()
-    If BlockAt(cScrn, behind, cBlockY) = T_SPACE And dist >= 4 Then
-      MoveFwd dist - 14
-      cBlockY = cBlockY + 1
-      cSeq = seqTab(SEQ_FIGHTFALL) : cFalling = 1 : cAction = 4
-      lastWhat = "killed, knocked off"
+  ' MISC.S ":DL - stabbed when defenseless" takes all hundred points and then
+  ' jumps to :killed, which is the very code an armed man reaches when his
+  ' last point goes - edge test and all.  The port sent a defenceless man
+  ' straight to stabkill, so being run through at the lip of a drop stood him
+  ' up and killed him where he was instead of putting him over it.
+  If cSword = 2 Then
+    If DecStr(1) Then
+      cSeq = seqTab(SEQ_STABBED) : lastWhat = "stabbed"
+      cAction = 1
+      cY = floory(cBlockY + 1) : cYVel = 0
       If Advance() = 0 Then lastWhat = "STALLED"
       Exit Sub
     End If
-    cSeq = seqTab(SEQ_STABKILL) : lastWhat = "killed"
+    lastWhat = "killed"
+  Else
+    If DecStr(100) = 0 Then cLife = cLife
+    lastWhat = "run through"
   End If
+  ' :killed - if he goes down at an edge, he is knocked off it.
+  If (cFace And &H80) Then behind = cBlockX + 1 Else behind = cBlockX - 1
+  dist = GetDist()
+  If BlockAt(cScrn, behind, cBlockY) = T_SPACE And dist >= 4 Then
+    MoveFwd dist - 14
+    cBlockY = cBlockY + 1
+    cSeq = seqTab(SEQ_FIGHTFALL) : cFalling = 1 : cAction = 4
+    lastWhat = lastWhat + ", knocked off"
+    If Advance() = 0 Then lastWhat = "STALLED"
+    Exit Sub
+  End If
+  cSeq = seqTab(SEQ_STABKILL)
   cAction = 1
   cY = floory(cBlockY + 1) : cYVel = 0
   If Advance() = 0 Then lastWhat = "STALLED"
