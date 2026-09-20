@@ -1107,12 +1107,6 @@ Sub TryGrab(idx As INTEGER)
   If (cFace And &H80) Then ahead = cBlockX - 1 Else ahead = cBlockX + 1
   above = BlockAt(cScrn, cBlockX, cBlockY - 1)
   aboveinf = BlockAt(cScrn, ahead, cBlockY - 1)
-  If nGates <= 8 Then
-    Print "    reach: blk "; Str$(cBlockX); ","; Str$(cBlockY); " x "; Str$(cX);
-    Print " | above(same col) "; Str$(above);
-    Print " | ahead "; Str$(ahead); "="; Str$(BlockAt(cScrn, ahead, cBlockY - 1));
-    Print " | behind "; Str$(2*cBlockX - ahead); "="; Str$(BlockAt(cScrn, 2*cBlockX - ahead, cBlockY - 1))
-  End If
   If CanGrab(above, aboveinf) = 0 Then
     cX = saved : RereadBlocks : Exit Sub
   End If
