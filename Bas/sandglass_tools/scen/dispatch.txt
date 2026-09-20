@@ -1,0 +1,41 @@
+' scen/dispatch.txt - finding 2.11: which handler the control machine picks.
+'
+' CTRL.S GENCTRL dispatches on the action first -
+'     cmp #5 ;is char in mid-bump? / beq :clr
+'     cmp #4 ;or falling? / beq :clr
+' - and then on the pose, and it has three small handlers the port had no
+' equivalent of at all:
+'
+'   :starting  poses 1-3   up and forward -> DoStandjump
+'   :stjumpup  poses 67-69 forward, held or fresh -> DoStandjump
+'   :turning   pose 48     forward still held -> turnrun (sequence 43, which
+'                          is NOT runturn: SEQDATA.S has turnrun = 43)
+'
+' so a jump asked for a frame late was thrown away and a turn had to be stood
+' through before he could run.  And the port let StandCtrl run right through
+' the bump recovery, poses 50 to 52, where the original accepts nothing.
+'
+' Also added, and not testable from a scenario: a character who is not the
+' player goes en garde on a fresh down and forward together, which FinalShad
+' uses on the twelfth level.
+
+SCEN a jump asked a frame late is still a jump
+AT 1 1 5 0
+SEED 17
+RUN ..>J......
+WANT POSN 22
+WANT X 132
+END
+
+' Input during a bump is ignored.  Put one pixel from a wall he bumps it on
+' the first frame, and forward on the third frame does nothing: he is still
+' in the bump.  Before this he started a step out of it.
+SCEN nothing gets through a bump
+AT 1 3 4 1
+TYPE 3 3 1 20
+X 119
+SEED 17
+RUN ..>
+WANT POSN 51
+WANT STEPS 0
+END

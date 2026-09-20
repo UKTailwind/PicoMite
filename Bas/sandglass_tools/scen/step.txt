@@ -44,7 +44,7 @@ END
 SCEN forward close to a wall steps instead of running
 AT 1 3 4 1
 TYPE 3 3 1 20
-X 119
+X 123
 SEED 17
 RUN ..>
 WANT FWDKIND 1

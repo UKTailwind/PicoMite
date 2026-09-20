@@ -101,6 +101,9 @@ Const SEQ_STANDJUMP = 3
 Const SEQ_RUNJUMP = 4
 Const SEQ_TURN = 5
 Const SEQ_RUNTURN = 6
+' SEQDATA.S turnrun = 43, which is not runturn: it is the two frames that
+' turn a turn already under way into a run.
+Const SEQ_TURNRUN = 43
 Const SEQ_DIVEROLL = 26
 Const SEQ_FREEFALL = 12
 ' The four falls a step off an edge can turn into, besides a plain one.  Which
@@ -1038,9 +1041,22 @@ Sub StepCharacter
   ElseIf cFalling = 0 And cID >= 2 And cID <> MOUSE_ID Then
     want = GuardCtrl()
   ElseIf cFalling = 0 And stunned = 0 Then
-    If cPosn = 109 Then
+    ' CTRL.S GENCTRL: "cmp #5 ;is char in mid-bump? / beq :clr / cmp #4 ;or
+    ' falling? / beq :clr".  Neither takes any input.  The port let StandCtrl
+    ' run right through the bump recovery, poses 50 to 52.
+    If cAction = 5 Or cAction = 4 Then
+      want = 0
+    ElseIf cPosn = 109 Then
       want = CrouchCtrl()
-    ElseIf cPosn = 15 Or (cPosn >= 50 And cPosn < 53) Then
+    ElseIf cPosn = 15 Then
+      want = StandCtrl()
+    ElseIf cPosn >= 1 And cPosn <= 3 Then
+      want = StartingCtrl()
+    ElseIf cPosn = 48 Then
+      want = TurningCtrl()
+    ElseIf cPosn >= 67 And cPosn <= 69 Then
+      want = StJumpUpCtrl()
+    ElseIf cPosn >= 50 And cPosn < 53 Then
       want = StandCtrl()
     ElseIf cPosn < 15 Then
       want = RunCtrl()
@@ -1410,6 +1426,11 @@ Function StandCtrl() As INTEGER
   If clrBtn < 0 And btn < 0 Then
     StandCtrl = TryPickup()
     If StandCtrl Then Exit Function
+  End If
+  ' CTRL.S standing, "Shadman only: down & fwd to go en garde" - a fresh down
+  ' and a fresh forward from anyone who is not the player.  FinalShad uses it.
+  If cID <> 0 Then
+    If clrD < 0 And clrF < 0 Then StandCtrl = DoEngarde() : Exit Function
   End If
   ' With a sword and a guard in sight he draws it, or turns to face him.
   If cID = 0 And gotSword Then
@@ -2655,6 +2676,33 @@ End Function
 ' :btnup uses.  The port answered a fresh up with the button held by returning
 ' jumpup on the spot, so a player who keeps the action key down never grabs a
 ' ledge and cannot climb a flight of stairs.
+' CTRL.S :starting - poses 1 to 3, the first frames of a run.  Up and forward
+' together is still a standing jump there, so a jump asked for a frame late is
+' not thrown away.
+Function StartingCtrl() As INTEGER
+  StartingCtrl = 0
+  If jstkY >= 0 Then Exit Function
+  If jstkX >= 0 Then Exit Function
+  StartingCtrl = SEQ_STANDJUMP
+End Function
+
+' CTRL.S :stjumpup - poses 67 to 69, the wind-up of a jump straight up.
+' Forward, held or freshly pressed, makes it a standing jump instead.
+Function StJumpUpCtrl() As INTEGER
+  StJumpUpCtrl = 0
+  If jstkX < 0 Or clrF < 0 Then StJumpUpCtrl = SEQ_STANDJUMP
+End Function
+
+' CTRL.S :turning - pose 48.  Forward still held, with no button and no up,
+' turns the turn into a run rather than making him stand through it.
+Function TurningCtrl() As INTEGER
+  TurningCtrl = 0
+  If btn < 0 Then Exit Function
+  If jstkX >= 0 Then Exit Function
+  If jstkY < 0 Then Exit Function
+  TurningCtrl = SEQ_TURNRUN
+End Function
+
 Function DoUp() As INTEGER
   If TryStairs() Then DoUp = SEQ_CLIMBSTAIRS : Exit Function
   If jstkX < 0 Then DoUp = SEQ_STANDJUMP : Exit Function
