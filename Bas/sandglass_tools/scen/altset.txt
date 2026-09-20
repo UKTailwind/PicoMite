@@ -1,0 +1,46 @@
+' scen/altset.txt - section 4: which set of pictures a character is drawn from.
+'
+' CTRLSUBS.S usealtsets:
+'     ldx CharID / beq rts        ;kid uses main set
+'     cpx #24 / beq rts           ;mouse uses main set
+'     cpx #5 / bcs :usealt2       ;princess & vizier use alt set 2
+'     lda CharPosn
+'     cpx #2 / bcc :1             ;<-- CharID 1 skips the next test
+'     cmp #102 / bcc rts / cmp #107 / bcs :1 / clc / adc #70
+'     :1 cmp #150 / bcc rts / cmp #190 / bcs rts / sec / sbc #149
+'        jmp getaltframe1
+'
+' Two substitutions, and they are not the same audience.  Poses 150-189 go to
+' the alternate set for everyone from CharID 1 up.  The falling poses 102-106
+' are swapped for the alternate set's own, 172-176, only from CharID 2 up.
+' The shadow is 1, and he is drawn as the kid because he IS the kid; the port
+' applied the swap to him as well, so for the whole of any fall he turned
+' into a guard.  On the sixth level that is the first thing he does.
+'
+' The shadow stands at block 0 of screen 1 on the sixth level.  The floor is
+' taken from under him and the fall is watched from four blocks away.
+
+SCEN the shadow falls in his own frames
+AT 6 1 8 1
+TYPE 1 0 1 0
+SEED 17
+RUN ....
+WANT OPPID 1
+WANT OPPPOSN 104
+' The main set, where the row is simply the pose less one.
+WANT OPPROW 103
+END
+
+' The control: a guard IS drawn from the alternate set, falling poses and all.
+' Level 1's guard is dropped through the floor of his own room.  Pose 105
+' becomes 175, which is 25 into the alternate set's rows - 240 of them come
+' first.
+SCEN a guard falls in the guards' frames
+AT 1 3 2 1
+TYPE 3 8 1 0
+SEED 17
+RUN .....
+WANT OPPID 2
+WANT OPPPOSN 105
+WANT OPPROW 265
+END

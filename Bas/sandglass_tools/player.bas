@@ -3383,15 +3383,27 @@ End Function
 ' Which row of the frame table this character's pose uses: an enemy's poses
 ' 150 to 189 and his falling frames come from the first alternate set.
 Function FrameRow() As INTEGER
+  FrameRow = FrameRowOf(cID, cPosn)
+End Function
+
+' CTRLSUBS.S usealtsets, as a function of who he is and what he is doing, so
+' that a scenario can ask it of the opponent as well as of the player.
+Function FrameRowOf(id As INTEGER, posn As INTEGER) As INTEGER
   Local INTEGER p
-  p = cPosn
-  FrameRow = p - 1
-  If cID = 0 Then Exit Function          ' only the player uses the main set
+  p = posn
+  FrameRowOf = p - 1
+  If id = 0 Then Exit Function           ' only the player uses the main set
   ' and the mouse, whose poses are in it: sent down the guards' alternate set
   ' they land on rows that hold nothing and he is drawn as empty air.
-  If cID = MOUSE_ID Then Exit Function
-  If p >= 102 And p < 107 Then p = p + 70
-  If p >= 150 And p < 190 Then FrameRow = frmCount + (p - 150)
+  If id = MOUSE_ID Then Exit Function
+  ' "cpx #2 / bcc :1" - the falling poses are swapped for the alternate set's
+  ' own only from CharID 2 upward.  The shadow is 1 and keeps the main set's
+  ' falling frames, which are the kid's, because he IS the kid; the port sent
+  ' him down the guards' set and drew him as a guard for the whole of a fall.
+  If id >= 2 Then
+    If p >= 102 And p < 107 Then p = p + 70
+  End If
+  If p >= 150 And p < 190 Then FrameRowOf = frmCount + (p - 150)
 End Function
 
 Sub DrawChar
@@ -5756,6 +5768,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "DROPPED" : ScenValue = droppedOut
     Case "ALERT"   : ScenValue = enemyAlert
     Case "NOISE"   : ScenValue = alertGuard
+    Case "OPPROW"  : ScenValue = FrameRowOf(gRec(11), gRec(0))
     Case "OPDIST"  : ScenValue = OpDistS()
     Case "OPEN"    : ScenValue = exitOpen
     Case "OVER"    : ScenValue = gameOver
