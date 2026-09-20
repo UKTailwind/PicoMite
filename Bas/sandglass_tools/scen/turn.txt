@@ -1,0 +1,39 @@
+' scen/turn.txt - section 3: drawing the sword as he turns.
+'
+' CTRL.S DoTurn:
+'     lda gotsword / beq :1
+'     lda EnemyAlert / cmp #2 / bcc :1
+'     jsr getopdist / bpl :1
+'     jsr getdist ;to EOB / cmp #2 / bcc :1
+'     lda #2 / sta CharSword ;en garde
+'     lda #0 / sta offguard
+'     lda #turndraw
+'
+' Turning with an armed enemy BEHIND him is one move, not two: the sword comes
+' out as he comes round.  The port turned first and then drew, which is slower
+' and leaves him facing a drawn blade with nothing in his hand.
+'
+' Level 1 screen 3 is the guard's room and its middle row is floor all the way
+' across, so the alert reads a clear 2.  He is put at block 4 facing left, with
+' the guard at block 7 behind him.
+
+SCEN turning with an armed enemy behind draws as he turns
+AT 1 3 4 1
+SWORD 1
+SEED 17
+RUN ..<.......
+WANT DRAWN 2
+WANT POSN 170
+WANT ALERT 2
+END
+
+' The control: with nobody behind him it is an ordinary turn and the sword
+' stays where it is.
+SCEN with nobody behind him it is an ordinary turn
+AT 1 1 5 0
+SWORD 1
+SEED 17
+RUN ..<.......
+WANT DRAWN 0
+WANT POSN 52
+END

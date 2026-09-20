@@ -1494,7 +1494,7 @@ Function StandCtrl() As INTEGER
         d = OpDist()
         If d >= SWORDTHRESN Or d < SWORDTHRES Then
           heroic = 1
-          If d >= 250 Then StandCtrl = SEQ_TURN Else StandCtrl = DoEngarde()
+          If d >= 250 Then StandCtrl = DoTurn() Else StandCtrl = DoEngarde()
           Exit Function
         End If
       End If
@@ -1502,7 +1502,7 @@ Function StandCtrl() As INTEGER
     End If
   End If
   If btn < 0 Then
-    If clrB < 0 Then clrB = 1 : StandCtrl = SEQ_TURN : Exit Function
+    If clrB < 0 Then StandCtrl = DoTurn() : Exit Function
     If clrU < 0 Then clrU = 1 : StandCtrl = DoUp() : Exit Function
     ' ":2 lda clrD / bmi :down" - down with the button held is the same
     ' handler as down without it, and was missing here altogether.
@@ -1515,7 +1515,7 @@ Function StandCtrl() As INTEGER
   If jstkY > 0 Then StandCtrl = DoDown() : Exit Function
   If jstkY < 0 Then StandCtrl = DoUp() : Exit Function
   If jstkX < 0 Then StandCtrl = DoStartrun() : Exit Function
-  If jstkX > 0 Then StandCtrl = SEQ_TURN : Exit Function
+  If jstkX > 0 Then StandCtrl = DoTurn() : Exit Function
 End Function
 
 '=============================================================================
@@ -2788,6 +2788,28 @@ Function TurningCtrl() As INTEGER
   If jstkX >= 0 Then Exit Function
   If jstkY < 0 Then Exit Function
   TurningCtrl = SEQ_TURNRUN
+End Function
+
+' CTRL.S DoTurn.  Turning with an armed enemy BEHIND him draws the sword as
+' he comes round:
+'     lda gotsword / beq :1
+'     lda EnemyAlert / cmp #2 / bcc :1
+'     jsr getopdist / bpl :1
+'     jsr getdist ;to EOB / cmp #2 / bcc :1
+'     lda #2 / sta CharSword ;en garde
+'     lda #0 / sta offguard
+'     lda #turndraw
+' The port turned and left the sword where it was, so he came round to face a
+' drawn blade with nothing in his hand.
+Function DoTurn() As INTEGER
+  DoTurn = SEQ_TURN
+  clrB = 1
+  If gotSword = 0 Then Exit Function
+  If enemyAlert < 2 Then Exit Function
+  If OpDistS() >= 0 Then Exit Function
+  If GetDist() < 2 Then Exit Function
+  cSword = 2 : offGuard = 0
+  DoTurn = SEQ_TURNDRAW
 End Function
 
 Function DoUp() As INTEGER
