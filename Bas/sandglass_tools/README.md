@@ -3,6 +3,28 @@
 A dungeon game for the PicoComputer 3, in the style of the Apple II original.
 The player's manual is in `docs/Pico_Persia_Player_Manual.html`.
 
+## The board
+
+**Firmware 6.03.02b12 or later.** The RAM image slots the artwork is loaded
+into arrived just before it, and b12 is what this has been built and played
+against.
+
+**PSRAM is required.** It is not an optimisation and there is no fallback: the
+four artwork sheets and the interlude picture go into image slots 4 to 8,
+which are the RAM slots, and those are carved out of the top of PSRAM. Without
+it they have nowhere to go and the game stops as it starts. `OPTION LIST`
+should show a line like `OPTION PSRAM PIN GP47`.
+
+The game draws in `MODE 2`, 320 by 240 in sixteen colours, and needs two
+framebuffers. Both the HDMI and the VGA builds do that; it has been played on
+`PicoMiteHDMIWEB` and on `PicoMiteVGAUSB`, both RP2350B. A USB keyboard is
+needed to play, so a build with USB host support.
+
+About 800 KB of the drive, for the engine and the converted data.
+
+The console output goes to the serial port - the engine sets `OPTION CONSOLE
+SERIAL` on its first line - so the screen belongs to the game alone.
+
 ## Asset converter
 
 This directory holds the converter. It reads a copy of the published Apple II
@@ -151,10 +173,51 @@ engine is written to be read. Strip it before copying it over:
 python build.py player.bas -o player.min.bas
 ```
 
-Copy `player.min.bas` to the board as `player.bas`. The stripped program is
-about seventy per cent of the size and leaves room to grow. A `.map` file is
-written beside it so a line number in an error message can be traced back to
-the commented source.
+Copy `player.min.bas` to the board as `player.bas`. The stripped file is about
+145 KB, some sixty per cent of the commented source. A `.map` file is written
+beside it so a line number in an error message can be traced back to the
+commented source.
+
+Getting it there: on a build with WiFi the board's own TFTP server is by far
+the quickest way, and `Bas/exile_tools/tftp.py` drives it. Without WiFi it is
+XMODEM over the console, which runs at about 5 KB a second - the whole set,
+engine and data together, takes a shade under two minutes.
+
+### Loading it
+
+```
+LOAD "A:/player.bas", C
+```
+
+The `C` crunches as it reads, throwing away the comments, the blank lines and
+the spaces inside lines. Crunched, the program is **123K of program memory**.
+The engine is written to be read and is close to what a board will hold, so
+use the `C` everywhere: it is never wrong and it costs nothing.
+
+It is only strictly needed where program memory is 144K, which is the HDMIWEB
+build: there the stripped file does not load without it, and that has been
+seen. The VGA build has 160K, which should be room enough to take it as it is,
+though the `C` was used there too and the plain load has not been tried.
+
+**A load that does not fit is quiet about it.** It prints `Error : Not enough
+memory` in one line and leaves the PREVIOUS program in memory, so the board
+goes on running whatever it had. `run_scentest.py` stops with exit 2 when it
+sees that; by hand, read the line.
+
+**And check there is no `scen.txt` on the drive.** With one there the engine
+plays test scenarios instead of the game - see Scenarios, below.
+
+### Two things that stop it starting
+
+`Option Local Variables 128`, on the engine's fourth line, moves the balance
+between global and local variable slots, and MMBasic will only do that while
+no variable exists at all. Anything that has declared one stops the program
+dead with `Error : Variables already declared`:
+
+* **a library in flash.** Even a single `Const` in it counts. `LIBRARY DELETE`
+  clears it, and `FLASH LIST` shows whether one is there.
+* **a previous run.** Variables left behind by the last program count too.
+  `CPU RESTART` clears them; the program stays in memory, so `RUN` follows.
 
 ## Checking your setup
 
