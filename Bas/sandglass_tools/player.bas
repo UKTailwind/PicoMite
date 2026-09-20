@@ -249,6 +249,11 @@ Dim INTEGER kFlaskScrn, kFlaskX, kFlaskY, kSwordScrn, kSwordX, kSwordY, kShadStr
 Dim INTEGER kSpecialFlask, kSwordGleam0, kSwordGleam1, nSwordsDrawn
 Dim INTEGER playCount, preRecPtr, shadowAction, nShadows
 Dim INTEGER kMirScrn, kMirX, kMirY, nMirrors, nMerges
+' TOPCTRL.S mergetimer.  Zero before the two become one on the twelfth
+' level and negative afterwards, which is how the rest of the level knows
+' the meeting is over: the shadow is not put back in the room, and the
+' bridge to the last screen is there to be walked on.
+Dim INTEGER mergeTimer
 Const T_MIRROR = 13
 ' The enemy image set each level loads (MISC.S chset), and the tables.
 Dim INTEGER tSet(6), chSet(15), bgSet(15)
@@ -1609,6 +1614,7 @@ End Sub
 
 Sub MergeShadow
   CueSong 5
+  mergeTimer = -1
   If maxKidStr < kMaxMaxStr Then maxKidStr = maxKidStr + 1
   kidStr = maxKidStr : chgKidStr = 0
   VanishShadow
@@ -2045,7 +2051,11 @@ Sub AddGuard(scrn As INTEGER)
   If curLevel = 5 And s = kFlaskScrn Then
     If RdBlock(s, kFlaskX, kFlasky) = T_FLASK Then AddShadow aShad5 : Exit Sub
   End If
-  If curLevel = 12 And s = kSwordScrn Then
+  ' AUTO.S ADDGUARD puts the shadow on the sword's screen once the sword has
+  ' gone, and not once the two have become one.  Without the second test he
+  ' was made again every time the room was entered, so the meeting could be
+  ' had over and over and the level was never done with him.
+  If curLevel = 12 And s = kSwordScrn And mergeTimer >= 0 Then
     If RdBlock(s, kSwordX, kSwordY) <> T_SWORD Then AddShadow aShad12 : Exit Sub
   End If
   If s < 1 Or s > 24 Then Exit Sub
@@ -4498,7 +4508,7 @@ Sub LoadLevel(n As INTEGER)
   SelectBackground n
   If origStrength = 0 Then origStrength = kInitMaxStr
   maxKidStr = origStrength : kidStr = maxKidStr : chgKidStr = 0
-  deadTimer = 0 : weightless = 0
+  deadTimer = 0 : weightless = 0 : mergeTimer = 0
   Open home + "levels.dat" For Input As #1
   Seek #1, n * LEVELBYTES + 1
   Memory Input #1, LEVELBYTES, packed()
@@ -4696,6 +4706,8 @@ End Sub
 '   OPEN n                the level's way out is open
 '   SEED n                the random seed, so that a run repeats
 '   SPEC scrn bx by v     hold one block's modifier byte at a value
+'   TYPE scrn bx by v     put a block type where the scenario needs one
+'   ENTER                 arrive at the screen he is on, again
 '   TRACE n               from here on, print a line for every frame
 '   RUN codes             one character a frame; use as many lines as needed
 '   WANT what [op] n      an expectation, checked at END
@@ -4753,6 +4765,20 @@ Sub RunScenarios
         Print "      start blk " + Str$(cBlockX) + "," + Str$(cBlockY) + " lvl " + Str$(curLevel) + " scr " + Str$(cScrn) + " facing " + Str$(cFace)
       Case "SPEC"
         ScSpec ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,3)), ScNum(ScWord$(ln,4)), ScNum(ScWord$(ln,5))
+      Case "TYPE"
+        ' Put a block where the scenario needs one, which is how a room is set
+        ' up as it would be some way into the level without playing up to it.
+        SetType ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,4)) * COLS + ScNum(ScWord$(ln,3)), ScNum(ScWord$(ln,5))
+        BuildTypeGrid cScrn
+        Print "  type scr " + ScWord$(ln,2) + " blk " + ScWord$(ln,3) + "," + ScWord$(ln,4) + " set to " + ScWord$(ln,5)
+      Case "ENTER"
+        ' Arrive at the screen he is already on: torches, slicers and whoever
+        ' is waiting.  After a TYPE that is what makes the room take effect,
+        ' and coming back to a room is a thing worth testing by itself.
+        SaveChar kRec()
+        EnterScreen cScrn, cBlockY
+        LoadKidWOp
+        Print "  entered scr " + Str$(cScrn) + ", shadows so far " + Str$(nShadows)
       Case "SWORD" : gotSword = ScNum(ScWord$(ln, 2))
       Case "FLOAT" : weightless = ScNum(ScWord$(ln, 2))
       Case "OPEN"  : exitOpen = ScNum(ScWord$(ln, 2))

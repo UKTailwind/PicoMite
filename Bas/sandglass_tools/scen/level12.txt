@@ -28,3 +28,35 @@ RUN ..>>>>>>>>>>>>>>>>
 WANTBLOCK 15 1 0 22
 WANT SCRN 21
 END
+
+' 4. AUTO.S ADDGUARD adds the shadow once the sword has gone and not once the
+' two have become one.  The port tested only for the sword, so every time
+' screen 15 was entered after the merge he was made again and the meeting
+' could be had over and over.
+'
+' The room is set up as it would be with the sword already taken, rather than
+' played up to: TYPE takes the block out and ENTER arrives at the room again,
+' which is what puts whoever is waiting there.  Then he walks into the shadow
+' with his sword away - the one thing that ends it - and arrives once more.
+SCEN the shadow does not come back after the merge
+AT 12 15 6 0
+TYPE 15 1 0 1
+ENTER
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+ENTER
+WANT SCRN 15
+WANT MERGES 1
+WANT SHADOWS 1
+WANT ALIVE 1
+END
+
+' The control: the gate is on the merge and not on the shadow.  With the
+' sword still in the room nobody is waiting, which is what the test for it
+' being gone is there for.
+SCEN nobody is waiting while the sword is still there
+AT 12 15 6 0
+ENTER
+WANT SHADOWS 0
+WANT MERGES 0
+END
