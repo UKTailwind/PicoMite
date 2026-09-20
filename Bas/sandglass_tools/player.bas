@@ -115,6 +115,10 @@ Const SEQ_MEDLAND = 20
 Const SEQ_HARDLAND = 22
 Const SEQ_FALLHANG = 15
 Const SEQ_CLIMBUP = 10
+' The climb down is the climb up run backwards - poses 148 down to 141,
+' a row down, then 140, 138, 136 and into the hang.  It has no name in
+' the port's list because nothing ever asked for it.
+Const SEQ_CLIMBDOWN = 68
 Const SEQ_HANGDROP = 11
 Const SEQ_HANGFALL = 23
 Const SEQ_HANGSTRAIGHT = 25
@@ -146,7 +150,7 @@ Dim INTEGER blocksLen
 Dim INTEGER T_BG1, T_BG2, T_CH(8), noFloor(31), vertDist
 Dim INTEGER sLeft, sRight, sUp, sDown, cFalling, composedScrn, stunned, jarAbove
 Dim INTEGER nStandup, nCrawl, nRunJump, nRoll, nRunTurn, nDead
-Dim INTEGER nClimb, nClimbFail, nDrop, nHangFall, nHangStr
+Dim INTEGER nClimb, nClimbFail, nDrop, nHangFall, nHangStr, nClimbDown
 Dim INTEGER nGates, nGrabs, nBumps, nSoft, nMed, nHard, nStepOff, nCross, nStoop
 Dim INTEGER poseSeen(256), scenFrames, loadedLevel
 Dim INTEGER palette(15)
@@ -222,6 +226,9 @@ Const SEQ_JUMPHANGLONG = 24
 Const SEQ_JUMPBACKHANG = 16
 Const SEQ_HIGHJUMP = 28
 Const JUMPBACK_THRES = 6
+' Down at the front edge of the block steps off it; down well back in the
+' block, which is to say close to the edge behind him, climbs down it.
+Const STEPDOWN_THRES = 3 : Const CLIMBDOWN_THRES = 8
 ' The low five bits of a frame's check byte: how far in from the left edge
 ' of the image his base X sits.  Ffootmark in the original.
 Const FFOOTMARK = &H1F
@@ -1365,7 +1372,7 @@ Function StandCtrl() As INTEGER
     If jstkX < 0 And clrF < 0 Then StandCtrl = DoStepFwd() : Exit Function
     Exit Function
   End If
-  If jstkY > 0 Then StandCtrl = SEQ_STOOP : nStoop = nStoop + 1 : Exit Function
+  If jstkY > 0 Then StandCtrl = DoDown() : Exit Function
   If jstkY < 0 Then
     If TryStairs() Then StandCtrl = SEQ_CLIMBSTAIRS : Exit Function
     If jstkX < 0 Then StandCtrl = SEQ_STANDJUMP : Exit Function
@@ -2469,6 +2476,46 @@ End Sub
 ' he jumps and catches it; if there would be one from a block back, he is
 ' shifted back first (or jumps from the edge when there is no floor behind);
 ' otherwise a plain jump, touching a ceiling if there is one.
+' CTRL.S standing :down.  With a cliff in front of him and his base within
+' three pixels of the edge, down steps off it.  With a cliff behind and his
+' base eight or more pixels into the block - which is to say within six of
+' the edge behind him - down lowers him over THAT edge instead and he ends up
+' hanging from it.  Anything else is a crouch.
+'
+' The port only ever crouched.  Getting down two storeys safely is done by
+' climbing down and letting go, so without this every descent cost health or
+' a life, and some of them cannot be made at all.
+Function DoDown() As INTEGER
+  Local INTEGER ahead, behind, dist
+  DoDown = SEQ_STOOP
+  If (cFace And &H80) Then
+    ahead = cBlockX - 1 : behind = cBlockX + 1
+  Else
+    ahead = cBlockX + 1 : behind = cBlockX - 1
+  End If
+  dist = GetDist()
+  If dist <= STEPDOWN_THRES Then
+    If noFloor(BlockAt(cScrn, ahead, cBlockY)) Then
+      DoDown = SEQ_STEPFALL
+      lastWhat = "steps off"
+      Exit Function
+    End If
+  End If
+  If dist >= CLIMBDOWN_THRES Then
+    ' checkledge: the block behind has to be one he can hang in, and the one
+    ' he is standing in has to have the floor whose edge he hangs from.  A
+    ' bare no-floor test would have had him climb down into a solid block,
+    ' which is in the no-floor set precisely because nobody can be in one.
+    If CanGrab(BlockAt(cScrn, behind, cBlockY), BlockAt(cScrn, cBlockX, cBlockY)) Then
+      DoDown = SEQ_CLIMBDOWN
+      nClimbDown = nClimbDown + 1
+      lastWhat = "climbs down"
+      Exit Function
+    End If
+  End If
+  nStoop = nStoop + 1
+End Function
+
 Function DoJumpup() As INTEGER
   Local INTEGER ahead, behind, above, aboveinf, abovebeh, dist
   clrU = 1
@@ -4839,6 +4886,8 @@ End Sub
 '   AT lvl scrn bx by     put him there: fresh level, counters back to zero
 '   START lvl             begin the level where the level itself begins
 '   SWORD n               he is carrying the sword
+'   FACE n                255 looking left, 0 looking right
+'   X n                   put him at that coordinate within his row
 '   FLOAT n               the float potion is in him for n more frames
 '   OPEN n                the level's way out is open
 '   SEED n                the random seed, so that a run repeats
@@ -4919,6 +4968,21 @@ Sub RunScenarios
         LoadKidWOp
         Print "  entered scr " + Str$(cScrn) + ", shadows so far " + Str$(nShadows)
       Case "SWORD" : gotSword = ScNum(ScWord$(ln, 2))
+      Case "X"
+        ' Where in the block he is standing.  AT always puts him in the
+        ' middle, and how far he is from an edge is exactly what several of
+        ' the control rules turn on.
+        cX = ScNum(ScWord$(ln, 2)) And &HFF
+        RereadBlocks
+        SaveChar kRec()
+        Print "  x set to " + Str$(cX) + ", block " + Str$(cBlockX) + ", " + Str$(GetDist()) + " from the edge ahead"
+      Case "FACE"
+        ' Which way he is looking, without spending frames turning him:
+        ' 255 for left, 0 for right.  AT always faces him left, and half
+        ' of what a scenario wants to ask about depends on the other way.
+        cFace = ScNum(ScWord$(ln, 2)) And &HFF
+        RereadBlocks
+        SaveChar kRec()
       Case "FLOAT" : weightless = ScNum(ScWord$(ln, 2))
       Case "OPEN"  : exitOpen = ScNum(ScWord$(ln, 2))
       Case "SEED"  : rndSeed  = ScNum(ScWord$(ln, 2))
@@ -5052,6 +5116,10 @@ Function ScenValue(what As STRING) As INTEGER
     Case "PLATES"  : ScenValue = nPlates
     Case "STEPS"   : ScenValue = nSteps
     Case "CLIMBS"  : ScenValue = nClimb
+    Case "CLIMBDOWN" : ScenValue = nClimbDown
+    Case "STOOPS"  : ScenValue = nStoop
+    Case "DIST"    : ScenValue = GetDist()
+    Case "BASEX"   : ScenValue = BaseX()
     Case "DROPS"   : ScenValue = nDrop
     Case "STRIKES" : ScenValue = nStrikes
     Case "GUARDS"  : ScenValue = nGuardsDead
@@ -5085,7 +5153,7 @@ Sub ScZero
   gameOver = 0 : message = 0 : msgTimer = 0 : weightless = 0
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
-  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0
+  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0
   nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0
 End Sub
 
@@ -5096,7 +5164,7 @@ Function ScState$() As STRING
   t = "blk " + Str$(cBlockX) + "," + Str$(cBlockY) + " scr " + Str$(cScrn)
   t = t + " x " + Str$(cX) + " y " + Str$(cY) + " posn " + Str$(cPosn)
   t = t + " act " + Str$(cAction) + " fall " + Str$(cFalling)
-  t = t + " yv " + Str$(cYVel) + " life " + Str$(cLife)
+  t = t + " yv " + Str$(cYVel) + " life " + Str$(cLife) + " d " + Str$(GetDist())
   ' Whoever else is on the screen, since half of what a scenario asks about
   ' is what he is doing: pose, x, block, sword, life and what is left of him.
   If gdPresent Then
