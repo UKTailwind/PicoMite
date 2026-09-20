@@ -91,8 +91,20 @@ def main(argv=None):
         engine = args.engine
         if not os.path.isabs(engine):
             engine = os.path.join(here, engine)
+        # LOAD ,C - the file goes over by TFTP as before, and MMBasic strips
+        # the comments, blank lines and the spaces inside lines as it reads it.
+        # The engine is within a few hundred bytes of program memory and
+        # build.py does not remove the inner spaces, so without the C it no
+        # longer fits.  A LOAD that does not fit leaves the PREVIOUS program on
+        # the board and says so in one line; every scenario then runs against
+        # the old engine and passes, which is worse than useless.
         put(board, ENGINE_ON_BOARD, open(engine, "rb").read().replace(b"\r\n", b"\n"))
-        print(board.cmd('LOAD "A:/%s"' % ENGINE_ON_BOARD, timeout=60))
+        reply = board.cmd('LOAD "A:/%s", C' % ENGINE_ON_BOARD, timeout=120)
+        print(reply)
+        if "Error" in reply:
+            print("the engine did not load: the board is still running the "
+                  "program it had, so nothing below would mean anything")
+            return 2
 
     put(board, SCEN_ON_BOARD, scen)
 

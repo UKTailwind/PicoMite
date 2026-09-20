@@ -115,22 +115,29 @@ class PC3:
         body = [l for l in lines if l.strip() not in ("", ">", line.strip())]
         return "\n".join(body)
 
-    def upload(self, source, timeout=30.0):
-        """AUTOSAVE the source into program memory."""
+    def upload(self, source, timeout=30.0, crunch=False):
+        """AUTOSAVE the source into program memory.
+
+        crunch=True uses AUTOSAVE C rather than AUTOSAVE N, so MMBasic strips
+        comments, blank lines AND unnecessary spaces as the text arrives.  For
+        a program near the limit that is the difference between fitting and
+        not.  C and N are alternatives, though, so the console echoes every
+        character back and the lines have to be paced and drained.
+        """
         self.drain(0.05)
         # The N suppresses the console echo for the transfer, so the device is
         # not sending every character back while we are still talking.  That
         # removes the reason for pacing characters, and a whole line can go out
         # in a single write.
-        self.send_line("AUTOSAVE N")
+        self.send_line("AUTOSAVE C" if crunch else "AUTOSAVE N")
         time.sleep(0.4)
         self.drain(0.2)
         n = 0
         for raw in source.splitlines():
             self.s.write((raw.rstrip("\r\n") + "\r").encode("latin-1"))
             n += 1
-            time.sleep(FAST_LINE_GAP)
-            if n % 32 == 0:
+            time.sleep(0.02 if crunch else FAST_LINE_GAP)
+            if crunch or n % 32 == 0:
                 self._read()
         time.sleep(0.2)
         self.s.write(b"\x1a")  # Ctrl-Z

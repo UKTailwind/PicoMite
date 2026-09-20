@@ -39,3 +39,32 @@ WANT BY 1
 WANT BX 2
 WANT ALIVE 1
 END
+
+' KNOWN DEFECT, recorded rather than fixed.  COLL.S COLLISIONS lets a
+' character through a barrier only while he is hanging (action 2 or 6),
+' climbing (poses 135-148) or turning (action 7), so the original bumps in the
+' air as well as on the ground.  It can afford to: CHECKBARR works from the
+' character's own image edges against the barrier's edge - the CD/SN nybble
+' buffers and the BarL/BarR tables - and a collision is a nybble that goes
+' from 0 to 1 between frames.  This port has none of that, and what stands in
+' for it is "the block ahead is a barrier and he has reached its edge".  On
+' the ground that is the same answer.  In the air it is not: a man falling
+' PAST a wall is beside it every frame, so letting the test run in the air
+' smacks him into the wall under every ledge he reaches for and the grab stops
+' working altogether.  So HitBarrier still leaves the air alone.
+'
+' Level 1 screen 1 has floor at columns 3 to 7 and solid block at 8 and 9.  A
+' running jump from column 3 meets that wall at the top of its arc, nineteen
+' frames in, and goes INTO block 8 - inside the wall - to be pushed back out
+' two frames later when he comes down.  This records that.  Whoever ports
+' CHECKBARR properly should find this scenario failing, and the answers it
+' should then give are BUMPS 1 and BX 7.
+SCEN a running jump still ends up inside the wall
+AT 1 1 3 0
+FACE 0
+SEED 17
+RUN ..>>>>>>>>JFFFFFFFF
+WANT BUMPS 0
+WANT BX 8
+WANT ALIVE 1
+END

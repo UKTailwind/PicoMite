@@ -1242,15 +1242,22 @@ End Sub
 '-----------------------------------------------------------------------------
 
 Sub HitBarrier
-  Local INTEGER ahead, t, lo, hi
+  Local INTEGER ahead, t, lo, hi, floorline
+  ' NOT FIXED, and deliberately: COLL.S COLLISIONS lets a character through a
+  ' barrier only while he is hanging (action 2 or 6), climbing (poses 135-148)
+  ' or turning (action 7), so the original bumps in the air as well.  It can
+  ' afford to, because CHECKBARR works from the character's own image edges -
+  ' the CD/SN nybble buffers, a collision being a nybble that goes from 0 to 1
+  ' between frames - and stops him where his edge meets the bar, from the
+  ' BarL/BarR tables.  This port has none of that; what stands in for it is
+  ' "the block ahead is a barrier and he has reached its edge", which on the
+  ' ground is the same answer and in the air is not: a man falling PAST a wall
+  ' is beside it every frame.  Enabling the air case without the edge data
+  ' smacks him into the wall under every ledge he reaches for, so he can never
+  ' catch one - which is what this gate was put here for in the first place.
+  ' Bit 6 of the frame's check byte is the on-the-ground mark, the same bit
+  ' the floor test uses; every hanging and climbing pose has it clear.
   If cFalling Then Exit Sub
-  ' Only a man on the ground can walk into something.  Bit 6 of the frame's
-  ' check byte is the on-the-ground mark - the same bit the floor test uses -
-  ' and every hanging and climbing pose has it clear, as do the airborne
-  ' frames of a jump.  Without this gate the wall a man hangs in front of was
-  ' treated as one he had walked into, so it shoved him off the ledge the
-  ' instant he caught it; across a room boundary that looked like the catch
-  ' being refused outright.
   If cPosn >= 1 Then
     If (frmb((cPosn - 1) * frmEntry + 4) And &H40) = 0 Then Exit Sub
   End If
@@ -1318,6 +1325,30 @@ Sub HitBarrier
 
 dobump:
 
+  ' COLL.S collide sorts the bump into one of two before anything else: it is
+  ' a ground bump only if he has floor under him where he hit, and a ground
+  ' bump taken more than fifteen pixels above the floor line is an air bump
+  ' too - unless he is en garde, when a fighter is never thrown off his feet.
+  ' The gate above keeps a freefall out of here, so the airbump label is only
+  ' reached from a pose that carries the on-the-ground mark and is nonetheless
+  ' well clear of the floor - the top of a jump.  It is written out in full
+  ' because it is what COLL.S does, and because the rest of it becomes live
+  ' the moment the collision is done from the image edges.
+  floorline = floory(cBlockY + 1)
+  If BlockAt(cScrn, cBlockX, cBlockY) = T_SPACE Then GoTo airbump
+  If cSword <> 2 Then
+    If floorline - cY >= 15 Then GoTo airbump
+  End If
+  ' GroundBump puts him on the floor line.  Coming down hard he is backed off
+  ' five instead and left falling, for the floor test to land properly.
+  cY = floorline
+  If cYVel >= OOF_VELOCITY Then
+    cX = AddCharX(-5)
+    RereadBlocks
+    Exit Sub
+  End If
+  cYVel = 0
+  If cLife = 0 Then Exit Sub
   ' With the sword out the bump is the en-garde one, forward or back by which
   ' way he was moving (ENEMYCOLL / bumpengfwd).
   If cSword = 2 Then
@@ -1327,13 +1358,30 @@ dobump:
     Exit Sub
   End If
   ' Severity is chosen by the pose he hit it in: a jump or a fall is a hard
-  ' bump, anything else a soft one.
-  If cPosn = 25 Or (cPosn >= 40 And cPosn <= 42) Or (cPosn >= 102 And cPosn <= 106) Then
+  ' bump, anything else a soft one.  Pose 24 is the other half of the stand
+  ' jump and belongs with 25.
+  If cPosn = 24 Or cPosn = 25 Or (cPosn >= 40 And cPosn <= 42) Or (cPosn >= 102 And cPosn <= 106) Then
     cSeq = seqTab(SEQ_HARDBUMP) : lastWhat = "hard bump" : nBumps = nBumps + 1
   Else
     cSeq = seqTab(SEQ_BUMP) : lastWhat = "bump" : nBumps = nBumps + 1
   End If
   cAction = 5
+  Exit Sub
+
+airbump:
+  ' AirBump: back off four.  If he is already in a freefall he simply rebounds
+  ' off the wall with his drift killed; otherwise bumpfall takes him down from
+  ' wherever he was.  Either way the wall makes a noise a guard can hear.
+  cX = AddCharX(-4)
+  RereadBlocks
+  If cAction = ACT_FALLING Then
+    cXVel = 0
+  Else
+    cSeq = seqTab(SEQ_BUMPFALL)
+  End If
+  lastWhat = "air bump" : nBumps = nBumps + 1
+  AddSound 13
+  alertGuard = 1
 End Sub
 
 '-----------------------------------------------------------------------------
@@ -5691,6 +5739,8 @@ Function ScState$() As STRING
   t = t + " x " + Str$(cX) + " y " + Str$(cY) + " posn " + Str$(cPosn)
   t = t + " act " + Str$(cAction) + " fall " + Str$(cFalling)
   t = t + " yv " + Str$(cYVel) + " sw " + Str$(cSword) + " life " + Str$(cLife) + " d " + Str$(GetDist())
+  ' What the frame decided, which is usually the thing being looked for.
+  If lastWhat <> "" Then t = t + " [" + lastWhat + "]"
   ' Whoever else is on the screen, since half of what a scenario asks about
   ' is what he is doing: pose, x, block, sword, life and what is left of him.
   If gdPresent Then
