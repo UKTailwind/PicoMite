@@ -4088,12 +4088,18 @@ Sub FlipBuffer
   Next y
 End Sub
 
-' The title screen, if the player has one.  It is the game's own artwork,
-' so it is not supplied here: drop a title.bmp beside the data and it is
-' shown, leave it out and the game starts straight away.  A 640 by 480
-' picture fits the screen with the seventh parameter, which bins pixels by
-' two.  The game's palette is put aside while it is up, because the title
-' is dithered against the display's own colours, not the dungeon's.
+' The title screen.  `title.jpg` beside the data is shown before play and any
+' key cuts it short; leave it out and the game starts straight away.
+'
+' LOAD JPG, not LOAD IMAGE.  It is the JPG form that carries the seventh
+' parameter, the scale, which reduces the picture by averaging blocks of
+' pixels - 2 for a half - so a 640 by 480 picture fits this 320 by 240 screen
+' exactly.  LOAD IMAGE takes six parameters and no scale, and a seventh
+' argument is simply a syntax error there; it was written that way for a long
+' time and On Error Skip hid it, so the title never once appeared.
+'
+' The game's palette is put aside while it is up, because the title is drawn
+' against the display's own colours, not the dungeon's.
 ' THE INTERLUDES AND THE ENDINGS.
 '
 ' The original animates the princess, the vizier and the mouse against a
@@ -4149,7 +4155,7 @@ Sub ShowTitle
   FrameBuffer Write N
   CLS
   On Error Skip 1
-  Load Image home + "title.bmp", 0, 0, -1, 0, 0, 2
+  Load JPG home + "title.jpg", 0, 0, -1, 0, 0, 2
   If MM.ErrNo <> 0 Then ok = 0
   On Error Clear
   If ok Then

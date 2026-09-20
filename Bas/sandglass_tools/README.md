@@ -175,18 +175,21 @@ You can unpack any of these pictures yourself:
 
     python packpic.py <packed file> -o out.bmp
 
-## Title screen (optional)
+## Title screen
 
-Put a `title.bmp` beside the converted data and it is shown before play, until
-you press a key. Leave it out and the game starts straight away.
+`title.jpg` is supplied, and unlike everything else in this section it is ours
+to pass on: it was drawn by a user of [TheBackShed](https://www.thebackshed.com)
+forum rather than taken from the original. Put it beside the converted data and
+it is shown before play until you press a key, or for eight seconds. Leave it
+out and the game starts straight away.
 
-The picture is scaled to the screen by the seventh parameter of `LOAD IMAGE`,
-which bins pixels, so a 640 by 480 image fits exactly. The game's own palette is
-set aside while the title is up, because a photograph-like image is dithered
-against the display's standard colours rather than the dungeon's.
-
-As with everything else, the title artwork is the game's and is not supplied
-here.
+It is `LOAD JPG`, not `LOAD IMAGE`. The JPG form is the one that carries a
+seventh parameter, the scale, which shrinks the picture by averaging blocks of
+pixels - 2 for a half - so the 640 by 480 picture fits this 320 by 240 screen
+exactly. `LOAD IMAGE` takes six parameters and has no scale at all, and a
+seventh argument there is a syntax error. The game's own palette is set aside
+while the title is up, so the picture is drawn against the display's standard
+colours rather than the dungeon's.
 
 ## Music (optional)
 
