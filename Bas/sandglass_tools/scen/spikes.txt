@@ -1,0 +1,43 @@
+' scen/spikes.txt - section 4: how wide a look for spikes is.
+'
+' CTRLSUBS.S CHECKSPIKES:
+'     lda rightej / jsr getblockxp / bmi rts / sta tempright
+'     lda leftej / jsr getblockxp
+'     :loop sta blockx / jsr sub
+'           lda blockx / cmp tempright / beq rts / clc / adc #1 / jmp :loop
+' Every column his IMAGE covers, from its left edge to its right, and down
+' each one through empty space until something is found.  The port looked
+' down the one column his base was in, so a foot out over a spike block was
+' not over it and spikes he was standing on the edge of stayed down.
+'
+' Screen 19 of level 1 has a single spike block at column 5 of the walking
+' row, with floor at 3 and pillars either side.  These put him beside it at
+' coordinates chosen so that his base is in another column.
+
+SCEN spikes under the near edge of him go off
+AT 1 19 4 1
+FACE 0
+X 136
+SEED 17
+RUN ..
+WANTSPEC 19 5 1 1
+END
+
+SCEN and under his back edge as well
+AT 1 19 4 1
+FACE 0
+X 152
+SEED 17
+RUN ..
+WANTSPEC 19 5 1 1
+END
+
+' The control: four pixels further back and no part of him is over them.
+SCEN well clear of them they stay down
+AT 1 19 4 1
+FACE 0
+X 132
+SEED 17
+RUN ..
+WANTSPEC 19 5 1 0
+END

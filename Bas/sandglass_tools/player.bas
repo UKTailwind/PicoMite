@@ -5239,11 +5239,49 @@ End Sub
 ' CHECKSPIKES: spikes under him spring; so do spikes under an empty block he
 ' is passing over.  The original scans the blocks between his image's edges;
 ' this uses the block he is in, which is the common case.
+' CTRLSUBS.S CHECKSPIKES:
+'     lda rightej / jsr getblockxp / bmi rts / sta tempright
+'     lda leftej / jsr getblockxp
+'     :loop sta blockx / jsr sub / lda blockx / cmp tempright / beq rts
+'           clc / adc #1 / jmp :loop
+' It walks every column his IMAGE covers, left edge to right, and looks down
+' each one.  The port looked down the single column his base was in, so a
+' foot out over a spike block was not over it, and spikes he was plainly
+' standing on the edge of did not go off.
 Sub CheckSpikes
-  Local INTEGER t, s, bx, by
-  s = cScrn : bx = cBlockX : by = cBlockY
+  Local INTEGER bx, a, w2, lb, rb, f
+  lb = cBlockX : rb = cBlockX
+  If CharImg() Then
+    ' GETEDGES, in this port's terms: the drawing anchor is the coordinate
+    ' displaced by the frame's own dx, the image runs right from it facing
+    ' left and left from it facing right, and a screen pixel is half a game
+    ' unit.  (GETEDGES also narrows a frame marked thin by three bits on each
+    ' side; that mark is not carried in this port's frame table.)
+    f = FrameRow() * frmEntry
+    a = Sgn8(frmb(f + 2))
+    w2 = imW \ 2
+    If (cFace And &H80) Then
+      a = (cX - a) And &HFF
+      lb = BlockOfX(a) : rb = BlockOfX((a + w2 - 1) And &HFF)
+    Else
+      a = (cX + a) And &HFF
+      lb = BlockOfX((a - w2 + 1) And &HFF) : rb = BlockOfX(a)
+    End If
+  End If
+  If rb < 0 Then Exit Sub
+  If lb > rb Then lb = rb
+  For bx = lb To rb
+    SpikeColumn bx
+  Next bx
+End Sub
+
+' CHECKSPIKES "sub": down one column from his own row, through empty space,
+' until something is found.  Spikes go off; anything solid stops the look.
+Sub SpikeColumn(bx As INTEGER)
+  Local INTEGER t, by
+  by = cBlockY
   Do
-    t = RdBlock(s, bx, by)
+    t = RdBlock(cScrn, bx, by)
     If t = T_SPIKES Then
       TrigSpikes tScrn, tBY * COLS + tBX
       nSpikesTrig = nSpikesTrig + 1
