@@ -149,19 +149,21 @@ END
 ' touched at all.  Measured on the board before the change: after the fight
 ' below the shadow still had all four of his, and the kid was dead.
 '
-' The script is the one the sword-fight coverage scenario uses.  Both meters
-' fall together, one for one, which is the mirroring.
-SCEN a blow on the twelfth level is felt by both
+' Up to the moment a blow lands, neither has lost anything: the shadow's
+' entrance drop costs him nothing, because the shadow always lands softly
+' however far he has fallen, and so there is nothing to mirror onto the kid.
+' That is finding 2.3, and before it was fixed this read 2 and 3.
+SCEN before the blow lands neither has lost anything
 AT 12 15 6 0
 TYPE 15 1 0 1
 ENTER
 SWORD 1
 SEED 17
-RUN ..>>>>>>>>........B...B...^..B...B..^..B...>..B..
+RUN ..>>>>>>>>........B...B...^..B...B..^..B...>..B...B...^..B...B...>..B..
 WANT MAXSTR 3
 WANT MAXOPP 4
-WANT STR 2
-WANT OPPSTR 3
+WANT STR 3
+WANT OPPSTR 4
 WANT ALIVE 1
 END
 

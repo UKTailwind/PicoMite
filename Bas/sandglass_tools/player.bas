@@ -1340,11 +1340,19 @@ Sub Settle
   End If
   cY = floory(idx)
   cAction = 0 : cFalling = 0
-  If cYVel < OOF_VELOCITY Then
-    cSeq = seqTab(SEQ_SOFTLAND) : lastWhat = "soft land" : nSoft = nSoft + 1
+  ' CTRL.S hitflr.  The shadow lands softly however far he has fallen - he is
+  ' not a thing that can be hurt by the ground.  Everyone else is judged on
+  ' the speed, and a guard does not survive a medium fall where the player
+  ' only loses a point.
+  If cID = 1 Or cYVel < OOF_VELOCITY Then
+    cSeq = seqTab(LandSeq()) : lastWhat = "soft land" : nSoft = nSoft + 1
   ElseIf cYVel < DEATH_VELOCITY Then
     cSeq = seqTab(SEQ_MEDLAND) : lastWhat = "med land" : nMed = nMed + 1
-    If DecStr(1) = 0 Then cLife = 0 : nDead = nDead + 1
+    If cID >= 2 Then
+      If DecStr(100) = 0 Then cLife = 0 : nDead = nDead + 1
+    Else
+      If DecStr(1) = 0 Then cLife = 0 : nDead = nDead + 1
+    End If
   Else
     cSeq = seqTab(SEQ_HARDLAND) : lastWhat = "HARD land" : nHard = nHard + 1
     If DecStr(100) = 0 Then cLife = 0 : nDead = nDead + 1
@@ -2495,6 +2503,14 @@ End Sub
 ' The port only ever crouched.  Getting down two storeys safely is done by
 ' climbing down and letting go, so without this every descent cost health or
 ' a life, and some of them cannot be made at all.
+' Which landing a character comes down in.  A guard, or anyone with his sword
+' out, lands en garde; only the player unarmed comes down into the crouch,
+' which is FightCtrl's business and which a guard never gets out of - a guard
+' who dropped a storey lay in it for the rest of the game.
+Function LandSeq() As INTEGER
+  If cID >= 2 Or cSword = 2 Then LandSeq = SEQ_LANDENGARDE Else LandSeq = SEQ_SOFTLAND
+End Function
+
 Function DoDown() As INTEGER
   Local INTEGER ahead, behind, dist
   DoDown = SEQ_STOOP

@@ -1,0 +1,43 @@
+' scen/landing.txt - finding 2.3: who lands how.
+'
+' CTRL.S hitflr :softland.  A guard, or anyone with his sword out, lands en
+' garde.  The shadow always lands softly, however far he has fallen.  And a
+' guard does not survive a medium fall where the player only loses a point.
+'
+' The port sent everyone into softland, which is the player's crouch, and the
+' crouch is FightCtrl's business: a guard who dropped a storey lay in it for
+' the rest of the game.
+'
+' Level 1 screen 3 is the guard's room.  The floor is taken out from under
+' him where he stands, and the row below given something to land on.
+
+SCEN a guard lands en garde, not in the crouch
+AT 1 3 2 1
+TYPE 3 8 2 1
+TYPE 3 8 1 0
+SEED 17
+RUN .......
+WANT OPPPOSN 158
+WANT OPPFALL 0
+END
+
+SCEN and he gets up again
+AT 1 3 2 1
+TYPE 3 8 2 1
+TYPE 3 8 1 0
+SEED 17
+RUN ................
+WANT OPPPOSN NE 109
+WANT OPPID 2
+END
+
+' The control: the player unarmed still lands in the crouch, which is what
+' softland is for.
+SCEN the player still lands in his own crouch
+AT 1 1 3 0
+X 100
+SEED 17
+RUN ..v.......
+WANT POSN 109
+WANT ALIVE 1
+END
