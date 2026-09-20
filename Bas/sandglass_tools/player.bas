@@ -2678,19 +2678,47 @@ End Sub
 ' ENEMYCOLL: with a sword drawn he can be pushed into a wall, because
 ' retreating does not test the ground behind him.  Finding himself inside
 ' one, he is put back outside it and bumps.
-Sub EnemyColl
-  Local INTEGER t, lo
-  If cSword <> 2 Or cAction <> 1 Or cLife = 0 Then Exit Sub
-  t = RdBlock(cScrn, cBlockX, cBlockY)
+' COLL.S ENEMYCOLL takes exactly three things for something to back into: a
+' solid block, a panel WITH floor, and a gate hanging low enough to bar him.
+' The port asked Barrier(), which also says yes to a panel without floor, to
+' a mirror and to a slicer - none of which ENEMYCOLL so much as looks at, so
+' a fighter was stopped by things he should have been able to back through.
+Function EnemyBarrier(bx As INTEGER) As INTEGER
+  Local INTEGER t
+  EnemyBarrier = 0
+  t = RdBlock(cScrn, bx, cBlockY)
+  If t = T_BLOCK Or t = 7 Then EnemyBarrier = 1 : Exit Function   ' 7 = panelwif
   If t = T_GATE Then
-    If GateOpen(cScrn, cBlockX, cBlockY) Then Exit Sub
-  ElseIf t = T_SLICER Then
-    If SlicerShut(cScrn, cBlockX, cBlockY) = 0 Then Exit Sub
-  ElseIf Barrier(t) = 0 Then
-    Exit Sub
+    If GateOpen(cScrn, bx, cBlockY) = 0 Then EnemyBarrier = 1
   End If
-  lo = 14 * (cBlockX + 4) + BLOCKLO
-  If (cFace And &H80) Then cX = lo + 14 Else cX = lo - 1
+End Function
+
+Sub EnemyColl
+  Local INTEGER lo, bx
+  If cSword <> 2 Or cAction <> 1 Or cLife = 0 Then Exit Sub
+  bx = cBlockX
+  If EnemyBarrier(bx) = 0 Then
+    ' "* If facing R, check block behind too" - and only then, because the
+    ' routine returns at "lda CharFace / bmi rts" for a left-facer.  The port
+    ' never looked behind at all, so a right-facing fighter backed clean
+    ' through the wall on his left.
+    If (cFace And &H80) Then Exit Sub
+    bx = cBlockX - 1
+    If EnemyBarrier(bx) = 0 Then Exit Sub
+  End If
+  ' ":collide - put him right at edge".  DBarr2 gives the distance to the
+  ' barrier, negative because it is behind him, and :collide negates it and
+  ' hands it to addcharx - so he comes out of it the way he FACES.  Backing up
+  ' moves him against his facing, so that is the way out.  The port had the
+  ' two the wrong way round and pushed him further in, which is why he could
+  ' stand inside a wall shuffling between two blocks for ever.
+  '
+  ' NO SCENARIO PINS THIS.  ENEMYCOLL wants action 1 - the en-garde advance
+  ' and retreat - and in every room that can be built out of the shipped
+  ' levels HitBarrier reaches him first and puts him in action 5, where this
+  ' routine will not look at him.  Written from the source and left as read.
+  lo = 14 * (bx + 4) + BLOCKLO
+  If (cFace And &H80) Then cX = lo - 1 Else cX = lo + 14
   RereadBlocks
   cSeq = seqTab(SEQ_BUMPENGBACK) : cAction = 5
   If Advance() = 0 Then lastWhat = "STALLED"
