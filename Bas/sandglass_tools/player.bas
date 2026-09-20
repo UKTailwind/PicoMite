@@ -267,10 +267,7 @@ Const SEQ_STEP1 = 29 : Const SEQ_FULLSTEP = 42 : Const SEQ_TESTFOOT = 44
 ' The running jump's aiming constants, from CTRL.S.  These live up here with
 ' the rest: a Const only exists once the line has run, and everything below the
 ' main body never does.
-' A corner readout while a move is being chased: where he is, which way he
-' faces, the pose number, and what the engine last decided.  0 to turn off.
-Const SHOWDEBUG = 0
-Dim STRING jumpWhat, rjWhat, traceLine, lastTrace
+Dim STRING traceLine, lastTrace
 Const RJCHANGE = 4        ' how far he moves in the frame being projected
 Const RJLOOKAHEAD = 1     ' blocks to look ahead for an edge
 Const RJLEADDIST = 14     ' the run-up the jump itself needs
@@ -453,8 +450,6 @@ For frame = 1 To maxFrames
     traceLine = traceLine + " up" + Str$(jstkY) + " fresh" + Pad$(Str$(clrU),3)
     traceLine = traceLine + " act" + Str$(cAction)
     traceLine = traceLine + "  " + lastWhat
-    If rjWhat <> "" Then traceLine = traceLine + "  | " + rjWhat
-    If jumpWhat <> "" Then traceLine = traceLine + "  | " + jumpWhat
     If traceLine <> lastTrace Then
       Print Pad$(Str$(frame),4) + " " + traceLine
       lastTrace = traceLine
@@ -485,7 +480,6 @@ For frame = 1 To maxFrames
   DrawMessage
   DrawScrnNo cScrn
   DrawFrameNo frame
-  DrawDebug
   If invert Then FlipBuffer
   tWork = tWork + (Timer - tStart)
   ' Three stills for the record: the gate part-way up with him against it,
@@ -2312,11 +2306,7 @@ Function DoJumpup() As INTEGER
   above = BlockAt(cScrn, cBlockX, cBlockY - 1)
   aboveinf = BlockAt(cScrn, ahead, cBlockY - 1)
   abovebeh = BlockAt(cScrn, behind, cBlockY - 1)
-  jumpWhat = "up: a" + Str$(above) + " f" + Str$(aboveinf) + " b" + Str$(abovebeh) + " d" + Str$(GetDist())
-  If CanGrab(above, aboveinf) Then
-    jumpWhat = jumpWhat + " GRAB"
-    DoJumpup = DoJumphang() : Exit Function
-  End If
+  If CanGrab(above, aboveinf) Then DoJumpup = DoJumphang() : Exit Function
   If CanGrab(abovebeh, above) Then
     dist = GetDist()
     If dist >= JUMPBACK_THRES Then
@@ -2324,18 +2314,14 @@ Function DoJumpup() As INTEGER
         MoveFwd dist - 10
         DoJumpup = SEQ_JUMPBACKHANG : nJumpHang = nJumpHang + 1
         lastWhat = "jump back hang"
-        jumpWhat = jumpWhat + " EDGE"
       Else
         MoveFwd dist - 14
         DoJumpup = DoJumphang()
-        jumpWhat = jumpWhat + " BACK+GRAB"
       End If
       Exit Function
     End If
-    jumpWhat = jumpWhat + " too close to step back"
   End If
   If noFloor(above) Then DoJumpup = SEQ_HIGHJUMP Else DoJumpup = SEQ_JUMPUP
-  jumpWhat = jumpWhat + " - plain jump"
 End Function
 
 ' The jump that ends hanging from the ledge in front: a long one from four
@@ -2485,8 +2471,7 @@ End Function
 Function DoRunjump() As INTEGER
   Local INTEGER n, px, bx, t, dist, diff
   DoRunjump = 0
-  rjWhat = "rj p" + Str$(cPosn)
-  If cPosn < 7 Then rjWhat = rjWhat + " NOT-FULL-RUN" : Exit Function
+  If cPosn < 7 Then Exit Function                  ' not yet at full speed
   n = 0
   px = AddCharX(RJCHANGE)
   bx = BlockOfX(px)
@@ -2500,7 +2485,6 @@ Function DoRunjump() As INTEGER
       ' Nothing to aim at.  Jump anyway, which is what a long jump on a long
       ' floor is.
       clrU = 1 : nRunJump = nRunJump + 1
-      rjWhat = rjWhat + " NO-EDGE GO"
       DoRunjump = SEQ_RUNJUMP
       Exit Function
     End If
@@ -2508,16 +2492,11 @@ Function DoRunjump() As INTEGER
   ' How far to the end of the floor, and how that compares with the jump.
   dist = DistFromX(px, bx) + 14 * n
   diff = dist - RJLEADDIST
-  rjWhat = rjWhat + " n" + Str$(n) + " dist" + Str$(dist) + " diff" + Str$(diff)
-  If diff >= RJMAXFUJFWD And diff < 128 Then
-    rjWhat = rjWhat + " WAIT"
-    Exit Function
-  End If
+  If diff >= RJMAXFUJFWD And diff < 128 Then Exit Function     ' too far off yet
   If diff < -RJMAXFUJBAK Then diff = -3                       ' too late; tidy it
   cX = (cX + Choice((cFace And &H80) <> 0, -(diff + RJCHANGE), diff + RJCHANGE)) And &HFF
   RereadBlocks
   clrU = 1 : nRunJump = nRunJump + 1
-  rjWhat = rjWhat + " GO"
   DoRunjump = SEQ_RUNJUMP
 End Function
 
@@ -3241,15 +3220,6 @@ End Sub
 ' It is here so that a player and whoever they are asking for help can name the
 ' same room: the rooms are numbered in the level data and the map, the routes
 ' and the positions of everything are all quoted in those numbers.
-Sub DrawDebug
-  Local STRING f
-  If SHOWDEBUG = 0 Then Exit Sub
-  If (cFace And &H80) Then f = "<" Else f = ">"
-  Text 2, 12, "blk " + Str$(cBlockX) + "," + Str$(cBlockY) + " " + f + " pose " + Str$(cPosn), "LT", 7, 1, Map(15)
-  Text 2, 22, Left$(lastWhat, 22), "LT", 7, 1, Map(15)
-  Text 2, 32, Left$(jumpWhat, 34), "LT", 7, 1, Map(15)
-End Sub
-
 Sub DrawScrnNo(n As INTEGER)
   Text 160, ORIGINY + 186, "ROOM " + Str$(n), "CT", 7, 1, Map(15)
 End Sub
