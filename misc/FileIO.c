@@ -152,6 +152,15 @@ static uint32_t lastfptr[MAXOPENFILES + 1] = {[0 ... MAXOPENFILES] = -1};
 uint8_t fmode[MAXOPENFILES + 1] = {0};
 static unsigned int bw[MAXOPENFILES + 1] = {[0 ... MAXOPENFILES] = -1};
 unsigned char filesource[MAXOPENFILES + 1] = {0};
+/* True while the read buffer, and not FatFS's own offset, holds this file's
+   logical read position: positionfile and FileGetChar both fill the buffer by
+   reading bw bytes ahead, so the position is buffpointer bytes into it rather
+   than where FatFS has got to.  Anything that needs to know where the file is,
+   or that reads past the buffer, must ask this rather than work it out again. */
+#define BUFFERLIVE(f) (filesource[f] == FATFSFILE                        \
+                    && !(fmode[f] & FA_WRITE)                            \
+                    && lastfptr[f] == (uint32_t)FileTable[f].fptr        \
+                    && buffpointer[f] < SDbufferSize)
 char filepath[HAS_USB_MSC ? 3 : 2][FF_MAX_LFN] = {
     "A:/",
     "B:/"
@@ -2800,46 +2809,40 @@ void MIPS16 cmd_kill(void)
 
 void positionfile(int fnbr, int gidx, bool noread)
 {
-    char *buff;
     volatile int idx = gidx;
+    (void)noread; /* a seek is now always exact, so there is nothing to choose */
     if (filesource[fnbr] == FLASHFILE)
     {
         //        if(idx>FileTable[fnbr].lfsptr->ctz.size)idx=FileTable[fnbr].lfsptr->ctz.size;
         FSerror = lfs_file_seek(&lfs, FileTable[fnbr].lfsptr, idx, LFS_SEEK_SET);
         if (FSerror < 0)
             ErrorCheck(fnbr);
+        return;
     }
-    else
-    {
-        if ((fmode[fnbr] & FA_WRITE) || noread)
-        {
-            FSerror = f_lseek(FileTable[fnbr].fptr, idx);
-            ErrorCheck(fnbr);
-        }
-        else
-        {
-            buff = SDbuffer[fnbr];
-            FSerror = f_lseek(FileTable[fnbr].fptr, idx - (idx % 512));
-            ErrorCheck(fnbr);
-            FSerror = f_read(FileTable[fnbr].fptr, buff, SDbufferSize, &bw[fnbr]);
-            ErrorCheck(fnbr);
-            buffpointer[fnbr] = idx % 512;
-            lastfptr[fnbr] = (uint32_t)FileTable[fnbr].fptr;
-        }
-    }
+    /* A seek is just a seek.  This used to align down to a 512 boundary and
+       read a buffer, which left FatFS's own offset at the far end of that
+       buffer - and a bulk read goes to FatFS, so it started up to 512 bytes
+       late.  The buffer is now filled on demand by the first FileGetChar,
+       which would have read it anyway, so nothing is lost; a seek followed by
+       a bulk read does no wasted read at all.  FileGetChar is now the only
+       thing that can make the buffer live. */
+    FSerror = f_lseek(FileTable[fnbr].fptr, idx);
+    ErrorCheck(fnbr);
+    lastfptr[fnbr] = -1;
+    buffpointer[fnbr] = 0;
 }
 
 int filegetpos(int fnbr)
 {
     if (filesource[fnbr] == FLASHFILE)
         return (int)lfs_file_tell(&lfs, FileTable[fnbr].lfsptr);
-    else
-    {
-        int pos = (int)((((uint64_t)((*(FileTable[fnbr].fptr)).fptr) + 511ULL) & ~511ULL) - 512 + buffpointer[fnbr]);
-        if (pos < 0)
-            pos += 512;
-        return pos;
-    }
+    if (!BUFFERLIVE(fnbr))
+        return (int)((*(FileTable[fnbr].fptr)).fptr);
+    /* The buffer was filled by one read of bw bytes, so it begins bw bytes
+       back from where FatFS now is.  Recovering that by rounding the pointer
+       up to a 512 boundary comes out 512 low when the fill returned nothing,
+       which is what a seek to or past the end of the file does. */
+    return (int)((*(FileTable[fnbr].fptr)).fptr - bw[fnbr] + buffpointer[fnbr]);
 }
 /*  @endcond */
 void cmd_seek(void)
@@ -5111,7 +5114,7 @@ char __not_in_flash_func(FileGetChar)(int fnbr)
         }
         else
         {
-            if (!(lastfptr[fnbr] == (uint32_t)FileTable[fnbr].fptr && buffpointer[fnbr] < SDbufferSize))
+            if (!BUFFERLIVE(fnbr))
             {
                 FSerror = f_read(FileTable[fnbr].fptr, buff, SDbufferSize, &bw[fnbr]);
                 ErrorCheck(fnbr);
@@ -5125,11 +5128,27 @@ char __not_in_flash_func(FileGetChar)(int fnbr)
         return ch;
     }
 }
+/* Bring FatFS's own offset up to the logical position before a bulk read.
+   f_read knows nothing about the 512-byte buffer, so a read through it after a
+   SEEK or after any character read would start where the buffer ends rather
+   than where the reader has got to - up to 512 bytes late.  A no-op unless the
+   buffer is live, which it is not after an open or after a previous bulk
+   read, so the readers that only ever go forwards pay two comparisons. */
+static void filealign(int fnbr)
+{
+    if (!BUFFERLIVE(fnbr))
+        return;
+    FSerror = f_lseek(FileTable[fnbr].fptr, filegetpos(fnbr));
+    ErrorCheck(fnbr);
+    lastfptr[fnbr] = -1;
+    buffpointer[fnbr] = 0;
+}
 // bulk read data
 int __not_in_flash_func(FileGetData)(int fnbr, void *buff, int count, unsigned int *read)
 {
     if (filesource[fnbr] == FATFSFILE)
     {
+        filealign(fnbr);
         FSerror = f_read(FileTable[fnbr].fptr, buff, count, (UINT *)read);
         // Invalidate the read buffer so FileEOF falls through to f_eof()
         // and any subsequent FileGetChar refills the buffer from the new position
@@ -5205,7 +5224,10 @@ int FileEOF(int fnbr)
     {
         if (!InitSDCard())
             return 0;
-        if (buffpointer[fnbr] <= bw[fnbr] - 1 && !(fmode[fnbr] & FA_WRITE))
+        /* bw is unsigned, so the old "buffpointer <= bw - 1" said there was
+           data whenever a fill had returned nothing - a seek to or past the
+           end - and FileGetChar then handed back whatever was in the buffer. */
+        if (BUFFERLIVE(fnbr) && (unsigned int)buffpointer[fnbr] < bw[fnbr])
             i = 0;
         else
         {
@@ -7210,17 +7232,10 @@ void fun_loc(void)
                 iret = lfs_file_tell(&lfs, FileTable[fnbr].lfsptr) + 1;
             else
             {
-                //                iret = (*(FileTable[fnbr].fptr)).fptr + 1;
-                if (fmode[fnbr] & FA_WRITE)
-                {
-                    iret = (*(FileTable[fnbr].fptr)).fptr + 1;
-                }
-                else
-                {
-                    iret = (RoundUptoBlock((*(FileTable[fnbr].fptr)).fptr) - 511 + buffpointer[fnbr]);
-                    if (iret < 0)
-                        iret += 512;
-                }
+                /* LOC is one-based; filegetpos is zero-based and knows
+                   about the read buffer, including the write case, where it
+                   returns FatFS's own offset. */
+                iret = filegetpos(fnbr) + 1;
             }
         }
         else

@@ -330,7 +330,40 @@ The original failure is also a regression test: the Prince of Pico engine's
 `LoadLevel` before commit `7385d46` did `Seek` then `Memory Input`, and fails
 with `Index out of bounds` at startup from `B:` while working from `A:`.
 
-## 9. Risks
+## 9. Status
+
+Both phases are in, tested on a PicoMiteHDMIWEB RP2350B with an SD card.
+
+`Testfiles/SeekBulkReadTest.bas` runs the checks of section 8 on `A:` and `B:`
+and needs `seektest.bin` on each - 4096 bytes, byte *i* = *i* MOD 251.
+Thirteen of its fourteen checks pass; the fourteenth is section 10 below.
+
+The original failure serves as the end-to-end proof. The Prince of Pico engine
+before commit `7385d46` did `Seek` then `Memory Input`; from `B:/board` on the
+old firmware it stopped at startup with `Index out of bounds`, and that same
+unchanged 145,483-byte file now loads and runs. The game's own 274-check suite
+passes from `A:` on both phases, and `LIST` paging - which is what depends on
+`filegetpos` being right after a `positionfile` - walks a 111-line file to its
+end without repeating or skipping a line.
+
+Phase 2 gave back 136 bytes of flash.
+
+## 10. Still open: EOF past the end on the flash filesystem
+
+`SEEK` beyond the end of a file and then `EOF()` answers true on an SD card and
+**false** on the flash filesystem. The FAT side is section 4b; the flash side is
+untouched by any of this and reads
+
+```c
+i = (lfs_file_tell(&lfs, FileTable[fnbr].lfsptr) == lfs_file_size(&lfs, FileTable[fnbr].lfsptr));
+```
+
+LittleFS allows a seek past the end, so `tell` is then greater than `size` and
+the equality fails. `>=` would make the two filesystems agree. Not changed
+here: it is a separate defect, it predates this work, and it wants its own
+decision about whether a position beyond the end counts as end of file.
+
+## 11. Risks
 
 * `filegetpos` changes its answer at end of file, by design. Anything that
   relied on the old value was relying on a number that was 512 low.
