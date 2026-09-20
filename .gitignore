@@ -96,3 +96,11 @@ Prince-of-Persia-Apple-II/
 Bas/sandglass_tools/music/
 Bas/sandglass_tools/*.min.bas
 Bas/sandglass_tools/*.map
+
+# Prince of Pico: what setup.py leaves behind.  release/ is the published
+# source release and board/ is the data converted from it - neither is ours to
+# commit, any more than to redistribute.
+Bas/sandglass_tools/release/
+Bas/sandglass_tools/board/
+Bas/sandglass_tools/art.idx
+Bas/sandglass_tools/convert.log

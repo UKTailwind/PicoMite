@@ -2,11 +2,14 @@
 
     python make_release.py [-o PrinceOfPico.zip]
 
-What goes in is everything in this directory that is our own work, under a
-single `PrinceOfPico/` folder so the zip does not empty itself into whatever
-the player unpacks it in:
+Make a directory, unpack the zip into it, and run `setup.bat` or `setup.sh`.
+The zip has no folder of its own inside it, so it lands where it is put.
+
+What goes in is everything in this directory that is our own work:
 
   * the instructions, `README.md`, which is where anyone should start;
+  * `setup.bat` and `setup.sh`, which do the whole job in one go, and the
+    `setup.py` they call;
   * the engine, both as the commented source and as the stripped
     `player.min.bas` that goes on the board;
   * the converter and the modules it imports, so the player can turn their own
@@ -16,11 +19,16 @@ the player unpacks it in:
     names files that are not in it is worse than no README.
 
 What stays out is anything generated or private: `player.min.bas.map`,
-`__pycache__`, and - this is the point of the whole arrangement - **any
-converted game data**. The zip carries no artwork, no rooms, no animation
-tables and no music, and the engine will not start until the player has run
-the converter against a copy of the release they obtained themselves. See
-"Keep what comes out to yourself" in the README.
+`__pycache__`, the `release/` and `board/` directories `setup.py` makes, and -
+this is the point of the whole arrangement - **any converted game data**.
+`release/` matters as much as `board/` does: run the setup here and the
+published source release is sitting in this directory, and it is no more ours
+to hand on than the data converted out of it.
+
+So the zip carries no artwork, no rooms, no animation tables and no music, and
+the engine will not start until the player has run the converter against a copy
+of the release they fetched themselves. See "Keep what comes out to yourself"
+in the README.
 
 `player.min.bas` is rebuilt from `player.bas` before it is packed, so the two
 cannot drift apart in the zip.
@@ -32,12 +40,13 @@ import sys
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FOLDER = "PrinceOfPico"
 
 # Not ours to give away, or not worth giving: converted data and everything
 # the tools leave behind.  Matched against the name, not the path.
-SKIP_NAMES = {"player.min.bas.map", "convert.log", "make_release.py"}
-SKIP_DIRS = {"__pycache__", "out", ".git"}
+SKIP_NAMES = {"player.min.bas.map", "convert.log", "art.idx", "make_release.py"}
+# release/ and board/ are what setup.py leaves behind: the source release
+# itself and the data converted from it.  Neither may ever go in the zip.
+SKIP_DIRS = {"__pycache__", "out", ".git", "release", "board", "_release"}
 SKIP_EXT = {".pyc", ".zip", ".log", ".bmp", ".dat", ".idx", ".bin", ".wav", ".map"}
 # ...except these, which are ours and are wanted.
 KEEP_ANYWAY = {"title.jpg"}
@@ -69,7 +78,7 @@ def collect():
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("-o", "--out", default=os.path.join(HERE, FOLDER + ".zip"))
+    ap.add_argument("-o", "--out", default=os.path.join(HERE, "PrinceOfPico.zip"))
     args = ap.parse_args(argv)
 
     # Rebuild the stripped engine so the zip cannot carry a stale one.
@@ -79,7 +88,7 @@ def main(argv=None):
 
     names = collect()
     for must in ("README.md", "player.bas", "player.min.bas", "convert.py",
-                 "title.jpg"):
+                 "title.jpg", "setup.py", "setup.bat", "setup.sh"):
         if must not in names:
             raise SystemExit("%s is missing and the zip would be no use without it"
                              % must)
@@ -89,7 +98,14 @@ def main(argv=None):
         for rel in names:
             path = os.path.join(HERE, rel)
             total += os.path.getsize(path)
-            z.write(path, FOLDER + "/" + rel.replace("\\", "/"))
+            arc = rel.replace("\\", "/")
+            info = zipfile.ZipInfo.from_file(path, arc)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            # A shell script that arrives without its execute bit is a puzzle
+            # for whoever unpacks it, and Windows will not have set one.
+            info.external_attr = ((0o755 if arc.endswith(".sh") else 0o644) << 16)
+            with open(path, "rb") as fh:
+                z.writestr(info, fh.read())
 
     print("%s" % args.out)
     print("%d files, %d bytes in, %d out" % (len(names), total,

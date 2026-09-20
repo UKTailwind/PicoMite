@@ -7,6 +7,37 @@ The player's manual is in `docs/Prince_of_Pico_Player_Manual.html`.
 be passed on.** See [Asset converter](#asset-converter) - it is the first thing
 to do, and the game will not start without it.
 
+## Quick start
+
+Make a directory, unpack the zip into it, and run the one script:
+
+```
+setup.bat                      Windows
+./setup.sh                     Linux and macOS
+```
+
+It fetches the game's own data from the published source release, converts it,
+strips the engine, and leaves everything the board wants in a `board/`
+subdirectory. If you already have a copy of the release, give it the path and
+it downloads nothing:
+
+```
+setup.bat  C:\Users\you\Prince-of-Persia-Apple-II
+./setup.sh ~/Prince-of-Persia-Apple-II
+```
+
+Then copy the whole of `board/` onto the board's drive and
+
+```
+LOAD "A:/player.bas", C
+RUN
+```
+
+The rest of this file is what those steps are doing, and what to do when one of
+them does not work. **What lands in `board/` is the game's own content and is
+not yours to pass on** - see [Keep what comes out to
+yourself](#4-keep-what-comes-out-to-yourself).
+
 ## The board
 
 **Firmware 6.03.02b12 or later.** The RAM image slots the artwork is loaded
@@ -24,7 +55,7 @@ framebuffers. Both the HDMI and the VGA builds do that; it has been played on
 `PicoMiteHDMIWEB` and on `PicoMiteVGAUSB`, both RP2350B. A USB keyboard is
 needed to play, so a build with USB host support.
 
-About 800 KB of the drive, for the engine and the converted data.
+About 1.1 MB of the drive, for the engine, the converted data and the title.
 
 The console output goes to the serial port - the engine sets `OPTION CONSOLE
 SERIAL` on its first line - so the screen belongs to the game alone.
