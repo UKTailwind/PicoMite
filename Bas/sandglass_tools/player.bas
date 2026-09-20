@@ -960,7 +960,7 @@ Sub ApplyCode(c As STRING)
     Case "F" : SetInput 1,0,0,0,1
     Case "B" : SetInput 0,0,0,0,1
     Case "U" : SetInput 0,0,1,0,1
-    Case "D" : SetInput 1,0,0,1,0
+    Case "D" : SetInput 0,0,0,1,1
     Case "J" : SetInput 1,0,1,0,0
     Case "R" : SetInput 1,0,0,1,0
     Case Else : SetInput 0,0,0,0,0
@@ -1416,19 +1416,17 @@ Function StandCtrl() As INTEGER
   End If
   If btn < 0 Then
     If clrB < 0 Then clrB = 1 : StandCtrl = SEQ_TURN : Exit Function
-    If clrU < 0 Then clrU = 1 : StandCtrl = SEQ_JUMPUP : Exit Function
+    If clrU < 0 Then clrU = 1 : StandCtrl = DoUp() : Exit Function
+    ' ":2 lda clrD / bmi :down" - down with the button held is the same
+    ' handler as down without it, and was missing here altogether.
+    If clrD < 0 Then StandCtrl = DoDown() : Exit Function
     ' Button and forward together is the careful step, the only way to walk
     ' up to an edge without running off it.
     If jstkX < 0 And clrF < 0 Then StandCtrl = DoStepFwd() : Exit Function
     Exit Function
   End If
   If jstkY > 0 Then StandCtrl = DoDown() : Exit Function
-  If jstkY < 0 Then
-    If TryStairs() Then StandCtrl = SEQ_CLIMBSTAIRS : Exit Function
-    If jstkX < 0 Then StandCtrl = SEQ_STANDJUMP : Exit Function
-    StandCtrl = DoJumpup()
-    Exit Function
-  End If
+  If jstkY < 0 Then StandCtrl = DoUp() : Exit Function
   If jstkX < 0 Then StandCtrl = SEQ_STARTRUN : Exit Function
   If jstkX > 0 Then StandCtrl = SEQ_TURN : Exit Function
 End Function
@@ -2561,6 +2559,18 @@ End Sub
 
 Function LandSeq() As INTEGER
   If cID >= 2 Or cSword = 2 Then LandSeq = SEQ_LANDENGARDE Else LandSeq = SEQ_SOFTLAND
+End Function
+
+' CTRL.S standing :up - the stairs first, then a standing jump if forward is
+' held, then DoJumpup with its ledge logic.  Both branches of "standing" reach
+' it: ":2 lda clrU / bmi :up" with the button down is the same label that
+' :btnup uses.  The port answered a fresh up with the button held by returning
+' jumpup on the spot, so a player who keeps the action key down never grabs a
+' ledge and cannot climb a flight of stairs.
+Function DoUp() As INTEGER
+  If TryStairs() Then DoUp = SEQ_CLIMBSTAIRS : Exit Function
+  If jstkX < 0 Then DoUp = SEQ_STANDJUMP : Exit Function
+  DoUp = DoJumpup()
 End Function
 
 Function DoDown() As INTEGER
@@ -5235,6 +5245,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "STEPS"   : ScenValue = nSteps
     Case "CLIMBS"  : ScenValue = nClimb
     Case "CLIMBDOWN" : ScenValue = nClimbDown
+    Case "JUMPHANG" : ScenValue = nJumpHang
     Case "STOOPS"  : ScenValue = nStoop
     Case "DIST"    : ScenValue = GetDist()
     Case "BASEX"   : ScenValue = BaseX()
@@ -5273,7 +5284,7 @@ Sub ScZero
   gameOver = 0 : message = 0 : msgTimer = 0 : weightless = 0
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
-  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0
+  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0 : nJumpHang = 0
   nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0 : nGuardsGone = 0
 End Sub
 

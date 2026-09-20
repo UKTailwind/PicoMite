@@ -1,0 +1,41 @@
+' scen/jumpup.txt - finding 2.10: up with the action key held.
+'
+' CTRL.S "standing" has two branches, one for the button down and one for it
+' up, and both answer a fresh up at the same label:
+'
+'   :2 lda clrB / bmi :backB      (button down)
+'      lda clrU / bmi :up
+'   ...
+'   :btnup lda clrF / bmi :fwd    (button up)
+'      lda clrB / bmi :back
+'      lda clrU / bmi :up
+'
+' and :up is the stairs test, then a standing jump if forward is held, then
+' DoJumpup with its ledge logic.  The port returned jumpup on the spot when
+' the button was down, so a player who keeps the action key held never grabs
+' a ledge and cannot climb a flight of stairs.
+'
+' Level 1 screen 1: standing on the floor at block 2 of the middle row, the
+' block above him is empty and the one above and in front has floor, which is
+' a ledge to jump for.  He is turned to face it.
+
+SCEN up with the button held jumps for the ledge
+AT 1 1 2 1
+FACE 0
+SEED 17
+RUN ..UUUUUUUUUUUU
+WANT JUMPHANG 1
+WANT ACTION 2
+WANT ALIVE 1
+END
+
+' The control: with the button up it has always done this, and still does.
+SCEN up on its own does the same
+AT 1 1 2 1
+FACE 0
+SEED 17
+RUN ..^^^^^^^^^^^^
+WANT JUMPHANG 1
+WANT ACTION 2
+WANT ALIVE 1
+END
