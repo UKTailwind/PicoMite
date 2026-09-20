@@ -1398,6 +1398,20 @@ Sub Settle
     Exit Sub
   End If
   t = BlockAt(cScrn, cBlockX, cBlockY)
+  ' CTRL.S falling: "jsr getunderft / cmp #block / bne :2 / jsr InsideBlock".
+  ' A solid block underfoot is the special case - he is put out to one side of
+  ' it rather than dropped through.  The port had a solid block in the no-floor
+  ' set and let him fall through the wall.
+  If t = T_BLOCK Then
+    InsideBlock
+    t = BlockAt(cScrn, cBlockX, cBlockY)
+    ' "jsr cmpspace / bne hitflr": a solid block is not space, so if the nudge
+    ' has not taken him clear of it he lands on top of it.  Falling through a
+    ' wall is what the port did instead, because a solid block is in its
+    ' no-floor set - it is there so that nobody can stand INSIDE one, which is
+    ' a different question from whether you can come down on one.
+    If t = T_BLOCK Then t = T_FLOOR
+  End If
   If noFloor(t) Then
     cBlockY = (cBlockY + 1) And &HFF      ' through the floor plane
     lastWhat = "through"
@@ -2687,6 +2701,33 @@ Sub CutFallenGuard
   If cScrn >= 1 And cScrn <= 24 Then gdBlock(cScrn) = 255
   nGuardsGone = nGuardsGone + 1
   lastWhat = "over the edge and gone"
+End Sub
+
+' CTRL.S InsideBlock: he came down inside a wall, so put him out beside it.
+' Forward if he is near the front edge and there is no wall that way, back
+' otherwise; and if there is wall on both sides, back two ("what the hell",
+' as the original has it).
+Sub InsideBlock
+  Local INTEGER d, ahead, behind
+  If (cFace And &H80) Then
+    ahead = cBlockX - 1 : behind = cBlockX + 1
+  Else
+    ahead = cBlockX + 1 : behind = cBlockX - 1
+  End If
+  d = GetDist()
+  If d < 8 Then
+    If BlockAt(cScrn, ahead, cBlockY) <> T_BLOCK Then
+      MoveFwd d + 4
+      lastWhat = "out of the wall"
+      Exit Sub
+    End If
+  End If
+  If BlockAt(cScrn, behind, cBlockY) = T_BLOCK Then
+    MoveFwd -d - 7
+  Else
+    MoveFwd 7 - d
+  End If
+  lastWhat = "out of the wall"
 End Sub
 
 Function LandSeq() As INTEGER

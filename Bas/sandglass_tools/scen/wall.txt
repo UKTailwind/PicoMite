@@ -1,0 +1,41 @@
+' scen/wall.txt - section 3: coming down on a solid block.
+'
+' CTRL.S falling, at the moment he passes through a floor plane:
+'     :1 jsr getunderft
+'        cmp #block
+'        bne :2
+'        jsr InsideBlock ;reset him to either side of block
+'     :2 jsr cmpspace
+'        bne hitflr
+'        inc CharBlockY ;Fall thru floor plane
+'
+' A solid block is not space, so he lands on it - after InsideBlock has nudged
+' him towards whichever side of it is clear.  The port has a solid block in
+' its no-floor set, which is right for "nobody can stand inside one" and wrong
+' for this, so he fell straight through the wall and out of the room.
+'
+' A wall is put in the way of a step-off on level 1 screen 1.
+
+SCEN coming down on a wall lands on it
+AT 1 1 3 0
+TYPE 1 2 1 20
+X 105
+SEED 17
+RUN ..v..........
+WANT SCRN 1
+WANT BY 1
+WANT ALIVE 1
+END
+
+' The control: with the floor left as it was he lands on the floor, on the
+' same row, exactly as before.
+SCEN and an ordinary floor is unchanged
+AT 1 1 3 0
+X 105
+SEED 17
+RUN ..v..........
+WANT SCRN 1
+WANT BY 1
+WANT BX 2
+WANT ALIVE 1
+END
