@@ -329,6 +329,9 @@ Dim INTEGER cRepeat, nSteps, invert, nInverts, nGateKnocks
 ' What GetFwdDist found in the way: 0 the edge of his own block, 1 a
 ' barrier, 2 clear - and the block type it looked at.
 Dim INTEGER fwdKind, fwdType
+' COLL.S CHECKGATE wants the overlap to have held for two frames running
+' before it shoves.  Only the player is ever asked, so one flag does.
+Dim INTEGER gateLast
 ' The sixteen tunes the original asks for by name.  The player supplies the
 ' files; a cue whose file is missing simply does not play, which is the
 ' normal case and the one that is tested.  The audio output does one thing
@@ -2339,18 +2342,30 @@ End Sub
 ' him when he is standing, turning or crouched, and only while the gate is
 ' still low enough to be in his way.
 Sub CheckGate
-  Local INTEGER t, gx
-  If cAction <> 7 And cPosn <> 15 Then
-    If cPosn < 108 Or cPosn >= 111 Then Exit Sub
-  End If
+  Local INTEGER gx, off
   gx = -1
+  If cAction <> 7 And cPosn <> 15 Then
+    If cPosn < 108 Or cPosn >= 111 Then gateLast = 0 : Exit Sub
+  End If
   If RdBlock(cScrn, cBlockX, cBlockY) = T_GATE Then
     gx = cBlockX
   ElseIf RdBlock(cScrn, cBlockX - 1, cBlockY) = T_GATE Then
+    ' INTERPRETATION.  COLL.S wants his collision edges to have overlapped
+    ' both edges of the bars, which it gets from CDthisframe and CDlastframe -
+    ' per-column collision maps the port does not keep.  What it can ask is
+    ' how far into his own block he is standing: a man on the far side of the
+    ' boundary is not touching the bars at all.  Without this, standing beside
+    ' a shut gate on its right shoved him five pixels a frame with a smack on
+    ' the wall every frame, for as long as he stood there.
+    off = BaseX() - (14 * (cBlockX + 4) + BLOCKLO)
+    If off > kGateMargin Then gateLast = 0 : Exit Sub
     gx = cBlockX - 1
   End If
-  If gx < 0 Then Exit Sub
-  If GateOpen(cScrn, gx, cBlockY) Then Exit Sub
+  If gx < 0 Then gateLast = 0 : Exit Sub
+  If GateOpen(cScrn, gx, cBlockY) Then gateLast = 0 : Exit Sub
+  ' "lda CDthisframe,x / and CDlastframe,x / cmp #$ff" - both frames, or not
+  ' yet.
+  If gateLast = 0 Then gateLast = 1 : Exit Sub
   AddSound 13
   ' Away from the gate: out of its own column to the left, or clear of one
   ' standing to his left.
@@ -5302,6 +5317,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "FWDKIND" : ScenValue = fwdKind
     Case "FWDTYPE" : ScenValue = fwdType
     Case "REPEAT"  : ScenValue = cRepeat
+    Case "KNOCKS"  : ScenValue = nGateKnocks
     Case "BASEX"   : ScenValue = BaseX()
     Case "DROPS"   : ScenValue = nDrop
     Case "STRIKES" : ScenValue = nStrikes
@@ -5338,7 +5354,7 @@ Sub ScZero
   gameOver = 0 : message = 0 : msgTimer = 0 : weightless = 0
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
-  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0 : nJumpHang = 0 : nPotions = 0
+  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0 : nJumpHang = 0 : nPotions = 0 : nGateKnocks = 0
   nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0 : nGuardsGone = 0
 End Sub
 

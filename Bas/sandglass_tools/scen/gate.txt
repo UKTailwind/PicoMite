@@ -1,0 +1,35 @@
+' scen/gate.txt - finding 2.14: being shoved out from under a gate.
+'
+' COLL.S CHECKGATE shoves only when the character's collision edges have
+' overlapped both edges of the bars for two frames running -
+'     lda CDthisframe,x / and CDlastframe,x / cmp #$ff
+' - and the gate is too low to pass under.
+'
+' The port shoved whenever a standing or crouching character was in the gate's
+' block or the one to its right, with no test of where in that block he was
+' standing and none of the two frames.  So standing beside a shut gate on its
+' right shoved him five pixels a frame with a smack on the wall every frame,
+' for as long as he stood there.
+'
+' Level 1 screen 5's top row: block 5 is a gate and block 6 the up-plate
+' beside it.
+
+SCEN standing beside a shut gate is left alone
+AT 1 5 6 0
+SEED 17
+RUN ....................
+WANT X 156
+WANT BX 6
+WANT KNOCKS 0
+END
+
+' The control: he is still got out from under a shut gate rather than left
+' standing in the bars.  Both builds do this; what the port did wrongly was
+' the block NEXT to it.
+SCEN he does not stay standing in the bars
+AT 1 5 5 0
+SEED 17
+RUN ....................
+WANT BX NE 5
+WANT ALIVE 1
+END
