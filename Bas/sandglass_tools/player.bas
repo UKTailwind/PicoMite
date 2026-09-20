@@ -253,7 +253,7 @@ Dim INTEGER kMirScrn, kMirX, kMirY, nMirrors, nMerges
 ' level and negative afterwards, which is how the rest of the level knows
 ' the meeting is over: the shadow is not put back in the room, and the
 ' bridge to the last screen is there to be walked on.
-Dim INTEGER mergeTimer
+Dim INTEGER mergeTimer, nBridge
 Const T_MIRROR = 13
 ' The enemy image set each level loads (MISC.S chset), and the tables.
 Dim INTEGER tSet(6), chSet(15), bgSet(15)
@@ -1252,6 +1252,7 @@ Sub Settle
     If cPosn >= 1 Then
       If (frmb((cPosn - 1) * frmEntry + 4) And &H40) = 0 Then Exit Sub
     End If
+    CheckBridge
     t = BlockAt(cScrn, cBlockX, cBlockY)
     ' A solid block is not somewhere you fall from or stand on: you cannot be
     ' inside one at all, so you are pushed back out the way you came.  It is in
@@ -1610,6 +1611,28 @@ Sub Shad12
   End If
   If OpDistS() < 0 Then MergeShadow : Exit Sub
   If enemyAlert = 2 Then AiFwd
+End Sub
+
+' CTRL.S onground, the twelfth level.  Once the two are one, empty air on the
+' top row of screen 2, and from column six of screen 13's top row, becomes
+' floor as he comes to it.  That invisible bridge is the only way left from
+' the room where they met to the last screen of the level, so without it the
+' level cannot be finished however well it is played.  The block really is
+' written, not merely treated as solid for a frame, which is what "creates
+' floor on the fly" means: walk it once and it is there.
+Sub CheckBridge
+  Local INTEGER here
+  If curLevel <> 12 Or mergeTimer >= 0 Then Exit Sub
+  If cBlockY <> 0 Or cBlockX < 0 Or cBlockX >= COLS Then Exit Sub
+  here = 0
+  If cScrn = 2 Then here = 1
+  If cScrn = 13 And cBlockX >= 6 Then here = 1
+  If here = 0 Then Exit Sub
+  If BType(cScrn, cBlockX) <> T_SPACE Then Exit Sub
+  SetType cScrn, cBlockX, T_FLOOR
+  BuildTypeGrid cScrn
+  nBridge = nBridge + 1
+  lastWhat = "the bridge holds"
 End Sub
 
 Sub MergeShadow
@@ -4911,6 +4934,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "GUARDS"  : ScenValue = nGuardsDead
     Case "SHADOWS" : ScenValue = nShadows
     Case "MERGES"  : ScenValue = nMerges
+    Case "BRIDGE"  : ScenValue = nBridge
     Case Else      : Error "unknown expectation " + what
   End Select
 End Function
@@ -4937,7 +4961,7 @@ Sub ScZero
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
   nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0
-  nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0
+  nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0
 End Sub
 
 ' One line saying where he is and what he is doing, the same shape every

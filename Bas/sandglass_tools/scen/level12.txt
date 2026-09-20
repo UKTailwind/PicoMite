@@ -60,3 +60,55 @@ ENTER
 WANT SHADOWS 0
 WANT MERGES 0
 END
+
+' 2. CTRL.S onground.  Once the two are one, empty air on the top row of
+' screen 2, and from column six of screen 13's top row, becomes floor as he
+' comes to it.  That invisible bridge is the only way left out of the room
+' where they met, and the port had none of it.
+'
+' Screen 15's left is screen 2, whose top row is empty from column 0 to 7,
+' and screen 2's left is screen 13.  So the merge scenario simply carries on
+' walking, and what it walks on is the thing being tested.
+SCEN the bridge carries him across screen 2
+AT 12 15 6 0
+TYPE 15 1 0 1
+ENTER
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+RUN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+WANT MERGES 1
+WANT SCRN 2
+WANT BX 0
+WANT BY 0
+WANT FELL 0
+WANT ALIVE 1
+WANT BRIDGE 8
+END
+
+' The first control: no merge, no bridge.  Put down on the same row with the
+' meeting still to come, he steps off the end of the torch block as before.
+SCEN there is no bridge before the merge
+AT 12 2 9 0
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>>>
+WANT BRIDGE 0
+WANT FELL GE 1
+END
+
+' The second control: the bridge has an edge, and it is where the original
+' puts it.  Carrying on into screen 13 he walks columns 9 to 6 on air, then
+' 5 and 4 on the floor that is really there, and steps off at column 3 -
+' which is what stops this change being "the twelfth level is solid".
+SCEN the bridge on screen 13 stops at column six
+AT 12 15 6 0
+TYPE 15 1 0 1
+ENTER
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+RUN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+RUN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+WANT SCRN 13
+WANT BY 2
+WANT FELL GE 1
+WANT ALIVE 1
+END
