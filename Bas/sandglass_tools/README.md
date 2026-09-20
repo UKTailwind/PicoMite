@@ -216,6 +216,7 @@ list of directives is in the comment above `RunScenarios`.
 
     python run_scentest.py scen/slicer.txt            put the file and run it
     python run_scentest.py scen/slicer.txt --engine   put the engine too
+    python run_scentest.py                            every scenario in scen/
 
 The engine goes to the board once and takes two minutes; a scenario goes in
 under a second, which is what makes it worth writing one per reported bug.

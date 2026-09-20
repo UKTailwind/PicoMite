@@ -1,7 +1,7 @@
 """run_scentest.py - play scenarios on the board and report what they proved.
 
-    python run_scentest.py [scenfile] [--engine] [--clean] [--timeout n]
-                           [--out file]
+    python run_scentest.py [scenfile ...] [--engine [path]] [--clean]
+                           [--timeout n] [--out file]
 
 The engine itself is the test rig: player.bas looks for `scen.txt` beside
 itself, and if it is there it plays the scenarios in it with nothing drawn
@@ -11,7 +11,9 @@ board in under a second, rather than a two-minute upload of the program.
     python run_scentest.py scen/slicer.txt
 
 puts that file on the board as scen.txt, runs the resident program and prints
-what it said.  The exit status is 0 only if the board printed PASS.
+what it said.  The exit status is 0 only if the board printed PASS.  Several
+files are joined in the order given; with none named, every scenario in
+scen/ is run, which is the regression pass.
 
 --engine also puts player.min.bas (build it first with build.py) and LOADs it,
 which is needed whenever the engine itself has changed.  --clean takes scen.txt
@@ -28,6 +30,7 @@ right.  moverref.py exists because MOVER.S is small and self-contained; the
 game is not.
 """
 import argparse
+import glob
 import os
 import re
 import sys
@@ -58,7 +61,9 @@ def put(board, name, data):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("scenfile", nargs="?", default=os.path.join(here, "scen", "slicer.txt"))
+    ap.add_argument("scenfile", nargs="*",
+                    help="scenario files, joined in the order given; with none, "
+                         "every scen/*.txt except discover.txt, which only prints")
     ap.add_argument("--engine", nargs="?", const="player.min.bas", default=None,
                     help="put the engine as well and LOAD it; takes a path, so "
                          "the same scenarios can be run against an older build "
@@ -69,7 +74,15 @@ def main(argv=None):
     ap.add_argument("--out", default=None, help="also write the output to a file")
     args = ap.parse_args(argv)
 
-    scen = open(args.scenfile, "rb").read().replace(b"\r\n", b"\n")
+    names = args.scenfile
+    if not names:
+        names = sorted(glob.glob(os.path.join(here, "scen", "*.txt")))
+        names = [n for n in names if os.path.basename(n) != "discover.txt"]
+    scen = b""
+    for n in names:
+        scen += (b"\n' ---- " + os.path.basename(n).encode() + b"\n"
+                 + open(n, "rb").read().replace(b"\r\n", b"\n") + b"\n")
+    print("scenarios: " + ", ".join(os.path.basename(n) for n in names))
     board = PC3()
     print("board on %s, files by %s" % (board.port, ("tftp " + HOST) if HOST else "xmodem"))
     board.attention()

@@ -2828,6 +2828,16 @@ Function CrossScreen() As INTEGER
     cScrn = sRight : cBlockX = cBlockX - COLS : cX = cX - SCRNW
     CrossScreen = 1 : cutDir = 1
   ElseIf cBlockY >= ROWS Then
+    ' The sixth level is finished by falling off its first screen.  AUTO.S
+    ' cutchar refuses to cut down from there, so he never arrives anywhere -
+    ' the shaft below is on the map and is what he appears to fall through,
+    ' but he is gone before he reaches it - and TOPCTRL.S NextFrame sees his
+    ' Y wrap and calls the level done.  Without this he crossed down, ran out
+    ' of screens at the foot of the shaft and was killed by the landing.
+    If curLevel = 6 And cScrn = 1 Then
+      levelDone = 1 : lastWhat = "off the sixth level"
+      Exit Function
+    End If
     ' INTERPRETATION: the original has no case for this, because its levels
     ' always link a screen below wherever a fall is possible.  Falling out of
     ' the world is treated as fatal rather than left to count rows for ever.
@@ -4701,10 +4711,20 @@ Sub RunScenarios
       Case "RUN"
         codes = ScRest$(ln, 2)
         For i = 1 To Len(codes)
+          ' A later RUN line after the level ended plays nothing, quietly.
+          If levelDone Or gameOver Then Exit For
           ApplyCode Mid$(codes, i, 1)
           GameFrame
           scenFrames = scenFrames + 1
           If tr Then Print "      f" + Str$(scenFrames) + " " + Mid$(codes, i, 1) + " " + ScState$()
+          ' The play loop leaves a finished level at once, so there is nothing
+          ' truthful to be learnt from the frames after it, and a character
+          ' who has fallen off the world keeps falling into blocks that are
+          ' not there.  Stop where the game would have stopped.
+          If levelDone Or gameOver Then
+            Print "  stopped at frame " + Str$(scenFrames) + ": " + Choice(levelDone, "the level ended", "the game ended")
+            Exit For
+          End If
         Next i
       Case "WANT"
         If nw < 15 Then
@@ -4817,6 +4837,8 @@ End Sub
 ' AT starts a scenario from a known slate.
 Sub ScZero
   scenFrames = 0
+  ' A scenario that ended the game must not decide the ones after it.
+  gameOver = 0 : message = 0 : msgTimer = 0
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
   nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0

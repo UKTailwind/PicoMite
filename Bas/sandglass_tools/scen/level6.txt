@@ -1,0 +1,24 @@
+' scen/level6.txt - finding 1.2: the plunge off the sixth level has to end it.
+'
+' Level 6 screen 1, the ledge over the shaft:
+'   row 1   0 pillar  1 drop-button  2 gate  3..6 SPACE  7 up-plate  8 floor
+'           9 floor
+' and columns 3 to 6 are open through screen 2 below and screen 3 below that.
+' Walking forward off block 7 is the leap the level is famous for.
+'
+' TOPCTRL.S NextFrame ends level 6 when the kid falls off screen 1, and
+' AUTO.S cutchar refuses to cut down from there, so he never reaches the
+' screen below and he is never killed by the landing: the level is simply
+' over.  The port had no level 6 case at all, so he crossed down, ran out of
+' screens and was killed by "fell out of the world".
+
+SCEN falling off the sixth level ends it
+AT 6 1 9 1
+SEED 17
+RUN ..>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
+WANT DONE 1
+WANT SCRN 1
+WANT ALIVE 1
+WANT DEATHS 0
+WANT CROSS 0
+END
