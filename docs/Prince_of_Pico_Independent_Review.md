@@ -1,4 +1,4 @@
-# Pico Persia: independent review of the port against Mechner's source
+# Prince of Pico: independent review of the port against Mechner's source
 
 ---
 

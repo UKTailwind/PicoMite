@@ -1,7 +1,7 @@
-# Pico Persia
+# Prince of Pico
 
 A dungeon game for the PicoComputer 3, in the style of the Apple II original.
-The player's manual is in `docs/Pico_Persia_Player_Manual.html`.
+The player's manual is in `docs/Prince_of_Pico_Player_Manual.html`.
 
 **None of the game's own data is included here, and what you convert must not
 be passed on.** See [Asset converter](#asset-converter) - it is the first thing
