@@ -68,3 +68,36 @@ WANT BUMPS 0
 WANT BX 8
 WANT ALIVE 1
 END
+
+' COLL.S sends every bump, soft or hard, through BumpSound:
+'     BumpSound
+'      lda #1 / sta alertguard
+'      lda #SmackWall / jmp addsound
+' The port walked into walls in silence and told nobody, so a guard who would
+' have turned round at the noise heard nothing.  Also ":normal" begins
+' "cpx #24 / beq :hard": pose 24 is the other half of the stand jump and
+' belongs with 25 in the hard-bump list.  (That half cannot be shown from
+' here - HitBarrier's ground gate means a pose without the on-the-ground mark
+' never reaches the bump at all, so 24 is never the pose of record.  See the
+' known defect above.)
+'
+' He jumps at the wall on the right of screen 1 from column 7.  Twelve frames
+' in he is still in the air and nothing has been heard; thirteen and he has
+' hit it.
+SCEN a moment before the wall, nothing has been heard
+AT 1 1 7 0
+FACE 0
+SEED 17
+RUN ..JJJJJJJJJJ
+WANT NOISE 0
+WANT BUMPS 0
+END
+
+SCEN hitting the wall makes a noise a guard can hear
+AT 1 1 7 0
+FACE 0
+SEED 17
+RUN ..JJJJJJJJJJJ
+WANT NOISE 1
+WANT BUMPS 1
+END

@@ -977,6 +977,12 @@ Sub ResetCharAt(lvl As INTEGER, scrn As INTEGER, bx As INTEGER, by As INTEGER)
   cX = 58 + cBlockX * 14 + 7 + ANGLE : cY = floory(cBlockY + 1)
   cFace = &HFF : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF
   cFalling = 0 : stunned = 0 : cPosn = 15
+  ' The flags a fight leaves behind are not part of the level, so LoadLevel
+  ' does not clear them and they carried from one scenario into the next.
+  ' alertGuard especially: it is the "something was heard" flag, and it is
+  ' only ever consumed by a guard, so on a screen with none it stayed set.
+  alertGuard = 0 : enemyAlert = 0 : refract = 0 : justBlocked = 0
+  droppedOut = 0 : chgOppStr = 0 : offGuard = 0
   cSeq = seqTab(SEQ_STAND)
   GetScreens cScrn
   BuildTypeGrid cScrn
@@ -1234,12 +1240,24 @@ End Function
 ' Severity is chosen by the pose he hit it in: a jump or a fall is a hard bump,
 ' anything else a soft one.
 Sub WallBump
-  If cPosn = 25 Or (cPosn >= 40 And cPosn <= 42) Or (cPosn >= 102 And cPosn <= 106) Then
+  ' COLL.S ":normal" - pose 24 is the other half of the stand jump and belongs
+  ' with 25.  And every bump, soft or hard, goes through BumpSound: "lda #1 /
+  ' sta alertguard / lda #SmackWall / jmp addsound".  The port made no noise
+  ' walking into a wall and told nobody, so a guard in the next room heard
+  ' nothing of it.
+  If cPosn = 24 Or cPosn = 25 Or (cPosn >= 40 And cPosn <= 42) Or (cPosn >= 102 And cPosn <= 106) Then
     cSeq = seqTab(SEQ_HARDBUMP) : lastWhat = "hard bump" : nBumps = nBumps + 1
   Else
     cSeq = seqTab(SEQ_BUMP) : lastWhat = "bump" : nBumps = nBumps + 1
   End If
   cAction = 5
+  BumpSound
+End Sub
+
+' COLL.S BumpSound: the smack of hitting a wall, and it carries.
+Sub BumpSound
+  AddSound 13
+  alertGuard = 1
 End Sub
 
 '-----------------------------------------------------------------------------
@@ -1355,7 +1373,14 @@ dobump:
   ' With the sword out the bump is the en-garde one, forward or back by which
   ' way he was moving (ENEMYCOLL / bumpengfwd).
   If cSword = 2 Then
-    If cXVel < 0 Or cXVel > 127 Then cSeq = seqTab(SEQ_BUMPENGBACK) Else cSeq = seqTab(SEQ_BUMPENGFWD)
+    If cXVel < 0 Or cXVel > 127 Then
+      cSeq = seqTab(SEQ_BUMPENGBACK)
+      cX = AddCharX(1)                      ' :collback "lda #1 / jsr addcharx"
+      RereadBlocks
+    Else
+      cSeq = seqTab(SEQ_BUMPENGFWD)
+      BumpSound                             ' bumpengfwd falls into :doit
+    End If
     lastWhat = "bump en garde" : nBumps = nBumps + 1
     cAction = 5
     Exit Sub
@@ -1369,6 +1394,7 @@ dobump:
     cSeq = seqTab(SEQ_BUMP) : lastWhat = "bump" : nBumps = nBumps + 1
   End If
   cAction = 5
+  BumpSound
   Exit Sub
 
 airbump:
@@ -1383,8 +1409,7 @@ airbump:
     cSeq = seqTab(SEQ_BUMPFALL)
   End If
   lastWhat = "air bump" : nBumps = nBumps + 1
-  AddSound 13
-  alertGuard = 1
+  BumpSound
 End Sub
 
 '-----------------------------------------------------------------------------
@@ -5730,6 +5755,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "DRAWN"   : ScenValue = cSword
     Case "DROPPED" : ScenValue = droppedOut
     Case "ALERT"   : ScenValue = enemyAlert
+    Case "NOISE"   : ScenValue = alertGuard
     Case "OPDIST"  : ScenValue = OpDistS()
     Case "OPEN"    : ScenValue = exitOpen
     Case "OVER"    : ScenValue = gameOver
