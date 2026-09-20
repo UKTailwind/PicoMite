@@ -1955,11 +1955,30 @@ Sub Shad12
     shadHold = 0
     lastWhat = "the shadow drops"
   End If
-  If kRec(12) = 2 Then GuardEnGarde : Exit Sub
+  ' AUTO.S FinalShad, ":cont lda CharSword / cmp #2 / bcs :fight" - his own
+  ' sword is asked about before the kid's.
+  '     :fight lda offguard / beq :1   ;has kid put up sword?
+  '            lda refract / bne :1    ;yes--wait a moment--
+  '            jmp DoDown              ;--then lower your guard
+  '     :1 jmp EnGarde
+  ' He lowers his guard by PRESSING DOWN, and the control machine then puts
+  ' the sword up for him with the animation that goes with it.  The port took
+  ' the sword out of his hand where he stood, with nothing to see, and did it
+  ' whether or not the kid had put his own up first.
+  '
+  ' NOT REACHABLE TODAY, and worth knowing why: FinalShad's other branch is
+  '     :hostile lda EnemyAlert / cmp #2 / bcc :2
+  '              jsr getopdist / cmp #swordthres / bcs :2
+  '              lda CharPosn / cmp #15 / bne rts / jmp DoEngarde ;draw on kid
+  ' and this port answers the kid's drawn sword with GuardEnGarde instead,
+  ' which is the routine for a character who already has his out.  So the
+  ' shadow never draws on the twelfth level: he stands at pose 15 and is run
+  ' through.  That is a separate finding and not one the review raises.
   If cSword = 2 Then
-    If refract = 0 Then cSword = 0
-    Exit Sub
+    If offGuard <> 0 And refract = 0 Then AiTurn : Exit Sub
+    GuardEnGarde : Exit Sub
   End If
+  If kRec(12) = 2 Then GuardEnGarde : Exit Sub
   If OpDistS() < 0 Then MergeShadow : Exit Sub
   If enemyAlert = 2 Then AiFwd
 End Sub
