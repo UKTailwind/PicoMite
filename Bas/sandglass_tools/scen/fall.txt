@@ -1,0 +1,46 @@
+' scen/fall.txt - finding 1.3: what a freefall does to a character.
+'
+' Level 7 opens with the kid standing on nothing: screen 17 is three rows of
+' empty and he is put at (2,2), so he is in freefall from the first frame.
+' That makes it the place to watch a fall, and it is the level the finding is
+' about.
+
+' (a) SUBS.S ADDFALL adds the horizontal velocity to X on every freefall
+' frame.  The port set cXVel from the sequence and then never moved him with
+' it, so every fall was dead vertical.  He faces left, so the drift is left.
+SCEN a fall carries his horizontal velocity too
+AT 7 17 2 2
+SEED 17
+RUN ..........
+WANT XVEL 1
+WANT X LE 88
+WANT FALLING 1
+END
+
+' (b) SUBS.S GRAVITY caps an ordinary fall at thirty-three.  The port added
+' three a frame for ever, and since the landing severity is read straight off
+' this speed, a long fall killed where the original only hurt.
+SCEN a fall gathers speed to thirty-three and no further
+AT 7 17 2 2
+SEED 17
+RUN ..............
+WANT YVEL 33
+WANT ALIVE 1
+END
+
+' (b) again, the other half: while the float potion is in him gravity is one
+' a frame to a terminal four.  The potion on level 7 screen 1 exists to make
+' the long drop survivable, and in the port it changed nothing.  Here it is
+' the difference between landing on the ledge at column 1 of screen 1 and
+' going on down the shaft to die at the foot of screen 3.
+SCEN the float potion makes the drop survivable
+START 7
+FLOAT 60
+SEED 17
+RUN ..................
+WANT YVEL LE 4
+WANT ALIVE 1
+WANT DEATHS 0
+WANT HARD 0
+WANT SCRN 1
+END

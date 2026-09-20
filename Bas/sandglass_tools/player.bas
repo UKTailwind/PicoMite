@@ -83,6 +83,15 @@ Const OP_NEXTLEVEL = &HF1
 Const ACT_FALLING = 4
 Const OOF_VELOCITY = 22
 Const DEATH_VELOCITY = 33
+' SUBS.S GRAVITY.  A fall gathers speed by three a frame and goes no faster
+' than thirty-three; while the float potion is in him it is one a frame and
+' four.  The terminal speed is what the landing severity is read off, so
+' without the cap a long fall killed where the original only hurt, and
+' without the weightless pair the potion changed nothing at all.
+Const FALL_ACCEL = 3
+Const FALL_TERMVEL = 33
+Const WTLESS_ACCEL = 1
+Const WTLESS_TERMVEL = 4
 Const GRAB_SPEED = 32
 Const GRAB_LEAD = 25
 
@@ -1251,7 +1260,22 @@ Sub Settle
     Exit Sub
   End If
 
-  cYVel = cYVel + 3                       ' gathers speed on the way down
+  If weightless Then
+    cYVel = cYVel + WTLESS_ACCEL
+    If cYVel > WTLESS_TERMVEL Then cYVel = WTLESS_TERMVEL
+  Else
+    cYVel = cYVel + FALL_ACCEL
+    If cYVel > FALL_TERMVEL Then cYVel = FALL_TERMVEL
+  End If
+  ' SUBS.S ADDFALL carries the horizontal velocity through a freefall as well
+  ' as the vertical one.  The port set cXVel from the sequence and then never
+  ' moved him with it, so every fall was dead vertical: the one pixel a frame
+  ' that a step off an edge drifts was missing, and with it the ledge the
+  ' seventh level opens by dropping onto.
+  If cXVel <> 0 Then
+    cX = AddCharX(cXVel)
+    RereadBlocks
+  End If
   cY = (cY + cYVel) And &HFF
   idx = cBlockY + 1
   If idx > 4 Then Exit Sub
@@ -4651,7 +4675,9 @@ End Sub
 '   SHOW lvl scrn         one screen's blocks, and what it joins onto
 '   SCEN name...          begin a scenario
 '   AT lvl scrn bx by     put him there: fresh level, counters back to zero
+'   START lvl             begin the level where the level itself begins
 '   SWORD n               he is carrying the sword
+'   FLOAT n               the float potion is in him for n more frames
 '   OPEN n                the level's way out is open
 '   SEED n                the random seed, so that a run repeats
 '   SPEC scrn bx by v     hold one block's modifier byte at a value
@@ -4702,9 +4728,17 @@ Sub RunScenarios
       Case "AT"
         ResetCharAt ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,3)), ScNum(ScWord$(ln,4)), ScNum(ScWord$(ln,5))
         ScZero
+      Case "START"
+        ' The level's own opening: the screen, block and facing out of its
+        ' INFO block, which is what AT cannot give because it has to be told
+        ' where to put him and always faces him left.
+        StartLevel ScNum(ScWord$(ln, 2))
+        ScZero
+        Print "      start blk " + Str$(cBlockX) + "," + Str$(cBlockY) + " lvl " + Str$(curLevel) + " scr " + Str$(cScrn) + " facing " + Str$(cFace)
       Case "SPEC"
         ScSpec ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,3)), ScNum(ScWord$(ln,4)), ScNum(ScWord$(ln,5))
       Case "SWORD" : gotSword = ScNum(ScWord$(ln, 2))
+      Case "FLOAT" : weightless = ScNum(ScWord$(ln, 2))
       Case "OPEN"  : exitOpen = ScNum(ScWord$(ln, 2))
       Case "SEED"  : rndSeed  = ScNum(ScWord$(ln, 2))
       Case "TRACE" : tr       = ScNum(ScWord$(ln, 2))
@@ -4792,6 +4826,9 @@ Function ScenValue(what As STRING) As INTEGER
     Case "SEQ"     : ScenValue = cSeq
     Case "ACTION"  : ScenValue = cAction
     Case "FALLING" : ScenValue = cFalling
+    Case "XVEL"    : ScenValue = cXVel
+    Case "YVEL"    : ScenValue = cYVel
+    Case "FLOAT"   : ScenValue = weightless
     Case "ALIVE"   : ScenValue = Choice(cLife <> 0, 1, 0)
     Case "STR"     : ScenValue = kidStr
     Case "SWORD"   : ScenValue = gotSword
@@ -4838,7 +4875,7 @@ End Sub
 Sub ScZero
   scenFrames = 0
   ' A scenario that ended the game must not decide the ones after it.
-  gameOver = 0 : message = 0 : msgTimer = 0
+  gameOver = 0 : message = 0 : msgTimer = 0 : weightless = 0
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
   nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0
