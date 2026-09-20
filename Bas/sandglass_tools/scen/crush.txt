@@ -1,0 +1,42 @@
+' scen/crush.txt - section 3: a falling floor landing on somebody.
+'
+' MOVER.S crushchar lets a man at a run get out from under it -
+'     lda level / cmp #13 / beq :1
+'     (then the pose test, 5 to 14: "running-->escape")
+' - with the thirteenth level as the exception, where the ceiling is coming
+' down on purpose and nobody outruns it.  Whoever it does catch is set down on
+' the floor first ("lda FloorY,x / sta CharY"), loses a point, and plays the
+' crush sequence, or a hard landing if it has killed him.
+'
+' The port just debited his strength and left him standing there in whatever
+' he happened to be doing, and nobody could ever run out from under one.
+'
+' Level 1 screen 1 has a quiet corner: floor at block 2 of the middle row with
+' empty air above it.  A loose floor is put in that air and brought down.
+
+SCEN a floor coming down on a man standing still catches him
+AT 1 1 2 1
+TYPE 1 2 0 11
+BREAK 1 2 0
+SEED 17
+RUN ..................
+WANT CRUSHED GE 1
+WANT STR LT 3
+WANT POSN 109
+WANT ALIVE 1
+END
+
+' The control: run out of the block before it arrives and nothing happens.
+' This does not isolate the pose rule - he has left the block as well as being
+' at a run - because holding him inside it in a running pose at the one frame
+' the floor lands is not something a scripted set of presses can do reliably.
+SCEN a man who has run clear is not caught
+AT 1 1 2 1
+FACE 0
+TYPE 1 2 0 11
+BREAK 1 2 0
+SEED 17
+RUN .......>>>>>>>>>>>>>
+WANT CRUSHED 0
+WANT STR 3
+END

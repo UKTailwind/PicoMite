@@ -217,6 +217,8 @@ Const T_DPLATE = 5 : Const T_PLATE = 6 : Const T_FLASK = 10 : Const T_LOOSE = 11
 Const T_RUBBLE = 14 : Const T_UPLATE = 15 : Const T_EXIT = 16 : Const T_SLICER = 18
 Const T_TORCH = 19 : Const T_BLOCK = 20
 Const SEQ_IMPALE = 51
+' SEQDATA.S crush = 52, turndraw = 89.
+Const SEQ_CRUSH = 52 : Const SEQ_TURNDRAW = 89
 Dim INTEGER gBlockAy, gBlockEdge, aGateInc, aGateVel
 Dim INTEGER kPPTimer, kSpikeTimer, kSliceTimer, kGateTimer, kLooseTimer
 Dim INTEGER kFFAccel, kFFTermVel, kCrumble, kDisappear, kCrushDist, kMaxGateVel
@@ -4731,10 +4733,32 @@ Sub CheckCrush
   If (wX >> 2) <> cBlockX Then Exit Sub
   If wY >= cY Then Exit Sub
   If ((cY - kCrushDist) And &HFF) >= wY Then Exit Sub
-  nCrush = nCrush + 1
-  If cLife <> 0 Then
-    If DecStr(1) = 0 Then cLife = 0 : nDead = nDead + 1
+  ' MOVER.S crushchar: a man at a run gets out from under it.  "lda level /
+  ' cmp #13 / beq :1" makes the thirteenth level the exception - there the
+  ' ceiling is coming down on purpose and nobody outruns it.
+  If curLevel <> 13 Then
+    If cPosn >= 5 And cPosn < 15 Then Exit Sub
   End If
+  nCrush = nCrush + 1
+  If cLife = 0 Then Exit Sub
+  ' He is set down on the floor first - "lda FloorY,x / sta CharY" - and then
+  ' takes the hit, and it is the crush sequence he plays, or a hard landing if
+  ' it has killed him.  The port debited his strength and left him standing
+  ' there in whatever he happened to be doing.
+  cY = floory(cBlockY + 1)
+  cAction = 0 : cFalling = 0 : cYVel = 0
+  If DecStr(1) = 0 Then
+    cLife = 0 : nDead = nDead + 1
+    cSeq = seqTab(SEQ_HARDLAND)
+  Else
+    cSeq = seqTab(SEQ_CRUSH)
+  End If
+  ' AnimMobs runs before GameFrame reloads the character from his record, so
+  ' anything set here is thrown away unless it is written back.  That is why
+  ' the port's version appeared to work at all: the strength change goes
+  ' through a separate variable and survived, and nothing else did.
+  If cID = 0 Then SaveChar kRec() Else SaveChar gRec()
+  lastWhat = "crushed"
 End Sub
 
 
@@ -5265,6 +5289,7 @@ End Sub
 '   CLOCK n               wind the game clock on to frame n
 '   SPEC scrn bx by v     hold one block's modifier byte at a value
 '   TYPE scrn bx by v     put a block type where the scenario needs one
+'   BREAK scrn bx by      bring that loose floor down
 '   ENTER                 arrive at the screen he is on, again
 '   TRACE n               from here on, print a line for every frame
 '   RUN codes             one character a frame; use as many lines as needed
@@ -5336,6 +5361,11 @@ Sub RunScenarios
         Print "      start blk " + Str$(cBlockX) + "," + Str$(cBlockY) + " lvl " + Str$(curLevel) + " scr " + Str$(cScrn) + " facing " + Str$(cFace)
       Case "SPEC"
         ScSpec ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,3)), ScNum(ScWord$(ln,4)), ScNum(ScWord$(ln,5))
+      Case "BREAK"
+        ' Bring a loose floor down, which is otherwise only ever asked for by
+        ' standing on one or by the shake of a hard landing.
+        BreakLoose ScNum(ScWord$(ln,2)), ScNum(ScWord$(ln,4)) * COLS + ScNum(ScWord$(ln,3)), 1
+        Print "  break scr " + ScWord$(ln,2) + " blk " + ScWord$(ln,3) + "," + ScWord$(ln,4)
       Case "TYPE"
         ' Put a block where the scenario needs one, which is how a room is set
         ' up as it would be some way into the level without playing up to it.
@@ -5516,6 +5546,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "KNOCKS"  : ScenValue = nGateKnocks
     Case "CLOCK"   : ScenValue = frameCount
     Case "MILESTONE" : ScenValue = milestone
+    Case "CRUSHED" : ScenValue = nCrush
     Case "MINLEFT" : ScenValue = minLeft
     Case "BASEX"   : ScenValue = BaseX()
     Case "DROPS"   : ScenValue = nDrop
@@ -5553,7 +5584,7 @@ Sub ScZero
   gameOver = 0 : message = 0 : msgTimer = 0 : weightless = 0
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
-  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0 : nJumpHang = 0 : nPotions = 0 : nGateKnocks = 0
+  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0 : nJumpHang = 0 : nPotions = 0 : nGateKnocks = 0 : nCrush = 0
   nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0 : nGuardsGone = 0
 End Sub
 
