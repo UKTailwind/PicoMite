@@ -1,0 +1,30 @@
+' scen/potion.txt - finding 2.12, and a bigger one found beside it.
+'
+' MISC.S POTIONEFFECT opens with
+'     lda CharID / bne ]rts
+' so a potion works on the player and on nobody else.  The port had no such
+' test: when the thief drinks the flask on level 5 the kid would get the
+' benefit of it.  That half cannot be shown here - the thief's recorded
+' programme does not take him to the flask in any staging I could set up - so
+' the guard goes in untested and says so.
+'
+' The other half can.  POTIONEFFECT reads lastpotion and compares it against
+' 1 to 5 directly: the kind of potion IS the block's modifier byte.  The port
+' shifted it down five bits, which turns every flask in the game into type
+' zero, and type zero is no effect at all.  Nothing any potion does has ever
+' happened in this port.
+'
+' Level 7 screen 1 (8,2) carries a 3, which is the float potion - the one the
+' long drop on that level exists to be survived with.  He is put beside it,
+' crouches, and drinks.
+
+SCEN the float potion makes him weightless
+AT 7 1 9 2
+SEED 17
+RUN ..B..vvvDvvDvvD
+RUN ....................................
+WANT POTIONS 1
+WANT FLOAT GT 0
+WANT ALIVE 1
+WANT BY 2
+END

@@ -4582,7 +4582,11 @@ Function TryPickup() As INTEGER
     TryPickup = SEQ_STOOP
     Exit Function
   End If
-  If t = T_SWORD Then potion = -1 Else potion = BSpec(tScrn, tBY * COLS + tBX) >> 5
+  ' The kind of potion is the block's modifier byte itself - MISC.S compares
+  ' lastpotion against 1 to 5 directly.  Shifting it down five bits turned
+  ' every flask in the game into type zero, which is no effect at all: the
+  ' float potion on level 7 carries a 3, the poison on level 2 a 5.
+  If t = T_SWORD Then potion = -1 Else potion = BSpec(tScrn, tBY * COLS + tBX)
   ' REMOVEOBJ: the block becomes plain floor and the press is used up.
   lastPotion = potion
   clrBtn = 1
@@ -4593,8 +4597,12 @@ Function TryPickup() As INTEGER
   lastWhat = "pick up " + Str$(potion)
 End Function
 
-' POTIONEFFECT, run by the drinking sequence's effect instruction.
+' POTIONEFFECT, run by the drinking sequence's effect instruction.  MISC.S
+' returns at once unless CharID is zero: a potion works on the player and on
+' nobody else.  The port had no such test, so when the thief drank the flask
+' on level 5 the kid got the benefit of it.
 Sub PotionEffect
+  If cID <> 0 Then Exit Sub
   Select Case lastPotion
     Case -1
       gotSword = 1
@@ -5246,6 +5254,7 @@ Function ScenValue(what As STRING) As INTEGER
     Case "CLIMBS"  : ScenValue = nClimb
     Case "CLIMBDOWN" : ScenValue = nClimbDown
     Case "JUMPHANG" : ScenValue = nJumpHang
+    Case "POTIONS" : ScenValue = nPotions
     Case "STOOPS"  : ScenValue = nStoop
     Case "DIST"    : ScenValue = GetDist()
     Case "BASEX"   : ScenValue = BaseX()
@@ -5284,7 +5293,7 @@ Sub ScZero
   gameOver = 0 : message = 0 : msgTimer = 0 : weightless = 0
   nBumps = 0 : nStepOff = 0 : nSoft = 0 : nMed = 0 : nHard = 0
   nGrabs = 0 : nGates = 0 : nCross = 0 : nDead = 0 : nImpaled = 0
-  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0 : nJumpHang = 0
+  nPlates = 0 : nSteps = 0 : nClimb = 0 : nDrop = 0 : nClimbDown = 0 : nStoop = 0 : nJumpHang = 0 : nPotions = 0
   nStrikes = 0 : nGuardsDead = 0 : nShadows = 0 : nMerges = 0 : nBridge = 0 : nMice = 0 : nGuardsGone = 0
 End Sub
 
