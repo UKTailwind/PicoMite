@@ -1,0 +1,37 @@
+' scen/start.txt - section 3: how a level starts him off.
+'
+' SUBS.S STARTKID:
+'     lda KidStartFace / eor #$ff / sta CharFace
+' so the blueprint's facing byte is INVERTED before it is used.  And it starts
+' him in a different sequence on each of the levels that need one -
+'     level 1   lda #stepfall / jsr jumpseq
+'     level 13  lda #running  / jsr jumpseq
+'     others    lda #turn     / jsr jumpseq ;start in standing posn
+'
+' The port used the byte as it stood and stood him still on every level.  So
+' the first level began with him facing left instead of right, and the
+' thirteenth began with him standing still facing right instead of running
+' to the left.
+
+SCEN the first level starts him facing right and dropping in
+START 1
+SEED 17
+RUN ......
+WANT FACE 0
+WANT POSN 107
+END
+
+SCEN the thirteenth starts him running to the left
+START 13
+SEED 17
+RUN ......
+WANT FACE 255
+WANT POSN 49
+END
+
+SCEN and every other level starts with a turn on the spot
+START 5
+SEED 17
+RUN ......
+WANT POSN 50
+END

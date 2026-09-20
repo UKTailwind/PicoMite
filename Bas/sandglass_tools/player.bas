@@ -406,7 +406,10 @@ BuildSections
 cScrn = level(OFF_INFO + 64)
 cBlockX = level(OFF_INFO + 65) Mod COLS : cBlockY = level(OFF_INFO + 65) \ COLS
 cX = 58 + cBlockX * 14 + 7 + ANGLE : cY = floory(cBlockY + 1)
-cFace = level(OFF_INFO + 66) : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF : cFalling = 0
+' SUBS.S STARTKID: "lda KidStartFace / eor #$ff / sta CharFace".  The
+' blueprint's facing byte is INVERTED before it is used, so level 1 starts
+' him facing right, not left.
+cFace = level(OFF_INFO + 66) Xor &HFF : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF : cFalling = 0
 ' For now the demo starts on screen 5 instead, the first room with plates and
 ' gates: a torch, an up-plate that raises the gate beside it and the one at the
 ' far end, a second up-plate, and a hole onto rubble.
@@ -786,9 +789,19 @@ Sub StartLevel(n As INTEGER)
   cScrn = level(OFF_INFO + 64)
   cBlockX = level(OFF_INFO + 65) Mod COLS : cBlockY = level(OFF_INFO + 65) \ COLS
   cX = 58 + cBlockX * 14 + 7 + ANGLE : cY = floory(cBlockY + 1)
-  cFace = level(OFF_INFO + 66) : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF
+  cFace = level(OFF_INFO + 66) Xor &HFF : cAction = 0 : cXVel = 0 : cYVel = 0 : cLife = &HFF
   cFalling = 0 : stunned = 0 : cPosn = 15
-  cSeq = seqTab(SEQ_STAND)
+  ' STARTKID starts him in a different sequence on each of the levels that
+  ' need one: the first drops him in from the ceiling, the thirteenth has him
+  ' already running, and every other level turns him round on the spot.  The
+  ' port stood him still on all of them.
+  If n = 1 Then
+    cSeq = seqTab(SEQ_STEPFALL)
+  ElseIf n = 13 Then
+    cSeq = seqTab(SEQ_RUNNING)
+  Else
+    cSeq = seqTab(SEQ_TURN)
+  End If
   GetScreens cScrn
   numTrans = 0 : numMob = 0
   SaveChar kRec()
