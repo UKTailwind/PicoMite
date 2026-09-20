@@ -2573,6 +2573,14 @@ Sub BonesRise
   cSeq = seqTab(SEQ_ARISE)
   If Advance() = 0 Then lastWhat = "STALLED"
   guardProg = SKELPROG : cLife = &HFF
+  ' MISC.S BONESRISE sets OppStrength to 3 and leaves MaxOppStrength ALONE, so
+  ' in the original the skeleton's meter is three of whatever the last guard
+  ' the kid met was worth.  Not followed, deliberately: maxOppStr is also what
+  ' caps a guard's strength when he is restored on re-entering his room, which
+  ' is this port's own machinery and not the original's, and leaving it at a
+  ' previous guard's figure would cap the skeleton at that instead of at his
+  ' own three.  He is invincible anyway - STABCHAR spares CharID 4 - so the
+  ' only thing the original's leftover changes is how wide his meter is drawn.
   maxOppStr = 3 : oppStr = 3 : chgOppStr = 0
   alertGuard = 0 : refract = 0 : justBlocked = 0 : droppedOut = 0
   SaveChar gRec()
