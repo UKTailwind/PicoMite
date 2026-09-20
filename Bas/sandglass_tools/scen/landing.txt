@@ -44,9 +44,10 @@ END
 ' softland is for.
 SCEN the player still lands in his own crouch
 AT 1 1 3 0
-X 107
+X 105
 SEED 17
-RUN ..v.......
+RUN ..v........
 WANT POSN 109
+WANT BY 1
 WANT ALIVE 1
 END

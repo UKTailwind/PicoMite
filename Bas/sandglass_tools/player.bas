@@ -2564,33 +2564,55 @@ Function LandSeq() As INTEGER
 End Function
 
 Function DoDown() As INTEGER
-  Local INTEGER ahead, behind, dist
-  DoDown = SEQ_STOOP
+  Local INTEGER ahead, behind, under
+  DoDown = 0
+  clrD = 1
   If (cFace And &H80) Then
     ahead = cBlockX - 1 : behind = cBlockX + 1
   Else
     ahead = cBlockX + 1 : behind = cBlockX - 1
   End If
-  dist = GetDist()
-  If dist <= STEPDOWN_THRES Then
-    If noFloor(BlockAt(cScrn, ahead, cBlockY)) Then
-      DoDown = SEQ_STEPFALL
+  ' A cliff in front, and his base within three pixels of the edge: he is
+  ' NUDGED five pixels over it and the floor test does the rest.  The original
+  ' starts no sequence here at all -
+  '     lda #5 / jsr addcharx / sta CharX / jmp rereadblocks
+  ' - which is why handing him stepfall did not work: the floor test found the
+  ' floor he was still standing over and set him back down before the sequence
+  ' could carry his base off it.
+  If noFloor(BlockAt(cScrn, ahead, cBlockY)) Then
+    If GetDist() < STEPDOWN_THRES Then
+      MoveFwd 5
       lastWhat = "steps off"
       Exit Function
     End If
   End If
-  If dist >= CLIMBDOWN_THRES Then
-    ' checkledge: the block behind has to be one he can hang in, and the one
-    ' he is standing in has to have the floor whose edge he hangs from.  A
-    ' bare no-floor test would have had him climb down into a solid block,
-    ' which is in the no-floor set precisely because nobody can be in one.
-    If CanGrab(BlockAt(cScrn, behind, cBlockY), BlockAt(cScrn, cBlockX, cBlockY)) Then
-      DoDown = SEQ_CLIMBDOWN
-      nClimbDown = nClimbDown + 1
-      lastWhat = "climbs down"
-      Exit Function
+  ' A cliff behind, and his base eight or more pixels in: climb down it.
+  If noFloor(BlockAt(cScrn, behind, cBlockY)) Then
+    If GetDist() >= CLIMBDOWN_THRES Then
+      under = BlockAt(cScrn, cBlockX, cBlockY)
+      ' checkledge(getbehind, getunderft): the block behind has to be one he
+      ' can hang in and the one he is standing in has to have the floor whose
+      ' edge he hangs from.
+      If CanGrab(BlockAt(cScrn, behind, cBlockY), under) Then
+        ' Facing left with a gate underfoot, it has to be high enough to get
+        ' under, the same threshold the climb up the other way uses.
+        If (cFace And &H80) = 0 Or RdBlock(cScrn, cBlockX, cBlockY) <> T_GATE Then
+          MoveFwd GetDist() - 9
+          DoDown = SEQ_CLIMBDOWN
+          nClimbDown = nClimbDown + 1
+          lastWhat = "climbs down"
+          Exit Function
+        ElseIf (BSpec(tScrn, tBY * COLS + tBX) >> 2) >= GCLIMBTHRES Then
+          MoveFwd GetDist() - 9
+          DoDown = SEQ_CLIMBDOWN
+          nClimbDown = nClimbDown + 1
+          lastWhat = "climbs down"
+          Exit Function
+        End If
+      End If
     End If
   End If
+  DoDown = SEQ_STOOP
   nStoop = nStoop + 1
 End Function
 

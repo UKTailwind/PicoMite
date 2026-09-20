@@ -11,19 +11,31 @@
 ' with floor one row down at column 2, so the join between columns 2 and 3 is
 ' a ledge with somewhere to stand under it.
 
-' Three frames only, because what is being tested is which of the three
-' things down did - pose 102 is the first frame of stepfall, 107 the first
-' of the crouch.  The fall itself is cut short a few frames later: his base
-' never crosses into the empty block, so the floor test finds the floor he
-' is still standing over and sets him back down.  That is the stepfall
-' sequence's own chx values, which net to zero, and it is not this finding.
+' The step-off is not a sequence: CTRL.S :down nudges him five pixels over
+' the edge and lets the floor test do the rest.  So this runs long enough to
+' land, a storey lower and unhurt.
 SCEN down at the edge, with the drop in front, steps off
+AT 1 1 3 0
+X 105
+SEED 17
+RUN ..v..........
+WANT BY 1
+WANT BX 2
+WANT STOOPS 0
+WANT CLIMBDOWN 0
+WANT ALIVE 1
+END
+
+' The threshold is three pixels and it is exclusive: at exactly three from
+' the edge he crouches, which is what CTRL.S "cmp #StepOffFwd / bcs :notfwd"
+' says.  StepOffFwd is 3.
+SCEN three pixels from the edge is not close enough
 AT 1 1 3 0
 X 107
 SEED 17
-RUN ..v
-WANT POSN 102
-WANT STOOPS 0
+RUN ..v...
+WANT STOOPS 1
+WANT BY 0
 WANT CLIMBDOWN 0
 END
 
