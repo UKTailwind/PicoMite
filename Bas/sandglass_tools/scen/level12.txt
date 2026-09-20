@@ -109,8 +109,15 @@ RUN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 RUN >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 WANT SCRN 13
 WANT BY 2
-WANT FELL GE 1
 WANT ALIVE 1
+' And he goes over that edge once.  CTRL.S startfall increments CharBlockY as
+' the fall begins, so the first frame of the fall is measured against the floor
+' a storey down.  Without that the port measured it against the floor he had
+' just left, and the falling pose's footmark puts his base back over it: he
+' landed on the block he had stepped off, crouched, and stepped off it again.
+' Two step-offs and a landing that never happened, for one walk over one edge.
+' (The landing count is no use here - the shadow lands too.)
+WANT FELL 1
 END
 
 ' 3. TOPCTRL.S NextFrame: the twelfth level is over on reaching screen 23,

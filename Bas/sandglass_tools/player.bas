@@ -1339,7 +1339,7 @@ End Sub
 '-----------------------------------------------------------------------------
 ' Where did that leave him: on the ground, still falling, or landing?
 Sub Settle
-  Local INTEGER idx, t
+  Local INTEGER idx, t, spiked, ahead, behind, land, spkScrn, spkLoc
   ' Whether he is falling is our state, not the sequence's.  The sequence
   ' rewrites the action class as it runs, so testing that instead re-entered
   ' the fall every frame and restarted it, and he hung in the air.
@@ -1375,6 +1375,14 @@ Sub Settle
     ' him oscillate - step off, land, step off - once a frame.
     If noFloor(t) Then
       cFalling = 1 : cAction = ACT_FALLING : cYVel = 0
+      ' CTRL.S startfall: "inc CharBlockY ;# of floor just below your feet",
+      ' and then addslicers.  Without the increment the fall's first frame
+      ' tests the floor he has just stepped off and puts him back on it, so a
+      ' walk-off wobbled - step off, land, crouch, step off again - and once
+      ' the landing nudge pulled him back off the lip it cancelled the fall
+      ' for good and a ledge could not be walked off at all.
+      cBlockY = cBlockY + 1
+      AddSlicers cScrn, cBlockY
       cSeq = seqTab(FallSeq())
       ' CTRL.S startfall puts the sword away.  Left drawn, the landing runs
       ' softland's crouch with FightCtrl in charge, and FightCtrl takes no
@@ -1441,35 +1449,81 @@ Sub Settle
     Exit Sub
   End If
   ' Sprung spikes under him take precedence over how hard he lands.
-  t = RdBlock(cScrn, cBlockX, cBlockY)
-  If t = T_SPIKES And cLife <> 0 Then
-    If GetSpikes(tScrn, tBY * COLS + tBX) Then DoImpale : Exit Sub
-  End If
+  ' CTRL.S hitflr, in its own order.  He is put on the floor line first, then
+  ' the spikes underfoot are asked about, then how near the edge he came down.
   cY = floory(idx)
   cAction = 0 : cFalling = 0
-  ' hitflr sends a character who is already dead to hardland, whatever speed
-  ' he came down at, and there is nothing left to take off him.
+  spiked = 0
+  t = RdBlock(cScrn, cBlockX, cBlockY)
+  ' RdBlock leaves the resolved place in tScrn/tBX/tBY, and the test for
+  ' spikes BEHIND him below runs another one - so where the spikes are has
+  ' to be kept here rather than read back afterwards.
+  If t = T_SPIKES And cLife <> 0 Then spiked = 1 : spkScrn = tScrn : spkLoc = tBY * COLS + tBX
+  If spiked = 0 Then
+    ' "Has he landed too close to edge?" - within four pixels of an edge with
+    ' nothing beyond it, he is moved three back off it.  Without this a landing
+    ' right on the lip leaves him half over a drop.
+    If (cFace And &H80) Then ahead = cBlockX - 1 Else ahead = cBlockX + 1
+    If noFloor(BlockAt(cScrn, ahead, cBlockY)) Then
+      If GetDist() < 4 Then cX = AddCharX(-3)
+    End If
+  End If
+  ' "jsr addslicers ;trigger slicers on this level" - coming down on a row
+  ' starts that row's blades, exactly as walking onto it does.
+  AddSlicers cScrn, cBlockY
+  ' Dead before he hits the ground: hardland, and nothing left to take off him.
   If cLife = 0 Then
     cSeq = seqTab(SEQ_HARDLAND) : lastWhat = "the body lands"
     cYVel = 0
     Exit Sub
   End If
-  ' CTRL.S hitflr.  The shadow lands softly however far he has fallen - he is
-  ' not a thing that can be hurt by the ground.  Everyone else is judged on
-  ' the speed, and a guard does not survive a medium fall where the player
-  ' only loses a point.
-  If cID = 1 Or cYVel < OOF_VELOCITY Then
-    cSeq = seqTab(LandSeq()) : lastWhat = "soft land" : nSoft = nSoft + 1
+  ' Well into the block, the spikes BEHIND him count too.
+  If spiked = 0 And GetDist() >= 12 Then
+    If (cFace And &H80) Then behind = cBlockX + 1 Else behind = cBlockX - 1
+    If RdBlock(cScrn, behind, cBlockY) = T_SPIKES Then spiked = 1 : spkScrn = tScrn : spkLoc = tBY * COLS + tBX
+  End If
+  If spiked Then
+    If GetSpikes(spkScrn, spkLoc) Then DoImpale : Exit Sub
+  End If
+  ' The severity, and who it applies to.  The shadow is spared a MEDIUM fall -
+  ' "lda CharID / cmp #1 / beq :softland ;shad lands easy" - not a hard one.  A
+  ' guard cannot survive a medium fall and takes the hard landing whole, sound
+  ' and sequence and all, which is not the same as a medium one that kills.
+  If cYVel < OOF_VELOCITY Then
+    land = 0
   ElseIf cYVel < DEATH_VELOCITY Then
-    cSeq = seqTab(SEQ_MEDLAND) : lastWhat = "med land" : nMed = nMed + 1
-    If cID >= 2 Then
-      If DecStr(100) = 0 Then cLife = 0 : nDead = nDead + 1
-    Else
-      If DecStr(1) = 0 Then cLife = 0 : nDead = nDead + 1
-    End If
+    land = 1
+    If cID = 1 Then land = 0
+    If cID >= 2 Then land = 2
   Else
-    cSeq = seqTab(SEQ_HARDLAND) : lastWhat = "HARD land" : nHard = nHard + 1
+    land = 2
+  End If
+  If land = 1 Then
+    If DecStr(1) = 0 Then
+      cLife = 0 : nDead = nDead + 1
+      land = 3                      ' :hdland1 - the hard landing, already paid for
+    End If
+  End If
+  If land = 2 Then
     If DecStr(100) = 0 Then cLife = 0 : nDead = nDead + 1
+    land = 3
+  End If
+  If land = 0 Then
+    ' ":softland ... cmp #2 / bcs :gd ;guard always lands en garde" - and at
+    ' :gd the sword is SET, not merely tested.
+    If cID >= 2 Or cSword = 2 Then
+      cSword = 2
+      cSeq = seqTab(SEQ_LANDENGARDE)
+    Else
+      cSeq = seqTab(SEQ_SOFTLAND)
+    End If
+    lastWhat = "soft land" : nSoft = nSoft + 1
+  ElseIf land = 1 Then
+    AddSound 5
+    cSeq = seqTab(SEQ_MEDLAND) : lastWhat = "med land" : nMed = nMed + 1
+  Else
+    AddSound 5
+    cSeq = seqTab(SEQ_HARDLAND) : lastWhat = "HARD land" : nHard = nHard + 1
   End If
   cYVel = 0
 End Sub

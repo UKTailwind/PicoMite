@@ -16,6 +16,32 @@
 ' somewhere put below to land on.  How the floor went does not matter - what
 ' is being tested is what a step-off does to a character with his sword out.
 
+' The sword goes away and droppedout is raised the moment he goes over, so
+' that is where those two are read.  droppedout is not a flag that keeps: it
+' is a message to the guard, and FollowKid clears it once it has been acted
+' on - which is why it is not looked at at the end of the longer run below.
+SCEN going over the edge drops him out of the fight
+AT 1 3 2 1
+SWORD 1
+SEED 17
+RUN ..<<<<....>>>>>>>>>>>>>>........B...B...^..B
+TYPE 3 3 2 1
+TYPE 3 4 2 1
+TYPE 3 5 2 1
+TYPE 3 4 1 0
+TYPE 3 3 1 0
+RUN ..
+WANT DRAWN 0
+WANT DROPPED 1
+WANT FALLING 1
+END
+
+' And he comes out of the landing standing, not stuck in softland's crouch
+' with FightCtrl in charge of pose 109 and taking no input.  The guard comes
+' down after him, which is what droppedout is for: his own floor has gone too,
+' and hitflr's :softland brings a guard up en garde rather than leaving him
+' disarmed where the step-off put his sword away, so he stays in the fight and
+' follows.  Before, he stood on the lip he had failed to step off for ever.
 SCEN dropping out of a fight does not leave him crouching
 AT 1 3 2 1
 SWORD 1
@@ -28,10 +54,10 @@ TYPE 3 4 1 0
 TYPE 3 3 1 0
 RUN ........................
 WANT DRAWN 0
-WANT DROPPED 1
 WANT POSN 15
 WANT BY 2
 WANT ALIVE 1
+WANT OPPBY 2
 END
 
 ' The control: an ordinary step-off with no sword drawn is unchanged.
