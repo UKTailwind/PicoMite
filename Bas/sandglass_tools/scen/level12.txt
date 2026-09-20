@@ -112,3 +112,30 @@ WANT BY 2
 WANT FELL GE 1
 WANT ALIVE 1
 END
+
+' 3. TOPCTRL.S NextFrame: the twelfth level is over on reaching screen 23,
+' the room the bridge leads to.  There is no exit door and no stairs on this
+' level, so the port - which knew only about the princess's room on level 14
+' - had no way of leaving it.
+'
+' Screen 23's right is screen 13, whose second row begins with floor, so he
+' is put there and walked at the join.  The bridge does not yet reach this
+' row, which is finding 2.1 and not this one.
+SCEN reaching screen 23 finishes the twelfth level
+AT 12 13 0 1
+SEED 17
+RUN ..>>>>>>>>>>>>
+WANT SCRN 23
+WANT DONE 1
+WANT ALIVE 1
+END
+
+' The control: it is that room and no other.  Walked the other way he ends up
+' somewhere else on the same level with the level still to finish.
+SCEN no other room on the level finishes it
+AT 12 13 0 1
+SEED 17
+RUN ..<<<<....>>>>>>>>>>>>
+WANT DONE 0
+WANT SCRN NE 23
+END

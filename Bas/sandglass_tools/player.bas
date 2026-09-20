@@ -3912,6 +3912,10 @@ Sub EnterScreen(scrn As INTEGER, row As INTEGER)
     gameOver = 2
     message = MSG_TIME : msgText = "YOU WIN" : msgTimer = 200
   End If
+  ' TOPCTRL.S NextFrame: the twelfth level is over on reaching screen 23, the
+  ' room the bridge leads to.  There is no exit door and no stairs to climb,
+  ' so without this there was no way to leave the level at all.
+  If curLevel = 12 And s = 23 Then levelDone = 1
   SaveChar kRec()
   If CutGuard(s) = 0 Then AddGuard s
   LoadKidWOp
