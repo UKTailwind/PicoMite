@@ -54,6 +54,7 @@ typedef struct psram_id_t
 
 void psram_setup();
 size_t psram_size();
+bool psram_not_responding();
 const psram_id_t *psram_get_id();
 const char *psram_get_manufacturer(uint8_t mfid);
 

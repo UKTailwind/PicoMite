@@ -88,11 +88,33 @@ static const struct psram_type_t psram_chip_types[] = {
 static size_t psram_sz = 0;
 static psram_id_t psram_id = {0};
 
+/* PicoMite: the two direct-mode waits below used to spin for ever.  They run
+   inside the 1 s clock-speed watchdog window at boot, so a QMI or PSRAM that
+   never answered rebooted the board with RESET_CLOCKSPEED, which re-armed the
+   same window and hung again: a silent boot loop that also rewrote the option
+   sector every cycle.  Bound each wait by a loop count (not a timer: XIP is
+   off while direct mode is on, so nothing in flash may be called from here).
+   1<<20 iterations is ~20 ms at 315 MHz and ~130 ms at 48 MHz; the flags are
+   normally clear within a microsecond or two.  Once a wait has timed out every
+   later wait returns at once, the command sequence runs through to
+   csr_disable_direct_mode() so XIP comes back, and psram_init() reports the
+   chip as not responding without disturbing the saved option. */
+#define PSRAM_CSR_WAIT_LOOPS (1u << 20)
+static bool psram_timed_out = false;
+
 static inline void csr_busy_wait()
 {
 	/* Wait for BUSY flag to clear */
+	uint32_t n = PSRAM_CSR_WAIT_LOOPS;
+	if (psram_timed_out)
+		return;
 	while ((qmi_hw->direct_csr & QMI_DIRECT_CSR_BUSY_BITS))
 	{
+		if (--n == 0)
+		{
+			psram_timed_out = true;
+			return;
+		}
 		tight_loop_contents();
 	};
 }
@@ -100,8 +122,16 @@ static inline void csr_busy_wait()
 static inline void csr_txempty_wait()
 {
 	/* Wait for TXEMPTY flag to get set */
+	uint32_t n = PSRAM_CSR_WAIT_LOOPS;
+	if (psram_timed_out)
+		return;
 	while ((qmi_hw->direct_csr & QMI_DIRECT_CSR_TXEMPTY_BITS) == 0)
 	{
+		if (--n == 0)
+		{
+			psram_timed_out = true;
+			return;
+		}
 		tight_loop_contents();
 	};
 }
@@ -272,6 +302,7 @@ static int psram_init(int pin, bool clear_memory)
 	int ret = 0;
 
 	psram_sz = 0;
+	psram_timed_out = false;
 	if (pin < 0)
 		return -1;
 
@@ -280,6 +311,12 @@ static int psram_init(int pin, bool clear_memory)
 
 	/* Check if PSRAM chip is present */
 	psram_read_id(csr_clkdiv, (uint8_t *)&psram_id);
+	if (psram_timed_out)
+	{
+		/* The QMI direct-mode handshake never completed: nothing answered.
+		   Not the same as "no chip" (-2), which the caller makes permanent. */
+		return -5;
+	}
 	if (psram_id.kgd != KGD_PASS)
 	{
 		/* No PSRAM chip found */
@@ -329,6 +366,11 @@ static int psram_init(int pin, bool clear_memory)
 
 	/* Enable PSRAM */
 	psram_qmi_setup(clkdiv, csr_clkdiv, max_select, min_deselect, rxdelay);
+	if (psram_timed_out)
+	{
+		psram_sz = 0;
+		return -5;
+	}
 
 	/* Test that we can write to PSRAM */
 	if (!psram_is_writable((void *)PSRAM_NOCACHE_BASE))
@@ -382,6 +424,7 @@ void psram_setup()
 	{
 		MMPrintString("PSRAM: Memory size mismatch!\r\n");
 	}
+	/* -5 (not responding) is reported by main() once the console is up */
 #endif
 }
 
@@ -391,6 +434,18 @@ size_t psram_size()
 	return psram_sz;
 #else
 	return 0;
+#endif
+}
+
+/* True when the last psram_setup() gave up waiting on the QMI direct-mode
+   handshake.  The caller keeps OPTION PSRAM PIN in that case: a chip that did
+   not answer this time is not evidence that there is no chip. */
+bool psram_not_responding()
+{
+#ifdef PSRAMCSPIN
+	return psram_timed_out;
+#else
+	return false;
 #endif
 }
 

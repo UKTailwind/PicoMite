@@ -3887,6 +3887,12 @@ bool MIPS16 testMODBUFF(bool proposed, int proposedsize, bool noask)
 }
 void doreset(int format)
 {
+    /* A format already requested by the boot sanity check (magic key
+       mismatch) must survive the soft reset the platform auto-configure
+       does on its way to the first prompt, or updatebootcount() would
+       see SOFT_RESET and mount the old drive instead of formatting it. */
+    if (!format && _excep_code == RESET_FLASHSTORAGE)
+        format = 1;
     SoftReset(format == 2 ? RESET_PICOCALCINIT : (format ? RESET_FLASHSTORAGE : SOFT_RESET));
 }
 void MIPS16 configure(unsigned char *p, bool noask)

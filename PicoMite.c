@@ -3627,7 +3627,15 @@ uint32_t testPSRAM(void)
             !(Option.Magic == MagicKey))
         {
             ResetAllFlash(); // init the options if this is the very first startup
-            _excep_code = 0;
+            /* A magic key that does not match means a different variant was
+               flashed (or the option sector is unreadable): make it a full
+               clean, A: drive included, not just the options and slots.  The
+               format itself happens in updatebootcount() on the next boot,
+               once the console and the heap exist; doreset() carries this
+               code across the extra soft reset the platform auto-configure
+               (PicoComputer3 / PicoCalc) does before that point.  A firmware
+               VERSION change keeps the same key and resets nothing. */
+            _excep_code = RESET_FLASHSTORAGE;
             watchdog_enable(1, 1);
             while (1)
                 ;
@@ -3750,8 +3758,16 @@ uint32_t testPSRAM(void)
             psram_setup();
             if (!(PSRAMsize = psram_size()))
             {
-                Option.PSRAM_CS_PIN = 0;
-                SaveOptions();
+                /* A chip that answered the read-ID with a bad KGD, or none at
+                   all, is a wrong option and is cleared for good.  A chip that
+                   never answered (the direct-mode waits timed out) is left
+                   configured: this boot runs without PSRAM and says so once
+                   the console is up, and the next boot tries again. */
+                if (!psram_not_responding())
+                {
+                    Option.PSRAM_CS_PIN = 0;
+                    SaveOptions();
+                }
             }
             else
                 PSRAMsize -= 2 * 1024 * 1024;
@@ -4240,6 +4256,8 @@ uint32_t testPSRAM(void)
             PInt(PSRAMsize / (1024 * 1024));
             MMPrintString(" Mbytes PSRAM available\r\n");
         }
+        else if (psram_not_responding())
+            MMPrintString("PSRAM not responding: disabled until the next restart\r\n");
 #if defined(PICOMITEVGA) && !defined(HDMI)
         start_i2s(QVGA_PIO_NUM, 1);
 #elif defined(PICOMITEWEB)
