@@ -82,7 +82,7 @@ extern "C"
       layout or defaults change. */
 #define FLASH_TARGET_OFFSET (1392 * 1024)
 #define HEAP_MEMORY_SIZE (180 * 1024)
-#define MagicKey 0x4DB1F60E
+#define MagicKey 0x2678E9D9
 #elif defined(PICOMITEHDMIWEB)
    /* HDMIWEB: HDMIUSB-style display stack + USB host + WebMite WiFi /
       lwIP / mbedtls TLS (no Bluetooth). The cyw43 WiFi firmware blob plus
@@ -110,7 +110,7 @@ extern "C"
    /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
       changed from 1024x600 to 640x480@315000 so existing devices pick up
       the new default via ResetOptions on first boot. */
-#define MagicKey 0x57EB1A45
+#define MagicKey 0xBCA41BCD
 #else
    /* HDMIUSB: full 153600-byte framebuffer pool (unlike HDMIBTH/HDMIWEB,
       which use the shrunk 96000-byte one) plus the TinyUSB host stack's
@@ -131,10 +131,10 @@ extern "C"
       BSS grows again; see [[heap-bss-overlap-on-rp2350]]. */
 #define FLASH_TARGET_OFFSET (1088 * 1024)
 #define HEAP_MEMORY_SIZE (152 * 1024)
-#define MagicKey 0xD340BBCD
+#define MagicKey 0x41052ADE
 #endif
 #else
-#define MagicKey 0xD1F6F86C
+#define MagicKey 0x779012A9
 #define FLASH_TARGET_OFFSET (1040 * 1024)
 #define HEAP_MEMORY_SIZE (160 * 1024)
 #endif
@@ -156,11 +156,11 @@ extern "C"
       steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
       and [[project_core0_stack_overflow_fm]]. */
 #define HEAP_MEMORY_SIZE (160 * 1024)
-#define MagicKey 0x4C73A942
+#define MagicKey 0xD9051EC2
 #else
 #define FLASH_TARGET_OFFSET (1008 * 1024)
 #define HEAP_MEMORY_SIZE (168 * 1024)
-#define MagicKey 0xDAEA58BA
+#define MagicKey 0x4530F045
 #endif
 #endif
 
@@ -178,7 +178,7 @@ extern "C"
       It fitted without this at +284 bytes, and the font handling then took all
       but 108 of them - which is no place to stop. */
 #define FLASH_TARGET_OFFSET (848 * 1024)
-#define MagicKey 0xCD8778E7
+#define MagicKey 0x6DE27504
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
       __end__) was 4732 bytes, only ~640 bytes clear of the 4096 page
@@ -198,7 +198,7 @@ extern "C"
       need a step. */
 #define FLASH_TARGET_OFFSET (816 * 1024)
 #define HEAP_MEMORY_SIZE (100 * 1024)
-#define MagicKey 0x3193CA54
+#define MagicKey 0x741677C8
 #endif
 
 #endif
@@ -225,7 +225,7 @@ extern "C"
 #define MIN_CPU 126000
 
 #ifdef rp2350
-#define MagicKey 0xBB91433A
+#define MagicKey 0x7E23D439
 #define MAXSUBFUN 512
 #define MAXGLOBALVARS 512 // Configurable split
 #define MAXLOCALVARS 256
@@ -243,7 +243,7 @@ extern "C"
 #define HEAP_MEMORY_SIZE (256 * 1024)
 #define FLASH_TARGET_OFFSET (1456 * 1024)
 #else
-#define MagicKey 0x6AA79987
+#define MagicKey 0x6E75BE94
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
 #define MAXLOCALVARS 240
@@ -272,7 +272,7 @@ extern "C"
 #define MAXSUBFUN 512
 
 #ifdef USBKEYBOARD
-#define MagicKey 0x029A7245
+#define MagicKey 0x678A02E7
 #define FLASH_TARGET_OFFSET (1120 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
       from the cursor module (~650 bytes for user_cursor.pixels +
@@ -305,7 +305,7 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0x90E5E945
+#define MagicKey 0xFB2B4EA6
 #define FLASH_TARGET_OFFSET (1392 * 1024)
 #define HEAP_MEMORY_SIZE (272 * 1024)
 #elif defined(PICOMITEBTH)
@@ -317,14 +317,14 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0x6FACAA50
+#define MagicKey 0xB3A99D85
 #define FLASH_TARGET_OFFSET (1424 * 1024)
 #define HEAP_MEMORY_SIZE (256 * 1024)
 #else
 #define FLASH_TARGET_OFFSET (1104 * 1024)
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
 #define HEAP_MEMORY_SIZE (300 * 1024)
-#define MagicKey 0x29672F8B
+#define MagicKey 0x5E57936A
 #endif
 
 #else                     // RP2040
@@ -335,7 +335,7 @@ extern "C"
 #define MAXSUBFUN 256
 
 #ifdef USBKEYBOARD
-#define MagicKey 0xEE897110
+#define MagicKey 0x2B7462F5
    /* -16 KB (2026-09-16): compiling misc/FileIO.c at -Os freed ~4.5 KB, so
       912 KB fits again and the 16 KB goes back to the A: drive. */
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c)
@@ -357,12 +357,12 @@ extern "C"
 #else
 #ifdef PICOMITEMIN
 #define FLASH_TARGET_OFFSET (688 * 1024)
-#define MagicKey 0x452EC40A
+#define MagicKey 0x40287BEA
 #define HEAP_MEMORY_SIZE (128 * 1024)
 #else
 #define HEAP_MEMORY_SIZE (120 * 1024)
 #define FLASH_TARGET_OFFSET (912 * 1024)
-#define MagicKey 0x5E503A67
+#define MagicKey 0xA17DE2A2
 #endif
 #endif
 #endif
