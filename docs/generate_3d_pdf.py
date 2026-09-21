@@ -51,7 +51,7 @@ pdf.chapter_body(
     "The DRAW3D graphics system in PicoMite MMBasic provides commands and functions for creating, "
     "manipulating, and displaying three-dimensional objects on a 2D screen. The system uses "
     "quaternion-based rotation and supports features like:\n\n"
-    "- Multiple 3D objects (up to 8 objects)\n"
+    "- Multiple 3D objects (up to 32 objects)\n"
     "- Multiple cameras (up to 3 cameras)\n"
     "- Face-based rendering with depth sorting\n"
     "- Surface normal calculations for hidden face removal\n"
