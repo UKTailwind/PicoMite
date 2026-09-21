@@ -70,7 +70,8 @@ own work; the content is the game's, and it stays yours.
 
 ### 1. Python
 
-Python 3.8 or later. No packages beyond the standard library.
+Python 3.8 or later. The converter needs no packages beyond the standard
+library. `rooms.py`, below, is the one exception and needs Pillow.
 
 ### 2. The published source release
 
@@ -183,6 +184,28 @@ start of level one, so a later level can be looked at without playing up to it:
     Const BEGINBY = 0
 
 `Const SNAPSHOT = n` saves that frame's picture to the drive beside the data.
+
+## Looking at every room
+
+`rooms.py` draws each screen of each level to a picture, without a board:
+
+```
+python rooms.py --data <the board/ directory> --out rooms --sheet
+```
+
+336 pictures - fourteen levels of twenty-four screens - in about five seconds,
+plus one contact sheet per level with `--sheet`. `--level N` does one level and
+`--scale N` makes them bigger.
+
+It reads the same files the engine does and composes a screen the way
+`DrawScreen` and `DrawFront` do, so what comes out is the scenery as the game
+draws it. **The moving parts are not in it**: gates, loose floors, the plates,
+spikes, slicer blades and torch flames are redrawn every frame by `DrawMovers`,
+so a gate shows as an empty recess and a loose floor as a gap. Neither are the
+characters, which is the point - these are the rooms.
+
+Needs Pillow (`pip install pillow`). The pictures are the game's own artwork and
+are no more yours to pass on than the data they come from.
 
 ## The interludes
 
