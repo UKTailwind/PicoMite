@@ -2974,13 +2974,19 @@ void MIPS16 cmd_save(void)
            scanout, and a BMP written with the starting colours then does not
            look like the screen it came from.  The pixel indices below are
            recovered through the same default map, so only the palette needs
-           correcting. */
+           correcting - and a BMP palette entry is blue, green, red, so the
+           three bytes go in the opposite order to MapRGB's packing. */
         if (MapRGBValid)
             for (int m = 0; m < 16; m++)
             {
-                bmpcolourpallette[m * 4 + 0] = (unsigned char)(MapRGB[m] >> 16);
-                bmpcolourpallette[m * 4 + 1] = (unsigned char)(MapRGB[m] >> 8);
-                bmpcolourpallette[m * 4 + 2] = (unsigned char)(MapRGB[m]);
+                /* The index written for a pixel is its RGB121 value with the red and
+                   blue bits exchanged - that is the byte order ReadBuffer hands back.
+                   The default table above is already written that way round, so the
+                   map has to be read through the same exchange. */
+                int s = (m & 0x6) | ((m & 1) << 3) | ((m >> 3) & 1);
+                bmpcolourpallette[m * 4 + 0] = (unsigned char)(MapRGB[s]);       /* blue  */
+                bmpcolourpallette[m * 4 + 1] = (unsigned char)(MapRGB[s] >> 8);  /* green */
+                bmpcolourpallette[m * 4 + 2] = (unsigned char)(MapRGB[s] >> 16); /* red   */
                 bmpcolourpallette[m * 4 + 3] = 0;
             }
 
@@ -3132,13 +3138,19 @@ void MIPS16 cmd_save(void)
                scanout, and a BMP written with the starting colours then does not
                look like the screen it came from.  The pixel indices below are
                recovered through the same default map, so only the palette needs
-               correcting. */
+               correcting - and a BMP palette entry is blue, green, red, so the
+               three bytes go in the opposite order to MapRGB's packing. */
             if (MapRGBValid)
                 for (int m = 0; m < 16; m++)
                 {
-                    bmpcolourpallette[m * 4 + 0] = (unsigned char)(MapRGB[m] >> 16);
-                    bmpcolourpallette[m * 4 + 1] = (unsigned char)(MapRGB[m] >> 8);
-                    bmpcolourpallette[m * 4 + 2] = (unsigned char)(MapRGB[m]);
+                    /* The index written for a pixel is its RGB121 value with the red and
+                       blue bits exchanged - that is the byte order ReadBuffer hands back.
+                       The default table above is already written that way round, so the
+                       map has to be read through the same exchange. */
+                    int s = (m & 0x6) | ((m & 1) << 3) | ((m >> 3) & 1);
+                    bmpcolourpallette[m * 4 + 0] = (unsigned char)(MapRGB[s]);       /* blue  */
+                    bmpcolourpallette[m * 4 + 1] = (unsigned char)(MapRGB[s] >> 8);  /* green */
+                    bmpcolourpallette[m * 4 + 2] = (unsigned char)(MapRGB[s] >> 16); /* red   */
                     bmpcolourpallette[m * 4 + 3] = 0;
                 }
 
