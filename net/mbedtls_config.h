@@ -4,6 +4,7 @@
  */
 /* Workaround for some mbedtls source files using INT_MAX without including limits.h */
 #include <limits.h>
+#include <stdio.h>
 void *CallocMemory(size_t num, size_t size);
 void FreeMemory(void *addr);
 #define MBEDTLS_NO_PLATFORM_ENTROPY
