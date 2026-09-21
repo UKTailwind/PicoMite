@@ -65,6 +65,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifndef PICOMITEWEB
 #include "pico/multicore.h"
 #endif
+#ifdef PICOMITE
+#include "pico/mutex.h"
+extern mutex_t frameBufferMutex;
+#endif
 #include "hardware/pio.h"
 #include "hardware/pio_instructions.h"
 // #include "integer.h"
@@ -2171,10 +2175,46 @@ DSTATUS disk_status(BYTE pdrv)
 	return STA_NOINIT;
 }
 
+/* When the SD card shares the system SPI with the display (SPIatRisk), a
+   background FRAMEBUFFER COPY ,B / MERGE ,B / BLIT ,B leaves core 1 bursting
+   the panel over that bus after the statement has returned, and the next
+   file operation on core 0 used to drive the same SPI at the same time: an
+   I/O error whose only cure was a PAUSE tuned to the CPU speed.  Core 1 holds
+   frameBufferMutex for exactly the length of the burst, so wait for it to be
+   free before touching the card.  It is only peeked, not held: a burst can
+   only be started by a FIFO push from a BASIC statement on core 0, and this
+   transfer is inside one, so nothing can restart a burst under us.  (The
+   continuous MERGE restarts itself and stays the documented limitation.)
+   The owner test is what lets checkWAVinput(), which already holds the
+   mutex when it reads the card, come through: the SDK mutex is not
+   recursive.  The limit turns a wedged core 1 into today's behaviour
+   instead of a hung file system. */
+static void WaitForCore1SPI(void)
+{
+#ifdef PICOMITE
+	uint32_t owner;
+	if (!SPIatRisk)
+		return;
+	uint64_t limit = time_us_64() + 1000000;
+	while (!mutex_try_enter(&frameBufferMutex, &owner))
+	{
+		if (owner == get_core_num())
+			return; /* this core already holds it */
+		if (time_us_64() > limit)
+			return;
+		tight_loop_contents();
+	}
+	mutex_exit(&frameBufferMutex);
+#endif
+}
+
 DSTATUS disk_initialize(BYTE pdrv)
 {
 	if (pdrv == 0)
+	{
+		WaitForCore1SPI();
 		return sd_disk_initialize();
+	}
 #if defined(USBKEYBOARD) && defined(rp2350)
 	if (pdrv == 1)
 		return usb_disk_initialize();
@@ -2185,7 +2225,10 @@ DSTATUS disk_initialize(BYTE pdrv)
 DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
 {
 	if (pdrv == 0)
+	{
+		WaitForCore1SPI();
 		return sd_disk_read(buff, sector, count);
+	}
 #if defined(USBKEYBOARD) && defined(rp2350)
 	if (pdrv == 1)
 		return usb_disk_read(buff, sector, count);
@@ -2196,7 +2239,10 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count)
 DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count)
 {
 	if (pdrv == 0)
+	{
+		WaitForCore1SPI();
 		return sd_disk_write(buff, sector, count);
+	}
 #if defined(USBKEYBOARD) && defined(rp2350)
 	if (pdrv == 1)
 		return usb_disk_write(buff, sector, count);
@@ -2207,7 +2253,10 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count)
 DRESULT disk_ioctl(BYTE pdrv, BYTE cmd, void *buff)
 {
 	if (pdrv == 0)
+	{
+		WaitForCore1SPI();
 		return sd_disk_ioctl(cmd, buff);
+	}
 #if defined(USBKEYBOARD) && defined(rp2350)
 	if (pdrv == 1)
 		return usb_disk_ioctl(cmd, buff);
