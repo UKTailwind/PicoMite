@@ -169,6 +169,16 @@ void restorepanel(void)
                 ReadBuffer = ReadBufferSPISCR;
                 ReadBLITBuffer = ReadBufferSPISCR;
             }
+            else
+            {
+                /* A panel with no read-back must go back to "not readable".
+                   setframebuffer() had bound the readers to ReadBuffer16, which
+                   reads WriteBuf, and WriteBuf is about to be NULLed below: left
+                   bound, the next SAVE IMAGE / BLIT READ / PIXEL passed the
+                   DisplayNotSet test and read through a null pointer. */
+                ReadBuffer = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
+                ReadBLITBuffer = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
+            }
         }
         else
         {
@@ -182,6 +192,12 @@ void restorepanel(void)
                 ReadBLITBuffer = ReadBufferSPI;
                 ReadBuffer = ReadBufferSPI;
                 ScrollLCD = ScrollLCDSPI;
+            }
+            else
+            {
+                /* see the portrait branch above */
+                ReadBuffer = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
+                ReadBLITBuffer = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
             }
         }
     }
