@@ -5,74 +5,90 @@
 Make a directory, unpack the zip into it, and run `setup.bat` or `setup.sh`.
 The zip has no folder of its own inside it, so it lands where it is put.
 
-What goes in is everything in this directory that is our own work:
+**What goes in is the minimum needed to create the resources and play the
+game, and nothing else.** It is a named list, not a filter. A filter lets
+anything new in this directory into the next release by default, and that is
+how the scenario harness and twenty developer probes came to be in a player's
+zip. That is not merely untidy: a player who runs the harness gets a `scen.txt`
+on their board, and the engine then plays test scenarios instead of the game -
+silently, because the engine sets `Option Console Serial` and every word of the
+explanation goes to a port they are not watching.
 
-  * the instructions, `README.md`, which is where anyone should start;
-  * `setup.bat` and `setup.sh`, which do the whole job in one go, and the
-    `setup.py` they call;
-  * the engine, both as the commented source and as the stripped
-    `player.min.bas` that goes on the board;
-  * the converter and the modules it imports, so the player can turn their own
-    copy of the published source release into the data the engine needs;
-  * `title.jpg`;
-  * the test kit, because the instructions describe it and a zip whose README
-    names files that are not in it is worse than no README.
+Everything else stays in this directory and is described in `DEVELOPING.md`,
+which does not go in the zip either.
 
-What stays out is anything generated or private: `player.min.bas.map`,
-`__pycache__`, the `release/` and `board/` directories `setup.py` makes, and -
-this is the point of the whole arrangement - **any converted game data**.
-`release/` matters as much as `board/` does: run the setup here and the
-published source release is sitting in this directory, and it is no more ours
-to hand on than the data converted out of it.
+`player.min.bas` is deliberately not listed. `setup.py` builds it from
+`player.bas` with `build.py` as part of the install, so a second copy in the
+zip could only ever go stale.
+
+What stays out on principle is anything generated or private - and, this being
+the point of the whole arrangement, **any converted game data**. `release/`
+matters as much as `board/` does: run the setup here and the published source
+release is sitting in this directory, and it is no more ours to hand on than
+the data converted out of it. A named list makes that automatic rather than
+something to remember.
 
 So the zip carries no artwork, no rooms, no animation tables and no music, and
 the engine will not start until the player has run the converter against a copy
 of the release they fetched themselves. See "Keep what comes out to yourself"
 in the README.
-
-`player.min.bas` is rebuilt from `player.bas` before it is packed, so the two
-cannot drift apart in the zip.
 """
 import argparse
 import os
-import subprocess
 import sys
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Not ours to give away, or not worth giving: converted data and everything
-# the tools leave behind.  Matched against the name, not the path.
-SKIP_NAMES = {"player.min.bas.map", "convert.log", "art.idx", "make_release.py"}
-# release/ and board/ are what setup.py leaves behind: the source release
-# itself and the data converted from it.  Neither may ever go in the zip.
-SKIP_DIRS = {"__pycache__", "out", ".git", "release", "board", "_release"}
-SKIP_EXT = {".pyc", ".zip", ".log", ".bmp", ".dat", ".idx", ".bin", ".wav", ".map"}
-# ...except these, which are ours and are wanted.
-KEEP_ANYWAY = {"title.jpg"}
-
-
-def wanted(rel):
-    parts = rel.replace("\\", "/").split("/")
-    if any(p in SKIP_DIRS for p in parts):
-        return False
-    name = parts[-1]
-    if name in KEEP_ANYWAY:
-        return True
-    if name in SKIP_NAMES or name.startswith("."):
-        return False
-    return os.path.splitext(name)[1].lower() not in SKIP_EXT
+# The release is this list, and only this list.  Putting a file in this
+# directory does not put it in the next zip; adding it here does.
+CONTENTS = [
+    # The instructions, which are where anyone should start.
+    "README.md",
+    # The installer: one command does the whole job.
+    "setup.bat", "setup.sh", "setup.py",
+    # The engine as source; setup.py strips it with build.py.
+    "player.bas", "build.py",
+    # The converter and every module it imports, so a player can turn their own
+    # copy of the published source release into the data the engine needs.
+    "convert.py", "appleimg.py", "blueprint.py", "merlin.py", "packpic.py",
+    "sheets.py", "sounds.py",
+    # Ours - drawn by a user of thebackshed, not taken from any official source.
+    "title.jpg",
+]
 
 
 def collect():
-    out = []
-    for base, dirs, files in os.walk(HERE):
-        dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
-        for f in sorted(files):
-            rel = os.path.relpath(os.path.join(base, f), HERE)
-            if wanted(rel):
-                out.append(rel)
-    return sorted(out)
+    """CONTENTS, checked. A name that is not in it is not in the release."""
+    missing = [n for n in CONTENTS if not os.path.isfile(os.path.join(HERE, n))]
+    if missing:
+        raise SystemExit("these are not in %s and the zip would be no use "
+                         "without them:%s" % (HERE, "".join(
+                             "\n   " + m for m in missing)))
+    return list(CONTENTS)
+
+
+def unlisted():
+    """Local modules the listed scripts import that CONTENTS does not carry.
+
+    A list is the right way to build the zip and is also the one thing that
+    goes quietly wrong when the converter grows a module: the zip still builds,
+    and dies on someone else's machine with an ImportError for a file we never
+    sent. So read the imports back and refuse instead.
+    """
+    here = {os.path.splitext(f)[0] for f in os.listdir(HERE)
+            if f.endswith(".py")}
+    listed = {os.path.splitext(n)[0] for n in CONTENTS if n.endswith(".py")}
+    needed = set()
+    for name in [n for n in CONTENTS if n.endswith(".py")]:
+        with open(os.path.join(HERE, name), encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line.startswith("import "):
+                    mod = line[7:].split()[0].split(".")[0].rstrip(",")
+                    if mod in here:
+                        needed.add(mod)
+    return sorted(needed - listed)
 
 
 def main(argv=None):
@@ -81,17 +97,12 @@ def main(argv=None):
     ap.add_argument("-o", "--out", default=os.path.join(HERE, "PrinceOfPico.zip"))
     args = ap.parse_args(argv)
 
-    # Rebuild the stripped engine so the zip cannot carry a stale one.
-    subprocess.check_call([sys.executable, os.path.join(HERE, "build.py"),
-                           os.path.join(HERE, "player.bas"),
-                           "-o", os.path.join(HERE, "player.min.bas")])
-
     names = collect()
-    for must in ("README.md", "player.bas", "player.min.bas", "convert.py",
-                 "title.jpg", "setup.py", "setup.bat", "setup.sh"):
-        if must not in names:
-            raise SystemExit("%s is missing and the zip would be no use without it"
-                             % must)
+    short = unlisted()
+    if short:
+        raise SystemExit("the listed scripts import these and CONTENTS does "
+                         "not carry them:%s" % "".join(
+                             "\n   " + m + ".py" for m in short))
 
     total = 0
     with zipfile.ZipFile(args.out, "w", zipfile.ZIP_DEFLATED) as z:
@@ -111,7 +122,7 @@ def main(argv=None):
     print("%d files, %d bytes in, %d out" % (len(names), total,
                                              os.path.getsize(args.out)))
     for rel in names:
-        print("   %s" % rel.replace("\\", "/"))
+        print("   %-16s %8d" % (rel, os.path.getsize(os.path.join(HERE, rel))))
     return 0
 
 
