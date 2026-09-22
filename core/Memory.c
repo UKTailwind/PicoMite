@@ -1990,6 +1990,11 @@ void InitHeap(bool all)
     BBCSoundRelease();
     memset(mmap, 0, sizeof(mmap));
     memset(MMHeap, 0, heap_memory_size + 256);
+    /* The IF/ENDIF jump table lives in this heap too; its pointer is now
+       dangling and its pages are free again.  Forget it rather than let a
+       later IfTableFree() hand back memory that now belongs to something
+       else - see IfTableForget() in Commands.c. */
+    IfTableForget();
 #ifdef rp2350
     if (all)
         memset(psmap, 0, sizeof(psmap));

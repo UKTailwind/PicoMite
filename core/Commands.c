@@ -3264,6 +3264,30 @@ void IfTableFree(void)
 	iftab_lib_count = 0;
 }
 
+/* Forget the table WITHOUT freeing it.
+ *
+ * InitHeap() wipes the BASIC heap and the page bitmap together, so every
+ * pointer into that heap is left dangling and the pages behind them are
+ * already marked free.  iftab is one of those pointers, and iftab_capacity
+ * survives the wipe, so the next IfTableFree() handed back pages that by
+ * then belonged to something else.  What they belonged to was the structure
+ * table - PrepareProgram allocates each TYPE definition from this heap - and
+ * the IF table was then rebuilt over part of it.  GetMemory() zeroes what it
+ * returns, so the definition's name survived in an earlier page while
+ * total_size, its last field, read back as 0, and DIM of that type asked for
+ * nought bytes.  It needed a multi-line IF in the program to show, because
+ * without one IfTableBuild() allocates nothing.
+ *
+ * Reset the bookkeeping and drop the pointer; the memory is already gone.
+ * Same treatment as the trace cache and the BBC sound state get. */
+void IfTableForget(void)
+{
+	iftab = NULL;
+	iftab_count = 0;
+	iftab_capacity = 0;
+	iftab_lib_count = 0;
+}
+
 static int iftab_grow(void)
 {
 	int newcap = iftab_capacity ? iftab_capacity * 2 : IFTAB_INITIAL_CAPACITY;
