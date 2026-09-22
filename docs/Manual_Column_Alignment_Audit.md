@@ -4,7 +4,7 @@ Written 2026-09-21 against the V6.04.00RC0 manual (294 pages).
 
 **Finding 1, pages 113 and 114, was fixed on the day of the audit** and the
 manual and its PDF have been regenerated; the description below is kept as
-the record of what was wrong. Findings 2 to 5, and everything under
+the record of what was wrong. Findings 2 to 6, and everything under
 *Sub-line drift*, are untouched and still stand against the current manual.
 
 ## What is being checked, and why it breaks
@@ -234,6 +234,33 @@ cross product.
 The block recovers by itself at `MATH C_ADD` on page 171, which is level
 again.
 
+### 6. Commands, pages 190 and 191: the PLAY block
+
+Reported by Peter, 2026-09-22. The top of page 191 is a whole entry out,
+in the same direction as finding 5: the description column runs one entry
+ahead of the names, across the page break.
+
+| name | what appears beside it | whose text that is |
+|---|---|---|
+| `PLAY MODSAMPLE samplenum, channel [,volume]` | Loads a 1024 element array comprising 4096 16-bit values | `PLAY LOAD SOUND` |
+| `PLAY LOAD SOUND array%()` | Play a series of sounds simultaneously on the audio output | `PLAY SOUND` |
+| `PLAY SOUND soundno, channelno, type ...` | speaker), B (both speakers) | its own, four lines in |
+
+`PLAY MODSAMPLE`'s own description - *Plays a specific sample in the mod
+file on the channel specified* - is stranded at the foot of page 190 with
+no name beside it. So a reader looking up `PLAY MODSAMPLE` is told how to
+load a waveform array.
+
+The block rights itself half way down page 191: `PLAY PAUSE`,
+`PLAY RESUME`, `PLAY STOP`, `PLAY VOLUME`, `PLAY NEXT` and
+`PLAY PREVIOUS` are all level.
+
+This row was in the automated sweep's list below as *partly false, matches
+example lines*. That was half right and is corrected here: some of the
+sweep's individual matches were the worked examples such as
+`PLAY MP3 "B:/mp3/mymp3.mp3"`, but the row does carry a real defect at the
+page break.
+
 ## The automated sweep for this class
 
 Findings 3, 4 and 5 share a shape the first sweep could not see: a
@@ -250,7 +277,7 @@ working through:
 | page | block | worst | forms |
 |---|---|---|---|
 | 201 | `SELECT CASE` | 22.3 ln | 3 - probably false, matches the syntax example |
-| 189 to 193 | `PLAY` | 19.7 ln | 5 - partly false, matches example lines |
+| 189 to 193 | `PLAY` | 19.7 ln | 5 - **confirmed, see finding 6**; some matches are example lines |
 | 210 | row 349 | 18.7 ln | 1 |
 | 205 | row 326 | 16.9 ln | 1 |
 | 161 | row 157 | 13.4 ln | 1 |
@@ -360,18 +387,19 @@ These have **not** been checked and may hide further instances. Re-running
    wrong text and by the widest margins in the manual.
 3. Pages 170 and 171, the `MATH` block, seven names carrying another
    function's description.
-4. Page 155, the `GUI CURSOR` block, eight entries reading against the
+4. Pages 190 and 191, the `PLAY` block, three names at the page break.
+5. Page 155, the `GUI CURSOR` block, eight entries reading against the
    wrong form, plus `GUI CLICK PIN OFF`.
-5. Page 193, `POKE`, six forms.
-6. Decide 2 to 5 together: all are a running narrative against a list of
+6. Page 193, `POKE`, six forms.
+7. Decide 2 to 6 together: all are a running narrative against a list of
    names, and all want either padding by eye or one table row per form.
-7. Page 112, `MM.INFO(FREE SPACE)`, one entry.
-8. Work through the unverified rows in *The automated sweep for this
+8. Page 112, `MM.INFO(FREE SPACE)`, one entry.
+9. Work through the unverified rows in *The automated sweep for this
    class*, discarding the ones that matched a code example.
-9. Leave the sub-line drift alone unless a particular entry looks wrong on
+10. Leave the sub-line drift alone unless a particular entry looks wrong on
    the page; correcting it means touching paragraph spacing, which moves
    everything below it and risks introducing the very defect being fixed.
-10. Consider putting the audit in `tools/` and running it before a release,
+11. Consider putting the audit in `tools/` and running it before a release,
    the way `release_preflight.py` runs. It takes about three minutes over
    the whole manual and needs only the docx and the PDF.
 
