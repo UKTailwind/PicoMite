@@ -590,9 +590,35 @@ share a sentence stay in one row, still separated by their blank
 paragraphs - and the topic list comes through untouched. It did here: 1163
 topics, the eleven gained earlier still present, none lost.
 
-**This is the pattern to use for any other block that will not hold its
-alignment**, and it is what findings 4, 6 and 7 would want if they drift
-again.
+**Every hand-aligned block named in this audit has since been split the
+same way.** On 2026-09-22, after `MATH` and `GUI CURSOR` proved the
+technique, the remaining six went too:
+
+| block | pages | rows |
+|---|---|---|
+| `GUI CLICK` | 155 | 5 |
+| `LIBRARY` | 162, 163 | 6 |
+| `PLAY` | 189 to 193 | 5 |
+| `POKE` | 193, 194 | 10 |
+| `PEEK` | 229, 230 | 15 |
+| `TOUCH` gestures | 234, 235 | 12 |
+
+Nothing about the printed page changed except the alignment: still 294
+pages, the same contents pages, and no rule anywhere inside a block. The
+PDF outline grew from 844 entries to 882, because each form is now its own
+cell and earns its own bookmark.
+
+**The help files gained 24 topics and lost none.** Commands that had never
+had an entry now do, among them `LIBRARY DELETE`, `LIBRARY LIST`,
+`LIBRARY LOAD`, `POKE SHORT`, `POKE WORD`, `POKE INTEGER`, `POKE FLOAT`,
+`POKE VAR`, `PEEK(SHORT)`, `PEEK(WORD)`, `PEEK(INTEGER)`, `PEEK(FLOAT)`,
+`PEEK(VARADDR)`, `PEEK(VARTBL)` and nine of the `TOUCH` gestures. That is
+the real measure of how badly the old layout was confusing the generator as
+well as the reader.
+
+Only one hand-aligned block is left, the `MATH()` functions on pages 227
+and 228. It was corrected by padding and currently reads within half a
+line, so it was left alone; it is the last candidate if it ever drifts.
 
 **A coupling worth knowing about.** `tools/gen_help.py` pairs the two
 columns by splitting each cell into blank-line separated groups and zipping

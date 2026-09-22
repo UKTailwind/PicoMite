@@ -148,171 +148,174 @@ EDIT FILE                             POKE
 ELSE                                  POKE BYTE
 ELSE IF                               POKE DISPLAY
 ELSEIF                                POKE DISPLAY HRES
-END                                   POKE INTEGER
-END CSUB                              POKE SHORT
-END DEFINEFONT                        POLYGON
-END FUNCTION                          PORT
-END IF                                PRINT
-END SELECT                            PULSE
-END SUB                               PWM
-END TYPE                              PWM SYNC
-ENDIF                                 RAM
-EPOCH                                 RAM CHAIN
-ERASE                                 RAM ERASE
-ERROR                                 RAM ERASE ALL
-ESCAPE CODES                          RAM FILE LOAD
-EXECUTE                               RAM LIST
-EXIT                                  RAM LOAD
-EXIT DO                               RAM OVERWRITE
-EXIT FOR                              RAM RUN
-EXIT FUNCTION                         RAM SAVE
-EXIT SUB                              RANDOMIZE
-FILES                                 RAY
-FILL                                  RAY CAMERA
-FLAG                                  RAY CAST
-FLAGS                                 RAY CELL
-FLASH                                 RAY CLOSE
-FLASH CHAIN                           RAY COLOUR
-FLASH DISK LOAD                       RAY DEFINE
-FLASH ERASE                           RAY DOOR
-FLASH ERASE ALL                       RAY DOOR CLEAR
-FLASH LIST                            RAY DOOR CLOSE
-FLASH LOAD                            RAY MAP
-FLASH LOAD IMAGE                      RAY MINIMAP
-FLASH MODBUFF LOAD                    RAY MOVE
-FLASH OVERWRITE                       RAY RENDER
-FLASH RUN                             RAY SPRITE
-FLASH SAVE                            RAY SPRITE CLEAR
-FLASH UF2                             RAY SPRITE REMOVE
-FLUSH                                 RAY TURN
-FM                                    RBOX
-FONT                                  READ
-FOR                                   READ SAVE
-FRAME                                 REDIM
-FRAME BOX                             REFRESH
-FRAME CLEAR                           REM
-FRAME CLOSE                           RENAME
-FRAME CLS                             RESOLUTION
-FRAME COLOUR                          RESTORE
-FRAME CREATE                          RETURN
-FRAME CURSOR                          RMDIR
-FRAME DESTROY                         RTC
-FRAME HIDE                            RTC GETTIME
-FRAME HLINE                           RTC SETREG
-FRAME INPUT                           RTC SETTIME
-FRAME OVERLAY                         RTC SETTIME MID$
-FRAME PANEL                           RUN
-FRAME SCROLL                          SAVE
-FRAME SHOW                            SAVE CONTEXT
-FRAME TITLE                           SAVE DATA
-FRAME VBUF                            SAVE IMAGE
-FRAME WRITE                           SAVE PERSISTENT
-FRAMEBUFFER                           SEEK
-FRAMEBUFFER CLOSE                     SELECT
-FRAMEBUFFER COPY                      SELECT CASE
-FRAMEBUFFER CREATE                    SERVO
-FRAMEBUFFER LAYER                     SETPIN
-FRAMEBUFFER LAYER TOP                 SETTICK
-FRAMEBUFFER MERGE                     SETTICK PAUSE
-FRAMEBUFFER SYNC                      SETTICK RESUME
-FRAMEBUFFER WAIT                      SIN COS TAN ASIN ACOS ATAN SQR ABS INT EXP LOG SGN FIX CINT DEG RAD
-FRAMEBUFFER WRITE                     SLEW
-FUNCTION                              SORT
-GAMEPAD                               SPI OPEN
-GAMEPAD COLOUR                        SPI2
-GAMEPAD CONFIGURE                     SPRITE
-GAMEPAD HAPTIC                        SPRITE CLOSE
-GAMEPAD INTERRUPT DISABLE             SPRITE CLOSE ALL
-GAMEPAD INTERRUPT ENABLE              SPRITE COPY
-GAMEPAD MONITOR                       SPRITE HIDE
-GOSUB                                 SPRITE HIDE ALL
-GOTO                                  SPRITE HIDE SAFE
-GUI                                   SPRITE INTERRUPT
-GUI AREA                              SPRITE LOAD
-GUI BARGAUGE                          SPRITE LOADARRAY
-GUI BCOLOUR                           SPRITE LOADBMP
-GUI BEEP                              SPRITE LOADPNG
-GUI BITMAP                            SPRITE MOVE
-GUI BUTTON                            SPRITE NEXT
-GUI CALIBRATE                         SPRITE NOINTERRUPT
-GUI CAPTION                           SPRITE NOSTINTERRUPT
-GUI CHECKBOX                          SPRITE READ
-GUI CLICK                             SPRITE RESTORE
-GUI CLICK DOWN                        SPRITE SCROLL
-GUI CLICK PIN                         SPRITE SET TRANSPARENT
-GUI CURSOR                            SPRITE SHOW
-GUI CURSOR COLOUR                     SPRITE SHOW SAFE
-GUI CURSOR HIDE                       SPRITE STATIC
-GUI CURSOR LINK MOUSE                 SPRITE STATIC CLEAR
-GUI CURSOR LOAD                       SPRITE STINTERRUPT
-GUI CURSOR OFF                        SPRITE SWAP
-GUI CURSOR ON                         SPRITE WRITE
-GUI CURSOR SHOW                       STAR
-GUI DELETE                            STATIC
-GUI DISABLE                           STEP
-GUI DISPLAYBOX                        STEPPER
-GUI ENABLE                            STEPPER ARC
-GUI FCOLOUR                           STEPPER AXIS
-GUI FORMATBOX                         STEPPER BUFFER
-GUI FORMATBOX CANCEL                  STEPPER CLEAR
-GUI FRAME                             STEPPER CLOSE
-GUI GAUGE                             STEPPER ENABLE
-GUI HIDE                              STEPPER ESTOP
-GUI INTERRUPT                         STEPPER GC
-GUI LED                               STEPPER GC G28
-GUI LISTBOX                           STEPPER GCODE
-GUI LISTBOX CANCEL                    STEPPER GS
-GUI NUMBERBOX                         STEPPER HWLIMITS
-GUI NUMBERBOX CANCEL                  STEPPER INIT
-GUI PAGE                              STEPPER INVERT
-GUI RADIO                             STEPPER JERK
-GUI REDRAW                            STEPPER LIMITS
-GUI RESET LCDPANEL                    STEPPER POSITION
-GUI SETUP                             STEPPER POSITION HOME
-GUI SHOW                              STEPPER RECOVER
-GUI SLIDER                            STEPPER RESET
-GUI SPINBOX                           STEPPER RUN
-GUI SWITCH                            STEPPER SCURVE
-GUI TEST LCDPANEL                     STEPPER SPINDLE
-GUI TEST TOUCH                        STEPPER STATUS
-GUI TEXTBOX                           STEPPER TUNE
-GUI TEXTBOX CANCEL                    STRUCT
-HELP                                  STRUCT COPY
-HUMID                                 STRUCT LOAD
-I2C                                   STRUCT SAVE
-I2C CHECK                             SUB
-I2C CLOSE                             SYNC
-I2C OPEN                              TEMPR START
-I2C READ                              TEXT
-I2C SLAVE                             THEN
-I2C WRITE                             TILE
-I2C2                                  TILE HEIGHT
-I2CLCD                                TILEMAP
-I2CLCD CLOSE                          TILEMAP ATTR
-I2CLCD CREATECHAR                     TILEMAP CLOSE
-I2CLCD INIT                           TILEMAP CREATE
-IF                                    TILEMAP DESTROY
-IF ALARM THEN                         TILEMAP DRAW
-IF ASC                                TILEMAP LOAD
-IN                                    TILEMAP SCROLL
-INC                                   TILEMAP SET
-INPUT                                 TILEMAP SPRITE CLOSE
-INTERRUPT                             TILEMAP SPRITE CREATE
-INV                                   TILEMAP SPRITE DESTROY
-IR                                    TILEMAP SPRITE DRAW
-IR SEND                               TILEMAP SPRITE MOVE
-IRETURN                               TILEMAP SPRITE SET
-KEYBOARD                              TILEMAP VIEW
-KEYBOARD OFF                          TIME$
-KEYBOARD ON                           TIMER
-KEYPAD                                TMC22XX
-KILL                                  TO
-LCD                                   TOUCH
-LCD CMD                               TRACE
-LCD INIT                              TRACE ON
-LET                                   TRIANGLE
-LIBRARY                               TRIANGLE RESTORE
-LIBRARY DELETE                        TRIANGLE SAVE
+END                                   POKE FLOAT
+END CSUB                              POKE INTEGER
+END DEFINEFONT                        POKE SHORT
+END FUNCTION                          POKE VAR
+END IF                                POKE WORD
+END SELECT                            POLYGON
+END SUB                               PORT
+END TYPE                              PRINT
+ENDIF                                 PULSE
+EPOCH                                 PWM
+ERASE                                 PWM SYNC
+ERROR                                 RAM
+ESCAPE CODES                          RAM CHAIN
+EXECUTE                               RAM ERASE
+EXIT                                  RAM ERASE ALL
+EXIT DO                               RAM FILE LOAD
+EXIT FOR                              RAM LIST
+EXIT FUNCTION                         RAM LOAD
+EXIT SUB                              RAM OVERWRITE
+FILES                                 RAM RUN
+FILL                                  RAM SAVE
+FLAG                                  RANDOMIZE
+FLAGS                                 RAY
+FLASH                                 RAY CAMERA
+FLASH CHAIN                           RAY CAST
+FLASH DISK LOAD                       RAY CELL
+FLASH ERASE                           RAY CLOSE
+FLASH ERASE ALL                       RAY COLOUR
+FLASH LIST                            RAY DEFINE
+FLASH LOAD                            RAY DOOR
+FLASH LOAD IMAGE                      RAY DOOR CLEAR
+FLASH MODBUFF LOAD                    RAY DOOR CLOSE
+FLASH OVERWRITE                       RAY MAP
+FLASH RUN                             RAY MINIMAP
+FLASH SAVE                            RAY MOVE
+FLASH UF2                             RAY RENDER
+FLUSH                                 RAY SPRITE
+FM                                    RAY SPRITE CLEAR
+FONT                                  RAY SPRITE REMOVE
+FOR                                   RAY TURN
+FRAME                                 RBOX
+FRAME BOX                             READ
+FRAME CLEAR                           READ SAVE
+FRAME CLOSE                           REDIM
+FRAME CLS                             REFRESH
+FRAME COLOUR                          REM
+FRAME CREATE                          RENAME
+FRAME CURSOR                          RESOLUTION
+FRAME DESTROY                         RESTORE
+FRAME HIDE                            RETURN
+FRAME HLINE                           RMDIR
+FRAME INPUT                           RTC
+FRAME OVERLAY                         RTC GETTIME
+FRAME PANEL                           RTC SETREG
+FRAME SCROLL                          RTC SETTIME
+FRAME SHOW                            RTC SETTIME MID$
+FRAME TITLE                           RUN
+FRAME VBUF                            SAVE
+FRAME WRITE                           SAVE CONTEXT
+FRAMEBUFFER                           SAVE DATA
+FRAMEBUFFER CLOSE                     SAVE IMAGE
+FRAMEBUFFER COPY                      SAVE PERSISTENT
+FRAMEBUFFER CREATE                    SEEK
+FRAMEBUFFER LAYER                     SELECT
+FRAMEBUFFER LAYER TOP                 SELECT CASE
+FRAMEBUFFER MERGE                     SERVO
+FRAMEBUFFER SYNC                      SETPIN
+FRAMEBUFFER WAIT                      SETTICK
+FRAMEBUFFER WRITE                     SETTICK PAUSE
+FUNCTION                              SETTICK RESUME
+GAMEPAD                               SIN COS TAN ASIN ACOS ATAN SQR ABS INT EXP LOG SGN FIX CINT DEG RAD
+GAMEPAD COLOUR                        SLEW
+GAMEPAD CONFIGURE                     SORT
+GAMEPAD HAPTIC                        SPI OPEN
+GAMEPAD INTERRUPT DISABLE             SPI2
+GAMEPAD INTERRUPT ENABLE              SPRITE
+GAMEPAD MONITOR                       SPRITE CLOSE
+GOSUB                                 SPRITE CLOSE ALL
+GOTO                                  SPRITE COPY
+GUI                                   SPRITE HIDE
+GUI AREA                              SPRITE HIDE ALL
+GUI BARGAUGE                          SPRITE HIDE SAFE
+GUI BCOLOUR                           SPRITE INTERRUPT
+GUI BEEP                              SPRITE LOAD
+GUI BITMAP                            SPRITE LOADARRAY
+GUI BUTTON                            SPRITE LOADBMP
+GUI CALIBRATE                         SPRITE LOADPNG
+GUI CAPTION                           SPRITE MOVE
+GUI CHECKBOX                          SPRITE NEXT
+GUI CLICK                             SPRITE NOINTERRUPT
+GUI CLICK DOWN                        SPRITE NOSTINTERRUPT
+GUI CLICK PIN                         SPRITE READ
+GUI CURSOR                            SPRITE RESTORE
+GUI CURSOR COLOUR                     SPRITE SCROLL
+GUI CURSOR HIDE                       SPRITE SET TRANSPARENT
+GUI CURSOR LINK MOUSE                 SPRITE SHOW
+GUI CURSOR LOAD                       SPRITE SHOW SAFE
+GUI CURSOR OFF                        SPRITE STATIC
+GUI CURSOR ON                         SPRITE STATIC CLEAR
+GUI CURSOR SHOW                       SPRITE STINTERRUPT
+GUI DELETE                            SPRITE SWAP
+GUI DISABLE                           SPRITE WRITE
+GUI DISPLAYBOX                        STAR
+GUI ENABLE                            STATIC
+GUI FCOLOUR                           STEP
+GUI FORMATBOX                         STEPPER
+GUI FORMATBOX CANCEL                  STEPPER ARC
+GUI FRAME                             STEPPER AXIS
+GUI GAUGE                             STEPPER BUFFER
+GUI HIDE                              STEPPER CLEAR
+GUI INTERRUPT                         STEPPER CLOSE
+GUI LED                               STEPPER ENABLE
+GUI LISTBOX                           STEPPER ESTOP
+GUI LISTBOX CANCEL                    STEPPER GC
+GUI NUMBERBOX                         STEPPER GC G28
+GUI NUMBERBOX CANCEL                  STEPPER GCODE
+GUI PAGE                              STEPPER GS
+GUI RADIO                             STEPPER HWLIMITS
+GUI REDRAW                            STEPPER INIT
+GUI RESET LCDPANEL                    STEPPER INVERT
+GUI SETUP                             STEPPER JERK
+GUI SHOW                              STEPPER LIMITS
+GUI SLIDER                            STEPPER POSITION
+GUI SPINBOX                           STEPPER POSITION HOME
+GUI SWITCH                            STEPPER RECOVER
+GUI TEST LCDPANEL                     STEPPER RESET
+GUI TEST TOUCH                        STEPPER RUN
+GUI TEXTBOX                           STEPPER SCURVE
+GUI TEXTBOX CANCEL                    STEPPER SPINDLE
+HELP                                  STEPPER STATUS
+HUMID                                 STEPPER TUNE
+I2C                                   STRUCT
+I2C CHECK                             STRUCT COPY
+I2C CLOSE                             STRUCT LOAD
+I2C OPEN                              STRUCT SAVE
+I2C READ                              SUB
+I2C SLAVE                             SYNC
+I2C WRITE                             TEMPR START
+I2C2                                  TEXT
+I2CLCD                                THEN
+I2CLCD CLOSE                          TILE
+I2CLCD CREATECHAR                     TILE HEIGHT
+I2CLCD INIT                           TILEMAP
+IF                                    TILEMAP ATTR
+IF ALARM THEN                         TILEMAP CLOSE
+IF ASC                                TILEMAP CREATE
+IN                                    TILEMAP DESTROY
+INC                                   TILEMAP DRAW
+INPUT                                 TILEMAP LOAD
+INTERRUPT                             TILEMAP SCROLL
+INV                                   TILEMAP SET
+IR                                    TILEMAP SPRITE CLOSE
+IR SEND                               TILEMAP SPRITE CREATE
+IRETURN                               TILEMAP SPRITE DESTROY
+KEYBOARD                              TILEMAP SPRITE DRAW
+KEYBOARD OFF                          TILEMAP SPRITE MOVE
+KEYBOARD ON                           TILEMAP SPRITE SET
+KEYPAD                                TILEMAP VIEW
+KILL                                  TIME$
+LCD                                   TIMER
+LCD CMD                               TMC22XX
+LCD INIT                              TO
+LET                                   TOUCH
+LIBRARY                               TRACE
+LIBRARY DELETE                        TRACE ON
+LIBRARY DISK SAVE                     TRIANGLE
+LIBRARY LIST                          TRIANGLE RESTORE
+LIBRARY LOAD                          TRIANGLE SAVE
 LIBRARY SAVE                          TURTLE
 LINE                                  TYPE
 LINE AA                               UNTIL
@@ -367,116 +370,120 @@ MAP RESET
 ~FUNCTIONS
 MMBasic functions
 
-ABS                         MM.INFO(KEYBOARD)
-ACOS                        OCT$
-ASC                         PEEK(BP)
-ASIN                        PEEK(BYTE)
-ATAN2                       PEEK(CFUNADDR)
-ATN                         PEEK(FLOAT)
-BASE$                       PEEK(PROGMEM)
-BIN$                        PEEK(SP)
-BIN2STR$                    PEEK(STEPPER A)
-BOUND                       PEEK(STEPPER ACTIVE)
-CHOICE                      PEEK(STEPPER BUFFER)
-CHR$                        PEEK(STEPPER STATUS)
-CINT                        PEEK(STEPPER X)
-CLICK(DOWN)                 PEEK(STEPPER Y)
-CLICK(LASTREF)              PEEK(STEPPER Z)
-CLICK(LASTX)                PEEK(VAR)
-CLICK(LASTY)                PEEK(VARHEADER)
-CLICK(REF)                  PEEK(VARTBL)
-CLICK(UP)                   PEEK(WORD)
-COS                         PEEK(WP)
-CWD$                        PI
-DATETIME$                   PIN(BOOTSEL)
-DAY$                        PIN(TEMP)
-DEG                         PIO(.WRAP)
-DEVICE(GAMEPAD)             PIO(DMA RX POINTER)
-DEVICE(MOUSE)               PIO(EXECCTRL)
-DEVICE(NUNCHUCK)            PIO(FDEBUG)
-DEVICE(WII)                 PIO(FLEVEL)
-DIR$                        PIO(FSTAT)
-DISTANCE                    PIO(NEXT LINE)
-DRAW3D(DISTANCE)            PIO(PINCTRL)
-DRAW3D(X)                   PIO(READFIFO)
-DRAW3D(XMAX)                PIO(SHIFTCTRL)
-DRAW3D(XMIN)                PRINT TOUCH(X)
-DRAW3D(Y)                   PULSIN
-DRAW3D(YMAX)                RAD
-DRAW3D(YMIN)                RAY(CAMA)
-DRAW3D(Z)                   RAY(CAMX)
-EOF                         RAY(CAMY)
-EPOCH(DATETIME$)            RAY(CASTDIST)
-EVAL                        RAY(CASTSIDE)
-EXP                         RAY(CASTWALL)
-FIELD$                      RAY(CASTX)
-FIX                         RAY(CASTY)
-FORMAT$                     RAY(CELL)
-FRAME(ACTIVE)               RAY(DEFINE)
-FRAME(BC)                   RAY(DIST)
-FRAME(CELL)                 RAY(DOOR)
-FRAME(FC)                   RAY(MAPH)
-FRAME(HEIGHT)               RAY(MAPW)
-FRAME(INKEY)                RAY(SPRITES)
-FRAME(OVERLAYS)             RAY(SPRITEX)
-FRAME(PANELS)               RAY(SPRITEY)
-FRAME(PCELL)                RAY(WALL)
-FRAME(PH)                   RGB
-FRAME(PW)                   RIGHT$
-FRAME(PX)                   RND
-FRAME(PY)                   SELECT CASE TOUCH(LASTREF)
-FRAME(SX)                   SELECT CASE TOUCH(REF)
-FRAME(SY)                   SGN
-FRAME(VH)                   SIN
-FRAME(VISIBLE)              SPACE$
-FRAME(VW)                   SPI
-FRAME(WIDTH)                SPRITE(A)
-GETSCANLINE                 SPRITE(B)
-GPS                         SPRITE(C)
-GUI FCOLOUR RGB(RED)        SPRITE(D)
-GUI FCOLOUR RGB(WHITE)      SPRITE(E)
-HEX$                        SPRITE(H)
-IF PIN(GP2)                 SPRITE(L)
-INKEY$                      SPRITE(N)
-INPUT$                      SPRITE(S)
-INSTR                       SPRITE(ST COLLISION)
-INT                         SPRITE(ST OBJECT)
-JSON$                       SPRITE(ST)
-KEYBOARD(INKEY$)            SPRITE(T)
-KEYBOARD(KEYDOWN)           SPRITE(V)
-KEYDOWN                     SPRITE(W)
-LCASE$                      SPRITE(X)
-LCOMPARE                    SPRITE(Y)
-LEFT$                       SQR
-LEN                         STR$
-LGETBYTE                    STR2BIN
-LGETSTR$                    STRING$
-LINPUT                      STRUCT(FIND)
-LINSTR                      STRUCT(OFFSET)
-LLEN                        STRUCT(SIZEOF)
-LOC                         STRUCT(TYPE)
-LOF                         TAB
-LOG                         TAN
-MATH(ATAN3)                 TEMPR
-MATH(BASE64)                TILEMAP(ATTR)
-MATH(CHI)                   TILEMAP(COLLISION)
-MATH(CORREL)                TILEMAP(COLS)
-MATH(COSH)                  TILEMAP(SPRITE HIT)
-MATH(CROSSING)              TILEMAP(SPRITE TILE)
-MATH(DOTPRODUCT)            TILEMAP(SPRITE W)
-MATH(LOG10)                 TILEMAP(SPRITE X)
-MATH(MAGNITUDE)             TILEMAP(TILE)
-MATH(MAX)                   TILEMAP(VIEWX)
+ABS                         PEEK(CFUNADDR)
+ACOS                        PEEK(FLOAT)
+ASC                         PEEK(INTEGER)
+ASIN                        PEEK(PROGMEM)
+ATAN2                       PEEK(SHORT)
+ATN                         PEEK(SP)
+BASE$                       PEEK(STEPPER A)
+BIN$                        PEEK(STEPPER ACTIVE)
+BIN2STR$                    PEEK(STEPPER BUFFER)
+BOUND                       PEEK(STEPPER STATUS)
+CHOICE                      PEEK(STEPPER X)
+CHR$                        PEEK(STEPPER Y)
+CINT                        PEEK(STEPPER Z)
+CLICK(DOWN)                 PEEK(VAR)
+CLICK(LASTREF)              PEEK(VARADDR)
+CLICK(LASTX)                PEEK(VARHEADER)
+CLICK(LASTY)                PEEK(VARTBL)
+CLICK(REF)                  PEEK(WORD)
+CLICK(UP)                   PEEK(WP)
+COS                         PI
+CWD$                        PIN(BOOTSEL)
+DATETIME$                   PIN(TEMP)
+DAY$                        PIO(.WRAP)
+DEG                         PIO(DMA RX POINTER)
+DEVICE(GAMEPAD)             PIO(EXECCTRL)
+DEVICE(MOUSE)               PIO(FDEBUG)
+DEVICE(NUNCHUCK)            PIO(FLEVEL)
+DEVICE(WII)                 PIO(FSTAT)
+DIR$                        PIO(NEXT LINE)
+DISTANCE                    PIO(PINCTRL)
+DRAW3D(DISTANCE)            PIO(READFIFO)
+DRAW3D(X)                   PIO(SHIFTCTRL)
+DRAW3D(XMAX)                PRINT TOUCH(X)
+DRAW3D(XMIN)                PULSIN
+DRAW3D(Y)                   RAD
+DRAW3D(YMAX)                RAY(CAMA)
+DRAW3D(YMIN)                RAY(CAMX)
+DRAW3D(Z)                   RAY(CAMY)
+EOF                         RAY(CASTDIST)
+EPOCH(DATETIME$)            RAY(CASTSIDE)
+EVAL                        RAY(CASTWALL)
+EXP                         RAY(CASTX)
+FIELD$                      RAY(CASTY)
+FIX                         RAY(CELL)
+FORMAT$                     RAY(DEFINE)
+FRAME(ACTIVE)               RAY(DIST)
+FRAME(BC)                   RAY(DOOR)
+FRAME(CELL)                 RAY(MAPH)
+FRAME(FC)                   RAY(MAPW)
+FRAME(HEIGHT)               RAY(SPRITES)
+FRAME(INKEY)                RAY(SPRITEX)
+FRAME(OVERLAYS)             RAY(SPRITEY)
+FRAME(PANELS)               RAY(WALL)
+FRAME(PCELL)                RGB
+FRAME(PH)                   RIGHT$
+FRAME(PW)                   RND
+FRAME(PX)                   SELECT CASE TOUCH(LASTREF)
+FRAME(PY)                   SELECT CASE TOUCH(REF)
+FRAME(SX)                   SGN
+FRAME(SY)                   SIN
+FRAME(VH)                   SPACE$
+FRAME(VISIBLE)              SPI
+FRAME(VW)                   SPRITE(A)
+FRAME(WIDTH)                SPRITE(B)
+GETSCANLINE                 SPRITE(C)
+GPS                         SPRITE(D)
+GUI FCOLOUR RGB(RED)        SPRITE(E)
+GUI FCOLOUR RGB(WHITE)      SPRITE(H)
+HEX$                        SPRITE(L)
+IF PIN(GP2)                 SPRITE(N)
+INKEY$                      SPRITE(S)
+INPUT$                      SPRITE(ST COLLISION)
+INSTR                       SPRITE(ST OBJECT)
+INT                         SPRITE(ST)
+JSON$                       SPRITE(T)
+KEYBOARD(INKEY$)            SPRITE(V)
+KEYBOARD(KEYDOWN)           SPRITE(W)
+KEYDOWN                     SPRITE(X)
+LCASE$                      SPRITE(Y)
+LCOMPARE                    SQR
+LEFT$                       STR$
+LEN                         STR2BIN
+LGETBYTE                    STRING$
+LGETSTR$                    STRUCT(FIND)
+LINPUT                      STRUCT(OFFSET)
+LINSTR                      STRUCT(SIZEOF)
+LLEN                        STRUCT(TYPE)
+LOC                         TAB
+LOF                         TAN
+LOG                         TEMPR
+MATH(ATAN3)                 TILEMAP(ATTR)
+MATH(BASE64)                TILEMAP(COLLISION)
+MATH(CHI)                   TILEMAP(COLS)
+MATH(CORREL)                TILEMAP(SPRITE HIT)
+MATH(COSH)                  TILEMAP(SPRITE TILE)
+MATH(CROSSING)              TILEMAP(SPRITE W)
+MATH(DOTPRODUCT)            TILEMAP(SPRITE X)
+MATH(LOG10)                 TILEMAP(TILE)
+MATH(MAGNITUDE)             TILEMAP(VIEWX)
+MATH(MAX)                   TOUCH(CW)
 MATH(MEAN)                  TOUCH(DTAP)
 MATH(MEDIAN)                TOUCH(EXPAND)
 MATH(MIN)                   TOUCH(HOLD)
-MATH(PID)                   TOUCH(SWL)
-MATH(RAND)                  TOUCH(TAP)
-MATH(SD)                    TOUCH(TTAP)
-MATH(SINH)                  TOUCH(X)
-MATH(SUM)                   TRIM$
-MATH(TANH)                  UCASE$
-MAX                         VAL
+MATH(PID)                   TOUCH(PINCH)
+MATH(RAND)                  TOUCH(ROTATE)
+MATH(SD)                    TOUCH(SWIPE)
+MATH(SINH)                  TOUCH(SWL)
+MATH(SUM)                   TOUCH(TAP)
+MATH(TANH)                  TOUCH(TTAP)
+MAX                         TOUCH(X)
+MM.INFO(KEYBOARD)           TRIM$
+OCT$                        UCASE$
+PEEK(BP)                    VAL
+PEEK(BYTE)
 
 ~OPTIONS
 OPTION settings
@@ -1657,22 +1664,14 @@ GUI CHECKBOX #10, "Test", 100, 100, 50, rgb(BLUE)
 ~GUI CLICK
 GUI CLICK
 GUI CLICK x, y
-GUI CLICK DOWN
-GUI CLICK UP
-GUI CLICK PIN pin [,INV]
-GUI CLICK PIN OFF
 
 ~GUI CLICK DOWN
 GUI CLICK DOWN
 GUI CLICK UP
 
-Described with the rest of its family:  HELP GUI CLICK
-
 ~GUI CLICK PIN
 GUI CLICK PIN pin [,INV]
 GUI CLICK PIN OFF
-
-Described with the rest of its family:  HELP GUI CLICK
 
 ~GUI CURSOR
 GUI CURSOR x, y
@@ -2009,40 +2008,35 @@ LGETBYTE(array%(), n)
 LGETSTR$(array%(), start, length)
 
 ~LIBRARY
-LIBRARY SAVE
-or
-LIBRARY DELETE
-or
-LIBRARY LIST
-or
-LIBRARY LIST ALL
-or
-LIBRARY DISK SAVE fname$
-or
-LIBRARY DISK LOAD fname$
-or
-LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]
+LIBRARY is the first word of several entries:
+
+LIBRARY DELETE     LIBRARY LIST       LIBRARY SAVE
+LIBRARY DISK SAVE  LIBRARY LOAD
+
+List them all with:  HELP LIBRARY*
 
 ~LIBRARY DELETE
 LIBRARY DELETE
 or
-LIBRARY LIST
-or
-LIBRARY LIST ALL
-or
+
+~LIBRARY DISK SAVE
 LIBRARY DISK SAVE fname$
 or
 LIBRARY DISK LOAD fname$
 or
-LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]
 
-Described with the rest of its family:  HELP LIBRARY
+~LIBRARY LIST
+LIBRARY LIST
+or
+LIBRARY LIST ALL
+or
+
+~LIBRARY LOAD
+LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]
 
 ~LIBRARY SAVE
 LIBRARY SAVE
 or
-
-Described with the rest of its family:  HELP LIBRARY
 
 ~LINE
 LINE  x1, y1, x2, y2 [,[-] LW [, C]]
@@ -3765,69 +3759,44 @@ PAUSE delay
 ~PEEK
 PEEK is the first word of several entries:
 
-PEEK(BP)              PEEK(STEPPER A)       PEEK(STEPPER Z)
-PEEK(BYTE)            PEEK(STEPPER ACTIVE)  PEEK(VAR)
-PEEK(CFUNADDR)        PEEK(STEPPER BUFFER)  PEEK(VARHEADER)
-PEEK(FLOAT)           PEEK(STEPPER STATUS)  PEEK(VARTBL)
+PEEK(BP)              PEEK(SP)              PEEK(STEPPER Z)
+PEEK(BYTE)            PEEK(STEPPER A)       PEEK(VAR)
+PEEK(CFUNADDR)        PEEK(STEPPER ACTIVE)  PEEK(VARADDR)
+PEEK(FLOAT)           PEEK(STEPPER BUFFER)  PEEK(VARHEADER)
+PEEK(INTEGER)         PEEK(STEPPER STATUS)  PEEK(VARTBL)
 PEEK(PROGMEM)         PEEK(STEPPER X)       PEEK(WORD)
-PEEK(SP)              PEEK(STEPPER Y)       PEEK(WP)
+PEEK(SHORT)           PEEK(STEPPER Y)       PEEK(WP)
 
 List them all with:  HELP PEEK*
 
 ~PEEK(BP)
 PEEK(BP n%)
 
-Described with the rest of its family:  HELP PEEK(BYTE)
-
 ~PEEK(BYTE)
 PEEK(BYTE addr%)
 or
-PEEK(SHORT addr%)
-or
-PEEK(WORD addr%)
-or
-PEEK(INTEGER addr%)
-or
-PEEK(FLOAT addr%)
-or
-PEEK(VARADDR var)
-or
-PEEK(VARHEADER var)
-or
-PEEK(CFUNADDR cfun)
-or
-PEEK(VAR var, +/-offset)
-or
-PEEK( VARTBL, +/-offset)
-or
-PEEK( PROGMEM, +/-offset)
-PEEK(BP n%)
-PEEK(SP n%)
-PEEK(WP n%)
 
 ~PEEK(CFUNADDR)
 PEEK(CFUNADDR cfun)
 or
 
-Described with the rest of its family:  HELP PEEK(BYTE)
-
 ~PEEK(FLOAT)
 PEEK(FLOAT addr%)
 or
-PEEK(VARADDR var)
-or
 
-Described with the rest of its family:  HELP PEEK(BYTE)
+~PEEK(INTEGER)
+PEEK(INTEGER addr%)
+or
 
 ~PEEK(PROGMEM)
 PEEK( PROGMEM, +/-offset)
 
-Described with the rest of its family:  HELP PEEK(BYTE)
+~PEEK(SHORT)
+PEEK(SHORT addr%)
+or
 
 ~PEEK(SP)
 PEEK(SP n%)
-
-Described with the rest of its family:  HELP PEEK(BYTE)
 
 ~PEEK(STEPPER A)
 PEEK(STEPPER A)
@@ -3854,32 +3823,24 @@ PEEK(STEPPER Z)
 PEEK(VAR var, +/-offset)
 or
 
-Described with the rest of its family:  HELP PEEK(BYTE)
+~PEEK(VARADDR)
+PEEK(VARADDR var)
+or
 
 ~PEEK(VARHEADER)
 PEEK(VARHEADER var)
 or
 
-Described with the rest of its family:  HELP PEEK(BYTE)
-
 ~PEEK(VARTBL)
 PEEK( VARTBL, +/-offset)
 or
 
-Described with the rest of its family:  HELP PEEK(BYTE)
-
 ~PEEK(WORD)
 PEEK(WORD addr%)
 or
-PEEK(INTEGER addr%)
-or
-
-Described with the rest of its family:  HELP PEEK(BYTE)
 
 ~PEEK(WP)
 PEEK(WP n%)
-
-Described with the rest of its family:  HELP PEEK(BYTE)
 
 ~PI
 PI
@@ -4119,58 +4080,38 @@ PLAY VOLUME left, right
 PLAY WAV file$ [, interrupt]
 
 ~POKE
-POKE BYTE addr%, byte
-or
-POKE SHORT addr%, short%
-or
-POKE WORD addr%, word%
-or
-POKE INTEGER addr%, int%
-or
-POKE FLOAT addr%, float!
-or
-POKE VAR var, offset, byte
-or
 POKE VARTBL, offset, byte
-POKE DISPLAY command [,data1] [,data2] [,datan]
-POKE DISPLAY HRES n
-POKE DISPLAY VRES n
 
 ~POKE BYTE
 POKE BYTE addr%, byte
 or
 
-Described with the rest of its family:  HELP POKE
-
 ~POKE DISPLAY
 POKE DISPLAY command [,data1] [,data2] [,datan]
-
-Described with the rest of its family:  HELP POKE
 
 ~POKE DISPLAY HRES
 POKE DISPLAY HRES n
 POKE DISPLAY VRES n
 
-Described with the rest of its family:  HELP POKE
+~POKE FLOAT
+POKE FLOAT addr%, float!
+or
 
 ~POKE INTEGER
 POKE INTEGER addr%, int%
 or
-POKE FLOAT addr%, float!
-or
-POKE VAR var, offset, byte
-or
-POKE VARTBL, offset, byte
-
-Described with the rest of its family:  HELP POKE
 
 ~POKE SHORT
 POKE SHORT addr%, short%
 or
-POKE WORD addr%, word%
+
+~POKE VAR
+POKE VAR var, offset, byte
 or
 
-Described with the rest of its family:  HELP POKE
+~POKE WORD
+POKE WORD addr%, word%
+or
 
 ~POLYGON
 POLYGON n, xarray%(), yarray%() [, bordercolour] [, fillcolour]
@@ -4951,56 +4892,40 @@ To minimize wasted space from padding, consider:
 ~TOUCH
 TOUCH() Function - Reading Touch Coordinates
 
+~TOUCH(CW)
+TOUCH(CW)
+TOUCH(CCW)
+
 ~TOUCH(DTAP)
 TOUCH(DTAP)
-
-Described with the rest of its family:  HELP TOUCH(TAP)
 
 ~TOUCH(EXPAND)
 TOUCH(EXPAND)
 TOUCH(CONTRACT)
-TOUCH(PINCH)
-TOUCH(CW)
-TOUCH(CCW)
-TOUCH(ROTATE)
-
-Described with the rest of its family:  HELP TOUCH(TAP)
 
 ~TOUCH(HOLD)
 TOUCH(HOLD)
 
-Described with the rest of its family:  HELP TOUCH(TAP)
+~TOUCH(PINCH)
+TOUCH(PINCH)
+
+~TOUCH(ROTATE)
+TOUCH(ROTATE)
+
+~TOUCH(SWIPE)
+TOUCH(SWIPE)
 
 ~TOUCH(SWL)
 TOUCH(SWL)
 TOUCH(SWR)
 TOUCH(SWU)
 TOUCH(SWD)
-TOUCH(SWIPE)
-
-Described with the rest of its family:  HELP TOUCH(TAP)
 
 ~TOUCH(TAP)
 TOUCH(TAP)
-TOUCH(DTAP)
-TOUCH(HOLD)
-TOUCH(SWL)
-TOUCH(SWR)
-TOUCH(SWU)
-TOUCH(SWD)
-TOUCH(SWIPE)
-TOUCH(EXPAND)
-TOUCH(CONTRACT)
-TOUCH(PINCH)
-TOUCH(CW)
-TOUCH(CCW)
-TOUCH(ROTATE)
-TOUCH(TTAP)
 
 ~TOUCH(TTAP)
 TOUCH(TTAP)
-
-Described with the rest of its family:  HELP TOUCH(TAP)
 
 ~TOUCH(X)
 TOUCH(X)
