@@ -1696,18 +1696,38 @@ void fun_version(void)
 {
 	char *p;
 	/* Each step skips the separator that stopped the one before it - a '.', or
-	   the 'b' of a beta.  A release has no fourth field, so strtol stops on the
-	   terminating NUL and p + 1 would read PAST THE END of the string literal,
-	   parsing whatever the linker happened to put there as the beta number.  So
-	   check there is something to step over.  "6.03.02b8" is unchanged at
-	   6.030208; "6.03.02" is now reliably 6.0302. */
+	   the 'b' of a beta, or the "RC" of a release candidate.  A release has no
+	   fourth field, so strtol stops on the terminating NUL and p + 1 would read
+	   PAST THE END of the string literal, parsing whatever the linker happened
+	   to put there as the beta number.  So check there is something to step
+	   over.  "6.03.02b8" is unchanged at 6.030208; "6.03.02" is now reliably
+	   6.0302; "6.04.00RC1" is 6.040051. */
 	fret = strtol(VERSION, &p, 10);
 	if (*p)
 		fret += (MMFLOAT)strtol(p + 1, &p, 10) / 100;
 	if (*p)
 		fret += (MMFLOAT)strtol(p + 1, &p, 10) / 10000;
 	if (*p)
-		fret += (MMFLOAT)strtol(p + 1, &p, 10) / 1000000;
+	{
+		/* The fourth field's separator says which kind of pre-release this is:
+		   'b' for a beta, "RC" for a release candidate.  A beta contributes its
+		   own number, so "6.03.02b8" stays 6.030208.  A release candidate is
+		   offset by 50, so "6.04.00RC1" is 6.040051: that puts every RC above
+		   every beta of the same release and gives RC0 a value of its own, while
+		   staying inside the two digits this field owns.  The offset must not
+		   reach 100 - that would carry into the third field's digits and make
+		   RC1 read 6.040101, which is indistinguishable from 6.04.01b1.  The 'C'
+		   has to be stepped over as well - stepping over one character only, as
+		   a beta needs, left strtol looking at "C1", which returns 0 and made
+		   every RCn read alike. */
+		int offset = 0;
+		if ((p[0] == 'R' || p[0] == 'r') && (p[1] == 'C' || p[1] == 'c'))
+		{
+			p++;
+			offset = 50;
+		}
+		fret += (MMFLOAT)(strtol(p + 1, &p, 10) + offset) / 1000000;
+	}
 	targ = T_NBR;
 }
 
