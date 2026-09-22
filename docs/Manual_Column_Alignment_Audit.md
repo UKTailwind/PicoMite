@@ -4,7 +4,7 @@ Written 2026-09-21 against the V6.04.00RC0 manual (294 pages).
 
 **Finding 1, pages 113 and 114, was fixed on the day of the audit** and the
 manual and its PDF have been regenerated; the description below is kept as
-the record of what was wrong. Findings 2 and 3, and everything under
+the record of what was wrong. Findings 2, 3 and 4, and everything under
 *Sub-line drift*, are untouched and still stand against the current manual.
 
 ## What is being checked, and why it breaks
@@ -161,6 +161,37 @@ name belongs against its sentence, and a later edit to any sentence will
 undo it again. Splitting the block into one table row per form would fix it
 permanently; that is a bigger change and Peter's call.
 
+### 4. Commands, pages 162 and 163: the LIBRARY forms
+
+Reported by Peter, 2026-09-22. The same defect as finding 3 and the most
+pronounced instance found: **every one of the seven LIBRARY forms is level
+with the wrong text.**
+
+| name | what appears beside it | how far from its own sentence |
+|---|---|---|
+| `LIBRARY SAVE` | The library is a special segment of program memory | 135 pt, 10.7 lines |
+| `LIBRARY DELETE` | Any code in the library not contained within a subroutine | 158 pt, 12.5 lines |
+| `LIBRARY LIST` | for a full explanation. | 143 pt, 11.3 lines |
+| `LIBRARY LIST ALL` | LIBRARY **SAVE** will take whatever is in program memory | 113 pt, 8.9 lines |
+| `LIBRARY DISK SAVE fname$` | in LIST or EDIT and will not be deleted ... | 85 pt, 6.7 lines |
+| `LIBRARY DISK LOAD fname$` | LIBRARY **LIST** will list the contents of the library | 42 pt, 3.3 lines |
+| `LIBRARY LOAD fname$ [, fname$ ...] [, O] [, RAM]` | allowing a subsequent call to LIBRARY DISK LOAD ... | 64 pt, 5.1 lines |
+
+`LIBRARY SAVE` at the top is a partial exception: the paragraph beside it
+is the general explanation of what the library is, so it does not read as
+wrong, even though the sentence describing `LIBRARY SAVE` itself is ten
+lines lower.
+
+The imbalance is extreme. All seven names fit in the top half of page 162,
+while the description runs from there to two thirds of the way down page
+163 - the `LIBRARY LOAD` narrative alone is some forty lines. The name
+column simply has nowhere to go.
+
+This is the same shape as finding 3 and wants the same decision: pad it by
+eye, knowing the next edit to any of those paragraphs will undo it, or give
+each form its own table row. The block ends cleanly - `LINE`, which starts
+the next row on page 163, is level.
+
 ## Sub-line drift: the space above and below paragraphs
 
 Separately from the defects above, the two columns very often run at
@@ -211,14 +242,17 @@ These have **not** been checked and may hide further instances. Re-running
 
 1. ~~Pages 113 and 114, sixteen entries, the only place a reader is
    actively misled.~~ Done.
-2. Page 155, the `GUI CURSOR` block, eight entries reading against the
-   wrong form, plus `GUI CLICK PIN OFF`. Decide first whether to re-pad it
-   or to split it into one row per form.
-3. Page 112, `MM.INFO(FREE SPACE)`, one entry. Still outstanding.
-4. Leave the sub-line drift alone unless a particular entry looks wrong on
+2. Pages 162 and 163, the `LIBRARY` block, all seven forms against the
+   wrong text and by the widest margins in the manual.
+3. Page 155, the `GUI CURSOR` block, eight entries reading against the
+   wrong form, plus `GUI CLICK PIN OFF`.
+4. Decide 2 and 3 together: both are a running narrative against a list of
+   names, and both want either padding by eye or one table row per form.
+5. Page 112, `MM.INFO(FREE SPACE)`, one entry. Still outstanding.
+6. Leave the sub-line drift alone unless a particular entry looks wrong on
    the page; correcting it means touching paragraph spacing, which moves
    everything below it and risks introducing the very defect being fixed.
-5. Consider putting the audit in `tools/` and running it before a release,
+7. Consider putting the audit in `tools/` and running it before a release,
    the way `release_preflight.py` runs. It takes about three minutes over
    the whole manual and needs only the docx and the PDF.
 
