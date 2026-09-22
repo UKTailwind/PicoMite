@@ -2056,6 +2056,17 @@ void __not_in_flash_func (*GetPSMemory)(int size)
 {
     unsigned int j, n;
     unsigned char *addr;
+    /* A request of zero or fewer bytes cannot be met, and must not be
+       reported as exhaustion.  The page count below is (size + PAGESIZE -
+       1) / PAGESIZE, which is 0 for any size from -255 to 0; the counters
+       are unsigned, so the scan's `--n == 0` / `++n == k` test never fires
+       and the whole heap is walked without a match however much of it is
+       free.  That surfaced as "Not enough PSRAM memory" on a completely
+       empty heap, which sends whoever reads it after entirely the wrong
+       thing.  A negative size would also reach memset() as a huge size_t
+       if a match were ever made.  Name the real fault instead. */
+    if (size <= 0)
+        error("Invalid memory request of % bytes", size);
     j = n = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
     for (addr = (unsigned char *)(PSRAMbase + PSRAMsize - PAGESIZE); addr >= (unsigned char *)PSRAMbase; addr -= PAGESIZE)
     {
@@ -2078,7 +2089,7 @@ void __not_in_flash_func (*GetPSMemory)(int size)
     // out of memory
     TempStringClearStart = 0;
     ClearTempMemory(); // hopefully this will give us enough to print the prompt
-    error("Not enough PSRAM memory");
+    error("Not enough PSRAM memory for % bytes", size);
     return NULL; // keep the compiler happy
 }
 #endif
@@ -2090,6 +2101,9 @@ void MIPS32 __not_in_flash_func (*GetSystemMemory)(int size)
 { // get memory from the bottom up
     int n = 0, k;
     unsigned char *addr;
+    /* See the note in GetPSMemory. */
+    if (size <= 0)
+        error("Invalid memory request of % bytes", size);
     k = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
     for (addr = MMHeap; addr < MMHeap + heap_memory_size - PAGESIZE; addr += PAGESIZE)
     {
@@ -2118,7 +2132,7 @@ void MIPS32 __not_in_flash_func (*GetSystemMemory)(int size)
 #endif
     TempStringClearStart = 0;
     ClearTempMemory(); // hopefully this will give us enough to print the prompt
-    error("Not enough System Heap memory");
+    error("Not enough System Heap memory for % bytes", size);
     return NULL; // keep the compiler happy
 }
 #ifdef rp2350
@@ -2131,6 +2145,9 @@ void MIPS32 __not_in_flash_func (*GetMemory)(int size)
     if (PSRAMsize && size > heap_memory_size / 2)
         return GetPSMemory(size);
 #endif
+    /* See the note in GetPSMemory. */
+    if (size <= 0)
+        error("Invalid memory request of % bytes", size);
     unsigned int j, n, k;
     unsigned char *addr;
     j = n = k = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
@@ -2158,7 +2175,7 @@ void MIPS32 __not_in_flash_func (*GetMemory)(int size)
 #endif
     TempStringClearStart = 0;
     ClearTempMemory(); // hopefully this will give us enough to print the prompt
-    error("Not enough Heap memory");
+    error("Not enough Heap memory for % bytes", size);
     return NULL; // keep the compiler happy
 }
 
@@ -2180,6 +2197,11 @@ void __not_in_flash_func (*CallocMemory)(size_t num, size_t size)
 #ifdef rp2350
 void __not_in_flash_func (*GetPSMemoryNull)(int size)
 {
+    /* See the note in GetPSMemory: a zero or negative size matches
+       nothing and would walk the whole heap.  These variants are called
+       from lwIP and must not longjmp, so answer NULL. */
+    if (size <= 0)
+        return NULL;
     unsigned int j, n;
     unsigned char *addr;
     j = n = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
@@ -2213,6 +2235,11 @@ void MIPS32 __not_in_flash_func (*GetMemoryNull)(int size)
     if (PSRAMsize && size > heap_memory_size / 2)
         return GetPSMemoryNull(size);
 #endif
+    /* See the note in GetPSMemory: a zero or negative size matches
+       nothing and would walk the whole heap.  These variants are called
+       from lwIP and must not longjmp, so answer NULL. */
+    if (size <= 0)
+        return NULL;
     unsigned int j, n;
     unsigned char *addr;
     j = n = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
