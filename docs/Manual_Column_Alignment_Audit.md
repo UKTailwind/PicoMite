@@ -4,7 +4,7 @@ Written 2026-09-21 against the V6.04.00RC0 manual (294 pages).
 
 **Finding 1, pages 113 and 114, was fixed on the day of the audit** and the
 manual and its PDF have been regenerated; the description below is kept as
-the record of what was wrong. Findings 2 to 8, and everything under
+the record of what was wrong. Findings 2 to 11, and everything under
 *Sub-line drift*, are untouched and still stand against the current manual.
 
 ## What is being checked, and why it breaks
@@ -304,6 +304,75 @@ badly.
 
 This was row 372 in the sweep list below, now confirmed.
 
+### 9. Functions, pages 227 and 228: the MATH() functions
+
+Reported by Peter, 2026-09-22. Every name in this block floats above its
+own description, consistently, for two pages.
+
+The offsets are steady at 15 to 16 pt, a line and a quarter: `MATH(ATAN3)`
+is 16.2 pt above *Returns ATAN3 of x and y*, `MATH(COSH)` 16.0 pt above
+*Returns the hyperbolic cosine of a*, and so on through `LOG10`, `SINH`,
+`TANH`, `CRCn` and `RAND`. On page 228 they widen to 1.7 lines -
+`MATH(MIN)`, `MATH(SD)`, `MATH(SUM)`, `MATH(MAGNITUDE)` and
+`MATH(DOTPRODUCT)` are each 19 to 22 pt above their text.
+
+At the page break it tips over into a whole entry: `MATH(MIN a(),
+[index%])` at the top of 228 has *Returns the median of all values in the
+a() array* beside it, which belongs to `MATH(MEDIAN)`, the last name on
+227.
+
+Because the offset is a little over one line and always downward, a reader
+can still pair them up - the text is directly below the name rather than
+beside it - but every entry on two pages looks wrong, and the one at the
+page break is genuinely misleading.
+
+### 10. Functions, page 230: the PEEK forms
+
+Reported by Peter, 2026-09-22. The PEEK block is level on page 229, where
+`PEEK(BYTE)`, `PEEK(SHORT)`, `PEEK(WORD)`, `PEEK(INTEGER)`, `PEEK(FLOAT)`,
+`PEEK(VARADDR)` and `PEEK(VARHEADER)` all read correctly. It goes out of
+step at the page break and stays out for the whole of 230, by about two
+lines:
+
+| name | what appears beside it |
+|---|---|
+| `PEEK(VAR var, ~offset)` | memory. This address can be passed to another CFunction (`CFUNADDR`'s text) |
+| `PEEK(VARTBL, ~offset)` | as var(). (the tail of `VAR`'s text) |
+| `PEEK(PROGMEM, ~offset)` | VARTBL. (the tail of `VARTBL`'s text) |
+| `PEEK(BP n%)` | nothing |
+| `PEEK(SP n%)` | the next byte. (the tail of `BP`'s text) |
+| `PEEK(WP n%)` | the next short. (the tail of `SP`'s text) |
+
+Each name is 19 to 28 pt above its own sentence. `PI`, which follows, is
+level again.
+
+### 11. Functions, pages 234 and 235: the TOUCH gestures
+
+Reported by Peter, 2026-09-22. The worst mismatch in the functions table:
+**the name column runs a whole group ahead of the description column.**
+
+On page 234 the single-finger gesture names - `TOUCH(TAP)`, `TOUCH(DTAP)`,
+`TOUCH(HOLD)`, `TOUCH(SWIPE)`, `TOUCH(SWL)`, `TOUCH(SWR)`, `TOUCH(SWU)`,
+`TOUCH(SWD)` - are listed against the block's general preamble about how
+gestures are latched and read.
+
+On page 235 the multi-finger names are then listed against the
+single-finger descriptions:
+
+| name | what appears beside it |
+|---|---|
+| `TOUCH(PINCH)` | TOUCH(**TAP**) - a quick tap |
+| `TOUCH(EXPAND)` | without moving). |
+| `TOUCH(CONTRACT)` | TOUCH(**DTAP**) - a double tap |
+| `TOUCH(ROTATE)` | second). |
+| `TOUCH(CW)` | TOUCH(**HOLD**) - a long press |
+| `TOUCH(CCW)` | This is recognised while the touch is still down. |
+| `TOUCH(TTAP)` | TOUCH(**SWL**), TOUCH(SWR) ... - a swipe |
+
+So a reader looking up `TOUCH(PINCH)` is told about a quick tap, and
+`TOUCH(CW)` is told about a long press. Unlike findings 9 and 10 the right
+text is nowhere near the name, so this one actively misinforms.
+
 ## The automated sweep for this class
 
 Findings 3, 4 and 5 share a shape the first sweep could not see: a
@@ -434,16 +503,20 @@ These have **not** been checked and may hide further instances. Re-running
 5. Pages 190 and 191, the `PLAY` block, three names at the page break.
 6. Page 155, the `GUI CURSOR` block, eight entries reading against the
    wrong form, plus `GUI CLICK PIN OFF`.
-7. Page 214, `WEB TLS NOVERIFY`, one name, minor.
-8. Decide 2 to 7 together: all are a running narrative against a list of
+7. Pages 234 and 235, the `TOUCH` gestures, seven names a whole group out.
+8. Pages 227 and 228, the `MATH()` functions, every name just over a line
+   high across two pages.
+9. Page 230, the `PEEK` forms, six names about two lines high.
+10. Page 214, `WEB TLS NOVERIFY`, one name, minor.
+11. Decide 2 to 10 together: all are a running narrative against a list of
    names, and all want either padding by eye or one table row per form.
-9. Page 112, `MM.INFO(FREE SPACE)`, one entry.
-10. Work through the unverified rows in *The automated sweep for this
+12. Page 112, `MM.INFO(FREE SPACE)`, one entry.
+13. Work through the unverified rows in *The automated sweep for this
    class*, discarding the ones that matched a code example.
-11. Leave the sub-line drift alone unless a particular entry looks wrong on
+14. Leave the sub-line drift alone unless a particular entry looks wrong on
    the page; correcting it means touching paragraph spacing, which moves
    everything below it and risks introducing the very defect being fixed.
-12. Consider putting the audit in `tools/` and running it before a release,
+15. Consider putting the audit in `tools/` and running it before a release,
    the way `release_preflight.py` runs. It takes about three minutes over
    the whole manual and needs only the docx and the PDF.
 
