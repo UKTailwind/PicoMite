@@ -35,7 +35,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * The classic BBC Micro model: channels 1-3 are square-wave tones and
  * channel 0 is an LFSR noise source with the BBC's eight settings -
  * periodic or white, at three fixed rates or tuned to channel 1's tone.
- * Each channel has an 8-note queue;
+ * Each channel has a 16-note queue (MM.INFO(BBC BUFFER) reports the free
+ * slots, so a program can keep ahead of the engine without blocking);
  * the channel word's &1x bit flushes it and the &Sxx bits hold a note
  * until S other channels carry the same sync mark, which is how chords
  * start together.  ENVELOPE 1-16 gives the three-section pitch envelope
@@ -65,13 +66,14 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * The next PLAY BBC SOUND starts it again.
  *
  * RAM.  The engine's state - the four channels with their queues, the
- * sixteen envelopes, the noise generator - is one block of about 470
- * bytes taken from the MMBasic heap by the first PLAY BBC command a
- * program issues, so a program that never uses the engine pays nothing
- * for it.  The only permanent cost is the pointer.  The block outlives
- * the audio output: it is kept through the automatic stop and through
- * PLAY STOP, so envelope definitions survive them as they did on the
- * BBC, and it is released when the program's variables are - by
+ * sixteen envelopes, the noise generator - is one block of 608 bytes
+ * (three 256-byte heap pages; it was 480 bytes in two pages when the
+ * queues were 8 deep) taken from the MMBasic heap by the first PLAY BBC
+ * command a program issues, so a program that never uses the engine pays
+ * nothing for it.  The only permanent cost is the pointer.  The block
+ * outlives the audio output: it is kept through the automatic stop and
+ * through PLAY STOP, so envelope definitions survive them as they did on
+ * the BBC, and it is released when the program's variables are - by
  * ClearRuntime, on RUN, NEW and program load - through BBCSoundRelease.
  * The engine is silenced and its queues flushed, envelopes kept, by
  * BBCSoundReset, which CloseAudio calls.
@@ -86,7 +88,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
 
-#define BBC_QLEN 8	   /* notes per channel queue */
+#define BBC_QLEN 16	   /* notes per channel queue */
 /* One bit set.  Periodic noise circulates a single bit round the fifteen
  * stages, so a register of ones with single-tap feedback would never change
  * and would be silent.  The chip clears its register when the noise control
@@ -519,6 +521,32 @@ int BBCSoundQueue(int chan, int amp, int pitch, int dur)
 	c->qw++;
 	try_dequeue();
 	return 0;
+}
+
+// Free slots in a channel's note queue - how many more notes PLAY BBC SOUND
+// will take for it without blocking.  chan is 0-3, or -1 for the emptiest of
+// the four.  The note that is playing has already left the queue (try_dequeue
+// advances qr when it starts it), so this counts pending notes only.  A query
+// before the first PLAY BBC must not take the heap block just to answer, so a
+// NULL engine reports the full depth, which is what its empty queues hold.
+int BBCSoundFree(int chan)
+{
+	int i, least = BBC_QLEN;
+
+	if (bbc == NULL)
+		return BBC_QLEN;
+	if (chan >= 0)
+	{
+		struct bbcchan *c = &bbc->ch[chan & 3];
+		return BBC_QLEN - (uint8_t)(c->qw - c->qr);
+	}
+	for (i = 0; i < 4; i++)
+	{
+		int f = BBC_QLEN - (uint8_t)(bbc->ch[i].qw - bbc->ch[i].qr);
+		if (f < least)
+			least = f;
+	}
+	return least;
 }
 
 // e[0] = envelope number 1-16, e[1..13] = T, PI1-3, PN1-3, AA, AD, AS, AR, ALA, ALD
