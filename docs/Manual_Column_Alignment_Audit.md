@@ -297,6 +297,27 @@ show the layout drifting:
 | 151 | `FRAMEBUFFER SYNC` | 7.6 pt, 0.60 line |
 | 112, 114, 115 | many, e.g. `MM.INFO(FCOLOUR)`, `MM.INFO(TRACK)` | 1 to 3 pt |
 
+**Page 186, the PIO DMA block, is the clearest worked example** and was
+reported by Peter as "very minor", which is the right reading. Every name
+on it sits half a line below its description:
+
+| name | offset |
+|---|---|
+| `PIO DMA RX pio, sm, nbr, data%() ...` | 8.5 pt, 0.67 line |
+| `PIO DMA RX OFF` | 6.0 pt, 0.47 line |
+| `PIO INTERRUPT pio, sm ...` | 6.2 pt, 0.49 line |
+
+The mechanism is visible in the line spacing. Down the description column
+the gaps are 15.6 to 15.8 pt, because each parameter is its own paragraph
+and carries space before it. Down the name column, where the wrapped name
+is one paragraph, they are 12.6 pt. The two columns start 8.5 pt apart at
+`PIO DMA RX` and have converged to 0.6 pt four lines later, then open up
+again at the next entry. Nothing is misread; the names just sit low.
+
+Correcting this one would mean changing paragraph spacing in a cell whose
+description runs for a page and a half, which moves everything below it.
+It is not worth the risk for half a line.
+
 A one-off offset of 1 to 3 pt reads as level and is not worth chasing. The
 9 to 12 pt cases are visible: the name looks like it belongs to the line
 above or below. More importantly this drift is **the mechanism that makes
