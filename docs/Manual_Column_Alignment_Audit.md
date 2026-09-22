@@ -4,7 +4,7 @@ Written 2026-09-21 against the V6.04.00RC0 manual (294 pages).
 
 **Finding 1, pages 113 and 114, was fixed on the day of the audit** and the
 manual and its PDF have been regenerated; the description below is kept as
-the record of what was wrong. Findings 2, 3 and 4, and everything under
+the record of what was wrong. Findings 2 to 5, and everything under
 *Sub-line drift*, are untouched and still stand against the current manual.
 
 ## What is being checked, and why it breaks
@@ -51,8 +51,10 @@ asks whether that line begins a description. A text line is 12.65 pt.
 
 The scripts are in this session's scratchpad, not yet in `tools/`:
 `align_audit5.py` (pairs entries and measures the offset in points),
-`align_audit7.py` (the direct symptom test) and `showrows.py` (prints a
-page as two columns, which is how each finding below was confirmed).
+`align_audit7.py` (the direct symptom test), `align_audit8.py` (finds the
+running-narrative class described under finding 3 onwards) and
+`showrows.py` (prints a page as two columns, which is how every finding
+below was confirmed).
 
 Coverage: 135 multi-entry rows were read and measured; 21 rows could not be
 located in the PDF and were not checked. Those are listed at the end.
@@ -192,6 +194,89 @@ eye, knowing the next edit to any of those paragraphs will undo it, or give
 each form its own table row. The block ends cleanly - `LINE`, which starts
 the next row on page 163, is level.
 
+### 5. Commands, pages 170 and 171: the MATH block
+
+Reported by Peter, 2026-09-22, as "minor but could be tidied" for page 170
+and "bad" for page 171. Both are right: it is one block and it degrades as
+it goes down.
+
+**Page 170 starts mildly.** In the matrix section the names sit about two
+lines *below* their descriptions, which is untidy but not misleading -
+`MATH M_INVERSE`, `MATH M_PRINT`, `MATH M_TRANSPOSE` and `MATH M_MULT` are
+each 23 to 24 pt low, so the right text is just above the name rather than
+beside it. `MATH CLAMP`, `MATH SLICE` and `MATH INSERT` at the top of the
+page are level.
+
+**By the foot of page 170 it has become a whole entry.** `MATH V_PRINT` is
+beside `Converts a vector inV() to unit scale`, which belongs to
+`MATH V_NORMALISE`; `MATH V_NORMALISE` is beside the text for
+`MATH V_MULT`.
+
+**Page 171 is the worst of it.** Seven names carry another function's
+description:
+
+| name | what appears beside it | whose text that is |
+|---|---|---|
+| `MATH V_MULT matrix(), inV(), outV()` | Calculates the cross product of two three element vectors | `V_CROSS` |
+| `MATH V_CROSS inV1(), inV2(), outV()` | This command rotates the coordinate pairs in 'xin()' and 'yin()' | `V_ROTATE` |
+| `Quaternion arithmetic` (heading) | Invert the quaternion in inQ() | `Q_INVERT` |
+| `MATH Q_INVERT inQ(), outQ()` | Converts a vector specified by x, y and z to a quaternion | `Q_VECTOR` |
+| `MATH Q_VECTOR x, y, z, outVQ()` | Generates a rotation quaternion ... around axis x,y,z by theta | `Q_CREATE` |
+| `MATH Q_CREATE theta, x, y, z, outRQ()` | Generates a rotation quaternion ... by yaw, pitch and roll | `Q_EULER` |
+| `MATH Q_MULT`, `MATH Q_ROTATE` | their own text, 22 to 24 pt above | themselves, low |
+
+Note the direction is the **opposite** of findings 1, 3 and 4. There the
+name column lagged; here the description column is a whole entry ahead, so
+`MATH V_MULT`'s own description sits at the bottom of page 170 while its
+name is at the top of 171. A reader looking up `V_MULT` is told about the
+cross product.
+
+The block recovers by itself at `MATH C_ADD` on page 171, which is level
+again.
+
+## The automated sweep for this class
+
+Findings 3, 4 and 5 share a shape the first sweep could not see: a
+description cell written as a running narrative that names each form as it
+describes it. That naming gives an exact test, with no pairing guesswork -
+find the description paragraph that opens with a form's name and check
+whether the name is level with it. `align_audit8.py` does that.
+
+It reports **23 blocks**. Three are confirmed above; `POKE` on page 193 was
+also checked and is genuine, six forms between 3.5 and 8.8 lines from their
+own sentences. The rest are listed here unverified, worst first, for
+working through:
+
+| page | block | worst | forms |
+|---|---|---|---|
+| 201 | `SELECT CASE` | 22.3 ln | 3 - probably false, matches the syntax example |
+| 189 to 193 | `PLAY` | 19.7 ln | 5 - partly false, matches example lines |
+| 210 | row 349 | 18.7 ln | 1 |
+| 205 | row 326 | 16.9 ln | 1 |
+| 161 | row 157 | 13.4 ln | 1 |
+| 146 | `EDIT` | 12.0 ln | 1 |
+| 200 | row 303 | 11.6 ln | 1 |
+| 121 | options row 38 | 9.2 ln | 2 |
+| 193 | `POKE` | 8.8 ln | 6 - confirmed genuine |
+| 182 | rows 240 and 243 | 6.6 ln | 5 |
+| 206 | row 330 | 6.5 ln | 1 |
+| 210 | row 348 | 5.2 ln | 2 |
+| 160 | row 153 | 5.2 ln | 1 |
+| 214 | row 372 | 3.8 ln | 1 |
+| 167 | `MANDELBROT` | 3.8 ln | 3 |
+| 215 | row 381 | 3.0 ln | 2 |
+| 110 | `MM.ERRNO` group | 2.8 ln | 1 |
+| 125 | `OPTION RESET` | 1.7 ln | 2 |
+| 209 | row 342 | 1.7 ln | 1 |
+
+**The false positives in that list are easy to spot and worth naming.** The
+test matches any description paragraph that opens with the form's name,
+and a worked example does exactly that: the `DIM` row on page 144 scores
+57 lines because the description contains the line
+`DIM INTEGER nbr(4) = (22, 44, 55, 66, 88)`. Before acting on a row,
+confirm the matched paragraph is a sentence describing the form and not a
+code example.
+
 ## Sub-line drift: the space above and below paragraphs
 
 Separately from the defects above, the two columns very often run at
@@ -244,15 +329,20 @@ These have **not** been checked and may hide further instances. Re-running
    actively misled.~~ Done.
 2. Pages 162 and 163, the `LIBRARY` block, all seven forms against the
    wrong text and by the widest margins in the manual.
-3. Page 155, the `GUI CURSOR` block, eight entries reading against the
+3. Pages 170 and 171, the `MATH` block, seven names carrying another
+   function's description.
+4. Page 155, the `GUI CURSOR` block, eight entries reading against the
    wrong form, plus `GUI CLICK PIN OFF`.
-4. Decide 2 and 3 together: both are a running narrative against a list of
-   names, and both want either padding by eye or one table row per form.
-5. Page 112, `MM.INFO(FREE SPACE)`, one entry. Still outstanding.
-6. Leave the sub-line drift alone unless a particular entry looks wrong on
+5. Page 193, `POKE`, six forms.
+6. Decide 2 to 5 together: all are a running narrative against a list of
+   names, and all want either padding by eye or one table row per form.
+7. Page 112, `MM.INFO(FREE SPACE)`, one entry.
+8. Work through the unverified rows in *The automated sweep for this
+   class*, discarding the ones that matched a code example.
+9. Leave the sub-line drift alone unless a particular entry looks wrong on
    the page; correcting it means touching paragraph spacing, which moves
    everything below it and risks introducing the very defect being fixed.
-7. Consider putting the audit in `tools/` and running it before a release,
+10. Consider putting the audit in `tools/` and running it before a release,
    the way `release_preflight.py` runs. It takes about three minutes over
    the whole manual and needs only the docx and the PDF.
 
