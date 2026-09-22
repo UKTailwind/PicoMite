@@ -361,7 +361,16 @@ extern "C"
 #define HEAP_MEMORY_SIZE (128 * 1024)
 #else
 #define HEAP_MEMORY_SIZE (120 * 1024)
-#define FLASH_TARGET_OFFSET (912 * 1024)
+   /* +16 KB (2026-09-22): this variant was down to 28 bytes, so anything
+      at all broke it - the littlefs bound checks and the cold-start settle
+      wait together needed 56.  Living on tens of bytes means every change
+      turns into a hunt for a few, and the hunt costs more than the flash.
+      Flash moves only in 16 KB steps, so this is one step, and it comes out
+      of the A: drive.  Moving the offset relocates the option sector too, so
+      the magic key check fails on the first boot after the upgrade and the
+      board does a full clean - existing A: drives and options do not
+      survive.  See [[project_flash_target_offset_alignment]]. */
+#define FLASH_TARGET_OFFSET (928 * 1024)
 #define MagicKey 0xA17DE2A2
 #endif
 #endif
