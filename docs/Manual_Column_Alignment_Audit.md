@@ -2,10 +2,10 @@
 
 Written 2026-09-21 against the V6.04.00RC0 manual (294 pages).
 
-**Finding 1, pages 113 and 114, was fixed the same day** and the manual and
-its PDF have been regenerated; the description below is kept as the record
-of what was wrong. Finding 2 and everything under *Sub-line drift* are
-untouched and still stand against the current manual.
+**Finding 1, pages 113 and 114, was fixed on the day of the audit** and the
+manual and its PDF have been regenerated; the description below is kept as
+the record of what was wrong. Findings 2 and 3, and everything under
+*Sub-line drift*, are untouched and still stand against the current manual.
 
 ## What is being checked, and why it breaks
 
@@ -56,6 +56,14 @@ page as two columns, which is how each finding below was confirmed).
 
 Coverage: 135 multi-entry rows were read and measured; 21 rows could not be
 located in the PDF and were not checked. Those are listed at the end.
+
+**The audit has a blind spot, which finding 3 fell into.** It treats a row
+whose two columns hold different numbers of entries as an intended layout,
+because that is usually several names sharing one description. Where the
+description cell is instead a single running narrative, as in the `GUI
+CURSOR` block, the audit counts one or two entries against eight or nine
+names and passes over it. Rows listed under *rows whose two columns hold a
+different number of entries* therefore need reading, not trusting.
 
 ## Confirmed defects
 
@@ -110,6 +118,49 @@ Filesystem or SD Card ...` a line above it. The entries on either side are
 correct, so the name column has one line too many just above this name
 rather than too few. Only this one entry is affected.
 
+### 3. Commands, page 155: the GUI CURSOR and GUI CLICK forms
+
+Reported by Peter, 2026-09-22. Both blocks on this page drift, and the
+`GUI CURSOR` block is the worst case found so far: **eight of its nine
+forms are level with another form's description.**
+
+The two columns start together at `GUI CURSOR ON`, then the name column
+falls behind, so each name ends up beside the text belonging to the form
+above it:
+
+| name | what appears beside it | how far from its own text |
+|---|---|---|
+| `GUI CURSOR ON [n [,x, y [,colour]]]` | GUI CONTROLS VERSIONS ONLY | level, correct |
+| `GUI CURSOR x, y` | GUI CURSOR **ON** enables and displays the cursor | 91 pt, 7.2 lines |
+| `GUI CURSOR OFF` | initial position (the centre of the screen ...) | 89 pt, 7.0 lines |
+| `GUI CURSOR HIDE` | display controller must support reading back ... | 70 pt, 5.5 lines |
+| `GUI CURSOR SHOW` | GUI CURSOR **x, y** moves the cursor to 'x', 'y' | 51 pt, 4.0 lines |
+| `GUI CURSOR COLOUR colour` | GUI CURSOR **OFF** turns off the cursor | 36 pt, 2.8 lines |
+| `GUI CURSOR LOAD fname$` | GUI CURSOR **COLOUR** changes the colour | 33 pt, 2.6 lines |
+| `GUI CURSOR LINK MOUSE` | GUI CURSOR **LOAD** loads cursor number 2 | 93 pt, 7.3 lines |
+| `GUI CURSOR UNLINK MOUSE` | layout and colour coding as a sprite ... | 90 pt, 7.1 lines |
+
+The `GUI CLICK` block above it is mostly sound: `DOWN`, `UP` and
+`PIN pin [,INV]` are level. Two are not:
+
+- `GUI CLICK PIN OFF` sits beside `button. The pin is polled in the
+  background ...`; its own sentence, *GUI CLICK PIN OFF releases the pin*,
+  is 32 pt lower.
+- `GUI CLICK x, y` sits beside the paragraph that opens *GUI CLICK
+  generates a momentary click*. That paragraph does go on to describe the
+  `x, y` form, so a reader is not misled, but the name is a line high.
+
+**This one is different from findings 1 and 2 and needs more than padding.**
+There the description column was a list of separate entries and the fix was
+to add spacer lines. Here the description cell is a single running
+narrative - one paragraph per form, in order, each wrapping to two or three
+lines - while the name column is a list of one-line names. The two flows
+were never going to stay together, and the gaps that hold the names apart
+have been set by eye. Re-aligning means deciding, form by form, where each
+name belongs against its sentence, and a later edit to any sentence will
+undo it again. Splitting the block into one table row per form would fix it
+permanently; that is a bigger change and Peter's call.
+
 ## Sub-line drift: the space above and below paragraphs
 
 Separately from the defects above, the two columns very often run at
@@ -160,11 +211,14 @@ These have **not** been checked and may hide further instances. Re-running
 
 1. ~~Pages 113 and 114, sixteen entries, the only place a reader is
    actively misled.~~ Done.
-2. Page 112, `MM.INFO(FREE SPACE)`, one entry. Still outstanding.
-3. Leave the sub-line drift alone unless a particular entry looks wrong on
+2. Page 155, the `GUI CURSOR` block, eight entries reading against the
+   wrong form, plus `GUI CLICK PIN OFF`. Decide first whether to re-pad it
+   or to split it into one row per form.
+3. Page 112, `MM.INFO(FREE SPACE)`, one entry. Still outstanding.
+4. Leave the sub-line drift alone unless a particular entry looks wrong on
    the page; correcting it means touching paragraph spacing, which moves
    everything below it and risks introducing the very defect being fixed.
-4. Consider putting the audit in `tools/` and running it before a release,
+5. Consider putting the audit in `tools/` and running it before a release,
    the way `release_preflight.py` runs. It takes about three minutes over
    the whole manual and needs only the docx and the PDF.
 
