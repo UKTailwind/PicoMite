@@ -6970,48 +6970,16 @@ using the same array twice or even three times in the parameters.
 eg,    MATH C_MUL a%(),a%(),a%()     will square all the values in the array a%()
 
 MATH
-Simple functions
-MATH(ATAN3 x,y)
-MATH(COSH a)
-MATH(LOG10 a)
-MATH(SINH a)
-MATH(TANH a)
-MATH(CRCn data [,length]
-[,polynome] [,startmask]
-[,endmask] [,reverseIn]
-[,reverseOut]
-MATH(RAND)
-Simple Statistics
-MATH(CHI a())
-MATH(CHI_p a())
-MATH(CROSSING array() [,level] [,direction] [,confirm])
-MATH(CORREL  a(), a())
-MATH(MAX a() [,index%])
-MATH(MEAN a())
-MATH(MEDIAN a())
-MATH(MIN a(), [index%])
-MATH(SD a())
-MATH(SUM a())
-Vector Arithmetic
-MATH(MAGNITUDE v())
-MATH(DOTPRODUCT v1(), v2())
-Matrix Arithmetic
-MATH(M_DETERMINANT array!())
 
 The math function performs many simple mathematical calculations that can be
 programmed in Basic but there are speed advantages to coding looping
 structures in C and there is the advantage that once debugged they are there
 for everyone without re-inventing the wheel.
 
-Returns ATAN3 of x and y
-
-Returns the hyperbolic cosine of a
-
-Returns the base 10 logarithm of a
-
-Returns the hyperbolic sine of a
-
-Returns the hyperbolic tan of a
+MATH(CRCn data [,length]
+[,polynome] [,startmask]
+[,endmask] [,reverseIn]
+[,reverseOut]
 
 Calculates the CRC to n bits (8, 12, 16, 32) of "data". "data" can be an
 integer or floating point array or a string variable. "Length" is optional and
@@ -7021,54 +6989,39 @@ reversOut are both Booleans and take the value 1 or 0. The defaults for
 polynomes are CRC8=&H07, CRC12=&H80D, CRC16=&H1021, crc32=&H04C11DB7
 eg, for crc16_CCITT use  MATH(CRC16 array(), n,, &HFFFF)
 
-Returns a random number 0.0 <= n < 1.0 using the "Mersenne Twister algorithm.
-If not seeded with MATH RANDOMIZE the first usage seeds with the time in
-microseconds since boot. NB: the RP2350 includes a H/W random number
-generator.
-
-Returns the Pearson's chi-squared value of the two dimensional array a())
+MATH(CHI_p a())
 
 Returns the associated probability in % of the Pearson's chi-squared value of
 the two dimensional array a())
 
-This returns the array index of the first sample at which the values in the
-array cross the "level" in the direction specified, where the crossing is
-sustained for "confirm" consecutive samples. level defaults to 0. direction
-defaults to 1 (valid values are -1 or 1). confirm defaults to 1; values
-greater than 1 reject brief noise spikes by requiring that many consecutive
-samples to remain past the level. Returns -1 if no qualifying crossing is
-found; a crossing within the final (confirm-1) samples cannot be confirmed and
-is not reported.
-
-Returns the Pearson's correlation coefficient between arrays a() and b()
-
-Returns the maximum of all values in the a() array, a() can have any number of
-dimensions. If the integer variable is specified then it will be updated with
-the index of the maximum value in the array. This is only available on
-one-dimensional arrays
-
-Returns the average of all values in the a() array, a() can have any number of
-dimensions
-Returns the median of all values in the a() array, a() can have any number of
-dimensions
-Returns the minimum of all values in the a() array, a() can have any number of
-dimensions. If the integer variable is specified then it will be updated with
-the index of the minimum value in the array. This is only available on
-one-dimensional arrays.
-
-Returns the sample standard deviation of all values in the a() array, a() can
-have any number of dimensions
-
-Returns the sum of all values in the a() array, a() can have any number of
-dimensions
-
-Returns the magnitude of the vector v(). The vector can have any number of
-elements
-
-Returns the dot product of two vectors v1() and v2(). The vectors can have any
-number of elements but must have the same cardinality
+MATH(M_DETERMINANT array!())
+Creation
+complex% = MATH(C_CPLX r!, i!)
+complex% = MATH(C_POLAR radius!, angle!)
+Floating returns
+real! = MATH(C_REAL complex%) imag! = MATH(C_IMAG complex%) arg! = MATH(C_ARG
+complex%)
+mod! = MATH(C_MOD complex%) phase! = MATH(C_PHASE complex%)
+Unary functions
+complex1% = MATH(C_CONJ complex2%) complex1% = MATH(C_SIN complex2%) complex1%
+= MATH(C_COS complex2%) complex1% = MATH(C_TAN complex2%) complex1% =
+MATH(C_ASIN complex2%) complex1% = MATH(C_ACOS complex2%) complex1% =
+MATH(C_ATAN complex2%) complex1% = MATH(C_SINH complex2%) complex1% =
+MATH(C_COSH complex2%) complex1% = MATH(C_TANH complex2%) complex1% =
+MATH(C_ASINH complex2%) complex1% = MATH(C_ACOSH complex2%) complex1% =
+MATH(C_ATANH complex2%) complex1% = MATH(C_PROJ complex2%)
+Basic Arithmetic
+complex1% = MATH(C_ADD complex2%,complex3%) complex1% = MATH(C_SUB
+complex2%,complex3%) complex1% = MATH(C_MUL complex2%,complex3%) complex1% =
+MATH(C_DIV complex2%,complex3%) complex1% = MATH(C_POW complex2%,complex3%)
+complex1% = MATH(C_AND complex2%,complex3%) complex1% = MATH(C_OR
+complex2%,complex3%) complex1% = MATH(C_XOR complex2%,complex3%)
 
 Returns the determinant of the array. The array must be square.
+MMBasic supports a full range of functions to allow the manipulation of
+complex numbers. In this implementation complex numbers have a 32-bit real and
+32-bit imaginary part and to make this work in MMBasic, it uses integers
+(64-bit) to hold these.
 
 ~MATH ADD
 MATH ADD in(), num ,out()
@@ -7329,7 +7282,7 @@ Will return OUT(0)=7, OUT(1)=5,OUT(2)=3,LOW=1,HIGH=3
 ~MATH(ATAN3)
 MATH(ATAN3 x,y)
 
-Described with the rest of its family:  HELP MATH
+Returns ATAN3 of x and y
 
 ~MATH(BASE64)
 MATH(BASE64 ENCODE/DECODE in$/in(), out$/out())
@@ -7342,78 +7295,74 @@ increases length by 4/3 and decryption decreases it by 3/4.
 ~MATH(CHI)
 MATH(CHI a())
 
-Described with the rest of its family:  HELP MATH
+Returns the Pearson's chi-squared value of the two dimensional array a())
 
 ~MATH(CORREL)
 MATH(CORREL  a(), a())
 
-Described with the rest of its family:  HELP MATH
+Returns the Pearson's correlation coefficient between arrays a() and b()
 
 ~MATH(COSH)
 MATH(COSH a)
 
-Described with the rest of its family:  HELP MATH
+Returns the hyperbolic cosine of a
 
 ~MATH(CROSSING)
 MATH(CROSSING array() [,level] [,direction] [,confirm])
 
-Described with the rest of its family:  HELP MATH
+This returns the array index of the first sample at which the values in the
+array cross the "level" in the direction specified, where the crossing is
+sustained for "confirm" consecutive samples. level defaults to 0. direction
+defaults to 1 (valid values are -1 or 1). confirm defaults to 1; values
+greater than 1 reject brief noise spikes by requiring that many consecutive
+samples to remain past the level. Returns -1 if no qualifying crossing is
+found; a crossing within the final (confirm-1) samples cannot be confirmed and
+is not reported.
 
 ~MATH(DOTPRODUCT)
 MATH(DOTPRODUCT v1(), v2())
-Creation
-complex% = MATH(C_CPLX r!, i!)
-complex% = MATH(C_POLAR radius!, angle!)
-Floating returns
-real! = MATH(C_REAL complex%) imag! = MATH(C_IMAG complex%) arg! = MATH(C_ARG
-complex%)
-mod! = MATH(C_MOD complex%) phase! = MATH(C_PHASE complex%)
-Unary functions
-complex1% = MATH(C_CONJ complex2%) complex1% = MATH(C_SIN complex2%) complex1%
-= MATH(C_COS complex2%) complex1% = MATH(C_TAN complex2%) complex1% =
-MATH(C_ASIN complex2%) complex1% = MATH(C_ACOS complex2%) complex1% =
-MATH(C_ATAN complex2%) complex1% = MATH(C_SINH complex2%) complex1% =
-MATH(C_COSH complex2%) complex1% = MATH(C_TANH complex2%) complex1% =
-MATH(C_ASINH complex2%) complex1% = MATH(C_ACOSH complex2%) complex1% =
-MATH(C_ATANH complex2%) complex1% = MATH(C_PROJ complex2%)
-Basic Arithmetic
-complex1% = MATH(C_ADD complex2%,complex3%) complex1% = MATH(C_SUB
-complex2%,complex3%) complex1% = MATH(C_MUL complex2%,complex3%) complex1% =
-MATH(C_DIV complex2%,complex3%) complex1% = MATH(C_POW complex2%,complex3%)
-complex1% = MATH(C_AND complex2%,complex3%) complex1% = MATH(C_OR
-complex2%,complex3%) complex1% = MATH(C_XOR complex2%,complex3%)
 
-Described with the rest of its family:  HELP MATH
+Returns the dot product of two vectors v1() and v2(). The vectors can have any
+number of elements but must have the same cardinality
 
 ~MATH(LOG10)
 MATH(LOG10 a)
 
-Described with the rest of its family:  HELP MATH
+Returns the base 10 logarithm of a
 
 ~MATH(MAGNITUDE)
 MATH(MAGNITUDE v())
 
-Described with the rest of its family:  HELP MATH
+Returns the magnitude of the vector v(). The vector can have any number of
+elements
 
 ~MATH(MAX)
 MATH(MAX a() [,index%])
 
-Described with the rest of its family:  HELP MATH
+Returns the maximum of all values in the a() array, a() can have any number of
+dimensions. If the integer variable is specified then it will be updated with
+the index of the maximum value in the array. This is only available on
+one-dimensional arrays
 
 ~MATH(MEAN)
 MATH(MEAN a())
 
-Described with the rest of its family:  HELP MATH
+Returns the average of all values in the a() array, a() can have any number of
+dimensions
 
 ~MATH(MEDIAN)
 MATH(MEDIAN a())
 
-Described with the rest of its family:  HELP MATH
+Returns the median of all values in the a() array, a() can have any number of
+dimensions
 
 ~MATH(MIN)
 MATH(MIN a(), [index%])
 
-Described with the rest of its family:  HELP MATH
+Returns the minimum of all values in the a() array, a() can have any number of
+dimensions. If the integer variable is specified then it will be updated with
+the index of the minimum value in the array. This is only available on
+one-dimensional arrays.
 
 ~MATH(PID)
 MATH(PID channel, setpoint!, measurement))
@@ -7428,27 +7377,32 @@ For an example of setting up and running a PID controller
 ~MATH(RAND)
 MATH(RAND)
 
-Described with the rest of its family:  HELP MATH
+Returns a random number 0.0 <= n < 1.0 using the "Mersenne Twister algorithm.
+If not seeded with MATH RANDOMIZE the first usage seeds with the time in
+microseconds since boot. NB: the RP2350 includes a H/W random number
+generator.
 
 ~MATH(SD)
 MATH(SD a())
 
-Described with the rest of its family:  HELP MATH
+Returns the sample standard deviation of all values in the a() array, a() can
+have any number of dimensions
 
 ~MATH(SINH)
 MATH(SINH a)
 
-Described with the rest of its family:  HELP MATH
+Returns the hyperbolic sine of a
 
 ~MATH(SUM)
 MATH(SUM a())
 
-Described with the rest of its family:  HELP MATH
+Returns the sum of all values in the a() array, a() can have any number of
+dimensions
 
 ~MATH(TANH)
 MATH(TANH a)
 
-Described with the rest of its family:  HELP MATH
+Returns the hyperbolic tan of a
 
 ~MAX
 MAX( arg1 [, arg2 [, ...]] )

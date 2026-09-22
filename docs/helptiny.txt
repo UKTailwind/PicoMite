@@ -2265,33 +2265,33 @@ MATH C_AND array1(), array2(), array3()
 MATH C_OR array1(), array2(), array3()
 MATH C_XOR array1(), array2(), array3()
 MATH
-Simple functions
-MATH(ATAN3 x,y)
-MATH(COSH a)
-MATH(LOG10 a)
-MATH(SINH a)
-MATH(TANH a)
 MATH(CRCn data [,length]
 [,polynome] [,startmask]
 [,endmask] [,reverseIn]
 [,reverseOut]
-MATH(RAND)
-Simple Statistics
-MATH(CHI a())
 MATH(CHI_p a())
-MATH(CROSSING array() [,level] [,direction] [,confirm])
-MATH(CORREL  a(), a())
-MATH(MAX a() [,index%])
-MATH(MEAN a())
-MATH(MEDIAN a())
-MATH(MIN a(), [index%])
-MATH(SD a())
-MATH(SUM a())
-Vector Arithmetic
-MATH(MAGNITUDE v())
-MATH(DOTPRODUCT v1(), v2())
-Matrix Arithmetic
 MATH(M_DETERMINANT array!())
+Creation
+complex% = MATH(C_CPLX r!, i!)
+complex% = MATH(C_POLAR radius!, angle!)
+Floating returns
+real! = MATH(C_REAL complex%) imag! = MATH(C_IMAG complex%) arg! = MATH(C_ARG
+complex%)
+mod! = MATH(C_MOD complex%) phase! = MATH(C_PHASE complex%)
+Unary functions
+complex1% = MATH(C_CONJ complex2%) complex1% = MATH(C_SIN complex2%) complex1%
+= MATH(C_COS complex2%) complex1% = MATH(C_TAN complex2%) complex1% =
+MATH(C_ASIN complex2%) complex1% = MATH(C_ACOS complex2%) complex1% =
+MATH(C_ATAN complex2%) complex1% = MATH(C_SINH complex2%) complex1% =
+MATH(C_COSH complex2%) complex1% = MATH(C_TANH complex2%) complex1% =
+MATH(C_ASINH complex2%) complex1% = MATH(C_ACOSH complex2%) complex1% =
+MATH(C_ATANH complex2%) complex1% = MATH(C_PROJ complex2%)
+Basic Arithmetic
+complex1% = MATH(C_ADD complex2%,complex3%) complex1% = MATH(C_SUB
+complex2%,complex3%) complex1% = MATH(C_MUL complex2%,complex3%) complex1% =
+MATH(C_DIV complex2%,complex3%) complex1% = MATH(C_POW complex2%,complex3%)
+complex1% = MATH(C_AND complex2%,complex3%) complex1% = MATH(C_OR
+complex2%,complex3%) complex1% = MATH(C_XOR complex2%,complex3%)
 
 ~MATH ADD
 MATH ADD in(), num ,out()
@@ -2362,86 +2362,41 @@ MATH WINDOW in(), minout, maxout, out() [,minin!, maxin!]
 ~MATH(ATAN3)
 MATH(ATAN3 x,y)
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(BASE64)
 MATH(BASE64 ENCODE/DECODE in$/in(), out$/out())
 
 ~MATH(CHI)
 MATH(CHI a())
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(CORREL)
 MATH(CORREL  a(), a())
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH(COSH)
 MATH(COSH a)
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(CROSSING)
 MATH(CROSSING array() [,level] [,direction] [,confirm])
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(DOTPRODUCT)
 MATH(DOTPRODUCT v1(), v2())
-Creation
-complex% = MATH(C_CPLX r!, i!)
-complex% = MATH(C_POLAR radius!, angle!)
-Floating returns
-real! = MATH(C_REAL complex%) imag! = MATH(C_IMAG complex%) arg! = MATH(C_ARG
-complex%)
-mod! = MATH(C_MOD complex%) phase! = MATH(C_PHASE complex%)
-Unary functions
-complex1% = MATH(C_CONJ complex2%) complex1% = MATH(C_SIN complex2%) complex1%
-= MATH(C_COS complex2%) complex1% = MATH(C_TAN complex2%) complex1% =
-MATH(C_ASIN complex2%) complex1% = MATH(C_ACOS complex2%) complex1% =
-MATH(C_ATAN complex2%) complex1% = MATH(C_SINH complex2%) complex1% =
-MATH(C_COSH complex2%) complex1% = MATH(C_TANH complex2%) complex1% =
-MATH(C_ASINH complex2%) complex1% = MATH(C_ACOSH complex2%) complex1% =
-MATH(C_ATANH complex2%) complex1% = MATH(C_PROJ complex2%)
-Basic Arithmetic
-complex1% = MATH(C_ADD complex2%,complex3%) complex1% = MATH(C_SUB
-complex2%,complex3%) complex1% = MATH(C_MUL complex2%,complex3%) complex1% =
-MATH(C_DIV complex2%,complex3%) complex1% = MATH(C_POW complex2%,complex3%)
-complex1% = MATH(C_AND complex2%,complex3%) complex1% = MATH(C_OR
-complex2%,complex3%) complex1% = MATH(C_XOR complex2%,complex3%)
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH(LOG10)
 MATH(LOG10 a)
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(MAGNITUDE)
 MATH(MAGNITUDE v())
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH(MAX)
 MATH(MAX a() [,index%])
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(MEAN)
 MATH(MEAN a())
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH(MEDIAN)
 MATH(MEDIAN a())
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(MIN)
 MATH(MIN a(), [index%])
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH(PID)
 MATH(PID channel, setpoint!, measurement))
@@ -2449,27 +2404,17 @@ MATH(PID channel, setpoint!, measurement))
 ~MATH(RAND)
 MATH(RAND)
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(SD)
 MATH(SD a())
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH(SINH)
 MATH(SINH a)
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(SUM)
 MATH(SUM a())
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH(TANH)
 MATH(TANH a)
-
-Described with the rest of its family:  HELP MATH
 
 ~MAX
 MAX( arg1 [, arg2 [, ...]] )

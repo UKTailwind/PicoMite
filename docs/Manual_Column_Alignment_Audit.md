@@ -616,9 +616,17 @@ had an entry now do, among them `LIBRARY DELETE`, `LIBRARY LIST`,
 the real measure of how badly the old layout was confusing the generator as
 well as the reader.
 
-Only one hand-aligned block is left, the `MATH()` functions on pages 227
-and 228. It was corrected by padding and currently reads within half a
-line, so it was left alone; it is the last candidate if it ever drifts.
+**The `MATH()` functions on pages 227 and 228 went the same way**, into 25
+rows, and with that **no hand-aligned block is left in the manual.** Every
+reference entry now sits in a row of its own, or in a row shared only with
+the forms that genuinely share its sentence, and none of them can drift
+again. The complex-number list that follows on page 228 was left as it is:
+it is a genuine list of forms under one shared description, which is a
+different thing.
+
+Final tally for the whole exercise: 294 pages throughout and the contents
+pages never moved, the PDF outline grew from 844 entries to 885, and the
+help files went from 1152 topics to 1176 with none lost.
 
 **A coupling worth knowing about.** `tools/gen_help.py` pairs the two
 columns by splitting each cell into blank-line separated groups and zipping
