@@ -305,16 +305,25 @@ static err_t tcp_server_accept(void *arg, struct tcp_pcb *client_pcb, err_t err)
                 tcp_server_result(arg, err);
                 return ERR_VAL;
         }
-        for (pcb = 0; pcb <= MaxPcb; pcb++)
+        for (pcb = 0; pcb < MaxPcb; pcb++)
         {
-                if (pcb == MaxPcb)
-                        MMPrintString("Warning: No free connections\r\n");
-                //        if(pcb==MaxPcb)error("No free connections");
                 if (state->client_pcb[pcb] == NULL)
                 {
                         state->client_pcb[pcb] = client_pcb;
                         break;
                 }
+        }
+        if (pcb == MaxPcb)
+        {
+                /* Table full. The warning used to be issued from an extra loop
+                   iteration that then went on to index client_pcb[MaxPcb] - one past
+                   the array, i.e. inttrig[0] - and the keepalive[]/pcbopentime[]
+                   writes below landed on telnet_pcb_no and keepalive[0..1]. (Harmless
+                   while this was an error() that longjmped out; not once it became a
+                   warning.) Refuse the connection instead: lwIP aborts the pcb itself
+                   when the accept callback returns an error. */
+                MMPrintString("Warning: No free connections\r\n");
+                return ERR_MEM;
         }
 
         if (client_pcb->local_port == 23 && Option.Telnet)
