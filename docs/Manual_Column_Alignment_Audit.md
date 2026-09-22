@@ -4,7 +4,7 @@ Written 2026-09-21 against the V6.04.00RC0 manual (294 pages).
 
 **Finding 1, pages 113 and 114, was fixed on the day of the audit** and the
 manual and its PDF have been regenerated; the description below is kept as
-the record of what was wrong. Findings 2 to 6, and everything under
+the record of what was wrong. Findings 2 to 7, and everything under
 *Sub-line drift*, are untouched and still stand against the current manual.
 
 ## What is being checked, and why it breaks
@@ -261,6 +261,31 @@ sweep's individual matches were the worked examples such as
 `PLAY MP3 "B:/mp3/mymp3.mp3"`, but the row does carry a real defect at the
 page break.
 
+### 7. Commands, pages 193 and 194: the POKE block
+
+Reported by Peter, 2026-09-22, and previously confirmed by the automated
+sweep. Seven forms, and after the first two every one carries another
+form's text. The name column lags, as in findings 1, 3 and 4.
+
+| name | page | what appears beside it | whose text that is |
+|---|---|---|---|
+| `POKE BYTE addr%, byte` | 193 | Will set a byte or a word within the Pico's memory space | the block's preamble |
+| `POKE SHORT addr%, short%` | 193 | bytes: 2, 4, or 8 otherwise an error will be reported | the preamble, still |
+| `POKE WORD addr%, word%` | 193 | POKE **BYTE** will set the byte (i.e. 8 bits) | `POKE BYTE` |
+| `POKE INTEGER addr%, int%` | 193 | 'addr%' to 'word%' ... should be integers | `POKE SHORT`, mid-sentence |
+| `POKE FLOAT addr%, float!` | 193 | 'word%'. 'addr%' and 'word%' should be integers | `POKE WORD`, mid-sentence |
+| `POKE VAR var, offset, byte` | 194 | POKE **INTEGER** will set the MMBasic integer | `POKE INTEGER` |
+| `POKE VARTBL, offset, byte` | 194 | POKE **FLOAT** will set the word (i.e. 64 bits) | `POKE FLOAT` |
+
+`POKE BYTE` and `POKE SHORT` at the top are the partial exception seen in
+finding 4: the text beside them is the general preamble about writing to
+the Pico's memory space, so they do not read as wrong even though neither
+form's own sentence is anywhere near its name.
+
+The offsets run from 3.5 lines at `POKE SHORT` to 8.8 lines at
+`POKE INTEGER` and `POKE FLOAT`, whose sentences are over the page break on
+194. `POKE DISPLAY`, further down 194, is a separate row and is level.
+
 ## The automated sweep for this class
 
 Findings 3, 4 and 5 share a shape the first sweep could not see: a
@@ -284,7 +309,7 @@ working through:
 | 146 | `EDIT` | 12.0 ln | 1 |
 | 200 | row 303 | 11.6 ln | 1 |
 | 121 | options row 38 | 9.2 ln | 2 |
-| 193 | `POKE` | 8.8 ln | 6 - confirmed genuine |
+| 193 | `POKE` | 8.8 ln | 6 - **confirmed, see finding 7** |
 | 182 | rows 240 and 243 | 6.6 ln | 5 |
 | 206 | row 330 | 6.5 ln | 1 |
 | 210 | row 348 | 5.2 ln | 2 |
@@ -387,10 +412,10 @@ These have **not** been checked and may hide further instances. Re-running
    wrong text and by the widest margins in the manual.
 3. Pages 170 and 171, the `MATH` block, seven names carrying another
    function's description.
-4. Pages 190 and 191, the `PLAY` block, three names at the page break.
-5. Page 155, the `GUI CURSOR` block, eight entries reading against the
+4. Pages 193 and 194, the `POKE` block, five of seven forms.
+5. Pages 190 and 191, the `PLAY` block, three names at the page break.
+6. Page 155, the `GUI CURSOR` block, eight entries reading against the
    wrong form, plus `GUI CLICK PIN OFF`.
-6. Page 193, `POKE`, six forms.
 7. Decide 2 to 6 together: all are a running narrative against a list of
    names, and all want either padding by eye or one table row per form.
 8. Page 112, `MM.INFO(FREE SPACE)`, one entry.
