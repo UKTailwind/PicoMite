@@ -4226,6 +4226,17 @@ uint32_t testPSRAM(void)
             MMPrintString("I2C Keyboard not found, OPTION KEYBOARD disabled\r\n");
         }
         updatebootcount(_excep_code == RESET_FLASHSTORAGE || _excep_code == RESET_PICOCALCINIT);
+        /* That was the only consumer of the pending format, so retire the
+           code now it has been acted on.  _excep_code lives in
+           uninitialized RAM and survives a warm reset, and nothing else
+           clears it: left set, doreset()'s carry - which exists so a
+           format survives the soft reset the PicoCalc / PicoComputer 3
+           auto-configure does on its way to the first prompt - would fire
+           again on the next ordinary soft reset and silently reformat the
+           A: drive on an unrelated OPTION change.  The banner suppression
+           above has already read it. */
+        if (_excep_code == RESET_FLASHSTORAGE || _excep_code == RESET_PICOCALCINIT)
+            _excep_code = 0;
         *tknbuf = 0;
         ContinuePoint = nextstmt; // in case the user wants to use the continue command
         clearrepeat();
