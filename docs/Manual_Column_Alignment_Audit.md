@@ -4,7 +4,7 @@ Written 2026-09-21 against the V6.04.00RC0 manual (294 pages).
 
 **Finding 1, pages 113 and 114, was fixed on the day of the audit** and the
 manual and its PDF have been regenerated; the description below is kept as
-the record of what was wrong. Findings 2 to 7, and everything under
+the record of what was wrong. Findings 2 to 8, and everything under
 *Sub-line drift*, are untouched and still stand against the current manual.
 
 ## What is being checked, and why it breaks
@@ -286,6 +286,24 @@ The offsets run from 3.5 lines at `POKE SHORT` to 8.8 lines at
 `POKE INTEGER` and `POKE FLOAT`, whose sentences are over the page break on
 194. `POKE DISPLAY`, further down 194, is a separate row and is level.
 
+### 8. Commands, page 214: WEB TLS NOVERIFY
+
+Reported by Peter, 2026-09-22, as minor, which it is: one entry, and the
+right text is a few lines below rather than missing.
+
+`WEB TLS NOVERIFY` sits beside `WEB NTP) as verification checks the
+certificate expiry dates`, which is the middle of `WEB TLS CA`'s
+description. Its own sentence - *WEB TLS NOVERIFY removes the loaded
+certificates and returns to the default in which connections are encrypted
+but the server is not verified* - is 48 pt lower, 3.8 lines.
+
+`WEB TLS CA file$` above it is level, and `WEB TCP READ` below it is level,
+so the drift is confined to this one name. It is the same running-narrative
+shape as the larger findings, just short enough that only one name lands
+badly.
+
+This was row 372 in the sweep list below, now confirmed.
+
 ## The automated sweep for this class
 
 Findings 3, 4 and 5 share a shape the first sweep could not see: a
@@ -314,7 +332,7 @@ working through:
 | 206 | row 330 | 6.5 ln | 1 |
 | 210 | row 348 | 5.2 ln | 2 |
 | 160 | row 153 | 5.2 ln | 1 |
-| 214 | row 372 | 3.8 ln | 1 |
+| 214 | `WEB TLS NOVERIFY` | 3.8 ln | 1 - **confirmed, see finding 8** |
 | 167 | `MANDELBROT` | 3.8 ln | 3 |
 | 215 | row 381 | 3.0 ln | 2 |
 | 110 | `MM.ERRNO` group | 2.8 ln | 1 |
@@ -416,15 +434,16 @@ These have **not** been checked and may hide further instances. Re-running
 5. Pages 190 and 191, the `PLAY` block, three names at the page break.
 6. Page 155, the `GUI CURSOR` block, eight entries reading against the
    wrong form, plus `GUI CLICK PIN OFF`.
-7. Decide 2 to 6 together: all are a running narrative against a list of
+7. Page 214, `WEB TLS NOVERIFY`, one name, minor.
+8. Decide 2 to 7 together: all are a running narrative against a list of
    names, and all want either padding by eye or one table row per form.
-8. Page 112, `MM.INFO(FREE SPACE)`, one entry.
-9. Work through the unverified rows in *The automated sweep for this
+9. Page 112, `MM.INFO(FREE SPACE)`, one entry.
+10. Work through the unverified rows in *The automated sweep for this
    class*, discarding the ones that matched a code example.
-10. Leave the sub-line drift alone unless a particular entry looks wrong on
+11. Leave the sub-line drift alone unless a particular entry looks wrong on
    the page; correcting it means touching paragraph spacing, which moves
    everything below it and risks introducing the very defect being fixed.
-11. Consider putting the audit in `tools/` and running it before a release,
+12. Consider putting the audit in `tools/` and running it before a release,
    the way `release_preflight.py` runs. It takes about three minutes over
    the whole manual and needs only the docx and the PDF.
 
