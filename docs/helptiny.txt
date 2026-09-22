@@ -2261,30 +2261,15 @@ MAP SET
 
 ~MATH
 MATH
-MATH RANDOMIZE [n]
-Simple array arithmetic
-MATH SET nbr, array()
-MATH SCALE in(), scale ,out()
-MATH ADD in(), num ,out()
-MATH INTERPOLATE in1(), in2(), ratio, out()
-MATH WINDOW in(), minout, maxout, out() [,minin!, maxin!]
-MATH CLAMP in(), lo, hi, out()
-MATH SLICE sourcearray(), [d1] [,d2] [,d3] [,d4] [,d5] , destinationarray()
-MATH INSERT targetarray(), [d1] [,d2] [,d3] [,d4] [,d5] , sourcearray()
-MATH POWER inarray(), power, outarray()
-MATH SHIFT inarray%(), nbr, outarray%() [,U]
-Matrix arithmetic
 MATH M_INVERSE array!(), inversearray!()
 MATH M_PRINT array()
 MATH M_TRANSPOSE in(), out()
 MATH M_MULT in1(), in2(), out()
-Vector arithmetic
 MATH V_PRINT array() [,hex]
 MATH V_NORMALISE inV(), outV()
 MATH V_MULT matrix(), inV(), outV()
 MATH V_CROSS inV1(), inV2(), outV()
 MATH V_ROTATE  x, y, a, xin(), yin(), xout(), yout()
-Quaternion arithmetic
 MATH Q_INVERT inQ(), outQ()
 MATH Q_VECTOR x, y, z,  outVQ()
 MATH Q_CREATE theta, x, y, z, outRQ()
@@ -2330,16 +2315,12 @@ MATH(M_DETERMINANT array!())
 ~MATH ADD
 MATH ADD in(), num ,out()
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH AES128
 MATH AES128 ENCRYPT/DECRYPT CBC/ECB/CTR key$/key(), in$/in(), out$/out()
 [,iv$/iv()]
 
 ~MATH CLAMP
 MATH CLAMP in(), lo, hi, out()
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH FFT
 MATH FFT signalarray!(), FFTarray!()
@@ -2356,12 +2337,8 @@ MATH FFT PHASE signalarray!(), phasearray!()
 ~MATH INSERT
 MATH INSERT targetarray(), [d1] [,d2] [,d3] [,d4] [,d5] , sourcearray()
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH INTERPOLATE
 MATH INTERPOLATE in1(), in2(), ratio, out()
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH PID INIT
 MATH PID INIT channel, pid_params!(), callback
@@ -2375,17 +2352,11 @@ MATH PID STOP channel
 ~MATH POWER
 MATH POWER inarray(), power, outarray()
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH RANDOMIZE
 MATH RANDOMIZE [n]
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH SCALE
 MATH SCALE in(), scale ,out()
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH SENSORFUSION
 MATH SENSORFUSION type ax, ay, az, gx, gy, gz, [mx, my, mz, ] pitch, roll, yaw
@@ -2394,12 +2365,8 @@ MATH SENSORFUSION type ax, ay, az, gx, gy, gz, [mx, my, mz, ] pitch, roll, yaw
 ~MATH SET
 MATH SET nbr, array()
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH SHIFT
 MATH SHIFT inarray%(), nbr, outarray%() [,U]
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH SINC
 MATH SINC x_in(), y_in(), n , m, window, freq, x_out(), y_out()
@@ -2408,12 +2375,8 @@ MATH SINC x_in(), y_in(), n, window, freq, x_out(), y_out()
 ~MATH SLICE
 MATH SLICE sourcearray(), [d1] [,d2] [,d3] [,d4] [,d5] , destinationarray()
 
-Described with the rest of its family:  HELP MATH
-
 ~MATH WINDOW
 MATH WINDOW in(), minout, maxout, out() [,minin!, maxin!]
-
-Described with the rest of its family:  HELP MATH
 
 ~MATH(ATAN3)
 MATH(ATAN3 x,y)

@@ -542,15 +542,42 @@ not be aligned at all, because the list and the text disagreed on order.
 
 **Two blocks resisted and were put back as they were.**
 
-- **Pages 170 and 171, `MATH`** (finding 5). This row runs over three
-  pages, and the two columns break at different points because the
-  description column carries paragraph spacing and the name column does
-  not. Padding the name column changes where the break falls, which moves
-  the names again: three passes converged on the names still sitting about
-  2.8 lines high on page 171, and a fourth made it worse. It cannot be
-  solved by padding.
 - **Page 155, `GUI CURSOR`** (finding 3). Re-padding it aligned the names
-  but cost three entries in the generated help files, for the reason below.
+  but cost three entries in the generated help files, for the reason below,
+  so it was put back. It is the one block still out.
+- **Pages 170 and 171, `MATH`** (finding 5) resisted padding for the reason
+  given under *One row per command*, below, and was fixed structurally
+  instead.
+
+## One row per command: the permanent fix, used for MATH
+
+Padding could not hold the `MATH` block. That row runs over three pages and
+the two columns break at different points, because the description column
+carries paragraph spacing and the name column does not; padding the name
+column moves the break, which moves the names again. Three passes converged
+with the names still 2.8 lines high on page 171, and a fourth made it worse.
+
+So on 2026-09-22, at Peter's suggestion, **the block was split into one
+table row per command** - thirty-one rows - and the rule between them was
+turned off: every internal row carries `top` and `bottom` borders of `nil`,
+and zero top and bottom cell margins, so the section reads as one
+continuous block exactly as before. Only the first row keeps its top rule
+and the last its bottom rule, joining it to the rows either side.
+
+Word now does the alignment, and it cannot drift again however the text is
+edited. Every one of the thirty-one entries is level with its own
+description, within 3 pt. Three things came free with it:
+
+- the page count did not change, because the row heights still add up to
+  the same total;
+- each `MATH` command now has **its own PDF bookmark** - the outline went
+  from 844 entries to 859 - where previously the whole block had one;
+- the help files are unaffected, because each row now holds exactly one
+  name group and one description group.
+
+**This is the pattern to use for any other block that will not hold its
+alignment**, and it is what findings 3, 4, 6 and 7 would want if they drift
+again.
 
 **A coupling worth knowing about.** `tools/gen_help.py` pairs the two
 columns by splitting each cell into blank-line separated groups and zipping

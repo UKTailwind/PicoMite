@@ -6887,36 +6887,6 @@ during the next frame blanking interval.
 
 ~MATH
 MATH
-MATH RANDOMIZE [n]
-Simple array arithmetic
-MATH SET nbr, array()
-MATH SCALE in(), scale ,out()
-MATH ADD in(), num ,out()
-MATH INTERPOLATE in1(), in2(), ratio, out()
-MATH WINDOW in(), minout, maxout, out() [,minin!, maxin!]
-MATH CLAMP in(), lo, hi, out()
-MATH SLICE sourcearray(), [d1] [,d2] [,d3] [,d4] [,d5] , destinationarray()
-MATH INSERT targetarray(), [d1] [,d2] [,d3] [,d4] [,d5] , sourcearray()
-MATH POWER inarray(), power, outarray()
-MATH SHIFT inarray%(), nbr, outarray%() [,U]
-Matrix arithmetic
-MATH M_INVERSE array!(), inversearray!()
-MATH M_PRINT array()
-MATH M_TRANSPOSE in(), out()
-MATH M_MULT in1(), in2(), out()
-Vector arithmetic
-MATH V_PRINT array() [,hex]
-MATH V_NORMALISE inV(), outV()
-MATH V_MULT matrix(), inV(), outV()
-MATH V_CROSS inV1(), inV2(), outV()
-MATH V_ROTATE  x, y, a, xin(), yin(), xout(), yout()
-Quaternion arithmetic
-MATH Q_INVERT inQ(), outQ()
-MATH Q_VECTOR x, y, z,  outVQ()
-MATH Q_CREATE theta, x, y, z, outRQ()
-MATH Q_EULER yaw, pitch, roll, outRQ()
-MATH Q_MULT inQ1(), inQ2(), outQ()
-MATH Q_ROTATE , RQ(), inVQ(), outVQ()
 
 The math command performs many simple mathematical calculations that can be
 programmed in BASIC but there are speed advantages to coding looping
@@ -6926,90 +6896,50 @@ maths matrices are always specified DIM matrix(n_columns, n_rows) and of
 course the dimensions respect OPTION BASE. Quaternions are stored as a 5
 element array w, x, y, z, magnitude.
 
-Seeds the Mersenne Twister algorithm.  If n is not specified the seed is the
-time in microseconds since boot The Mersenne Twister algorithm gives a much
-better random number than the C-library inbuilt function. NB: the RP2350
-includes a H/W random number generator.
-
-See ARRAY SET
-
-This scales the matrix in() by the scalar scale and puts the answer in out().
-Works for arrays of any dimensionality of both integer and float and can
-convert between. Setting b to 1 is optimised and is the fastest way of copying
-an entire array.
-
-See ARRAY ADD
-
-This command implements the following equation on every array element: out =
-(in2 - in1) * ratio + in1 Arrays can have any number of dimensions and must be
-distinct and have the same number of total elements. The command works with
-both integer and floating point arrays in any mixture
-
-This command takes the "in" array and scales it between "minout" and "maxout"
-returning the answer in "out". Optionally, it can also return the minimum and
-maximum floating point values found in the original data ("minin!" and
-"maxin!").  Note: "minout" can be greater than "maxout" and in this case the
-data will be both scaled and inverted.
-This command can massively simplify scaling data for plotting etc.
-Example:
-DIM IN(2)=(1,2,3)
-DIM OUT(2)
-MATH WINDOW IN(),7,3,OUT(),LOW,HIGH
-Will return OUT(0)=7, OUT(1)=5,OUT(2)=3,LOW=1,HIGH=3
-
-Limits every element of 'in()' to the range 'lo' to 'hi' and puts the result
-in 'out()'.  Anything below 'lo' becomes 'lo', anything above 'hi' becomes
-'hi' and everything else is copied unchanged.  The two arrays must have the
-same number of elements but can be integer or floating point in any
-combination; when the output array is an integer array the limits are rounded
-to whole numbers.  An error is reported if 'lo' is greater than 'hi'.
-Note that this is not the same as MATH WINDOW, which rescales the data to fit
-the range given rather than clipping it.
-Example:
-DIM v(3) = (-8,2,40,11)
-DIM w(3)
-MATH CLAMP v(),0,10,w()
-Will return w(0)=0, w(1)=2, w(2)=10, w(3)=10
-
-See ARRAY SLICE
-
-See ARRAY INSERT
-
-Raises each element in 'inarray()' to the 'power' defined and puts the output
-in 'outarray()'
-
-This command does a bit shift on all elements of inarray%() and places the
-result in outarray%() (may be the same as inarray%()). nbr can be between -63
-and 63. Positive numbers are a left shift (multiply by power of 2). Negative
-number are a right shift.  The optional parameter ,U will force an unsigned
-shift.
+MATH M_INVERSE array!(), inversearray!()
 
 This returns the inverse of array!() in inversearray!(). The array must be
 square and you will get an error if the array cannot be inverted
 (determinant=0). array!() and inversearray!() cannot be the same.
 
+MATH M_PRINT array()
+
 Quick mechanism to print a 2D matrix one row per line.
+
+MATH M_TRANSPOSE in(), out()
 
 Transpose matrix in() and put the answer in matrix out(), both arrays must be
 2D but need not be square. If not square then the arrays must be dimensioned
 in(m,n) out(n,m)
 
+MATH M_MULT in1(), in2(), out()
+
 Multiply the arrays in1() and in2() and put the answer in out()c. All arrays
 must be 2D but need not be square. If not square then the arrays must be
 dimensioned  in1(m,n) in2(p,m) ,out(p,n)
 
+MATH V_PRINT array() [,hex]
+
 Quick mechanism to print a small array on a single line. 'hex' will print in
 hex.
+
+MATH V_NORMALISE inV(), outV()
 
 Converts a vector inV() to unit scale and puts the answer in outV()
 (sqr(x*x + y*y +....)=1
 There is no limit on number of elements in the vector
 
+MATH V_MULT matrix(), inV(), outV()
+
 Multiplies matrix() and vector inV() returning vector outV(). The vectors and
 the 2D matrix can be any size but must have the same cardinality.
 
+MATH V_CROSS inV1(), inV2(), outV()
+
 Calculates the cross product of two three element vectors inV1() and inV2()
 and puts the answer in outV()
+
+MATH V_ROTATE  x, y, a, xin(), yin(), xout(), yout()
 
 This command rotates the coordinate pairs in "xin()" and "yin()" around the
 centre point defined by "x" and "y" by the angle "a" and puts the results in
@@ -7017,13 +6947,21 @@ centre point defined by "x" and "y" by the angle "a" and puts the results in
 the rotation angle is, by default, in radians but this can be changed using
 the OPTION ANGLE command.
 
+MATH Q_INVERT inQ(), outQ()
+
 Invert the quaternion in inQ() and put the answer in outQ()
+
+MATH Q_VECTOR x, y, z,  outVQ()
 
 Converts a vector specified by x , y, and z to a normalised quaternion vector
 outVQ() with the original magnitude stored
 
+MATH Q_CREATE theta, x, y, z, outRQ()
+
 Generates a normalised rotation quaternion outRQ() to rotate quaternion
 vectors around axis x,y,z by an angle of theta. Theta is specified in radians.
+
+MATH Q_EULER yaw, pitch, roll, outRQ()
 
 Generates a normalised rotation quaternion outRQ() to rotate quaternion
 vectors as defined by the yaw, pitch and roll angles With the vector in front
@@ -7032,7 +6970,11 @@ clockwise, pitch rotates the top away from the camera and roll rotates around
 the z-axis clockwise.  The yaw, pitch and roll angles default to radians but
 respect the setting of OPTION ANGLE
 
+MATH Q_MULT inQ1(), inQ2(), outQ()
+
 Multiplies two quaternions inQ1() and inQ2() and puts the answer in outQ()
+
+MATH Q_ROTATE , RQ(), inVQ(), outVQ()
 
 Rotates the source quaternion vector inVQ() by the rotate quaternion RQ() and
 puts the answer in outVQ()
@@ -7153,12 +7095,12 @@ number of elements but must have the same cardinality
 
 Returns the determinant of the array. The array must be square.
 
-See also: ARRAY SET, ARRAY ADD, ARRAY SLICE, ARRAY INSERT
-
 ~MATH ADD
 MATH ADD in(), num ,out()
 
-Described with the rest of its family:  HELP MATH
+See ARRAY ADD
+
+See also: ARRAY ADD
 
 ~MATH AES128
 MATH AES128 ENCRYPT/DECRYPT CBC/ECB/CTR key$/key(), in$/in(), out$/out()
@@ -7190,7 +7132,19 @@ message.
 ~MATH CLAMP
 MATH CLAMP in(), lo, hi, out()
 
-Described with the rest of its family:  HELP MATH
+Limits every element of 'in()' to the range 'lo' to 'hi' and puts the result
+in 'out()'.  Anything below 'lo' becomes 'lo', anything above 'hi' becomes
+'hi' and everything else is copied unchanged.  The two arrays must have the
+same number of elements but can be integer or floating point in any
+combination; when the output array is an integer array the limits are rounded
+to whole numbers.  An error is reported if 'lo' is greater than 'hi'.
+Note that this is not the same as MATH WINDOW, which rescales the data to fit
+the range given rather than clipping it.
+Example:
+DIM v(3) = (-8,2,40,11)
+DIM w(3)
+MATH CLAMP v(),0,10,w()
+Will return w(0)=0, w(1)=2, w(2)=10, w(3)=10
 
 ~MATH FFT
 MATH FFT signalarray!(), FFTarray!()
@@ -7239,12 +7193,17 @@ according to the formula above.
 ~MATH INSERT
 MATH INSERT targetarray(), [d1] [,d2] [,d3] [,d4] [,d5] , sourcearray()
 
-Described with the rest of its family:  HELP MATH
+See ARRAY INSERT
+
+See also: ARRAY INSERT
 
 ~MATH INTERPOLATE
 MATH INTERPOLATE in1(), in2(), ratio, out()
 
-Described with the rest of its family:  HELP MATH
+This command implements the following equation on every array element: out =
+(in2 - in1) * ratio + in1 Arrays can have any number of dimensions and must be
+distinct and have the same number of total elements. The command works with
+both integer and floating point arrays in any mixture
 
 ~MATH PID INIT
 MATH PID INIT channel, pid_params!(), callback
@@ -7292,17 +7251,24 @@ For an example of setting up and running a PID controller
 ~MATH POWER
 MATH POWER inarray(), power, outarray()
 
-Described with the rest of its family:  HELP MATH
+Raises each element in 'inarray()' to the 'power' defined and puts the output
+in 'outarray()'
 
 ~MATH RANDOMIZE
 MATH RANDOMIZE [n]
 
-Described with the rest of its family:  HELP MATH
+Seeds the Mersenne Twister algorithm.  If n is not specified the seed is the
+time in microseconds since boot The Mersenne Twister algorithm gives a much
+better random number than the C-library inbuilt function. NB: the RP2350
+includes a H/W random number generator.
 
 ~MATH SCALE
 MATH SCALE in(), scale ,out()
 
-Described with the rest of its family:  HELP MATH
+This scales the matrix in() by the scalar scale and puts the answer in out().
+Works for arrays of any dimensionality of both integer and float and can
+convert between. Setting b to 1 is optimised and is the fastest way of copying
+an entire array.
 
 ~MATH SENSORFUSION
 MATH SENSORFUSION type ax, ay, az, gx, gy, gz, [mx, my, mz, ] pitch, roll, yaw
@@ -7334,12 +7300,18 @@ A fully worked example of using the code is given on the BackShed forum at:
 ~MATH SET
 MATH SET nbr, array()
 
-Described with the rest of its family:  HELP MATH
+See ARRAY SET
+
+See also: ARRAY SET
 
 ~MATH SHIFT
 MATH SHIFT inarray%(), nbr, outarray%() [,U]
 
-Described with the rest of its family:  HELP MATH
+This command does a bit shift on all elements of inarray%() and places the
+result in outarray%() (may be the same as inarray%()). nbr can be between -63
+and 63. Positive numbers are a left shift (multiply by power of 2). Negative
+number are a right shift.  The optional parameter ,U will force an unsigned
+shift.
 
 ~MATH SINC
 MATH SINC x_in(), y_in(), n , m, window, freq, x_out(), y_out()
@@ -7360,12 +7332,24 @@ Parameters:
 ~MATH SLICE
 MATH SLICE sourcearray(), [d1] [,d2] [,d3] [,d4] [,d5] , destinationarray()
 
-Described with the rest of its family:  HELP MATH
+See ARRAY SLICE
+
+See also: ARRAY SLICE
 
 ~MATH WINDOW
 MATH WINDOW in(), minout, maxout, out() [,minin!, maxin!]
 
-Described with the rest of its family:  HELP MATH
+This command takes the "in" array and scales it between "minout" and "maxout"
+returning the answer in "out". Optionally, it can also return the minimum and
+maximum floating point values found in the original data ("minin!" and
+"maxin!").  Note: "minout" can be greater than "maxout" and in this case the
+data will be both scaled and inverted.
+This command can massively simplify scaling data for plotting etc.
+Example:
+DIM IN(2)=(1,2,3)
+DIM OUT(2)
+MATH WINDOW IN(),7,3,OUT(),LOW,HIGH
+Will return OUT(0)=7, OUT(1)=5,OUT(2)=3,LOW=1,HIGH=3
 
 ~MATH(ATAN3)
 MATH(ATAN3 x,y)
