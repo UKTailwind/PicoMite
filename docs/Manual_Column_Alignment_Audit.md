@@ -297,15 +297,23 @@ show the layout drifting:
 | 151 | `FRAMEBUFFER SYNC` | 7.6 pt, 0.60 line |
 | 112, 114, 115 | many, e.g. `MM.INFO(FCOLOUR)`, `MM.INFO(TRACK)` | 1 to 3 pt |
 
-**Page 186, the PIO DMA block, is the clearest worked example** and was
-reported by Peter as "very minor", which is the right reading. Every name
-on it sits half a line below its description:
+**Pages 186 and 187, the PIO block, are the clearest worked example** and
+were reported by Peter as "very minor", which is the right reading. The
+names sit below their descriptions:
 
 | name | offset |
 |---|---|
 | `PIO DMA RX pio, sm, nbr, data%() ...` | 8.5 pt, 0.67 line |
 | `PIO DMA RX OFF` | 6.0 pt, 0.47 line |
 | `PIO INTERRUPT pio, sm ...` | 6.2 pt, 0.49 line |
+| `PIO INIT MACHINE pio%, ...` (187) | 21.8 pt, 1.72 lines |
+
+Everything else on page 187 is level or within 3 pt: `PIO EXECUTE`,
+`PIO WRITE`, `PIO WRITEFIFO`, `PIO READ`, `PIO START`, `PIO STOP`,
+`PIO CLEAR` and both `PIO PROGRAM` forms all read correctly.
+`PIO INIT MACHINE` is the one case here that exceeds a line - its name
+block begins about two lines into its own five-line description - but the
+text above the name is still its own, so nothing is misread.
 
 The mechanism is visible in the line spacing. Down the description column
 the gaps are 15.6 to 15.8 pt, because each parameter is its own paragraph
