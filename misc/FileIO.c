@@ -4108,6 +4108,13 @@ int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashou
         fp = (char *)getFstring(fnames[i]);
         AppendDefaultExtension(fp, ".bas");
         fsize = FileSize(fp);
+        /* FileSize answers 0 both for an empty file and for one that is
+           not there, so ask which it was.  "File not found" for a file
+           sitting in plain sight sends the reader looking for a typo in
+           a path that is perfectly correct.  ExistsFile returns -1 when
+           the card will not mount, which is not "empty" either. */
+        if (fsize == 0 && ExistsFile(fp) == 1)
+            error("$ is empty", fp);
         if (fsize <= 0)
             error("File not found");
         if (fsize > MAX_PROG_SIZE)
