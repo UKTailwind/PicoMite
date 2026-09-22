@@ -503,7 +503,17 @@ int __not_in_flash_func(fs_flash_prog)(const struct lfs_config *cfg, lfs_block_t
 {
     assert(off % cfg->prog_size == 0);
     assert(size % cfg->prog_size == 0);
-    assert(block < cfg->block_count);
+    /* littlefs asserts this, and NDEBUG compiles the assert out, so at
+       runtime nothing bounds the block number at all.  The address below
+       is computed from it and handed straight to the flash eraser, so a
+       block out of range erases whatever lies at the answer - and past the
+       end of the part the XIP window aliases back over the firmware, which
+       is a board that boots once more and then never again.  Refuse, and
+       let littlefs report the failure. */
+    if (block >= cfg->block_count)
+        return LFS_ERR_INVAL;
+    if (off + size > BLOCK_SIZE)
+        return LFS_ERR_INVAL;
 
     uint32_t addr = RoundUpK4(TOP_OF_SYSTEM_FLASH) + (Option.modbuff ? 1024 * Option.modbuffsize : 0) + block * 4096 + off;
 #if PICOMITERP2350
@@ -522,7 +532,9 @@ int __not_in_flash_func(fs_flash_prog)(const struct lfs_config *cfg, lfs_block_t
 }
 int __not_in_flash_func(fs_flash_erase)(const struct lfs_config *cfg, lfs_block_t block)
 {
-    assert(block < cfg->block_count);
+    /* See fs_flash_prog. */
+    if (block >= cfg->block_count)
+        return LFS_ERR_INVAL;
 
     uint32_t block_addr = RoundUpK4(TOP_OF_SYSTEM_FLASH) + (Option.modbuff ? 1024 * Option.modbuffsize : 0) + block * 4096;
 #if PICOMITERP2350
