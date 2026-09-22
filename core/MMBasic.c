@@ -6100,6 +6100,7 @@ const char *const errorstring[] = {
     "System SPI not configured",                                   // 45
     "Illegal escape sequence, use CHR$(0) for the Null character", // 46
     "Struct member arrays not supported for this command",         // 47
+    "Not enough memory for % bytes",                               // 48
 };
 void StandardError(int n)
 {
