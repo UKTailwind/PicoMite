@@ -581,12 +581,12 @@ uint8_t PSRAMpin;
         // and MMBasic run the SAME code and cannot disagree. Each writes into
         // a destination the caller supplies - GetTempStrMemory() (0x30 with
         // STRINGSIZE) is the natural source - and clamps rather than erroring.
-        (void *)StrLeft,  // 0x178 unsigned char *StrLeft(dst, s, n)            LEFT$
-        (void *)StrRight, // 0x17c unsigned char *StrRight(dst, s, n)           RIGHT$
-        (void *)StrCase,  // 0x180 unsigned char *StrCase(dst, s, upper)        UCASE$/LCASE$
-        (void *)StrMid,   // 0x184 unsigned char *StrMid(dst, s, spos, nbr)     MID$
-        (void *)StrChar,  // 0x188 unsigned char *StrChar(dst, c)               CHR$
-        (void *)StrFill,  // 0x18c unsigned char *StrFill(dst, ch, n)           SPACE$/STRING$
+        (void *)StrLeft,   // 0x178 unsigned char *StrLeft(dst, s, n)            LEFT$
+        (void *)StrRight,  // 0x17c unsigned char *StrRight(dst, s, n)           RIGHT$
+        (void *)StrCase,   // 0x180 unsigned char *StrCase(dst, s, upper)        UCASE$/LCASE$
+        (void *)StrMid,    // 0x184 unsigned char *StrMid(dst, s, spos, nbr)     MID$
+        (void *)StrChar,   // 0x188 unsigned char *StrChar(dst, c)               CHR$
+        (void *)StrFill,   // 0x18c unsigned char *StrFill(dst, ch, n)           SPACE$/STRING$
         (void *)StrInstr,  // 0x190 int StrInstr(s1, s2, start)                   INSTR (0-based start)
         (void *)StrFormat, // 0x194 unsigned char *StrFormat(dst,f,i64,isint,m,n,ch)  STR$
         // Not strings, but the same idea: the body of the MMBasic function with
@@ -3128,6 +3128,33 @@ uint32_t testPSRAM(void)
         lfs_file_t lfs_file;
         pico_lfs_cfg.block_count = (Option.FlashSize - RoundUpK4(TOP_OF_SYSTEM_FLASH) - (Option.modbuff ? 1024 * Option.modbuffsize : 0)) / 4096;
         int err, boot_count = 0;
+        /* Writing the boot count is the first flash write the board ever
+           makes, and after a power-on reset it is made while the rails are
+           still settling.  That matters more than it sounds: boot2 re-runs
+           inside flash_range_erase and leaves the flash clocked at sys/2 -
+           100 MHz at 200 MHz sys - so the erase command and its ADDRESS are
+           clocked in at full speed while the chip's own charge pump draws
+           its peak current.  On a board with linear regulators and a 2.63 V
+           supervisor there is a window where the flash is below its 2.7 V
+           minimum and nothing has reset: a mis-latched address then erases a
+           sector that was never the target, and the XIP window aliases the
+           far end of the part back over the firmware.  The board boots once
+           more and then never again.  Measured on a PicoComputer 3: patching
+           this write out made an unreliable board solid across every kind of
+           reset, while leaving the mount and the reads in place.
+
+           So wait a second, and ONLY on a cold start - every warm path has
+           been running long enough for the rails to be up, and delaying them
+           would cost a second on every soft reset for nothing.  The warm
+           paths all overwrite restart_reason with a sentinel before this
+           runs, so the bit test cannot match one of those. */
+#ifdef rp2350
+        /* HAD_POR, plus HAD_BOR for a core rail that collapsed on its own. */
+        if (restart_reason & 0x30000)
+#else
+    if (restart_reason & 0x100)
+#endif
+            sleep_ms(1000);
         if (format)
             err = true;
         else
