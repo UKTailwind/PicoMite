@@ -3989,7 +3989,7 @@ void MIPS16 configure(unsigned char *p, bool noask)
             Option.VGA_HSYNC = PINMAP[12];
             Option.VGA_BLUE = PINMAP[14];
 #endif
-#ifdef USBKEYBOARD
+#if defined(USBKEYBOARD)
             Option.SerialTX = PINMAP[8];
             Option.SerialRX = PINMAP[9];
             Option.SerialConsole = 2;
