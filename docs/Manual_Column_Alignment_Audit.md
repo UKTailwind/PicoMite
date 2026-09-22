@@ -520,6 +520,55 @@ These have **not** been checked and may hide further instances. Re-running
    the way `release_preflight.py` runs. It takes about three minutes over
    the whole manual and needs only the docx and the PDF.
 
+
+## What was done, and what could not be
+
+The name columns were re-padded on 2026-09-22 so that each name sits level
+with the first line of its own description. Of the 60 name-and-description
+pairs targeted, **53 now sit within 8 pt of level, which reads as aligned,
+and 57 are within one line.** The worst residual is 1.5 lines. Nothing else
+in the document moved: 294 pages, 42 top-level and 844 outline entries,
+543/543 command bookmarks and the same contents pages as before.
+
+Fixed: `MM.INFO(FREE SPACE)` (112), the `LIBRARY` forms (162, 163), the
+`PLAY` forms at the page break (190, 191), the `POKE` forms (193, 194),
+`WEB TLS NOVERIFY` (214), the `MATH()` functions (227, 228), the `PEEK`
+forms (230) and the `TOUCH` gestures (234, 235).
+
+**The `TOUCH` names were also reordered** to follow the narrative: `SWIPE`
+now comes after the four swipe directions, `PINCH` after `EXPAND` and
+`CONTRACT`, and `ROTATE` after `CW` and `CCW`. Without that the names could
+not be aligned at all, because the list and the text disagreed on order.
+
+**Two blocks resisted and were put back as they were.**
+
+- **Pages 170 and 171, `MATH`** (finding 5). This row runs over three
+  pages, and the two columns break at different points because the
+  description column carries paragraph spacing and the name column does
+  not. Padding the name column changes where the break falls, which moves
+  the names again: three passes converged on the names still sitting about
+  2.8 lines high on page 171, and a fourth made it worse. It cannot be
+  solved by padding.
+- **Page 155, `GUI CURSOR`** (finding 3). Re-padding it aligned the names
+  but cost three entries in the generated help files, for the reason below.
+
+**A coupling worth knowing about.** `tools/gen_help.py` pairs the two
+columns by splitting each cell into blank-line separated groups and zipping
+them, so the blank spacer paragraphs that hold the visual alignment are
+also what decide which name gets a help topic. Re-padding therefore changes
+the help files. Here it was a net gain: **eleven commands that had no help
+topic now have one** - `LIBRARY DELETE`, `PEEK(FLOAT)`, `PEEK(VARTBL)`,
+`PEEK(WORD)`, `POKE INTEGER`, `POKE SHORT`, `TOUCH(DTAP)`, `TOUCH(EXPAND)`,
+`TOUCH(HOLD)`, `TOUCH(SWL)` and `TOUCH(TTAP)` - and none were lost, after
+`GUI CURSOR` was put back. Check the topic list after any future re-padding.
+
+**The case for one row per form is now stronger.** Both blocks that
+resisted, and the residual line or so elsewhere, come from the same thing:
+a compact list of names cannot be made to track a running narrative when
+the two columns flow independently and break across pages separately.
+Giving each form its own table row would make the alignment automatic,
+permanent, and immune to the next edit.
+
 ## Why this keeps happening
 
 Every one of these defects was introduced by a correct edit to a
