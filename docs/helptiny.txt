@@ -1675,20 +1675,13 @@ GUI CLICK PIN OFF
 Described with the rest of its family:  HELP GUI CLICK
 
 ~GUI CURSOR
-GUI CURSOR ON [n [,x, y [,colour]]]
 GUI CURSOR x, y
 GUI CURSOR OFF
 GUI CURSOR HIDE
 GUI CURSOR SHOW
-GUI CURSOR COLOUR colour
-GUI CURSOR LOAD fname$
-GUI CURSOR LINK MOUSE
-GUI CURSOR UNLINK MOUSE
 
 ~GUI CURSOR COLOUR
 GUI CURSOR COLOUR colour
-
-Described with the rest of its family:  HELP GUI CURSOR
 
 ~GUI CURSOR HIDE
 GUI CURSOR HIDE
@@ -1699,12 +1692,8 @@ Described with the rest of its family:  HELP GUI CURSOR
 GUI CURSOR LINK MOUSE
 GUI CURSOR UNLINK MOUSE
 
-Described with the rest of its family:  HELP GUI CURSOR
-
 ~GUI CURSOR LOAD
 GUI CURSOR LOAD fname$
-
-Described with the rest of its family:  HELP GUI CURSOR
 
 ~GUI CURSOR OFF
 GUI CURSOR OFF
@@ -1713,8 +1702,6 @@ Described with the rest of its family:  HELP GUI CURSOR
 
 ~GUI CURSOR ON
 GUI CURSOR ON [n [,x, y [,colour]]]
-
-Described with the rest of its family:  HELP GUI CURSOR
 
 ~GUI CURSOR SHOW
 GUI CURSOR SHOW

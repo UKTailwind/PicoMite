@@ -542,12 +542,11 @@ not be aligned at all, because the list and the text disagreed on order.
 
 **Two blocks resisted and were put back as they were.**
 
-- **Page 155, `GUI CURSOR`** (finding 3). Re-padding it aligned the names
-  but cost three entries in the generated help files, for the reason below,
-  so it was put back. It is the one block still out.
+- **Page 155, `GUI CURSOR`** (finding 3). Re-padding aligned the names but
+  cost three entries in the generated help files, so it was put back and
+  then split into rows instead, below.
 - **Pages 170 and 171, `MATH`** (finding 5) resisted padding for the reason
-  given under *One row per command*, below, and was fixed structurally
-  instead.
+  given under *One row per command*, below, and was split too.
 
 ## One row per command: the permanent fix, used for MATH
 
@@ -575,8 +574,24 @@ description, within 3 pt. Three things came free with it:
 - the help files are unaffected, because each row now holds exactly one
   name group and one description group.
 
+**`GUI CURSOR` on page 155 was then split the same way**, into six rows:
+`ON` (carrying the version banner and the preamble), `x, y`, the
+`OFF`/`HIDE`/`SHOW` trio that share one sentence, `COLOUR`, `LOAD`, and the
+`LINK MOUSE`/`UNLINK MOUSE` pair. Every form is now level with its own
+text, the page count is unchanged and five more PDF bookmarks appear.
+
+**The one thing to get right when splitting is the help files.**
+`gen_help.py` compares the number of blank-separated groups in the two
+cells: equal counts pair one to one, unequal counts make a primary topic
+under the common prefix plus a stub for every other name. That is where
+`GUI CURSOR HIDE` and `GUI CURSOR SHOW` come from. So **keep the paragraph
+grouping inside each new row exactly as it was** - the three names that
+share a sentence stay in one row, still separated by their blank
+paragraphs - and the topic list comes through untouched. It did here: 1163
+topics, the eleven gained earlier still present, none lost.
+
 **This is the pattern to use for any other block that will not hold its
-alignment**, and it is what findings 3, 4, 6 and 7 would want if they drift
+alignment**, and it is what findings 4, 6 and 7 would want if they drift
 again.
 
 **A coupling worth knowing about.** `tools/gen_help.py` pairs the two

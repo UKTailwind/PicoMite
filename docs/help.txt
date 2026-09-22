@@ -4835,15 +4835,58 @@ GUI CLICK PIN OFF
 Described with the rest of its family:  HELP GUI CLICK
 
 ~GUI CURSOR
-GUI CURSOR ON [n [,x, y [,colour]]]
 GUI CURSOR x, y
+
+GUI CURSOR x, y moves the cursor to 'x', 'y'.  If the cursor is hidden it is
+not displayed, just its stored location is updated.
+
 GUI CURSOR OFF
 GUI CURSOR HIDE
 GUI CURSOR SHOW
+
+GUI CURSOR OFF turns off the cursor (this also unlinks the mouse).  GUI CURSOR
+HIDE hides the cursor but maintains its position and GUI CURSOR SHOW will show
+a hidden cursor again at its stored position.
+
+~GUI CURSOR COLOUR
 GUI CURSOR COLOUR colour
-GUI CURSOR LOAD fname$
+
+GUI CURSOR COLOUR (or COLOR) changes the colour of cursor numbers 0 and 1.  It
+does not affect a loaded cursor which has its colours specified by the cursor
+designer.
+
+~GUI CURSOR HIDE
+GUI CURSOR HIDE
+
+Described with the rest of its family:  HELP GUI CURSOR
+
+~GUI CURSOR LINK MOUSE
 GUI CURSOR LINK MOUSE
 GUI CURSOR UNLINK MOUSE
+
+GUI CURSOR LINK MOUSE links the cursor to the mouse so that it automatically
+tracks the mouse movement.  GUI CURSOR UNLINK MOUSE breaks the link.  A mouse
+must be connected (USB) or configured (PS2 - see the MOUSE OPEN command)
+before the cursor can be linked.
+
+~GUI CURSOR LOAD
+GUI CURSOR LOAD fname$
+
+GUI CURSOR LOAD loads cursor number 2 from the file 'fname$' (a .spr extension
+is added if none is given) and selects it.  The file uses the same layout and
+colour coding as a sprite (see Appendix G) except that the header line is:
+width, height, xoffset, yoffset.  The two offsets define the position of the
+cursor's active point within the image - the mouse pointer (cursor 0) has
+offsets 0,0 (the tip of the arrow) and the cross hair (cursor 1) has 7,7 (its
+centre).  The maximum size is 24x24 pixels.
+
+~GUI CURSOR OFF
+GUI CURSOR OFF
+
+Described with the rest of its family:  HELP GUI CURSOR
+
+~GUI CURSOR ON
+GUI CURSOR ON [n [,x, y [,colour]]]
 
 GUI CONTROLS VERSIONS ONLY
 Displays and manipulates a cursor (eg, a mouse pointer) on the screen.  The
@@ -4855,56 +4898,6 @@ initial position (the centre of the screen if omitted) and 'colour' can be
 used to override the default white colour of cursors 0 and 1.  On an LCD panel
 the display controller must support reading back the image (eg, ILI9341)
 otherwise an error will be generated.
-GUI CURSOR x, y moves the cursor to 'x', 'y'.  If the cursor is hidden it is
-not displayed, just its stored location is updated.
-GUI CURSOR OFF turns off the cursor (this also unlinks the mouse).  GUI CURSOR
-HIDE hides the cursor but maintains its position and GUI CURSOR SHOW will show
-a hidden cursor again at its stored position.
-GUI CURSOR COLOUR (or COLOR) changes the colour of cursor numbers 0 and 1.  It
-does not affect a loaded cursor which has its colours specified by the cursor
-designer.
-GUI CURSOR LOAD loads cursor number 2 from the file 'fname$' (a .spr extension
-is added if none is given) and selects it.  The file uses the same layout and
-colour coding as a sprite (see Appendix G) except that the header line is:
-width, height, xoffset, yoffset.  The two offsets define the position of the
-cursor's active point within the image - the mouse pointer (cursor 0) has
-offsets 0,0 (the tip of the arrow) and the cross hair (cursor 1) has 7,7 (its
-centre).  The maximum size is 24x24 pixels.
-GUI CURSOR LINK MOUSE links the cursor to the mouse so that it automatically
-tracks the mouse movement.  GUI CURSOR UNLINK MOUSE breaks the link.  A mouse
-must be connected (USB) or configured (PS2 - see the MOUSE OPEN command)
-before the cursor can be linked.
-
-~GUI CURSOR COLOUR
-GUI CURSOR COLOUR colour
-
-Described with the rest of its family:  HELP GUI CURSOR
-
-~GUI CURSOR HIDE
-GUI CURSOR HIDE
-
-Described with the rest of its family:  HELP GUI CURSOR
-
-~GUI CURSOR LINK MOUSE
-GUI CURSOR LINK MOUSE
-GUI CURSOR UNLINK MOUSE
-
-Described with the rest of its family:  HELP GUI CURSOR
-
-~GUI CURSOR LOAD
-GUI CURSOR LOAD fname$
-
-Described with the rest of its family:  HELP GUI CURSOR
-
-~GUI CURSOR OFF
-GUI CURSOR OFF
-
-Described with the rest of its family:  HELP GUI CURSOR
-
-~GUI CURSOR ON
-GUI CURSOR ON [n [,x, y [,colour]]]
-
-Described with the rest of its family:  HELP GUI CURSOR
 
 ~GUI CURSOR SHOW
 GUI CURSOR SHOW
