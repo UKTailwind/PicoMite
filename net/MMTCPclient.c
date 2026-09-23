@@ -266,6 +266,37 @@ static bool tcp_client_open(void *arg, const char *hostname_for_sni)
     err_t err = altcp_connect(pcb, &state->remote_addr, state->TCP_PORT, tcp_client_connected);
     return err == ERR_OK;
 }
+/* Point the receive callbacks at nothing, leaving the connection alone.
+ *
+ * state->buffer is the caller's BASIC array, and the callbacks write into it
+ * - including eight bytes in FRONT of it, the LongString length.  A timeout
+ * error() longjmps straight out of the command with that pointer still
+ * armed and the connection still open, so a reply that turns up afterwards
+ * is written into whatever owns that memory by then.  Demonstrated on a
+ * PicoMiteHDMIWEB against a server that answered eight seconds after a two
+ * second timeout: the request's LOCAL buffer was freed when its SUB
+ * returned, the next DIM was handed the same block, and all 201 elements of
+ * it were overwritten.  Reported as "my program exits with an error, then a
+ * few seconds later the CPU restarts".
+ *
+ * Both recv callbacks already handle a NULL buffer: they consume from lwIP
+ * and drop the data, which is what the existing comments there describe for
+ * a server that speaks first.  So a late reply is discarded rather than
+ * delivered - the program has already been told the request timed out, and a
+ * following READ or REQUEST arms a buffer again.
+ *
+ * Not a close: the connection may still be wanted.  close_tcpclient() is the
+ * stronger form, used where the pcb itself is no use any more. */
+static void tcp_client_disarm(TCP_CLIENT_T *state)
+{
+    if (!state)
+        return;
+    state->buffer = NULL;
+    state->buffer_write = NULL;
+    state->buffer_read = NULL;
+    state->buffer_len = 0;
+}
+
 void close_tcpclient(void)
 {
     TCP_CLIENT_T *state = TCP_CLIENT;
@@ -337,7 +368,13 @@ int cmd_tcpclient(void)
                 cyw43_arch_poll();
         web_async_check_error();
         if (!Timer4)
+        {
+            /* Same reasoning as the TLS handshake timeout below: tear the
+               half-open pcb down before longjmping out, rather than leave
+               its callbacks registered for the next poll to service. */
+            close_tcpclient();
             error("No response from client");
+        }
         return 1;
     }
     tp = checkstring(cmdline, (unsigned char *)"OPEN TCP STREAM");
@@ -399,7 +436,13 @@ int cmd_tcpclient(void)
             }
         }
         if (!Timer4)
+        {
+            /* Same reasoning as the TLS handshake timeout below: tear the
+               half-open pcb down before longjmping out, rather than leave
+               its callbacks registered for the next poll to service. */
+            close_tcpclient();
             error("No response from client");
+        }
         return 1;
     }
 
@@ -593,7 +636,10 @@ int cmd_tcpclient(void)
         while (!state->buffer_len && Timer4)
             ProcessWeb(0);
         if (!Timer4)
+        {
+            tcp_client_disarm(state); /* the reply may still be coming */
             error("No response from server");
+        }
         else
             Timer4 = 500;
         while (Timer4)
@@ -639,7 +685,10 @@ int cmd_tcpclient(void)
         while (!state->buffer_len && Timer4)
             ProcessWeb(0);
         if (!Timer4)
+        {
+            tcp_client_disarm(state); /* the reply may still be coming */
             error("No response from server");
+        }
         else
             Timer4 = 500;
         while (Timer4)
