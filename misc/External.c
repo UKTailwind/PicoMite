@@ -6026,6 +6026,17 @@ void MIPS16 ClearExternalIO(void)
     MQTTInterrupt = NULL;
     MQTTComplete = 0;
     closeMQTT();
+    /* The TCP client belongs in this tidy-up as much as MQTT does, and was
+       the only one of net/'s four close entry points missing from it.  Its
+       receive callbacks are armed at a BASIC array, and InitHeap(true) is
+       about to wipe the heap that array lives in, so a connection left open
+       across a RUN would write a late reply into whatever the next program
+       put there.  Until now only the next WEB OPEN TCP CLIENT cleared it,
+       which a program that uses UDP or the web server never issues.
+       Safe with nothing open: close_tcpclient() returns at once when
+       TCP_CLIENT is NULL, and tcp_client_close() guards its pcb, exactly as
+       closeMQTT() guards mqtt_client. */
+    close_tcpclient();
 #endif
     CollisionFound = false;
     COLLISIONInterrupt = NULL;

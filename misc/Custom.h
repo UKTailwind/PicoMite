@@ -211,6 +211,9 @@ int cmd_tls(void);
 void open_udp_server(void);
 void cmd_udp(unsigned char *tp);
 
+/* TCP client functions */
+void close_tcpclient(void);
+
 /* MQTT functions */
 int cmd_mqtt(void);
 void closeMQTT(void);
