@@ -175,7 +175,11 @@ else:
 #     the same asymmetry the uf2 and mmb2csub checks use.
 supname = "PicoMite_Supplementary_Manuals-%s.zip" % version
 suppath = os.path.join(REPO, supname)
-SUPP_PATHS = [':(glob)PDF/*.pdf']
+# The zip excludes both copies of the user manual, so they must not count
+# towards its freshness either - cutting the versioned snapshot at release
+# time would otherwise condemn a zip that is perfectly current.
+SUPP_PATHS = [':(glob)PDF/*.pdf',
+              ':(exclude,glob)PDF/PicoMite_User_Manual*.pdf']
 if not os.path.exists(suppath):
     check("supplementary manuals zip present", False,
           "%s - run tools/make_supplementary_zip.py" % supname)
