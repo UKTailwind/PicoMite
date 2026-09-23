@@ -540,17 +540,18 @@ MM.CODE                    MM.INFO(ADC DMA)
 MM.DEVICE$                 MM.INFO(ADC)
 MM.DISPLAY                 MM.INFO(AUTORUN)
 MM.ERRNO                   MM.INFO(BATTERY)
-MM.FLAGS                   MM.INFO(BCOLOUR)
-MM.FONTHEIGHT              MM.INFO(BIOS)
-MM.HEIGHT                  MM.INFO(BOOT COUNT)
-MM.HPOS                    MM.INFO(BOOT)
-MM.HRES                    MM.INFO(CALLTABLE)
-MM.I2C                     MM.INFO(CHARGING)
-MM.INFO                    MM.INFO(CPUSPEED)
-MM.INFO$(ADC DMA)          MM.INFO(CURRENT)
-MM.INFO$(ADC)              MM.INFO(DISK SIZE)
-MM.INFO$(AUTORUN)          MM.INFO(DRIVE)
-MM.INFO$(BATTERY)          MM.INFO(EXISTS DIR)
+MM.FLAGS                   MM.INFO(BBC BUFFER)
+MM.FONTHEIGHT              MM.INFO(BCOLOUR)
+MM.HEIGHT                  MM.INFO(BIOS)
+MM.HPOS                    MM.INFO(BOOT COUNT)
+MM.HRES                    MM.INFO(BOOT)
+MM.I2C                     MM.INFO(CALLTABLE)
+MM.INFO                    MM.INFO(CHARGING)
+MM.INFO$(ADC DMA)          MM.INFO(CPUSPEED)
+MM.INFO$(ADC)              MM.INFO(CURRENT)
+MM.INFO$(AUTORUN)          MM.INFO(DISK SIZE)
+MM.INFO$(BATTERY)          MM.INFO(DRIVE)
+MM.INFO$(BBC BUFFER)       MM.INFO(EXISTS DIR)
 MM.INFO$(BCOLOUR)          MM.INFO(EXISTS FILE)
 MM.INFO$(BIOS)             MM.INFO(FCOLOUR)
 MM.INFO$(BOOT COUNT)       MM.INFO(FILESIZE)
@@ -1675,7 +1676,6 @@ GUI CLICK PIN OFF
 
 ~GUI CURSOR
 GUI CURSOR x, y
-GUI CURSOR OFF
 GUI CURSOR HIDE
 GUI CURSOR SHOW
 
@@ -1696,8 +1696,6 @@ GUI CURSOR LOAD fname$
 
 ~GUI CURSOR OFF
 GUI CURSOR OFF
-
-Described with the rest of its family:  HELP GUI CURSOR
 
 ~GUI CURSOR ON
 GUI CURSOR ON [n [,x, y [,colour]]]
@@ -2595,6 +2593,11 @@ MM.INFO$(BATTERY)
 
 Described with the rest of its family:  HELP MM.INFO(BATTERY)
 
+~MM.INFO$(BBC BUFFER)
+MM.INFO$(BBC BUFFER)
+
+Described with the rest of its family:  HELP MM.INFO(BBC BUFFER)
+
 ~MM.INFO$(BCOLOUR)
 MM.INFO$(BCOLOUR)
 
@@ -2939,6 +2942,9 @@ Described with the rest of its family:  HELP MM.INFO$(AUTORUN)
 
 ~MM.INFO(BATTERY)
 MM.INFO(BATTERY)
+
+~MM.INFO(BBC BUFFER)
+MM.INFO(BBC BUFFER)
 
 ~MM.INFO(BCOLOUR)
 MM.INFO(BCOLOUR)

@@ -542,17 +542,18 @@ MM.CODE                    MM.INFO(ADC DMA)
 MM.DEVICE$                 MM.INFO(ADC)
 MM.DISPLAY                 MM.INFO(AUTORUN)
 MM.ERRNO                   MM.INFO(BATTERY)
-MM.FLAGS                   MM.INFO(BCOLOUR)
-MM.FONTHEIGHT              MM.INFO(BIOS)
-MM.HEIGHT                  MM.INFO(BOOT COUNT)
-MM.HPOS                    MM.INFO(BOOT)
-MM.HRES                    MM.INFO(CALLTABLE)
-MM.I2C                     MM.INFO(CHARGING)
-MM.INFO                    MM.INFO(CPUSPEED)
-MM.INFO$(ADC DMA)          MM.INFO(CURRENT)
-MM.INFO$(ADC)              MM.INFO(DISK SIZE)
-MM.INFO$(AUTORUN)          MM.INFO(DRIVE)
-MM.INFO$(BATTERY)          MM.INFO(EXISTS DIR)
+MM.FLAGS                   MM.INFO(BBC BUFFER)
+MM.FONTHEIGHT              MM.INFO(BCOLOUR)
+MM.HEIGHT                  MM.INFO(BIOS)
+MM.HPOS                    MM.INFO(BOOT COUNT)
+MM.HRES                    MM.INFO(BOOT)
+MM.I2C                     MM.INFO(CALLTABLE)
+MM.INFO                    MM.INFO(CHARGING)
+MM.INFO$(ADC DMA)          MM.INFO(CPUSPEED)
+MM.INFO$(ADC)              MM.INFO(CURRENT)
+MM.INFO$(AUTORUN)          MM.INFO(DISK SIZE)
+MM.INFO$(BATTERY)          MM.INFO(DRIVE)
+MM.INFO$(BBC BUFFER)       MM.INFO(EXISTS DIR)
 MM.INFO$(BCOLOUR)          MM.INFO(EXISTS FILE)
 MM.INFO$(BIOS)             MM.INFO(FCOLOUR)
 MM.INFO$(BOOT COUNT)       MM.INFO(FILESIZE)
@@ -2700,13 +2701,11 @@ GUI CURSOR x, y
 GUI CURSOR x, y moves the cursor to 'x', 'y'. If the cursor is hidden it is
 not displayed, just its stored location is updated.
 
-GUI CURSOR OFF
 GUI CURSOR HIDE
 GUI CURSOR SHOW
 
-GUI CURSOR OFF turns off the cursor (this also unlinks the mouse). GUI CURSOR
-HIDE hides the cursor but maintains its position and GUI CURSOR SHOW will show
-a hidden cursor again at its stored position.
+GUI CURSOR HIDE hides the cursor but maintains its position and GUI CURSOR
+SHOW will show a hidden cursor again at its stored position.
 
 ~GUI CURSOR COLOUR
 GUI CURSOR COLOUR colour
@@ -2738,7 +2737,7 @@ width, height, xoffset, yoffset.
 ~GUI CURSOR OFF
 GUI CURSOR OFF
 
-Described with the rest of its family:  HELP GUI CURSOR
+GUI CURSOR OFF turns off the cursor (this also unlinks the mouse).
 
 ~GUI CURSOR ON
 GUI CURSOR ON [n [,x, y [,colour]]]
@@ -4477,6 +4476,11 @@ MM.INFO$(BATTERY)
 
 Described with the rest of its family:  HELP MM.INFO(BATTERY)
 
+~MM.INFO$(BBC BUFFER)
+MM.INFO$(BBC BUFFER)
+
+Described with the rest of its family:  HELP MM.INFO(BBC BUFFER)
+
 ~MM.INFO$(BCOLOUR)
 MM.INFO$(BCOLOUR)
 
@@ -4880,6 +4884,12 @@ Described with the rest of its family:  HELP MM.INFO$(AUTORUN)
 MM.INFO(BATTERY)
 
 PicoCalc only: Returns the battery level
+
+~MM.INFO(BBC BUFFER)
+MM.INFO(BBC BUFFER)
+
+Returns the number of free slots in the PLAY BBC SOUND queue for channel n (0
+to 3), or in the emptiest of the four channels if n is omitted.
 
 ~MM.INFO(BCOLOUR)
 MM.INFO(BCOLOUR)
