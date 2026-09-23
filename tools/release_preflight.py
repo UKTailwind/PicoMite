@@ -167,6 +167,34 @@ else:
     check("no uncommitted change to what the zip packages", not pkg_dirty,
           pkg_dirty.replace(chr(10), "; "))
 
+# 8b. the supplementary-manuals zip: every PDF/ manual except the two copies
+#     of the user manual, which ships as an asset of its own.  Added as a
+#     22nd asset at Peter's request during V6.04.00RC0 and built by a
+#     throwaway script that release; tools/make_supplementary_zip.py now.
+#     Freshness is its mtime against the COMMIT time of the PDFs it packs,
+#     the same asymmetry the uf2 and mmb2csub checks use.
+supname = "PicoMite_Supplementary_Manuals-%s.zip" % version
+suppath = os.path.join(REPO, supname)
+SUPP_PATHS = [':(glob)PDF/*.pdf']
+if not os.path.exists(suppath):
+    check("supplementary manuals zip present", False,
+          "%s - run tools/make_supplementary_zip.py" % supname)
+else:
+    check("supplementary manuals zip present", True, supname)
+    t_sup = commit_time(SUPP_PATHS)
+    check("supplementary zip newer than the manuals it packages",
+          os.path.getmtime(suppath) >= t_sup,
+          "rebuild it - the zip predates a PDF inside it")
+    import zipfile as _zf
+    n_in = len([f for f in os.listdir(os.path.join(REPO, 'PDF'))
+                if f.lower().endswith('.pdf')
+                and not f.startswith('PicoMite_User_Manual')])
+    with _zf.ZipFile(suppath) as _z:
+        n_zip = len(_z.namelist())
+    check("supplementary zip holds every supplementary manual (%d)" % n_in,
+          n_in == n_zip,
+          "zip has %d, PDF/ has %d" % (n_zip, n_in))
+
 # 9. the two HELP files, which are generated FROM the manual - so they go
 #    stale exactly when the docx changes, and nothing else notices.
 #
@@ -217,6 +245,7 @@ print()
 if fails:
     print("PRE-FLIGHT FAILED: " + ", ".join(fails))
     sys.exit(1)
-print("PRE-FLIGHT PASSED for V%s - 21 assets ready" % version)
+print("PRE-FLIGHT PASSED for V%s - 22 assets ready" % version)
 print("  16 uf2 + the manual PDF + %s" % zipname)
 print("  + docs/help.txt, docs/helpmin.txt, docs/helptiny.txt")
+print("  + %s" % supname)
