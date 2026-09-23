@@ -754,6 +754,9 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
 
     void IfTableBuild(void);                               // build for both ProgMemory and LibMemory
     void IfTableForget(void);                              // after InitHeap: the pointer is dangling
+#ifdef STRUCTENABLED
+    void StructTableForget(void);                         // ditto for the TYPE definitions
+#endif
     void IfTableFree(void);                                // free all entries
     struct iftab_entry *IfTableLookup(unsigned char *tok); // NULL if not found
 

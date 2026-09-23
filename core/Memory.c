@@ -1995,6 +1995,10 @@ void InitHeap(bool all)
        later IfTableFree() hand back memory that now belongs to something
        else - see IfTableForget() in Commands.c. */
     IfTableForget();
+#ifdef STRUCTENABLED
+    /* Same for the TYPE definitions, which are GetMemory blocks too. */
+    StructTableForget();
+#endif
 #ifdef rp2350
     if (all)
         memset(psmap, 0, sizeof(psmap));

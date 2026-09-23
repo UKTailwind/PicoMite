@@ -863,6 +863,28 @@ int g_StructMemberType = 0;						   // Type of struct member being accessed (0 i
 int g_StructMemberOffset = 0;					   // Offset of member within struct (for EXTRACT/INSERT/SORT)
 int g_StructMemberSize = 0;						   // Size of the member (for EXTRACT/INSERT/SORT)
 int g_ExprStructType = -1;						   // Struct type index from expression evaluation (-1 if not a struct)
+/* Forget the structure table WITHOUT freeing it.
+ *
+ * Each TYPE definition is a GetMemory() block, so InitHeap() takes them all
+ * away underneath us: the heap and its page bitmap are wiped together and
+ * these pointers are left dangling.  Freeing one after that is not a no-op
+ * once something else has been allocated over those pages - FreeMemory's
+ * PUSED check only saves us while the bitmap is still clear - and it hands
+ * away memory that now belongs to somebody else.  That is precisely how the
+ * IF jump table corrupted a TYPE definition (see IfTableForget).
+ *
+ * PrepareProgram's clear loop is safe today only because it runs before
+ * anything re-allocates.  This removes the dependence on that ordering.
+ * The five FreeMemorySafe() sites are ownership and are left alone: they
+ * release real memory while the bitmap still describes it. */
+void StructTableForget(void)
+{
+	for (int i = 0; i < MAX_STRUCT_TYPES; i++)
+		g_structtbl[i] = NULL;
+	g_structcnt = 0;
+	g_StructArg = -1;
+}
+
 #endif
 
 int TraceOn; // used to track the state of TRON/TROFF
