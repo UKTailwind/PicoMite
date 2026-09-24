@@ -1,0 +1,11 @@
+add  4  8
+sub -2  2
+mul  3  15
+div  0  1
+and  1  1
+or  3  7
+xor  2  6
+fadd  3  7
+fdiv  0.5  2.5
+fxor  3  7
+fmult  2  10

@@ -1,0 +1,11 @@
+colons: 1 2 3
+spaced: 4 5
+empty statements survive
+1 then-only, taken
+3 then branch
+4 else branch
+5 all three ran
+5 b,c = 11 12
+6 b,c = 0 0
+[27] If a = 4 Then b = 21 : Print "7 then" Else b = 22 : Print "7 else"
+Error : Expected closing bracket

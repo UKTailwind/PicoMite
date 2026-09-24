@@ -1,0 +1,9 @@
+1x1    32
+dot    32
+outer  4 8 12
+       5 10 15
+       6 12 18
+det1   4
+inv1   0.25
+trans  1 2 3
+vmult  14

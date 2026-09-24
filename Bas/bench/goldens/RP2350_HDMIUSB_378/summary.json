@@ -1,0 +1,786 @@
+[
+ {
+  "name": "arrsize",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": ""
+ },
+ {
+  "name": "arrslice",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.9,
+  "note": "[108] Print \"  MAP(\"; Str$(codes(i)); \") = \"; HEX$(cout(i), 6); \"  MAP() agrees: \"; Str$(cout(i) = Map(codes(i))) | Error : Invalid for Mode"
+ },
+ {
+  "name": "arrslice1",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.7,
+  "note": ""
+ },
+ {
+  "name": "bench",
+  "class": "TIMEOUT",
+  "deterministic": false,
+  "secs": 61.5,
+  "note": ">"
+ },
+ {
+  "name": "bitbyte",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.6,
+  "note": "[38] Print \"  flags 2,5      \"; Flag(0); Flag(2); Flag(5); \"  MM.INFO(FLAGS) = \"; MM.Info(Flags) | Error : Invalid syntax"
+ },
+ {
+  "name": "blit",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "box",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "byrefelem",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "callname",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "checks",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "circle",
+  "class": "NO-EXPECTED",
+  "deterministic": false,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "circrnd",
+  "class": "NO-EXPECTED",
+  "deterministic": false,
+  "secs": 1.8,
+  "note": ""
+ },
+ {
+  "name": "cmath",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "console",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "constonce",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "countpin",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[10] SetPin gp4, FIN | Error : Invalid configuration"
+ },
+ {
+  "name": "dataconst",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[32] Const LATE = 7 | Error : LATE Global variable already declared"
+ },
+ {
+  "name": "dynarr",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[80] Out % = 0 | Error : Missing Program statement"
+ },
+ {
+  "name": "elseif",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[51] Else If n = 2 Then Print \"same line body\" | Error : Unexpected text"
+ },
+ {
+  "name": "fbdemo",
+  "class": "NO-EXPECTED",
+  "deterministic": false,
+  "secs": 4.8,
+  "note": ""
+ },
+ {
+  "name": "fbwrite",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[11] FRAMEBUFFER Write F | Error : Frame buffer not created"
+ },
+ {
+  "name": "flash",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 7.9,
+  "note": ""
+ },
+ {
+  "name": "fnbyref",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "fnretcat",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "fontdef",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "forktest",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[17] SYSTEM \"true\" | Error : Unknown command"
+ },
+ {
+  "name": "framebuf",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[55] FRAMEBUFFER Create | Error : Framebuffer already exists"
+ },
+ {
+  "name": "gpio",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[17] SetPin 3, DIN | Error : Invalid pin"
+ },
+ {
+  "name": "i2c0",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[64] SetPin 38, 39, I2C2 | Error : Invalid pin"
+ },
+ {
+  "name": "i2c2",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[17] SetPin 38, 39, I2C2 | Error : Invalid pin"
+ },
+ {
+  "name": "imgfmt",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[9] Load IMAGE \"g4.bmp\" | Error : Could not find the file"
+ },
+ {
+  "name": "imgloop",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 1.7,
+  "note": "[21] SYSTEM \"sum\", \"s1.bmp\", \"s2.bmp\" | Error : Unknown command"
+ },
+ {
+  "name": "imgm1",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 4.9,
+  "note": "[13] SYSTEM \"sum\", \"m1.bmp\", \"m1b.bmp\" | Error : Unknown command"
+ },
+ {
+  "name": "imgm1b",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 4.9,
+  "note": "[22] SYSTEM \"sum\", \"n1.bmp\", \"n1b.bmp\" | Error : Unknown command"
+ },
+ {
+  "name": "imgm1c",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 1.7,
+  "note": "[23] SYSTEM \"sum\", \"q1.bmp\", \"q1b.bmp\" | Error : Unknown command"
+ },
+ {
+  "name": "imgm1d",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 2.3,
+  "note": "[26] SYSTEM \"sum\", \"r1.bmp\", \"r2.bmp\", \"r3.bmp\" | Error : Unknown command"
+ },
+ {
+  "name": "imgtrip",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 1.6,
+  "note": "[17] SYSTEM \"sum\", \"a.bmp\", \"b.bmp\" | Error : Unknown command"
+ },
+ {
+  "name": "init2d",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "jsonpath",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[6] Print \"[\" JSON$(j(), \"Name\") \"]\" | Error : Dimensions"
+ },
+ {
+  "name": "justarg",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "layer",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[36] FRAMEBUFFER MERGE 0 | Error : Frame buffer 2 not created"
+ },
+ {
+  "name": "localheap",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "lscomms",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[25] SetPin 2, 3, 4, SPI | Error : Invalid pin"
+ },
+ {
+  "name": "matha",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.9,
+  "note": ""
+ },
+ {
+  "name": "mathb64",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[6] n% = Math(BASE64 ENCODE \"f\", out$) | Error : Variable name"
+ },
+ {
+  "name": "mathcrc",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": "[28] Print HEX$(Math(CRC16 s$, 0, &H1021)) | Error : 0 is invalid (valid is 1 to 65535)"
+ },
+ {
+  "name": "mathm",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.6,
+  "note": ""
+ },
+ {
+  "name": "mathm1",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": ""
+ },
+ {
+  "name": "mathq",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.7,
+  "note": ""
+ },
+ {
+  "name": "mathr",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": ""
+ },
+ {
+  "name": "mathw",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.7,
+  "note": ""
+ },
+ {
+  "name": "mminfo",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.6,
+  "note": "[26] Print \"gp0      \"; GP0 | Error : GP0 is not declared"
+ },
+ {
+  "name": "negcmp",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": "[34] ii% = -Pi% | Error : Expression syntax"
+ },
+ {
+  "name": "onerror",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.6,
+  "note": "[48] r = 10 \\ n | Error : Divide by zero"
+ },
+ {
+  "name": "onerrwin",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": ""
+ },
+ {
+  "name": "onewire",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[17] OneWire RESET 26 | Error : Pin 26/GP20 is reserved on startup"
+ },
+ {
+  "name": "onkey",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.9,
+  "note": ""
+ },
+ {
+  "name": "optangle",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.6,
+  "note": ""
+ },
+ {
+  "name": "optbase1",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.7,
+  "note": ""
+ },
+ {
+  "name": "optescape",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.7,
+  "note": ""
+ },
+ {
+  "name": "order",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.6,
+  "note": ""
+ },
+ {
+  "name": "palette",
+  "class": "NO-EXPECTED",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "pathmap",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "pinint",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[26] SetPin 34, INTH, OnEdge | Error : Pin 34/GP28 is reserved on startup"
+ },
+ {
+  "name": "pioout",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "pixart",
+  "class": "NO-EXPECTED",
+  "deterministic": false,
+  "secs": 10.1,
+  "note": ""
+ },
+ {
+  "name": "pixels",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "play",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": ""
+ },
+ {
+  "name": "playfile",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "playmp3",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[18] Play MP3 \"/root/mp3/whiter.mp3\" | Error : Could not find the file"
+ },
+ {
+  "name": "polypoly",
+  "class": "NO-EXPECTED",
+  "deterministic": false,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "port",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[4] SetPin i, DOut | Error : Invalid pin"
+ },
+ {
+  "name": "posflush",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "printat",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "pulse",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[13] SetPin 0, DOut | Error : Invalid pin"
+ },
+ {
+  "name": "pulsin",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": ""
+ },
+ {
+  "name": "pwm",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[9] SetPin 3, PWM | Error : Invalid pin"
+ },
+ {
+  "name": "ripple",
+  "class": "NO-EXPECTED",
+  "deterministic": false,
+  "secs": 2.4,
+  "note": ""
+ },
+ {
+  "name": "rtcreg",
+  "class": "DIFF",
+  "deterministic": false,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "rtest",
+  "class": "NO-EXPECTED",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "saveimg",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 1.0,
+  "note": "[11] SYSTEM \"ls\", \"-l\", \"shot2.bmp\", \"crop2.bmp\" | Error : Unknown command"
+ },
+ {
+  "name": "settick",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 9.4,
+  "note": ""
+ },
+ {
+  "name": "solar_eclipse",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 15.9,
+  "note": ""
+ },
+ {
+  "name": "sombrero",
+  "class": "NO-EXPECTED",
+  "deterministic": false,
+  "secs": 8.9,
+  "note": ""
+ },
+ {
+  "name": "spi",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[19] SetPin 2, 3, 4, SPI | Error : Invalid pin"
+ },
+ {
+  "name": "sprite",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[99] Sprite LOADARRAY #6, 8, 8, two%() | Error : Argument 4 must be a 1D numerical array"
+ },
+ {
+  "name": "strargs",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "strlen",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "structtest",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 1.6,
+  "note": ""
+ },
+ {
+  "name": "t1",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[99] Function Trim$(s$, ch$) | Error: Invalid identifier"
+ },
+ {
+  "name": "t2",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[8] Fill data() | Error : Invalid syntax"
+ },
+ {
+  "name": "t3",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[27] If a = 4 Then b = 21 : Print \"7 then\" Else b = 22 : Print \"7 else\" | Error : Expected closing bracket"
+ },
+ {
+  "name": "t4",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[13] If a = 4 Then Show 11, 12 : Show 13, 14 Else Show 15, 16 | Error : Argument list"
+ },
+ {
+  "name": "t5",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[25] Print Bit(&B1010, 1); Bit(&B1010, 2) | Error : Variable name"
+ },
+ {
+  "name": "t6",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.7,
+  "note": ""
+ },
+ {
+  "name": "t7",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": "[162] Print \"after erase: stat(0) =\"; stat(0); \" s$ = [\"; s$; \"]\" | Error : STAT is not declared"
+ },
+ {
+  "name": "t8",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": ""
+ },
+ {
+  "name": "text",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "tiger",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[5] Load IMAGE \"tiger.bmp\", 0, 20 | Error : Could not find the file"
+ },
+ {
+  "name": "tilemap",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 5.1,
+  "note": ""
+ },
+ {
+  "name": "tri",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "type",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "uptime",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "varaddr",
+  "class": "DIFF",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "waitint",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 1.2,
+  "note": ""
+ },
+ {
+  "name": "webnpc",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "webpage",
+  "class": "MATCH",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": ""
+ },
+ {
+  "name": "webservz",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[4] WEB TCP SERVER PORT 48123 | Error : Unknown command"
+ },
+ {
+  "name": "webtcpe",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[5] WEB OPEN TCP CLIENT \"127.0.0.1\", 9, 100 | Error : Unknown command"
+ },
+ {
+  "name": "webtlse",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[3] WEB TLS CA \"no_such_bundle.pem\" | Error : Unknown command"
+ },
+ {
+  "name": "webudp",
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.4,
+  "note": "[9] WEB UDP SERVER PORT 47999 | Error : Unknown command"
+ },
+ {
+  "name": "wtest",
+  "class": "NO-EXPECTED",
+  "deterministic": true,
+  "secs": 1.0,
+  "note": ""
+ }
+]

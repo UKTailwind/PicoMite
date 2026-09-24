@@ -155,6 +155,7 @@ extern struct s_ctrl *Ctrl; // List of GUI controls
  * Function declarations - Heap initialization
  * ============================================================================ */
 void InitHeap(bool all);
+void HeapHintsReset(void); // call after anything that rewrites mmap wholesale
 unsigned char *HeapBottom(void);
 
 /* ============================================================================

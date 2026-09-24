@@ -1,0 +1,2 @@
+[26] SetPin 34, INTH, OnEdge
+Error : Pin 34/GP28 is reserved on startup

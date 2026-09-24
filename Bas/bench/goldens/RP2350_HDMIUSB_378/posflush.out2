@@ -1,0 +1,11 @@
+POS
+  at line start    1 (1 expected)
+abc   after abc       4 (4 expected)
+abcdefghij   after 10 more   11 (11 expected)
+
+FLUSH
+  wrote and flushed twice
+  FLUSH #0 accepted (the console: does nothing)
+  read back      first line
+  read back      second line
+  done

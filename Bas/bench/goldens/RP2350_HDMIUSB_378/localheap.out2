@@ -1,0 +1,15 @@
+-- LOCAL scalars, arrays and strings --
+  simple: a(0)= 0 a(3)= 33 s$=[abcdef]
+-- recursion --
+  level  3 after: mine(0)= 300 mine(4)= 304 tag$=[d3]
+  level  2 after: mine(0)= 200 mine(4)= 204 tag$=[d2]
+  level  1 after: mine(0)= 100 mine(4)= 104 tag$=[d1]
+-- STATIC survives, LOCAL does not --
+  counter n= 1 scratch(0)= 7
+  counter n= 2 scratch(0)= 7
+  counter n= 3 scratch(0)= 7
+-- local string array in a function --
+  pick(0)=[zero] pick(3)=[three]
+-- no leak over many calls --
+  2000 calls survived
+-- done --

@@ -1,0 +1,16 @@
+create 0.7071067812 0 0 0.7071067812 1
+euler  0.7852207151 0.4021984935-0.08080468869 0.4638269103 1
+vector 0 0.2307692308 0.3076923077 0.9230769231 13
+invert 0.7071067812 0 0-0.7071067812 1
+mult   0.2272597388 0.3415348255 0.2272597388 0.8832100459 1
+rotate 0-0.3076923077 0.2307692308 0.9230769231 13
+alias  0.2272597388 0.3415348255 0.2272597388 0.8832100459 1
+e inv1:Argument 1 must be a 5 element floating point array
+e inv2:Argument 2 must be a 5 element floating point array
+e mul1:Argument 1 must be a 5 element floating point array
+e mul2:Argument 2 must be a 5 element floating point array
+e mul3:Argument 3 must be a 5 element floating point array
+e cre :Argument 4 must be a 5 element floating point array
+e vec :Argument 4 must be a 5 element floating point array
+e eul :Argument 4 must be a 5 element floating point array
+e rot3:Argument 3 must be a 5 element floating point array

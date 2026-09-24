@@ -1,0 +1,28 @@
+size:  5 3
+tile:  0 2 4
+off map:  0 0
+attr:  1 2 3 0 0
+collision:  1 2 0
+corner:  4 0
+set:  3 3
+read:  7 8
+view:  5 6
+floor:  0 0
+no ceiling:  1000 1000
+drawn:  3 4
+sprite:  10 20 2 8 8
+hit:  1
+miss:  0 100
+sprite set:  4
+1: Sprite 2 not created
+2: Tilemap 2 not created
+3: 5 is invalid (valid is 0 to 4)
+4: Not enough DATA for tilemap (need 10000, found 19)
+5: 5 is invalid (valid is 1 to 4)
+6: 16 is invalid (valid is -1 to 15)
+7: Tilemap 2 not created
+8: Sprite 2 not created
+9: 0 is invalid (valid is 1 to 65535)
+10: Tilemap 1 not created
+11: No image in slot 1
+tilemap surface ok

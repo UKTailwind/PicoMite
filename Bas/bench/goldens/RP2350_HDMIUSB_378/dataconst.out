@@ -1,0 +1,8 @@
+values:  3 4 7 0.5
+text: SOLID NAME$ HALF
+later:  0 0 0
+unknown:  0 nothing
+restore:  0
+dataconst ok
+[32] Const LATE = 7
+Error : LATE Global variable already declared

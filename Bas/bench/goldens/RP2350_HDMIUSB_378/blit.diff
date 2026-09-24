@@ -1,0 +1,12 @@
+--- expected
++++ board
+@@ -2,7 +2,7 @@
+ 2: Buffer not in use
+ 3: Buffer not in use
+ 4: Buffer not in use
+-5: Invalid blit mode
+-6: Invalid blit buffer number
++5: 8 is invalid (valid is 0 to 7)
++6: 65 is invalid (valid is 1 to 64)
+ 7: Buffer not in use
+ blit surface ok

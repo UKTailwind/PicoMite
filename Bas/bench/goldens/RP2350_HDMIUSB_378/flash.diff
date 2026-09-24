@@ -1,0 +1,11 @@
+--- expected
++++ board
+@@ -1,6 +1,6 @@
+ addr ok
+ 1: Already programmed
+-2: Invalid flash slot
++2: 4 is invalid (valid is 1 to 3)
+ 3: Invalid Image
+-4: Invalid coordinates
++4: Same framebuffer
+ flash surface ok

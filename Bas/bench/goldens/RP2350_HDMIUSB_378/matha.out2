@@ -1,0 +1,30 @@
+shl   4-32 1020-4
+sar   0-2 63-1
+shr   0 4611686018427387902 63 4611686018427387903
+powf  4 9 0.25 4
+pow1  2 3 0.5-2
+powi  8 27 64 125
+pow*  8 27 64 125
+mag   13
+dot   47
+mag2  5
+norm  0.2307692308 0.3076923077 0.9230769231
+self  0.2307692308 0.3076923077 0.9230769231
+cross 0 0 1
+alias 0 0 1
+   1.5000,   -2.2500,    3.0000
+10, 255, -3
+A, FF, FFFFFFFFFFFFFFFD
+   1.0000,    2.0000
+   3.0000,    4.0000
+   5.0000,    6.0000
+7, 8
+9, 10
+err shrange :99 is invalid (valid is -63 to 63)
+err shsize  :Size mismatch
+err powsize :Array size mismatch
+err normsize:Array size mismatch
+err cross1  :Argument 1 must be a 3 element floating point array
+err cross2  :Argument 2 must be a 3 element floating point array
+err cross3  :Argument 3 must be a 3 element floating point array
+err dotsize :Array size mismatch

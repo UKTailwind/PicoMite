@@ -1,0 +1,13 @@
+-- the four shapes --
+  integer arrays, current colour
+  integer arrays, one colour
+  integer arrays, colour array
+  float arrays, float colour array
+  mixed float and integer
+-- mismatched lengths are bounded by the shortest --
+  x shorter than y
+  y shorter than x
+  colour array shortest
+-- the scalar form still works --
+  ok
+-- done --

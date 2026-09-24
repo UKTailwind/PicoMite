@@ -161,6 +161,62 @@ void SBitsSet(unsigned char *addr, int bits);
 #endif
 static inline unsigned int MBitsGet(unsigned char *addr);
 static inline void MBitsSet(unsigned char *addr, int bits);
+/* Search hint for the SRAM heap's top-down search (GetMemory: variables,
+   LOCAL strings and arrays, DIM).  Every page above heap_top_hint is in use,
+   so the search can start there and still find exactly the block a full scan
+   from the top would: placement is unchanged, only the walk past pages known
+   to be used is saved.  A program that DIMs big arrays first leaves the top of
+   the heap full, and without the hint every later LOCAL string or array walked
+   past all of it (2.6x the cost of such a call on the RP2350).  FreeMemory
+   widens the hint, the search narrows it, and InitHeap / RestoreContext reset
+   it (NULL means "not known: start at the top").  A search that fails from the
+   hint rescans the pages above it before giving up, so a stale hint can only
+   cost time, never a false "not enough memory".
+   The bottom-up search (GetSystemMemory, temporaries) has no hint: the bottom
+   of the heap is almost always free, so it finds a page at once, and a hint
+   there cost every temporary more than it saved.
+   On the RP2350, FreeMemory can run in an interrupt (the stepper ISR releases
+   arc buffers), so every free bumps heap_frees, and a search that sees it
+   change while it ran stores NULL rather than a hint that could hide the pages
+   just freed.  The words live in one 16-byte, 16-aligned block so that adding
+   them moves every later variable by a multiple of 16: a 12-byte shift left
+   hot buffers such as inpbuf and tknbuf only 4-aligned. */
+static volatile struct
+{
+    unsigned char *top;
+    unsigned int frees, spare1, spare2;
+} __attribute__((aligned(16))) heap_hints = {NULL, 0, 0, 0};
+#define heap_top_hint heap_hints.top
+#define heap_frees heap_hints.frees
+void HeapHintsReset(void)
+{
+    heap_top_hint = NULL;
+}
+#ifdef rp2350
+/* store a narrowed hint, then drop it if a free happened since the search began */
+#define HEAP_FREES_NOW heap_frees
+#define HEAP_SET_HINT(hint, value, frees0) \
+    do                                     \
+    {                                      \
+        hint = (value);                    \
+        if (heap_frees != (frees0))        \
+            hint = NULL;                   \
+    } while (0)
+#else
+/* no heap frees happen in interrupts on the RP2040 */
+#define HEAP_FREES_NOW 0
+#define HEAP_SET_HINT(hint, value, frees0) ((void)(frees0), hint = (value))
+#endif
+static inline __attribute__((always_inline)) void HeapFreed(unsigned char *last)
+{
+    /* FreeMemory accepts a pointer anywhere in a block's first page, so round
+       to the page before a widened end becomes the hint */
+#ifdef rp2350
+    heap_frees++;
+#endif
+    if (heap_top_hint != NULL && last > heap_top_hint)
+        heap_top_hint = MMHeap + ((unsigned int)(last - MMHeap) & ~(PAGESIZE - 1));
+}
 char *g_StrTmp[MAXTEMPSTRINGS];          // used to track temporary string space on the heap
 char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalIndex for each temporary string space on the heap
 
@@ -1952,6 +2008,7 @@ void MIPS32 __not_in_flash_func(FreeMemory)(void *addr)
                 MBitsSet(addr, 0);
                 addr += PAGESIZE;
             } while (bits != (PUSED | PLAST));
+            HeapFreed((unsigned char *)addr - PAGESIZE);
         }
     }
     else
@@ -1966,6 +2023,7 @@ void MIPS32 __not_in_flash_func(FreeMemory)(void *addr)
             MBitsSet(addr, 0);
             addr += PAGESIZE;
         } while (bits != (PUSED | PLAST));
+        HeapFreed((unsigned char *)addr - PAGESIZE);
     }
 #else
     int bits;
@@ -1979,6 +2037,7 @@ void MIPS32 __not_in_flash_func(FreeMemory)(void *addr)
         MBitsSet(addr, 0);
         addr += PAGESIZE;
     } while (bits != (PUSED | PLAST));
+    HeapFreed((unsigned char *)addr - PAGESIZE);
 #endif
 }
 
@@ -1989,6 +2048,7 @@ void InitHeap(bool all)
        hand it back while the bitmap is still valid, then wipe.          */
     BBCSoundRelease();
     memset(mmap, 0, sizeof(mmap));
+    HeapHintsReset();
     memset(MMHeap, 0, heap_memory_size + 256);
     /* The IF/ENDIF jump table lives in this heap too; its pointer is now
        dangling and its pages are free again.  Forget it rather than let a
@@ -2098,6 +2158,64 @@ void __not_in_flash_func (*GetPSMemory)(int size)
     return NULL; // keep the compiler happy
 }
 #endif
+/* The top-down search shared by GetMemory and GetMemoryNull: find and mark
+   the first run of pages big enough for size, scanning down from the highest
+   page that can be free.  Returns NULL (with the hint left valid) if the SRAM
+   heap has no such run. */
+static inline __attribute__((always_inline)) unsigned char *TopDownFind(int size)
+{
+    unsigned int j, n, k;
+    unsigned char *addr, *first_free = NULL, *ff0 = NULL, *limit = MMHeap;
+    unsigned char *const top = MMHeap + heap_memory_size - PAGESIZE;
+    unsigned int frees0 = HEAP_FREES_NOW;
+    unsigned char *start = heap_top_hint;
+    k = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
+    if (start == NULL || start > top || start < MMHeap)
+        start = top;
+    if (k == 1 && !(MBitsGet(start) & PUSED))
+    { // the usual case: one page, and the page at the hint is free
+        MBitsSet(start, PUSED | PLAST);
+        HEAP_SET_HINT(heap_top_hint, start - PAGESIZE, frees0);
+        memset(start, 0, size); // zero the memory
+        return start;
+    }
+    for (;;)
+    {
+        j = n = k;
+        first_free = NULL;
+        for (addr = start; addr >= limit; addr -= PAGESIZE)
+        {
+            if (!(MBitsGet(addr) & PUSED))
+            {
+                if (first_free == NULL)
+                    first_free = addr;
+                if (--n == 0)
+                { // found a free slot
+                    // every page above first_free is used; so is this block once taken
+                    HEAP_SET_HINT(heap_top_hint, (addr + (k - 1) * PAGESIZE == first_free) ? addr - PAGESIZE : first_free, frees0);
+                    j--;
+                    MBitsSet(addr + (j * PAGESIZE), PUSED | PLAST); // show that this is used and the last in the chain of pages
+                    while (j--)
+                        MBitsSet(addr + (j * PAGESIZE), PUSED); // set the other pages to show that they are used
+                    memset(addr, 0, size);                      // zero the memory
+                    return addr;
+                }
+            }
+            else
+                n = j; // not enough space here so reset our count
+        }
+        if (start == top)
+            break;
+        /* Failed from the hint: rescan from the top before giving up.  A run
+           the first pass missed must reach above the hint, so the rescan can
+           stop k-1 pages below it. */
+        ff0 = first_free;
+        limit = (k >= 1 && (unsigned int)(start - MMHeap) >= (k - 1) * PAGESIZE) ? start - (k - 1) * PAGESIZE : MMHeap;
+        start = top;
+    }
+    HEAP_SET_HINT(heap_top_hint, first_free ? first_free : (ff0 ? ff0 : MMHeap - PAGESIZE), frees0);
+    return NULL;
+}
 #ifdef rp2350
 void MIPS64 __not_in_flash_func (*GetSystemMemory)(int size)
 #else
@@ -2147,26 +2265,9 @@ void MIPS32 __not_in_flash_func (*GetMemory)(int size)
     if (PSRAMsize && size > heap_memory_size / 2)
         return GetPSMemory(size);
 #endif
-    unsigned int j, n, k;
-    unsigned char *addr;
-    j = n = k = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
-    for (addr = MMHeap + heap_memory_size - PAGESIZE; addr >= MMHeap; addr -= PAGESIZE)
-    {
-        if (!(MBitsGet(addr) & PUSED))
-        {
-            if (--n == 0)
-            { // found a free slot
-                j--;
-                MBitsSet(addr + (j * PAGESIZE), PUSED | PLAST); // show that this is used and the last in the chain of pages
-                while (j--)
-                    MBitsSet(addr + (j * PAGESIZE), PUSED); // set the other pages to show that they are used
-                memset(addr, 0, size);                      // zero the memory
-                return (void *)addr;
-            }
-        }
-        else
-            n = j; // not enough space here so reset our count
-    }
+    unsigned char *addr = TopDownFind(size);
+    if (addr != NULL)
+        return (void *)addr;
     // out of memory
 #ifdef rp2350
     if (PSRAMsize)
@@ -2229,26 +2330,9 @@ void MIPS32 __not_in_flash_func (*GetMemoryNull)(int size)
     if (PSRAMsize && size > heap_memory_size / 2)
         return GetPSMemoryNull(size);
 #endif
-    unsigned int j, n;
-    unsigned char *addr;
-    j = n = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
-    for (addr = MMHeap + heap_memory_size - PAGESIZE; addr >= MMHeap; addr -= PAGESIZE)
-    {
-        if (!(MBitsGet(addr) & PUSED))
-        {
-            if (--n == 0)
-            { // found a free slot
-                j--;
-                MBitsSet(addr + (j * PAGESIZE), PUSED | PLAST);
-                while (j--)
-                    MBitsSet(addr + (j * PAGESIZE), PUSED);
-                memset(addr, 0, size); // zero the memory (calloc semantics)
-                return (void *)addr;
-            }
-        }
-        else
-            n = j;
-    }
+    unsigned char *addr = TopDownFind(size); // zeroes the memory (calloc semantics)
+    if (addr != NULL)
+        return (void *)addr;
 #ifdef rp2350
     if (PSRAMsize)
         return GetPSMemoryNull(size);

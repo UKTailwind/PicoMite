@@ -1,0 +1,45 @@
+base pc3 2026-09-24 19:59:20  new pc3 2026-09-24 20:55:49
+ -61.58%  bench_heap:B_top80 call SUB with LOCAL s$ (top-down)                          10562 -> 4058
+ -57.84%  bench_heap:B_top80 call SUB with LOCAL la(3) (top-down)                       11264 -> 4749
+ -20.98%  bench_micro:call SUB creating 3 LOCAL arrays                                  14066 -> 11115
+  -7.16%  bench_micro2:call SeLoc (sefunc shape: 7 LOCAL arrays + 10 scalars)           55025 -> 51087
+  -1.67%  knivd_fixed:knivd_fixed_us_per_outer_pass                                   3549810 -> 3490363
+  -1.67%  knivd_fixed:knivd_fixed_us_per_inner_pass                                     35498 -> 34904
+  -1.21%  bench_gfx:E9.cls.640x480                                                     113999 -> 112616
+  -1.18%  bench_gfx:E9.boxfill.640x480                                                 117177 -> 115790
+  -1.14%  bench_gfx:local.H4.line.lit                                                    4838 -> 4783
+  -1.08%  bench_micro2:fy=MAX(1.25,2.5) (literals)                                       3427 -> 3390
+  -1.05%  bench_heap:A_empty call SUB with LOCAL s$ (top-down)                           4101 -> 4058
+  -1.02%  bench_heap:C_bottom80 call SUB with LOCAL s$ (top-down)                        4101 -> 4059
+  +1.03%  bench_micro2:DO 1-pass loop, body 30 lines                                    12578 -> 12707
+  +1.05%  bench_micro:30-char name = 30-char name                                        4573 -> 4621
+  +1.20%  bench_micro2:DATA line with a 60-byte list in the body                         1669 -> 1689
+  +1.26%  bench_micro2:call S6F fx,fy,fz,fx,fy,fz (untyped)                             12783 -> 12944
+  +1.31%  bench_micro2:GOSUB label near the top                                          2666 -> 2701
+  +1.33%  bench_micro2:GOSUB label after 1000 lines                                      2634 -> 2669
+  +1.50%  bench_micro2:call S0L4 (0 params, 4 LOCAL scalars)                             6283 -> 6377
+  +1.59%  bench_micro:GOSUB/RETURN                                                       1129 -> 1147
+  +1.68%  bench_micro2:call S6T a%..f% (AS INTEGER)                                     17855 -> 18155
+  +2.16%  bench_gfx:E9.circlefill.r4                                                     7681 -> 7847
+  +2.49%  bench_micro2:call S6I a%,b%,c%,d%,e%,f% (suffixed)                            12712 -> 13028
+  +4.17%  bench_micro2:call S3T a%,b%,c% (AS INTEGER params)                             9819 -> 10228
+  +9.69%  bench_micro2:FOR 1-pass inner loop, body 30 lines                             12079 -> 13249
+  +9.78%  bench_micro2:[depth 10] ly=lx*1.000001+0.5                                     4491 -> 4930
+ +11.79%  bench_micro2:[depth 1] ly=lx*1.000001+0.5                                      3622 -> 4049
+
+median change per test:
+  anchor            -0.00%  (1 figures, worst -0.00%, best -0.00%)
+  bench_gfx         +0.00%  (43 figures, worst +2.16%, best -1.21%)
+  bench_heap        -0.11%  (24 figures, worst +0.66%, best -61.58%)
+  bench_micro       +0.32%  (36 figures, worst +1.59%, best -20.98%)
+  bench_micro2      +0.19%  (52 figures, worst +11.79%, best -7.16%)
+  bench_subs0       +0.24%  (6 figures, worst +0.70%, best -0.57%)
+  bench_subs200     +0.19%  (6 figures, worst +0.64%, best -0.57%)
+  elite             -0.36%  (1 figures, worst -0.36%, best -0.36%)
+  exile             +0.21%  (2 figures, worst +0.22%, best +0.21%)
+  gfx_frames        +0.14%  (7 figures, worst +0.99%, best -0.62%)
+  julia_interp      +0.08%  (3 figures, worst +0.08%, best +0.07%)
+  knivd_fixed       -1.67%  (2 figures, worst -1.67%, best -1.67%)
+  pop               -0.38%  (2 figures, worst +0.16%, best -0.93%)
+
+checks changed: 0

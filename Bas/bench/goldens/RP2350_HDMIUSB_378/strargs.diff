@@ -1,0 +1,10 @@
+--- expected
++++ board
+@@ -1,5 +1,5 @@
+-1: expected N, F or L
+-2: Sound output did not start
++1: Invalid syntax
++2:
+ 3: Position must be L, R, or B
+ 4: Invalid type
+ strargs ok

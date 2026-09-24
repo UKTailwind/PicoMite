@@ -61,6 +61,17 @@ run on a clean drive and later runs differ there. Compare like with like.
 prints `BENCH name microseconds cycles`. `bench_micro.py` is its
 MicroPython twin, run at module level (like BASIC) and inside a `def`.
 
+## Measuring a Route A step
+
+Every step is judged on both boards against a baseline taken on the build
+before it:
+
+- **`stdset.py PORT pc3|vga OUT.json [--skip-put]`** runs the standard set: the anchor, both micro suites, `bench_subs0/200`, the heap and graphics suites, knivd, julia, the 3D frame and, on the PC3, the three games. It resets the board before and after the set, because Elite and Prince of Pico set OPTION LOCAL VARIABLES 128 and the graphics programs change MODE, both of which last until a reset. Every CHECK, GAMECHECK and golden line is recorded.
+- **`stdcmp.py BASE.json NEW.json`** lists every figure that moved by more than 1%, every CHECK that changed, and the median change per test.
+- **`goldens.py`**, then **`goldcmp.py REFDIR NEWDIR`**, compares the corpus outputs with a reference. Run it on a freshly reset board.
+
+**Judging the numbers.** Any code change moves flash-resident functions by a few bytes. That reshuffles QMI cache conflicts between code and the program text, which is also read through the cache. Loops that scan program text then move by several percent whatever the change does: FOR/DO entry over a long body, and a float literal inside a SUB. The RP2040, which runs most of the interpreter from flash, shows this more. So judge a step on the workloads and on its own targeted tests, and treat a single micro outlier as placement unless a profile puts the extra time in the changed code.
+
 ## Phase 1 (`phase1/`, `results/phase1/`)
 
 The characterisation behind `docs/Interpreter_Phase1_Results.html`:

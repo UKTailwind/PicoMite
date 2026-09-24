@@ -1,0 +1,5 @@
+-- write N without a buffer is fine --
+  ok
+-- write F without one is not --
+[11] FRAMEBUFFER Write F
+Error : Frame buffer not created

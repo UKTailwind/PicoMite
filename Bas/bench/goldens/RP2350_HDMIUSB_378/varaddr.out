@@ -1,0 +1,29 @@
+-- a scalar integer, there and back
+byte 0   &h34
+byte 1   &h12
+integer  &h1234
+after    &h1278
+-- a float
+float     1.5
+after     2.25
+-- a string is its LENGTH BYTE, as in MMBasic
+length    5
+first    h
+third    l
+poked    Hello
+shortenedHell len 4
+-- one element of an array
+a(2)      200
+after     777
+a(3)      300  (untouched)
+-- the whole array is element 0
+a(0)      0
+same      1
+a(1)      100
+-- a string array element
+length    5
+first    w
+-- SHORT and WORD
+word     &hDEADBEEF
+short     65534
+done

@@ -4615,6 +4615,7 @@ void RestoreContext(bool keep)
 		p += sizeof(mmap);
 		memcpy(psmap, p, sizeof(psmap));
 		p += sizeof(psmap);
+		HeapHintsReset(); /* the page map was replaced wholesale */
 	}
 	else
 	{
@@ -4644,6 +4645,7 @@ void RestoreContext(bool keep)
 		lfs_file_read(&lfs, &lfs_file, g_hashlist, sizeof(struct s_hash) * MAXLOCALVARS);
 		lfs_file_read(&lfs, &lfs_file, MMHeap, heap_memory_size + 256);
 		lfs_file_read(&lfs, &lfs_file, mmap, sizeof(mmap));
+		HeapHintsReset(); /* the page map was replaced wholesale */
 		lfs_file_close(&lfs, &lfs_file);
 		if (!keep)
 			lfs_remove(&lfs, "/.vars");

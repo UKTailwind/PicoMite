@@ -1,0 +1,23 @@
+-- LINE INPUT --
+ 1: [first line]
+ 2: [second line]
+ 3: [alpha, 42, 3.5]
+ 4: [one two]
+ 5: [ 100 200]
+ 6: [appended]
+lines = 6
+-- INPUT # --
+a$=[alpha] i= 42 f= 3.5
+-- random access --
+lof = 70
+loc after seek 1 = 1
+first5 = [first]
+loc now = 6
+next4 = [line]
+after patch: [FIRST]
+-- housekeeping --
+copy lof = 70
+moved first line: [FIRST]
+cwd ends with subdir: yes
+found [inner.txt]
+cleaned up

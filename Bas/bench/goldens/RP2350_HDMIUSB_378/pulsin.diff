@@ -1,0 +1,14 @@
+--- expected
++++ board
+@@ -2,7 +2,7 @@
+ -1
+ -2
+ -2
+-Pulsin needs GP4, GP5, GP6 or GP7
+-Pin is not an input
+-Number out of bounds
+-Number out of bounds
++Pin 11/GP8 is not an input
++Pin 7/GP5 is not an input
++4 is invalid (valid is 5 to 10000000)
++10000001 is invalid (valid is 5 to 10000000)

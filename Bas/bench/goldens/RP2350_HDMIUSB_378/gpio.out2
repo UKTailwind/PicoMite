@@ -1,0 +1,4 @@
+dout  1
+dout  0
+[17] SetPin 3, DIN
+Error : Invalid pin

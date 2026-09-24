@@ -1,0 +1,10 @@
+one   (IF)
+two   (ElseIf)
+three (Else If)
+four  (ELSE)
+chain = 1111
+line one
+line two
+line three
+[51] Else If n = 2 Then Print "same line body"
+Error : Unexpected text

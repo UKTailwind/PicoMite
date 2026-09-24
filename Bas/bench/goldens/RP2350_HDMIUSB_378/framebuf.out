@@ -1,0 +1,19 @@
+-- create --
+  created
+-- write --
+  drawing into F
+  drawing into N
+-- copy both ways --
+  F to N
+  N to F
+  F to N at the top of the frame
+-- close --
+  closed
+  closing again is quiet
+-- create after close --
+  created
+-- mode change discards it --
+  created again after MODE
+-- creating twice is an error --
+[55] FRAMEBUFFER Create
+Error : Framebuffer already exists
