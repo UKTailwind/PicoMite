@@ -1,0 +1,18 @@
+cross dflt 2
+cross lvl2 3
+cross down 5
+cross cf2  2
+cross cf4 -1
+cross none-1
+cross int  2
+win ff     0 0.25 0.5 0.75 1
+win fi     0 25 50 75 100
+win if     0 0.25 0.5 0.75 1
+win ii     0 2 5 7 10
+win range  0 20-1 1
+win irange 0 20
+e dir0   :Valid are -1 and 1
+e dir5   :5 is invalid (valid is -1 to 1)
+e cf0    :0 is invalid (valid is 1 to 10)
+e cf99   :99 is invalid (valid is 1 to 10)
+e winsize:Size mismatch

@@ -1,0 +1,420 @@
+[
+ {
+  "name": "webtlse",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "WEB TLS CA is a real WebMite command, but the WEB command is registered only in PICOMITEWEB (WiFi) builds, so the RP2040 PicoMiteVGA build reports 'Unknown command' before the program can reach the missing-file check it is testing.",
+  "evidence": "Board: '[3] WEB TLS CA \"no_such_bundle.pem\" / Error : Unknown command'. AllCommands.h:623-631 puts {\"WEB\", T_CMD, 0, cmd_web} inside #ifdef PICOMITEWEB. On a WebMite, net/MMTCPclient.c:861 cmd_tls() parses \"TLS CA\" and then calls ExistsFile(fname) (line ~870), which is the missing-bundle refusal the test comment describes. This is a VGA build with no WiFi."
+ },
+ {
+  "name": "webudp",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "The WEB command does not exist on this non-WiFi VGA build, so line 9 fails with 'Unknown command'. The program also would not run on a WebMite: its first statement, 'WEB UDP SERVER PORT', exists only in the translator (the firmware's equivalent is OPTION UDP SERVER PORT, which saves the setting and reboots, and gives an error inside a program).",
+  "evidence": "Board: '[9] WEB UDP SERVER PORT 47999 / Error : Unknown command'. AllCommands.h:631 registers WEB only under #ifdef PICOMITEWEB. On a WebMite, net/MMudp.c cmd_udp() handles only \"INTERRUPT\" and \"SEND\" (help.txt:15338-15346 lists only WEB UDP INTERRUPT and WEB UDP SEND). The server port is set with OPTION UDP SERVER PORT (core/MM_Misc.c:6668), which raises StandardError(10) when CurrentLinePtr is set (inside a program), then runs SaveOptions and SoftReset. The test header cites the translator's 'PLAN-web.md \u00a711'."
+ },
+ {
+  "name": "mathm1",
+  "category": "POSSIBLE-MMBASIC-BUG",
+  "summary": "1x1 arrays are now legal (single-element dims merged in b02e3b2), but MATH M_INVERSE of a 1x1 fails because cofactor() calls determinant(m_cofactor, size-1=0), which calls alloc2df(0,0), and GetMemory(0) can never succeed, so it raises 'Not enough memory for 0 bytes'.",
+  "evidence": "Board: det1 4, then '[50] Math M_Inverse s(), si() / Error : Not enough memory for 0 bytes'; expected 'inv1 0.25'. The test's header ('DIM a(0) is refused') is stale: the board accepted Dim Float s(0,0) and M_DETERMINANT worked. core/MATHS.c:2121-2122: M_INVERSE calls cofactor(matrix, matrix1, n) with n=1. core/MATHS.c:4574 is `determinant(m_cofactor, size - 1)`, and determinant() at 4587 does `alloc2df(size,size)` before its size==1 check. core/Memory.c:2109: k=(0+PAGESIZE-1)/PAGESIZE=0, so `++n == k` never fires and it reaches StandardErrorParam(48, 0). Commit 1bc63bc documents that single-element dims let the MATH matrix commands produce 1x1 results. Side note: determinant() allocates m_minor and then returns at size==1 without dealloc2df, so every recursion leaf leaks a heap allocation.",
+  "repro": "Option Base 0\nDim Float s(0,0), si(0,0)\ns(0,0) = 4\nMath M_Inverse s(), si()\nPrint si(0,0)\n' should print 0.25; MMBasic prints 'Error : Not enough memory for 0 bytes'",
+  "verification": {
+   "verdict": "CONFIRMED-BUG",
+   "reason": "I could not refute this one. The firmware allows 1x1 arrays: b02e3b2 is in HEAD, and help.txt:2341-2345 says a single-element dimension \"allows the MATH matrix commands to produce a single row, a single column, or a 1x1 result\". The manual lists only one error for M_INVERSE, a zero determinant (help.txt:6873-6877). The board accepted Dim Float s(0,0) and got det1 4 from M_DETERMINANT. Yet M_INVERSE on [4] fails with a false out-of-memory error.\n\nWhat happens in the code:\n1. M_INVERSE works out n=numrows+1=1 (MATHS.c:2106). determinant(matrix,1) returns 4, so the zero-determinant check passes. It then calls cofactor(matrix, matrix1, 1) at MATHS.c:2122.\n2. cofactor() calls determinant(m_cofactor, size-1), which is determinant(...,0), at MATHS.c:4576.\n3. determinant() calls alloc2df(size,size), which is alloc2df(0,0), at MATHS.c:4587. That happens before its size==1 check.\n4. alloc2df calls GetMemory(0) (MATHS.c:358). In GetMemory (Memory.c:2152), j=n=k=(0+PAGESIZE-1)/PAGESIZE=0, and these are unsigned. So `--n == 0` at Memory.c:2157 wraps to 0xFFFFFFFF and never matches. The scan runs out and hits StandardErrorParam(48, 0) at Memory.c:2177, which prints \"Not enough memory for 0 bytes\". The comment at Memory.c:2068-2074 describes exactly this zero-size behaviour.\n\nEven if a zero-size request succeeded, determinant(...,0) would take the else branch, skip the loop and return 0. The result would then be 0, not 0.25, so the n==1 path is wrong either way. It needs a special case in M_INVERSE: if n==1, the answer is 1/a(0,0). Matrices of 2x2 and larger never reach size 0, which is why this only showed up once 1x1 arrays became legal.\n\nA separate, lower-confidence side note that I did not check on a board: determinant() allocates m_minor and then returns at size==1 (MATHS.c:4589-4591) without calling dealloc2df. Every recursion leaf therefore seems to leak two heap pages. MATH(M_DETERMINANT) or M_INVERSE called in a loop would slowly use up the heap until the program is re-run.\n\nThe test file's header is out of date: it says DIM a(0) is refused, but the board accepted it. That does not affect the verdict.",
+   "firmware_evidence": "core/MATHS.c:2106 and 2121-2122 (M_INVERSE, n=1, calls cofactor); core/MATHS.c:4576 (cofactor calls determinant(m_cofactor, size-1=0)); core/MATHS.c:4587 (determinant calls alloc2df(0,0) before the size==1 test at 4589); core/MATHS.c:358 (GetMemory(0*sizeof)); core/Memory.c:2152-2157 and 2177 (unsigned page count 0, `--n==0` never matches, StandardErrorParam(48,0)). Documentation: docs/help.txt:2341-2345 (1x1 results allowed) and 6873-6877 (the only M_INVERSE error is determinant=0).",
+   "repro": "Option Base 0\nDim Float s(0,0), si(0,0)\ns(0,0) = 4\nPrint Math(M_Determinant s())\nMath M_Inverse s(), si()\nPrint si(0,0)\n\nExpected:\n 4\n 0.25\n\nActual (board, matching mathm1.out):\n 4\n[5] Math M_Inverse s(), si()\nError : Not enough memory for 0 bytes"
+  }
+ },
+ {
+  "name": "mathr",
+  "category": "POSSIBLE-MMBASIC-BUG",
+  "summary": "The MATH(RAND) values differ because the firmware's Mersenne Twister seeder multiplies by 6069, not the 69069 of the Knuth Table 1 line 25 generator its own comment cites; the test says MMBasic is to be corrected. The other difference (rndsam 1 vs 0) is documented RP2040 behaviour: there RANDOMIZE really seeds RND.",
+  "evidence": "Diff: expected 'seed42 0.5133931517 0.7469599433 0.1366053673', board 'seed42 0.9631073475 0.203106375 0.3369474896'. seed1 and s4357 differ the same way; both runs are identical, and 'again' repeats seed42 on both. core/MATHS.c:131-138: the comment cites 'Line 25 of Table 1 in: Donald Knuth ... pp.102', but the code is `rand->mt[rand->index] = (6069 * rand->mt[rand->index - 1]) & 0xffffffff;`. The test header: 'The reference's Mersenne seeder multiplies by 6069 where the published algorithm ... uses 69069 ... MMBasic is to be corrected to match.' rndsam: core/Commands.c:5746 `#ifndef rp2350 void cmd_randomize` calls srand(i), and RndVal() only reseeds from hardware on rp2350 (core/Functions.c:1214). help.txt says RANDOMIZE seeds RND on the RP2040 and does nothing on the RP2350, so '-rndsam 0 / +rndsam 1' is expected on this RP2040 board. Changing the constant would change every existing seeded sequence.",
+  "repro": "Math Randomize 42\nPrint Math(RAND)\n' with the 69069 seeder that the source comment cites: 0.5133931517; MMBasic (6069) prints 0.9631073475",
+  "verification": {
+   "verdict": "NOT-A-BUG",
+   "reason": "The board does exactly what the firmware source says, and the source matches its documented contract. The documentation never promises any particular sequence of numbers.\n\n1. What the documentation promises. help.txt:7184-7190 says MATH RANDOMIZE \"Seeds the Mersenne Twister algorithm\". help.txt:7376-7382 says MATH(RAND) \"Returns a random number 0.0 <= n < 1.0 using the Mersenne Twister algorithm\". Neither says which seeding routine is used, and neither promises that a given seed produces the numbers from a published MT reference. The firmware keeps both documented promises: the numbers are in range, and the same seed repeats the same sequence (the 'again' line matches seed42 on the board).\n\n2. Where 6069 comes from. MATHS.c:113-121 says the code is Evan Sultanik's MT19937 implementation (sultanik.com/Mersenne_twister). The upstream file github.com/ESultanik/mtwister/mtwister.c contains the same m_seedRand, with the same Knuth comment and the same `(6069 * rand->mt[rand->index-1])`. MMBasic copied that library word for word. The mismatch between the comment and the constant is an upstream typo that is baked into every seeded MATH(RAND) sequence the firmware has ever produced. It is not an MMBasic coding error that yields wrong results. \"Fixing\" it would change the output for every existing seeded program, which is a change of behaviour, not a correction.\n\n3. The 'published algorithm' argument is weak. The 69069 seeder is the 1998 sgenrand. The MT authors replaced it in 2002 with init_genrand, which uses 1812433253*(x^(x>>30))+i. So neither 6069 nor 69069 matches today's reference MT19937 (for example std::mt19937), and MMBasic has never claimed that compatibility. The quality of the seeding is about the same either way. Both multipliers are 5 mod 8, so both give a multiplier period of 2^30, far more than the 624 steps used. Both also keep the trailing zeros of an even seed.\n\n4. The expected values are not from the interpreter. The test header itself says its MATH(RAND) goldens \"ARE NOT BLESSED AGAINST THE INTERPRETER\". They come from a translator author's decision that MMBasic \"is to be corrected\". That is a request to change the firmware, not proof that it is wrong.\n\n5. I simulated the firmware's generator in Python, copying MATHS.c:129-187 and dividing by 0xffffffff as MATHS.c:313 does. With 6069 it reproduces the board output exactly: 0.9631073475 0.203106375 0.3369474896 for seed 42, and likewise for seed 1 and seed 4357. With 69069 it reproduces the test's expected lines exactly. The constant is the only difference, and the board is faithful to its source.\n\n6. The rndsam difference is not a bug either. On RP2040, cmd_randomize (Commands.c:5746-5759, built only when rp2350 is not defined) calls srand(i). RndVal (Functions.c:1212-1222) reseeds from hardware only on rp2350. help.txt:11704-11713 says RANDOMIZE seeds the generator on the RP2040 and does nothing on the RP2350. So 'rndsam 1' is the documented result on an RP2040 VGA board. The test's no-op assumption applies only to the RP2350.\n\nTwo unrelated problems I noticed while reading the code, neither part of the claim:\n(a) genRand (MATHS.c:313) divides by 0xffffffff, not 2^32. When genRandLong returns 0xffffffff, MATH(RAND) returns exactly 1.0, which breaks the documented \"n < 1.0\".\n(b) MATH RANDOMIZE 0 is accepted (MATHS.c:2739 rejects only i<0) and creates an all-zero MT state, after which MATH(RAND) returns 0 forever. That happens with either constant.",
+   "firmware_evidence": "core/MATHS.c:138 `rand->mt[rand->index] = (6069 * rand->mt[rand->index - 1]) & 0xffffffff;`: copied word for word from Sultanik's mtwister.c, which MATHS.c:113-121 credits and which has the same 6069. The documented contract is help.txt:7184-7190 (MATH RANDOMIZE) and help.txt:7376-7382 (MATH(RAND)), and it specifies no seeder. rndsam: Commands.c:5746-5759 (RP2040 RANDOMIZE calls srand), Functions.c:1212-1222, help.txt:11704-11713.",
+   "repro": "Math Randomize 42\nPrint Math(RAND); Math(RAND); Math(RAND)\n' Board (the firmware as documented and as copied from Sultanik's mtwister, 6069 seeder): 0.9631073475 0.203106375 0.3369474896\n' Test golden (hypothetical 69069 seeder): 0.5133931517 0.7469599433 0.1366053673\n' Both are valid Mersenne Twister output; the docs promise neither sequence, and the board is reproducible from run to run."
+  }
+ },
+ {
+  "name": "mminfo",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "A bare GPn is not an expression in MMBasic. Only pin-argument parsing (getpinarg/codecheck) recognises unquoted GPnn, so `Print GP0` under OPTION EXPLICIT is an undeclared variable. The translator makes GPn evaluate to its number.",
+  "evidence": "Board: '[26] Print \"gp0      \"; GP0 / Error : GP0 is not declared'. misc/External.c:437-438 in getpinarg: 'First check for unquoted literal GPn/GPnn (the outlier case that evaluate cannot handle since GPn is not a valid expression)'. The test's own comment: 'Here a pin is its GPIO number, so the name IS the number' (the translator's model). Also machine-specific: device [PicoMiteVGA] vs [Fuzix], and platform [] vs [PC3]."
+ },
+ {
+  "name": "negcmp",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "PI is a no-argument built-in function, so in expression context the tokeniser turns 'pi%' into the PI token followed by '%', which gives 'Expression syntax'. A no-arg builtin name cannot be used as a variable name in MMBasic.",
+  "evidence": "Board lists line 34 as 'ii% = -Pi%' (PI capitalised, so it was tokenised as the function) and gives 'Error : Expression syntax'. Line 33, 'pi% = 159', ran because it is at command position. core/MMBasic.c:1725: a function-table match is accepted when `!isnamechar(*tp2)`, and '%' is not a name char, so 'PI' matches. Known MMBasic rule: no-arg builtins (PI, POS, TIMER...) cannot be variable names."
+ },
+ {
+  "name": "onerror",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "The program deliberately runs out its ON ERROR SKIP 2 count inside Risky and stops with 'Divide by zero', exactly as its header says a real PicoMite does. Every line of output matches; only the final error banner is formatted differently.",
+  "evidence": "Test comment (lines 68-71): 'SKIP 2 does not reach the third statement inside it and the error is real. Proven on a real PicoMite, which stops here.' The .rc file expects 1. Expected ends with 'done' then 'Error: Divide by zero'. Board ends with 'done' then '[48] r = 10 \\ n' / 'Error : Divide by zero'. All earlier lines are identical, and both runs are the same."
+ },
+ {
+  "name": "onewire",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "Physical pin 26 is GP20, which the VGA build reserves for video output at startup, so ONEWIRE RESET 26 is refused before any bus activity.",
+  "evidence": "Board: '[17] OneWire RESET 26 / Error : Pin 26/GP20 is reserved on startup'. PicoMiteVGA uses GP16-GP21 for VGA. The test itself says there is no bus or sensor and that it only checks forms. Its intended DS18B20 pin is 'GP26', but it writes a bare 26, which MMBasic reads as a physical pin number."
+ },
+ {
+  "name": "pathmap",
+  "category": "HARNESS-ARTEFACT",
+  "summary": "The harness runs each test with CWD set to a per-test work directory, not A:/. MMBasic resolves every 'A:...' spelling to the root of A:, but a bare 'pm_t.dat' to the CWD, so the first EXISTS FILE finds nothing. Run from A:/ it would print 1.",
+  "evidence": "Diff: only the first line differs, '- 1' vs '+ 0'. The FILESIZE \"A:\\pm_t.dat\" = 7 and the 'a:pm_t.dat' read of 'hello' both succeed. goldens.py:131-134 does CHDIR \"A:/<workbase>/<name>_<r>\" before LOAD/RUN. misc/FileIO.c:6325-6333 fullpath(): 'if the disk is specified the pathname is absolute and starts with /', so 'a:x' becomes '/x' and 'A:/x' becomes '/x', both at the root. The translator instead maps 'A:/x' and drive-relative 'A:x' to the plain name next to the program. Those agree with MMBasic only when the CWD is A:/."
+ },
+ {
+  "name": "structtest",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "The board passes every check (102 PASS, 0 FAIL, and both runs are identical). Every diff line is the translator's runtime failing: 44 FAIL lines in .expected, plus the SUB's Print output and the STRUCT PRINT dumps missing from .expected. The golden is wrong, not the firmware.",
+  "evidence": "board: 'TEST 6 ... Sum X = 9, Sum Y = 12', 'TEST 29: PASS: Function returning struct', 'TEST 41: PASS: STRUCT SAVE/LOAD', STRUCT PRINT prints 'PERSON: .AGE = 25 ...'. expected: 'FAIL: Expected 123,456 got 0, 0', 'FAIL: Data mismatch after load', 'FAIL: Expected index 2, got 0' (STRUCT(FIND)), 'FAIL: STRUCT EXTRACT float values incorrect'. grep -c FAIL: expected 45 (44 plus the closing 'Review ... FAIL messages' line), board has only that closing line."
+ },
+ {
+  "name": "t1",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "The program defines its own FUNCTION Trim$, but TRIM$( is a built-in function (TRIM$(source$ [,mask$] [,where])). The tokeniser turns the name into a function token, so the pre-scan after FUNCTION finds no identifier and reports 'Invalid identifier'. A user function can't reuse a built-in's name.",
+  "evidence": "t1.bas:100 'FUNCTION Trim$(s$, ch$)'. AllCommands.h:766 {\"Trim$(\", T_FUN|T_STR, 0, fun_trim} (unconditional). core/MMBasic.c:1096-1100: after the SUB/FUNCTION token, if (!isnamestart(*p)) SetPreprogramError(\"Invalid identifier\"). help.txt:14941 'TRIM$(source$ [,mask$] [,where/where$])'."
+ },
+ {
+  "name": "t2",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "The user SUB is named Fill, which is a built-in command (FILL x, y, colour). At the start of a statement 'Fill data()' is tokenised as the built-in FILL, and cmd_fill rejects 'data()' as Invalid syntax. The SUB definition is accepted only because names after SUB are not command-tokenised. This is a name collision with a built-in.",
+  "evidence": "t2.bas:8 'Fill data()', t2.bas:69 'SUB Fill arr%()'. AllCommands.h:669 {\"Fill\", T_CMD, 0, cmd_fill}. help.txt:3261 'FILL x, y, fillcolour [,bordercolour]'. Board: '[8] Fill data() / Error : Invalid syntax'."
+ },
+ {
+  "name": "t3",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "The line uses 'IF c THEN s1 : s2 ELSE s3 : s4', which MMBasic does not support. The tokeniser turns every ':' into a statement terminator, so the IF statement ends at 's1' (argc=3, no ELSE seen). The ELSE token then lands inside the next statement (PRINT \"7 then\" ELSE ...), and PRINT treats it as a function token. The error text 'Expected closing bracket' is misleading, but the form is outside the documented one (THEN stmt ELSE stmt). In the false case the whole line, ELSE included, is skipped, as documented.",
+  "evidence": "t3.bas:27 'IF a = 4 THEN b = 21 : PRINT \"7 then\" ELSE b = 22 : PRINT \"7 else\"'. core/MMBasic.c:1514-1516 turns ':' into 0. core/Commands.c:3694 getargs splits only the current statement on THEN/ELSE. 3791-3794 argc!=5: nextstmt = byte after THEN. 3938-3940 false with no ELSE: skipline. help.txt:5608-5616 'IF expr THEN stmt [: stmt] or IF expr THEN stmt ELSE stmt'. Lines 16/17 (single stmt each side) pass on the board."
+ },
+ {
+  "name": "t4",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "This has the same cause as t3. 'IF a = 4 THEN Show 11, 12 : Show 13, 14 ELSE Show 15, 16' puts a colon between THEN and ELSE, so the IF statement ends at 'Show 11, 12', which runs and prints. The ELSE then sits inside the next statement's SUB argument list (Show 13, 14 <ELSE> Show 15, 16), which gives 'Argument list'. Only the single statement between THEN and ELSE is documented.",
+  "evidence": "Board prints 'show 11 12' and then '[13] ... Error : Argument list'. Line 11 'IF a = 4 THEN Show 3, 4 ELSE Show 5, 6' and line 12 pass. The argc==3 path is core/Commands.c:3791-3794, and ':' becomes 0 at core/MMBasic.c:1514. help.txt:5610 'IF expr THEN stmt ELSE stmt'."
+ },
+ {
+  "name": "t5",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "BIT() reads a bit of an integer VARIABLE: fun_bit calls findvar on argv[0]. Passing a literal &B1010 therefore fails with 'Variable name'. The manual documents it as BIT(var%, bitno). The test's 'manual examples' premise is wrong here.",
+  "evidence": "t5.bas:25 'PRINT BIT(&B1010, 1); BIT(&B1010, 2)'. core/Functions.c:590-593: getcsargs(&ep,3); s = findvar(argv[0], V_NOFIND_ERR); if not T_INT error(\"Not an integer\"). help.txt:974-976 'BIT(var%, bitno) ... returns the value of a specific bit (0-63) in an integer variable'. All output before line 25 matches."
+ },
+ {
+  "name": "t7",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "In MMBasic, ERASE deletes the variable; it does not zero it. The next reference to the array stat(0) therefore gives 'STAT is not declared', because arrays are never auto-created. The translator zeroes the array instead. Everything before the ERASE matches exactly.",
+  "evidence": "t7.bas:161-162 'ERASE stat(), s$' then 'PRINT ... stat(0) ...'. help.txt:3130 'ERASE: Deletes global variables and frees up the memory allocated to them. This will work with arrayed variables'. core/MMBasic.c:5223-5224: if ((OptionExplicit || dnbr != 0) && !(action & V_DIM_VAR)) error(\"$ is not declared\"). Board output is identical to .expected up to '-- ERASE --'."
+ },
+ {
+  "name": "t8",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "GOSUB opens a new local-variable level, so a label jumped to by GOSUB inside a SUB cannot see that SUB's LOCAL k. `k = 42` there quietly creates a global k and the LOCAL k stays 0. The translator treats the GOSUB as staying in the SUB's scope. This is how MMBasic's GOSUB has always worked, though the manual does not mention it.",
+  "evidence": "t8.bas:155-162 `LOCAL INTEGER k : k = 0 : GOSUB local_target ... local_target: k = 42 : RETURN`; diff `-gosub inside a SUB gave k = 42` / `+gosub inside a SUB gave k = 0` (same in out2). core/Commands.c:5854 cmd_gosub does `g_LocalIndex++; EnterLocalFrame(); // open a new local-variable frame for this GOSUB`, and Commands.c:6006 cmd_return does `ClearVars(g_LocalIndex--, true)`. MMBasic.c:4630 matches a local only when `level == g_LocalIndex`; MMBasic.c:5034 creates a variable that is not found as a global. The test's own comment (line 154) assumes the opposite."
+ },
+ {
+  "name": "text",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "MAP GREYSCALE exists only in the HDMI build. The VGA cmd_map accepts only RESET, MAXIMITE, SET and MAP(n)=, so GREYSCALE falls through to getinteger() and, under OPTION EXPLICIT, fails with 'not declared'.",
+  "evidence": "text.bas:69 `Map Greyscale`; board: `[69] Map Greyscale / Error : GREYSCALE is not declared`. graphics/Draw.c:4003-4061 (VGA cmd_map inside `#ifndef HDMI`) has no GREYSCALE branch; the GRAYSCALE/GREYSCALE branch is only at Draw.c:4826, in the HDMI cmd_map. The manual's MAP section with MAP GREYSCALE is headed 'HDMI VERSIONS ONLY'; the 'VGA VERSIONS ONLY' MAP section lists only MAP(n)=, MAXIMITE, SET and RESET."
+ },
+ {
+  "name": "tiger",
+  "category": "HARNESS-ARTEFACT",
+  "summary": "The data file tiger.bmp was never put on the board, and it is not in the test directory either, so LOAD IMAGE correctly reports it missing.",
+  "evidence": "tiger.bas:5 `LOAD IMAGE \"tiger.bmp\", 0, 20`; board: `Error : Could not find the file`. The tests dir holds only tiger.bas: no tiger.bmp and no .expected."
+ },
+ {
+  "name": "tilemap",
+  "category": "FORMAT-DIFFERENCE",
+  "summary": "Both raise the same error for TILEMAP CREATE on an erased slot, but the firmware wording changed from 'Invalid flash image in slot 1' to 'No image in slot 1' when RAM image slots were added. The translator still has the old text.",
+  "evidence": "diff: `-11: Invalid flash image in slot 1` / `+11: No image in slot 1` (the only difference; out2 is identical). graphics/TileMap.c:322-323 `if (*fw < 1 || ...) error(\"No image in slot %\", slot);`. git 93600cc (RAM image slots, slots 4-8 in PSRAM) changed `error(\"Invalid flash image in slot %\")` to `error(\"No image in slot %\")` on purpose."
+ },
+ {
+  "name": "varaddr",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "PEEK(SHORT) returns the 16-bit value unsigned (65534), the same way PEEK(BYTE) and PEEK(WORD) are unsigned. The translator sign-extends it to -2.",
+  "evidence": "varaddr.bas:72-73 `Poke SHORT addr%, -2 : Print \"short    \"; Peek(SHORT addr%)`; diff `-short    -2` / `+short     65534`. core/MM_Misc.c:9888 `iret = (unsigned long long int)(*(unsigned short *)(GetPeekAddr(p) & ...));` and :9879 WORD is likewise `*(unsigned int *)`. The same test relies on WORD being unsigned: `word &hDEADBEEF` matches on both."
+ },
+ {
+  "name": "webservz",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "The WEB command is compiled only into the WiFi (PICOMITEWEB) builds. This PicoMiteVGA build has no WiFi, so WEB TCP SERVER is an unknown command.",
+  "evidence": "webservz.bas:4 `WEB TCP SERVER PORT 48123`; board: `Error : Unknown command`. AllCommands.h:623-631 `#ifdef PICOMITEWEB ... {\"WEB\", T_CMD, 0, cmd_web}`."
+ },
+ {
+  "name": "webtcpe",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "Same cause: WEB exists only in the PICOMITEWEB builds, so WEB OPEN TCP CLIENT is an unknown command on the VGA board.",
+  "evidence": "webtcpe.bas:5 `WEB OPEN TCP CLIENT \"127.0.0.1\", 9, 100`; board: `Error : Unknown command`. AllCommands.h:623-631 puts the WEB entry under `#ifdef PICOMITEWEB`."
+ },
+ {
+  "name": "i2c2",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "SETPIN takes physical pin numbers on a Pico, and physical pins 38 and 39 are GND and VSYS, so 'Invalid pin' is the right answer. The second pair, 42/43 (GP24/GP25), is on I2C0, not I2C1, so it would fail too. The test was written for the translator's own board, not a Pico.",
+  "evidence": "i2c2.bas:17 `SETPIN 38, 39, I2C2`; the board prints `[17] SetPin 38, 39, I2C2 / Error : Invalid pin`. PicoMite.c PinDef (RP2040): `{38, 99, \"GND\", UNUSED...}`, `{39, 99, \"VSYS\", UNUSED...}`. misc/External.c:576 IsInvalidPin: `if (PinDef[pin].mode & UNUSED) return true;` gives error 9 'Invalid pin'. Pseudo pins 42/43 = GP24 `I2C0SDA` and GP25 `I2C0SCL` (no I2C1 bit), so External.c:1813-1829 would StandardError(8). The test's own header says 'There is no second controller under the gates' and that it only checks the translator's generated C."
+ },
+ {
+  "name": "imgfmt",
+  "category": "HARNESS-ARTEFACT",
+  "summary": "The input bitmap g4.bmp (and g8r.bmp, g24.bmp) was never copied to the board and is not in the tests directory either, so LOAD IMAGE correctly reports the file as missing. Even with the files present, line 16 would stop at the translator-only SYSTEM \"sum\".",
+  "evidence": "imgfmt.bas:9 `LOAD IMAGE \"g4.bmp\"`; the board prints `[9] Load IMAGE \"g4.bmp\" / Error : Could not find the file`. `ls tests | grep -i bmp` finds nothing, and there is no imgfmt.expected. Line 16 is `SYSTEM \"sum\", \"p4.bmp\", \"p8.bmp\"`, a host checksum hook, and the firmware has no SYSTEM command."
+ },
+ {
+  "name": "imgloop",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "All the MODE 1 drawing and SAVE/LOAD IMAGE lines before line 21 ran without error. The program stops at SYSTEM \"sum\", a checksum hook that exists only on the translator's host, and MMBasic has no SYSTEM command.",
+  "evidence": "imgloop.bas:21 `SYSTEM \"sum\", \"s1.bmp\", \"s2.bmp\"`; the board prints `[21] ... Error : Unknown command`. A grep of core/*.c finds SYSTEM only as the first word of 'SYSTEM I2C'/'SYSTEM SPI' (OPTION and MM.INFO, core/MM_Misc.c:7605,7734,9216) and 'SYSTEM HEAP' (MM.INFO, core/MM_Misc.c:9256). There is no command-table entry for SYSTEM."
+ },
+ {
+  "name": "imgm1",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "SAVE IMAGE, LOAD IMAGE and SAVE IMAGE in MODE 1 all ran. The program then stops at the translator-only SYSTEM \"sum\" host hook, which MMBasic lacks.",
+  "evidence": "imgm1.bas:13 `SYSTEM \"sum\", \"m1.bmp\", \"m1b.bmp\"`; the board prints `[13] ... Error : Unknown command`. No SYSTEM command exists in the firmware; it appears only in 'SYSTEM I2C/SPI' (OPTION and MM.INFO) and 'SYSTEM HEAP' (MM.INFO)."
+ },
+ {
+  "name": "imgm1b",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "The clean MODE 1 round trip (clear, draw, SAVE, clear, LOAD, SAVE) ran without error. The program then stops at the translator-only SYSTEM \"sum\" checksum hook.",
+  "evidence": "imgm1b.bas:22 `SYSTEM \"sum\", \"n1.bmp\", \"n1b.bmp\"`; the board prints `[22] ... Error : Unknown command`. The firmware has no SYSTEM command."
+ },
+ {
+  "name": "imgm1c",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "The 320x240 crop round trip in MODE 1 ran without error. The program then stops at the translator-only SYSTEM \"sum\" host hook.",
+  "evidence": "imgm1c.bas:23 `SYSTEM \"sum\", \"q1.bmp\", \"q1b.bmp\"`; the board prints `[23] ... Error : Unknown command`. The firmware has no SYSTEM command."
+ },
+ {
+  "name": "imgm1d",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "The three chained save and load passes (r1 -> r2 -> r3) all ran. The program then stops at the translator-only SYSTEM \"sum\" host hook.",
+  "evidence": "imgm1d.bas:26 `SYSTEM \"sum\", \"r1.bmp\", \"r2.bmp\", \"r3.bmp\"`; the board prints `[26] ... Error : Unknown command`. The firmware has no SYSTEM command."
+ },
+ {
+  "name": "pinint",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "The test uses the translator host's bare GPIO numbers, but on the RP2040 PicoMite a bare number is a physical pin. Pin 34 is GP28 and works; pins 35, 36 and 37 are VREF, 3V3 and 3V3_EN, so 'Invalid pin' is the right error.",
+  "evidence": "Board: '[27] SetPin 35, INTL, OnEdge, PULLUP / Error : Invalid pin' (line 26, SETPIN 34, passed). PicoMite.c PinDef: {34, 28, \"GP28\", ...}, {35, 99, \"VREF\", UNUSED}, {36, 99, \"3V3\", UNUSED}, {37, 99, \"3V3E\", UNUSED}. misc/External.c:576 IsInvalidPin returns true for a pin marked UNUSED."
+ },
+ {
+  "name": "play",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "This VGA board has no OPTION AUDIO set. cmd_play checks for audio before it parses any subcommand except STOP, so all seven probes get 'Audio not enabled' and never reach the argument checks the translator runs.",
+  "evidence": "io/Audio.c cmd_play: PLAY STOP returns early, then 'if (!(Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk)) error(\"Audio not enabled\");'. Board: lines 1-7 are all 'Audio not enabled', then 'play surface ok' (PLAY STOP is exempt). The output is the same on both runs."
+ },
+ {
+  "name": "playfile",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "PLAY VOLUME stops with 'Audio not enabled' because this build has no audio output configured. The same audio check in cmd_play runs before every PLAY subcommand except STOP.",
+  "evidence": "Board: 'play file forms' then '[13] Play VOLUME 70 / Error : Audio not enabled'. io/Audio.c cmd_play: the audio check comes straight after the STOP shortcut. The test's comment says: 'the gates have no audio device'."
+ },
+ {
+  "name": "playmp3",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "PLAY VOLUME 80 stops with 'Audio not enabled' because no audio is configured. The later PLAY MP3 lines use host paths (/root/mp3/...) and could not run on this board anyway.",
+  "evidence": "Board: 'play test' then '[17] Play VOLUME 80 / Error : Audio not enabled'. io/Audio.c cmd_play: the audio check runs before every subcommand except STOP. The test's comment says: 'the gates have no sound card'."
+ },
+ {
+  "name": "port",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "The loop starts at SETPIN 0. That is a GPIO number on the translator's host, but on the RP2040 PicoMite a bare number is a physical pin and pin 0 does not exist, so 'Invalid pin' is correct. The equivalent here is GP0..GP7 (physical pins 3 and 8 are also GND).",
+  "evidence": "Board: '[4] SetPin i, DOut / Error : Invalid pin' with i=0. PicoMite.c PinDef[0] = {0, 99, \"NULL\", UNUSED, 99, 99}. External.c IsInvalidPin: 'if (pin < 1 || pin > NBRPINS) return true;'."
+ },
+ {
+  "name": "pulse",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "SETPIN 0 is a GPIO number on the translator's host, but physical pin 0 does not exist on the PicoMite, so the board correctly reports 'Invalid pin'. The board equivalent would be GP0.",
+  "evidence": "Board: '[13] SetPin 0, DOut / Error : Invalid pin'. PicoMite.c PinDef[0] is 'NULL', UNUSED. IsInvalidPin rejects pin < 1."
+ },
+ {
+  "name": "pulsin",
+  "category": "FORMAT-DIFFERENCE",
+  "summary": "All four measurements match (-1, -1, -2, -2). Only the four error texts differ: the board prints MMBasic's standard messages. The translator's 'Pulsin needs GP4..GP7' is a restriction of its own host; MMBasic accepts any pin and rejects GP8 only because it was never set as an input.",
+  "evidence": "misc/External.c fun_pulsin: 'if (ExtCurrentConfig[pin] != EXT_DIG_IN) error(\"Pin %/| is not an input\", pin, pin);' and 't1 = t2 = getint(argv[4], 5, 10000000);'. getint throws MMBasic.c:3080 '~ is invalid (valid is ~ to ~)'. Board: 'Pin 11/GP8 is not an input', 'Pin 7/GP5 is not an input', '4 is invalid (valid is 5 to 10000000)', '10000001 is invalid (valid is 5 to 10000000)'. The translator prints 'Pulsin needs GP4, GP5, GP6 or GP7', 'Pin is not an input', and 'Number out of bounds' twice."
+ },
+ {
+  "name": "imgtrip",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "The program checks the round trip with SYSTEM \"sum\", a host checksum call that only the translator runtime has. The firmware has no SYSTEM command, so every line before 17 ran without error.",
+  "evidence": "imgtrip.bas:17 `SYSTEM \"sum\", \"a.bmp\", \"b.bmp\"`, and the board prints `Error : Unknown command`. A grep of AllCommands.h finds no \"System\" command-table entry in any build."
+ },
+ {
+  "name": "jsonpath",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "JSON$ exists only in the WEB builds. On the VGA build the name is not a function, so `JSON$(j(), \"Name\")` is parsed as an undimensioned string array and fails with Dimensions.",
+  "evidence": "AllCommands.h:869-871 `#ifdef PICOMITEWEB {\"Json$(\", T_FUN | T_STR, 0, fun_json}, #endif`, with the implementation in misc/Custom.c:3005. The board prints `[6] Print \"[\" JSON$(j(), \"Name\") \"]\" / Error : Dimensions`."
+ },
+ {
+  "name": "layer",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "FRAMEBUFFER MERGE is not compiled into the RP2040 VGA build. In the VGA cmd_framebuffer it exists only under #ifdef rp2350, and RP2040 VGA composites the layer in the scanline builder instead, which the test's own header acknowledges.",
+  "evidence": "graphics/FrameBuffer.c:1816-1817 `#ifdef rp2350 ... else if ((p = checkstring(cmdline, \"MERGE\")))` in the PICOMITEVGA cmd_framebuffer (line 1489). The non-VGA MERGE at line 1149 is in the other cmd_framebuffer. layer.bas:9-11 says 'Its VGA and HDMI builds do the same compositing inside the scanline builder instead'. The board prints `[36] FRAMEBUFFER MERGE 0 / Error : Invalid syntax`."
+ },
+ {
+  "name": "lscomms",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "SETPIN 2, 3, 4, SPI names physical pins for a different board. On a Pico, pin 3 is GND and pin 2 (GP1) cannot be SPI RX, so Invalid pin is correct. The test never reaches the SPI WRITE/READ LONGSTRING forms it is meant to exercise.",
+  "evidence": "PicoMite.c:617-619 PinDef: `{2, 1, \"GP1\", ... UART0RX | I2C0SCL ...}`, `{3, 99, \"GND\", UNUSED, 99, 99}`, `{4, 2, \"GP2\", ... SPI0SCK ...}`. The board prints `[25] SetPin 2, 3, 4, SPI / Error : Invalid pin`. Line 58 `SETPIN 38, 39, I2C2` would also hit non-GPIO pins."
+ },
+ {
+  "name": "mathb64",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "MATH(BASE64 ...) parses its input with parseany(), which calls findvar and so accepts only a string variable or an array, never a literal or expression. The literal \"f\" therefore gives Variable name. The translator accepts any string expression.",
+  "evidence": "core/MATHS.c:1313 parseB64 -> `parseany(argv[0], ...)`, and MATHS.c:1099 `findvar(tp, V_FIND | V_EMPTY_OK | V_NOFIND_ERR)`. The manual gives the syntax as `MATH(BASE64 ENCODE/DECODE in$/in(), out$/out())`, and the sibling MATH(CRCn) entry explicitly says 'a string variable'. The board prints `[6] n% = Math(BASE64 ENCODE \"f\", out$) / Error : Variable name`. The workaround is `a$=\"f\" : n%=Math(BASE64 ENCODE a$, out$)`."
+ },
+ {
+  "name": "mathcrc",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "The optional CRC length argument is range-checked 1..65535, and 0 does not mean 'use the whole source'. The documented way to keep the default length is to leave the slot empty, as line 31 of the test does. The translator treats 0 as the default. The first 7 results match exactly.",
+  "evidence": "core/MATHS.c:3195-3196 `if (argc > 1 && *argv[2]) length = getint(argv[2], 1, 65535);`, and CRC8/12/32 do the same. The manual says '\"Length\" is optional and if not specified the size of the array or string length is used', with the example `MATH(CRC16 array(), n,, &HFFFF)`. The board prints `[28] Print HEX$(Math(CRC16 s$, 0, &H1021)) / Error : 0 is invalid (valid is 1 to 65535)`. Lines 40, 43 and 49-51 also pass 0 and would fail the same way. Line 54 passes a literal \"\" and would give Variable name, as in mathb64."
+ },
+ {
+  "name": "mathm",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "Every line matches except cos(90 degrees) in V_ROTATE, where the board prints 6.093216209e-17 instead of 6.123233996e-17. The difference comes from the RP2040's bootrom double sin/cos (Qfplib-style, not correctly rounded, absolute error ~3e-19) rather than from MMBasic's arithmetic. An argument off by even 1 ulp from double pi/2 would move the result by about 2.2e-16, so the argument is not the cause.",
+  "evidence": "diff: `-rot   0 0 6.123233996e-17 1` / `+rot   0 0 6.093216209e-17 1`, and the same on the 'self' lines. core/MATHS.c:1951-1952 `angle = getnumber(argv[4]) / optionangle; cangle = cos(angle)`. pico-sdk/src/rp2_common/pico_double/double_aeabi_rp2040.S:716-724 `wrapper_func cos ... shimmable_table_tail_call SF_TABLE_FCOS dcos_shim` routes to the ROM dsincos_internal/dcos_finish. mathm.bas:10-14 says the golden was blessed on 6.03.02 with correctly rounded cos. The integer 'roti' results match."
+ },
+ {
+  "name": "elseif",
+  "category": "POSSIBLE-MMBASIC-BUG",
+  "summary": "Rejecting 'Else If cond Then <statement>' inside a multi-line IF is deliberate. The bug is that the error is reported on the IF line [49] instead of the ELSE IF line [51]: the IF jump table stores each arm's own line rather than the line of the next arm.",
+  "evidence": "Board: '[49] If n = 1 Then / Error : Unexpected text'. The problem text is on line 51: 'Else If n = 2 Then Print \"same line body\"'. The rejection is intended: Commands.c:3696 'if (testelseif && argc > 2) error(\"Unexpected text\")', and help.txt:5623 says of the multi-line IF 'Each component is on a separate line.' The wrong line comes from the fast path at Commands.c:3817 'CurrentLinePtr = _ife->line_ptr', where _ife is the IF's own entry. iftab_append(p, line_ptr) at Commands.c:3405/3441 stores the line of that token. MMBasic.h:752 says line_ptr should be 'the T_NEWLINE that begins the line containing next_arm'. The linear-scan path sets it correctly with 'CurrentLinePtr = rp' (Commands.c:3878). As a result, any error raised while evaluating an ELSEIF condition is reported one arm too early.",
+  "repro": "n = 2\nIf n = 1 Then\n  Print \"a\"\nElseIf n = 2 Then Print \"b\"\nEndIf\nThe error should name line 4 ('[4] ElseIf n = 2 Then Print \"b\"'). MMBasic prints '[2] If n = 1 Then / Error : Unexpected text'. The same happens with a valid layout and a bad condition, e.g. 'ElseIf Val(3) Then' on line 4: the type error is reported against line 2.",
+  "verification": {
+   "verdict": "CONFIRMED-BUG",
+   "reason": "The bug is real, but only in the part the claim singles out. Rejecting 'Else If n = 2 Then Print ...' inside a multi-line IF is deliberate: after an ELSEIF the firmware re-enters cmd_if with testelseif set, and Commands.c:3696 raises \"Unexpected text\" when argc > 2. help.txt:5623 says each part of a multi-line IF goes on its own line. The error names the wrong line, though.\n\nWhen an IF or ELSEIF condition is false, the fast path looks up the jump-table entry for the arm that just failed (_ife = IfTableLookup(if_token_addr)). It jumps to _ife->next_arm and sets CurrentLinePtr = _ife->line_ptr (Commands.c:3817). But iftab_build_region stores each arm's own line in line_ptr: iftab_append(p, line_ptr) at Commands.c:3405 and 3441, where GetNextCommand has just set line_ptr to the line holding p (MMBasic.c:7275 onward). So while the next ELSEIF is being tested, CurrentLinePtr still points at the previous arm's line.\n\nThree things show this is wrong:\n- The struct comment at MMBasic.h:752 says line_ptr is \"the T_NEWLINE that begins the line containing next_arm - used to set CurrentLinePtr when re-entering cmd_if for an ELSEIF\".\n- The fallback linear scan does it correctly: CurrentLinePtr = rp, the ELSEIF's own line (Commands.c:3878).\n- error() uses CurrentLinePtr for the \"[n] line\" echo and for MM.ERRLINE (MMBasic.c:5873-5874, 6012).\n\nSo any error raised while testing an ELSEIF (bad syntax, extra text, or a run-time error in the condition) is reported one arm too early. With a chain, errors in the second ELSEIF are blamed on the first. This matches the board output '[49] If n = 1 Then' for a problem that is on line 51.\n\nThe trace cache only caches the condition result and does not touch this path. The table is built on every RUN by PrepareProgram (MMBasic.c:1007), so a normal program always takes the fast path. There are two possible fixes: store the next arm's line when linking it (iftab[prev].line_ptr = line_ptr at the ELSEIF and ENDIF link sites), or have the fast path read IfTableLookup(target)->line_ptr.",
+   "firmware_evidence": "core/Commands.c:3817 'CurrentLinePtr = _ife->line_ptr;' (_ife is the entry for the arm that just failed), and core/Commands.c:3405/3441 'iftab_append(p, line_ptr)' store that arm's own line. This contradicts core/MMBasic.h:752 ('line_ptr is the T_NEWLINE that begins the line containing next_arm') and the linear-scan path at core/Commands.c:3878 ('CurrentLinePtr = rp;'). error() reports CurrentLinePtr: core/MMBasic.c:5873-5874 and 6012.",
+   "repro": "z = 0\nn = 2\nIf n = 1 Then\n  Print \"a\"\nElseIf 1/z Then\n  Print \"b\"\nEndIf\n\nExpected: [5] ElseIf 1/z Then\n          Error : Divide by zero\nActual:   [3] If n = 1 Then\n          Error : Divide by zero\n\nChained form, where the error is reported one arm early:\nz = 0 : n = 3\nIf n = 1 Then\n  Print \"a\"\nElseIf n = 2 Then\n  Print \"b\"\nElseIf 1/z Then\n  Print \"c\"\nEndIf\nExpected: [6] ElseIf 1/z Then   Actual: [4] ElseIf n = 2 Then\n(MM.ERRLINE is wrong in the same way.)\n\nSame-line-body form from the test:\nn = 2\nIf n = 1 Then\n  Print \"a\"\nElse If n = 2 Then Print \"b\"\nEndIf\nExpected: [4] Else If n = 2 Then Print \"b\" / Error : Unexpected text\nActual:   [2] If n = 1 Then / Error : Unexpected text\n(The rejection is intended; only the line number is wrong.)"
+  }
+ },
+ {
+  "name": "fbwrite",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "The program is designed to end on this error (.rc = 1), and the board raises it with the same message. Only MMBasic's usual '[line] stmt / Error : msg' layout differs from the translator's '\\nError: msg'.",
+  "evidence": "Test line 11 'FrameBuffer Write F' with the comment 'The other refusal: drawing into a buffer that was never created'. Expected 'Error: Frame buffer not created'; board '[11] FRAMEBUFFER Write F / Error : Frame buffer not created' (errorstring[38], MMBasic.c:6200). Everything before it matches."
+ },
+ {
+  "name": "flash",
+  "category": "POSSIBLE-MMBASIC-BUG",
+  "summary": "Line '2:' differs only in wording: getint's standard range error versus the translator's text. Line '4:' shows two BLIT FRAMEBUFFER weaknesses on VGA. A closed F aliases the display, so the error is a misleading 'Same framebuffer' instead of 'Frame buffer not created'. The RGB121 path also never checks the source rectangle, so the translator's 'Invalid coordinates' error has no firmware counterpart.",
+  "evidence": "Diff: '-2: Invalid flash slot / +2: 4 is invalid (valid is 1 to 3)'. That is FileIO.c:1144 getint(p,1,MAXFLASHSLOTS), MMBasic's established form. Diff: '-4: Invalid coordinates / +4: Same framebuffer'. Line 43 'FRAMEBUFFER CLOSE F' runs before line 47 'BLIT FRAMEBUFFER N, F, 500, 0, 0, 0, 8, 8'. On VGA, closeframebuffer sets 'FrameBuf = DisplayBuf' (FrameBuffer.c:1445), so s == d and Blit.c:793 raises 'Same framebuffer'. Buffer '2' gets its own 'Frame buffer 2 not created' check (Blit.c:757/781); F and L do not. An absent L therefore silently means N. There is no source-rectangle check before blit121 (Blit.c:797-947), and blit121 (RGB121.c:43-65) clips only the destination. BLIT FLASH does check: Blit.c:726 'if (x1 < 0 || y1 < 0 || x1 + w > HResS || y1 + h > VResS) StandardError(21)'.",
+  "repro": "MODE 2 : FRAMEBUFFER CLOSE\nBLIT FRAMEBUFFER N, F, 0, 0, 0, 0, 8, 8\nThis should say 'Frame buffer not created', as FRAMEBUFFER WRITE F does. MMBasic prints 'Same framebuffer'.\nMODE 2 : FRAMEBUFFER CREATE\nBLIT FRAMEBUFFER F, N, 0, 400, 0, 0, 8, 8\nThis should give 'Number out of bounds', as BLIT FLASH does. MMBasic runs it silently and reads rows 400-407 of a 240-row buffer, about 64 KB past F. A large enough y1 would read off the end of SRAM.",
+  "verification": {
+   "verdict": "CONFIRMED-BUG",
+   "reason": "The claim covers three things. Only one is a real firmware defect.\n\n1. Line '2:' is not a bug. FLASH ERASE 4 goes through getint(p,1,MAXFLASHSLOTS), which prints MMBasic's standard range message \"4 is invalid (valid is 1 to 3)\". The translator simply uses different wording.\n\n2. Line '4:' as produced by the test is a weak diagnostic, not a defect. On VGA, closeframebuffer sets FrameBuf = DisplayBuf (FrameBuffer.c:1445). Every buffer that has not been created points at DisplayBuf, and the firmware relies on that design throughout. So BLIT FRAMEBUFFER N,F with F closed gives s == d, and Blit.c:793 raises \"Same framebuffer\". That wording is misleading, but the command is still refused.\n   - FRAMEBUFFER WRITE F uses StandardError(38) \"Frame buffer not created\" (FrameBuffer.c:1777), and BLIT FRAMEBUFFER checks buffer '2' explicitly (Blit.c:757/781). F and L get no such check.\n   - The help text says the command \"Requires both a framebuffer and a layer buffer to have been created\", so an absent L silently meaning N is a gap in enforcement, not memory misuse.\n\n3. The missing source-rectangle check is a genuine defect. In BLIT FRAMEBUFFER on VGA, the RGB121 branch (Blit.c:942-947) calls blit121 without checking x1/y1/w/h against HRes/VRes. blit121 clips only the destination (RGB121.c:43-65) and then reads src_row = source + (ysource+y)*src_stride (RGB121.c:90). So a y1 past the buffer, or a negative x1/y1, reads memory outside the framebuffer and paints it onto the target. A very large offset can reach memory that does not exist.\n   - Every sibling path guards the source:\n     - BLIT FLASH: StandardError(21) at Blit.c:726.\n     - The HDMI MODE 4/5 branches of this same command clip x1/y1 against HRes/VRes (Blit.c:823-848 and 888+).\n     - The LCD NEXTGEN branch skips sy/sx outside 0..VRes/HRes.\n     - The resize-style blit uses StandardError(21) at Blit.c:1431.\n     - Plain BLIT clips source and destination (Blit.c:1780-1812).\n   - Only this RGB121 path reads past the buffer, so the intent to guard the source is plain from the surrounding code.\n\nCaveat: the test itself never reaches this path, because F was already closed and the \"Same framebuffer\" error fires first. The defect is shown by the repro below, not by the golden diff.",
+   "firmware_evidence": "graphics/Blit.c:942-947 (RGB121 branch of BLIT FRAMEBUFFER calls blit121 without validating x1,y1,w,h); graphics/RGB121.c:43-65 (clips the destination only) and RGB121.c:90 (src_row = source + (ysource + y) * src_stride, so the read is unbounded); compare the guarded siblings Blit.c:726 (BLIT FLASH StandardError(21)), Blit.c:823-848 (HDMI MODE 4 branch clips the source), Blit.c:1431, Blit.c:1780-1812. Secondary, diagnostic only: graphics/FrameBuffer.c:1445 (a closed F aliases DisplayBuf) plus Blit.c:793 (s == d gives \"Same framebuffer\" where FRAMEBUFFER WRITE F gives StandardError(38)).",
+   "repro": "MODE 2 : FRAMEBUFFER CREATE\nFRAMEBUFFER WRITE N : CLS\nBLIT FRAMEBUFFER F, N, 0, 400, 0, 0, 8, 8\nPRINT \"no error\"\n\nExpected: an error, \"Number out of bounds\", as BLIT FLASH and the plain BLIT area check give. A silent clipped no-op, which is what the HDMI MODE 4/5 branches of the same command do, would also be acceptable.\nActual: \"no error\" is printed. The 8x8 block at the top left of the screen is filled from memory 64,000 bytes past the start of F, which is about 25,600 bytes past the end of its 38,400-byte buffer, usually as coloured noise. A negative y1, such as -1, reads the heap before F instead. A very large y1 reads far beyond F, possibly into memory that does not exist.\n\nSecondary, message wording only: MODE 2 : FRAMEBUFFER CLOSE : BLIT FRAMEBUFFER N, F, 0, 0, 0, 0, 8, 8 prints \"Same framebuffer\". The consistent message would be \"Frame buffer not created\", which is what FRAMEBUFFER WRITE F prints."
+  }
+ },
+ {
+  "name": "forktest",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "SYSTEM \"cmd\" is a host/FUZIX shell-out that exists only in the translator's runtime. The firmware has no SYSTEM command.",
+  "evidence": "forktest.bas line 17 'SYSTEM \"true\"'. The header comments are about FUZIX fork, swap and bcrun. AllCommands.h has no SYSTEM entry, and the board says '[17] SYSTEM \"true\" / Error : Unknown command'."
+ },
+ {
+  "name": "framebuf",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "Every step matches, including MODE discarding the buffer. The program ends on the deliberate 'creating twice' error (.rc = 1) with the same message, printed in MMBasic's usual layout.",
+  "evidence": "Test comment: 'It ends on a deliberate error'. Line 55 'FrameBuffer Create' after line 51 already created one. Expected 'Error: Framebuffer already exists'; board '[55] FRAMEBUFFER Create / Error : Framebuffer already exists' (FrameBuffer.c:1069 etc.). All lines before it are identical."
+ },
+ {
+  "name": "gpio",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "The test uses another board's pin numbering. On a Pico-based PicoMiteVGA, SETPIN takes physical pin numbers and pin 3 is GND. Pin 41 is not a standard Pico header pin either.",
+  "evidence": "Program line 17 'SETPIN 3, DIN' gives '[17] SetPin 3, DIN / Error : Invalid pin'. PicoMite.c:619 has '{3, 99, \"GND\", UNUSED, 99, 99}, // pin 3'. The earlier 'SETPIN 2, DOUT' (pin 2 = GP1) works and reads back 1/0 as expected."
+ },
+ {
+  "name": "i2c0",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "The test assumes a fixed system I2C bus (GP20/GP21 with a DS3231, as on the translator's target board). This PicoMiteVGA has no OPTION SYSTEM I2C and no SETPIN for I2C, so I2C CHECK correctly refuses.",
+  "evidence": "Test header: 'the FIXED I2C bus ... No SETPIN, no OPEN'. Board: '[22] I2C CHECK &h76 / Error : Pin not set for I2C', raised by I2C.c:303 'if (I2C0SDApin == 99 || I2C0SCLpin == 99) error(\"Pin not set for I2C\")' before any subcommand."
+ },
+ {
+  "name": "pwm",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "The test uses the translator's abstract pin numbers. On a Pico, SETPIN takes physical pin numbers and physical pin 3 is a ground pin, so 'Invalid pin' is the correct refusal.",
+  "evidence": "pwm.bas line 9: SETPIN 3, PWM -> board: '[9] SetPin 3, PWM / Error : Invalid pin'. PicoMite.c:619 PinDef: {3, 99, \"GND\", UNUSED, 99, 99} // pin 3. Line 8 'SETPIN 2, PWM' passed because pin 2 = GP1 (PWM0B). The test's comment says 'There is no hardware under the gates', so it was written for the translator's stub."
+ },
+ {
+  "name": "rtcreg",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "RTC GETREG/SETREG needs OPTION SYSTEM I2C. This board has none, so cmd_rtc stops at once with 'SYSTEM I2C not configured', where the translator's stub answers -1.",
+  "evidence": "Board: '[10] RTC GETREG 14, c / Error : SYSTEM I2C not configured'. io/I2C.c:1087-1088 (top of cmd_rtc): if (!(I2C0locked || I2C1locked)) StandardError(44). The test's header says 'Under the gates there is no clock, so every read answers -1', which is how the translator's runtime behaves, not the firmware."
+ },
+ {
+  "name": "rtest",
+  "category": "HARNESS-ARTEFACT",
+  "summary": "rtest.bas only loads w1.bmp, a file that wtest.bas writes. The harness runs the programs in sorted order (rtest before wtest) and gives every run a fresh working directory, so w1.bmp never exists when rtest runs.",
+  "evidence": "rtest.bas header: 'Read half only ... one LOAD IMAGE of what wtest.bas wrote'. wtest.bas does SAVE IMAGE \"w1.bmp\", 160, 120, 320, 240. goldens.py:103 uses names = sorted(...). goldens.py:131-134 does MKDIR/CHDIR A:/<workbase>/<name>_<r> for each run. Both rtest.out and rtest.out2 give 'Could not find the file'."
+ },
+ {
+  "name": "saveimg",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "SYSTEM \"ls\", ... runs a host program. That exists only in the translator's FUZIX runtime and is not a firmware command. The two SAVE IMAGE lines before it ran without error.",
+  "evidence": "Board: '[11] SYSTEM \"ls\", \"-l\", \"shot2.bmp\", \"crop2.bmp\" / Error : Unknown command'. AllCommands.h has no SYSTEM command token; SYSTEM appears only in OPTION SYSTEM I2C/SPI. The header says 'runs ls to prove both files arrived'. Lines 9-10 (SAVE IMAGE full and crop) raised no error."
+ },
+ {
+  "name": "spi",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "SETPIN rx, tx, clk, SPI takes physical pin numbers, and each pin must support the right SPI function. Pin 2 is GP1, which has no SPI function, and pin 3 is ground, so 'Invalid pin' is correct.",
+  "evidence": "spi.bas line 19: SETPIN 2, 3, 4, SPI -> '[19] SetPin 2, 3, 4, SPI / Error : Invalid pin'. PicoMite.c PinDef: pin 2 = GP1 (UART0RX|I2C0SCL|PWM0B, no SPI), pin 3 = GND/UNUSED. The valid set would be e.g. pins 6, 5, 4 (GP4 SPI0RX, GP3 SPI0TX, GP2 SPI0SCK). The header says 'There is no controller under the gates'."
+ },
+ {
+  "name": "sprite",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "The translator also accepts a 2-D array for SPRITE LOADARRAY. The firmware deliberately takes only a 1-D numeric array (documented as array()), so it refuses two%() with an explicit message. Everything before line 99 matches exactly.",
+  "evidence": "sprite.bas comment at lines 87-88: 'LOADARRAY takes a two-dimensional array as well as MMBasic's one-dimensional one' (a translator extension). graphics/Sprite.c:998: size = parsenumberarray(argv[6], &a3float, &a3int, 4, 1 /*dimensions*/, NULL, true, NULL). core/MATHS.c:829-830: if (dimensions == 1 && (... DimIsRealArray(dims[1]))) error(\"Argument % must be a 1D numerical array\"). The board's lines up to 'x4:  20' are identical to .expected."
+ },
+ {
+  "name": "strargs",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "Lines 2-4 differ because this board has no OPTION AUDIO, so cmd_play fails 'Audio not enabled' before it parses anything. Line 1 differs because the message the translator expects, 'expected N, F or L', does not exist in the firmware: the VGA FRAMEBUFFER WRITE path deliberately raises a plain syntax error for an unknown runtime letter.",
+  "evidence": "Diff: '-1: expected N, F or L' / '+1: Invalid syntax'. graphics/FrameBuffer.c:1778-1812 (VGA cmd_framebuffer WRITE, string arm): the strcasecmp chain for N/L/F/2/T ends in 'else SyntaxError();'. A grep of every *.c/*.h finds no 'expected N, F or L', so the test's claim that these messages are 'the reference's own' is wrong for line 1. Lines 2-4: io/Audio.c:1456-1457: if (!(Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk)) error(\"Audio not enabled\"). With audio configured, 3 and 4 would come from Audio.c:2102 'Position must be L, R, or B' and Audio.c:2211 'Invalid type', matching .expected. 'Sound output did not start' (line 2) is the translator's own host message."
+ },
+ {
+  "name": "arrslice",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "Every slice and insert result matches. The run stops at the first MAP() call because the board is in a monochrome VGA mode (MODE 1), where MAP() is deliberately rejected; the program never selects a colour mode.",
+  "evidence": "Program line 108: Str$(cout(i) = Map(codes(i))), and nothing before it sets a MODE (blit.bas, by contrast, starts with MODE 2). graphics/Draw.c:3980-3988 fun_map: 'case SCREENMODE1: case SCREENMODE4: error(\"Invalid for Mode\")'. Only SCREENMODE2/3 (16 colours) and SCREENMODE5 return a value. COLOUR MAP (cmd_colourmap, Draw.c:3912) has no mode check, so the line before succeeded. All board output before the error is identical to .expected."
+ },
+ {
+  "name": "bench",
+  "category": "HARNESS-ARTEFACT",
+  "summary": "The KnivD benchmark runs 4 passes of 30 s each (about 120 s), but the harness gave up at about 61 s, so only 1-2 'Performance' lines were captured. There is no .expected, and the score varies from run to run anyway.",
+  "evidence": "bench.bas:12 'Do While Timer<30000' inside 'Loop Until count%=4'. SUMMARY: 'bench | TIMEOUT | False | 61.5'. bench.out: two lines of 'Performance:     5245 grains' then '> '. bench.out2: one line of 5248 grains then '> '."
+ },
+ {
+  "name": "bitbyte",
+  "category": "TRANSLATOR-ONLY",
+  "summary": "MM.INFO(FLAGS) does not exist in the firmware, which exposes the flags register as MM.FLAGS. BIT, BYTE, FLAGS= and FLAG()= all worked, and the error is raised when MM.INFO(Flags) is parsed.",
+  "evidence": "Program line 38: '... Flag(5); \"  MM.INFO(FLAGS) = \"; MM.Info(Flags)' gives 'Error : Invalid syntax'. core/Functions.c:74 lists \"MM.FLAGS\". fun_info (core/MM_Misc.c:8110) has no FLAGS keyword: its F group is FONT POINTER / FONT ADDRESS / FLASH ADDRESS / FILESIZE / FREE SPACE / FLASHTOP / FONTWIDTH / FLASH / FCOLOUR / FONT / FONTHEIGHT (lines 8413-8489). help.txt:7654 documents '~MM.FLAGS Returns the value of the system flags register'. The mmb2c sources say \"MM.INFO(FLAGS), which is where MMBasic put it\" (mmb2c.py:6823), which is the translator's own invention."
+ },
+ {
+  "name": "blit",
+  "category": "FORMAT-DIFFERENCE",
+  "summary": "Both reject BLIT mode 8 and buffer #65. The firmware reports them with the standard getint range message; the translator made up its own wording.",
+  "evidence": "diff: '-5: Invalid blit mode' / '+5: 8 is invalid (valid is 0 to 7)', '-6: Invalid blit buffer number' / '+6: 65 is invalid (valid is 1 to 64)'. graphics/Blit.c:1586 'mode = (char)getint(argv[6], 0, 7)'. Blit.c:1223/1535/1578/1750 'bnbr = getint(argv[0], 1, MAXBLITBUF) - 1'. The other lines, and a second board run, are identical."
+ },
+ {
+  "name": "countpin",
+  "category": "HARDWARE-OR-CONFIG",
+  "summary": "GP4 is not one of this board's counting pins. FIN/CIN/PIN are accepted only on the four OPTION COUNT pins (default GP6-GP9), so SETPIN GP4, FIN is rejected with error 8 by design. GP5 on line 11 would fail the same way.",
+  "evidence": "Program line 10: 'SetPin gp4, FIN' gives 'Error : Invalid configuration' (core/MMBasic.c:6170, standard error 8). misc/External.c:1000-1089: case EXT_CNT_IN/EXT_FREQ_IN/EXT_PER_IN accepts only pin == Option.INT1pin..INT4pin, else 'StandardError(8); // not an interrupt enabled pin'. Defaults are misc/FileIO.c:7657-7660 INT1pin=9..INT4pin=12 (physical pins = GP6..GP9). help.txt:9439-9442 'OPTION COUNT pin1, pin2, pin3, pin4 ... GP6, GP7, GP8 and GP9'."
+ },
+ {
+  "name": "dataconst",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "MMBasic's CONST is a run-time statement evaluated where it stands, not hoisted. READ evaluates the bare name LATE before line 32 has run, which implicitly creates a variable LATE = 0 (hence 'later: 0 0 0' and 'restore: 0'). When execution falls through to CONST LATE = 7, that name already exists. The test comment's claim 'wherever in the program the CONST is declared' describes the translator's declaration pass, not MMBasic.",
+  "evidence": "Board: 'later:  0 0 0', 'restore:  0', then '[32] Const LATE = 7 / Error : LATE Global variable already declared'. core/Commands.c:9018 cmd_const evaluates and calls findvar(... V_DIM_VAR | T_CONST ...) at run time, and core/MMBasic.c:5012-5016 raises '$ Global variable already declared' when the global already exists. The manual (help.txt ~CONST) says the value is 'evaluated when the constant is created'. Lines 1-3 of the output (CONSTs declared above their DATA) match .expected."
+ },
+ {
+  "name": "dynarr",
+  "category": "EXPECTED-MMBASIC-BEHAVIOUR",
+  "summary": "OUT is a reserved command keyword (the PIO assembler's OUT). The tokeniser matches commands at the start of a statement and '%' is not a name character, so 'out% = 0' becomes the OUT command, which fails with 'Missing Program statement'. A SUB parameter named out% cannot be assigned at the start of a statement.",
+  "evidence": "Program line 80: '  out% = 0' is listed as '[80] Out % = 0 / Error : Missing Program statement'. AllCommands.h:586 {\"Out\", T_CMD, 0, cmd_out}. misc/Custom.c:2885 cmd_out -> call_pio(\"out\",...), and Custom.c:2811-2812 'if (instructions == NULL ...) error(\"Missing Program statement\")'. core/MMBasic.c:1608 tokenise accepts a command match when '!isnamechar(*tp2)', and '%' is not a namechar. The same collision applies to In, Wait, Push, Pull, Mov, Nop and Jmp. Output before line 80 matches .expected."
+ }
+]

@@ -1,0 +1,41 @@
+-- LONGSTRING basics --
+empty len = 0
+len = 25
+text = [Hello, long string world!]
+300 chars, len = 300
+first 12 = [012345678901]
+last  12 = [890123456789]
+-- COPY / CONCAT / LEFT / RIGHT / MID --
+copy = [abcdefghij]
+concat len = 20 = [abcdefghijabcdefghij]
+left4  = [abcd]
+right3 = [hij]
+mid3,4 = [cdef]
+mid8   = [hij]
+-- LOAD / REPLACE / TRIM / RESIZE / SETBYTE --
+load5  = [abcde]
+replace= [abcXYZghij]
+trim3  = [XYZghij]
+resize4= [XYZg]
+setbyte= [ZYZg]
+-- UCASE / LCASE / LGETBYTE / LINSTR / LCOMPARE --
+ucase  = [MIXED CASE TEXT]
+lcase  = [mixed case text]
+byte 0 = 109 (m)
+instr 'case' = 7
+instr 'case' from 8 = 0
+instr 'zzz'  = 0
+compare equal = 0
+compare shorter =-1
+-- LONGSTRING PRINT and file round trip --
+read back 31bytes:
+written through a long string
+
+-- GOSUB / RETURN --
+back from simple, count = 1
+back from outer, count = 1111
+after loop, count = 1114
+after IF, count = 1115
+after ON GOSUB, tally$ = [123]
+gosub inside a SUB gave k = 0
+done

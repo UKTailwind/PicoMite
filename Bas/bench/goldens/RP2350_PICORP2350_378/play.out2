@@ -1,0 +1,8 @@
+1: 5 is invalid (valid is 1 to 4)
+2: Valid is 1Hz to 20KHz
+3: 99 is invalid (valid is 0 to 25)
+4: -5 is invalid (valid is 0 to 2147483647)
+5: 
+6: Samples play over MOD file
+7: Samples play over MOD file
+play surface ok

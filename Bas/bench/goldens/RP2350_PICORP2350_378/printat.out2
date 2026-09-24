@@ -1,0 +1,18 @@
+-- plain PRINT is unchanged --
+abc
+ 1	 2
+-- @ before the text --
+at the origin
+-- @ with a mode --
+over the top
+reversed
+-- @ mixed with items and separators --
+t= 42 done
+x	y
+-- @ twice in one statement --
+leftright
+-- @ with expressions for the position --
+computed
+-- and a trailing semicolon still flushes --
+partial
+-- done --

@@ -1,0 +1,15 @@
+sizes:  16  56  31  120
+offsets:  24  104
+types:  2 4 1 0
+copy:  100 200 100 300
+init: diag 1 2 3 4
+bound: alpha 012345678 9
+chain:  3 6
+label: G3
+byref:  114 202
+swap:  3 4 1 2
+vcopy:  3 4
+clear:  0 0
+acopy:  5 6 7 0
+dotted:  2.5
+done

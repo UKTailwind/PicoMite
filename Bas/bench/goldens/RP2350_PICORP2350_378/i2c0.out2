@@ -1,0 +1,19 @@
+-- CHECK an address with nothing on it
+mm.i2c    1
+-- a write, and the status it leaves
+mm.i2c    1
+-- a read into an array leaves it DEFINED, not stale
+mm.i2c    1
+bytes     0 0 0 0
+untouched 99
+-- and into a string, which is how STR2BIN gets its fields
+mm.i2c    1
+len       4
+-- the hold option, for a combined write-then-read
+mm.i2c    1
+mm.i2c    1
+-- a scan is the shape CHECK exists for
+found     1
+-- I2C2 does not raise either
+[64] SetPin 38, 39, I2C2
+Error : Invalid pin

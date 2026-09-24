@@ -1,0 +1,7 @@
+int: 10 21 30 40
+float: 7.50
+string: HELLO
+2d: 8
+expr: 1
+after: 99
+BYREFELEM DONE

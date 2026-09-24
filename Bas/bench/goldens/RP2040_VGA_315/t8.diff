@@ -1,0 +1,9 @@
+--- expected
++++ board
+@@ -37,5 +37,5 @@
+ after loop, count = 1114
+ after IF, count = 1115
+ after ON GOSUB, tally$ = [123]
+-gosub inside a SUB gave k = 42
++gosub inside a SUB gave k = 0
+ done

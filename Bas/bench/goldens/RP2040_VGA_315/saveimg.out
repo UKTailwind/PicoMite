@@ -1,0 +1,2 @@
+[11] SYSTEM "ls", "-l", "shot2.bmp", "crop2.bmp"
+Error : Unknown command

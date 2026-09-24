@@ -1,0 +1,10 @@
+one   (IF)
+two   (ElseIf)
+three (Else If)
+four  (ELSE)
+chain = 1111
+line one
+line two
+line three
+[49] If n = 1 Then
+Error : Unexpected text

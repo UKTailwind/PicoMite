@@ -1,0 +1,231 @@
+=== Structure Tests ===
+
+TEST 1: Basic struct definition and access
+  PASS: Simple struct assignment and read
+TEST 2: Struct with mixed types
+  PASS: Mixed type struct
+TEST 3: Array of structures
+  PASS: Array of structs
+TEST 4: Pass struct to SUB by reference
+  PASS: Struct passed by reference modified caller
+TEST 5: Pass array element to SUB
+  PASS: Array element passed by reference
+TEST 6: Pass struct array to SUB
+  Calling SumPoints (expect Sum X=9, Sum Y=12):
+    Sum X = 9, Sum Y = 12
+  PASS: Array of structs passed to SUB (verify output above)
+TEST 7: Modify struct array elements in SUB
+  PASS: SUB modified caller's struct array
+TEST 8: STRUCT COPY command
+  PASS: STRUCT COPY works
+TEST 9: STRUCT COPY with mixed types
+  PASS: STRUCT COPY with mixed types
+TEST 10: Function using struct member
+  PASS: Function with struct parameter
+TEST 11: Struct members in expressions
+  PASS: Struct members in expressions
+TEST 12: Array of structs with variable index
+  PASS: Variable index into struct array
+TEST 13: Multiple struct type definitions
+  PASS: Multiple struct types
+TEST 14: Read-only access in SUB
+    Read value: 333
+  PASS: Struct unchanged after read-only access
+TEST 15: Simple struct initialization
+  PASS: Simple struct initialization
+TEST 16: Struct with string initialization
+  PASS: Struct with string initialization
+TEST 17: Array of structs initialization
+  PASS: Array of structs initialization
+TEST 18: Mixed type struct array initialization
+  PASS: Mixed type struct array initialization
+TEST 19: LOCAL struct in subroutine
+    Local struct values: 555, 666
+  PASS: LOCAL struct works
+TEST 20: LOCAL struct array in subroutine
+  PASS: LOCAL struct array works
+TEST 21: LOCAL struct with initialization
+  PASS: LOCAL struct initialization works
+TEST 22: Multiple LOCAL struct calls (memory test)
+  PASS: Multiple LOCAL struct calls completed (no memory error)
+TEST 23: STRUCT SORT by integer field
+  PASS: STRUCT SORT by integer ascending
+TEST 24: STRUCT SORT reverse
+  PASS: STRUCT SORT reverse
+TEST 25: STRUCT SORT by string field
+  PASS: STRUCT SORT by string
+  PASS: Other fields preserved during sort
+TEST 26: STRUCT SORT case insensitive
+  PASS: STRUCT SORT case insensitive (Apple/APPLE first)
+TEST 27: STRUCT SORT by float field
+  PASS: STRUCT SORT by float
+TEST 28: STRUCT SORT empty strings at end
+  PASS: STRUCT SORT empty strings at end
+TEST 29: Function returning struct
+  PASS: Function returning struct
+TEST 30: Function returning struct with mixed types
+  PASS: Function returning struct with mixed types
+TEST 31: Struct packing with short string before int/float
+  PASS: Struct packing with short string
+TEST 32: Function returning struct with array member
+  PASS: Function returning struct with array member
+TEST 33: STRUCT CLEAR - single struct
+  PASS: STRUCT CLEAR single struct
+TEST 34: STRUCT CLEAR - array of structs
+  PASS: STRUCT CLEAR array of structs
+TEST 35: STRUCT SWAP
+  PASS: STRUCT SWAP
+TEST 36: STRUCT SWAP with array elements
+  PASS: STRUCT SWAP array elements
+TEST 37: STRUCT(FIND) - find by integer
+  PASS: STRUCT(FIND) by integer found at index 2
+TEST 38: STRUCT(FIND) - find by string
+  PASS: STRUCT(FIND) by string found at index 3
+TEST 39: STRUCT(FIND) - not found
+  PASS: STRUCT(FIND) returns -1 when not found
+TEST 40: STRUCT(FIND) - find by float
+  PASS: STRUCT(FIND) by float
+TEST 42: STRUCT(FIND) with start parameter
+  PASS: STRUCT(FIND) with start parameter iterates correctly
+TEST 42A: STRUCT(FIND) with regex - basic pattern
+  PASS: Found 'Bob' at index 1, match length = 3
+TEST 42B: STRUCT(FIND) with regex - wildcards
+  PASS: Found 'own' in Charlie Brown at index 2
+TEST 42C: STRUCT(FIND) with regex - character class
+  PASS: Found name starting with A-D at index 0 (Alice)
+TEST 42D: STRUCT(FIND) with regex - with start parameter
+  PASS: Found name starting with A-D at index 2 (Charlie)
+  PASS: Found name starting with A-D at index 3 (Diana)
+TEST 42E: STRUCT(FIND) with regex - no match
+  PASS: No match returns -1, length = 0
+TEST 42F: STRUCT(FIND) with regex - digit pattern
+  PASS: Found digits at index 0, match length = 3
+TEST 41: STRUCT SAVE and LOAD
+  PASS: STRUCT SAVE/LOAD
+TEST 43: STRUCT PRINT - single struct
+  Output should show Person structure with Alice, 25, 1.65:
+PERSON:
+  .AGE = 25
+  .HEIGHT = 1.65
+  .NAME = "Alice"
+  PASS: (verify output above manually)
+TEST 44: STRUCT PRINT - array element
+  Output should show Point structure with x=100, y=200:
+POINT:
+  .X = 100
+  .Y = 200
+  PASS: (verify output above manually)
+TEST 45: STRUCT PRINT - whole array
+  Output should show 3 Point elements (indexes 0..2):
+POINT array (3 elements):
+[0]:
+  .X = 100
+  .Y = 200
+[1]:
+  .X = 300
+  .Y = 400
+[2]:
+  .X = 0
+  .Y = 0
+  PASS: (verify output above manually)
+TEST 46: BOUND() - basic 1D struct array
+  PASS: BOUND() returned  9
+TEST 47: BOUND() - 2D struct array with dimension
+  PASS: Dimension 1 =  4, Dimension 2 =  7
+TEST 48: BOUND() - default dimension for struct array
+  PASS: Default dimension returned  4
+TEST 49: STRUCT COPY array() TO array()
+  PASS: Array copy successful
+TEST 50: STRUCT COPY array preserves extra dest elements
+  PASS: Extra elements preserved
+TEST 51: Nested structure - basic access
+  PASS: Nested structure access works
+TEST 52: Nested structure in array of structs
+  PASS: Array of structs with nested access
+TEST 53: Array of nested structure members
+  PASS: Array of nested structure members
+TEST 54: Full nesting: arr(i).member(j).member(k)
+  PASS: Full nesting array(i).array(j).array(k)
+TEST 55: Variables with dots in names (non-struct)
+  PASS: Dotted variable names work correctly
+TEST 56: Subroutines with dots in names
+  PASS: Dotted subroutine names work
+TEST 57: Functions with dots in names
+  PASS: Dotted function names work
+TEST 58: Dotted variables alongside struct members
+  PASS: Mixed dotted vars and struct members
+TEST 59: Arrays with dots in names
+  PASS: Dotted array names work
+TEST 60: STRUCT(SIZEOF) - basic types
+  PASS: SIZEOF Point =  16 bytes
+TEST 61: STRUCT(SIZEOF) - with string
+  PASS: SIZEOF Person =  272 bytes
+TEST 62: STRUCT(SIZEOF) - case insensitive
+  PASS: SIZEOF case insensitive
+TEST 63: STRUCT(SIZEOF) - with variable typename
+  PASS: SIZEOF with variable typename
+TEST 63a: STRUCT(OFFSET) - basic member offset
+  PASS: Point.x offset= 0, Point.y offset= 8
+TEST 63b: STRUCT(OFFSET) - mixed type structure
+  PASS: Person offsets correct
+TEST 63c: STRUCT(OFFSET) - case insensitive
+  PASS: OFFSET case insensitive
+TEST 63d: STRUCT(OFFSET) - with variable names
+  PASS: OFFSET with variable names
+TEST 64: STRUCT SAVE/LOAD individual element
+  PASS: Save/Load individual element
+TEST 65: STRUCT SAVE/LOAD multiple elements sequentially
+  PASS: Multiple sequential element save/load
+TEST 66: STRUCT SAVE single struct, LOAD to array element
+  PASS: Single struct to array element
+TEST 67: STRUCT SAVE array element, LOAD to single struct
+  PASS: Array element to single struct
+TEST 68: STRUCT(SIZEOF) for memory calculation
+  PASS: Array of  5 elements =  80 bytes
+TEST 69: Direct struct assignment (single variables)
+  PASS: Direct struct assignment
+TEST 70: Direct struct assignment (array elements)
+  PASS: Direct array element assignment
+TEST 71: Direct assignment between different arrays
+  PASS: Cross-array element assignment
+TEST 72: Direct assignment with mixed types struct
+  PASS: Mixed type struct assignment
+TEST 73: Direct assignment from function return
+  PASS: Assignment from function return
+TEST 74: Chained assignment
+  PASS: Chained struct assignment
+TEST 74A: Direct assignment from nested struct array member
+  PASS: Nested struct array element assignment
+TEST 74B: Direct assignment from nested struct array member (variable index)
+  PASS: Variable index nested struct array assignment
+TEST 75: Random access file with struct array
+  PASS: Random access file write and reverse read with strings
+TEST 76: BOX command with structure array members
+  PASS: BOX command with structure array members
+TEST 77: STRUCT EXTRACT - float member
+  PASS: STRUCT EXTRACT - float member
+TEST 78: STRUCT EXTRACT - integer member
+  PASS: STRUCT EXTRACT - integer member
+TEST 79: STRUCT EXTRACT - string member
+  PASS: STRUCT EXTRACT - string member
+TEST 80: STRUCT EXTRACT - second member (non-zero offset)
+  PASS: STRUCT EXTRACT - second member (non-zero offset)
+TEST 81: STRUCT INSERT - float member
+  PASS: STRUCT INSERT - float member
+TEST 82: STRUCT INSERT - integer member
+  PASS: STRUCT INSERT - integer member
+TEST 83: STRUCT INSERT - string member
+  PASS: STRUCT INSERT - string member
+TEST 84: STRUCT INSERT preserves other members
+  PASS: STRUCT INSERT preserves other members
+TEST 85: STRUCT(TYPE) - basic member types
+  PASS: STRUCT(TYPE) returns correct base types
+TEST 85b: STRUCT(TYPE) - Point type
+  PASS: STRUCT(TYPE) for Point members
+TEST 85c: STRUCT(TYPE) - case insensitive
+  PASS: STRUCT(TYPE) case insensitive
+TEST 85d: STRUCT(TYPE) - with variable names
+  PASS: STRUCT(TYPE) with variable names
+
+=== All Tests Complete ===
+Review output above for any FAIL messages

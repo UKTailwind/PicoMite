@@ -1,0 +1,19 @@
+n:  2
+x1:  10
+c2:  1  1
+s:  2
+s2:  2
+t1:  2
+e3:  1
+d:  2.828427125
+st:  3  1
+x1b:  50
+1: Not Showing
+2: Copies still open
+n2:  0
+sc5:  18  6
+st2:  308  196
+3: Sprites are hidden
+x4:  20
+[99] Sprite LOADARRAY #6, 8, 8, two%()
+Error : Argument 4 must be a 1D numerical array

@@ -1,0 +1,3 @@
+-- CHECK an address with nothing on it
+[22] I2C CHECK &h76
+Error : Pin not set for I2C

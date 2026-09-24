@@ -1,0 +1,2 @@
+[27] SetPin 35, INTL, OnEdge, PULLUP
+Error : Invalid pin

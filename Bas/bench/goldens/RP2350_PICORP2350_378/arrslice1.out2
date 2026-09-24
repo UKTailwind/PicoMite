@@ -1,0 +1,16 @@
+ARRAY INSERT - the manual's example
+  2,1,3= 1 2,2,3= 2 2,3,3= 3 2,4,3= 4
+  and nothing else was written: 1,1,3= 0 2,1,2= 0
+
+ARRAY SLICE - the manual's example
+  a(2,*,3) = 213 223 233 243
+
+a size mismatch is MMBasic's own error
+  MM.ERRNO = 16  Size mismatch between slice and target array
+
+COLOUR MAP's palette is 16 entries, counted the same way
+  codes = 0 4 8 12
+  pal   = 0F0F10 0F0F14 0F0F18 0F0F1C
+
+and a palette of the wrong length is refused
+  MM.ERRNO = 16  Array size not 16 elements

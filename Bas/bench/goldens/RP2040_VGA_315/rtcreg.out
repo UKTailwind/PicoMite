@@ -1,0 +1,2 @@
+[10] RTC GETREG 14, c
+Error : SYSTEM I2C not configured

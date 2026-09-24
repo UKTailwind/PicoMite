@@ -1,0 +1,6 @@
+addr ok
+1: Already programmed
+2: 4 is invalid (valid is 1 to 3)
+3: Invalid Image
+4: Same framebuffer
+flash surface ok

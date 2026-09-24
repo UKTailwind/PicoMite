@@ -1,0 +1,12 @@
+-- what this machine is
+device   [PicoMiteVGA]
+platform []
+drive    [A:]
+same      1
+version   1
+-- OPTION BASE is known when we translate
+base      0
+-- pin names
+
+[26] Print "gp0      "; GP0
+Error : GP0 is not declared

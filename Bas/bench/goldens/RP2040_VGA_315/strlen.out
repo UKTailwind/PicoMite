@@ -1,0 +1,8 @@
+stride  4  4  2  8
+first A E I 1
+elem2  18
+full [12345678] len 8
+cat [IJEFGH]
+after  4  4  2  2
+n1 [EFGH] n2 [IJ]
+scalar 2 p

@@ -1,0 +1,45 @@
+-- DATA / READ --
+ints: 10 20 30
+strs: [alpha][beta]
+third: [gamma]
+after RESTORE numbers:  1.5
+after RESTORE words: [one][two]
+array read: 1.5 2.5 3.5
+inner read = 2.5
+after READ RESTORE = 2.5
+10 as a string: [10]
+-- SORT --
+sorted: 10 20 30 40 50 60
+index : 3 1 4 2 0 5
+reverse: 5 4 3 1 1
+names: [Alpha] [bravo] [charlie] [delta] []
+partial: 9 8 2 3 7 1
+-- CONTINUE --
+sum skipping 3 = 18
+do sum skipping 2 = 8
+-- INC / CAT --
+n = 16
+f = 1.25
+s$ = [abcdefghi]
+-- ON GOTO --
+  target one
+  target two
+  target three
+-- ARRAY / MATH --
+set: 2.5 2.5
+scaled: 10 10
+added: 11 11
+sum = 112
+mean = 16
+max = 42
+  at index 5
+min = 4
+  at index 0
+median = 15
+sd = 13.40397951
+-- TIMER / PAUSE --
+timer advanced: yes
+-- ERASE --
+
+[162] Print "after erase: stat(0) ="; stat(0); " s$ = ["; s$; "]"
+Error : STAT is not declared

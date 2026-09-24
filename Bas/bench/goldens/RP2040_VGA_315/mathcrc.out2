@@ -1,0 +1,9 @@
+F4
+EFB
+31C3
+89A1897F
+31C3
+31C3
+29B1
+[28] Print HEX$(Math(CRC16 s$, 0, &H1021))
+Error : 0 is invalid (valid is 1 to 65535)

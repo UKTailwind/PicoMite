@@ -1,0 +1,14 @@
+-- one dimension
+bound      4
+values     0 1 4 9 16
+-- two dimensions, row-major like every other array
+bounds     4 2
+g(3,2)     32
+g(0,0)     0
+g(4,2)     42
+-- strings
+s$(2)     item2
+s$(4)     item4
+-- a whole array still passes to a SUB
+[80] Out % = 0
+Error : Missing Program statement

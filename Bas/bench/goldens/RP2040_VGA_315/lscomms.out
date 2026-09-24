@@ -1,0 +1,3 @@
+long string holds  480 bytes
+[25] SetPin 2, 3, 4, SPI
+Error : Invalid pin

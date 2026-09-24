@@ -1,0 +1,21 @@
+same:[ 3]
+ 4:a\nb
+nl: 3
+cr: 3
+quote:["]
+backslash:[\]
+bell: 7
+bs: 8
+esc: 27
+ff: 12
+vt: 11
+dec:ABC
+dechigh: 200
+wrap: 231
+hex:AB
+hexcase:jK
+twodigits:[65]
+onehex:[&4]
+unknown:[z]
+upper:[N]
+trail:[x\]

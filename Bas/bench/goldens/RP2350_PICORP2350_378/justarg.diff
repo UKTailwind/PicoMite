@@ -1,0 +1,6 @@
+--- expected
++++ board
+@@ -1,2 +1,2 @@
+-1: Justification
++1: Display not configured
+ justarg ok

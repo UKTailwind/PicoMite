@@ -1,0 +1,9 @@
+--- expected
++++ board
+@@ -25,5 +25,5 @@
+ first    w
+ -- SHORT and WORD
+ word     &hDEADBEEF
+-short    -2
++short     65534
+ done

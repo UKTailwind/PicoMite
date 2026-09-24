@@ -1,0 +1,9 @@
+--- expected
++++ board
+@@ -24,5 +24,5 @@
+ 8: Sprite 2 not created
+ 9: 0 is invalid (valid is 1 to 65535)
+ 10: Tilemap 1 not created
+-11: Invalid flash image in slot 1
++11: No image in slot 1
+ tilemap surface ok

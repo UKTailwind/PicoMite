@@ -1,0 +1,7 @@
+add int  :Array size mismatch
+add flt  :Array size mismatch
+add str  :Array size mismatch
+scale    :Size mismatch
+add ok   : 11 12 13 14
+scale ok : 3 6 9 12
+adds ok  : a! b! c! d!

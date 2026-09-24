@@ -1,0 +1,7 @@
+1 call-colon-call ok
+show 1 2
+show 3 4
+show 9 10
+show 11 12
+[13] If a = 4 Then Show 11, 12 : Show 13, 14 Else Show 15, 16
+Error : Argument list
