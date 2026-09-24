@@ -944,6 +944,11 @@ int blitother(void)
             VResD = VRes;
             HResS = HRes;
             VResS = VRes;
+            /* blit121 clips only the destination, so a source rectangle off
+               the buffer would read the memory around it - check it as
+               BLIT FLASH does */
+            if (x1 < 0 || y1 < 0 || x1 + w > HResS || y1 + h > VResS)
+                StandardError(21);
             blit121((uint8_t *)s, (uint8_t *)d, x1, y1, w, h, x2, y2, blank);
             return 1;
         }

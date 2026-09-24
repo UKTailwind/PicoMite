@@ -4313,6 +4313,19 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
 }
 #undef LIBPUT
 
+/* Put back the font that was in use before a program was loaded.  A program's
+   own DefineFont fonts go with it, and it may have left one selected (it can
+   stop on an error before it selects a built-in font again), so that font may
+   no longer exist - fall back to the default rather than fail with "Invalid
+   font number" and lose the LOAD. */
+static void RestoreFontAfterLoad(int fnt)
+{
+    if (FontTable[fnt >> 4] == NULL)
+        fnt = Option.DefaultFont;
+    SetFont(fnt);
+    PromptFont = fnt;
+}
+
 int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
 {
     int fnbr;
@@ -4330,8 +4343,7 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
     StartEditChar = 0;
     ProgramChanged = false;
     TraceOn = false;
-    SetFont(oldfont);
-    PromptFont = oldfont;
+    RestoreFontAfterLoad(oldfont);
     fnbr = FindFreeFileNbr();
     p = (char *)getFstring(fname);
     AppendDefaultExtension(p, ".bas");
@@ -4807,8 +4819,7 @@ int MemLoadProgram(unsigned char *fname, unsigned char *ram)
     StartEditChar = 0;
     ProgramChanged = false;
     TraceOn = false;
-    SetFont(oldfont);
-    PromptFont = oldfont;
+    RestoreFontAfterLoad(oldfont);
     fnbr = FindFreeFileNbr();
     p = (char *)getFstring(fname);
     AppendDefaultExtension((char *)p, ".bas");
@@ -5092,8 +5103,7 @@ void MIPS16 cmd_load(void)
         StandardError(10);
     if (!FileLoadProgram(argv[0], false, crunch))
     {
-        SetFont(oldfont);
-        PromptFont = oldfont;
+        RestoreFontAfterLoad(oldfont);
         return;
     }
     FlashLoad = 0;
