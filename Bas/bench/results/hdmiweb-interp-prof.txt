@@ -1,0 +1,166 @@
+RUN
+ 
+program solar_eclipse
+=====================
+ 
+please input the initial calendar date
+ 
+(month [1 - 12], day [1 - 31], year [yyyy])
+< for example, october 21, 1986 is input as 10,21,1986 >
+< b.c. dates are negative, a.d. dates are positive >
+< the day of the month may also include a decimal part >
+ 
+? 
+12,1,2000
+ 
+please input the geographic latitude of the observer
+(degrees [-90 to +90], minutes [0 - 60], seconds [0 - 60])
+(north latitudes are positive, south latitudes are negative)
+? 
+39,40,36
+
+please input the geographic longitude of the observer
+(degrees [0 - 360], minutes [0 - 60], seconds [0 - 60])
+(east longitude is positive, west longitude is negative)
+? 
+-104,57,12
+ 
+please input the altitude of the observer (meters)
+(positive above sea level, negative below sea level)
+? 
+1644
+ 
+please input the search duration in days
+? 
+30
+ 
+searching for solar eclipse ...
+ 
+ 
+ 
+begin penumbral phase of solar eclipse
+ 
+calendar date  	December	 	25	 	2000
+ 
+UTC time       	15 hours 29 minutes 23.91 seconds
+ 
+UTC julian day     	2451904.14541560
+ 
+topocentric coordinates
+ 
+lunar azimuth angle    	132 deg 9 min 29.65 sec
+ 
+lunar elevation angle  	10 deg 35 min 42.02 sec
+ 
+solar azimuth angle    	132 deg 8 min 30.41 sec
+ 
+solar elevation angle  	10 deg 4 min 35.03 sec
+ 
+ 
+greatest eclipse conditions
+ 
+calendar date  	December	 	25	 	2000
+ 
+UTC time       	16 hours 43 minutes 32.47 seconds
+ 
+UTC julian day     	2451904.19690359
+ 
+topocentric coordinates
+ 
+lunar azimuth angle    	146 deg 40 min 53.36 sec
+ 
+lunar elevation angle  	19 deg 34 min 59.64 sec
+ 
+solar azimuth angle    	146 deg 53 min 27.85 sec
+ 
+solar elevation angle  	19 deg 21 min 2.24 sec
+ 
+ 
+end penumbral phase of solar eclipse
+ 
+calendar date  	December	 	25	 	2000
+ 
+UTC time       	18 hours 6 minutes 3.54 seconds
+ 
+UTC julian day     	2451904.25420764
+ 
+topocentric coordinates
+ 
+lunar azimuth angle    	165 deg 38 min 46.45 sec
+ 
+lunar elevation angle  	25 deg 48 min 46.82 sec
+ 
+solar azimuth angle    	166 deg 12 min 32.05 sec
+ 
+solar elevation angle  	25 deg 41 min 51.62 sec
+ 
+event duration   	2.61100904 hours
+ 
+Time taken : 	 14.843804	 Seconds
+
+[PERF] elapsed=16222823 us  statements=714912  findvar=2843723 (locals=2226036 [78%] globals=617687 [21%])  user_subs=10605
+[PERF] top commands by dispatch count:
+      453246  Let
+       83459  Next
+       78004  If
+       38293  Local
+       15058  End If
+       10020  End Function
+        9148  End Sub
+        8163  For
+        3467  Else
+        2870  EndIf
+        1457  Exit Sub
+         482  Exit For
+         221  Read
+         208  Loop
+          91  Data
+          88  Print
+           7  Dim
+           7  Const
+           5  Do
+           5  Input
+[PERF] top SUBs by exclusive (self) time:
+       self_us    incl_us     calls   self_us/call  name
+       5572779     7199742       477         11682  moon
+       2302556     2302556       954          2413  nut2000_lp
+       1762748     1873403       477          3695  sun
+       1056358     1056358      1455           726  findleap
+        809420     1038287         3        269806  eclprint
+        755409     1811767      1455           519  utc2tdb
+        749979      749979         1        749979  observer
+        360305      360305         0             0  modulo
+        333477      333477         1        333477  getdate
+        322000     2205674       477           675  jbrent
+        307910    13722211       474           649  sefunc
+        304534      769660       480           634  eci2topo
+PRESS any-key ...                         190503      190503         0             0  atan3
+        165108     1310665       477           346  gast2
+        147286      147286       480           306  matxvec
+        133657      134374         3         44552  jd2str
+        116188     1273187       477           243  obliq_lp
+        114964      114964       480           239  gsite
+         95785       95785         0             0  vecmag
+         73189     1883674      1454            50  jdfunc
+[PERF] top SUBs by call count:
+        1455  utc2tdb
+        1455  findleap
+        1454  jdfunc
+         954  nut2000_lp
+         480  eci2topo
+         480  gsite
+         480  uvector
+         480  matxvec
+         477  sun
+         477  moon
+         477  obliq_lp
+         477  tdb2utc
+         477  gast2
+         477  jbrent
+         474  sefunc
+          12  deg2str
+           3  eclprint
+           3  gdate
+           3  jd2str
+           2  broot
+> 

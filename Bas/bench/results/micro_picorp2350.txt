@@ -1,0 +1,40 @@
+RUN
+BENCHSTART PicoMite RP2350B  6.040051  378 MHz
+BENCH empty_for_loop 0.835 316
+BENCH a%=b% (1-char names) 3.440 1300
+BENCH 30-char name = 30-char name 12.232 4624
+BENCH a%=a%+1 4.702 1777
+BENCH a%=a%+1 + 40-char comment 5.653 2137
+BENCH a%=a%+1 + 40 trailing spaces 4.702 1777
+BENCH s%=(s%+i%) AND 65535 7.524 2844
+BENCH fx=fx*1.000001+0.5 8.071 3051
+BENCH fy=fx (float) 3.683 1392
+BENCH fy=1.23456789 (literal) 4.301 1626
+BENCH fy=K1 (CONST) 3.696 1397
+BENCH y%=arr%(i% AND 1023) 10.285 3888
+BENCH arr%(i% AND 1023)=y% 10.309 3897
+BENCH y%=arr2%(i% AND 31,7) 11.223 4242
+BENCH fy=ABS(fx) 6.159 2328
+BENCH fy=ABS nested 5 deep 15.181 5739
+BENCH fy=SIN(fx) 6.236 2357
+BENCH st$=STR$(i%) 9.171 3467
+BENCH st$=LEFT$(t$,3) 8.637 3265
+BENCH st$=t$+u$ 6.929 2619
+BENCH IF i% AND 1 THEN a%=1 ELSE a%=2 11.852 4480
+BENCH multi-line IF/ELSE/ENDIF (per pass) 9.176 3468
+BENCH SELECT 8 arms, first matches 10.677 4036
+BENCH SELECT 8 arms, last matches 17.173 6492
+BENCH call SUB with no arguments 5.052 1909
+BENCH y%=FUNCTION f%(a%,b%) 25.192 9523
+BENCH call SUB, 6 params + 4 LOCALs 45.657 17259
+BENCH call SUB creating 3 LOCAL arrays 36.364 13746
+BENCH GOSUB/RETURN 2.881 1089
+BENCH [sub] empty_for_loop 0.873 330
+BENCH [sub] la=lb (LOCALs) 3.874 1464
+BENCH [sub] la=b% (global read from a SUB) 3.804 1438
+BENCH [sub] ly=K1 (CONST read from a SUB) 3.920 1482
+BENCH [sub] ly=lx*1.000001+0.5 8.262 3123
+BENCH [sub] ly=SIN(lx) 6.416 2425
+BENCH [sub] la=arr%(li AND 1023) (global array) 10.859 4105
+BENCHEND
+> 

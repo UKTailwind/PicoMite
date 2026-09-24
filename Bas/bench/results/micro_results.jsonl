@@ -1,0 +1,103 @@
+{"build": "PICORP2350", "mhz": 378, "test": "empty_for_loop", "us": 0.835, "cycles": 316}
+{"build": "PICORP2350", "mhz": 378, "test": "a%=b% (1-char names)", "us": 3.44, "cycles": 1300}
+{"build": "PICORP2350", "mhz": 378, "test": "30-char name = 30-char name", "us": 12.232, "cycles": 4624}
+{"build": "PICORP2350", "mhz": 378, "test": "a%=a%+1", "us": 4.702, "cycles": 1777}
+{"build": "PICORP2350", "mhz": 378, "test": "a%=a%+1 + 40-char comment", "us": 5.653, "cycles": 2137}
+{"build": "PICORP2350", "mhz": 378, "test": "a%=a%+1 + 40 trailing spaces", "us": 4.702, "cycles": 1777}
+{"build": "PICORP2350", "mhz": 378, "test": "s%=(s%+i%) AND 65535", "us": 7.524, "cycles": 2844}
+{"build": "PICORP2350", "mhz": 378, "test": "fx=fx*1.000001+0.5", "us": 8.071, "cycles": 3051}
+{"build": "PICORP2350", "mhz": 378, "test": "fy=fx (float)", "us": 3.683, "cycles": 1392}
+{"build": "PICORP2350", "mhz": 378, "test": "fy=1.23456789 (literal)", "us": 4.301, "cycles": 1626}
+{"build": "PICORP2350", "mhz": 378, "test": "fy=K1 (CONST)", "us": 3.696, "cycles": 1397}
+{"build": "PICORP2350", "mhz": 378, "test": "y%=arr%(i% AND 1023)", "us": 10.285, "cycles": 3888}
+{"build": "PICORP2350", "mhz": 378, "test": "arr%(i% AND 1023)=y%", "us": 10.309, "cycles": 3897}
+{"build": "PICORP2350", "mhz": 378, "test": "y%=arr2%(i% AND 31,7)", "us": 11.223, "cycles": 4242}
+{"build": "PICORP2350", "mhz": 378, "test": "fy=ABS(fx)", "us": 6.159, "cycles": 2328}
+{"build": "PICORP2350", "mhz": 378, "test": "fy=ABS nested 5 deep", "us": 15.181, "cycles": 5739}
+{"build": "PICORP2350", "mhz": 378, "test": "fy=SIN(fx)", "us": 6.236, "cycles": 2357}
+{"build": "PICORP2350", "mhz": 378, "test": "st$=STR$(i%)", "us": 9.171, "cycles": 3467}
+{"build": "PICORP2350", "mhz": 378, "test": "st$=LEFT$(t$,3)", "us": 8.637, "cycles": 3265}
+{"build": "PICORP2350", "mhz": 378, "test": "st$=t$+u$", "us": 6.929, "cycles": 2619}
+{"build": "PICORP2350", "mhz": 378, "test": "IF i% AND 1 THEN a%=1 ELSE a%=2", "us": 11.852, "cycles": 4480}
+{"build": "PICORP2350", "mhz": 378, "test": "multi-line IF/ELSE/ENDIF (per pass)", "us": 9.176, "cycles": 3468}
+{"build": "PICORP2350", "mhz": 378, "test": "SELECT 8 arms, first matches", "us": 10.677, "cycles": 4036}
+{"build": "PICORP2350", "mhz": 378, "test": "SELECT 8 arms, last matches", "us": 17.173, "cycles": 6492}
+{"build": "PICORP2350", "mhz": 378, "test": "call SUB with no arguments", "us": 5.052, "cycles": 1909}
+{"build": "PICORP2350", "mhz": 378, "test": "y%=FUNCTION f%(a%,b%)", "us": 25.192, "cycles": 9523}
+{"build": "PICORP2350", "mhz": 378, "test": "call SUB, 6 params + 4 LOCALs", "us": 45.657, "cycles": 17259}
+{"build": "PICORP2350", "mhz": 378, "test": "call SUB creating 3 LOCAL arrays", "us": 36.364, "cycles": 13746}
+{"build": "PICORP2350", "mhz": 378, "test": "GOSUB/RETURN", "us": 2.881, "cycles": 1089}
+{"build": "PICORP2350", "mhz": 378, "test": "[sub] empty_for_loop", "us": 0.873, "cycles": 330}
+{"build": "PICORP2350", "mhz": 378, "test": "[sub] la=lb (LOCALs)", "us": 3.874, "cycles": 1464}
+{"build": "PICORP2350", "mhz": 378, "test": "[sub] la=b% (global read from a SUB)", "us": 3.804, "cycles": 1438}
+{"build": "PICORP2350", "mhz": 378, "test": "[sub] ly=K1 (CONST read from a SUB)", "us": 3.92, "cycles": 1482}
+{"build": "PICORP2350", "mhz": 378, "test": "[sub] ly=lx*1.000001+0.5", "us": 8.262, "cycles": 3123}
+{"build": "PICORP2350", "mhz": 378, "test": "[sub] ly=SIN(lx)", "us": 6.416, "cycles": 2425}
+{"build": "PICORP2350", "mhz": 378, "test": "[sub] la=arr%(li AND 1023) (global array)", "us": 10.859, "cycles": 4105}
+{"build": "VGA-RP2040", "mhz": 315, "test": "empty_for_loop", "us": 1.529, "cycles": 482}
+{"build": "VGA-RP2040", "mhz": 315, "test": "a%=b% (1-char names)", "us": 7.073, "cycles": 2228}
+{"build": "VGA-RP2040", "mhz": 315, "test": "30-char name = 30-char name", "us": 24.24, "cycles": 7636}
+{"build": "VGA-RP2040", "mhz": 315, "test": "a%=a%+1", "us": 9.668, "cycles": 3046}
+{"build": "VGA-RP2040", "mhz": 315, "test": "a%=a%+1 + 40-char comment", "us": 10.999, "cycles": 3465}
+{"build": "VGA-RP2040", "mhz": 315, "test": "a%=a%+1 + 40 trailing spaces", "us": 9.669, "cycles": 3046}
+{"build": "VGA-RP2040", "mhz": 315, "test": "s%=(s%+i%) AND 65535", "us": 16.483, "cycles": 5192}
+{"build": "VGA-RP2040", "mhz": 315, "test": "fx=fx*1.000001+0.5", "us": 20.751, "cycles": 6537}
+{"build": "VGA-RP2040", "mhz": 315, "test": "fy=fx (float)", "us": 7.641, "cycles": 2407}
+{"build": "VGA-RP2040", "mhz": 315, "test": "fy=1.23456789 (literal)", "us": 11.289, "cycles": 3556}
+{"build": "VGA-RP2040", "mhz": 315, "test": "fy=K1 (CONST)", "us": 7.636, "cycles": 2405}
+{"build": "VGA-RP2040", "mhz": 315, "test": "y%=arr%(i% AND 1023)", "us": 21.841, "cycles": 6880}
+{"build": "VGA-RP2040", "mhz": 315, "test": "arr%(i% AND 1023)=y%", "us": 25.376, "cycles": 7993}
+{"build": "VGA-RP2040", "mhz": 315, "test": "y%=arr2%(i% AND 31,7)", "us": 23.085, "cycles": 7272}
+{"build": "VGA-RP2040", "mhz": 315, "test": "fy=ABS(fx)", "us": 12.986, "cycles": 4090}
+{"build": "VGA-RP2040", "mhz": 315, "test": "fy=ABS nested 5 deep", "us": 28.831, "cycles": 9082}
+{"build": "VGA-RP2040", "mhz": 315, "test": "fy=SIN(fx)", "us": 17.917, "cycles": 5644}
+{"build": "VGA-RP2040", "mhz": 315, "test": "st$=STR$(i%)", "us": 20.634, "cycles": 6500}
+{"build": "VGA-RP2040", "mhz": 315, "test": "st$=LEFT$(t$,3)", "us": 17.546, "cycles": 5527}
+{"build": "VGA-RP2040", "mhz": 315, "test": "st$=t$+u$", "us": 14.182, "cycles": 4467}
+{"build": "VGA-RP2040", "mhz": 315, "test": "IF i% AND 1 THEN a%=1 ELSE a%=2", "us": 23.063, "cycles": 7265}
+{"build": "VGA-RP2040", "mhz": 315, "test": "multi-line IF/ELSE/ENDIF (per pass)", "us": 19.548, "cycles": 6158}
+{"build": "VGA-RP2040", "mhz": 315, "test": "SELECT 8 arms, first matches", "us": 21.344, "cycles": 6723}
+{"build": "VGA-RP2040", "mhz": 315, "test": "SELECT 8 arms, last matches", "us": 48.809, "cycles": 15375}
+{"build": "VGA-RP2040", "mhz": 315, "test": "call SUB with no arguments", "us": 15.629, "cycles": 4923}
+{"build": "VGA-RP2040", "mhz": 315, "test": "y%=FUNCTION f%(a%,b%)", "us": 64.158, "cycles": 20210}
+{"build": "VGA-RP2040", "mhz": 315, "test": "call SUB, 6 params + 4 LOCALs", "us": 122.358, "cycles": 38543}
+{"build": "VGA-RP2040", "mhz": 315, "test": "call SUB creating 3 LOCAL arrays", "us": 90.329, "cycles": 28454}
+{"build": "VGA-RP2040", "mhz": 315, "test": "GOSUB/RETURN", "us": 40.06, "cycles": 12619}
+{"build": "VGA-RP2040", "mhz": 315, "test": "[sub] empty_for_loop", "us": 1.593, "cycles": 502}
+{"build": "VGA-RP2040", "mhz": 315, "test": "[sub] la=lb (LOCALs)", "us": 8.035, "cycles": 2531}
+{"build": "VGA-RP2040", "mhz": 315, "test": "[sub] la=b% (global read from a SUB)", "us": 7.943, "cycles": 2502}
+{"build": "VGA-RP2040", "mhz": 315, "test": "[sub] ly=K1 (CONST read from a SUB)", "us": 8.206, "cycles": 2585}
+{"build": "VGA-RP2040", "mhz": 315, "test": "[sub] ly=lx*1.000001+0.5", "us": 21.136, "cycles": 6658}
+{"build": "VGA-RP2040", "mhz": 315, "test": "[sub] ly=SIN(lx)", "us": 16.801, "cycles": 5292}
+{"build": "VGA-RP2040", "mhz": 315, "test": "[sub] la=arr%(li AND 1023) (global array)", "us": 27.566, "cycles": 8683}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "empty_for_loop", "us": 0.985, "cycles": 372}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "a=b (1-char names)", "us": 0.604, "cycles": 228}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "30-char name = 30-char name", "us": 0.594, "cycles": 225}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "a=a+1", "us": 1.35, "cycles": 510}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "s=(s+i)&65535", "us": 1.394, "cycles": 527}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "fx=fx*1.000001+0.5", "us": 5.965, "cycles": 2255}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "fy=fx (float)", "us": 0.6, "cycles": 227}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "fy=1.23456789 (literal)", "us": 0.357, "cycles": 135}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "fy=K1 (constant)", "us": 1.104, "cycles": 417}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "y=arr[i&1023]", "us": 1.55, "cycles": 586}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "arr[i&1023]=y", "us": 1.554, "cycles": 587}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "y=arr2[i&31][7]", "us": 1.861, "cycles": 703}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "fy=abs(fx)", "us": 5.74, "cycles": 2170}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "fy=abs nested 5 deep", "us": 19.027, "cycles": 7192}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "fy=sin(fx)", "us": 4.148, "cycles": 1568}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "st=str(i)", "us": 34.145, "cycles": 12907}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "st=t[:3]", "us": 33.92, "cycles": 12822}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "st=t+u", "us": 28.066, "cycles": 10609}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "a=1 if i&1 else 2", "us": 1.071, "cycles": 405}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "multi-line if/else (per pass)", "us": 1.071, "cycles": 405}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "call function with no arguments", "us": 2.584, "cycles": 977}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "y=add2(i,3)", "us": 4.014, "cycles": 1517}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "call, 6 params + 4 locals", "us": 5.24, "cycles": 1981}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "call creating 3 local lists", "us": 27.415, "cycles": 10363}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "[def] empty_for_loop", "us": 0.735, "cycles": 278}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "[def] la=lb (locals)", "us": 0.08, "cycles": 30}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "[def] la=b (global read)", "us": 0.3, "cycles": 114}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "[def] ly=K1 (constant from def)", "us": 0.808, "cycles": 305}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "[def] ly=lx*1.000001+0.5", "us": 4.502, "cycles": 1702}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "[def] ly=sin(lx)", "us": 3.086, "cycles": 1167}
+{"build": "MicroPython-PC2", "mhz": 378, "test": "[def] la=arr[li&1023] (global list)", "us": 0.99, "cycles": 374}

@@ -200,8 +200,10 @@ void ProfilingAlloc(void)
     g_perf_start_us = time_us_64();
 }
 
+void PcsFree(void);
 void ProfilingFree(void)
 {
+    PcsFree(); /* stop the sampler before its tables go back to the heap */
     FreeMemorySafe((void **)&g_perf_cmdcount);
     FreeMemorySafe((void **)&g_perf_subcall_count);
     FreeMemorySafe((void **)&g_perf_subtime_us);
@@ -218,6 +220,111 @@ void ResetPerfCounters(void)
         return;
     /* Reallocate buffers if needed (e.g. RUN after OPTION PROFILING ON).   */
     ProfilingAlloc();
+}
+
+// ---------------------------------------------------------------------------
+// PC sampler: OPTION PROFILING ON, SAMPLE
+//
+// A spare hardware alarm interrupts core 0 every PCS_PERIOD_US.  The handler
+// takes the interrupted PC from the exception frame and counts it, and the
+// program line being run (CurrentLinePtr), in two open-addressing tables on
+// the heap.  cmd_end prints both; a host script resolves the PCs against the
+// build's ELF.  An odd period keeps the samples from locking to the 1 ms tick.
+// Nothing runs and nothing is allocated unless a program asks for it.
+// ---------------------------------------------------------------------------
+#include "hardware/timer.h"
+#include "hardware/irq.h"
+#define PCS_PERIOD_US 97
+#define PCS_TIMER PICO_DEFAULT_TIMER_INSTANCE()
+pcs_ent_t *g_pcs_pc = NULL;   // [g_pcs_size] PC -> samples
+pcs_ent_t *g_pcs_line = NULL; // [g_pcs_size] CurrentLinePtr -> samples
+uint32_t g_pcs_size = 0, g_pcs_samples = 0, g_pcs_dropped = 0, g_pcs_dropped_line = 0;
+static int pcs_alarm = -1;
+
+static inline void __not_in_flash_func(pcs_add)(pcs_ent_t *t, uint32_t key, uint32_t *dropped)
+{
+    uint32_t mask = g_pcs_size - 1, h = (key * 2654435761u) >> 8;
+    for (int probe = 0; probe < 32; probe++, h++)
+    {
+        pcs_ent_t *e = &t[h & mask];
+        if (e->key == key)
+        {
+            e->n++;
+            return;
+        }
+        if (e->n == 0)
+        {
+            e->key = key;
+            e->n = 1;
+            return;
+        }
+    }
+    (*dropped)++;
+}
+
+void __attribute__((used)) __not_in_flash_func(pcs_isr_c)(uint32_t *frame)
+{
+    PCS_TIMER->intr = 1u << pcs_alarm;
+    PCS_TIMER->alarm[pcs_alarm] = PCS_TIMER->timerawl + PCS_PERIOD_US;
+    if (g_pcs_pc == NULL)
+        return;
+    g_pcs_samples++;
+    pcs_add(g_pcs_pc, frame[6] & ~1u, &g_pcs_dropped); // stacked PC (basic frame: r0-r3, r12, lr, pc, xpsr)
+    pcs_add(g_pcs_line, (uint32_t)CurrentLinePtr, &g_pcs_dropped_line);
+}
+
+// Core 0 runs on MSP, so SP at entry is the exception frame.  EXC_RETURN is
+// kept on the stack and popped into PC to return.  Thumb-1, for the M0+ too.
+void __attribute__((naked, used, section(".time_critical.pcs_isr"))) pcs_isr(void)
+{
+    __asm volatile(
+        "mov r0, sp       \n"
+        "push {r4, lr}    \n"
+        "bl pcs_isr_c     \n"
+        "pop {r4, pc}     \n");
+}
+
+void PcsStop(void)
+{
+    if (pcs_alarm < 0)
+        return;
+    uint irq = hardware_alarm_get_irq_num(pcs_alarm);
+    irq_set_enabled(irq, false);
+    hw_clear_bits(&PCS_TIMER->inte, 1u << pcs_alarm);
+    PCS_TIMER->armed = 1u << pcs_alarm;
+    PCS_TIMER->intr = 1u << pcs_alarm;
+    irq_remove_handler(irq, pcs_isr);
+    hardware_alarm_unclaim(pcs_alarm);
+    pcs_alarm = -1;
+}
+
+void PcsFree(void)
+{
+    PcsStop();
+    FreeMemorySafe((void **)&g_pcs_pc);
+    FreeMemorySafe((void **)&g_pcs_line);
+    g_pcs_size = 0;
+}
+
+// entries: table size, a power of two
+void PcsStart(int entries)
+{
+    PcsFree();
+    g_pcs_size = entries;
+    g_pcs_pc = (pcs_ent_t *)GetMemory(entries * sizeof(pcs_ent_t));
+    g_pcs_line = (pcs_ent_t *)GetMemory(entries * sizeof(pcs_ent_t));
+    g_pcs_samples = g_pcs_dropped = g_pcs_dropped_line = 0;
+    pcs_alarm = hardware_alarm_claim_unused(false);
+    if (pcs_alarm < 0)
+    {
+        PcsFree();
+        error("No spare timer alarm for SAMPLE");
+    }
+    uint irq = hardware_alarm_get_irq_num(pcs_alarm);
+    irq_set_exclusive_handler(irq, pcs_isr);
+    hw_set_bits(&PCS_TIMER->inte, 1u << pcs_alarm);
+    irq_set_enabled(irq, true);
+    PCS_TIMER->alarm[pcs_alarm] = PCS_TIMER->timerawl + PCS_PERIOD_US;
 }
 // unsigned char lastcmd[STRINGSIZE];                                           // used to store the last command in case it is needed by the EDIT command
 unsigned char PromptString[MAXPROMPTLEN]; // the prompt for input, an empty string means use the default

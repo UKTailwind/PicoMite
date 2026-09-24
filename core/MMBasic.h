@@ -430,6 +430,15 @@ extern "C"
     void LeaveLocalFrame(void);
     void ProfilingAlloc(void);
     void ProfilingFree(void);
+    /* PC sampler (OPTION PROFILING ON, SAMPLE): key -> sample count */
+    typedef struct
+    {
+        uint32_t key, n;
+    } pcs_ent_t;
+    extern pcs_ent_t *g_pcs_pc, *g_pcs_line;
+    extern uint32_t g_pcs_size, g_pcs_samples, g_pcs_dropped, g_pcs_dropped_line;
+    void PcsStart(int entries);
+    void PcsStop(void);
     /* ============================================================================
      * External variables - Options and settings
      * ============================================================================ */

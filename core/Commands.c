@@ -4158,6 +4158,54 @@ static void perf_print(const char *s, int *cnt)
 	}
 }
 
+/* The PC sampler's tables (OPTION PROFILING ON, SAMPLE): every sampled PC
+   with its count, busiest first, then the busiest program lines.  The PCs
+   are raw addresses - a host script resolves them against the build's ELF. */
+static void PcsReport(int *cnt)
+{
+	char buf[80];
+	PcsStop();
+	if (g_pcs_pc == NULL)
+		return;
+	snprintf(buf, sizeof(buf), "[PCS] samples=%u dropped=%u dropped_line=%u entries=%u\r\n",
+			 (unsigned)g_pcs_samples, (unsigned)g_pcs_dropped, (unsigned)g_pcs_dropped_line, (unsigned)g_pcs_size);
+	perf_print(buf, cnt);
+	for (int rank = 0; rank < (int)g_pcs_size; rank++)
+	{
+		uint32_t best = 0;
+		int bi = -1;
+		for (int k = 0; k < (int)g_pcs_size; k++)
+			if (g_pcs_pc[k].n > best)
+			{
+				best = g_pcs_pc[k].n;
+				bi = k;
+			}
+		if (bi < 0)
+			break;
+		snprintf(buf, sizeof(buf), "[PCS] %08x %u\r\n", (unsigned)g_pcs_pc[bi].key, (unsigned)best);
+		perf_print(buf, cnt);
+		g_pcs_pc[bi].n = 0;
+	}
+	for (int rank = 0; rank < 40; rank++)
+	{
+		uint32_t best = 0;
+		int bi = -1;
+		for (int k = 0; k < (int)g_pcs_size; k++)
+			if (g_pcs_line[k].n > best)
+			{
+				best = g_pcs_line[k].n;
+				bi = k;
+			}
+		if (bi < 0)
+			break;
+		unsigned char *lp = (unsigned char *)g_pcs_line[bi].key;
+		int ln = (lp >= ProgMemory && lp < ProgMemory + MAX_PROG_SIZE) ? CountLines(lp) : -1;
+		snprintf(buf, sizeof(buf), "[PCSLINE] %d %u\r\n", ln, (unsigned)best);
+		perf_print(buf, cnt);
+		g_pcs_line[bi].n = 0;
+	}
+}
+
 void cmd_end(void)
 {
 	RamLibRelease(); /* a RAM library is the program's: END gives the flash library back */
@@ -4378,6 +4426,7 @@ void cmd_end(void)
 				FreeMemorySafe((void **)&scratch_us);
 			}
 		}
+		PcsReport(&list_cnt);
 	}
 #ifdef MMBASIC_FM
 	int relaunch_fm = fm_program_launched_from_fm;

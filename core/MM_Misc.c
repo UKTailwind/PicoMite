@@ -5207,6 +5207,19 @@ static void OptionLoadText(char *buf)
     }
 }
 #endif
+/* The ", SAMPLE [, entries]" tail of OPTION PROFILING ON: start the PC
+   sampler with tables of the given size, rounded up to a power of two. */
+static void MIPS16 ProfilingSampleOption(unsigned char *p)
+{
+    getcsargs(&p, 3);
+    if (argc < 1 || !checkstring(argv[0], (unsigned char *)"SAMPLE"))
+        SyntaxError();
+    int want = (argc == 3) ? getint(argv[2], 256, 65536) : 4096;
+    int entries = 256;
+    while (entries < want)
+        entries <<= 1;
+    PcsStart(entries);
+}
 void MIPS16 cmd_option(void)
 {
     unsigned char *tp;
@@ -5331,10 +5344,14 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"PROFILING");
     if (tp)
     {
-        if (checkstring(tp, (unsigned char *)"ON"))
+        unsigned char *p;
+        if ((p = checkstring(tp, (unsigned char *)"ON")))
         {
             ProfilingAlloc();
             g_option_profiling = 1;
+            skipspace(p);
+            if (*p == ',')
+                ProfilingSampleOption(p + 1);
             return;
         }
         if (checkstring(tp, (unsigned char *)"OFF"))

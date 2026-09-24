@@ -1,0 +1,35 @@
+import bm
+BENCHSTART 378000000
+BENCH empty_for_loop 0.985 372
+BENCH a=b (1-char names) 0.604 228
+BENCH 30-char name = 30-char name 0.594 225
+BENCH a=a+1 1.350 510
+BENCH s=(s+i)&65535 1.394 527
+BENCH fx=fx*1.000001+0.5 5.965 2255
+BENCH fy=fx (float) 0.600 227
+BENCH fy=1.23456789 (literal) 0.357 135
+BENCH fy=K1 (constant) 1.104 417
+BENCH y=arr[i&1023] 1.550 586
+BENCH arr[i&1023]=y 1.554 587
+BENCH y=arr2[i&31][7] 1.861 703
+BENCH fy=abs(fx) 5.740 2170
+BENCH fy=abs nested 5 deep 19.027 7192
+BENCH fy=sin(fx) 4.148 1568
+BENCH st=str(i) 34.145 12907
+BENCH st=t[:3] 33.920 12822
+BENCH st=t+u 28.066 10609
+BENCH a=1 if i&1 else 2 1.071 405
+BENCH multi-line if/else (per pass) 1.071 405
+BENCH call function with no arguments 2.584 977
+BENCH y=add2(i,3) 4.014 1517
+BENCH call, 6 params + 4 locals 5.240 1981
+BENCH call creating 3 local lists 27.415 10363
+BENCH [def] empty_for_loop 0.735 278
+BENCH [def] la=lb (locals) 0.080 30
+BENCH [def] la=b (global read) 0.300 114
+BENCH [def] ly=K1 (constant from def) 0.808 305
+BENCH [def] ly=lx*1.000001+0.5 4.502 1702
+BENCH [def] ly=sin(lx) 3.086 1167
+BENCH [def] la=arr[li&1023] (global list) 0.990 374
+BENCHEND
+>>> 
