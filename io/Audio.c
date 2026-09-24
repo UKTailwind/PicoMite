@@ -2188,6 +2188,7 @@ void MIPS16 cmd_play(void)
 		if (left && lset == 0)
 		{
 			p = (char *)getCstring(argv[4]);
+			local_sound_mode_left = NULL; /* else it still holds the channel's last waveform and "Invalid type" can never fire */
 			if (strcasecmp(p, "O") == 0)
 				local_sound_mode_left = (uint16_t *)nulltable;
 			if (strcasecmp(p, "Q") == 0)
@@ -2215,6 +2216,7 @@ void MIPS16 cmd_play(void)
 		if (right && rset == 0)
 		{
 			p = (char *)getCstring(argv[4]);
+			local_sound_mode_right = NULL; /* as for the left channel */
 			if (strcasecmp(p, "O") == 0)
 				local_sound_mode_right = (uint16_t *)nulltable;
 			if (strcasecmp(p, "Q") == 0)
