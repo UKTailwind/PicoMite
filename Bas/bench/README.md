@@ -42,6 +42,19 @@ only the timed region. Use 8192 entries on an RP2350, 4096 on an RP2040.
 it from the commit if it is gone. The reported program line is one less
 than the file line.
 
+## Goldens
+
+`goldens.py PORT OUTDIR` runs the mmb2c test corpus and keeps what the
+firmware prints; `goldens/` holds the reference for the RP2040 VGA and
+PICORP2350, taken on the builds carrying the five Phase 0 bug fixes
+(main c994e92..b4ccc22). A later build must reproduce them, except where
+a change is meant to alter a program's output. `--recompare DIR`
+re-scores saved runs without a board.
+
+Some corpus programs depend on files others leave on A:/g - `rtest`
+reads `w1.bmp`, which `wtest` (later in the order) writes - so the first
+run on a clean drive and later runs differ there. Compare like with like.
+
 ## Micro suite
 
 `bench_micro.bas` times one statement per loop against an empty loop and

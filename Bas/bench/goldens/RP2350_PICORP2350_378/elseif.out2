@@ -6,5 +6,5 @@ chain = 1111
 line one
 line two
 line three
-[49] If n = 1 Then
+[51] Else If n = 2 Then Print "same line body"
 Error : Unexpected text

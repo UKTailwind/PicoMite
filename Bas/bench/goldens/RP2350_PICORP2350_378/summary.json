@@ -23,7 +23,7 @@
  {
   "name": "bench",
   "class": "TIMEOUT",
-  "deterministic": true,
+  "deterministic": false,
   "secs": 61.4,
   "note": ">"
  },
@@ -130,7 +130,7 @@
   "class": "ERROR",
   "deterministic": true,
   "secs": 0.5,
-  "note": "[49] If n = 1 Then | Error : Unexpected text"
+  "note": "[51] Else If n = 2 Then Print \"same line body\" | Error : Unexpected text"
  },
  {
   "name": "fbdemo",
@@ -176,8 +176,10 @@
  },
  {
   "name": "forktest",
-  "class": "LOAD-ERROR",
-  "note": "Error : Invalid font number #10"
+  "class": "ERROR",
+  "deterministic": true,
+  "secs": 0.5,
+  "note": "[17] SYSTEM \"true\" | Error : Unknown command"
  },
  {
   "name": "framebuf",
@@ -197,7 +199,7 @@
   "name": "i2c0",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.6,
+  "secs": 0.5,
   "note": "[64] SetPin 38, 39, I2C2 | Error : Invalid pin"
  },
  {
@@ -328,10 +330,10 @@
  },
  {
   "name": "mathm1",
-  "class": "ERROR",
+  "class": "MATCH",
   "deterministic": true,
-  "secs": 0.5,
-  "note": "[50] Math M_Inverse s(), si() | Error : Not enough memory for 0 bytes"
+  "secs": 0.4,
+  "note": ""
  },
  {
   "name": "mathq",
@@ -372,7 +374,7 @@
   "name": "onerror",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.5,
+  "secs": 0.6,
   "note": "[48] r = 10 \\ n | Error : Divide by zero"
  },
  {
@@ -393,7 +395,7 @@
   "name": "onkey",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 0.8,
+  "secs": 0.7,
   "note": ""
  },
  {
@@ -498,14 +500,14 @@
   "name": "port",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.5,
+  "secs": 0.6,
   "note": "[4] SetPin i, DOut | Error : Invalid pin"
  },
  {
   "name": "posflush",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 0.4,
+  "secs": 0.5,
   "note": ""
  },
  {
@@ -575,7 +577,7 @@
   "name": "solar_eclipse",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 14.7,
+  "secs": 14.6,
   "note": ""
  },
  {
@@ -596,7 +598,7 @@
   "name": "sprite",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.5,
+  "secs": 0.6,
   "note": "[4] Mode 2 | Error : Invalid in a program"
  },
  {
@@ -617,7 +619,7 @@
   "name": "structtest",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 1.0,
+  "secs": 1.1,
   "note": "[1848] Box boxes(i%).x, boxes(i%).y, boxes(i%).w, boxes(i%).h | Error : Display not configured"
  },
  {
@@ -638,14 +640,14 @@
   "name": "t3",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.5,
+  "secs": 0.6,
   "note": "[27] If a = 4 Then b = 21 : Print \"7 then\" Else b = 22 : Print \"7 else\" | Error : Expected closing bracket"
  },
  {
   "name": "t4",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.5,
+  "secs": 0.6,
   "note": "[13] If a = 4 Then Show 11, 12 : Show 13, 14 Else Show 15, 16 | Error : Argument list"
  },
  {
@@ -673,14 +675,14 @@
   "name": "t8",
   "class": "DIFF",
   "deterministic": true,
-  "secs": 0.4,
+  "secs": 0.5,
   "note": ""
  },
  {
   "name": "text",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.6,
+  "secs": 0.5,
   "note": "[18] Text 0, 0, \"plain\" | Error : Display not configured"
  },
  {
@@ -694,7 +696,7 @@
   "name": "tilemap",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.6,
+  "secs": 0.5,
   "note": "[7] Mode 2 | Error : Invalid in a program"
  },
  {
@@ -729,7 +731,7 @@
   "name": "waitint",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 1.1,
+  "secs": 1.2,
   "note": ""
  },
  {

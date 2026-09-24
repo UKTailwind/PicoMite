@@ -23,8 +23,8 @@
  {
   "name": "bench",
   "class": "TIMEOUT",
-  "deterministic": false,
-  "secs": 61.5,
+  "deterministic": true,
+  "secs": 61.4,
   "note": ">"
  },
  {
@@ -130,13 +130,13 @@
   "class": "ERROR",
   "deterministic": true,
   "secs": 0.4,
-  "note": "[49] If n = 1 Then | Error : Unexpected text"
+  "note": "[51] Else If n = 2 Then Print \"same line body\" | Error : Unexpected text"
  },
  {
   "name": "fbdemo",
   "class": "NO-EXPECTED",
   "deterministic": false,
-  "secs": 5.6,
+  "secs": 5.5,
   "note": ""
  },
  {
@@ -150,7 +150,7 @@
   "name": "flash",
   "class": "DIFF",
   "deterministic": true,
-  "secs": 6.6,
+  "secs": 6.7,
   "note": ""
  },
  {
@@ -220,7 +220,7 @@
   "name": "imgloop",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 1.6,
+  "secs": 1.8,
   "note": "[21] SYSTEM \"sum\", \"s1.bmp\", \"s2.bmp\" | Error : Unknown command"
  },
  {
@@ -248,7 +248,7 @@
   "name": "imgm1d",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 2.3,
+  "secs": 2.4,
   "note": "[26] SYSTEM \"sum\", \"r1.bmp\", \"r2.bmp\", \"r3.bmp\" | Error : Unknown command"
  },
  {
@@ -304,7 +304,7 @@
   "name": "matha",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 0.7,
+  "secs": 0.8,
   "note": ""
  },
  {
@@ -318,7 +318,7 @@
   "name": "mathcrc",
   "class": "ERROR",
   "deterministic": true,
-  "secs": 0.4,
+  "secs": 0.5,
   "note": "[28] Print HEX$(Math(CRC16 s$, 0, &H1021)) | Error : 0 is invalid (valid is 1 to 65535)"
  },
  {
@@ -330,10 +330,10 @@
  },
  {
   "name": "mathm1",
-  "class": "ERROR",
+  "class": "MATCH",
   "deterministic": true,
   "secs": 0.4,
-  "note": "[50] Math M_Inverse s(), si() | Error : Not enough memory for 0 bytes"
+  "note": ""
  },
  {
   "name": "mathq",
@@ -395,14 +395,14 @@
   "name": "onkey",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 1.1,
+  "secs": 1.0,
   "note": ""
  },
  {
   "name": "optangle",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 0.5,
+  "secs": 0.6,
   "note": ""
  },
  {
@@ -423,7 +423,7 @@
   "name": "order",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 0.6,
+  "secs": 0.5,
   "note": ""
  },
  {
@@ -458,7 +458,7 @@
   "name": "pixart",
   "class": "NO-EXPECTED",
   "deterministic": false,
-  "secs": 17.1,
+  "secs": 16.7,
   "note": ""
  },
  {
@@ -507,7 +507,7 @@
   "name": "posflush",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 0.6,
+  "secs": 0.4,
   "note": ""
  },
  {
@@ -542,7 +542,7 @@
   "name": "ripple",
   "class": "NO-EXPECTED",
   "deterministic": false,
-  "secs": 5.1,
+  "secs": 5.0,
   "note": ""
  },
  {
@@ -554,10 +554,10 @@
  },
  {
   "name": "rtest",
-  "class": "ERROR",
+  "class": "NO-EXPECTED",
   "deterministic": true,
   "secs": 0.4,
-  "note": "[7] Load IMAGE \"w1.bmp\", 160, 120 | Error : Could not find the file"
+  "note": ""
  },
  {
   "name": "saveimg",
@@ -570,21 +570,21 @@
   "name": "settick",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 13.6,
+  "secs": 13.7,
   "note": ""
  },
  {
   "name": "solar_eclipse",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 35.9,
+  "secs": 35.2,
   "note": ""
  },
  {
   "name": "sombrero",
   "class": "NO-EXPECTED",
   "deterministic": false,
-  "secs": 23.9,
+  "secs": 21.9,
   "note": ""
  },
  {
@@ -661,7 +661,7 @@
   "name": "t6",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 0.8,
+  "secs": 0.9,
   "note": ""
  },
  {
@@ -731,7 +731,7 @@
   "name": "waitint",
   "class": "MATCH",
   "deterministic": true,
-  "secs": 1.1,
+  "secs": 1.2,
   "note": ""
  },
  {
@@ -780,7 +780,7 @@
   "name": "wtest",
   "class": "NO-EXPECTED",
   "deterministic": true,
-  "secs": 1.0,
+  "secs": 1.1,
   "note": ""
  }
 ]

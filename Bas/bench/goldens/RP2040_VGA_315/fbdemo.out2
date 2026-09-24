@@ -1,14 +1,14 @@
 MODE 2:  320 x  240
 
 20 full-screen fills:
-  screen, SRAM   164.771 ms total
-  buffer, PSRAM  164.694 ms total
+  screen, SRAM   157.054 ms total
+  buffer, PSRAM  156.919 ms total
 
 100 copies of the buffer to the screen:
-   11.498 ms total
+   11.565 ms total
 
 200 frames on the screen, then 200 through the buffer
-  direct    2262.906 ms
-  buffered  2668.751 ms
+  direct    2184.452 ms
+  buffered  2669.288 ms
 
 done

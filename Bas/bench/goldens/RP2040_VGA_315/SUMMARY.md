@@ -1,13 +1,13 @@
 # Goldens on PicoMiteVGA  6.040051 315000000
 
-DIFF 12 ERROR 52 MATCH 38 NO-EXPECTED 9 TIMEOUT 1
+DIFF 12 ERROR 50 MATCH 39 NO-EXPECTED 10 TIMEOUT 1
 
 | program | class | deterministic | secs | note |
 |---|---|---|---|---|
 | arrsize | MATCH | True | 0.4 |  |
 | arrslice | ERROR | True | 0.8 | [108] Print "  MAP("; Str$(codes(i)); ") = "; HEX$(cout(i), 6); "  MAP() agrees: "; Str$(cout(i) = Map(codes(i))) / Error : Invalid for Mode |
 | arrslice1 | MATCH | True | 0.6 |  |
-| bench | TIMEOUT | False | 61.5 | > |
+| bench | TIMEOUT | True | 61.4 | > |
 | bitbyte | ERROR | True | 0.6 | [38] Print "  flags 2,5      "; Flag(0); Flag(2); Flag(5); "  MM.INFO(FLAGS) = "; MM.Info(Flags) / Error : Invalid syntax |
 | blit | DIFF | True | 0.4 |  |
 | box | MATCH | True | 0.4 |  |
@@ -22,10 +22,10 @@ DIFF 12 ERROR 52 MATCH 38 NO-EXPECTED 9 TIMEOUT 1
 | countpin | ERROR | True | 0.4 | [10] SetPin gp4, FIN / Error : Invalid configuration |
 | dataconst | ERROR | True | 0.4 | [32] Const LATE = 7 / Error : LATE Global variable already declared |
 | dynarr | ERROR | True | 0.4 | [80] Out % = 0 / Error : Missing Program statement |
-| elseif | ERROR | True | 0.4 | [49] If n = 1 Then / Error : Unexpected text |
-| fbdemo | NO-EXPECTED | False | 5.6 |  |
+| elseif | ERROR | True | 0.4 | [51] Else If n = 2 Then Print "same line body" / Error : Unexpected text |
+| fbdemo | NO-EXPECTED | False | 5.5 |  |
 | fbwrite | ERROR | True | 0.4 | [11] FRAMEBUFFER Write F / Error : Frame buffer not created |
-| flash | DIFF | True | 6.6 |  |
+| flash | DIFF | True | 6.7 |  |
 | fnbyref | MATCH | True | 0.4 |  |
 | fnretcat | MATCH | True | 0.4 |  |
 | fontdef | MATCH | True | 0.4 |  |
@@ -35,11 +35,11 @@ DIFF 12 ERROR 52 MATCH 38 NO-EXPECTED 9 TIMEOUT 1
 | i2c0 | ERROR | True | 0.4 | [22] I2C CHECK &h76 / Error : Pin not set for I2C |
 | i2c2 | ERROR | True | 0.4 | [17] SetPin 38, 39, I2C2 / Error : Invalid pin |
 | imgfmt | ERROR | True | 0.4 | [9] Load IMAGE "g4.bmp" / Error : Could not find the file |
-| imgloop | ERROR | True | 1.6 | [21] SYSTEM "sum", "s1.bmp", "s2.bmp" / Error : Unknown command |
+| imgloop | ERROR | True | 1.8 | [21] SYSTEM "sum", "s1.bmp", "s2.bmp" / Error : Unknown command |
 | imgm1 | ERROR | True | 5.1 | [13] SYSTEM "sum", "m1.bmp", "m1b.bmp" / Error : Unknown command |
 | imgm1b | ERROR | True | 5.1 | [22] SYSTEM "sum", "n1.bmp", "n1b.bmp" / Error : Unknown command |
 | imgm1c | ERROR | True | 1.6 | [23] SYSTEM "sum", "q1.bmp", "q1b.bmp" / Error : Unknown command |
-| imgm1d | ERROR | True | 2.3 | [26] SYSTEM "sum", "r1.bmp", "r2.bmp", "r3.bmp" / Error : Unknown command |
+| imgm1d | ERROR | True | 2.4 | [26] SYSTEM "sum", "r1.bmp", "r2.bmp", "r3.bmp" / Error : Unknown command |
 | imgtrip | ERROR | True | 1.6 | [17] SYSTEM "sum", "a.bmp", "b.bmp" / Error : Unknown command |
 | init2d | MATCH | True | 0.4 |  |
 | jsonpath | ERROR | True | 0.4 | [6] Print "[" JSON$(j(), "Name") "]" / Error : Dimensions |
@@ -47,11 +47,11 @@ DIFF 12 ERROR 52 MATCH 38 NO-EXPECTED 9 TIMEOUT 1
 | layer | ERROR | True | 0.4 | [36] FRAMEBUFFER MERGE 0 / Error : Invalid syntax |
 | localheap | MATCH | True | 0.5 |  |
 | lscomms | ERROR | True | 0.4 | [25] SetPin 2, 3, 4, SPI / Error : Invalid pin |
-| matha | MATCH | True | 0.7 |  |
+| matha | MATCH | True | 0.8 |  |
 | mathb64 | ERROR | True | 0.4 | [6] n% = Math(BASE64 ENCODE "f", out$) / Error : Variable name |
-| mathcrc | ERROR | True | 0.4 | [28] Print HEX$(Math(CRC16 s$, 0, &H1021)) / Error : 0 is invalid (valid is 1 to 65535) |
+| mathcrc | ERROR | True | 0.5 | [28] Print HEX$(Math(CRC16 s$, 0, &H1021)) / Error : 0 is invalid (valid is 1 to 65535) |
 | mathm | DIFF | True | 0.5 |  |
-| mathm1 | ERROR | True | 0.4 | [50] Math M_Inverse s(), si() / Error : Not enough memory for 0 bytes |
+| mathm1 | MATCH | True | 0.4 |  |
 | mathq | MATCH | True | 0.6 |  |
 | mathr | DIFF | True | 0.4 |  |
 | mathw | MATCH | True | 0.6 |  |
@@ -60,34 +60,34 @@ DIFF 12 ERROR 52 MATCH 38 NO-EXPECTED 9 TIMEOUT 1
 | onerror | ERROR | True | 0.5 | [48] r = 10 \ n / Error : Divide by zero |
 | onerrwin | MATCH | True | 0.4 |  |
 | onewire | ERROR | True | 0.4 | [17] OneWire RESET 26 / Error : Pin 26/GP20 is reserved on startup |
-| onkey | MATCH | True | 1.1 |  |
-| optangle | MATCH | True | 0.5 |  |
+| onkey | MATCH | True | 1.0 |  |
+| optangle | MATCH | True | 0.6 |  |
 | optbase1 | MATCH | True | 0.6 |  |
 | optescape | MATCH | True | 0.6 |  |
-| order | MATCH | True | 0.6 |  |
+| order | MATCH | True | 0.5 |  |
 | palette | NO-EXPECTED | True | 0.4 |  |
 | pathmap | DIFF | True | 0.4 |  |
 | pinint | ERROR | True | 0.4 | [27] SetPin 35, INTL, OnEdge, PULLUP / Error : Invalid pin |
 | pioout | MATCH | True | 0.4 |  |
-| pixart | NO-EXPECTED | False | 17.1 |  |
+| pixart | NO-EXPECTED | False | 16.7 |  |
 | pixels | MATCH | True | 0.4 |  |
 | play | DIFF | True | 0.4 |  |
 | playfile | ERROR | True | 0.4 | [13] Play VOLUME 70 / Error : Audio not enabled |
 | playmp3 | ERROR | True | 0.4 | [17] Play VOLUME 80 / Error : Audio not enabled |
 | polypoly | NO-EXPECTED | False | 0.4 |  |
 | port | ERROR | True | 0.4 | [4] SetPin i, DOut / Error : Invalid pin |
-| posflush | MATCH | True | 0.6 |  |
+| posflush | MATCH | True | 0.4 |  |
 | printat | MATCH | True | 0.4 |  |
 | pulse | ERROR | True | 0.4 | [13] SetPin 0, DOut / Error : Invalid pin |
 | pulsin | DIFF | True | 0.4 |  |
 | pwm | ERROR | True | 0.4 | [9] SetPin 3, PWM / Error : Invalid pin |
-| ripple | NO-EXPECTED | False | 5.1 |  |
+| ripple | NO-EXPECTED | False | 5.0 |  |
 | rtcreg | ERROR | True | 0.4 | [10] RTC GETREG 14, c / Error : SYSTEM I2C not configured |
-| rtest | ERROR | True | 0.4 | [7] Load IMAGE "w1.bmp", 160, 120 / Error : Could not find the file |
+| rtest | NO-EXPECTED | True | 0.4 |  |
 | saveimg | ERROR | True | 1.1 | [11] SYSTEM "ls", "-l", "shot2.bmp", "crop2.bmp" / Error : Unknown command |
-| settick | MATCH | True | 13.6 |  |
-| solar_eclipse | MATCH | True | 35.9 |  |
-| sombrero | NO-EXPECTED | False | 23.9 |  |
+| settick | MATCH | True | 13.7 |  |
+| solar_eclipse | MATCH | True | 35.2 |  |
+| sombrero | NO-EXPECTED | False | 21.9 |  |
 | spi | ERROR | True | 0.4 | [19] SetPin 2, 3, 4, SPI / Error : Invalid pin |
 | sprite | ERROR | True | 0.4 | [99] Sprite LOADARRAY #6, 8, 8, two%() / Error : Argument 4 must be a 1D numerical array |
 | strargs | DIFF | True | 0.4 |  |
@@ -98,7 +98,7 @@ DIFF 12 ERROR 52 MATCH 38 NO-EXPECTED 9 TIMEOUT 1
 | t3 | ERROR | True | 0.4 | [27] If a = 4 Then b = 21 : Print "7 then" Else b = 22 : Print "7 else" / Error : Expected closing bracket |
 | t4 | ERROR | True | 0.4 | [13] If a = 4 Then Show 11, 12 : Show 13, 14 Else Show 15, 16 / Error : Argument list |
 | t5 | ERROR | True | 0.4 | [25] Print Bit(&B1010, 1); Bit(&B1010, 2) / Error : Variable name |
-| t6 | MATCH | True | 0.8 |  |
+| t6 | MATCH | True | 0.9 |  |
 | t7 | ERROR | True | 0.5 | [162] Print "after erase: stat(0) ="; stat(0); " s$ = ["; s$; "]" / Error : STAT is not declared |
 | t8 | DIFF | True | 0.5 |  |
 | text | ERROR | True | 0.4 | [69] Map Greyscale / Error : GREYSCALE is not declared |
@@ -108,11 +108,11 @@ DIFF 12 ERROR 52 MATCH 38 NO-EXPECTED 9 TIMEOUT 1
 | type | MATCH | True | 0.4 |  |
 | uptime | MATCH | True | 0.4 |  |
 | varaddr | DIFF | True | 0.4 |  |
-| waitint | MATCH | True | 1.1 |  |
+| waitint | MATCH | True | 1.2 |  |
 | webnpc | MATCH | True | 0.4 |  |
 | webpage | MATCH | True | 0.4 |  |
 | webservz | ERROR | True | 0.4 | [4] WEB TCP SERVER PORT 48123 / Error : Unknown command |
 | webtcpe | ERROR | True | 0.4 | [5] WEB OPEN TCP CLIENT "127.0.0.1", 9, 100 / Error : Unknown command |
 | webtlse | ERROR | True | 0.4 | [3] WEB TLS CA "no_such_bundle.pem" / Error : Unknown command |
 | webudp | ERROR | True | 0.4 | [9] WEB UDP SERVER PORT 47999 / Error : Unknown command |
-| wtest | NO-EXPECTED | True | 1.0 |  |
+| wtest | NO-EXPECTED | True | 1.1 |  |

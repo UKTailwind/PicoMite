@@ -134,7 +134,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
     <li><strong>The per-statement checks cost 12.7% on HDMIWEB</strong>, almost all of it <code>ProcessWeb</code>, even with WiFi off. The same checks cost 3.8% on HDMIUSB and 2.4% on PICORP2350.</li>
     <li><strong>Against MicroPython, statement by statement</strong>, MMBasic is 6-7x slower on arrays, 9-12x on IF, 6-9x on calls, 12x on literals, 20x on long names and 50x on a local read inside a SUB. It is 3.5x faster on strings and holds its own on float maths.</li>
     <li><strong>The placement floor is about 1%</strong>, not the historical 4%. Gains must beat 2%.</li>
-    <li><strong>The corpus goldens are in place on both chips</strong> as the correctness reference. They turned up five firmware bugs, reported in section 8 and not fixed here.</li>
+    <li><strong>The corpus goldens are in place on both chips</strong> as the correctness reference. They turned up five firmware bugs (section 8), since fixed on main.</li>
   </ul>
 </section>
 
@@ -265,7 +265,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
   <h2>The correctness reference, and what it found</h2>
   <p>The mmb2c corpus (112 programs) runs on both chips with <code>Bas/bench/goldens.py</code>. What each build prints is kept in <code>Bas/bench/goldens/</code> as the reference later builds must reproduce. Against the translator's own expected output, the RP2040 VGA got 38 MATCH, 12 DIFF and 52 ERROR. PICORP2350, which has no display, got 35 MATCH, 9 DIFF and 66 ERROR. A classify-and-verify pass sorted every RP2040 mismatch: missing hardware 25, deliberate MMBasic behaviour 17, translator-only features 11, harness 5, formatting 3.</p>
   <div class="warnbox">
-    <div class="eyebrow">Firmware bugs found (not fixed; each is Peter's call)</div>
+    <div class="eyebrow">Firmware bugs found - all fixed on main (c994e92, 6e42565, 37e7af5, 2c0e6f3, b4ccc22)</div>
     <ol>
       <li><strong>MATH M_INVERSE of a 1x1 array</strong> fails with "Not enough memory for 0 bytes": <code>cofactor()</code> calls <code>determinant(0)</code>, which calls <code>GetMemory(0)</code>. Repro: <code>Option Base 0 : Dim Float s(0,0), si(0,0) : s(0,0)=4 : Math M_Inverse s(), si()</code>.</li>
       <li><strong>An error in an ELSEIF condition is reported on the previous arm's line.</strong> The IF jump table stores each arm's own line where the next arm's is needed (<code>Commands.c</code> ~3817 against the comment at <code>MMBasic.h:752</code>).</li>
@@ -273,6 +273,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
       <li><strong>PLAY SOUND accepts an invalid type string</strong> once the channel has played, because the local mode pointers start from the current waveform (<code>io/Audio.c:2065</code>) and the "Invalid type" check tests for NULL (<code>:2210</code>, <code>:2238</code>).</li>
       <li><strong>A program that selects its own DefineFont and stops on an error breaks the next LOAD.</strong> "Invalid font number #10" appears and only a second LOAD works. Reproduced on PICORP2350.</li>
     </ol>
+    <p>Fixing bug 1 also removed a heap leak in every determinant: on the RP2040, 300 inverses of a 3x3 matrix had exhausted the heap. Each fix was shown failing on the old firmware and passing on the new, and a full corpus run on both boards changed only the programs the fixes were meant to change.</p>
     <p>Related: with no display, <code>FRAMEBUFFER CREATE</code> says "Not enough memory for 0 bytes" instead of "Display not configured", the same <code>GetMemory(0)</code> pattern as bug 1.</p>
   </div>
 </section>

@@ -4,5 +4,6 @@ outer  4 8 12
        5 10 15
        6 12 18
 det1   4
-[50] Math M_Inverse s(), si()
-Error : Not enough memory for 0 bytes
+inv1   0.25
+trans  1 2 3
+vmult  14

@@ -3,8 +3,8 @@
 @@ -1,5 +1,5 @@
 -control -1
 -status  -1
-+control  28
-+status   8
++control  5
++status   1
  armed
  cleared
  done
