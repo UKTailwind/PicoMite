@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Interpreter Phase 0 Results</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Phase 0 results &middot; PicoMite MMBasic interpreter &middot; 24 September 2026</div>
+    <h1>Interpreter Phase 0 Results</h1>
+    <p>What the measuring kit found: where <code>solar_eclipse.bas</code> spends its time on each build and chip, what each kind of statement costs against MicroPython on the same hardware, which of the plan's hypotheses hold, and the order the evidence gives Route A.</p>
+    <p class="ref">Branch <code>development</code>. Commits: plan <code>0183e77</code>; PC sampler and bench kit <code>3306751</code>; goldens runner and line split <code>362394a</code>; corpus goldens <code>a166789</code>. Every figure below was measured on a board today unless marked otherwise.</p>
+  </div>
+</header>
+<div class="wrap">
+<nav class="toc" aria-label="Sections">
+  <a href="#summary">1 Summary</a>
+  <a href="#anchor">2 The anchor</a>
+  <a href="#split">3 Where the time goes</a>
+  <a href="#micro">4 Statement costs</a>
+  <a href="#noise">5 Floor and ceiling</a>
+  <a href="#hyp">6 Hypotheses</a>
+  <a href="#g2">7 Route A order</a>
+  <a href="#goldens">8 Goldens and bugs</a>
+  <a href="#next">9 Still to measure</a>
+</nav>
+
+<section id="summary">
+  <div class="eyebrow">1 &middot; Summary</div>
+  <h2>Summary</h2>
+  <ul>
+    <li><strong>The anchor is 81-87% interpreter overhead on every build and chip</strong>, measured against its own CSUB twin on the same build. MicroPython, with the same double-precision arithmetic on the same PC3 hardware, removes 38.8% of that overhead. That is the bar for Route A.</li>
+    <li><strong>Operand work is two thirds of the time.</strong> Sampled on PICORP2350: evaluator 27.6%, name lookup 26.1% (findvar alone 25.1%), text walking 11.7%, ExecuteProgram 12.4%. The arithmetic itself is about 5%.</li>
+    <li><strong>About 17% of the anchor's time goes on deciding which variable a name means</strong>: hashing the name 6.3%, probing the local table 6.5%, checks 2.75%.</li>
+    <li><strong>An address-keyed memo can't reach it.</strong> A throwaway findvar memo keyed on program address gained 1.15%. The hot lookups are array references and the names inside copied index and argument text. Only symbol ids that travel with the text (S5/S6) can take this 17%.</li>
+    <li><strong>The per-statement checks cost 12.7% on HDMIWEB</strong>, almost all of it <code>ProcessWeb</code>, even with WiFi off. The same checks cost 3.8% on HDMIUSB and 2.4% on PICORP2350.</li>
+    <li><strong>Against MicroPython, statement by statement</strong>, MMBasic is 6-7x slower on arrays, 9-12x on IF, 6-9x on calls, 12x on literals, 20x on long names and 50x on a local read inside a SUB. It is 3.5x faster on strings and holds its own on float maths.</li>
+    <li><strong>The placement floor is about 1%</strong>, not the historical 4%. Gains must beat 2%.</li>
+    <li><strong>The corpus goldens are in place on both chips</strong> as the correctness reference. They turned up five firmware bugs, reported in section 8 and not fixed here.</li>
+  </ul>
+</section>
+
+<section id="anchor">
+  <div class="eyebrow">2 &middot; The anchor</div>
+  <h2>solar_eclipse.bas, reference inputs, golden output</h2>
+  <p>Three runs of each, spread under 0.1% (MicroPython about 3%). Every run printed the golden JD 2451904.14541560 / .19690359 / .25420764.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Build</th><th class="num">Interpreted</th><th class="num">NOCHECK on</th><th class="num">CSUB</th><th class="num">Overhead</th></tr>
+    <tr><td>PC3 HDMIWEB, 378 MHz, WiFi live</td><td class="num">14.672 s</td><td class="num">12.804 s</td><td class="num">2.515 s</td><td class="num">0.83</td></tr>
+    <tr><td>PC3 HDMIWEB, 378 MHz, WiFi off</td><td class="num">14.293 s</td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
+    <tr><td>PC3 HDMIUSB, 378 MHz</td><td class="num">13.227 s</td><td class="num">12.731 s</td><td class="num">2.514 s</td><td class="num">0.81</td></tr>
+    <tr class="rec"><td>PC3 PICORP2350, 378 MHz (no display)</td><td class="num">12.122 s</td><td class="num">11.826 s</td><td class="num">1.534 s</td><td class="num">0.87</td></tr>
+    <tr><td>RP2040 PicoMiteVGA, 315 MHz</td><td class="num">32.04 s</td><td class="num"></td><td class="num">5.726 s</td><td class="num">0.82</td></tr>
+    <tr><td>MicroPython, PC2 (same hardware, no WiFi), 378 MHz</td><td class="num">9.07 s</td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
+  </table></div>
+  <ul>
+    <li><strong>MicroPython's share</strong>, like for like against HDMIUSB: (13.227 &minus; 9.067) / (13.227 &minus; 2.514) = <strong>38.8%</strong> of the overhead removed.</li>
+    <li><strong>The WEB penalty is ProcessWeb.</strong> HDMIWEB with WiFi off is 1.07 s slower than HDMIUSB, but only 0.07 s slower once NOCHECK is on. Live WiFi adds another 0.38 s. <code>ProcessWeb</code> in <code>CheckAbort</code> costs about 1.44 s, about 10% of the run.</li>
+    <li><strong>HDMI scan-out costs the interpreter 9%</strong> (13.227 against 12.122 s) <strong>but the CSUB floor 64%</strong> (2.514 against 1.534 s), so overhead is always taken against the CSUB on the same build.</li>
+  </ul>
+</section>
+
+<section id="split">
+  <div class="eyebrow">3 &middot; Where the time goes</div>
+  <h2>The sampled split</h2>
+  <p><code>OPTION PROFILING ON, SAMPLE</code> samples the interrupted PC every 97 &micro;s. It was started after <code>Timer =0</code>, so only the timed region is counted. PICORP2350 took 133,843 samples with none dropped. The RP2040 took 359,538 samples, 93% of them in the table.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Bucket</th><th class="num">PICORP2350</th><th class="num">RP2040 VGA</th><th>Main functions</th></tr>
+    <tr><td>Evaluator</td><td class="num">27.6%</td><td class="num">19.5%</td><td>getvalue, doexpr, evaluate, op_*</td></tr>
+    <tr class="rec"><td>Name lookup</td><td class="num">26.1%</td><td class="num">25.1% + ~3% divide</td><td>findvar (25.1% / 16.7%), FindSubFun; on the M0+ the hash <code>%</code> is a divider call</td></tr>
+    <tr><td>Dispatch (ExecuteProgram, with the pre-scan)</td><td class="num">12.4%</td><td class="num">7.7%</td><td></td></tr>
+    <tr><td>Text walking</td><td class="num">11.7%</td><td class="num">7.3%</td><td>skipvar, getclosebracket, makeargs</td></tr>
+    <tr><td>Housekeeping</td><td class="num">~5%</td><td class="num">1.3%</td><td>routinechecks, MMInkey, CheckAbort, time_us_64</td></tr>
+    <tr><td>Maths</td><td class="num">~5%</td><td class="num">13% (10% boot-ROM doubles)</td><td></td></tr>
+    <tr><td>Calls, temp memory, libc</td><td class="num">~7%</td><td class="num">~4%</td><td>DefinedSubFun, LOCAL, memset of temp pages</td></tr>
+    <tr><td>Console output</td><td class="num">0.4%</td><td class="num">3.5%</td><td>the VGA text console printing results</td></tr>
+  </table></div>
+  <p class="ref">About 3.4% of the PICORP2350 samples fall on <code>End</code>, where the PERF report itself runs before the sampler stops. They are left out above.</p>
+  <h3>Inside findvar (PICORP2350)</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Phase</th><th class="num">Share of all time</th></tr>
+    <tr><td>Probing the local table (78% of the anchor's lookups are locals)</td><td class="num">6.5%</td></tr>
+    <tr><td>Upper-casing and FNV-hashing the name</td><td class="num">6.3%</td></tr>
+    <tr><td>Type and dimension checks</td><td class="num">2.75%</td></tr>
+    <tr><td>Entry, global resets, prologue</td><td class="num">2.5%</td></tr>
+    <tr><td>Local/global decision, global probe, suffix</td><td class="num">2.8%</td></tr>
+    <tr><td>Array index copy (the index <em>evaluation</em> shows under getvalue)</td><td class="num">1.7%</td></tr>
+    <tr><td>Linearising, returns, struct check</td><td class="num">~1.6%</td></tr>
+  </table></div>
+  <h3>The hot lines</h3>
+  <ul>
+    <li>File line 2845, 6.8%: <code>findleap</code>'s linear search, <code>If (jday &gt;= jdleap(i) And jday &lt; jdleap(i + 1)) Then</code>, 27 passes over two arrays on each of 1,455 calls.</li>
+    <li>File lines 1669-1673, about 13%: <code>nut2000_lp</code>'s series, each statement holding about seven 2-D reads <code>xnut(k, i%)</code> and a SIN or COS.</li>
+    <li>File lines 829-835, about 9.6%: <code>sun()</code>'s 50-term series over <code>xsa</code>, <code>xsb</code>, <code>xsl</code> and <code>xsr</code>.</li>
+  </ul>
+  <p>The anchor's hot core is series evaluation dense with array references. That is where MMBasic trails MicroPython by 6-7x.</p>
+</section>
+
+<section id="micro">
+  <div class="eyebrow">4 &middot; Statement costs</div>
+  <h2>One statement at a time, against MicroPython</h2>
+  <p>Cycles per statement, with the empty loop subtracted. MMBasic HDMIUSB and MicroPython are on the same PC3 hardware at 378 MHz, with HDMI running and no WiFi (<code>Bas/bench/results/micro_pairs_hdmiusb_vs_mpy.md</code>).</p>
+  <div class="tablewrap"><table>
+    <tr><th>Statement</th><th class="num">MMBasic</th><th class="num">MicroPython</th><th class="num">Ratio</th></tr>
+    <tr><td><code>a=b</code></td><td class="num">1,348</td><td class="num">228</td><td class="num">5.9</td></tr>
+    <tr><td>the same with 30-character names</td><td class="num">4,671</td><td class="num">225</td><td class="num">20.8</td></tr>
+    <tr><td>a literal <code>1.23456789</code></td><td class="num">1,670</td><td class="num">135</td><td class="num">12.4</td></tr>
+    <tr><td>1-D array read</td><td class="num">4,014</td><td class="num">586</td><td class="num">6.8</td></tr>
+    <tr><td>2-D array read</td><td class="num">4,381</td><td class="num">703</td><td class="num">6.2</td></tr>
+    <tr><td>multi-line IF/ELSE</td><td class="num">3,624</td><td class="num">405</td><td class="num">8.9</td></tr>
+    <tr><td>single-line IF...THEN...ELSE</td><td class="num">4,695</td><td class="num">405</td><td class="num">11.6</td></tr>
+    <tr><td>FUNCTION with 2 arguments</td><td class="num">9,748</td><td class="num">1,517</td><td class="num">6.4</td></tr>
+    <tr><td>SUB, 6 parameters + 4 LOCALs</td><td class="num">17,866</td><td class="num">1,981</td><td class="num">9.0</td></tr>
+    <tr><td>local read inside a SUB / def</td><td class="num">1,506</td><td class="num">30</td><td class="num">50.2</td></tr>
+    <tr><td><code>x*1.000001+0.5</code> (float)</td><td class="num">3,127</td><td class="num">2,255</td><td class="num">1.4</td></tr>
+    <tr><td><code>SIN(x)</code></td><td class="num">2,461</td><td class="num">1,568</td><td class="num">1.6</td></tr>
+    <tr><td><code>STR$</code> / <code>LEFT$</code> / concatenation</td><td class="num">3,599 / 3,391 / 2,695</td><td class="num">12,907 / 12,822 / 10,609</td><td class="num">0.3</td></tr>
+  </table></div>
+  <p>On the RP2040 at 315 MHz everything costs 1.5-2.5x more cycles. A GOSUB to a label near the end of the program costs 12,619 cycles against 1,089 on the RP2350, because the RP2040 searches for labels linearly. Each CASE skipped in a SELECT costs 1,240 cycles against 350.</p>
+</section>
+
+<section id="noise">
+  <div class="eyebrow">5 &middot; Floor and ceiling</div>
+  <h2>Placement floor and the address-keyed ceiling</h2>
+  <ul>
+    <li><strong>Placement floor.</strong> Adding the sampler (+1.3 KB of flash and a little RAM code, never run) moved the anchor +0.96%. A 2 KB flash pad moved it &minus;0.08%. P is about 1%.</li>
+    <li><strong>findvar memo ceiling</strong> (0g, throwaway, never committed; the patch is kept in the session files). It memoised scalar lookups keyed on the name's program address, invalidated by a serial on every variable creation, ClearVars and ERASE. It gained <strong>1.15%</strong>, golden output intact, and findvar still took 24.4% of the samples. So a binding cache keyed on addresses is the wrong mechanism, the trace cache's failure mode measured directly. The resolution work itself (section 3) is about 17% and real.</li>
+  </ul>
+</section>
+
+<section id="hyp">
+  <div class="eyebrow">6 &middot; Hypotheses</div>
+  <h2>H1-H10, marked by the evidence</h2>
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>Hypothesis</th><th>Verdict</th><th>Evidence</th></tr>
+    <tr><td>H1</td><td>Operand work is at least half the overhead</td><td><strong>Confirmed</strong></td><td>Evaluator + lookup + text walking about 65% on PICORP2350, about 52% on the RP2040 (where boot-ROM doubles take 10%)</td></tr>
+    <tr><td>H2</td><td>Name resolution is 20-40% of statement time</td><td><strong>Confirmed</strong></td><td>findvar 25%; resolution about 17%; 57 cycles per name character on the RP2350, 93 on the RP2040. The address-keyed ceiling of 1.15% only rules out that mechanism.</td></tr>
+    <tr><td>H3</td><td>Call machinery dominates SUB-heavy code</td><td>Open</td><td>About 4-5% on the anchor. Calls are 6-9x MicroPython in the micro suite. It needs a game profile.</td></tr>
+    <tr><td>H4</td><td>Argument marshalling is the overhead in firmware-heavy code</td><td>Partly</td><td>Text walking 11.7% plus temp pages and memset about 4% on the anchor. The graphics pairs are not measured yet.</td></tr>
+    <tr><td>H5</td><td>The per-statement tail is significant</td><td><strong>Confirmed</strong></td><td>12.7% on HDMIWEB (ProcessWeb), 3.8% HDMIUSB, 2.4% PICORP2350</td></tr>
+    <tr><td>H6</td><td>Flash fetch</td><td>Dropped</td><td>Confounded by the QMI cache (Peter)</td></tr>
+    <tr><td>H7</td><td>Pre-scan over comments and spaces</td><td>Confirmed per byte</td><td>+9 cycles a byte, and a 40-character comment adds 20% to a short statement. Trailing spaces are stripped when a program is saved, so they cost nothing. The anchor share sits inside ExecuteProgram's 12.4%.</td></tr>
+    <tr><td>H8</td><td>Block-entry and jump scans matter</td><td>RP2040 labels only</td><td>GetNextCommand 0.5% on the anchor. The RP2040 label search is 11.6x the RP2350's.</td></tr>
+    <tr><td>H9</td><td>Temp-memory churn</td><td>Minor on the anchor</td><td>GetMemory, FreeMemory and memset about 4%. The heap-occupancy test has not been run.</td></tr>
+    <tr><td>H10</td><td>MicroPython's lead comes from scalars, arrays and calls</td><td><strong>Confirmed</strong></td><td>Ratios of 6-50x there, about 1x on maths, and strings in MMBasic's favour</td></tr>
+  </table></div>
+</section>
+
+<section id="g2">
+  <div class="eyebrow">7 &middot; Route A order</div>
+  <h2>What gate G2 recommends</h2>
+  <p>Ordered by measured share of the anchor, cost and risk. Every step is still one build and one commit, run against the goldens on both boards.</p>
+  <ol>
+    <li><strong>S1a: ProcessWeb behind the 100 &micro;s cadence</strong> on WEB builds, about 10% on HDMIWEB. Then <strong>S1b/S1c</strong>, an inline tail test, 2-4% elsewhere. Small and low risk.</li>
+    <li><strong>S5/S6: symbol ids in the stored image, with lazy binding</strong>, aimed at the ~17% resolution work and FindSubFun. It is the largest structural item, and the memo result says it must be symbols.</li>
+    <li><strong>S4: array indices evaluated in place</strong>, aimed at the hot array lines: the index copy, and part of makeargs and getclosebracket.</li>
+    <li><strong>S8: built-in arguments in place</strong> for the audited numeric functions (SIN and COS are everywhere in the anchor), removing getclosebracket, the temp page and memcpy.</li>
+    <li><strong>S2: RP2040 quick wins</strong>, the subfun count, and power-of-two variable tables (decision D4) so the hash <code>%</code> stops being a divider call, about 3% on the RP2040.</li>
+    <li><strong>S3: call descriptors</strong>, once a game profile shows calls are large.</li>
+    <li><strong>S5b label symbols</strong> for the RP2040 GOSUB/GOTO case. S7 partner tables and S9 comments have a small share on the anchor; keep them for workloads that show it.</li>
+  </ol>
+  <p>The evaluator core, 27.6%, is left after Route A. That is the Route B question at G3.</p>
+</section>
+
+<section id="goldens">
+  <div class="eyebrow">8 &middot; Goldens and bugs</div>
+  <h2>The correctness reference, and what it found</h2>
+  <p>The mmb2c corpus (112 programs) runs on both chips with <code>Bas/bench/goldens.py</code>. What each build prints is kept in <code>Bas/bench/goldens/</code> as the reference later builds must reproduce. Against the translator's own expected output, the RP2040 VGA got 38 MATCH, 12 DIFF and 52 ERROR. PICORP2350, which has no display, got 35 MATCH, 9 DIFF and 66 ERROR. A classify-and-verify pass sorted every RP2040 mismatch: missing hardware 25, deliberate MMBasic behaviour 17, translator-only features 11, harness 5, formatting 3.</p>
+  <div class="warnbox">
+    <div class="eyebrow">Firmware bugs found (not fixed; each is Peter's call)</div>
+    <ol>
+      <li><strong>MATH M_INVERSE of a 1x1 array</strong> fails with "Not enough memory for 0 bytes": <code>cofactor()</code> calls <code>determinant(0)</code>, which calls <code>GetMemory(0)</code>. Repro: <code>Option Base 0 : Dim Float s(0,0), si(0,0) : s(0,0)=4 : Math M_Inverse s(), si()</code>.</li>
+      <li><strong>An error in an ELSEIF condition is reported on the previous arm's line.</strong> The IF jump table stores each arm's own line where the next arm's is needed (<code>Commands.c</code> ~3817 against the comment at <code>MMBasic.h:752</code>).</li>
+      <li><strong>On VGA, BLIT FRAMEBUFFER with out-of-range source coordinates does nothing, silently</strong>, where BLIT FLASH and plain BLIT raise "Number out of bounds".</li>
+      <li><strong>PLAY SOUND accepts an invalid type string</strong> once the channel has played, because the local mode pointers start from the current waveform (<code>io/Audio.c:2065</code>) and the "Invalid type" check tests for NULL (<code>:2210</code>, <code>:2238</code>).</li>
+      <li><strong>A program that selects its own DefineFont and stops on an error breaks the next LOAD.</strong> "Invalid font number #10" appears and only a second LOAD works. Reproduced on PICORP2350.</li>
+    </ol>
+    <p>Related: with no display, <code>FRAMEBUFFER CREATE</code> says "Not enough memory for 0 bytes" instead of "Display not configured", the same <code>GetMemory(0)</code> pattern as bug 1.</p>
+  </div>
+</section>
+
+<section id="next">
+  <div class="eyebrow">9 &middot; Still to measure</div>
+  <h2>Before or alongside the first Route A step</h2>
+  <ul>
+    <li>A sampled profile of a SUB-heavy game workload (the Exile physics bench, the Prince of Persia scenario, an Elite frame) to settle H3, and one graphics workload for H4.</li>
+    <li>The graphics micro pairs (PIXEL, LINE, BOX) on HDMIUSB and MicroPython.</li>
+    <li>The heap-occupancy string test (H9).</li>
+  </ul>
+  <p class="ref">Boards now: the PC3 (COM16/COM37) runs PICORP2350 at the 3306751 build, with the sampler; the RP2040 VGA (COM7) runs the same source with the sampler; COM9 runs MicroPython at 378 MHz.</p>
+</section>
+</div>
+</body>
+</html>
