@@ -3463,6 +3463,7 @@ static void iftab_build_region(unsigned char *prog)
 				prev_arm_capacity = iftab_capacity;
 			}
 			iftab[prev].next_arm = p;
+			iftab[prev].line_ptr = line_ptr; /* the line holding next_arm, so an error in this ELSEIF's condition names it */
 			prev_arm[idx] = prev;
 			last_arm[sp - 1] = idx;
 		}
@@ -3476,6 +3477,7 @@ static void iftab_build_region(unsigned char *prog)
 			{
 				int last = last_arm[--sp];
 				iftab[last].next_arm = p;
+				iftab[last].line_ptr = line_ptr;
 				int i = last;
 				while (i >= 0)
 				{
