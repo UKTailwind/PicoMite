@@ -4584,13 +4584,16 @@ void cofactor(MMFLOAT **matrix, MMFLOAT **newmatrix, int size)
 MMFLOAT determinant(MMFLOAT **matrix, int size)
 {
 	MMFLOAT s = 1, det = 0;
-	MMFLOAT **m_minor = alloc2df(size, size);
 	int i, j, m, n, c;
+	/* The small cases need no minor, so they are answered before one is
+	   allocated: a 0x0 minor (the cofactor of a 1x1 matrix) has determinant
+	   1, and GetMemory(0) cannot succeed; and a 1x1 used to return here
+	   without freeing the minor it had just allocated. */
+	if (size == 0)
+		return 1;
 	if (size == 1)
-	{
 		return (matrix[0][0]);
-	}
-	else
+	MMFLOAT **m_minor = alloc2df(size, size);
 	{
 		det = 0;
 		for (c = 0; c < size; c++)
