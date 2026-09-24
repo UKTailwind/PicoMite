@@ -6743,6 +6743,15 @@ void MIPS16 ClearProgram(bool psram)
 {
     //    InitHeap(true);
     initFonts();
+    /* A program's own DefineFont fonts go with it, but the program may have
+       left one selected - it can stop on an error before it selects a
+       built-in font again, and the error handler keeps that font for the
+       prompt.  Fall back to the default font now, or the next SetFont
+       fails with "Invalid font number" and the LOAD after it is lost. */
+    if (FontTable[gui_font >> 4] == NULL)
+        SetFont(Option.DefaultFont);
+    if (FontTable[PromptFont >> 4] == NULL)
+        PromptFont = Option.DefaultFont;
     ClearVars(0, true);
     m_alloc(psram ? M_PROG : M_LIMITED); // init the variables for program memory
 #if PICOMITERP2350
