@@ -934,8 +934,10 @@ void fun_cos(void)
 			fret = sinetab[(integerPart % 360 + 450) % 360];
 		}
 		else
+			fret = cos(t / optionangle); // not getnumber(ep) again: a nested function has moved ep
+#else
+		fret = cos(getnumber(ep) / optionangle);
 #endif
-			fret = cos(getnumber(ep) / optionangle);
 	}
 	else
 	{
@@ -1256,8 +1258,10 @@ void fun_sin(void)
 			fret = sinetab[(integerPart % 360 + 360) % 360];
 		}
 		else
+			fret = sin(t / optionangle); // not getnumber(ep) again: a nested function has moved ep
+#else
+		fret = sin(getnumber(ep) / optionangle);
 #endif
-			fret = sin(getnumber(ep) / optionangle);
 	}
 	else
 	{
@@ -1294,8 +1298,10 @@ void fun_tan(void)
 			fret = sinetab[(integerPart % 360 + 360) % 360] / cosval;
 		}
 		else
+			fret = tan(t / optionangle); // not getnumber(ep) again: a nested function has moved ep
+#else
+		fret = tan(getnumber(ep) / optionangle);
 #endif
-			fret = tan(getnumber(ep) / optionangle);
 	}
 	else
 	{
