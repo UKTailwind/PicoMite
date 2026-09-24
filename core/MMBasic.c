@@ -5160,7 +5160,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
         {
             x = subfun[i]; // point to the command token
-            x++;
+            x += sizeof(CommandToken);
             skipspace(x); // point to the identifier
             s = name;     // point to the new variable
             if (*s != toupper(*x))
