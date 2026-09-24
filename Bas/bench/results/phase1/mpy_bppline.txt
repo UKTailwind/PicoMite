@@ -1,0 +1,6 @@
+import bppline
+BENCHSTART orig mode (640, 480, 8) 378 MHz
+BENCH RGB640_4 bpp=4 fmt=GS4_HMSB line640x480 134.3 us 50757 cyc | line8x8 5.2 us | fillrect640x480 312.5 us 118126 cyc
+BENCH RGB640 bpp=8 fmt=GS8 line640x480 117.1 us 44279 cyc | line8x8 4.9 us | fillrect640x480 521.6 us 197164 cyc
+BENCHEND
+>>> 

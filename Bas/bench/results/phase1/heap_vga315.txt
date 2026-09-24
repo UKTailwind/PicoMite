@@ -1,0 +1,31 @@
+RUN
+BENCHSTART PicoMiteVGA  6.040051  315 MHz
+BENCHINFO sram_free_at_start  101120 psram_heap  0
+BENCH A_empty a%=b% (no allocation) 8.037 2532
+BENCH A_empty st$=t$+u$ (temp, bottom-up) 15.162 4776
+BENCH A_empty st$=MID$(t$,3,4) (temp, bottom-up) 19.730 6215
+BENCH A_empty st$=STR$(fx,0,3) (temp, bottom-up) 42.442 13369
+BENCH A_empty fy=SIN(fx) (argument temp) 21.835 6878
+BENCH A_empty call SUB with LOCAL s$ (top-down) 39.338 12391
+BENCH A_empty call SUB with LOCAL la(3) (top-down) 45.126 14215
+BENCH A_empty call SUB with no LOCALs (control) 16.692 5258
+BENCHINFO B sram_free  18944 of  101120
+BENCH B_top80 a%=b% (no allocation) 8.042 2533
+BENCH B_top80 st$=t$+u$ (temp, bottom-up) 15.167 4778
+BENCH B_top80 st$=MID$(t$,3,4) (temp, bottom-up) 19.735 6217
+BENCH B_top80 st$=STR$(fx,0,3) (temp, bottom-up) 42.434 13367
+BENCH B_top80 fy=SIN(fx) (argument temp) 21.851 6883
+BENCH B_top80 call SUB with LOCAL s$ (top-down) 59.468 18732
+BENCH B_top80 call SUB with LOCAL la(3) (top-down) 65.242 20551
+BENCH B_top80 call SUB with no LOCALs (control) 16.696 5259
+BENCHINFO C sram_free  19712 of  101120
+BENCH C_bottom80 a%=b% (no allocation) 8.045 2534
+BENCH C_bottom80 st$=t$+u$ (temp, bottom-up) 15.246 4802
+BENCH C_bottom80 st$=MID$(t$,3,4) (temp, bottom-up) 43.865 13818
+BENCH C_bottom80 st$=STR$(fx,0,3) (temp, bottom-up) 66.717 21016
+BENCH C_bottom80 fy=SIN(fx) (argument temp) 21.930 6908
+BENCH C_bottom80 call SUB with LOCAL s$ (top-down) 63.567 20024
+BENCH C_bottom80 call SUB with LOCAL la(3) (top-down) 69.319 21836
+BENCH C_bottom80 call SUB with no LOCALs (control) 40.941 12896
+BENCHEND
+> 

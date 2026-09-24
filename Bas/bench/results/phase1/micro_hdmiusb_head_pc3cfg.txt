@@ -1,0 +1,40 @@
+RUN
+BENCHSTART PicoMiteHDMIUSB RP2350B  6.040051  378 MHz
+BENCH empty_for_loop 0.883 334
+BENCH a%=b% (1-char names) 3.550 1342
+BENCH 30-char name = 30-char name 12.098 4573
+BENCH a%=a%+1 4.822 1823
+BENCH a%=a%+1 + 40-char comment 5.690 2151
+BENCH a%=a%+1 + 40 trailing spaces 4.822 1823
+BENCH s%=(s%+i%) AND 65535 7.654 2893
+BENCH fx=fx*1.000001+0.5 8.190 3096
+BENCH fy=fx (float) 3.784 1431
+BENCH fy=1.23456789 (literal) 4.385 1658
+BENCH fy=K1 (CONST) 3.784 1431
+BENCH y%=arr%(i% AND 1023) 10.574 3997
+BENCH arr%(i% AND 1023)=y% 10.584 4001
+BENCH y%=arr2%(i% AND 31,7) 11.537 4361
+BENCH fy=ABS(fx) 6.389 2415
+BENCH fy=ABS nested 5 deep 15.695 5933
+BENCH fy=SIN(fx) 6.520 2464
+BENCH st$=STR$(i%) 9.494 3589
+BENCH st$=LEFT$(t$,3) 8.963 3388
+BENCH st$=t$+u$ 7.101 2684
+BENCH IF i% AND 1 THEN a%=1 ELSE a%=2 12.205 4613
+BENCH multi-line IF/ELSE/ENDIF (per pass) 9.485 3585
+BENCH SELECT 8 arms, first matches 10.863 4106
+BENCH SELECT 8 arms, last matches 17.497 6614
+BENCH call SUB with no arguments 5.116 1934
+BENCH y%=FUNCTION f%(a%,b%) 25.600 9677
+BENCH call SUB, 6 params + 4 LOCALs 46.771 17679
+BENCH call SUB creating 3 LOCAL arrays 37.213 14066
+BENCH GOSUB/RETURN 2.986 1129
+BENCH [sub] empty_for_loop 0.919 348
+BENCH [sub] la=lb (LOCALs) 3.944 1491
+BENCH [sub] la=b% (global read from a SUB) 3.885 1469
+BENCH [sub] ly=K1 (CONST read from a SUB) 3.989 1508
+BENCH [sub] ly=lx*1.000001+0.5 8.337 3151
+BENCH [sub] ly=SIN(lx) 6.674 2523
+BENCH [sub] la=arr%(li AND 1023) (global array) 11.094 4194
+BENCHEND
+> 

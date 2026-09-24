@@ -1,0 +1,8 @@
+RUN
+GAMESTART exile_csub PicoMiteHDMIUSB RP2350B 6.040051 378 MHz prof=0 reps=15
+GAMEBENCH exile_csub 35760 13965.9 0.3905
+GAMENULL exile_csub 35760 11953.1 0.3343
+GAMEKERNEL exile_csub 35760 2012.8 0.0563
+GAMECHECK exile_csub 270 of 270 end states match, unread feed 0, faults 0, notes 1395
+GAMECHECK PASS
+> 

@@ -61,6 +61,18 @@ run on a clean drive and later runs differ there. Compare like with like.
 prints `BENCH name microseconds cycles`. `bench_micro.py` is its
 MicroPython twin, run at module level (like BASIC) and inside a `def`.
 
+## Phase 1 (`phase1/`, `results/phase1/`)
+
+The characterisation behind `docs/Interpreter_Phase1_Results.html`:
+
+- **Micro tests:** `gen_micro2.py` writes `bench_micro2.bas` and `bench_subs0`/`bench_subs200.bas`. They cover calls, LOCALs, lookups at depth, SETTICK, REM/DATA, FOR/DO/SELECT scans and labels.
+- **Heap test:** `bench_heap.bas` times allocation with the heap empty, top-filled and bottom-filled.
+- **Graphics pairs:** `bench_gfx.bas` with its MicroPython twin `bench_gfx.py`, run on the PC2 with `runmpy.py`. `bppline.py` compares framebuf lines at 4 and 8 bits a pixel.
+- **Call profiles:** `calls_pcs_*.bas`. Use 4096 sampler entries on the RP2040.
+- **Macros (`macros/`):** fixed-work knivd, the julia interpreted/CSUB pair and a 3D frame, run with `runmacro.py`. `MANIFEST.md` has the order.
+- **Games (`games/`):** `make_games.py` builds headless, fixed-length copies of the Exile kernel, Elite and Prince of Pico from the repository, and `gamebench.py` runs them. No game data is kept here; the Prince of Pico data comes from a local conversion.
+- **Sampler size on the PC3:** use `SAMPLE, 16384`. The tables then go to PSRAM and do not distort allocation.
+
 ## Results so far (`results/`)
 
 Anchor at 378 MHz on the PC3 unless stated, three runs each, spread under

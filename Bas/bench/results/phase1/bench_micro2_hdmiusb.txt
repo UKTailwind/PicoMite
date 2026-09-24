@@ -1,0 +1,56 @@
+RUN
+BENCHSTART PicoMiteHDMIUSB RP2350B  6.040051  378 MHz
+BENCH empty_for_loop 0.882 333
+BENCH call S0 (no params) 4.565 1726
+BENCH call S3F fx,fy,fz (untyped float params) 19.243 7274
+BENCH call S3I a%,b%,c% (suffixed int params) 19.151 7239
+BENCH call S3I 1,2,3 (literal args) 17.039 6441
+BENCH call S3T a%,b%,c% (AS INTEGER params) 25.975 9818
+BENCH call S3V a%,b%,c% (BYVAL int params) 27.709 10474
+BENCH call S6F fx,fy,fz,fx,fy,fz (untyped) 33.819 12783
+BENCH call S6I a%,b%,c%,d%,e%,f% (suffixed) 33.630 12712
+BENCH call S6T a%..f% (AS INTEGER) 47.235 17855
+BENCH call S0L4 (0 params, 4 LOCAL scalars) 16.623 6283
+BENCH call S0L12 (0 params, 12 LOCAL scalars) 37.623 14221
+BENCH y%=F0%() (FUNCTION, 0 args) 13.356 5048
+BENCH fy=F2(fx,fz) (FUNCTION, 2 float args) 26.469 10005
+BENCH call SeLoc (sefunc shape: 7 LOCAL arrays + 10 scalars) 145.568 55025
+BENCH call SeGlob (same body on global arrays) 40.493 15306
+BENCH fy=fx 3.785 1431
+BENCH fy=SIN nested 1 deep 6.522 2465
+BENCH fy=SIN nested 2 deep 9.247 3495
+BENCH fy=SIN nested 3 deep 12.120 4581
+BENCH fy=SIN nested 4 deep 15.113 5713
+BENCH fy=SIN nested 5 deep 18.248 6898
+BENCH fy=MAX(fx,fz) (variables) 9.033 3415
+BENCH fy=MAX(1.25,2.5) (literals) 9.066 3427
+BENCH st$=MID$(t$,c%,d%) (variables) 11.482 4340
+BENCH st$=MID$(t$,3,4) (literals) 9.728 3677
+BENCH st$=STR$(fx,0,3) (literals) 14.589 5514
+BENCH a%=a%+1 (nothing armed) 4.822 1823
+BENCH a%=a%+1 (SETTICK armed, 60 s) 7.239 2736
+BENCH a%=a%+1 (SETTICK 1 ms, empty handler) 7.557 2857
+BENCH a%=a%+1 (OPTION NOCHECK ON) 4.148 1568
+BENCH DATA line with a 60-byte list in the body 4.415 1669
+BENCH REM line (40 chars) in the body 3.956 1495
+BENCH ' comment line (40 chars) in the body 1.380 522
+BENCH FOR 1-pass inner loop, body 3 lines 16.642 6291
+BENCH FOR 1-pass inner loop, body 30 lines 31.957 12080
+BENCH DO 1-pass loop, body 3 lines 14.263 5392
+BENCH DO 1-pass loop, body 30 lines 33.268 12575
+BENCH inner FOR count 100 (per inner pass, raw) 6.262 2367
+BENCH inner FOR count 2 (per inner pass, raw) 10.964 4145
+BENCH SELECT 30 arms, arm 1 matches 28.478 10765
+BENCH SELECT 30 arms, arm 30 matches 59.789 22600
+BENCH GOSUB label near the top 7.054 2667
+BENCH GOSUB label after 1000 lines 6.969 2634
+BENCH [depth 1] la=lb (LOCALs) 5.181 1958
+BENCH [depth 1] ly=K1 (CONST) 5.226 1975
+BENCH [depth 1] la=b% (global) 5.123 1936
+BENCH [depth 1] ly=lx*1.000001+0.5 9.581 3622
+BENCH [depth 10] la=lb (LOCALs) 7.564 2859
+BENCH [depth 10] ly=K1 (CONST) 7.009 2649
+BENCH [depth 10] la=b% (global) 5.982 2261
+BENCH [depth 10] ly=lx*1.000001+0.5 11.882 4492
+BENCHEND
+> 

@@ -1,0 +1,55 @@
+RUN
+BENCHSTART PicoMiteVGA  6.040051  315 MHz
+BENCH gfx_elite_frame_us_per_frame 69754.161 21972561
+BENCH gfx_elite_move_cls_us_per_frame 1176.846 370706
+BENCH gfx_elite_stardust_us_per_frame 11179.690 3521602
+BENCH gfx_elite_planet_us_per_frame 10653.094 3355725
+BENCH gfx_elite_ships_us_per_frame 31157.210 9814521
+BENCH gfx_elite_dash_us_per_frame 15369.960 4841537
+BENCH gfx_elite_fbcopy_us_per_frame 195.794 61675
+CHECK gfx_elite  37966927747
+ELAPSED gfx_elite 69755.807 ms for  1000 frames, FBUF% = 1
+BENCHEND
+
+[PERF] elapsed=69982836 us  statements=1906109  findvar=7262897 (locals=5079195 [69%] globals=2183702 [30%])  user_subs=30000
+[PERF] top commands by dispatch count:
+     1128554  Let
+      214860  Next
+      200882  If
+       96250  Line
+       53101  Box
+       47591  EndIf
+       43012  Local
+       30000  End Sub
+       17468  Else
+       16304  Text
+       16062  For
+        4000  Circle
+        2012  End Function
+        1002  FRAMEBUFFER
+        1000  Select Case
+        1000  Pixel
+        1000  CLS
+        1000  Array Set
+         750  Case
+         250  End Select
+[PERF] top SUBs by exclusive (self) time:
+       self_us    incl_us     calls   self_us/call  name
+[PERF] top SUBs by call count:
+       11000  Bar
+PRESS any-key ...                         3000  DrawMesh
+        2000  HalfCircle
+        2000  Pointer
+        1000  Bulbs
+        1000  DashStatic
+        1000  DrawCompass
+        1000  DrawDash
+        1000  DrawMessage
+        1000  DrawPlanet
+        1000  DrawScanner
+        1000  DrawStardust
+        1000  MissileBlocks
+        1000  MoveObjects
+        1000  SpaceFurniture
+        1000  ViewName
+> 

@@ -1,0 +1,9 @@
+RUN
+BENCHSTART PicoMiteHDMIUSB RP2350B  6.040051  378 MHz
+BENCH julia240x180_interp_us_per_render 30166693.000 11403009954
+BENCH julia240x180_interp_us_per_pixel 698.303 263959
+BENCH julia240x180_interp_us_per_escape_iter 64.065 24217
+CHECK julia240x180  1188747455186
+ELAPSED julia240x180_interp 30166.709 ms for  1 render(s)
+BENCHEND
+> 

@@ -1,0 +1,544 @@
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Interpreter Phase 1 Results</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Phase 1 results &middot; PicoMite MMBasic interpreter &middot; 24 September 2026</div>
+    <h1>Interpreter Phase 1 Results</h1>
+    <p>The characterisation that decides the real changes. It covers overhead against native code on two more kernels, where the time goes in six workloads including three games, and what calls, name lookups, built-ins, graphics commands, interrupts, heap occupancy and block structure each cost on both chips. It ends with the order the evidence gives Route A.</p>
+    <p class="ref">Branch <code>development</code> at <code>0096659</code> (the PC sampler plus the five fixes from main). PC3: HDMIUSB, 378 MHz, configured as a Pico Computer 3 with 6 MB PSRAM. RP2040: PicoMiteVGA at 315 MHz. MicroPython: Peter's port on the PC2 (the same RP2350B) at 378 MHz. Every figure was measured on a board today. All figures below were checked against the raw outputs by independent reviewers.</p>
+  </div>
+</header>
+<div class="wrap">
+<nav class="toc" aria-label="Sections">
+  <a href="#summary">1 Summary</a>
+  <a href="#overhead">2 Overhead</a>
+  <a href="#split">3 Where the time goes</a>
+  <a href="#calls">4 Calls (H3)</a>
+  <a href="#names">5 Names (H2)</a>
+  <a href="#builtins">6 Built-ins and graphics (H4)</a>
+  <a href="#tail">7 Interrupts (H5)</a>
+  <a href="#heap">8 Heap (H9)</a>
+  <a href="#blocks">9 Blocks and comments (H7, H8)</a>
+  <a href="#hyp">10 Hypotheses</a>
+  <a href="#g2">11 Route A order</a>
+  <a href="#method">12 Method and files</a>
+</nav>
+
+<section id="summary">
+  <div class="eyebrow">1 &middot; Summary</div>
+  <h2>Summary</h2>
+  <ul>
+    <li><strong>Overhead is higher in two compute kernels than in the anchor.</strong> Measured against their own CSUB twins:
+      <ul>
+        <li><strong>julia kernel:</strong> 97% interpreter overhead on the PC3 and 95% on the RP2040.</li>
+        <li><strong>Exile player routine:</strong> 99.4% on the PC3. It takes 9.36 ms a tick interpreted against 0.056 ms as a CSUB, about 170 times faster.</li>
+        <li><strong>The anchor, for comparison:</strong> 81-87%.</li>
+      </ul></li>
+    <li><strong>Three buckets dominate every workload.</strong> Name lookup takes 16-34% of the samples on all six PC3 workloads (knivd, julia, a 3D frame, Exile, Elite, Prince of Pico), the evaluator 13-35%, and walking argument text 8-20%. Together they are 53-78%. The firmware's own drawing is 3-6% of a game frame.</li>
+    <li><strong>Calls are not the biggest cost; H3's 20% threshold is borderline at most.</strong> Call machinery proper is 3-6% of the game samples. Counting the related samples as well (all of <code>makeargs</code>, zeroing and allocation) gives about 13-19%, with only Prince of Pico reaching the 20% that would move S3 ahead of symbols, and then only when <code>FindSubFun</code> is counted too.
+      <ul>
+        <li><strong>Argument splitting is the largest item inside a call:</strong> <code>makeargs</code>, which splits both the caller's arguments and the SUB's own parameter list on every call, is 21% of a call-heavy loop.</li>
+        <li><strong>Per LOCAL and per parameter, on the RP2350:</strong> each LOCAL scalar costs about 1,000 cycles (2,500-3,400 on the RP2040). Each <code>AS INTEGER</code> parameter costs about 860 cycles more than a <code>%</code> one.</li>
+        <li><strong>A sefunc-shaped call:</strong> its 7 LOCAL arrays and 10 LOCAL scalars make it 3.6x (RP2350) to 4.2x (RP2040) slower than the same body on globals.</li>
+      </ul></li>
+    <li><strong>An armed SETTICK adds about 460 cycles to every statement</strong> on the RP2350 (630 on the RP2040), even if it never fires. That is 20-25% of a short statement like <code>a%=a%+1</code>, and about 14% of the Exile kernel's average statement. Any program with an interrupt armed pays it; none of the three measured games arms one.</li>
+    <li><strong>The allocator's search depends on how full the heap is (H9 confirmed).</strong>
+      <ul>
+        <li><strong>Top occupied:</strong> a program that DIMs big arrays first leaves the top of the heap occupied. Every LOCAL string or array allocation then scans past those pages: such a call gets 2.35-2.6x slower on the PC3 (+6,400 cycles, about 13 cycles a page) and 1.5x on the RP2040.</li>
+        <li><strong>Bottom occupied:</strong> MID$ and STR$ temporaries pay about the same. Concatenation does not.</li>
+      </ul></li>
+    <li><strong>The RP2040 has two linear searches that the RP2350 does not.</strong>
+      <ul>
+        <li><strong>Labels:</strong> a GOSUB to a label about 1,600 lines from the top costs 67x a near one.</li>
+        <li><strong>The SUB table:</strong> with 200 SUBs defined, every array reference costs 32% more and every call about 2,100 cycles more (+47% on an empty SUB call, +21% on a FUNCTION call).</li>
+      </ul></li>
+    <li><strong>Recursion slows name lookup.</strong> At depth 10, a LOCAL read costs 46-48% more; globals and CONSTs read from the SUB slow down too.</li>
+    <li><strong>Graphics commands are interpreter-bound.</strong>
+      <ul>
+        <li><strong>Argument form:</strong> PIXEL, LINE, BOX and CIRCLE cost 1.37-1.52x as much with variable arguments as with literals on the RP2350, and 1.41-1.97x on the RP2040.</li>
+        <li><strong>A PIXEL loop:</strong> 97% of it is interpretation.</li>
+        <li><strong>Against MicroPython on the same chip:</strong> PIXEL and LINE are 2.7-3.3x slower at top level and 3.2-5.2x inside a SUB; BOX and CIRCLE 1.4-2.3x (BOX with variables inside a SUB 3.1x). Big fills are equal, so the C drawing matches. Long lines are the exception: MMBasic's C line routine is 2.6x slower than MicroPython's framebuf.</li>
+      </ul></li>
+    <li><strong>Smaller costs:</strong>
+      <ul>
+        <li><strong>SELECT:</strong> about 400 cycles for each arm it tests, and even a first-arm match scans every remaining arm. A 30-arm SELECT costs 10,800-22,600 cycles on the RP2350.</li>
+        <li><strong>FOR and DO entry:</strong> the scan of the body costs 210-270 cycles per body line.</li>
+        <li><strong>REM and DATA lines:</strong> about 3x a <code>'</code> comment line.</li>
+        <li><strong>USB host polling:</strong> 1-3.5% on HDMIUSB.</li>
+      </ul></li>
+    <li><strong>A latent RP2040 bug was found and fixed on main</strong> (<code>48b4680</code>): variables could take a SUB's name without error (section 11).</li>
+  </ul>
+</section>
+
+<section id="overhead">
+  <div class="eyebrow">2 &middot; Overhead</div>
+  <h2>Interpreted against native, on the same build</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Workload</th><th class="num">PC3 interpreted</th><th class="num">PC3 CSUB</th><th class="num">Overhead</th><th class="num">RP2040 interpreted</th><th class="num">RP2040 CSUB</th><th class="num">Overhead</th></tr>
+    <tr><td>solar_eclipse.bas (Phase 0, HDMIUSB)</td><td class="num">13.227 s</td><td class="num">2.514 s</td><td class="num">81%</td><td class="num">32.04 s</td><td class="num">5.726 s</td><td class="num">82%</td></tr>
+    <tr><td>julia, one 240x180 render (kernel <code>plotjulia</code>)</td><td class="num">30.17 s</td><td class="num">0.937 s</td><td class="num">96.9%</td><td class="num">70.88 s</td><td class="num">3.327 s</td><td class="num">95.3%</td></tr>
+    <tr class="rec"><td>Exile player kernel, per tick (18 scenarios, 2,384 ticks)</td><td class="num">9.356 ms</td><td class="num">0.0563 ms</td><td class="num">99.4%</td><td class="num"></td><td class="num"></td><td class="num"></td></tr>
+  </table></div>
+  <ul>
+    <li><strong>Both halves of every pair agree.</strong> Each pair printed the same checksum or end state in both halves. The interpreted Exile kernel matched the real game's end state in all 18 scenarios, and the CSUB run matched 270 of 270 across its 15 repeats. The CSUB also logs 93 events a pass for tiles its model does not cover, which the BASIC kernel does not raise; the end states still match.</li>
+    <li><strong>Why the anchor's figure is the low end.</strong> HDMI scan-out slows the CSUB half 64% but the interpreted half only 9% (Phase 0), so HDMIUSB's 81% is the lowest of the anchor's figures. With no display (PICORP2350) the anchor is 87%.</li>
+    <li><strong>Both kernels are compute routines, not whole programs.</strong> julia is one rendering SUB, and Exile's is the player-physics routine.</li>
+  </ul>
+  <p>The other workloads have no native twin:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Workload</th><th class="num">PC3, 378 MHz</th><th class="num">RP2040, 315 MHz</th><th>Check</th></tr>
+    <tr><td>knivd, fixed work (strings and trig)</td><td class="num">28.18 s</td><td class="num">65.73 s</td><td>checksum identical across runs</td></tr>
+    <tr><td>3D frame (Elite meshes, stardust, planet, dashboard, from 3ddemo)</td><td class="num">25.86 ms a frame</td><td class="num">68.66 ms a frame</td><td>same CHECK on both chips</td></tr>
+    <tr><td>Elite DEMOSCENE 1, flight and combat, 600 frames</td><td class="num">17.82 ms a frame</td><td class="num"></td><td>32 shots, 14 hits, 2 kills, every run</td></tr>
+    <tr><td>Prince of Pico, scenario harness, 2,690 frames</td><td class="num">9.71 ms a frame of game logic (13.68 with scenario set-up)</td><td class="num"></td><td>274 of 274 checks passed</td></tr>
+  </table></div>
+</section>
+
+<section id="split">
+  <div class="eyebrow">3 &middot; Where the time goes</div>
+  <h2>The sampled split, workload by workload</h2>
+  <ul>
+    <li><strong>How it was sampled.</strong> Each workload's profiled twin started the PC sampler (97 &micro;s period) at the start of its timed region. The sampler runs until END, so up to about 3% of the samples come from printing the report itself; this inflates housekeeping and console I/O slightly.</li>
+    <li><strong>Shares and times come from different runs.</strong> Shares are of all samples; times come from the unprofiled runs.</li>
+    <li><strong>No samples were lost on the games.</strong> The three games were sampled into 16,384-entry tables in PSRAM and dropped none. The other PC3 profiles dropped at most 0.1% (the 3D frame, 181 samples).</li>
+  </ul>
+  <div class="tablewrap"><table>
+    <tr><th>Bucket</th><th class="num">knivd</th><th class="num">julia</th><th class="num">3D frame</th><th class="num">Exile</th><th class="num">Elite</th><th class="num">PoP</th></tr>
+    <tr class="rec"><td>name lookup</td><td class="num">15.8%</td><td class="num">34.2%</td><td class="num">28.6%</td><td class="num">25.3%</td><td class="num">22.8%</td><td class="num">31.7%</td></tr>
+    <tr><td>evaluator</td><td class="num">25.2%</td><td class="num">35.3%</td><td class="num">22.8%</td><td class="num">21.9%</td><td class="num">19.2%</td><td class="num">13.5%</td></tr>
+    <tr class="rec"><td>arg parsing / text walk</td><td class="num">11.9%</td><td class="num">8.0%</td><td class="num">15.4%</td><td class="num">15.1%</td><td class="num">16.2%</td><td class="num">20.2%</td></tr>
+    <tr><td>dispatch</td><td class="num">5.7%</td><td class="num">8.9%</td><td class="num">6.9%</td><td class="num">11.4%</td><td class="num">8.2%</td><td class="num">8.2%</td></tr>
+    <tr><td>call machinery</td><td class="num"></td><td class="num"></td><td class="num">1.4%</td><td class="num">6.4%</td><td class="num">2.8%</td><td class="num">5.0%</td></tr>
+    <tr><td>housekeeping</td><td class="num">6.5%</td><td class="num">3.8%</td><td class="num">3.7%</td><td class="num">5.2%</td><td class="num">4.8%</td><td class="num">4.0%</td></tr>
+    <tr><td>temp memory</td><td class="num">3.0%</td><td class="num"></td><td class="num">0.6%</td><td class="num">0.8%</td><td class="num">1.0%</td><td class="num">2.0%</td></tr>
+    <tr><td>libc</td><td class="num">8.5%</td><td class="num">0.2%</td><td class="num">4.2%</td><td class="num">4.5%</td><td class="num">5.8%</td><td class="num">6.3%</td></tr>
+    <tr><td>maths library</td><td class="num">6.7%</td><td class="num">2.0%</td><td class="num">1.6%</td><td class="num">0.1%</td><td class="num">1.8%</td><td class="num">0.1%</td></tr>
+    <tr><td>built-in functions</td><td class="num">3.4%</td><td class="num"></td><td class="num">0.2%</td><td class="num"></td><td class="num">0.3%</td><td class="num">0.2%</td></tr>
+    <tr><td>statement handlers</td><td class="num">3.1%</td><td class="num">5.1%</td><td class="num">4.0%</td><td class="num">5.0%</td><td class="num">5.7%</td><td class="num">5.1%</td></tr>
+    <tr><td>console / display I/O</td><td class="num">0.3%</td><td class="num">0.2%</td><td class="num">2.3%</td><td class="num">1.1%</td><td class="num">2.9%</td><td class="num">0.6%</td></tr>
+    <tr><td>other</td><td class="num">10.0%</td><td class="num">2.2%</td><td class="num">8.2%</td><td class="num">3.1%</td><td class="num">8.6%</td><td class="num">3.1%</td></tr>
+  </table></div>
+
+  <p>On the RP2040, the 3D frame is the version without a framebuffer, sampled into a 2,048-entry table. It still dropped 27% of its samples, all of them PCs outside the table's busiest entries, so treat its column as indicative only. The framebuffer version could only fit 1,024 entries and dropped half. knivd dropped 5.5%, julia 0.1%.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Bucket</th><th class="num">knivd</th><th class="num">julia</th><th class="num">3D frame</th></tr>
+    <tr class="rec"><td>name lookup</td><td class="num">17.6%</td><td class="num">35.6%</td><td class="num">26.3%</td></tr>
+    <tr><td>evaluator</td><td class="num">17.9%</td><td class="num">29.4%</td><td class="num">13.6%</td></tr>
+    <tr class="rec"><td>arg parsing / text walk</td><td class="num">7.5%</td><td class="num">6.8%</td><td class="num">9.7%</td></tr>
+    <tr><td>dispatch</td><td class="num">6.8%</td><td class="num">6.6%</td><td class="num">4.2%</td></tr>
+    <tr><td>call machinery</td><td class="num"></td><td class="num"></td><td class="num">0.7%</td></tr>
+    <tr><td>housekeeping</td><td class="num">2.2%</td><td class="num">2.5%</td><td class="num">1.5%</td></tr>
+    <tr><td>temp memory</td><td class="num">3.7%</td><td class="num"></td><td class="num">0.1%</td></tr>
+    <tr><td>libc</td><td class="num">1.6%</td><td class="num">0.1%</td><td class="num">1.9%</td></tr>
+    <tr><td>maths library</td><td class="num">3.4%</td><td class="num">2.5%</td><td class="num">1.3%</td></tr>
+    <tr><td>boot ROM maths</td><td class="num">14.4%</td><td class="num">5.5%</td><td class="num">2.0%</td></tr>
+    <tr><td>built-in functions</td><td class="num">5.8%</td><td class="num"></td><td class="num"></td></tr>
+    <tr><td>statement handlers</td><td class="num">2.3%</td><td class="num">4.1%</td><td class="num">1.6%</td></tr>
+    <tr><td>console / display I/O</td><td class="num"></td><td class="num">0.1%</td><td class="num">0.5%</td></tr>
+    <tr><td>other</td><td class="num">11.4%</td><td class="num">6.6%</td><td class="num">9.8%</td></tr>
+  </table></div>
+
+  <ul>
+    <li><strong>Name lookup is the largest bucket in four of the six PC3 workloads.</strong> It is a close second in julia (34.2% against the evaluator's 35.3%) and second in knivd. <code>findvar</code> alone is 16-34%.</li>
+    <li><strong>What Route A targets covers 36-68% of the samples</strong> in every PC3 workload: name lookup, text walking, dispatch, calls and the per-statement tail. The evaluator core, 13-35%, is what stays for Route B.</li>
+    <li><strong>In the game frames the firmware does little.</strong> <code>DrawRectangle16</code>, <code>DrawBitmap16</code>, <code>DrawBuffered</code> and <code>DrawLine</code> together are 3-6% of the 3D frame and of Elite.</li>
+    <li><strong>Housekeeping includes USB host polling.</strong> On HDMIUSB, <code>tuh_task</code> and <code>hid_app_task</code> take 1-3.5% with no keyboard traffic: 1-2% in five workloads, 3.5% in knivd.</li>
+    <li><strong>On the RP2040, <code>TestStackOverflow</code></strong> with its veneer takes 2.1-2.6% of every workload, counted under "other".</li>
+  </ul>
+</section>
+
+<section id="calls">
+  <div class="eyebrow">4 &middot; Calls (H3)</div>
+  <h2>What a SUB call costs, and where</h2>
+  <p>Cycles per call, with the empty loop subtracted. Each SUB body is empty unless stated otherwise.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Call shape (cycles per call)</th><th class="num">RP2350 378 MHz</th><th class="num">RP2040 315 MHz</th></tr>
+    <tr><td>call S0 (no parameters)</td><td class="num">1,726</td><td class="num">4,898</td></tr>
+    <tr><td>3 untyped (float) parameters, variable arguments</td><td class="num">7,274</td><td class="num">18,035</td></tr>
+    <tr><td>3 <code>%</code> parameters, variable arguments</td><td class="num">7,239</td><td class="num">17,040</td></tr>
+    <tr><td>3 <code>%</code> parameters, literal arguments</td><td class="num">6,441</td><td class="num">14,929</td></tr>
+    <tr class="rec"><td>3 <code>AS INTEGER</code> parameters</td><td class="num">9,818</td><td class="num">20,191</td></tr>
+    <tr><td>3 <code>BYVAL</code> <code>%</code> parameters</td><td class="num">10,474</td><td class="num">21,987</td></tr>
+    <tr><td>6 untyped parameters</td><td class="num">12,783</td><td class="num">31,251</td></tr>
+    <tr><td>6 <code>%</code> parameters</td><td class="num">12,712</td><td class="num">29,439</td></tr>
+    <tr class="rec"><td>6 <code>AS INTEGER</code> parameters</td><td class="num">17,855</td><td class="num">37,187</td></tr>
+    <tr><td>0 parameters, 4 LOCAL scalars</td><td class="num">6,283</td><td class="num">18,658</td></tr>
+    <tr><td>0 parameters, 12 LOCAL scalars</td><td class="num">14,221</td><td class="num">39,034</td></tr>
+    <tr><td>FUNCTION, 0 arguments</td><td class="num">5,048</td><td class="num">10,247</td></tr>
+    <tr><td>FUNCTION, 2 float arguments</td><td class="num">10,005</td><td class="num">22,635</td></tr>
+    <tr class="rec"><td>sefunc's shape: 7 LOCAL arrays + 10 LOCAL scalars</td><td class="num">55,025</td><td class="num">119,659</td></tr>
+    <tr><td>the same body on global arrays</td><td class="num">15,306</td><td class="num">28,764</td></tr>
+  </table></div>
+
+  <ul>
+    <li><strong>Per parameter (RP2350).</strong> About 1,840 cycles for each <code>%</code> parameter, and 860 more if it is declared <code>AS INTEGER</code>. <code>BYVAL</code> adds about 1,080. Literal arguments are about 800 cycles a call cheaper than variables.</li>
+    <li><strong>Per LOCAL.</strong> About 1,000-1,140 cycles for each LOCAL scalar on the RP2350, and 2,500-3,400 on the RP2040. A single <code>LOCAL la(3)</code> costs about 2,700 cycles on an empty heap. The full heap of section 8 adds its search on top.</li>
+    <li><strong>The sefunc-shaped call</strong> costs 3.6x (RP2350) and 4.2x (RP2040) a SUB doing the same work on global arrays with no LOCALs. The 7 LOCAL arrays account for most of that and the 10 LOCAL scalars for the rest. The anchor makes only 474 such calls, about 50 ms of its 12 s; it matters in code that calls LOCAL-array SUBs every frame.</li>
+    <li><strong>The split inside a call.</strong> A loop of calls to a SUB with 6 <code>AS INTEGER</code> parameters and 4 LOCALs was sampled.
+      <ul>
+        <li><strong>The largest items:</strong> <code>findvar</code> 25%, <code>makeargs</code> 21%, <code>DefinedSubFun</code> 8.5%, <code>strchr</code> 5.5%, <code>skipvar</code> 5.1%, <code>memset</code> 4.7%, and <code>checkstring</code> 4.5% (the <code>AS INTEGER</code> parse).</li>
+        <li><strong>What <code>makeargs</code> covers:</strong> it splits both the caller's argument list and the SUB's own definition line on every call.</li>
+        <li><strong>The definition-side part:</strong> <code>makeargs</code> plus the type parse come to about 26%, most of it on the definition side, which call descriptors (S3b) would do once. The first H3 test, definition side at least 25% of call cost, is roughly met.</li>
+      </ul></li>
+    <li><strong>Calls are a modest share of real code.</strong>
+      <ul>
+        <li><strong>The call machinery bucket:</strong> 6.4% of the Exile kernel, 2.8% of Elite and 5.0% of Prince of Pico.</li>
+        <li><strong>Counting related samples:</strong> adding all of <code>makeargs</code> (which also serves commands), <code>memset</code> and <code>GetMemory</code> gives about 15%, 13% and 19%. That leaves out <code>FindSubFun</code> (with it Prince of Pico reaches about 20%) and findvar's creation of parameters and LOCALs.</li>
+        <li><strong>The second H3 test is borderline.</strong> It needs calls at least 20% of the game samples. Exile and Elite are well under, and Prince of Pico sits at the threshold only when every related sample is counted. S3 therefore stays after the symbol work, which also removes much of a call's lookup cost.</li>
+      </ul></li>
+  </ul>
+  <div class="warnbox">
+    <div class="eyebrow">Sampler caveat</div>
+    <p>The sampler's tables (16 bytes an entry) come from the heap. At 8,192 entries each table is 64 KB, under half the PC3's 150 KB SRAM heap, so both land in SRAM and every GetMemory in a profiled run scans past them. In the sampled 7-LOCAL-array loop <code>GetMemory</code> took 64% of the samples: section 8's effect caught live. The game profiles used 16,384 entries, which go to PSRAM and avoid it. The sampler should allocate outside the SRAM heap, and should stop before END prints its report.</p>
+  </div>
+</section>
+
+<section id="names">
+  <div class="eyebrow">5 &middot; Names (H2)</div>
+  <h2>Lookups at recursion depth, and the RP2040's SUB table</h2>
+  <p>The same statement timed inside a SUB at call depth 1, and again at depth 10 of a recursive SUB whose every level has the same LOCAL names:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Statement inside a SUB (cycles)</th><th class="num">RP2350</th><th class="num">RP2040</th></tr>
+    <tr><td><code>la=lb</code>, LOCALs, depth 1</td><td class="num">1,958</td><td class="num">5,471</td></tr>
+    <tr class="rec"><td><code>la=lb</code>, LOCALs, depth 10</td><td class="num">2,859</td><td class="num">8,085</td></tr>
+    <tr><td><code>ly=K1</code>, a CONST, depth 1</td><td class="num">1,975</td><td class="num">5,440</td></tr>
+    <tr><td><code>ly=K1</code>, a CONST, depth 10</td><td class="num">2,649</td><td class="num">8,156</td></tr>
+    <tr><td><code>la=b%</code>, a global, depth 1</td><td class="num">1,936</td><td class="num">5,550</td></tr>
+    <tr><td><code>la=b%</code>, a global, depth 10</td><td class="num">2,261</td><td class="num">8,026</td></tr>
+  </table></div>
+
+  <p>A LOCAL read slows 46% at depth 10 on the RP2350 and 48% on the RP2040, because each lookup's local probe has to pass the entries of every level. Globals and CONSTs read from the SUB slow down too (+17% and +34% on the RP2350, +45% and +50% on the RP2040). A symbol table must bind names per frame, not per name, or recursion keeps this cost.</p>
+  <p>The same program with no extra SUBs and with 200 empty SUBs defined:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Statement (cycles)</th><th class="num">RP2350, 0 SUBs</th><th class="num">200 SUBs</th><th class="num">change</th><th class="num">RP2040, 0 SUBs</th><th class="num">200 SUBs</th><th class="num">change</th></tr>
+    <tr><td><code>a%=b%</code></td><td class="num">1,342</td><td class="num">1,342</td><td class="num">+0%</td><td class="num">2,228</td><td class="num">2,228</td><td class="num">+0%</td></tr>
+    <tr class="rec"><td><code>y%=arr%(i% AND 1023)</code></td><td class="num">3,997</td><td class="num">4,008</td><td class="num">+0%</td><td class="num">6,605</td><td class="num">8,730</td><td class="num">+32%</td></tr>
+    <tr class="rec"><td>call a SUB</td><td class="num">1,725</td><td class="num">1,725</td><td class="num">+0%</td><td class="num">4,521</td><td class="num">6,657</td><td class="num">+47%</td></tr>
+    <tr><td>call a FUNCTION</td><td class="num">5,048</td><td class="num">5,048</td><td class="num">+0%</td><td class="num">10,113</td><td class="num">12,228</td><td class="num">+21%</td></tr>
+    <tr><td><code>fy=SIN(fx)</code></td><td class="num">2,465</td><td class="num">2,465</td><td class="num">+0%</td><td class="num">5,175</td><td class="num">5,175</td><td class="num">+0%</td></tr>
+  </table></div>
+
+  <p>On the RP2040, every array reference and every call pays a linear pass over the SUB table, about 2,100 cycles with 200 SUBs: +32% on an array read, +47% on an empty SUB call, +21% on a FUNCTION call. Scalar assignment and built-ins do not pay it. The RP2350's hashed table shows no change. Large RP2040 programs pay this on every array reference (step S2).</p>
+</section>
+
+<section id="builtins">
+  <div class="eyebrow">6 &middot; Built-ins and graphics (H4, E8, E9, H10)</div>
+  <h2>Built-in functions and drawing commands</h2>
+  <div class="tablewrap"><table>
+    <tr><th>Statement (cycles)</th><th class="num">RP2350</th><th class="num">RP2040</th></tr>
+    <tr><td><code>fy=fx</code></td><td class="num">1,431</td><td class="num">2,407</td></tr>
+    <tr><td><code>fy=SIN(...)</code> nested 1 deep</td><td class="num">2,465</td><td class="num">5,175</td></tr>
+    <tr><td><code>fy=SIN(...)</code> nested 2 deep</td><td class="num">3,495</td><td class="num">7,967</td></tr>
+    <tr><td><code>fy=SIN(...)</code> nested 3 deep</td><td class="num">4,581</td><td class="num">10,845</td></tr>
+    <tr><td><code>fy=SIN(...)</code> nested 4 deep</td><td class="num">5,713</td><td class="num">14,197</td></tr>
+    <tr><td><code>fy=SIN(...)</code> nested 5 deep</td><td class="num">6,898</td><td class="num">16,875</td></tr>
+    <tr><td><code>MAX(fx,fz)</code>, variables</td><td class="num">3,415</td><td class="num">5,894</td></tr>
+    <tr><td><code>MAX(1.25,2.5)</code>, literals</td><td class="num">3,427</td><td class="num">7,331</td></tr>
+    <tr><td><code>MID$(t$,c%,d%)</code>, variables</td><td class="num">4,340</td><td class="num">7,371</td></tr>
+    <tr><td><code>MID$(t$,3,4)</code>, literals</td><td class="num">3,677</td><td class="num">6,050</td></tr>
+  </table></div>
+
+  <ul>
+    <li><strong>Each nested SIN adds 1,030-1,185 cycles on the RP2350</strong> (about 2,800 on the RP2040, which includes its software double SIN). The growth is close to linear, so nesting is not the problem. The cost is fixed: about 900-1,000 cycles for every built-in call before its maths (ABS in Phase 0: 900-984). It is expected to be the T_FUN temp page, <code>getclosebracket</code> and the argument copy that S8 removes; that split has not been profiled.</li>
+    <li><strong>For built-ins the argument form matters little.</strong> MID$ with integer arguments costs 18% more with variables than with literals on the RP2350 and 22% more on the RP2040. The MAX pair is not a fair test: its literals are floats, which getvalue parses at run time with a double division, so the RP2040's literal MAX is 24% dearer than its variable form. For functions, then, the cost is in the call rather than the arguments.</li>
+  </ul>
+  <p>Graphics commands with small shapes, literal against variable arguments:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Command (cycles)</th><th class="num">RP2350 literals</th><th class="num">variables</th><th class="num">ratio</th><th class="num">RP2040 literals</th><th class="num">variables</th><th class="num">ratio</th></tr>
+    <tr><td>PIXEL</td><td class="num">1,957</td><td class="num">2,971</td><td class="num">1.52x</td><td class="num">3,326</td><td class="num">5,259</td><td class="num">1.58x</td></tr>
+    <tr><td>LINE</td><td class="num">4,799</td><td class="num">6,558</td><td class="num">1.37x</td><td class="num">8,449</td><td class="num">13,261</td><td class="num">1.57x</td></tr>
+    <tr><td>BOX</td><td class="num">4,037</td><td class="num">5,990</td><td class="num">1.48x</td><td class="num">6,876</td><td class="num">13,577</td><td class="num">1.97x</td></tr>
+    <tr><td>CIRCLE</td><td class="num">5,409</td><td class="num">7,383</td><td class="num">1.36x</td><td class="num">9,244</td><td class="num">13,069</td><td class="num">1.41x</td></tr>
+  </table></div>
+
+  <p><strong>For drawing commands the arguments do matter.</strong></p>
+  <ul>
+    <li><strong>Variable against literal:</strong> the variable form costs 1.37-1.52x the literal form on the RP2350 and 1.41-1.97x on the RP2040. H4's 1.5x test is met by PIXEL on both chips and by LINE and BOX on the RP2040 only. What the ratio prices is a name lookup against a short integer parse.</li>
+    <li><strong>Even a literal argument is not free.</strong> Dropping PIXEL's third argument saves 357 cycles on the RP2350 and 651 on the RP2040.</li>
+    <li><strong>A PIXEL loop is 97% interpretation.</strong> A PIXEL statement in a 64x64 loop costs 3,311 cycles a pixel on the RP2350 (6,099 on the RP2040), not counting the loop itself. One PIXEL statement drawing 512 pixels from arrays costs 89 cycles a pixel (129).</li>
+  </ul>
+  <p>Against MicroPython, drawing with framebuf over the HDMI buffer at 640x480 and 4 bits (the same geometry and memory as MMBasic MODE 3), on the PC2 (the same RP2350B) at 378 MHz:</p>
+  <div class="tablewrap"><table>
+    <tr><th>Test (cycles, 378 MHz)</th><th class="num">MMBasic</th><th class="num">MicroPython</th><th class="num">ratio</th></tr>
+    <tr><td><code>a%=b%</code> (control)</td><td class="num">1,341</td><td class="num">229</td><td class="num">5.86</td></tr>
+    <tr><td>PIXEL, literals</td><td class="num">1,957</td><td class="num">712</td><td class="num">2.75</td></tr>
+    <tr><td>PIXEL, variables</td><td class="num">2,971</td><td class="num">1,019</td><td class="num">2.92</td></tr>
+    <tr><td>LINE, variables</td><td class="num">6,558</td><td class="num">1,994</td><td class="num">3.29</td></tr>
+    <tr><td>BOX, variables</td><td class="num">5,990</td><td class="num">2,663</td><td class="num">2.25</td></tr>
+    <tr><td>CIRCLE, variables</td><td class="num">7,383</td><td class="num">5,389</td><td class="num">1.37</td></tr>
+    <tr><td>PIXEL inside a SUB/def, variables</td><td class="num">3,218</td><td class="num">618</td><td class="num">5.21</td></tr>
+    <tr><td>64x64 PIXEL loop, per pixel (net)</td><td class="num">3,311</td><td class="num">1,012</td><td class="num">3.27</td></tr>
+    <tr><td>CLS 640x480</td><td class="num">114,002</td><td class="num">117,197</td><td class="num">0.97</td></tr>
+    <tr><td>filled BOX 640x480</td><td class="num">117,179</td><td class="num">117,622</td><td class="num">1.00</td></tr>
+    <tr><td>filled CIRCLE r=100</td><td class="num">74,800</td><td class="num">121,062</td><td class="num">0.62</td></tr>
+    <tr class="rec"><td>LINE 0,0 to 639,479</td><td class="num">132,100</td><td class="num">50,398</td><td class="num">2.62</td></tr>
+  </table></div>
+
+  <ul>
+    <li><strong>Per statement, MMBasic is 1.4-3.3x slower at top level and 1.6-5.2x slower inside a SUB (2.3-5.2x with variable arguments).</strong> PIXEL and LINE are at the high end, BOX and CIRCLE at the low end. Inside a SUB, MicroPython's locals are fixed slots.</li>
+    <li><strong>The C drawing is equal</strong> on CLS and big fills (ratio 1.0), and MMBasic's circle fill is 1.6x faster. This is the E9 control: MicroPython's lead is in the interpreter, not in C.</li>
+    <li><strong>The exception is long lines.</strong> MMBasic's C <code>DrawLine</code> takes 2.6x the cycles of MicroPython's framebuf line for a full-screen diagonal: about 206 cycles a pixel against 79. That is a graphics-code finding outside this review.
+      <ul>
+        <li><strong>The pixel format was the same on both sides.</strong> MicroPython drew with <code>framebuf.GS4_HMSB</code> in its RGB640_4 mode: 4 bits a pixel, packed two to a byte, like MODE 3.</li>
+        <li><strong>Byte addressing is not the explanation.</strong> A separate run in MicroPython's 8-bit mode (<code>GS8</code>, one byte a pixel) made the same line only 13% faster (44,279 against 50,757 cycles). So the gap is in MMBasic's line loop, not the format.</li>
+        <li><strong>Fills follow the packing.</strong> MicroPython's full-screen fill is quicker at 4 bits than at 8 (118k against 197k cycles), and MMBasic's 4-bit fill (117k) matches its 4-bit one.</li>
+      </ul></li>
+  </ul>
+</section>
+
+<section id="tail">
+  <div class="eyebrow">7 &middot; Interrupts and the per-statement tail (H5)</div>
+  <h2>What an armed interrupt costs every statement</h2>
+  <p>Each row is net of an empty FOR/NEXT loop timed with nothing armed. The per-statement check runs after the loop's NEXT as well, so the armed rows include two checks.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Statement (cycles)</th><th class="num">RP2350</th><th class="num">RP2040</th></tr>
+    <tr><td><code>a%=a%+1</code>, nothing armed</td><td class="num">1,823</td><td class="num">3,046</td></tr>
+    <tr class="rec"><td>the same with a SETTICK armed (60 s, never fires)</td><td class="num">2,736</td><td class="num">4,312</td></tr>
+    <tr><td>the same with SETTICK 1 ms to an empty handler</td><td class="num">2,857</td><td class="num">4,422</td></tr>
+    <tr><td>the same under OPTION NOCHECK ON</td><td class="num">1,568</td><td class="num">2,754</td></tr>
+  </table></div>
+
+  <ul>
+    <li><strong>Arming one SETTICK adds about 460 cycles to every statement on the RP2350 and about 630 on the RP2040</strong>, whether or not it fires. That is +25% and +21% on <code>a%=a%+1</code>, or +42% and +36% on the whole <code>a%=a%+1</code>/NEXT pass.
+      <ul>
+        <li><strong>The cost is in checking, not firing.</strong> Letting the tick fire every millisecond adds only about 110-120 cycles more per pass, about 60 a statement.</li>
+        <li><strong>The likely fix:</strong> an interrupt-pending word set by the ISRs (S1c) should remove most of it for SETTICK. That is still to be measured. Polled sources, such as COM levels and pin interrupts, need converting as well.</li>
+      </ul></li>
+    <li><strong>OPTION NOCHECK ON</strong> removes about 130 cycles (RP2350) and 150 (RP2040) of checks per statement with nothing armed, 7% and 5% of <code>a%=a%+1</code>. That is consistent with Phase 0's tail estimate.</li>
+    <li><strong>On HDMIWEB</strong>, Phase 0 priced <code>ProcessWeb</code> at about 10% of the anchor. Peter's constraint for S1a: WEB SCAN runs with no WiFi connected and needs <code>ProcessWeb</code> while it executes. A cadence change therefore cannot depend on a live connection, and any command that waits on the network must still run <code>ProcessWeb</code> itself.</li>
+  </ul>
+</section>
+
+<section id="heap">
+  <div class="eyebrow">8 &middot; Heap occupancy (H9)</div>
+  <h2>The allocator's page search</h2>
+  <p>There are two searches, page by page through the SRAM heap (<code>core/Memory.c</code>):</p>
+  <ul>
+    <li><strong><code>GetMemory</code></strong> (variables, LOCAL strings and arrays, DIM) searches from the top down.</li>
+    <li><strong><code>GetSystemMemory</code></strong> (temporary strings and the like) searches from the bottom up.</li>
+  </ul>
+  <p>So the same statements were timed in three heap states:</p>
+  <ul>
+    <li><strong>Nearly empty.</strong></li>
+    <li><strong>Top 80% occupied:</strong> big arrays DIMmed first, the usual real-world state.</li>
+    <li><strong>Bottom 80% occupied:</strong> only possible after the heap has once been full.</li>
+  </ul>
+  <p>On the PC3 the fill was kept in SRAM, below the size that goes straight to PSRAM.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Statement (cycles)</th><th class="num">RP2350 empty</th><th class="num">top 80%</th><th class="num">bottom 80%</th><th class="num">RP2040 empty</th><th class="num">top 80%</th><th class="num">bottom 80%</th></tr>
+    <tr><td><code>a%=b%</code> (control)</td><td class="num">1,521</td><td class="num">1,522</td><td class="num">1,522</td><td class="num">2,532</td><td class="num">2,533</td><td class="num">2,534</td></tr>
+    <tr><td><code>MID$(t$,3,4)</code> (temporary, bottom-up)</td><td class="num">3,758</td><td class="num">3,758</td><td class="num">10,549</td><td class="num">6,215</td><td class="num">6,217</td><td class="num">13,818</td></tr>
+    <tr><td><code>STR$(fx,0,3)</code> (temporary, bottom-up)</td><td class="num">5,602</td><td class="num">5,604</td><td class="num">12,659</td><td class="num">13,369</td><td class="num">13,367</td><td class="num">21,016</td></tr>
+    <tr class="rec"><td>SUB with <code>LOCAL s$</code> (top-down)</td><td class="num">4,101</td><td class="num">10,562</td><td class="num">4,102</td><td class="num">12,391</td><td class="num">18,732</td><td class="num">20,024</td></tr>
+    <tr class="rec"><td>SUB with <code>LOCAL la(3)</code> (top-down)</td><td class="num">4,794</td><td class="num">11,264</td><td class="num">4,795</td><td class="num">14,215</td><td class="num">20,551</td><td class="num">21,836</td></tr>
+    <tr class="rec"><td>SUB with no LOCALs (control)</td><td class="num">2,080</td><td class="num">2,081</td><td class="num">2,081</td><td class="num">5,258</td><td class="num">5,259</td><td class="num">12,896</td></tr>
+  </table></div>
+
+  <ul>
+    <li><strong>Top 80% occupied:</strong> every call with a LOCAL string or LOCAL array gets about 6,400 cycles slower on both chips: 2.35-2.6x on the RP2350 and 1.45-1.5x on the RP2040. Temporaries are untouched. The search costs about 13 cycles a page on the RP2350 and 20 on the RP2040.</li>
+    <li><strong>Bottom 80% occupied:</strong> MID$ and STR$ temporaries get 6,800-7,600 cycles slower (1.6-2.8x); concatenation and SIN's argument copy are unaffected. On the RP2040, even a SUB call with no LOCALs gets 2.5x slower, because the call takes a temporary from the bottom.</li>
+    <li><strong>H9 is confirmed at 1.45-2.6x against a 1.15x threshold.</strong> The fix is local to <code>Memory.c</code>: keep a first-free hint for each search direction, so a search starts where free pages begin. It changes no format and costs a few bytes (new step S10).</li>
+  </ul>
+</section>
+
+<section id="blocks">
+  <div class="eyebrow">9 &middot; Blocks and comments (H7, H8)</div>
+  <h2>Scans at block entry, SELECT, labels, REM and DATA</h2>
+  <p>The first row is the empty loop pass itself; every other row is net of it.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Loop body (cycles per pass)</th><th class="num">RP2350</th><th class="num">RP2040</th></tr>
+    <tr><td>empty loop pass (the baseline)</td><td class="num">333</td><td class="num">482</td></tr>
+    <tr><td>a <code>'</code> comment line in the body</td><td class="num">522</td><td class="num">616</td></tr>
+    <tr class="rec"><td>a REM line in the body</td><td class="num">1,495</td><td class="num">1,777</td></tr>
+    <tr class="rec"><td>a DATA line with a 60-byte list in the body</td><td class="num">1,669</td><td class="num">2,003</td></tr>
+    <tr><td>inner FOR run once, body of 3 lines</td><td class="num">6,291</td><td class="num">8,798</td></tr>
+    <tr><td>inner FOR run once, body of 30 lines</td><td class="num">12,080</td><td class="num">15,654</td></tr>
+    <tr><td>DO...LOOP run once, body of 3 lines</td><td class="num">5,392</td><td class="num">6,737</td></tr>
+    <tr><td>DO...LOOP run once, body of 30 lines</td><td class="num">12,575</td><td class="num">13,512</td></tr>
+    <tr><td>SELECT, 30 arms, first arm matches</td><td class="num">10,765</td><td class="num">16,545</td></tr>
+    <tr class="rec"><td>SELECT, 30 arms, last arm matches</td><td class="num">22,600</td><td class="num">37,947</td></tr>
+    <tr><td>GOSUB to a label near the top</td><td class="num">2,667</td><td class="num">3,609</td></tr>
+    <tr class="rec"><td>GOSUB to a label 1,000 lines further down</td><td class="num">2,634</td><td class="num">241,375</td></tr>
+  </table></div>
+
+  <ul>
+    <li><strong>A <code>'</code> comment line costs about 520 cycles</strong> (RP2040 620). <strong>A REM line costs about 1,500 and a DATA line about 1,670</strong> (RP2040 1,780 and 2,000), about 3x a comment line, because they are dispatched as statements. Giving them the comment's skip (S9) is cheap.</li>
+    <li><strong>Entering a FOR or DO scans its body.</strong> That costs 214 (FOR) and 266 (DO) cycles per body line on the RP2350, and about 250 on the RP2040. An inner FOR with a 30-line body pays about 6,400 cycles (RP2040 7,600) every time it is entered.</li>
+    <li><strong>SELECT scans every arm up to END SELECT, even after a match.</strong> Each arm tested costs about 400 cycles on the RP2350 (740 on the RP2040), and a first-arm match still scans the remaining arms at about 300 cycles each. A 30-arm SELECT costs 10,800 cycles when the first arm matches and 22,600 when the last does (RP2040: 16,500 and 37,900). Partner tables (S7) make both nearly constant.</li>
+    <li><strong>On the RP2040, a GOSUB to a label about 1,600 lines from the top of the program costs 241,000 cycles</strong>, 67x a near label (the label sits past a 1,000-line SUB). The RP2350 shows no difference. H8's RP2040 test of at least 2x is met many times over; S5b label symbols fix it.</li>
+  </ul>
+</section>
+
+<section id="hyp">
+  <div class="eyebrow">10 &middot; Hypotheses</div>
+  <h2>H1-H10 after Phase 1</h2>
+  <div class="tablewrap"><table>
+    <tr><th>#</th><th>Hypothesis</th><th>Verdict</th><th>Evidence</th></tr>
+    <tr><td>H1</td><td>Operand work is at least half the overhead</td><td>Confirmed</td><td>Name lookup + evaluator + text walking are 53-78% of every PC3 workload</td></tr>
+    <tr class="rec"><td>H2</td><td>Name resolution is 20-40% of statement time</td><td>Confirmed</td><td>findvar 16-34% on six workloads; +46-48% at recursion depth 10; RP2040 SUB-table pass +21-47% (array reads +32%, SUB calls +47%, FUNCTION calls +21%)</td></tr>
+    <tr><td>H3</td><td>Call machinery dominates SUB-built code</td><td>Partly</td><td>makeargs (both argument lists) plus the type parse about 26% of a call, most of it definition-side (first test marginal, roughly met); calls 2.8-6.4% of game samples, about 13-19% counting related samples (borderline: S3 stays after symbols); sefunc-shaped LOCALs 3.6-4.2x</td></tr>
+    <tr><td>H4</td><td>Argument marshalling is the overhead in firmware-heavy code</td><td>Partly</td><td>Graphics variable forms 1.37-1.97x (the 1.5x test met by PIXEL on both chips, LINE and BOX on the RP2040); literal arguments 357-651 cycles each; text walking 8-20% on the PC3 (7-10% on the RP2040); built-in nesting linear and argument forms under 1.25x</td></tr>
+    <tr class="rec"><td>H5</td><td>The per-statement tail is significant</td><td>Confirmed</td><td>An armed SETTICK adds about 460-630 cycles a statement (20-25% of a short one); NOCHECK removes 130-150; ProcessWeb about 10% on HDMIWEB</td></tr>
+    <tr><td>H6</td><td>Flash fetch</td><td>Dropped</td><td>Confounded by the QMI cache (Peter)</td></tr>
+    <tr><td>H7</td><td>The pre-scan over comments costs at least 5%</td><td>Partly</td><td><code>'</code> comments are cheap; REM and DATA lines cost about 3x as much</td></tr>
+    <tr><td>H8</td><td>Block-entry and jump scans matter</td><td>Confirmed</td><td>FOR/DO entry 210-270 cycles a body line; SELECT 30 arms 10.8-22.6k cycles; RP2040 labels 67x</td></tr>
+    <tr class="rec"><td>H9</td><td>Temp-memory churn depends on heap occupancy</td><td>Confirmed</td><td>Calls with LOCAL strings or arrays 2.35-2.6x slower (RP2040 1.45-1.5x) with the top 80% of the heap in use; MID$ and STR$ temporaries 1.6-2.8x with the bottom in use</td></tr>
+    <tr><td>H10</td><td>MicroPython's lead is in scalars, arrays and calls, not C</td><td>Confirmed</td><td>Graphics statements 1.4-5.2x; C fills about 1x; Phase 0's 6-50x on scalars, arrays and calls</td></tr>
+  </table></div>
+</section>
+
+<section id="g2">
+  <div class="eyebrow">11 &middot; Route A order</div>
+  <h2>What gate G2 now recommends</h2>
+  <p>Each step stays one build and one commit. Each is run against the goldens, the micro and macro sets, and a capacity check, on both boards. The "why" column gives shares of the measured samples, not promised gains.</p>
+  <div class="tablewrap"><table>
+    <tr><th>Order</th><th>Step</th><th>Why, from the data</th><th>Cost and risk</th></tr>
+    <tr><td>1</td><td>S1a <code>ProcessWeb</code> on the 100 &micro;s cadence (WEB builds)</td><td>About 10% on HDMIWEB (Phase 0). WEB SCAN must keep working with no connection.</td><td>Trivial</td></tr>
+    <tr class="rec"><td>2</td><td>S10 first-free hints in the allocator (new)</td><td>Calls with LOCAL strings or arrays 2.35-2.6x slower (RP2040 1.45-1.5x) when big arrays hold the top of the heap; MID$ and STR$ likewise when the bottom fills.</td><td>Small, local to <code>Memory.c</code></td></tr>
+    <tr><td>3</td><td>S1c an interrupt-pending word</td><td>An armed SETTICK adds about 460 cycles (RP2350) or 630 (RP2040) to every statement. Any program with an interrupt armed pays this; none of the three measured games does.</td><td>Small; every interrupt source must set the word</td></tr>
+    <tr class="rec"><td>4</td><td>S5/S6 symbols with lazy, per-frame binding</td><td>Name lookup 16-34% of every workload, worse with recursion and on the RP2040.</td><td>The largest structural item; changes the image format</td></tr>
+    <tr><td>5</td><td>S4 array indices and S8 built-in arguments in place</td><td>Text walking 8-20% on the PC3; about 900-1,000 cycles of fixed cost on each built-in call; graphics variable forms 1.37-1.97x.</td><td>Medium</td></tr>
+    <tr><td>6</td><td>S3b call descriptors and cheaper LOCAL creation</td><td><code>makeargs</code> (both argument lists) is 21% of a call loop; about 1,000 cycles per LOCAL scalar on the RP2350 (2,500-3,400 on the RP2040).</td><td>Medium; fits with the symbol work</td></tr>
+    <tr><td>7</td><td>S7 partner tables for SELECT, FOR and DO; S5b label symbols</td><td>SELECT 10.8-22.6k cycles for 30 arms; FOR/DO entry 210-270 cycles per body line; RP2040 labels 67x.</td><td>Medium</td></tr>
+    <tr><td>8</td><td>S2 RP2040: cache the SUB-table count, power-of-two variable tables</td><td>+21-47% on array reads and calls with 200 SUBs; the hash <code>%</code> divider call.</td><td>Small</td></tr>
+    <tr><td>9</td><td>S9 REM and DATA lines skipped like <code>'</code> comments</td><td>1,500-1,670 cycles each against 520.</td><td>Small</td></tr>
+  </table></div>
+  <p><strong>The RP2040 bug found on the way, now fixed on main (<code>48b4680</code>, merged into <code>development</code>):</strong></p>
+  <ul>
+    <li><strong>The bug.</strong> When findvar created a variable on the RP2040, its check for a SUB or FUNCTION of the same name stepped one byte into the 2-byte command token instead of over it. It never matched, so a variable could take a SUB's name without the error the RP2350 gives.</li>
+    <li><strong>The fix and its proof.</strong> <code>DIM foo</code> beside <code>SUB foo</code> and <code>LOCAL fn</code> beside <code>FUNCTION fn</code> now raise "A sub/fun has the same name". Prefixes and extensions of a SUB's name are still accepted, and no corpus golden hits the error on either chip.</li>
+    <li><strong>What it costs.</strong> The check now really compares names on every LOCAL created, which costs solar_eclipse.bas 1.0% on the RP2040 (32.66 s to 32.99 s). Replacing the scan with a binary search of the sorted SUB table, as <code>FindSubFun</code> does, would remove it; that could join S2.</li>
+  </ul>
+  <p><strong>Outside the interpreter, for Peter's list:</strong></p>
+  <ul>
+    <li><strong>Long lines:</strong> MMBasic's C <code>DrawLine</code> takes 2.6x MicroPython's cycles on long lines at the same 4-bit packed format. MicroPython's own 8-bit mode is only 13% faster, so it is the line loop, not the format.</li>
+    <li><strong>USB host polling:</strong> takes 1-3.5% on HDMIUSB.</li>
+    <li><strong><code>TestStackOverflow</code>:</strong> takes 2.1-2.6% of every RP2040 workload.</li>
+    <li><strong>The sampler:</strong> its tables should come from outside the SRAM heap, and it should stop before END prints its report.</li>
+  </ul>
+  <p><strong>What stays for Route B:</strong> the evaluator core, 13-35% of the samples.</p>
+</section>
+
+<section id="method">
+  <div class="eyebrow">12 &middot; Method and files</div>
+  <h2>How it was measured</h2>
+  <ul>
+    <li><strong>Builds.</strong>
+      <ul>
+        <li><strong>PC3:</strong> HDMIUSB at <code>0096659</code>. Its micro suite matched Phase 0 within 3% (most within 1%). The board missed its automatic PC3 configuration on the first boot (the GP27 detection) and was configured by hand.</li>
+        <li><strong>RP2040:</strong> the timing runs were on the main build carrying the five fixes (<code>b4ccc22</code>). The profiles were on <code>0096659</code>, after it turned out the main build had no sampler; that is also why two early RP2040 profiled runs printed [PERF] with no [PCS]. The two builds differ only by the sampler code, within the 1% placement floor.</li>
+      </ul></li>
+    <li><strong>Micro tests</strong> time N passes of a loop holding one statement and subtract the empty loop, as in Phase 0. Timing runs never had profiling on; profiled runs are used only for shares.</li>
+    <li><strong>Game workloads</strong> are modified copies, never the originals. They are headless, run a fixed number of frames with fixed seeds, and check their end state. After review, the Exile harness's calibration pass was corrected and the three games were rerun. That moved the Exile CSUB kernel from 0.046 to 0.056 ms a tick, and the figures above are from the rerun. The Prince of Pico data is Peter's local conversion and is not in the repository.</li>
+    <li><strong>Files.</strong> The programs and drivers are in <code>Bas/bench/phase1</code>:
+      <ul>
+        <li><code>gen_micro2.py</code> (bench_micro2, bench_subs0/200), <code>bench_heap.bas</code>, <code>bench_gfx.bas</code> / <code>bench_gfx.py</code>, <code>calls_pcs_*.bas</code>;</li>
+        <li><code>macros/</code>: knivd_fixed, the julia pair, gfx_frames and <code>runmacro.py</code>;</li>
+        <li><code>games/</code>: the builder <code>make_games.py</code> and <code>gamebench.py</code>. It builds the game copies from the repository, so no game data is stored.</li>
+      </ul>
+      The raw outputs and <code>phase1_data.json</code> are in <code>Bas/bench/results/phase1</code>.</li>
+  </ul>
+</section>
+</div>
+</body>
+</html>

@@ -1,0 +1,9 @@
+RUN
+BENCHSTART PicoMiteVGA  6.040051  315 MHz
+BENCH julia240x180_csub_us_per_render 3326874.650 1047965515
+BENCH julia240x180_csub_us_per_pixel 77.011 24258
+BENCH julia240x180_csub_us_per_escape_iter 7.065 2226
+CHECK julia240x180  1188747455186
+ELAPSED julia240x180_csub 66537.561 ms for  20 render(s)
+BENCHEND
+> 

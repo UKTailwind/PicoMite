@@ -1,0 +1,56 @@
+RUN
+BENCHSTART PicoMiteVGA  6.040051  315 MHz
+BENCH empty_for_loop 1.530 482
+BENCH call S0 (no params) 15.550 4898
+BENCH call S3F fx,fy,fz (untyped float params) 57.254 18035
+BENCH call S3I a%,b%,c% (suffixed int params) 54.095 17040
+BENCH call S3I 1,2,3 (literal args) 47.393 14929
+BENCH call S3T a%,b%,c% (AS INTEGER params) 64.099 20191
+BENCH call S3V a%,b%,c% (BYVAL int params) 69.801 21987
+BENCH call S6F fx,fy,fz,fx,fy,fz (untyped) 99.209 31251
+BENCH call S6I a%,b%,c%,d%,e%,f% (suffixed) 93.456 29439
+BENCH call S6T a%..f% (AS INTEGER) 118.056 37187
+BENCH call S0L4 (0 params, 4 LOCAL scalars) 59.233 18658
+BENCH call S0L12 (0 params, 12 LOCAL scalars) 123.918 39034
+BENCH y%=F0%() (FUNCTION, 0 args) 32.531 10247
+BENCH fy=F2(fx,fz) (FUNCTION, 2 float args) 71.857 22635
+BENCH call SeLoc (sefunc shape: 7 LOCAL arrays + 10 scalars) 379.870 119659
+BENCH call SeGlob (same body on global arrays) 91.313 28764
+BENCH fy=fx 7.642 2407
+BENCH fy=SIN nested 1 deep 16.429 5175
+BENCH fy=SIN nested 2 deep 25.292 7967
+BENCH fy=SIN nested 3 deep 34.429 10845
+BENCH fy=SIN nested 4 deep 45.071 14197
+BENCH fy=SIN nested 5 deep 53.570 16875
+BENCH fy=MAX(fx,fz) (variables) 18.712 5894
+BENCH fy=MAX(1.25,2.5) (literals) 23.275 7331
+BENCH st$=MID$(t$,c%,d%) (variables) 23.401 7371
+BENCH st$=MID$(t$,3,4) (literals) 19.205 6050
+BENCH st$=STR$(fx,0,3) (literals) 40.849 12867
+BENCH a%=a%+1 (nothing armed) 9.669 3046
+BENCH a%=a%+1 (SETTICK armed, 60 s) 13.689 4312
+BENCH a%=a%+1 (SETTICK 1 ms, empty handler) 14.038 4422
+BENCH a%=a%+1 (OPTION NOCHECK ON) 8.741 2754
+BENCH DATA line with a 60-byte list in the body 6.359 2003
+BENCH REM line (40 chars) in the body 5.642 1777
+BENCH ' comment line (40 chars) in the body 1.954 616
+BENCH FOR 1-pass inner loop, body 3 lines 27.930 8798
+BENCH FOR 1-pass inner loop, body 30 lines 49.694 15654
+BENCH DO 1-pass loop, body 3 lines 21.389 6737
+BENCH DO 1-pass loop, body 30 lines 42.894 13512
+BENCH inner FOR count 100 (per inner pass, raw) 11.165 3518
+BENCH inner FOR count 2 (per inner pass, raw) 19.395 6110
+BENCH SELECT 30 arms, arm 1 matches 52.523 16545
+BENCH SELECT 30 arms, arm 30 matches 120.466 37947
+BENCH GOSUB label near the top 11.459 3609
+BENCH GOSUB label after 1000 lines 766.269 241375
+BENCH [depth 1] la=lb (LOCALs) 17.368 5471
+BENCH [depth 1] ly=K1 (CONST) 17.271 5440
+BENCH [depth 1] la=b% (global) 17.620 5550
+BENCH [depth 1] ly=lx*1.000001+0.5 33.094 10425
+BENCH [depth 10] la=lb (LOCALs) 25.668 8085
+BENCH [depth 10] ly=K1 (CONST) 25.891 8156
+BENCH [depth 10] la=b% (global) 25.479 8026
+BENCH [depth 10] ly=lx*1.000001+0.5 44.896 14142
+BENCHEND
+> 

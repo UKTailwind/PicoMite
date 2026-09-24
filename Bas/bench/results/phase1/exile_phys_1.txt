@@ -1,0 +1,8 @@
+RUN
+GAMESTART exile_phys PicoMiteHDMIUSB RP2350B 6.040051 378 MHz prof=0 reps=1
+GAMEBENCH exile_phys 2384 22879.6 9.5971
+GAMENULL exile_phys 2384 594.8 0.2495
+GAMEKERNEL exile_phys 2384 22284.8 9.3476
+GAMECHECK exile_phys 18 of 18 end states match, unread feed 0, faults 0, notes 0
+GAMECHECK PASS
+> 

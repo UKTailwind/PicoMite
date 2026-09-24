@@ -1,0 +1,44 @@
+RUN
+BENCHSTART PicoMiteVGA  6.040051  315 MHz
+BENCH ctl.loop.empty 1.531 482
+BENCH ctl.assign 7.157 2254
+BENCH H4.pixel.lit 10.559 3326
+BENCH H4.pixel.var 16.696 5259
+BENCH H4.pixel.var_x 13.480 4246
+BENCH H4.pixel.var_c 12.578 3962
+BENCH H4.pixel.var_float 29.373 9252
+BENCH H4.pixel.lit_2arg 8.492 2675
+BENCH H4.pixel.lit_offscreen 12.017 3785
+BENCH H4.line.lit 26.822 8449
+BENCH H4.line.lit_4arg 22.505 7089
+BENCH H4.line.var 42.099 13261
+BENCH H4.box.lit 21.828 6876
+BENCH H4.box.var 43.103 13577
+BENCH H4.circle.lit 29.347 9244
+BENCH H4.circle.var 41.490 13069
+BENCH E8.loop64.empty 1.959 617
+BENCH E8.pixel64.gross 21.323 6717
+BENCH E8.pixel64.net 19.363 6099
+BENCH E8.pixelarray512.stmt 210.409 66279
+BENCH E8.pixelarray512.perpixel 0.411 129
+BENCH E9.cls.320x240 125.190 39435
+BENCH E9.boxfill.8x8 36.157 11389
+BENCH E9.boxfill.320x240 159.401 50211
+BENCH E9.line.8x8 28.994 9133
+BENCH E9.line.320x240 347.290 109396
+BENCH E9.circlefill.r4 43.139 13589
+BENCH E9.circlefill.r100 336.508 106000
+BENCH local.ctl.loop.empty 1.593 502
+BENCH local.H4.pixel.lit 10.493 3305
+BENCH local.H4.pixel.var 18.413 5800
+BENCH local.H4.line.lit 26.761 8430
+BENCH local.H4.line.var 54.509 17170
+BENCH local.H4.box.lit 21.770 6858
+BENCH local.H4.box.var 38.497 12127
+BENCH local.H4.circle.lit 29.286 9225
+BENCH local.H4.circle.var 44.514 14022
+BENCH local.E8.loop64.empty 2.097 660
+BENCH local.E8.pixel64.gross 22.427 7064
+BENCH local.E8.pixel64.net 20.330 6404
+BENCHEND
+> 

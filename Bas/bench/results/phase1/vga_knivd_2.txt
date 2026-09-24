@@ -1,0 +1,8 @@
+RUN
+BENCHSTART PicoMiteVGA  6.040051  315 MHz
+BENCH knivd_fixed_us_per_outer_pass 21910.885 6901929
+BENCH knivd_fixed_us_per_inner_pass 219.109 69019
+CHECK knivd_fixed i=3000 sumx=-29.008128473 f=-0.000041588 len=13 shash=4502
+ELAPSED knivd_fixed 65732.655 ms for 3000 outer passes (4902 grains-equivalent)
+BENCHEND
+> 

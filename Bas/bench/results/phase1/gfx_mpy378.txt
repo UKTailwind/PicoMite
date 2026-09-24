@@ -1,0 +1,44 @@
+import bench_gfx
+BENCHSTART PICO_COMPUTER_2_v0.17_with_RP2350B 1.29.0 378 MHz
+BENCH ctl.loop.empty 1.001 379
+BENCH ctl.assign 0.605 229
+BENCH H4.pixel.lit 1.884 712
+BENCH H4.pixel.var 2.694 1019
+BENCH H4.pixel.var_x 3.087 1167
+BENCH H4.pixel.var_c 2.150 813
+BENCH H4.pixel.lit_3digit 1.973 746
+BENCH H4.pixel.lit_offscreen 1.706 645
+BENCH H4.line.lit 4.698 1776
+BENCH H4.line.var 5.274 1994
+BENCH H4.box.lit 5.675 2145
+BENCH H4.box.var 7.046 2663
+BENCH H4.circle.lit 9.366 3541
+BENCH H4.circle.var 14.255 5389
+BENCH py.display.pixel.var 8.930 3376
+BENCH py.display.line.var 31.587 11940
+BENCH E8.loop64.empty 1.068 404
+BENCH E8.pixel64.gross 3.745 1416
+BENCH E8.pixel64.net 2.677 1012
+BENCH E9.cls.640x480 310.045 117197
+BENCH E9.boxfill.8x8 4.153 1570
+BENCH E9.boxfill.320x240 99.347 37553
+BENCH E9.line.8x8 4.249 1606
+BENCH E9.line.320x240 67.956 25687
+BENCH E9.circlefill.r4 17.720 6698
+BENCH E9.circlefill.r100 320.271 121062
+BENCH E9.boxfill.640x480 311.170 117622
+BENCH E9.line.640x480 133.329 50398
+BENCH local.ctl.loop.empty 0.740 280
+BENCH local.H4.pixel.lit 1.625 614
+BENCH local.H4.pixel.var 1.634 618
+BENCH local.H4.line.lit 3.660 1383
+BENCH local.H4.line.var 3.681 1391
+BENCH local.H4.box.lit 5.421 2049
+BENCH local.H4.box.var 5.432 2053
+BENCH local.H4.circle.lit 9.118 3447
+BENCH local.H4.circle.var 9.073 3429
+BENCH local.E8.loop64.empty 0.804 304
+BENCH local.E8.pixel64.gross 3.501 1323
+BENCH local.E8.pixel64.net 2.697 1019
+BENCHEND
+[8;40;80t>>> 

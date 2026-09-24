@@ -1,0 +1,13 @@
+RUN
+BENCHSTART PicoMiteVGA  6.040051  315 MHz
+BENCH gfx_elite_frame_us_per_frame 68657.965 21627259
+BENCH gfx_elite_move_cls_us_per_frame 1156.758 364379
+BENCH gfx_elite_stardust_us_per_frame 10967.881 3454883
+BENCH gfx_elite_planet_us_per_frame 10415.649 3280929
+BENCH gfx_elite_ships_us_per_frame 30728.745 9679555
+BENCH gfx_elite_dash_us_per_frame 15172.613 4779373
+BENCH gfx_elite_fbcopy_us_per_frame 195.215 61493
+CHECK gfx_elite  37966927747
+ELAPSED gfx_elite 68659.610 ms for  1000 frames, FBUF% = 1
+BENCHEND
+> 

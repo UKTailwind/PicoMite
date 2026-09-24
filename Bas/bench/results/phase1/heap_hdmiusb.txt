@@ -1,0 +1,31 @@
+RUN
+BENCHSTART PicoMiteHDMIUSB RP2350B  6.040051  378 MHz
+BENCHINFO sram_free_at_start  154368 psram_heap  6.291456e+06
+BENCH A_empty a%=b% (no allocation) 4.023 1521
+BENCH A_empty st$=t$+u$ (temp, bottom-up) 7.407 2800
+BENCH A_empty st$=MID$(t$,3,4) (temp, bottom-up) 9.942 3758
+BENCH A_empty st$=STR$(fx,0,3) (temp, bottom-up) 14.820 5602
+BENCH A_empty fy=SIN(fx) (argument temp) 6.718 2539
+BENCH A_empty call SUB with LOCAL s$ (top-down) 10.848 4101
+BENCH A_empty call SUB with LOCAL la(3) (top-down) 12.683 4794
+BENCH A_empty call SUB with no LOCALs (control) 5.502 2080
+BENCHINFO B sram_free  29696 of  154368
+BENCH B_top80 a%=b% (no allocation) 4.026 1522
+BENCH B_top80 st$=t$+u$ (temp, bottom-up) 7.410 2801
+BENCH B_top80 st$=MID$(t$,3,4) (temp, bottom-up) 9.943 3758
+BENCH B_top80 st$=STR$(fx,0,3) (temp, bottom-up) 14.826 5604
+BENCH B_top80 fy=SIN(fx) (argument temp) 6.719 2540
+BENCH B_top80 call SUB with LOCAL s$ (top-down) 27.942 10562
+BENCH B_top80 call SUB with LOCAL la(3) (top-down) 29.800 11264
+BENCH B_top80 call SUB with no LOCALs (control) 5.505 2081
+BENCHINFO C sram_free  30464 of  154368
+BENCH C_bottom80 a%=b% (no allocation) 4.027 1522
+BENCH C_bottom80 st$=t$+u$ (temp, bottom-up) 7.410 2801
+BENCH C_bottom80 st$=MID$(t$,3,4) (temp, bottom-up) 27.908 10549
+BENCH C_bottom80 st$=STR$(fx,0,3) (temp, bottom-up) 33.490 12659
+BENCH C_bottom80 fy=SIN(fx) (argument temp) 6.719 2540
+BENCH C_bottom80 call SUB with LOCAL s$ (top-down) 10.851 4102
+BENCH C_bottom80 call SUB with LOCAL la(3) (top-down) 12.686 4795
+BENCH C_bottom80 call SUB with no LOCALs (control) 5.505 2081
+BENCHEND
+> 

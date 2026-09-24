@@ -1,0 +1,8 @@
+RUN
+BENCHSTART PicoMiteHDMIUSB RP2350B  6.040051  378 MHz
+BENCH knivd_fixed_us_per_outer_pass 9393.373 3550695
+BENCH knivd_fixed_us_per_inner_pass 93.934 35507
+CHECK knivd_fixed i=3000 sumx=-29.008128472 f=-0.000041588 len=13 shash=4502
+ELAPSED knivd_fixed 28180.119 ms for 3000 outer passes (11435 grains-equivalent)
+BENCHEND
+> 
