@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Interpreter Performance Plan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Review plan · PicoMite MMBasic interpreter · 24 September 2026</div>
+    <h1>Interpreter Performance Plan</h1>
+    <p>How MMBasic spends its time, what has already been learned, and a measured programme to make the interpreter faster without shrinking the largest program a user can run. It is led by one benchmark, <code>solar_eclipse.bas</code>, on both boards.</p>
+    <p class="ref">A read-only review of the <code>development</code> branch. Nothing was edited, built or run on a board to write it. Every figure is one of three things: Peter's measurement, a reading of the code cited as <code>file:line</code>, or an estimate marked as such.</p>
+  </div>
+</header>
+<div class="wrap">
+<nav class="toc" aria-label="Sections">
+  <a href="#purpose">1 Purpose and ground rules</a>
+  <a href="#time">2 Where the time goes</a>
+  <a href="#learned">3 What we know already</a>
+  <a href="#method">4 Review method</a>
+  <a href="#architectures">5 Architectures compared</a>
+  <a href="#programme">6 The programme</a>
+  <a href="#risks">7 Risks</a>
+  <a href="#decisions">8 Decisions for Peter</a>
+</nav>
+
+<!-- ============================================================ 1 -->
+<section id="purpose">
+  <div class="eyebrow">1 · Purpose</div>
+  <h2>Purpose and ground rules</h2>
+  <p class="lede">MMBasic spends most of its time interpreting, not computing. The work it repeats on every execution is fixed for the whole RUN. This plan measures that work first. It then moves the answers into the stored program, written once when the program is saved, and never into heap tables that grow with the program.</p>
+
+  <h3>The short version</h3>
+  <ul>
+    <li><strong>Overhead is most of the run time.</strong> Peter's mmb2csub pairs show that the same routine as native code runs about 4x faster, even when the heavy lifting is already in optimised firmware such as the graphics commands. On <code>solar_eclipse.bas</code> about 80% of the run time is interpreter overhead: 1 − 2.5/13 = 80.8% from Peter's figures, or 1 − 2.7/13 = 79% from the 252 MHz pair in <code>docs/mmb2csub.md:670</code>.</li>
+    <li><strong>The overhead is repeated work.</strong> Each statement is scanned to its end. Arguments are split again, names are hashed again and NEXT or LOOP is found again. A SUB's parameter list is re-read on every call, and the firmware polls for events that almost never happened.</li>
+    <li><strong>The trace cache shows what not to do.</strong> It kept its answers in one fixed heap slab, which has to be made bigger as the code grows (Elite needed 256 slots). It keyed them on buffer addresses and invalidated them through one global counter. It rarely pays, and it can make programs slower.</li>
+    <li><strong>Phase 0 measures before anything is built.</strong> It uses the anchor benchmark and its CSUB twin as the floor, a matrix of runs that needs no build, and <code>OPTION PROFILING</code>, extended one argument at a time as the hypotheses need it.</li>
+    <li><strong>Route A makes the text cheaper.</strong> It adds an attention word in place of per-statement polling, call descriptors, symbol ids for names with storage bound lazily at run time, and block-partner tables. The ids, descriptors and partner tables are kept in the stored image. RAM grows only with the number of unique names.</li>
+    <li><strong>Route B comes only if the numbers justify it.</strong> It is a compiled statement stream, written when the program is saved into a slot beside the text that LIST, EDIT and SAVE use. For testing, the slot is a RAM slot on the PC3 and a flash slot on the RP2040.</li>
+    <li><strong>The yardstick is the fraction of the anchor's measured overhead removed.</strong> MicroPython, doing the same double-precision arithmetic, removes about 37% of it (8.8 s against 12.5 s, with the CSUB at 2.5 s). That is the bar Route A should reach.</li>
+  </ul>
+
+  <h3>Why first principles, and not more tuning</h3>
+  <p>Tuning hot functions has been tried several times and has not moved the overhead:</p>
+  <ul>
+    <li>A word-level heap bitmap scan was 17% <em>slower</em> on knivd.</li>
+    <li>Moving the double-precision routines to RAM only shuffled code placement.</li>
+    <li>Dispatch tables in RAM gained 0.4%.</li>
+    <li>One TinyUSB debug flag moved knivd by about 4% (11,840 against 12,330) through code placement alone. Any claimed gain must beat that noise.</li>
+  </ul>
+  <p>Integer and float benchmarks run at almost the same speed, so the arithmetic is not the cost. The question is not "which function is slow". It is "what does the interpreter work out again on every execution that it could have worked out once".</p>
+
+  <h3>Ground rules</h3>
+  <ul>
+    <li><strong>Scope.</strong> This is the <code>development</code> branch, and everything may change: the stored program format, the tokeniser, LIST/EDIT/SAVE, the library and RAM-slot image formats, and interrupt-check timing. The trace cache is out of scope: Peter will probably remove it, and the plan ignores it.</li>
+    <li><strong>The hard constraints are RAM and flash, and nothing else.</strong>
+      <ul>
+        <li>Firmware flash per variant:
+          <ul>
+            <li>VGAUSBRP2350's margin is not known until that variant is built again. It outgrew its 1040 KB offset, and commit <code>564fcff</code> (2026-09-21) moved it one 16 KB step to 1056 KB (<code>configuration.h:146</code>).</li>
+            <li>RP2040 VGA has 13,340 B: <code>buildRP2040L/PicoMite.bin</code> is 822,244 B against the 816 KB offset.</li>
+            <li>Flash moves in 16 KB steps.</li>
+          </ul>
+        </li>
+        <li>RAM-resident code on the RP2040 costs whole 4 KB pages.</li>
+        <li><code>struct option_s</code> is exactly 896 bytes.</li>
+        <li>The function token table is 7-bit and nearly full: HDMIWEB is at 127.</li>
+      </ul>
+    </li>
+    <li><strong>Program capacity.</strong> In Peter's words, "going very fast but only supporting small programs isn't a step forward".
+      <ul>
+        <li>The largest programs today are about 100 KB on the RP2040 VGA, 144 KB on the PC3's HDMIWEB build and 300 KB on PICORP2350 (<code>configuration.h:109,200,326</code>). <code>MAX_PROG_SIZE</code> equals the heap, except that every RP2040 PicoMite build (PICO, PICOUSB and PICOMIN) fixes it at 120 KB (<code>:393-397</code>). That is the whole heap on PICO, but less than the heap on PICOUSB (124 KB) and PICOMIN (128 KB) (<code>:356, 361</code>).</li>
+        <li>Every proposal is priced in bytes of RAM and bytes of program flash per KB of user program.</li>
+        <li>Heap used by a side table is heap taken from the user's variables. The RP2040 has no PSRAM.</li>
+      </ul>
+    </li>
+    <li><strong>Method.</strong>
+      <ul>
+        <li>Measure before building.</li>
+        <li>One mechanism per build and per commit.</li>
+        <li>Every step runs on the board against golden outputs.</li>
+        <li>No benchmark may get slower beyond the placement floor.</li>
+        <li>A per-statement cache keyed on an address, or a heap table that grows with the code, is rejected on sight (§3.5).</li>
+      </ul>
+    </li>
+    <li><strong>Hardware.</strong>
+      <ul>
+        <li>PC3 on COM16: RP2350B with PSRAM and HDMI, running HDMIWEB with WiFi live.</li>
+        <li>RP2040 VGA on COM7: a <code>LOWRAM</code> build with no trace cache and no label hashing. <code>findvar</code>, <code>DefinedSubFun</code> and the FOR, IF, NEXT, DO and INC handlers run from flash.</li>
+      </ul>
+    </li>
+    <li><strong>Etiquette.</strong>
+      <ul>
+        <li>Never drive a board Peter is using. He types RUN.</li>
+        <li>Never build while he builds.</li>
+        <li>Serial lines go at least 20 ms apart.</li>
+        <li>Every result is logged with <code>MM.DEVICE$</code>, <code>MM.VER</code>, the git hash, the CPU speed and <code>OPTION LIST</code>.</li>
+      </ul>
+    </li>
+  </ul>
+</section>
+
+<!-- ============================================================ 2 -->
+<section id="time">
+  <div class="eyebrow">2 · The model</div>
+  <h2>How the interpreter spends its time today</h2>
+  <p class="lede">This section follows one statement through the firmware. Every step was read in the code. The cycle cost of each step has not been measured on either board; Phase 0 exists to measure it.</p>
+
+  <h3>What the program looks like in memory</h3>
+  <p>The program runs directly from its tokenised image in flash, read through the 16 KB XIP cache. On the PC3 the RAM library and the RAM slots sit in PSRAM behind the same cache (<code>PSRAMbase</code> 0x11000000, <code>configuration.h:524</code>).</p>
+  <ul>
+    <li>Only keywords are tokens. Names, numbers, spaces and trailing comments stay as ASCII.</li>
+    <li>Each line starts with <code>T_NEWLINE</code> and a skip byte (<code>MMBasic.h:98-107</code>, written at <code>MMBasic.c:1698-1720</code>).</li>
+    <li>Statements end in a 0, and the program ends with <code>00 00</code>.</li>
+  </ul>
+  <p>The same image is the source for LIST, EDIT and SAVE, which is why it stays text.</p>
+
+  <h3>One statement, step by step</h3>
+  <ol>
+    <li><strong>Line header</strong> (<code>MMBasic.c:1834-1859</code>), once per line: set <code>CurrentLinePtr</code>, write the <code>TraceBuff</code> ring, test <code>TraceOn</code>, and step over the line number and label.</li>
+    <li><strong>Pre-scan</strong> (<code>1879-1881</code>): <code>skipelement(nextstmt)</code> walks every byte to the terminating 0, including any trailing comment. <code>ExecuteProgram</code> uses the skip byte only to jump over comment-only lines (<code>1863-1875</code>).</li>
+    <li><strong>Dispatch</strong> (<code>1890-1917</code>): <code>commandtbl_decode</code>, then <code>commandtbl[].fptr()</code>. The table is <code>const</code>, so it is in flash. A user SUB name goes through <code>FindSubFun</code> and then <code>DefinedSubFun</code>. <code>setjmp</code> runs only while ON ERROR SKIP, IGNORE or RESTART is in effect, that is while <code>OptionErrorSkip</code> is not 0 (<code>1925-1938</code>; <code>Commands.c:8546-8575</code>).</li>
+    <li><strong>The command reads its own text again.</strong>
+      <ul>
+        <li><code>getargs</code>/<code>makeargs</code> copy it into a 384 B stack buffer, calling <code>strchr</code> on each top-level byte (<code>MMBasic.c:5551</code>). A bracketed argument or function call is found with <code>getclosebracket</code> and copied in one <code>memcpy</code> (<code>5600-5607</code>).</li>
+        <li>LET scans for <code>=</code> with a <code>tokenfunction</code> table lookup on each byte (an inline macro, <code>MMBasic.h:227-230</code>; <code>Commands.c:1787-1788</code>), then <code>skipvar</code>, then <code>findvar</code> on the left side (<code>Commands.c:1818</code>).</li>
+      </ul>
+    </li>
+    <li><strong>Expressions.</strong> <code>evaluate</code> calls <code>getvalue</code> for the first operand, then <code>doexpr</code> while an operator follows (<code>MMBasic.c:2889-2891</code>). <code>doexpr</code> calls <code>getvalue</code> for each next operand and recurses on precedence (<code>3066, 3146</code>).
+      <ul>
+        <li>Literals are parsed again on every evaluation (<code>MMBasic.c:3336-3398</code>).</li>
+        <li>Operators receive their operands through globals and are reached by an indirect call (<code>3135</code>).</li>
+      </ul>
+    </li>
+    <li><strong>Every name.</strong> <code>findvar</code> upper-cases and FNV-hashes each character, then takes <code>% maxglobalvars</code> at run time (<code>4689-4701</code>). Inside a SUB it probes the local table before the global one.</li>
+    <li><strong>Every <code>name(</code>.</strong> <code>FindSubFun</code> runs first (<code>3277-3279</code>), so every array read asks "is this a function?".
+      <ul>
+        <li>On the RP2040 that starts by counting <code>subfun[]</code> one entry at a time (<code>2027-2028</code>).</li>
+        <li>Array indices then go through a <code>getargs</code> copy, a bracket re-scan and <code>skipvar</code>.</li>
+      </ul>
+    </li>
+    <li><strong>Every built-in function that takes arguments</strong> (<code>T_FUN</code>, <code>3245-3253</code>; <code>Memory.c:1852-1860</code>): <code>getclosebracket</code>, then a zeroed 256 B temp page, then a <code>memcpy</code> of the argument text. The page is freed at the end of the statement. Functions with no arguments, such as TIMER and PI, skip the copy (<code>3254-3256</code>).</li>
+    <li><strong>Tail</strong> (<code>MMBasic.c:1940-1952</code>):
+      <ul>
+        <li><code>ClearTempMemory</code> if anything was allocated.</li>
+        <li>The core1 stack canary, which is not compiled on WEB builds (<code>1944</code>).</li>
+        <li>Unless NOCHECK is set, <code>CheckAbort()</code> and then <code>check_interrupt()</code>:
+          <ul>
+            <li><code>CheckAbort</code> calls <code>ProcessWeb(1)</code> on every statement on WEB builds (<code>PicoMite.c:2682-2687</code>), and HDMIWEB is one (<code>CMakeLists.txt:798-806</code>). <code>ProcessWeb</code> reads <code>time_us_64</code>, walks the PCBs, and polls cyw43 every 100 calls or every 1 ms (<code>net/WiFi.c:295-345</code>).</li>
+            <li><code>routinechecks</code> calls <code>time_us_64()</code> and returns if less than 100 µs have passed (<code>PicoMite.c:893-901</code>).</li>
+            <li><code>check_interrupt</code> calls <code>ProcessTouch</code> on every statement while GUI controls exist. Otherwise it returns unless <code>InterruptUsed</code> is set. Once any interrupt has been set, <code>checkdetailinterrupts</code> runs on every statement until END (<code>MM_Misc.c:10558-10586</code>). That is a 350-line function in flash (<code>10209-10557</code>) that tests every interrupt source in turn.</li>
+          </ul>
+        </li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>Control flow and calls</h3>
+  <ul>
+    <li><strong>FOR entry</strong> (<code>Commands.c:5121-5235</code>):
+      <ul>
+        <li><code>getargs</code>, which trims <code>argbuf</code> in place (<code>5130-5133</code>).</li>
+        <li>Removal of any stale entry for the same loop from the FOR stack.</li>
+        <li>A forward scan to the matching NEXT. For each NEXT it meets, it runs <code>mystrncasecmp</code> at every byte offset of that NEXT's argument list (<code>5198-5235</code>).</li>
+      </ul>
+      <p>NEXT itself is a pointer compare (<code>5278-5284</code>). An inner loop therefore re-scans its body once per outer iteration.</p>
+    </li>
+    <li><strong>DO</strong> scans forward to LOOP on entry (<code>5378-5394</code>). <strong>SELECT</strong> walks the arms on every dispatch (<code>4729-4912</code>).</li>
+    <li><strong>GOTO and GOSUB.</strong> <code>findline</code> is a linear walk on both chips (<code>MMBasic.c:3547</code>). <code>findlabel</code> is hashed on the RP2350 (<code>3742</code>) and linear on the RP2040 (<code>3802</code>).</li>
+    <li><strong>SUB and FUNCTION calls</strong> (<code>DefinedSubFun</code>, <code>2232-2709</code>):
+      <ul>
+        <li><code>makeargs</code> runs over the caller's argument list and over the definition's parameter list (<code>2392</code>, <code>2398</code>).</li>
+        <li>For each parameter: the BYVAL/BYREF test twice, <code>skipvar</code>, <code>CheckIfTypeSpecified</code> (<code>2527</code>), and <code>findvar(V_LOCAL)</code>.</li>
+        <li>The RP2350 clears 600 B per call (<code>2370-2371</code>). The RP2040 allocates and zeroes 75 × 29 + 512 = 2,687 B per call (<code>2376-2385</code>).</li>
+        <li>A FUNCTION re-enters <code>ExecuteProgram</code> (<code>2679</code>), which copies the <code>jmp_buf</code> on entry and again on exit.</li>
+        <li>On return, <code>ClearVars</code> walks the whole hash list (<code>6356+</code>).</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Where the code runs</h3>
+  <ul>
+    <li><strong>RP2350.</strong> <code>ExecuteProgram</code>, the evaluator, <code>findvar</code>, the operators and the hottest handlers are RAM-resident. <code>checkdetailinterrupts</code> and most <code>fun_</code> routines run from flash; <code>fun_sin</code> is at 0x1000cbfc in the HDMIUSB map (<code>buildRP2350L</code>).</li>
+    <li><strong>RP2040 VGA (LOWRAM).</strong> These also run from flash:
+      <ul>
+        <li><code>findvar</code> and <code>DefinedSubFun</code> (<code>MMBasic.c:4643, 2227</code>);</li>
+        <li><code>cmd_for</code>, <code>cmd_if</code>, <code>cmd_else</code>, <code>cmd_next</code>, <code>cmd_do</code> and <code>cmd_inc</code> (<code>Commands.c:5097, 3659, 3947, 5256, 5327, 909</code>).</li>
+      </ul>
+    </li>
+    <li><strong>Flash clock.</strong>
+      <ul>
+        <li>The RP2350 runs the flash at CLKDIV 2 up to 288 MHz and CLKDIV 4 above (<code>PicoMite.c:3758-3761</code>); the RP2040 VGA is always at CLKDIV 4 (<code>CMakeLists.txt:588-591</code>, <code>PicoMite.c:3825-3827</code>).</li>
+        <li><strong>Not pursued.</strong> Peter's judgement is that flash timing is not very relevant, because its effect is confounded by the QMI cache, and placement effects are already known to be about 4%. The plan runs no flash-clock experiments.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>The repeated work, in one table</h3>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Work</th><th>Where</th><th>How often</th><th>Fixed for the RUN?</th><th>Resolved once today?</th></tr>
+    <tr><td>Find the end of the statement</td><td><code>MMBasic.c:1881</code></td><td>Every statement, every byte</td><td>Yes (its length)</td><td>Per line, and only to skip comment lines</td></tr>
+    <tr><td>Decode and dispatch</td><td><code>1890-1917</code></td><td>Every statement</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Poll for events</td><td><code>1940-1952</code>; <code>PicoMite.c:2682-2687, 893-901</code></td><td>Every statement</td><td>Almost always nothing happened</td><td>No</td></tr>
+    <tr><td>Split the arguments</td><td><code>makeargs</code></td><td>Nearly every command</td><td>Split points, yes</td><td>No</td></tr>
+    <tr><td>Resolve a name</td><td><code>findvar 4689-4701</code></td><td>Every reference</td><td>Which name, yes; which storage, no</td><td>No; globals never move once created</td></tr>
+    <tr><td>Ask whether <code>name(</code> is a function</td><td><code>3277-3279</code></td><td>Every array read</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Convert a literal</td><td><code>3336-3398</code></td><td>Every evaluation</td><td>Yes</td><td>Tried, no gain (§3.4)</td></tr>
+    <tr><td>Copy built-in arguments</td><td><code>3245-3253</code></td><td>Every call of a function that takes arguments</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Find NEXT, LOOP or a CASE arm</td><td><code>Commands.c:5198-5235, 5378-5394, 4729-4912</code></td><td>Every loop entry; every SELECT</td><td>Yes</td><td>FOR and DO iterations and the IF jump table</td></tr>
+    <tr><td>Find a label or line</td><td><code>MMBasic.c:3547, 3742, 3802</code></td><td>Every GOTO/GOSUB</td><td>For literal targets</td><td>RP2350 labels only</td></tr>
+    <tr><td>Parse a SUB's parameter list</td><td><code>2392-2532</code></td><td>Every call</td><td>Yes</td><td>No</td></tr>
+    <tr><td>Allocate and clear call scratch</td><td><code>2370-2385</code></td><td>Every call</td><td>Size known</td><td>No</td></tr>
+  </table>
+  </div>
+
+  <div class="note"><strong>What this model does not tell us is the split.</strong>
+    <ul>
+      <li>How much goes on the fixed frame (steps 1-3 and 9) and how much on operand work (steps 4-8) has not been measured on either chip.</li>
+      <li>The dossier's instruction counts, which put the frame at about 10-25% of <code>A=A+1</code>, are estimates.</li>
+      <li>The trace-cache figure that looks like a frame measurement cannot answer it either. That figure is 771 ms for 1M FOR/NEXT iterations at 252 MHz, about 194 cycles an iteration (<code>docs/option-profiling-cache.md:300-311</code>).
+        <ul>
+          <li>It came from an RP2040 PICO build. PICO is the only RP2040 variant with CACHE (<code>CMakeLists.txt:297-309</code>), and on that build <code>cmd_next</code> is in RAM. On COM7 it is in flash.</li>
+          <li>Setting it against the PC3's 6 µs per assignment (about 1,900 cycles if it was measured at 315 MHz, or 2,270 at 378 MHz; the clock was not recorded) crosses chip, build and XIP regime.</li>
+        </ul>
+      </li>
+    </ul>
+    Phase 0 measures the split on each board and each build (H1, H5).</div>
+</section>
+
+<!-- ============================================================ 3 -->
+<section id="learned">
+  <div class="eyebrow">3 · Evidence</div>
+  <h2>What has been learned already</h2>
+
+  <h3>3.1 The overhead, measured against CSUB twins of the same routine</h3>
+  <p>Split the interpreted time as <code>T = W + O</code>: the work itself plus the interpreter's overhead. mmb2csub converts about 132 of the 166 routines in its corpus (mmb2c's <code>tests/</code>, plus <code>se.bas</code>, <code>julia.bas</code> and <code>knivd.bas</code>). The same routine therefore exists interpreted and native, and <code>T_native</code> is a measured floor for W.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Routine</th><th>Board</th><th class="num">Interpreted</th><th class="num">Native</th><th class="num">O = 1 − T<sub>native</sub>/T<sub>interp</sub></th><th>Source</th></tr>
+    <tr><td>Graphics-heavy routines</td><td>both</td><td class="num">—</td><td class="num">—</td><td class="num">≈ 0.75 (4x)</td><td>Peter</td></tr>
+    <tr><td>Julia set</td><td>RP2040</td><td class="num">119 s</td><td class="num">5.9 s</td><td class="num">0.95</td><td><code>docs/mmb2csub.md:33-34</code></td></tr>
+    <tr><td>Julia set</td><td>RP2350</td><td class="num">86 s</td><td class="num">2.5 s</td><td class="num">0.97</td><td>same</td></tr>
+    <tr><td>Exile player kernel (hand-written C CSUB)</td><td>PC3 (clock not recorded)</td><td class="num">9.8 ms/tick</td><td class="num">0.1 ms/tick</td><td class="num">≈ 0.99</td><td><code>Exile_Port_Design_Review.html:405</code></td></tr>
+    <tr class="rec"><td><code>solar_eclipse.bas</code>, sefunc as CSUB</td><td>PC3, 378 MHz</td><td class="num">~12.5 s (14.6 s on HDMIWEB with WiFi live)</td><td class="num">2.5 s</td><td class="num">≈ 0.80</td><td>Peter</td></tr>
+    <tr><td><code>solar_eclipse.bas</code>, sefunc as CSUB</td><td>RP2350B, 252 MHz</td><td class="num">13 s</td><td class="num">2.7 s</td><td class="num">0.79</td><td><code>docs/mmb2csub.md:670</code></td></tr>
+  </table>
+  </div>
+  <p>What this implies:</p>
+  <ul>
+    <li>Even where the firmware does the drawing, three quarters of the time goes between the firmware calls, getting arguments out of text and into C.</li>
+    <li>Code built from SUBs with locals is almost pure overhead.</li>
+    <li>Nothing that speeds up the arithmetic can matter.</li>
+  </ul>
+  <p>This gives the yardstick used everywhere below. It is measured per board, within one build and one condition:</p>
+  <div class="formula">removed(X) = (T_interp − T_interp,X) / (T_interp − T_native)</div>
+  <p>Removing 10% of the overhead counts the same on a 4x routine as on a 35x one. The floor needs two caveats:</p>
+  <ul>
+    <li><strong>It is slightly optimistic.</strong> A CSUB skips bounds checks, per-statement Ctrl-C and interrupts, and error line numbers (<code>docs/mmb2csub.md</code> Appendix A).</li>
+    <li><strong>It is pessimistic on the RP2350.</strong> The blobs are M0+ code, helpers are reached through the CallTable, and a 37 KB blob runs from XIP flash.</li>
+  </ul>
+  <p>The sefunc CSUB barely scales with the clock: 2.7 s at 252 MHz and 2.48 s at 378 MHz (<code>docs/mmb2csub.md:668-672</code>). Between those two clocks the flash clock <em>fell</em> from 126 to 94.5 MHz while the CPU rose 1.5x. The interpreted remainder, flash fetch or the CallTable's double routines could each explain that. The plan does not chase it (flash timing is confounded by the QMI cache); it takes the floor as measured, on the same build as the interpreted time.</p>
+
+  <h3>3.2 What MicroPython's lead teaches</h3>
+  <p>On the same chips, MicroPython written to mimic BASIC is up to about 30% faster than MMBasic (Peter's figure). Peter's MicroPython is his own PC3 port (<code>\\wsl.localhost\Ubuntu\home\peter\src\micropython\ports\rp2</code>, board <code>PICO_COMPUTER_3</code>). It uses <strong>double-precision floats and arbitrary-precision (MPZ) integers</strong>, so it does the same arithmetic as MMBasic (<code>mpconfigboard.h:24-26</code>; <code>DEVELOPMENT_NOTES.md</code> §1). On the anchor, the line-faithful port <code>tests/solar_eclipse.py</code> takes about 8.8 s against MMBasic's 12.5 s at 378 MHz on the same chip, with digit-identical output. That removes (12.5 − 8.8)/(12.5 − 2.5) ≈ 37% of the overhead.</p>
+  <div class="grid2">
+    <div class="card">
+      <h3>What it resolves once</h3>
+      <ul>
+        <li>It compiles once: lexer, whole-module parse tree, then bytecode (<code>py/compile.c</code>).</li>
+        <li>Identifiers are interned to qstrs at parse time, and bytecode names them by a small per-module index.</li>
+        <li>Function locals get fixed slots. <code>LOAD_FAST</code> is <code>fastn[-n]</code> plus a NULL check, and an unassigned slot is NULL.</li>
+        <li>Pending work is flagged by events. Ctrl-C and IRQ callbacks set two words, which are tested inline only in jump opcodes. Nothing polls per opcode.</li>
+        <li><code>for</code> over <code>range</code> compiles to an inline counter, and <code>const()</code> is folded.</li>
+        <li>Line numbers live in a compressed table that is decoded only when an exception is raised.</li>
+        <li>Dispatch is by computed goto, about 10% faster than a switch on rp2.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>What eats the gain</h3>
+      <ul>
+        <li>Type dispatch on every binary operation.</li>
+        <li>Floats are boxed. In Peter's double-precision build a 64-bit double cannot fit in the 32-bit object word, so every float result is a heap allocation from the GC under a mutex (his <code>DEVELOPMENT_NOTES.md</code> says so too).</li>
+        <li>Integers beyond 31 bits become MPZ bignums on the heap.</li>
+        <li>Its flash runs slower than MMBasic's: capped at 63 MHz (divider 6 at 378 MHz, <code>MICROPY_HW_FLASH_MAX_FREQ</code>), against MMBasic's 94.5 MHz. Its VM core is in RAM and its bytecode is in RAM.</li>
+        <li>Its <code>sin</code> is software double precision. The ulab variant, with the series vectorised, still takes 7.4 s, and its README puts the remainder down to <code>sin</code>.</li>
+        <li>BASIC-style module-level code uses <code>LOAD_NAME</code>/<code>STORE_NAME</code> dictionary operations, and builtins first miss in the globals.</li>
+        <li><code>nlr_push</code> on every call.</li>
+        <li>Its own documentation puts the native emitter at about 2x bytecode. The big factors come only from viper, which uses machine integers.</li>
+      </ul>
+    </div>
+  </div>
+  <p><strong>Implication.</strong> A suffix-typed BASIC that adopts these resolution ideas without the dynamic object model has a higher ceiling than 1.3x. An Amdahl projection from the 300% overhead: cutting the overhead by 5x would give about 2.5x on graphics-heavy code and 4-5x on compute kernels. This is unverified.</p>
+  <p><strong>A consistency check, also unverified.</strong> An assignment costs about 1,900-2,270 cycles in MMBasic (6 µs at 315 or 378 MHz), against a few hundred for MicroPython's <code>x=x+1</code>. That predicts far more than 1.3x on scalar code. The arithmetic is the same, so precision does not explain the gap. Two things could:</p>
+  <ul>
+    <li>If the 30% came from mixed programs, time spent in C (builtins, graphics) dilutes the difference.</li>
+    <li>MicroPython's own costs: a heap allocation for every float result, dictionary lookups for module-level names, and a slow software <code>sin</code> on an anchor with about 450 <code>SIN(</code> calls in its text.</li>
+  </ul>
+  <p>Either way, MicroPython carries costs MMBasic does not have and still wins. That points at MMBasic's operand handling, not at its arithmetic.</p>
+  <p>The E pairs in Phase 0 settle it.</p>
+  <div class="warnbox">
+    <div class="eyebrow">Memory-model warning</div>
+    <p>MicroPython compiles in RAM. The whole-module parse tree is held until every scope has compiled, so peak RAM is O(source). It also keeps bytecode in RAM, for <code>.py</code> and for <code>.mpy</code> (<code>persistentcode.c</code> copies it). Only frozen bytecode, or ROMFS (off by default on rp2), runs from flash. An unverified anecdote: a 100 KB <code>.py</code> ran out of memory compiling on a Pico W, and a 28 KB <code>.mpy</code> used 60 KB of heap.</p>
+    <p>MMBasic today uses <strong>no RAM for program text</strong>; only small indexes, such as the IF table and the sub tables, live in RAM. Any compiled form of MMBasic must therefore be written when the program is saved, into flash (or into a RAM slot while testing), beside the text that LIST/EDIT/SAVE round-trip. BASIC can compile line by line with a forward-jump fixup list, so it needs no parse tree.</p>
+    <p><strong>Do not adopt:</strong> dictionary globals, boxing, GC, compiling into RAM, or whole-module parse trees.</p>
+  </div>
+
+  <h3>3.3 What is already resolved once</h3>
+  <ul>
+    <li><strong>The line skip byte</strong> (<code>MMBasic.h:98-107</code>; <code>MMBasic.c:1698-1720</code>). <code>ExecuteProgram</code> uses it only to jump over comment-only lines (<code>1863-1875</code>). Every executed statement is still scanned byte by byte (<code>1881</code>).</li>
+    <li><strong>FOR and DO iterations.</strong> <code>forptr</code> and <code>nextptr</code> sit on the FOR stack, and <code>loopptr</code> on the DO stack (<code>Commands.c:5391, 5492-5496</code>), so NEXT and LOOP jump straight back. What remains is the forward scan each time a FOR (<code>Commands.c:5198-5235</code>) or DO (<code>5378-5394</code>) is <em>entered</em>, which for an inner loop is once per outer iteration.</li>
+    <li><strong>Multi-line IF/ELSEIF/ELSE/ENDIF</strong> uses a sorted jump table built at PrepareProgram (<code>Commands.c:3250-3565</code>). It lives in the heap.</li>
+    <li><strong>Labels and SUB names on the RP2350</strong> are hashed into <code>funtbl</code> (<code>MMBasic.c:3654</code>). The RP2040 does not have this.</li>
+    <li><strong>Still unresolved:</strong> the SELECT CASE walk on every dispatch, line-number targets, and labels on the RP2040.</li>
+  </ul>
+  <p>So block partners are mostly done already. The remaining gaps are the entry scans and SELECT.</p>
+
+  <h3>3.4 Binary literals: tried, no gain</h3>
+  <p>Peter stored numeric literals in binary behind a pretend function token, and there was no noticeable improvement. That fits the model. Converting a literal is a small part of a statement whose evaluator still walks the text around it, hashes the names and copies the arguments.</p>
+  <p>The lesson is general: removing one piece of text parsing buys little while the evaluator still re-walks the text. The gain arrives only when the walk itself stops. Symbols (S5-S6) start that, and a compiled stream (Route B) finishes it.</p>
+
+  <h3 id="tracecache">3.5 The trace cache, and why a per-statement cache fails to pay</h3>
+  <p><code>OPTION TRACECACHE ON [size[,flags]]</code> is off by default and exists only on CACHE builds (<code>CMakeLists.txt:297-309</code>): HDMIWEB has it, the RP2040 VGA does not. It compiles the right-hand sides of LET, IF, INC, DO and SELECT, and caches jump targets. Entries are keyed on the statement's source address, through a golden-ratio hash with up to 8 probes (<code>MMtrace.c:407-452</code>). A cached statement replays a small typed stack machine.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Case</th><th>Result</th><th>Source</th></tr>
+    <tr><td>RP2040 PICO build, 252 MHz, 1M-iteration DO UNTIL</td><td>3,822 ms → 2,204 ms. The equivalent FOR takes 771 ms.</td><td><code>option-profiling-cache.md:300-311</code></td></tr>
+    <tr><td>Elite on the PC3, 128 → 256 slots</td><td>Misses 18,618 → 757; frame 41.9 → 37.7 ms, about 10%. The cache was on in both runs.</td><td>commit <code>d1b4b96</code></td></tr>
+    <tr><td>ExilePhysicsBench</td><td>Halves the integrate loop and changes nothing else</td><td><code>Exile_Port_Design_Review.html:372</code></td></tr>
+    <tr><td>Exile player kernel</td><td>9.8 → 11.5 ms, <strong>slower</strong>; <strong>wrong result</strong> with CollTiles cached</td><td><code>Exile_Port_Design_Review.html:405</code></td></tr>
+  </table>
+  </div>
+  <p>It fails for six reasons.</p>
+  <ol>
+    <li><strong>The lookup costs about what it saves, and the frame stays.</strong>
+      <ul>
+        <li>Every hit pays a multiply-hash, up to 8 probes, and a replay with a stack check and a type tag on every op.</li>
+        <li>It skips <code>findvar</code> and the evaluator for one statement. It does not skip the pre-scan, the dispatch or the tail. IF's <code>getargs</code> runs before the cache is even checked (<code>Commands.c:3694</code> against <code>3722</code>).</li>
+        <li>The dispatch-level hook <code>TraceCacheTryExec</code> is a stub (<code>MMtrace.c:3376-3381</code>).</li>
+        <li>Even in the best case, a fully cached DO loop is still 2.9x slower than the FOR loop.</li>
+      </ul>
+    </li>
+    <li><strong>The binding lifetime is wrong.</strong>
+      <ul>
+        <li>One global 16-bit counter, <code>g_local_frame_gen</code> (<code>MMtrace.h:50-59</code>), changes on every frame entry and exit.</li>
+        <li>After any call, every cached statement that uses a local re-resolves it with a linear scan (<code>MMtrace.c:822-878</code>).</li>
+        <li>For SUBs with locals called once a tick this costs more than <code>findvar</code>. That is why the Exile kernel got slower.</li>
+      </ul>
+    </li>
+    <li><strong>The identity is wrong.</strong>
+      <ul>
+        <li>The key is a buffer address. The stack <code>argbuf</code>, which runs a single-line <code>THEN a ELSE b</code> (<code>Commands.c:3787</code>), and <code>tknbuf</code>, which runs EXECUTE and the prompt, present one key for different code.</li>
+        <li><code>physics.bas:450</code> and <code>:452</code> are both <code>If cy Then X = a Else X = 0</code>. That is the probable cause of the CollTiles result. This comes from reading the code; it has not been reproduced.</li>
+      </ul>
+    </li>
+    <li><strong>The coverage is wrong.</strong> It covers expression right-hand sides, including simple 1-D and 2-D array element reads and writes (<code>MMtrace.c:15-18, 1482-1553</code>). Real programs spend their time on calls, array traffic and command arguments ("calls and array traffic, not tight arithmetic", design review <code>:372</code>). It does not cover calls to user SUBs and FUNCTIONs, or command arguments.</li>
+    <li><strong>It is a second semantics.</strong>
+      <ul>
+        <li>Eight divergences are known from reading the code:
+          <ul>
+            <li><code>^</code> is right-associative;</li>
+            <li>INT^INT goes through <code>pow()</code>;</li>
+            <li><code>&gt;&gt;</code> is an arithmetic shift;</li>
+            <li><code>NOT 0.4</code> gives 1;</li>
+            <li>NaN compares differently;</li>
+            <li>float-to-integer conversion truncates instead of rounding in the side paths: the DO fast-path limit, an INC float step on an integer, and SELECT CASE constants (<code>MMtrace.c:3497, 3847, 4135</code>). LET and IF round, as the interpreter does;</li>
+            <li>RND advances twice when a statement bails out;</li>
+            <li>computed GOTO targets are frozen.</li>
+          </ul>
+        </li>
+        <li>The DO fast path (<code>Commands.c:5415-5450</code>) is gated only by <code>#ifdef CACHE</code>. On COM16's HDMIWEB build it is live today, with no option set.</li>
+      </ul>
+    </li>
+    <li><strong>Its size must grow with the code, and it never shrinks.</strong>
+      <ul>
+        <li>The slab is allocated once, at the size the user sets (default 64 entries; <code>MMtrace.c:79-83, 373-377</code>). What grows with the code is the number of slots needed to stop missing. Each slot is 216 B (<code>MMtrace.c:115, 314-329</code>), so Elite's 256 slots take about 55 KB of heap.</li>
+        <li>It compiles on the first visit and never evicts. One bail-out marks a statement BAD for the rest of the run.</li>
+        <li>Every CACHE build pays about 10 KB of RAM-resident code plus 9 KB of flash whether the option is used or not. The HDMIUSB map (<code>buildRP2350L</code>) shows 10,038 B of <code>.time_critical</code> and 9,138 B of <code>.text</code>, 19.2 KB in all.</li>
+        <li>Part of the invalidation its header documents (<code>MMtrace.c:74-77</code>) is not wired up. NEW, RUN and EDIT drop the whole cache (<code>Memory.c:2010</code>; <code>misc/Editor.c:629</code>), and the file-manager relaunch frees it (<code>misc/Editor.c:4440</code>), but DIM, ERASE, OPTION BASE and OPTION EXPLICIT do not invalidate it.</li>
+      </ul>
+    </li>
+  </ol>
+
+  <h3>Rules every new step must pass</h3>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Rule</th><th>What it requires</th></tr>
+    <tr><td><strong>R1 Identity</strong></td><td>Key work on something carried in the program bytes (a symbol id), or on a small stable integer the interpreter already has (a <code>subfun</code> index, an offset in the immutable stored image). Never on a buffer address.</td></tr>
+    <tr><td><strong>R2 When</strong></td><td>Compute static facts when the program is saved. Change dynamic bindings only at the events that change them: a variable created or destroyed, ERASE, CLEAR, RUN, CHAIN. Each event gets one reset point and a golden test. No global frame counter, and nothing re-derived per execution.</td></tr>
+    <tr><td><strong>R3 Replace, don't prefix</strong></td><td>A fast path replaces the slow path it shortcuts. The only miss allowed is a name that is genuinely unbound, and a miss costs no more than today.</td></tr>
+    <tr><td><strong>R4 One semantics</strong></td><td>Reuse <code>evaluate</code>, <code>doexpr</code>, the <code>op_*</code> functions and the runtime pairing scans. Anything new ships with a shadow mode that checks it against the old path.</td></tr>
+    <tr><td><strong>R5 Memory</strong></td><td>RAM is fixed, or O(unique names + call depth). Facts whose size grows with the code live in the stored image. The image may not grow beyond measured slack below <code>MAX_PROG_SIZE</code>, and today's largest programs must still run.</td></tr>
+    <tr><td><strong>R6 Coverage</strong></td><td>Target a bucket the measurements show is large, including polling and argument passing, not only expressions.</td></tr>
+  </table>
+  </div>
+
+  <h3>How symbol ids differ from the trace cache</h3>
+  <p>A symbol id identifies a <em>name</em> as it appears in the program text. It does not identify a variable, and it does not identify a statement address.</p>
+  <ul>
+    <li><strong>Ids are assigned when the program is tokenised,</strong> because every name in the program is known at that point.</li>
+    <li><strong>Storage is still bound at run time, and lazily.</strong> On first use an id has no binding, so <code>findvar</code> runs exactly as today and its result is recorded against the id. Implicit creation, conditional DIM and LOCAL, OPTION EXPLICIT and recursion all behave as they do now.</li>
+    <li><strong>A binding changes only when storage changes:</strong> a local created or destroyed, ERASE, CLEAR, RUN or CHAIN.</li>
+    <li><strong>Copies cannot alias.</strong> A fragment copied into <code>argbuf</code> carries its own ids.</li>
+    <li><strong>Names that never appear in the program text keep today's by-name path.</strong> These are EXECUTE strings, CALL by string and the prompt.</li>
+  </ul>
+  <p>The trace cache bound results to a statement address and invalidated them globally on every frame change. Ids bind to a name and change only on the events listed above.</p>
+
+  <div class="note"><strong>The plan ignores the trace cache from here on.</strong> Peter will probably remove it from <code>main</code>, because mmb2csub is far more powerful. Nothing below measures it, keeps it or tries to match it; it appears in this document only as the lesson above. Removing it frees 19.2 KB of text on the CACHE builds, about 10 KB of it RAM-resident (HDMIUSB map in <code>buildRP2350L</code>). It also removes the always-on DoFast path and its truncation bug (§7).</div>
+</section>
+
+<!-- ============================================================ 4 -->
+<section id="method">
+  <div class="eyebrow">4 · Method</div>
+  <h2>The review method</h2>
+  <p class="lede">Measure on both boards, lead with one real program, compare every interpreted number with its native twin, and state in advance which result would kill each hypothesis.</p>
+
+  <h3>4.1 The anchor benchmark: <code>solar_eclipse.bas</code></h3>
+  <p><code>Bas/solar_eclipse.bas</code> is byte-identical to <code>Testfiles/solar_eclipse.BAS</code>. It is 3,213 lines and 70 KB, of which about 44 KB is non-comment text, in 33 routines. It times itself: <code>Timer =0</code> is at line 224, and "Time taken" is printed at line 242. The key routine is <code>Sub sefunc(x, fx)</code> at line 248. With its callees it covers 15 of the 20 profiled routines and 99.8% of the calls (<code>docs/mmb2csub.md</code> §9).</p>
+  <p><strong>Reference inputs</strong> (Peter), typed in this order at the five prompts: <code>12,1,2000</code> · <code>39,40,36</code> · <code>-104,57,12</code> · <code>1644</code> · <code>30</code>. They give the 25 December 2000 eclipse. <strong>Golden output:</strong> JD 2451904.14541560, .19690359 and .25420764, the same to the last digit in MMBasic, in the CSUB version and in Peter's MicroPython port (<code>boards/PICO_COMPUTER_3/tests/README.md</code> in that tree). Every run uses these inputs and is checked against these digits.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Configuration</th><th>Board and condition</th><th class="num">Time</th><th>Source</th></tr>
+    <tr><td>MMBasic, interpreted</td><td>PC3, 378 MHz, reference inputs; build not recorded (July 2026)</td><td class="num">~12.5 s</td><td>Peter's MicroPython <code>tests/README.md</code></td></tr>
+    <tr class="rec"><td>MMBasic, interpreted</td><td>PC3 on COM16, HDMIWEB, 378 MHz, WiFi live, HDMI running</td><td class="num">14.6 s</td><td>Peter, 2026-09-24</td></tr>
+    <tr><td>MMBasic, interpreted</td><td>RP2350B, 252 MHz</td><td class="num">13 s</td><td><code>mmb2csub.md:668-672</code></td></tr>
+    <tr><td>sefunc as a CSUB (<code>--library --lean</code>, 37 KB blob)</td><td>RP2350, 378 MHz</td><td class="num">2.48-2.5 s</td><td>Peter; <code>mmb2csub.md</code></td></tr>
+    <tr><td>sefunc as a CSUB</td><td>RP2350B, 252 MHz</td><td class="num">2.7 s</td><td><code>mmb2csub.md</code></td></tr>
+    <tr><td>sefunc as a CSUB</td><td>RP2040 PicoMiteVGA</td><td class="num">5.7 s</td><td><code>mmb2csub.md</code></td></tr>
+    <tr><td>MicroPython, <code>tests/solar_eclipse.py</code> (line-faithful port; double floats, MPZ integers)</td><td>PC3, 378 MHz (flash at 63 MHz, divider 6)</td><td class="num">~8.8-9 s</td><td>Peter; MicroPython <code>tests/README.md</code></td></tr>
+    <tr><td>MicroPython, <code>tests/solar_eclipse_ulab.py</code> (series vectorised with ulab)</td><td>PC3, 378 MHz</td><td class="num">~7.4 s</td><td>same README: the rest is software double <code>sin</code></td></tr>
+    <tr><td>MMBasic, interpreted</td><td>RP2040 VGA on COM7</td><td class="num">not measured</td><td>—</td></tr>
+  </table>
+  </div>
+  <p><strong>What each ratio means:</strong></p>
+  <ul>
+    <li><strong>Overhead fraction.</strong> 1 − 2.5/12.5 = 0.80 at 378 MHz; the 252 MHz pair (<code>mmb2csub.md:670</code>) gives 1 − 2.7/13 = 0.79. Against today's 14.6 s on HDMIWEB it is 0.83, once the CSUB has been re-measured on the same build. This is a lower bound, because the CSUB run still includes the interpreted remainder. The overhead is about 22 ms per sefunc call (10.5 s over 474 calls).</li>
+    <li><strong>MicroPython's share.</strong> On the same chip and clock it removes (12.5 − 8.8)/(12.5 − 2.5) ≈ 37% of the overhead; with Peter's rounder 13 s and 9 s it is 38%. It does the same double-precision arithmetic as MMBasic, keeps every float result as a heap-allocated box, and reads flash at 63 MHz against MMBasic's 94.5 MHz, and it still wins. <strong>About 37% is the bar for Route A.</strong> On COM16's HDMIWEB build that means about 10 s.</li>
+    <li><strong>Why gates are in removed fraction.</strong> A 1.3x gain on the PC3 (14.6 → 11.2 s) removes only (14.6 − 11.2)/(14.6 − 2.5) ≈ 28%, which is below MicroPython. So every gate below is written as removed fraction, not as "x times faster".</li>
+    <li><strong>Only compare within one build and one condition.</strong> The spread between builds (12.5 s against 14.6 s at 378 MHz) is larger than several of the candidate steps. The likely causes are the per-statement <code>ProcessWeb</code> on WEB builds, HDMI scan-out contention and code placement. COM16 can take any RP2350 build, and all of them auto-configure as a Pico Computer 3 (Peter), so 0b measures the spread directly.</li>
+  </ul>
+  <p><strong>What the anchor exercises</strong> (from reading the source):</p>
+  <ul>
+    <li><strong>Types come from OPTION DEFAULT.</strong> The file sets <code>Option default float</code> (line 10) and <code>Option base 1</code> (line 12). Most numeric variables carry no suffix and take FLOAT from OPTION DEFAULT. But loop counters in six routines are <code>%</code> integers, line 26 declares <code>i</code> and <code>j</code> AS INTEGER, and a few names carry <code>$</code>. Typed operations must take their type from OPTION DEFAULT, DIM and LOCAL, not only from suffixes.</li>
+    <li><strong>Call counts.</strong> sefunc is called 474 times. <code>findleap</code>, <code>utc2tdb</code> and <code>jdfunc</code> are called about 1,455 times each (<code>mmb2csub.md</code> §9).</li>
+    <li><strong>LOCAL arrays.</strong> The file has 92 LOCAL statements. sefunc alone creates 7 LOCAL arrays on every call (lines 262-274), each allocated and freed on the heap. Arrays are passed BYREF.</li>
+    <li><strong>CONSTs.</strong> The file's "globals" are mostly CONSTs read inside SUBs, for example <code>dtr</code> with 101 uses and <code>pidiv2</code> with 167. Every read probes the local table first.</li>
+    <li><strong>Built-in functions.</strong> The text has about 450 <code>SIN(</code> and 25 <code>COS(</code>, and each call goes through the <code>T_FUN</code> temp-page path.</li>
+    <li><strong>Loops and branches.</strong> There are 23 FOR loops, 10 of them over 3 elements, and every entry scans the body to NEXT. There are 71 IF lines and 4 DO loops.</li>
+    <li><strong>What it lacks.</strong> No SELECT, GOTO/GOSUB, interrupts or graphics, and almost no string work (only the result printout).</li>
+    <li><strong>XIP pressure.</strong> <code>moon()</code> (lines 974-1531) is about 20 KB of non-comment text, more than the 16 KB XIP cache. Its text streams from flash on every call and evicts flash-resident handlers such as <code>fun_sin</code>.</li>
+    <li><strong>Inputs come before the timer.</strong> All five inputs are read before <code>Timer =0</code> (getdate at 199, observer at 205, ndays at 223; the input routines are at 1884-1959). Feeding them over serial does not touch the timed region.</li>
+    <li><strong>Secondary benchmarks cover what it lacks:</strong>
+      <ul>
+        <li>a fixed-work knivd, for strings and trig (today's never reaches END, <code>Bas/knivd.bas:9-16</code>);</li>
+        <li>ExilePhysicsBench and the PoP scenario, for calls, arrays and graphics (PC3);</li>
+        <li>an Elite frame (PC3);</li>
+        <li>julia (both boards);</li>
+        <li>one graphics macro on COM7.</li>
+      </ul>
+    </li>
+  </ul>
+  <p><strong>Log with every anchor run:</strong></p>
+  <ul>
+    <li>the variant, <code>MM.VER</code> and git hash;</li>
+    <li>the CPU speed, read with <code>MM.INFO(CPUSPEED)</code>;</li>
+    <li>whether WiFi is connected;</li>
+    <li>the display resolution. On the PC3's HDMI builds it fixes the CPU clock (<code>MM_Misc.c:6723-6768</code>). The heap shrinks with the mode only on the full HDMI builds (<code>PicoMite.c:3847-3877</code>), not on HDMIWEB;</li>
+    <li>where the program runs from (flash or a RAM library);</li>
+    <li><code>OPTION LIST</code>;</li>
+    <li>a hash of the printed eclipse circumstances. The interpreted and CSUB answers agree to the last digit (<code>mmb2csub.md</code> §9).</li>
+  </ul>
+
+  <h3>4.2 Phase 0: harness, profiler, goldens</h3>
+  <p class="ref">About 1-2 weeks (a guess). No behaviour change.</p>
+  <div class="phase">
+    <div class="num">0a<small>ASK</small></div>
+    <div><h3>Questions first</h3><p>Peter's rule is to ask before spending a build cycle on something he may already know. The questions are in §8. Already answered by Peter:</p>
+      <ul>
+        <li>COM16 runs HDMIWEB (14.6 s on the anchor), and any RP2350 build can be flashed onto it. PICORP2350 is the fastest, HDMIWEB probably the slowest. All auto-configure as a Pico Computer 3, but the CPU clocks must be checked for equivalence (<code>MM.INFO(CPUSPEED)</code>). A non-USBKEYBOARD build also brings up a CDC console on the USB lead used for flashing.</li>
+        <li>The anchor's reference inputs and golden output (§4.1).</li>
+        <li>The MicroPython build, a double-precision, MPZ-integer PC3 port at <code>\\wsl.localhost\Ubuntu\home\peter\src\micropython\ports\rp2</code> (board <code>PICO_COMPUTER_3</code>), runs on a board on COM9. That board is a "PC2": the same hardware as the PC3 except that it has no WiFi module. So the like-for-like comparison is MicroPython on COM9 against MMBasic's <strong>HDMIUSB</strong> build on COM16, at the same CPU clock. Its <code>tests/solar_eclipse.py</code> is a line-faithful port of the anchor.</li>
+        <li>The mmb2csub toolchain is in <code>mmb2csub/user-tools/</code> (<code>mmb2csub.py</code>, <code>mmb2c.py</code>, <code>armcfgen.py</code>). The corpus is at <code>\\wsl.localhost\Ubuntu\home\peter\src\FUZIX\Applications\mmb2c\tests</code>: 112 <code>.bas</code> programs and 90 <code>.expected</code> outputs. Claude can build every CSUB twin and run the goldens without Peter.</li>
+        <li>The trace cache is out of scope (§3.5).</li>
+      </ul></div>
+  </div>
+  <div class="phase">
+    <div class="num">0b<small>NO BUILD</small></div>
+    <div><h3>The no-build matrix on the anchor, first</h3>
+      <p class="meta">One session per board. Peter runs it, or Claude drives a board only after Peter has said it is free. The anchor is delivered as a harness copy with the inputs as constants: by TFTP on the PC3, by paced serial on COM7.</p>
+      <ul>
+        <li><strong>The same anchor on PICORP2350, HDMIUSB and HDMIWEB on COM16,</strong> at one CPU clock, checked with <code>MM.INFO(CPUSPEED)</code> and set with <code>OPTION CPUSPEED nnnn</code> where the build allows it (the HDMI builds take their clock from <code>OPTION RESOLUTION</code>). Which build becomes the reference for the gates is decided from these results, and HDMIWEB with WiFi connected against disconnected. The board stays the same and only the build changes, so the differences price HDMI scan-out and the per-statement <code>ProcessWeb</code> (H5) directly. Reflashing only; no code change.</li>
+        <li><strong>OPTION NOCHECK ON against OFF.</strong> The timed region is finite, so this is safe.</li>
+        <li><strong><code>OPTION PROFILING ON</code>, as it is today,</strong> gives the command mix, the local/global split of findvar calls and SUB call counts, plus per-SUB times on CACHE builds such as HDMIWEB (0e). The anchor ends with <code>End</code> (line 243), so the report prints. Timed runs are made with profiling off.</li>
+        <li><strong>COM7.</strong> Run the anchor interpreted, which has never been measured; the 70 KB source fits the ~93 KB LOAD buffer. Run the CSUB too; 5.7 s is recorded.</li>
+        <li><strong>Re-measure the CSUB on COM16's HDMIWEB build</strong> before computing any fraction against 14.6 s.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="num">0c<small>NO BUILD</small></div>
+    <div><h3>BASIC and Python suites</h3>
+      <p>Every micro-benchmark runs about 100k iterations. The empty-loop baseline is subtracted, the median of 5 is taken, and runs are interleaved ABAB. Every file ends with <code>END</code> and prints <code>BENCH name iters us cpu_mhz device</code>.</p>
+      <ul>
+        <li><strong>Micro set:</strong>
+          <ul>
+            <li>E0: empty FOR and DO loops, also under NOCHECK.</li>
+            <li>E1: <code>s%=(s%+i%) AND 65535</code>.</li>
+            <li>E1b: the same with 1- and 30-character names, and with a 40-character trailing comment.</li>
+            <li>E2: <code>x=x*1.000001+0.5</code>.</li>
+            <li>E3: 1-D and 2-D array reads and writes.</li>
+            <li>E4: string building, MID$ and STR$, with the heap empty and 80% full.</li>
+            <li>E5: a SUB with no arguments; a FUNCTION with 2; 6 parameters plus 4 LOCALs; a SUB creating LOCAL arrays.</li>
+            <li>E6: ABS and SIN.</li>
+            <li>E7: IF/ELSEIF chains; SELECT, first arm against last.</li>
+            <li>E8: a PIXEL loop over a framebuffer.</li>
+            <li>E9: BOX and LINE, a control whose ratio to MicroPython should be about 1.</li>
+          </ul>
+        </li>
+        <li><strong>Macro set:</strong> the anchor, plus the secondary benchmarks listed in §4.1.</li>
+        <li><strong>Interpreted and CSUB pairs</strong> from the mmb2c corpus, run on identical inputs. Outputs are hashed, and a pair is compared only when the outputs agree.</li>
+        <li><strong>MicroPython pairs</strong> on COM9, using Peter's double-precision PC3 port; <code>tests/solar_eclipse.py</code> is the anchor's twin. The MMBasic side of every pair runs on the HDMIUSB build on COM16 at the same CPU clock: the same hardware, no WiFi on either side. Each test is written twice, at module level (which mimics BASIC) and inside a <code>def</code>, and run from <code>.py</code> and frozen.</li>
+        <li><strong>Driver:</strong> <code>pc3.py</code> on COM16 and COM7, with serial lines paced at 20 ms or more. Never NOCHECK in an unbounded loop.</li>
+        <li><strong>PSRAM caveat:</strong> array micro-benchmarks on the PC3 may measure PSRAM, because large allocations spill there (<code>Memory.c:2147</code>).</li>
+      </ul>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="num">0d<small>GOLDENS</small></div>
+    <div><h3>Correctness baselines</h3>
+      <ul>
+        <li>The mmb2c corpus's <code>.expected</code> outputs, run on the board.</li>
+        <li>A new PASS/FAIL core-semantics suite. None covers core semantics as a whole; the per-feature PASS/FAIL tests in <code>Testfiles/</code> (<code>SelectCaseTest.bas</code>, <code>doloop_test.bas</code>, <code>SubParamTest.bas</code>, <code>ErrLineTest.bas</code>, <code>ArrayCopyTest.bas</code>, <code>ArrayFuncTest.bas</code>, <code>MathClampTest.bas</code>, <code>StructMemberPassTest.bas</code>) are a starting point. It covers:
+          <ul>
+            <li>expressions and type promotion, including <code>^</code>, <code>NOT</code>, <code>&gt;&gt;</code> and NaN;</li>
+            <li>FOR/NEXT edge cases, SELECT, GOTO/GOSUB/labels and READ/DATA;</li>
+            <li>ON ERROR SKIP, interrupts, EXECUTE and CONTINUE.</li>
+          </ul>
+        </li>
+        <li>A LIST/SAVE round-trip byte comparison over <code>Bas/</code>, PoP and Elite, needed before any format step.</li>
+        <li>A "never slower" micro set.</li>
+        <li>The hash of the anchor's output.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="num">0e<small>BUILD EACH</small></div>
+    <div><h3>Extend OPTION PROFILING</h3>
+      <p class="meta">Peter, 2026-09-24: "remember you have OPTION PROFILING ON to help with analysis and this could be extended as required". It is the main Phase 0 instrument. Claude builds, only when Peter says the shared build directory is free.</p>
+      <p><strong>What it records today:</strong></p>
+      <ul>
+        <li><code>OPTION PROFILING ON|OFF</code> is parsed at <code>core/MM_Misc.c:5327-5347</code>. ON allocates the counters from the heap (<code>ProfilingAlloc</code>, <code>core/MMBasic.c:171-201</code>) and OFF frees them (<code>ProfilingFree</code>). Every increment is gated, so when it is off it costs only the gate tests.</li>
+        <li>Dispatch counts per command token (<code>MMBasic.c:1896-1897</code>), the number of user SUB dispatches, <code>findvar</code> calls split into local and global, and call counts per SUB.</li>
+        <li>Inclusive and exclusive microseconds per SUB and FUNCTION (a FUNCTION's time is added up, but it is listed with 0 calls, and the table prints only if at least one SUB was dispatched as a command; <code>MMBasic.c:1913-1915, 2504, 2705</code>; <code>Commands.c:4292-4299</code>). These are taken in <code>EnterLocalFrame</code>/<code>LeaveLocalFrame</code>, inside <code>#ifdef CACHE</code> (<code>MMBasic.c:235-311</code>), so they exist only on CACHE builds: HDMIWEB has them, COM7's VGA build does not.</li>
+        <li>The <code>[PERF]</code> report is printed only by <code>cmd_end</code> (<code>Commands.c:4161-4380</code>), so the program must reach END.</li>
+      </ul>
+      <p><strong>Extensions.</strong> Each is selected by an argument to <code>OPTION PROFILING</code>, so it needs no new token and no <code>option_s</code> byte. They are added one at a time, as the hypotheses need them:</p>
+      <ul>
+        <li>per-SUB timing on every build, not only on CACHE builds;</li>
+        <li>FUNCTION call counts (their times are already recorded on CACHE builds);</li>
+        <li>a per-line time histogram keyed on <code>CurrentLinePtr</code>, and a per-command time histogram, both sampled in the 1 ms <code>timer_callback</code> (<code>PicoMite.c:2332</code>). Sampling also catches time spent in built-in functions and operators;</li>
+        <li>counters: bytes walked by <code>skipelement</code>, <code>getclosebracket</code> and <code>makeargs</code>; temp pages allocated; <code>FindSubFun</code> misses; calls to, or time in, <code>CheckAbort</code> and <code>check_interrupt</code>; LOCAL arrays created;</li>
+        <li>a machine-readable report format for the host script.</li>
+      </ul>
+      <p>Profiling perturbs timing. Timed runs are made with profiling off, and profiled runs are used only for shares.</p>
+      <p class="ref">Fallbacks, only if the extended PROFILING data leaves H1 open: a PC/LR sampler on a spare hardware alarm, and SWD <code>DWT_PCSR</code> sampling if Peter already has a probe working.</p>
+    </div>
+  </div>
+  <div class="phase">
+    <div class="num">0f<small>1 BUILD</small></div>
+    <div><h3>Placement floor</h3><p>A no-op size-change rebuild, measured on the anchor itself and on knivd. A claim on a macro benchmark must exceed twice this floor, or be proven on the step's own micro-benchmark.</p></div>
+  </div>
+  <div class="phase">
+    <div class="num">0g<small>1 BUILD</small></div>
+    <div><h3>Name-lookup ceiling (throwaway)</h3>
+      <p>A build with <code>findvar</code> memoised by program-text address and no invalidation. It gives an upper bound for S5-S6 before any real work is done.</p>
+      <p>It must be restricted to globals and scalars, or keyed on the address plus a frame serial. Otherwise sefunc's per-call LOCAL arrays would hand back freed pointers: wrong answers, or a crash. The build is never shipped.</p>
+    </div>
+  </div>
+  <p class="ref">Moved out of Phase 0: the VM-as-CSUB prototype. It only informs the Route B decision, and it is confounded (M0+ code on the M33, big blobs running from XIP, doubles through the CallTable). It now sits at G3.</p>
+
+  <div class="gate">
+    <div class="eyebrow">Gate G0: the harness is trusted when</div>
+    <ul>
+      <li>the spread of the median of 5 is ≤ 1% on micro-benchmarks and ≤ 2% on macro-benchmarks;</li>
+      <li>the placement floor has been measured on the anchor;</li>
+      <li>every golden passes on today's firmware on both boards;</li>
+      <li>the anchor has been measured interpreted and as a CSUB on one build per board.</li>
+    </ul>
+  </div>
+
+  <h3>4.3 Phase 1: characterisation</h3>
+  <p class="ref">About 1 week (a guess). Both boards.</p>
+  <p>The output is one table per workload per chip:</p>
+  <ul>
+    <li>the overhead fraction O against the CSUB floor;</li>
+    <li>the bucket shares from the extended PROFILING histograms and counters (shares from profiled runs, times from unprofiled ones): tail, pre-scan, name lookup, evaluator core, argument copies and temp pages, call machinery, block and jump scans, and work;</li>
+    <li>the MicroPython/MMBasic ratios for E0-E9;</li>
+    <li>the name-lookup ceiling.</li>
+  </ul>
+  <p>Each of H1-H10 is marked confirmed or killed by the thresholds below.</p>
+
+  <h3>4.4 Hypotheses, and the experiment that confirms or kills each</h3>
+  <div class="tablewrap">
+  <table>
+    <tr><th>#</th><th>Hypothesis</th><th>Experiment</th><th>Confirm</th><th>Kill</th></tr>
+    <tr><td>H1</td><td>Operand work in the evaluator is at least half of the overhead in compute code. That covers the getvalue/doexpr recursion, marshalling through globals, and re-walking names and brackets.</td><td>Extended OPTION PROFILING (line and command time histograms, 0e counters) on the anchor, julia and fixed-work knivd; E1 − E0 per statement; the 0g ceiling separates lookup from evaluation</td><td>Evaluator + lookup + text scan ≥ 50% of the overhead; (E1 − E0) ≥ 3 × E0 per statement</td><td>Evaluator core under 25%</td></tr>
+    <tr><td>H2</td><td>Name resolution is 20-40% of statement time</td><td>E1b, 1- against 30-character names; top level against inside a SUB against recursion depth 10; a CONST read inside a SUB (the anchor's pattern); COM7 <code>y=a(i)</code> with 0 and 200 dummy SUBs; the 0g ceiling</td><td>Slope ≥ 10 cycles per character (PC3) or ≥ 15 (COM7); ceiling ≥ 15% on the anchor</td><td>Slope under 3 cycles per character and ceiling under 8%</td></tr>
+    <tr><td>H3</td><td>Call machinery, including LOCAL arrays created per call, dominates code built from SUBs</td><td>E5: 0, 3 and 6 parameters, with and without <code>AS INTEGER</code>; a sefunc-shaped SUB with 7 LOCAL arrays against the same using global arrays; call counts from PROFILING</td><td>Definition-side parse plus zeroing ≥ 25% of call cost; call bucket ≥ 20% of the anchor or game samples; LOCAL-array form ≥ 1.3x</td><td>Definition side under 10% of call cost, and LOCAL-array creation under 5% of a call</td></tr>
+    <tr><td>H4</td><td>Marshalling the arguments of built-ins and commands is the 300% in firmware-heavy code</td><td><code>x=SIN(y)</code> minus <code>x=y</code>; SIN nested 1 to 5 deep; <code>PIXEL x,y,c</code> against <code>PIXEL 10,20,1</code>; LINE and BOX likewise; temp pages per statement</td><td>Variable form ≥ 1.5x the literal form; cost grows faster than linearly with nesting</td><td>Variable form under 1.2x the literal form</td></tr>
+    <tr><td>H5</td><td>The per-statement tail is 10-25% of simple statements. It is larger on HDMIWEB, where <code>ProcessWeb</code> runs on every statement, and larger with any interrupt armed or GUI controls present.</td><td>0b's WiFi and NOCHECK A/Bs; E0 and <code>A=A+1</code> under NOCHECK; each again with SETTICK armed and with GUI controls allocated; the 0e <code>CheckAbort</code>/<code>check_interrupt</code> counter</td><td>E0 ≥ 15% faster under NOCHECK; anchor ≥ 3%; SETTICK case ≥ 8%; WiFi-off delta ≥ 2% on the anchor</td><td>Anchor under 2%, SETTICK under 4%, WiFi delta under 1%</td></tr>
+    <tr><td>H6</td><td>Flash fetch through the XIP cache is a large cost.</td><td colspan="3"><strong>Not pursued.</strong> Peter: flash timing is not very relevant, because its effect is confounded by the QMI cache. Placement effects are already known to be about 4%, and every gain must beat that floor.</td></tr>
+    <tr><td>H7</td><td>The pre-scan over trailing comments and spaces costs at least 5% on commented code</td><td>E1b: <code>A=A+1</code> against the same with a 40-character trailing comment and with 40 spaces; <code>DATA</code> with a 60-byte list (a <code>cmd_null</code> statement)</td><td>≥ 5% per 40 bytes (about 5 cycles per byte)</td><td>Under 2%</td></tr>
+    <tr><td>H8</td><td>Block-entry scans matter in real programs</td><td>Nested FOR, inner count 2 against 100, body 40 against 400 B; SELECT with 30 arms, first against last; COM7 GOSUB to a label on line 10 against line 1000; histogram share of FOR, DO and SELECT lines</td><td>Block and jump lines ≥ 3% of macro time, or the COM7 label case ≥ 2x</td><td>Under 1% on every macro</td></tr>
+    <tr><td>H9</td><td>Temp-memory churn is ≥ 10% of string and built-in code, and depends on how full the heap is</td><td>E4 with the heap empty against 80% full</td><td>≥ 1.15x slower with the heap full</td><td>Under 1.05x</td></tr>
+    <tr><td>H10</td><td>MicroPython's lead comes from scalar, array and call mechanisms, not from work done in C</td><td>Pairs E0-E9, module-level and <code>def</code> versions of each Python test; Peter's own 30% pair first</td><td>E1, E3 and E5 ratios much larger than E0's; E9 about 1</td><td>Ratios flat across the tests (a uniform dispatch cost). Then H5 and H7 move up.</td></tr>
+  </table>
+  </div>
+</section>
+
+<!-- ============================================================ 5 -->
+<section id="architectures">
+  <div class="eyebrow">5 · Options</div>
+  <h2>Candidate architectures compared</h2>
+  <p class="lede">Five strategies were written independently and then judged. None is adopted as written. The recommended programme takes the measurement discipline from one, the identity layer from another, a binding mechanism from a third, the yardstick from a fourth, and the design rules for a later compiler from the fifth.</p>
+
+  <div class="grid2">
+    <div class="card">
+      <h3>measure-first: keep the text, add side tables</h3>
+      <p>Profile first. Then remove structural repetition inside shared primitives, using tables built at PrepareProgram as the IF table is:</p>
+      <ul>
+        <li>amortised polling;</li>
+        <li>a FOR/DO/SELECT structure table;</li>
+        <li>array indices evaluated in place;</li>
+        <li>call descriptors;</li>
+        <li>a binding cache.</li>
+      </ul>
+      <p><strong>RP2040:</strong> the tables compete with the 100 KB heap, and <code>findvar</code> and the FOR, IF, NEXT, DO and INC handlers run from flash. <strong>RP2350:</strong> a 12 KB binding cache.</p>
+      <p><strong>Kept:</strong> the whole Phase 0/1 skeleton and the attention word.</p>
+      <p><strong>Changed:</strong></p>
+      <ul>
+        <li>Its binding cache is keyed on the address of the name text, which is the trace cache's key shape. Symbol ids replace it.</li>
+        <li>Its heap structure table becomes a partner table stored in the image.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>prepass: link the program at RUN</h3>
+      <p>One pass at RUN builds a side structure in the heap:</p>
+      <ul>
+        <li>a statement spine;</li>
+        <li>block links;</li>
+        <li>call descriptors;</li>
+        <li>symbols with shallow binding;</li>
+        <li>operand sites.</li>
+      </ul>
+      <p><strong>Cost:</strong> by its own estimate about 0.4 KB of heap per KB of program for the spine and links, and 0.9 KB per KB with sites. <strong>The speed-up disappears exactly on large programs.</strong></p>
+      <p><strong>Kept:</strong></p>
+      <ul>
+        <li>Its shallow binding (L5a), keyed by symbol id.</li>
+        <li>Its rule that the builder calls the runtime pairing scan, which keeps one semantics.</li>
+        <li>Its ceiling hack, made safe (0g).</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>bytecode: compile units to a typed VM</h3>
+      <p>SUB bodies and hot loops compile to 16-bit typed wordcode in the heap. At every statement boundary, the state is the same as the text interpreter's.</p>
+      <p><strong>Highest ceiling:</strong> 2.5-7x on kernels (its estimate).</p>
+      <p><strong>Costs:</strong></p>
+      <ul>
+        <li>A second engine.</li>
+        <li>15-25 KB of flash, which non-CACHE RP2040 builds do not have.</li>
+        <li>A heap budget of 8-16 KB on VGA that caps coverage.</li>
+      </ul>
+      <p><strong>Kept as Route B's design rules:</strong></p>
+      <ul>
+        <li>state equivalence at statement boundaries;</li>
+        <li>loops reuse the interpreter's stacks;</li>
+        <li>entry by <code>subfun</code> index;</li>
+        <li>the value splice;</li>
+        <li>shared operator helpers with a shadow mode;</li>
+        <li>the VM-as-CSUB prototype (at G3).</li>
+      </ul>
+      <p>It is only acceptable as a stream written at save time into a slot, never compiled into the heap.</p>
+    </div>
+    <div class="card">
+      <h3>native: the CSUB boundary</h3>
+      <p>This is not an interpreter speed-up. It contributes the yardstick, <code>removed(X)</code> against the CSUB floor, and the mmb2c corpus as a semantics oracle.</p>
+      <p>Its firmware items are cheap and touch only CSUB paths, at about 150-300 B each (its estimates):</p>
+      <ul>
+        <li>F1: a CSUB call table indexed by <code>subfun</code>.</li>
+        <li>F2: a CSUB that returns a result, so a FUNCTION needs no interpreted wrapper.</li>
+      </ul>
+      <p>Offer these separately from this plan.</p>
+    </div>
+    <div class="card">
+      <h3>format: symbol ids in the stored image</h3>
+      <p>Repeated names become 2- or 3-byte references into a name block kept inside the image. The block holds each name's spelling, a hash16 identical to the text path's, and a static binding for every SUB, FUNCTION, CSUB and label. The tokeniser emits ids only in commands flagged as audited.</p>
+      <p><strong>Costs:</strong></p>
+      <ul>
+        <li>RAM: under 1.2 KB, fixed.</li>
+        <li>Save-time scratch is borrowed from <code>g_vartbl</code>: 26,880 B on VGA and 47,104 B on the PC3.</li>
+        <li>Firmware: 3-5 KB (estimate); VGA has 13 KB free.</li>
+      </ul>
+      <p><strong>Speed alone is small:</strong> 3-20%, its estimate. But it is the identity layer every later step needs, and <strong>the only proposal that makes the stored program smaller</strong>.</p>
+      <p><strong>Its gap:</strong> the speed-up rests on <code>findvar</code> still probing. Shallow binding fills it.</p>
+    </div>
+  </div>
+
+  <h3>The judge's scorecard</h3>
+  <p class="ref">On every axis 10 is best. For compatibility risk, 10 means lowest risk; for effort, 10 means least effort. These are judgements of each strategy <em>as written</em>.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Strategy</th><th class="num">Gain</th><th class="num">RP2040 feasibility</th><th class="num">Program capacity</th><th class="num">Compat. risk</th><th class="num">Effort</th><th class="num">Incremental</th><th class="num">Measure first</th><th class="num">Total /70</th></tr>
+    <tr class="rec"><td>measure-first</td><td class="num">5</td><td class="num">8</td><td class="num">7</td><td class="num">8</td><td class="num">8</td><td class="num">9</td><td class="num">10</td><td class="num"><strong>55</strong></td></tr>
+    <tr><td>native</td><td class="num">3</td><td class="num">9</td><td class="num">6</td><td class="num">7</td><td class="num">9</td><td class="num">9</td><td class="num">8</td><td class="num">51</td></tr>
+    <tr><td>format</td><td class="num">4</td><td class="num">7</td><td class="num"><strong>10</strong></td><td class="num">5</td><td class="num">5</td><td class="num">8</td><td class="num">8</td><td class="num">47</td></tr>
+    <tr><td>prepass</td><td class="num">6</td><td class="num">4</td><td class="num">2</td><td class="num">6</td><td class="num">5</td><td class="num">7</td><td class="num">8</td><td class="num">38</td></tr>
+    <tr><td>bytecode</td><td class="num"><strong>9</strong></td><td class="num">3</td><td class="num">4</td><td class="num">3</td><td class="num">2</td><td class="num">6</td><td class="num">7</td><td class="num">34</td></tr>
+  </table>
+  </div>
+  <p>Bytecode's capacity score of 4 is for compiling into the heap. Moved to a stream written at save time into a separate slot, as Route B does, it costs nothing from the program area or the heap beyond names and call depth.</p>
+
+  <h3>Program capacity: what each costs per KB of user program</h3>
+  <p>"Heap" here means heap at run time, which comes out of the user's variables. Today both boards are limited by the <em>source text</em> that LOAD holds in the heap: <code>GetTempMemory(EDIT_BUFFER_SIZE - 2048)</code> (<code>misc/FileIO.c:4345</code>; <code>configuration.h:561</code>). That is about 93 KB on the VGA and about 137 KB on the PC3 at 640 pixels wide, less at the wider HDMI modes. A smaller image becomes a bigger program only once LOAD tokenises while it streams the file.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Strategy</th><th>RAM per KB of program</th><th>Program flash per KB</th><th>Largest program, RP2040 VGA</th><th>Largest program, PC3 HDMIWEB</th></tr>
+    <tr><td>measure-first, as written</td><td>Structure table 16 B per block statement (about 0.1-0.2 KB/KB); binding cache fixed at 3 KB (VGA) or 12 KB (PC3); about 8 B per parameter</td><td>0</td><td>Limit unchanged, but a 90 KB program loses roughly 12-21 KB of variable heap unless the tables switch themselves off (estimate)</td><td>Limit unchanged; roughly 26-40 KB of heap on a 140 KB program (estimate)</td></tr>
+    <tr><td>prepass</td><td>About 0.4 KB/KB (spine, links, calls); about 0.9 KB/KB with operand sites (its own estimate: 12 KB and 28 KB for a 30 KB program)</td><td>0</td><td>A 90 KB program needs about 36 KB of heap, or about 80 KB with sites. The speed-up is lost on large programs.</td><td>A 140 KB program needs about 56 KB, or about 126 KB of the 144 KB heap</td></tr>
+    <tr><td>bytecode, as written</td><td>1.0-1.5x the compiled statements' size plus records, capped by a budget (8-16 KB VGA, 32-64 KB PC3)</td><td>0 in the image; firmware +15-25 KB</td><td>Limit unchanged; coverage stops at about 5-10 KB of hot code</td><td>Limit unchanged; coverage stops at about 20-40 KB of hot code</td></tr>
+    <tr><td>native</td><td>0 for the interpreter</td><td>A converted routine costs about 3.4x its blob in program memory: the hex text (about 2.4x) plus the binary built from it (1x). For sefunc's 37 KB blob that is about 121 KB (<code>FileIO.c:3830</code>; <code>mmb2csub.md</code> A.8). In the single library slot it costs 1x (<code>mmb2csub.md</code> §9)</td><td>Interpreter unchanged; conversions are opt-in</td><td>same</td></tr>
+    <tr><td>format</td><td>Fixed, under 1.2 KB; +2 B per name for the optional slot cache</td><td><strong>Negative on large programs.</strong> Emulator run for this review: Elite 110.4 → 101.5-105.5 KB (−8.1% to −4.4%); PoP <code>player.min.bas</code> 137.7 → 120.4-124.4 KB (−12.6% to −9.7%), or −14% to −17% with indent runs. The range depends on whether the block carries a 4 KB lookup index. The anchor comes out +0.6% to +2.1% (21% comments, 16% names).</td><td>About 93 KB of source, unchanged until LOAD streams; then the image saving becomes capacity</td><td>About 137 KB of source; after streaming LOAD, roughly 10-17% more PoP-style source in the same image</td></tr>
+    <tr class="rec"><td><strong>Recommended: Route A in the image + Route B stream in a slot</strong></td><td>About 4-8 B per <em>unique name</em>, plus a fixed array per variable slot and frames proportional to call depth. Elite's 876 names cost about 3.5-7 KB (2.4-4.9% of the PC3 heap). The IF table leaves the heap.</td><td>Symbols shrink large images; descriptors, partner tables and a small section header add to them. Each step measures the net change against the slack below <code>MAX_PROG_SIZE</code>. The Route B stream takes nothing from the program area.</td><td>Unchanged (about 93 KB of source), provided the stream is no larger than the image (a G3 condition)</td><td>Unchanged (about 137 KB); PICORP2350 likewise</td></tr>
+  </table>
+  </div>
+  <p class="ref">The emulator is <code>measure.py</code> in the session scratchpad: an approximate re-implementation of <code>tokenise()</code>, good to about ±2-3%. It was re-run for this document on <code>Bas/elite/elite.bas</code>, <code>Bas/sandglass_tools/player.min.bas</code>, <code>Bas/solar_eclipse.bas</code> and <code>Bas/exile/*.bas</code>.</p>
+</section>
+
+<!-- ============================================================ 6 -->
+<section id="programme">
+  <div class="eyebrow">6 · Plan</div>
+  <h2>The recommended programme</h2>
+  <p class="lede">Measure; characterise; then make the text cheaper one mechanism at a time, with every static answer stored in the image. Build a compiled stream only if Route A leaves a large, measured overhead and a prototype shows the stream can remove it.</p>
+
+  <div class="phase">
+    <div class="num">P0<small>1-2 WK</small></div>
+    <div><h3>Harness, profiler and goldens</h3><p class="meta">Both boards. See §4.2. Ends at gate G0.</p></div>
+  </div>
+  <div class="phase">
+    <div class="num">P1<small>~1 WK</small></div>
+    <div><h3>Characterisation</h3><p class="meta">Both boards. See §4.3. Produces the per-workload tables and marks H1-H10.</p></div>
+  </div>
+  <div class="phase">
+    <div class="num">G2<small>DECIDE</small></div>
+    <div><h3>Decision gate: the evidence picks the order</h3>
+      <ul>
+        <li><strong>Tail (H5)</strong> ≥ 5% of the anchor or of any macro on either board: S1 comes first. S1a applies if the WiFi A/B shows <code>ProcessWeb</code> is the cost.</li>
+        <li><strong>Calls (H3)</strong> ≥ 20% of the anchor or game samples: S3 comes before the symbol work.</li>
+        <li><strong>Name ceiling (H2)</strong> ≥ 15% on the anchor: the symbol track (S5-S6) is a go.</li>
+        <li><strong>Block scans (H8)</strong> ≥ 3%, or the COM7 label case ≥ 2x: S7 is a go.</li>
+        <li><strong>Argument copies (H4)</strong> ≥ 20% on the graphics pairs or on the anchor's SIN/COS: S4 and S8 are a go.</li>
+        <li><strong>If tail, names, calls, copies and scans together come to under 30% on both boards, and the evaluator core is over 50%:</strong> do only S1 and S2, then go straight to G3.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Route A: cheaper text, one step, one build, one commit each</h3>
+  <p>Every step runs the goldens, the micro and macro sets, the never-slower set and a capacity check, on both boards. The capacity check has two parts: the image size from "Saved nnn bytes", and <code>MM.INFO(HEAP)</code> free at RUN for the largest corpus programs.</p>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Step</th><th>What</th><th>Targets</th><th>Capacity cost</th><th>Boards</th></tr>
+    <tr><td>S1a</td><td><code>ProcessWeb</code> moves behind the same 100 µs cadence as <code>routinechecks</code>, on WEB builds only. Verified with the WebMite TCP tests.</td><td>H5, priced directly by the WiFi A/B</td><td>0</td><td>COM16 (HDMIWEB)</td></tr>
+    <tr><td>S1b</td><td>An inline raw-timer compare in front of the call to <code>routinechecks</code>. It keeps the 100 µs cadence exactly and removes the call, the register push and <code>time_us_64</code> from most statements.</td><td>H5 (NOCHECK A/B)</td><td>0; a few bytes of RAM code</td><td>Both</td></tr>
+    <tr><td>S1c</td><td>An interrupt pending word.
+      <ul>
+        <li>ISRs set it: the ticks at <code>PicoMite.c:2409-2416</code>, and WAV, IR, CSUB and key completion.</li>
+        <li>Sources that can only be polled (pins via <code>ExtInp</code>, COM rx, PIO levels) set an armed-class mask. <code>checkdetailinterrupts</code> then tests only the armed classes, still on every statement.</li>
+        <li>A shadow build counts any case where the full scan fired and the gate did not.</li>
+        <li><strong>The GPIO IRQ path is not touched.</strong></li>
+      </ul></td><td>H5 (SETTICK A/B)</td><td>0 per KB; about 0.2-0.4 KB of flash (estimate)</td><td>Both</td></tr>
+    <tr><td>S2</td><td>RP2040: cache the <code>subfun[]</code> count at PrepareProgram instead of counting on every call and every array read (<code>MMBasic.c:2027-2028</code>).</td><td>H2 (COM7 with 200 dummy SUBs)</td><td>0</td><td>COM7 first</td></tr>
+    <tr><td>S3a</td><td>An image-section container: an <strong>append-only</strong> trailer after everything the image holds today, including CSUB and font data, with a magic number and a directory.
+      <ul>
+        <li>Every image writer produces it.</li>
+        <li>Images without it run the text path.</li>
+        <li>It is appended, never inserted, because CSUB addresses are offsets within the image (<code>PicoMite.c:4705-4715</code>).</li>
+      </ul></td><td>Enables S3b, S5 and S7</td><td>A few bytes per image</td><td>Both</td></tr>
+    <tr><td>S3b</td><td>Call descriptors, written at save time into the image and indexed by <code>subfun</code>. Each holds the parameter names, types, BYVAL/BYREF and array flags. They replace <code>makeargs</code> over the definition (<code>MMBasic.c:2398</code>) and the per-parameter tests.</td><td>H3</td><td>About 20-40 B per SUB in the image (estimate); 0 RAM</td><td>Both; Exile and PoP on the PC3</td></tr>
+    <tr><td>S4</td><td>Array indices are evaluated in place. <code>evaluate</code> already stops at <code>,</code> and <code>)</code> (<code>MMBasic.c:2908-2911</code>). <code>findvar</code> is changed to return its end pointer as well, so <code>skipvar</code> is not needed. Today it returns only the value pointer (<code>MMBasic.c:4657</code>), and callers use <code>skipvar</code>.</td><td>H2, H4 (arrays)</td><td>0</td><td>Both</td></tr>
+    <tr><td>S5a</td><td>The name block and save-time dictionary are written, but no references are emitted yet. Round trip verified on every writer.</td><td>Infrastructure</td><td>Temporary image growth, measured</td><td>Both</td></tr>
+    <tr><td>S5b</td><td>Labels and GOTO/GOSUB/RESTORE targets become symbols, and <code>llist</code> decodes them. <code>findlabel</code> on the RP2040 becomes O(1).</td><td>H8 (COM7 label case)</td><td>Image shrinks slightly</td><td>COM7 first</td></tr>
+    <tr><td>S5c</td><td>SUB, FUNCTION and CSUB definitions, calls and <code>name(</code> become symbols with static bindings. This removes the <code>FindSubFun</code> hash, count and binary search.</td><td>H2, H3</td><td>Image shrinks</td><td>Both</td></tr>
+    <tr><td>S6</td><td>Variables become symbols with <strong>shallow binding</strong>, flagged one command at a time with LET first. Details are below this table.</td><td>H2</td><td>About 4-8 B per unique name plus fixed per-slot arrays; image −4% to −13% on the largest programs</td><td>Both</td></tr>
+    <tr><td>S7</td><td>A partner table in the image, built by the same runtime scan function.
+      <ul>
+        <li>It covers FOR→NEXT, DO→LOOP, SELECT→CASE arms→END SELECT, and literal GOTO/GOSUB/RESTORE targets.</li>
+        <li>The IF table moves from the heap into the image.</li>
+        <li>Computed targets stay dynamic.</li>
+      </ul></td><td>H8</td><td>Image grows (unmeasured; charged against measured slack); IF-table heap freed</td><td>Both</td></tr>
+    <tr><td>S8</td><td>Built-in arguments in place for an audited set of functions, starting with single-argument numeric ones (SIN and COS for the anchor). The temp page and <code>memcpy</code> are skipped.</td><td>H4</td><td>0</td><td>Both</td></tr>
+    <tr><td>S9</td><td>Only if H7 is confirmed: extend the existing skip byte, for example by making a trailing comment its own element so the comment-line fast path jumps it.</td><td>H7</td><td>About 2 B per trailing comment</td><td>Both</td></tr>
+  </table>
+  </div>
+  <p><strong>S6 in detail.</strong></p>
+  <ul>
+    <li><strong>The RAM binding table</strong> holds, per symbol, the global slot, the local slot and the local level. It is set when a variable is created and restored by <code>ClearVars</code> and ERASE.</li>
+    <li><strong>Reset events:</strong> CLEAR, RUN, NEW, <code>ClearVars(0)</code>, CHAIN/RestoreContext, and LIBRARY LOAD ,RAM.</li>
+    <li><strong>An unbound symbol</strong> takes <code>findvar</code> and then binds. This keeps implicit creation, conditional LOCAL, re-DIM and recursion exact.</li>
+    <li><strong>Types</strong> come from the suffix, OPTION DEFAULT, DIM and LOCAL.</li>
+    <li><strong>Library and program</strong> symbols are merged.</li>
+    <li><strong>EXECUTE, CALL by string and the prompt</strong> use by-name lookup.</li>
+    <li><strong>A shadow build</strong> also runs <code>findvar</code> on every hit and counts disagreements.</li>
+  </ul>
+  <p><strong>Not in the plan unless the measurements ask for it.</strong> Four hand micro-optimisations are left out: a static argument pool, zeroing sized by argument count, an early exit from <code>ClearVars</code>, and a register-local <code>skipelement</code>. Each is likely below the ~4% placement floor on the anchor. One is allowed only when the histogram shows its bucket at 2x the floor or more. Caching the <code>subfun</code> count (S2) is different: it is algorithmic, O(N) to O(1).</p>
+
+  <div class="gate">
+    <div class="eyebrow">Kill rules for every Route A step</div>
+    <ul>
+      <li>It delivers under 50% of its predicted gain on its own micro-benchmark.</li>
+      <li>Any macro benchmark is slower beyond the placement floor, or any never-slower micro regresses by more than 2%.</li>
+      <li>Any shadow-build mismatch that is not explained within the step.</li>
+      <li>Any corpus program stops fitting on COM7, or the image grows past measured slack.</li>
+      <li>RAM-resident growth crosses a 4 KB page with nothing removed to offset it.</li>
+    </ul>
+  </div>
+  <div class="gate">
+    <div class="eyebrow">When Route A is done or stops</div>
+    <ul>
+      <li><strong>Done:</strong> Route A has removed ≥ 37% of the anchor's overhead on the PC3 (MicroPython's bar; on the reference build, re-measure the interpreted and CSUB times first and take 37% of the difference) and ≥ 30% on COM7, with no macro slower. Go to G3.</li>
+      <li><strong>Stop:</strong> under 15% removed on both boards after S1-S4. Stop adding interpreter tables and go to G3.</li>
+      <li><strong>Firmware flash:</strong> VGAUSBRP2350's margin is not known until it is built again; it outgrew 1040 KB and moved to 1056 KB (commit <code>564fcff</code>, 2026-09-21). Removing the trace cache, which Peter plans for <code>main</code>, frees 19.2 KB of text on every CACHE build, VGAUSBRP2350 included. The RP2040 VGA has about 13 KB.</li>
+    </ul>
+  </div>
+
+  <div class="phase">
+    <div class="num">G3<small>DECIDE</small></div>
+    <div><h3>Stop, or Route B</h3>
+      <p>Route B is a go only when all of these hold:</p>
+      <ol>
+        <li><strong>Overhead is still large.</strong> After Route A, the anchor's remaining overhead (T<sub>interp,A</sub> − T<sub>csub</sub>, same build and condition) is at least twice the CSUB time on both boards. On the PC3 that means at least 5 s.</li>
+        <li><strong>The prototype pays.</strong> The prototype is the VM as a CSUB, moved here from Phase 0: about 300 lines of C built through armcfgen, with hand-written wordcode for an integer loop, the Julia inner loop, an array routine and one sefunc callee. It must be ≥ 3x faster than the post-Route-A interpreter on the integer and array routines on <strong>both</strong> boards. Under 2x kills Route B. Its confounders are stated with the result.</li>
+        <li><strong>The subset covers the work.</strong> A census, weighted by the line histogram, shows ≥ 70% of executed statements on the anchor and the game macros fall in the compilable subset.</li>
+        <li><strong>Capacity.</strong> A host-side encoder shows the stream is no larger than the tokenised image for every corpus program (PoP, Elite, the anchor, Exile). Any program that fits today then gets its stream into one slot of <code>MAX_PROG_SIZE</code>, and RAM stays O(unique names + call depth).</li>
+        <li><strong>Firmware fits.</strong> On CACHE builds, the 19.2 KB freed by removing MMtrace pays for the VM. On the VGA it must fit within about 13 KB. Any 16 KB step is Peter's decision at that point.</li>
+      </ol>
+      <p class="ref">The Exile kernel pair (9.8 ms against 0.1 ms) is a second floor. It checks that the anchor's result generalises to SUB-with-locals code.</p>
+    </div>
+  </div>
+
+  <div class="phase">
+    <div class="num">RB<small>IF G3</small></div>
+    <div><h3>Route B: a compiled statement stream, written at save time</h3>
+      <ul>
+        <li><strong>Where it is written.</strong> Save already tokenises line by line (<code>tokenise(false)</code> at <code>PicoMite.c:4788</code>). The compiler emits alongside it and appends a forward-jump fixup table, so there is no whole-program parse tree.</li>
+        <li><strong>Records point back to the text</strong> for errors, TRACE and LIST. The per-line state (<code>CurrentLinePtr</code>, <code>TraceBuff</code>) is derived from the instruction pointer where possible.</li>
+        <li><strong>Names and binding.</strong> Names are S5/S6 symbols, and binding uses the S6 table, so RAM stays O(unique names + call depth).</li>
+        <li><strong>Typed operations with unboxed values.</strong> Types come from the suffix or from the binding (OPTION DEFAULT, DIM, LOCAL). Operations call the shared <code>op_*</code> helpers.</li>
+        <li><strong>Loops reuse <code>g_forstack</code>, <code>g_dostack</code> and <code>gosubstack</code>.</strong> State is identical to the text interpreter at every statement boundary, so interrupts, ON ERROR, CONTINUE and EXECUTE work unchanged. S1c's pending word is the only per-statement test.</li>
+        <li><strong>Fallback and splice.</strong> Anything not compiled falls back to its handler. Whitelisted commands take pre-evaluated arguments through the value splice.</li>
+        <li><strong>Shadow mode:</strong> an OPTION argument, not a new token.</li>
+      </ul>
+      <p><strong>Delivery, each phase with its own gate:</strong></p>
+      <ul>
+        <li><strong>P1</strong> records only, calling the existing handlers. Gate: goldens pass and nothing is slower than text.</li>
+        <li><strong>P2</strong> numeric LET/IF/FOR/DO/EXIT on globals. Gate: shadow mode clean, and the prototype's speed holds in firmware.</li>
+        <li><strong>P3</strong> locals and calls. Gate: the Exile kernel matches all 2,384 ticks of <code>run_phystest.py</code>, and the anchor improves.</li>
+        <li><strong>P4</strong> arrays, SELECT, GOSUB, literal GOTO and simple strings.</li>
+        <li><strong>P5</strong> the value splice for SIN, COS and the other pure built-ins, then PIXEL, LINE and BOX.</li>
+      </ul>
+      <p><strong>Where the stream lives while testing:</strong></p>
+      <ul>
+        <li><strong>PC3:</strong> a RAM slot. RAM 1-4 are image slots 4-7; RAM 5 holds the RAM library (<code>configuration.h:400-410</code>; <code>ImageSlotAddress</code>, <code>misc/FileIO.c:1071</code>). Each slot is <code>MAX_PROG_SIZE</code>. The stream is rebuilt at each save or RUN and is lost at power-off. This avoids repeated flash burns.</li>
+        <li><strong>Timing check.</strong> PSRAM and flash both sit behind the XIP cache, with different timing. Before any figure is quoted as the flash result, it gets one confirming run from a flash slot.</li>
+        <li><strong>RP2040</strong> (no PSRAM, no RAM slots): flash slot 1 or 2, since slot 3 is the library. Iterations are batched to limit erases.</li>
+      </ul>
+      <p class="ref">Where the stream lives once the concept is proven (in production, one of the user's flash slots while compiled mode is in use) is deferred until then. The capacity-optimal end state, a single executable image that LIST decompiles, is noted but not started.</p>
+    </div>
+  </div>
+
+  <h3>Who does what, and on which hardware</h3>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Activity</th><th>Peter</th><th>Claude</th><th>Hardware</th></tr>
+    <tr><td>§8 questions</td><td>Answers the remaining questions</td><td>Asks once</td><td>—</td></tr>
+    <tr><td>0b no-build matrix</td><td>Runs it, or frees the board; sets the resolution (which sets the PC3's clock) and WiFi; flashes the build to compare</td><td>Writes the anchor harness copy with constant inputs; delivers it by TFTP (PC3) or paced serial (COM7); logs</td><td>COM16, COM7</td></tr>
+    <tr><td>0c/0d suites and goldens</td><td>Confirms each board is free; types RUN on any board he is using</td><td>Writes the BASIC, the Python and the goldens; drives only free boards through <code>pc3.py</code></td><td>COM16, COM7; COM9 for MicroPython</td></tr>
+    <tr><td>0e PROFILING extensions; 0f-0g builds</td><td>Says when the build directory is free; flashes, or approves flashing</td><td>One PROFILING argument per build, added as a hypothesis needs it, never concurrent with his builds; a host script that reads the machine-readable report</td><td>Both</td></tr>
+    <tr><td>Phase 1 and G2</td><td>Decides with the data</td><td>Writes up the tables and a recommendation</td><td>—</td></tr>
+    <tr><td>Each Route A step</td><td>Reviews before landing; flashes; decides flash steps</td><td>One step, one build, one commit; goldens, benchmarks and capacity check; reports</td><td>Both; games on the PC3; labels and <code>subfun</code> on COM7 first</td></tr>
+    <tr><td>G3</td><td>Decides go or no-go</td><td>VM-as-CSUB prototype; host-side stream-size encoder; census</td><td>Both</td></tr>
+    <tr><td>Route B, P1-P5</td><td>Reviews each phase gate</td><td>Implements; shadow mode; RAM-slot runs on the PC3; batched flash-slot runs on COM7</td><td>Both</td></tr>
+  </table>
+  </div>
+  <p class="ref">Effort, all guesses: Phase 0 1-2 weeks; Phase 1 about a week; S1-S4 a few days each including board runs; S5-S7 several weeks together; Route B 3-5 months part-time, the bytecode strategy's own estimate.</p>
+</section>
+
+<!-- ============================================================ 7 -->
+<section id="risks">
+  <div class="eyebrow">7 · Compatibility</div>
+  <h2>Risks and compatibility checklist</h2>
+  <div class="tablewrap">
+  <table>
+    <tr><th>Area</th><th>What can break</th><th>How the plan guards it</th></tr>
+    <tr><td>EXECUTE, the prompt, CALL by string</td><td>Code in <code>tknbuf</code> or <code>argbuf</code>; names that never appear in the program text</td><td>Nothing is keyed on a buffer address (R1). Symbols travel with copied bytes. Names absent from the text take today's by-name path. Console tokenising looks the name up in the block, or emits raw text.</td></tr>
+    <tr><td>ON ERROR SKIP/IGNORE</td><td>The per-statement <code>setjmp</code> (<code>MMBasic.c:1925-1938</code>), the skip count, and its save and restore across interrupts (<code>MM_Misc.c:10529-10533</code>)</td><td>Unchanged in Route A. Route B arms one <code>setjmp</code> per unit entry and keeps its program counter in memory. Covered by the golden suite.</td></tr>
+    <tr><td>Interrupts</td><td>A source that sets a polled flag but not the pending bit would lose an interrupt. Pin interrupts are sampled with <code>ExtInp</code> once per statement.</td><td>Polled classes are still tested on every statement. A shadow build counts misses. The <code>nextstmt</code> redirect and IRETURN are unchanged. The GPIO IRQ path is not touched.</td></tr>
+    <tr><td>Interrupt frame accounting</td><td>Interrupt entry does <code>g_LocalIndex++</code> twice with no <code>EnterLocalFrame</code> (<code>MM_Misc.c:10528, 10552</code>). <code>cmd_return</code> calls <code>LeaveLocalFrame</code> (<code>Commands.c:5957-5959</code>).</td><td>S6 binding tests the live <code>g_LocalIndex</code>, which balances, and never uses the CACHE-only frame stack.</td></tr>
+    <tr><td>LIST, EDIT, SAVE, AUTOSAVE, XMODEM</td><td>Symbols or sections that do not round-trip</td><td>The byte round-trip golden runs before and after every format step. <code>llist</code> decodes symbols. Commands are flagged one at a time.</td></tr>
+    <tr><td>Every image writer</td><td>A writer that drops the new sections</td><td><code>SaveProgramToFlash</code> (<code>PicoMite.c:4716</code>), <code>SaveLibraryImage</code>, FLASH SAVE and RAM SAVE must all carry them; each is tested. <code>SaveLibraryImage</code> writes both libraries: the flash library with <code>base=NULL</code> and the RAM library with <code>base=rambase</code> (<code>MM_Misc.c:2419, 2370</code>); its CSUB fix-up is at <code>FileIO.c</code> ~4280-4312. RAM SAVE is a whole-slot copy (<code>FileIO.c:865-875</code>). RAM RUN and RAM CHAIN run a slot in place and write nothing (<code>FileIO.c:917-958</code>). Images without the sections run the text path.</td></tr>
+    <tr><td>LIBRARY</td><td>The library lives in flash slot 3 or in the PSRAM RAM slot. <code>LIBRARY LOAD ,RAM</code> must be the program's first statement (<code>MM_Misc.c:2302-2333</code>). It does a RUN-style <code>ClearRuntime(true)</code>, then PrepareProgram, then restarts the program (<code>MM_Misc.c:2377-2380</code>).</td><td>Library and program symbol blocks are merged, as <code>IfTableBuild</code> already handles two slices (<code>Commands.c:3514-3527</code>). The library load is a binding reset event, like RUN.</td></tr>
+    <tr><td>CHAIN; RUN "file"</td><td>CHAIN: SaveContext copies <code>g_vartbl</code>, <code>g_hashlist</code> and the heap to PSRAM or to <code>/.vars</code> on A: (<code>Commands.c:4465-4470, 4508-4510</code>). Then <code>ClearVars(0)</code> and <code>InitHeap</code> run, the new program is loaded and prepared, and RestoreContext copies them back (<code>Commands.c:4643-4657</code>). RUN "file" is a <code>ClearRuntime</code> reset with no saved context (<code>do_run</code>, <code>Commands.c:2460</code>).</td><td>Both are S6 reset events. <code>g_vartbl</code> is free while the new program loads, so it can be the save-time scratch under CHAIN too. The limit under CHAIN is the A: drive space SaveContext needs on boards without PSRAM, not the variable table.</td></tr>
+    <tr><td>CSUB ABI</td><td>CSUB addresses are offsets within the image (<code>PicoMite.c:4705-4715</code>). <code>RunBasicSub</code> exposes <code>ExecuteProgram</code> (<code>PicoCFunctions.h:116, 268</code>). mmb2csub wrappers take variable addresses.</td><td>Sections are append-only. The text path stays complete. Variable storage never moves. The CallTable is append-only.</td></tr>
+    <tr><td>TRACE, TRACE LIST, error lines</td><td><code>CurrentLinePtr</code> and <code>TraceBuff</code> are set per line</td><td>Unchanged in Route A. Route B records point to the text.</td></tr>
+    <tr><td>Build variants</td><td>
+      <ul>
+        <li>HDMIWEB is a CACHE build: DoFast is live, and <code>EnterLocalFrame</code>/<code>LeaveLocalFrame</code> are in flash. VGA is not a CACHE build.</li>
+        <li>LOWRAM VGA pays for RAM code in 4 KB pages.</li>
+        <li>VGAUSBRP2350's flash margin is not known: it moved from 1040 to 1056 KB on 2026-09-21 (<code>564fcff</code>), and no map of it is at hand.</li>
+        <li>WEB builds call <code>ProcessWeb</code> on every statement.</li>
+        <li>PICOMIN.</li>
+        <li>On the M0+, -O3 miscompiles and -Os drops array alignment.</li>
+      </ul></td><td>Both boards are measured on every step. Map sizes are checked per variant. Hot paths on the RP2040 stay at -O2/-Os. Buffers get explicit alignment.</td></tr>
+    <tr><td>PSRAM or none</td><td>The RP2040 has no PSRAM and no RAM slots. The PC3 spills large allocations to PSRAM (<code>Memory.c:2147</code>), and a PSRAM table or stream has different timing.</td><td>Side tables are allocated from SRAM explicitly. Route B is tested in a RAM slot and confirmed once from a flash slot.</td></tr>
+    <tr><td>Program capacity</td><td>The LOAD text buffer limits both boards (<code>FileIO.c:4345</code>). It shrinks with the screen width (<code>configuration.h:561</code>), and on the full HDMI builds the heap depends on the display mode too.</td><td>Capacity is checked on every step with the largest corpus programs. The image size is logged.</td></tr>
+    <tr><td>Old images and downgrades</td><td>Old firmware cannot read new images. <code>PEEK(PROGMEM)</code> users see the new bytes.</td><td>A magic number marks new images; images without it run raw. The change is documented.</td></tr>
+    <tr><td>Variable semantics</td><td>Structs, STATIC name mangling, OPTION EXPLICIT, ERASE tombstones, re-DIM, OPTION BASE, OPTION DEFAULT</td><td>Binding happens only through <code>findvar</code>. Dotted names and STATIC stay on the slow path at first. A golden test covers each invalidation event.</td></tr>
+  </table>
+  </div>
+
+  <div class="warnbox">
+    <div class="eyebrow">Found along the way: correctness, not speed</div>
+    <p>These come from reading the code. Each has a short board repro in the dossier, and whether to act on each is Peter's call.</p>
+    <ul>
+      <li><strong>DoFast truncates a float DO limit.</strong> By reading, <code>i%=0 : Do While i%&lt;2.5 : Inc i% : Loop : Print i%</code> prints 2 instead of 3. It is gated only by <code>#ifdef CACHE</code> (<code>Commands.c:5415-5450</code>), so it is <strong>live on COM16</strong> today, with no option set. Removing the trace cache removes it, but the <code>cmd_do</code>/<code>cmd_loop</code> hooks must go with it.</li>
+      <li><strong>Trace-cache keys alias through <code>argbuf</code> and <code>tknbuf</code>,</strong> the probable cause of the CollTiles result, and DIM, ERASE, OPTION BASE and OPTION EXPLICIT do not invalidate it (<code>MMtrace.c:74-77</code>). Both go away with the cache.</li>
+      <li><strong>The RP2040 sub/fun name collision check is dead</strong> (<code>MMBasic.c:5160-5166</code>). <code>x++</code> lands on the second token byte, which is 0x80 or more, so the test never matches. Symbols would make it live, and programs that pass today could start reporting a clash, as the RP2350 already does.</li>
+      <li><strong>The interrupt frame imbalance is confirmed by reading, on CACHE builds only.</strong> <code>g_LocalIndex</code> itself balances through <code>cmd_ireturn</code> (<code>MM_Misc.c:1883</code>). The effect is limited to <code>g_current_sub_idx</code>, profiling and the trace cache's locals.</li>
+      <li><strong>The dossier's RP2040 SIN/COS double evaluation is already fixed</strong> (<code>fef1f0b</code>, today).</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============================================================ 8 -->
+<section id="decisions">
+  <div class="eyebrow">8 · Before starting</div>
+  <h2>Decisions needed from Peter</h2>
+  <div class="decide">
+    <div class="eyebrow">Questions and choices</div>
+    <p>Already answered by Peter: there are no existing build, NOCHECK or WiFi A/B figures, so 0b measures them. The reference build for the gates is chosen from the 0b results, with clocks matched through <code>MM.INFO(CPUSPEED)</code> and <code>OPTION CPUSPEED nnnn</code>. Flash timing is not pursued.</p>
+    <ol>
+      <li><strong>The 30% figure.</strong> Does the "up to 30%" come only from <code>solar_eclipse</code> (12.5 s against 8.8 s), or also from other programs? If others, where are they?</li>
+      <li><strong>SWD.</strong> Is a probe already working on either board? If not, the plan does not need one.</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  <p>Sources read for this plan, all under <code>D:/Dropbox/PicoMite/PicoMite</code>:</p>
+  <ul>
+    <li><code>core/MMBasic.c</code>, <code>core/MMBasic.h</code>, <code>core/Commands.c</code>, <code>core/MM_Misc.c</code>, <code>core/MMtrace.c</code>/<code>.h</code>;</li>
+    <li><code>PicoMite.c</code>, <code>misc/FileIO.c</code>, <code>configuration.h</code>, <code>CMakeLists.txt</code>;</li>
+    <li><code>Bas/solar_eclipse.bas</code>;</li>
+    <li><code>docs/mmb2csub.md</code>, <code>docs/option-profiling-cache.md</code>, <code>docs/Exile_Port_Design_Review.html</code>, <code>docs/Game_Development_Guide.md</code>;</li>
+    <li>commits <code>d1b4b96</code> and <code>564fcff</code>.</li>
+  </ul>
+  <p>The review also draws on the five strategy papers, the judge's plan and its fact-check critique, and a MicroPython source reading from master. The MicroPython sources were local copies in the session scratchpad.</p>
+</footer>
+</div>
+</body>
+</html>
