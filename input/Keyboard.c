@@ -665,6 +665,8 @@ void processcode(unsigned char Code)
   {
     PS2int = true;
     PS2code = Code;
+    if (OnPS2GOSUB != NULL)
+      IntSignal();
   }
 
   if (KeyUpCode)
@@ -1134,6 +1136,7 @@ void processcode(unsigned char Code)
         if (ConsoleRxBuf[ConsoleRxBufHead] == keyselect && KeyInterrupt != NULL)
         {
           Keycomplete = true;
+          IntSignal();
         }
         else
         {
@@ -1142,6 +1145,8 @@ void processcode(unsigned char Code)
           {                                                                  // if the buffer has overflowed
             ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
           }
+          if (OnKeyGOSUB != NULL)
+            IntSignal(); // ON KEY: a key is waiting
         }
       }
       else

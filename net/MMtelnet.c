@@ -131,6 +131,7 @@ err_t tcp_telnet_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                                 else if (ConsoleRxBuf[ConsoleRxBufHead] == keyselect && KeyInterrupt != NULL)
                                 {
                                         Keycomplete = 1;
+                                        IntSignal();
                                 }
                                 else
                                 {
@@ -140,6 +141,8 @@ err_t tcp_telnet_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                                         {                                                                        // if the buffer has overflowed
                                                 ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
                                         }
+                                        if (OnKeyGOSUB != NULL)
+                                                IntSignal(); // ON KEY: a key is waiting
                                 }
                         }
                 }

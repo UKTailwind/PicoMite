@@ -1085,6 +1085,7 @@ void USR_KEYBRD_ProcessData(uint8_t data)
 	if (data == keyselect && KeyInterrupt != NULL)
 	{
 		Keycomplete = 1;
+		IntSignal();
 		return;
 	}
 	ConsoleRxBuf[ConsoleRxBufHead] = data; // store the byte in the ring buffer
@@ -1099,6 +1100,8 @@ void USR_KEYBRD_ProcessData(uint8_t data)
 	{																	 // if the buffer has overflowed
 		ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
 	}
+	if (OnKeyGOSUB != NULL)
+		IntSignal(); // ON KEY: a key is waiting
 }
 static void process_key(int key, uint8_t n, int modifier)
 {
@@ -1371,6 +1374,7 @@ void process_mouse_input(int16_t x_delta,
         leftstate = 3;
         nunstruct[n].Z = 1;
         nunfoundc[n] = 1;
+        if (nunInterruptc[n] != NULL) IntSignal();
     }
 
     nunstruct[n].L = buttons & MOUSE_BUTTON_LEFT   ? 1 : 0;
@@ -1399,6 +1403,7 @@ void process_mouse_input(int16_t x_delta,
     if (nunstruct[n].x0 != (buttons & 0b111))
     {
         nunfoundc[n] = 1;
+        if (nunInterruptc[n] != NULL) IntSignal();
     }
     nunstruct[n].x0 = buttons & 0b111;
 

@@ -73,7 +73,9 @@ extern unsigned char *InterruptReturn;
    .count  interrupts signalled by their source (IntSignal) and not yet
            scanned for. Each scan consumes one, so interrupts that arrive
            together are served by consecutive statements.
-   .poll   an armed source has no signal of its own, so scan every statement */
+   .poll   armed sources without a signal of their own (INT_POLL_ bits) */
+#define INT_POLL_SCAN 1 // scan every statement while such a source is armed
+#define INT_POLL_PINS 2 // interrupt pins are armed: scan when one has latched an edge
 typedef union
 {
    uint32_t any;
@@ -86,6 +88,9 @@ typedef union
 } IntReady_t;
 extern volatile IntReady_t IntReady;
 void IntSignal(void);
+void IntPinArm(int pin);
+void IntPinDisarm(int pin);
+void IntPinsClear(void);
 
 /* ============================================================================
  * External variables - Tick timer configuration

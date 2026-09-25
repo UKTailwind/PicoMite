@@ -1,15 +1,29 @@
-"""inttests.py PORT OUT [TEST.bas ...] - put and run the round-1 tests; OUT collects the result lines.
-Assumes the .bas files sit next to this script."""
+"""inttests.py PORT OUT [TEST.bas ...] - put and run the interrupt tests; OUT
+collects the result lines. The .bas files sit next to this script; with no
+TEST names it runs the ones that need no wiring (ticktime, ticktest, polltest,
+onkeyk, pidfirst). Also here:
+  comloop.bas, pinint.bas  need GP0 jumpered to GP1
+  scanclear.bas            the per-statement scan stops once PID/INTERRUPT are off
+  wavtone.bas              needs audio (the PC3)
+  oneshot.bas              RP2350 register addresses
+  tickneg.bas              SETTICK must refuse a negative period
+Compare the output with an earlier build's: each test prints fixed labels."""
 import sys, os, time
 sys.path.insert(0, r"D:/Dropbox/PicoMite/PicoMite/Bas/elite_tools")
 import pc3
 HERE = os.path.dirname(os.path.abspath(__file__))
 port, outf = sys.argv[1], sys.argv[2]
 b = pc3.PC3(port); b.attention()
+b.cmd('Chdir "A:/"', 10)  # goldens.py leaves the board in A:/g
 lines = []
 
 def put(name):
-    b.xmodem_send(name, open(os.path.join(HERE, name), "rb").read())
+    """Send a test only if A: lacks it or has a different size."""
+    data = open(os.path.join(HERE, name), "rb").read()
+    size = b.cmd('Print MM.Info(FILESIZE "A:/%s")' % name, 10).split()[-2:]
+    if str((len(data) + 127) // 128 * 128) in size:  # XMODEM pads to 128-byte blocks
+        return
+    b.xmodem_send(name, data)
     b.drain(0.3)
 
 def run(name, keys=None, timeout=120):

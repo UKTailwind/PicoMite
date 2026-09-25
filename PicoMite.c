@@ -1029,12 +1029,15 @@ uint8_t PSRAMpin;
                 else if (c == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
+                    IntSignal();
                 }
                 else
                 {
                     ConsoleRxBuf[ConsoleRxBufHead] = c;
                     ConsoleRxBufHead = (ConsoleRxBufHead + 1) % CONSOLE_RX_BUF_SIZE;
                     space--;
+                    if (OnKeyGOSUB != NULL)
+                        IntSignal(); // ON KEY: a key is waiting
                 }
             }
         }
@@ -1081,12 +1084,15 @@ uint8_t PSRAMpin;
                 else if (c == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
+                    IntSignal();
                 }
                 // Normal character - store in buffer
                 else
                 {
                     ConsoleRxBuf[ConsoleRxBufHead] = c;
                     ConsoleRxBufHead = (ConsoleRxBufHead + 1) % CONSOLE_RX_BUF_SIZE;
+                    if (OnKeyGOSUB != NULL)
+                        IntSignal(); // ON KEY: a key is waiting
                 }
             }
         }
@@ -1237,12 +1243,15 @@ uint8_t PSRAMpin;
                 else if (b == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
+                    IntSignal();
                 }
                 else
                 {
                     ConsoleRxBuf[ConsoleRxBufHead] = b;
                     ConsoleRxBufHead = (ConsoleRxBufHead + 1) % CONSOLE_RX_BUF_SIZE;
                     space--;
+                    if (OnKeyGOSUB != NULL)
+                        IntSignal(); // ON KEY: a key is waiting
                 }
             }
         }
@@ -2616,6 +2625,7 @@ int __not_in_flash_func(MMInkey)(void)
                     else
                         *(long long int *)IrCmd = IrCmdTmp;
                     IrGotMsg = true;
+                    if (IrInterrupt != NULL) IntSignal();
                     NextIrTick += 250;
                 }
                 IrTimeout = IrTick + 150;

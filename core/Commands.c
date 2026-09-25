@@ -8568,7 +8568,7 @@ void cmd_on(void)
 		else
 		{
 			OnPS2GOSUB = GetIntAddress(argv[0]); // get a pointer to the interrupt routine
-			IntReady.poll = 1;
+			IntSignal();						 // a PS2 code may already be waiting
 		}
 		return;
 	}
@@ -8585,7 +8585,7 @@ void cmd_on(void)
 			else
 			{
 				OnKeyGOSUB = GetIntAddress(argv[0]); // get a pointer to the interrupt routine
-				IntReady.poll = 1;
+				IntSignal();						 // keys may already be waiting
 			}
 			return;
 		}
@@ -8605,7 +8605,7 @@ void cmd_on(void)
 				else
 				{
 					KeyInterrupt = (char *)GetIntAddress(argv[2]); // get a pointer to the interrupt routine
-					IntReady.poll = 1;
+					IntSignal();
 				}
 			}
 			return;
