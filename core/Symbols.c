@@ -42,6 +42,7 @@ const symtab_t *SymTabLib = NULL;
 int SymMode = SYM_OFF;
 int SymRawBlock = 0;
 int SymEnabled = 1;
+int SymLongest = 0;
 
 // the payload alphabet: 0-9 A-Z a-z _ are the digits 0-62, anything else is 0xFF
 #define XX 0xFF
@@ -187,6 +188,17 @@ const symtab_t *SymFindTable(const unsigned char *image)
 void SymSetProgram(const unsigned char *image)
 {
     SymTabProg = SymFindTable(image);
+    SymLongest = 0;
+    if (SymTabProg != NULL)
+    {
+        const unsigned char *n = (const unsigned char *)SymTabProg + SymTabProg->names;
+        for (int i = 0; i < SymTabProg->count; i++)
+        {
+            if (n[0] > SymLongest)
+                SymLongest = n[0];
+            n += n[0] + 1;
+        }
+    }
 }
 
 // Copy n bytes of program text to dst, spelling out every symbol.  Returns

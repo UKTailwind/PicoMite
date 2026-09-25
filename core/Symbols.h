@@ -91,6 +91,7 @@ extern const unsigned char symdigit[128];
 extern int SymMode;     // SYM_OFF: names stay text
 extern int SymRawBlock; // inside a CSUB or DefineFont block: names stay text
 extern int SymEnabled;  // OPTION SYMBOLS: 0 = save programs as text
+extern int SymLongest;  // the longest spelling in the program's table
 
 void SymInit(void);
 void SymDamaged(void);

@@ -2300,6 +2300,11 @@ int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
 static unsigned char *CheckByKeyword(unsigned char *p, int kind)
 {
     unsigned char *q;
+    const unsigned char *s;
+    int l;
+    NameView(p, &s, &l);
+    if (l < 2 || mytoupper(s[0]) != 'B' || mytoupper(s[1]) != 'Y')
+        return NULL; // (the common case: a parameter's name)
     if ((q = checkstring(p, (unsigned char *)(kind == 'V' ? "BYVAL" : "BYREF"))) != NULL)
         return q;
     if ((q = checkstring(p, (unsigned char *)"BY")) != NULL)
@@ -7399,8 +7404,12 @@ unsigned char MIPS16 __not_in_flash_func (*skipvar)(unsigned char *p, int noerro
     skipspace(p);
     if (issymbol(*p))
     {
-        SymSpelling(p, &extra);
-        extra -= symbolsize(*p);
+        // the name's length matters only if it could be too long
+        if (SymLongest + (p - tp) + 2 > MAXVARLEN)
+        {
+            SymSpelling(p, &extra);
+            extra -= symbolsize(*p);
+        }
         p += symbolsize(*p);
     }
     else
