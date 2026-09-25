@@ -1988,6 +1988,11 @@ void InitHeap(bool all)
     /* The PLAY BBC engine's state block (AudioBBC.c) lives in this heap:
        hand it back while the bitmap is still valid, then wipe.          */
     BBCSoundRelease();
+#ifdef rp2350
+    /* the stepper ISR's arc buffers waiting to be freed were in this heap */
+    extern void StepperForgetRetired(void);
+    StepperForgetRetired();
+#endif
     memset(mmap, 0, sizeof(mmap));
     memset(MMHeap, 0, heap_memory_size + 256);
     /* The IF/ENDIF jump table lives in this heap too; its pointer is now

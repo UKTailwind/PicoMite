@@ -4431,6 +4431,12 @@ void SaveContext(void)
 {
 	CloseAudio(1);
 #if defined(rp2350)
+	/* free the stepper ISR's finished arc buffers before the heap is
+	   snapshotted, so the snapshot holds no pending links */
+	extern void StepperReclaimRetired(void);
+	StepperReclaimRetired();
+#endif
+#if defined(rp2350)
 	if (PSRAMsize)
 	{
 		ClearTempMemory();
@@ -4566,6 +4572,9 @@ void RestoreContext(bool keep)
 		p += sizeof(mmap);
 		memcpy(psmap, p, sizeof(psmap));
 		p += sizeof(psmap);
+		/* the heap was rolled back: the stepper's retired-list links are stale */
+		extern void StepperForgetRetired(void);
+		StepperForgetRetired();
 	}
 	else
 	{
@@ -4595,6 +4604,12 @@ void RestoreContext(bool keep)
 		lfs_file_read(&lfs, &lfs_file, g_hashlist, sizeof(struct s_hash) * MAXLOCALVARS);
 		lfs_file_read(&lfs, &lfs_file, MMHeap, heap_memory_size + 256);
 		lfs_file_read(&lfs, &lfs_file, mmap, sizeof(mmap));
+#if defined(rp2350)
+		{
+			extern void StepperForgetRetired(void);
+			StepperForgetRetired(); /* the heap was rolled back */
+		}
+#endif
 		lfs_file_close(&lfs, &lfs_file);
 		if (!keep)
 			lfs_remove(&lfs, "/.vars");
