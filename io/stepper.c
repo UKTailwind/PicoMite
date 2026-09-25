@@ -154,6 +154,75 @@ float get_axis_position_mm(const stepper_axis_t *axis)
 
 // Global G-code buffer instance (must be defined before any helper uses it)
 static gcode_buffer_t gcode_buffer = {0};
+
+/* Arc buffers the timer ISR has finished with.  FreeMemory must not run in an
+   interrupt: its read-modify-write of the heap page map can interleave with the
+   main program's own GetMemory/FreeMemory and lose an update - leaking a page,
+   or marking free a page the main program has just been given, which is then
+   handed out twice.  So in the ISR a finished buffer is pushed onto this list,
+   linked through its own first word (the ISR no longer needs its contents), and
+   stepper_reclaim_retired() frees the list in main context.  The ISR runs on
+   core 0, as does everything that frees here, so masking interrupts around the
+   hand-over is enough. */
+static void *volatile stepper_retired = NULL;
+
+static inline void stepper_free_payload(void **p)
+{
+    if (*p == NULL)
+        return;
+    if (__get_current_exception())
+    { // interrupt context: park it for the main loop
+        *(void **)(*p) = stepper_retired;
+        stepper_retired = *p;
+        *p = NULL;
+    }
+    else
+        FreeMemorySafe(p);
+}
+
+/* a node must be a page-aligned block in the SRAM heap or the PSRAM heap */
+static inline bool stepper_retired_node_ok(const unsigned char *p)
+{
+    if (((uintptr_t)p & (PAGESIZE - 1)) != 0)
+        return false;
+    if (p >= MMHeap && p < MMHeap + heap_memory_size)
+        return true;
+    return PSRAMsize && p >= (const unsigned char *)PSRAMbase && p < (const unsigned char *)(PSRAMbase + PSRAMsize);
+}
+
+static void stepper_reclaim_retired(void)
+{
+    if (stepper_retired == NULL)
+        return;
+    uint32_t save = save_and_disable_interrupts();
+    void *list = stepper_retired;
+    stepper_retired = NULL;
+    restore_interrupts(save);
+    /* Stop at the first node that is not a heap block: a heap rollback that
+       slipped past StepperForgetRetired would leave junk links, and leaking the
+       rest is far safer than freeing through them. */
+    while (list != NULL && stepper_retired_node_ok((const unsigned char *)list))
+    {
+        void *next = *(void **)list;
+        FreeMemory(list);
+        list = next;
+    }
+}
+
+/* For SaveContext: free what is pending before the heap is snapshotted. */
+void StepperReclaimRetired(void)
+{
+    stepper_reclaim_retired();
+}
+
+/* InitHeap wipes the heap and its page map, and RestoreContext rolls both
+   back to a snapshot, so anything parked for freeing is gone or its links are
+   stale: drop the list rather than free pages that may now belong to someone
+   else. */
+void StepperForgetRetired(void)
+{
+    stepper_retired = NULL;
+}
 static void gcode_buffer_release_all_payloads(gcode_buffer_t *buffer);
 static void gcode_buffer_allocate(gcode_buffer_t *buffer, uint16_t size)
 {
@@ -279,7 +348,7 @@ static inline void stepper_release_runtime_block_payload(stepper_runtime_block_t
 {
     if (block->arc_segments != NULL)
     {
-        FreeMemorySafe((void **)&block->arc_segments);
+        stepper_free_payload((void **)&block->arc_segments); // may run in the ISR
         block->arc_segment_count = 0;
     }
 }
@@ -1175,6 +1244,7 @@ bool stepper_query_position_mm(char axis, float *pos_mm)
 
 int stepper_query_active(void)
 {
+    stepper_reclaim_retired(); // a program waiting on a job polls here, not getConsole
     uint32_t save = save_and_disable_interrupts();
     if (!stepper_initialized)
     {
@@ -1191,6 +1261,7 @@ int stepper_query_active(void)
 
 int stepper_query_buffer_free(void)
 {
+    stepper_reclaim_retired();
     uint32_t save = save_and_disable_interrupts();
     int free = stepper_initialized ? (int)stepper_gcode_buffer_space : 0;
     restore_interrupts(save);
@@ -1199,6 +1270,7 @@ int stepper_query_buffer_free(void)
 
 int stepper_query_status_bitmap(void)
 {
+    stepper_reclaim_retired();
     uint32_t save = save_and_disable_interrupts();
     uint64_t gpio_state = gpio_get_all64();
     int status = 0;
@@ -1326,6 +1398,7 @@ static bool stepper_report_latched_trips(void)
 
 void stepper_poll_events(void)
 {
+    stepper_reclaim_retired();
     (void)stepper_report_latched_trips();
 }
 
@@ -1412,7 +1485,7 @@ static inline void stepper_release_current_arc(void)
 {
     if (current_move.arc_segments != NULL)
     {
-        FreeMemorySafe((void **)&current_move.arc_segments);
+        stepper_free_payload((void **)&current_move.arc_segments); // may run in the ISR
     }
     current_move.arc_active = false;
     current_move.arc_segment_count = 0;
@@ -1597,6 +1670,7 @@ void stepper_close_subsystem(void)
     stepper_initialized = false;
 
     restore_interrupts(save);
+    stepper_reclaim_retired(); // the ISR is stopped: free what it had finished with
 
     // Release GPIO ownership back to generic input/not-configured state.
     stepper_release_gp_pin(x_step_pin);
@@ -1755,6 +1829,7 @@ static bool plan_arc_move(float start_x, float start_y, float start_z,
         float amax;       // max tangential accel usable on this segment (mm/s^2)
     } arc_seg_plan_t;
 
+    stepper_reclaim_retired(); // let finished arcs' memory be reused first
     arc_seg_plan_t *segs = (arc_seg_plan_t *)GetMemory((size_t)segments * sizeof(arc_seg_plan_t));
 
     // Base limits derived from configuration (conservative).
@@ -3751,6 +3826,8 @@ void cmd_stepper(void)
     // Block stepper command if I2S audio is configured (shares PWM resources)
     if (Option.audio_i2s_bclk)
         stepper_error("Stepper incompatible with I2S audio");
+
+    stepper_reclaim_retired(); // free arc buffers the ISR has finished with
 
     if (stepper_report_latched_trips())
         return;
