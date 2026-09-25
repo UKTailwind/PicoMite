@@ -1,9 +1,11 @@
-"""goldens.py PORT OUTDIR [--corpus DIR] [--only NAME,...]
+"""goldens.py PORT OUTDIR [--corpus DIR] [--only NAME,...] [--put]
 
 Run the mmb2c test corpus on a board and keep what this firmware prints as
 the golden for later builds, and compare it with each program's .expected.
 
-For every program: XMODEM it to A:/g/, CHDIR there, LOAD, RUN twice.  The
+The corpus lives in A:/g/ between runs: only files missing there, or of a
+different size, are sent (--put sends them all).  For every program: CHDIR
+to A:/g/, LOAD, RUN twice.  The
 driver watches every byte and ends a run as soon as it is over: back at the
 prompt, an Error, or an INPUT it has no answer for (Ctrl-C).  It answers
 INPUT from <name>.in and PRESS ANY KEY with a space.  A 60 s cap only
@@ -150,12 +152,26 @@ def main():
     device = b.cmd('PRINT MM.DEVICE$; " "; MM.VER; " "; MM.INFO(CPUSPEED)', 10).strip()
     b.cmd('MKDIR "A:/g"', 10)
     b.cmd('CHDIR "A:/g"', 10)
-    for n in names:                       # every file first: some programs run or read others
-        data = open(os.path.join(corpus, n + ".bas"), "rb").read()
-        b.xmodem_send("A:/g/%s.bas" % n, data)
-    for f in os.listdir(corpus):
-        if f.endswith((".dat", ".txt", ".csv")):
-            b.xmodem_send("A:/g/" + f, open(os.path.join(corpus, f), "rb").read())
+    # The corpus stays on A:/g between runs. Send a file only if the board lacks
+    # it or has a different size (a firmware update that moved the flash offset
+    # wipes A:), or everything with --put.
+    onboard = {}
+    if "--put" not in sys.argv:
+        listing = b.cmd('f$=Dir$("A:/g/*",FILE):Do While f$<>"":Print f$;"|";MM.INFO(FILESIZE "A:/g/"+f$):f$=Dir$():Loop', 60)
+        for line in listing.splitlines():
+            if "|" in line:
+                name, size = line.rsplit("|", 1)
+                if size.strip().isdigit():
+                    onboard[name.strip().lower()] = int(size)
+    files = [n + ".bas" for n in names]   # every file first: some programs run or read others
+    files += [f for f in os.listdir(corpus) if f.endswith((".dat", ".txt", ".csv"))]
+    sent = 0
+    for f in files:
+        data = open(os.path.join(corpus, f), "rb").read()
+        if onboard.get(f.lower()) != (len(data) + 127) // 128 * 128:  # XMODEM pads to 128-byte blocks
+            b.xmodem_send("A:/g/" + f, data)
+            sent += 1
+    print("sent %d of %d files to A:/g" % (sent, len(files)), flush=True)
     rows = []
     for n in names:
         inp = os.path.join(corpus, n + ".in")
