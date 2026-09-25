@@ -241,7 +241,7 @@ extern "C"
    include configuration.h). Defining it here too would produce a redefine
    warning because -D and #define without a body resolve to different bodies. */
 #define HEAP_MEMORY_SIZE (256 * 1024)
-#define FLASH_TARGET_OFFSET (1456 * 1024)
+#define FLASH_TARGET_OFFSET (1472 * 1024)
 #else
 #define MagicKey 0x6E75BE94
 #define MAXSUBFUN 256
@@ -306,7 +306,7 @@ extern "C"
 #undef MAX_CPU
 #define MAX_CPU 396000
 #define MagicKey 0xFB2B4EA6
-#define FLASH_TARGET_OFFSET (1392 * 1024)
+#define FLASH_TARGET_OFFSET (1408 * 1024)
 #define HEAP_MEMORY_SIZE (272 * 1024)
 #elif defined(PICOMITEBTH)
    /* PICOMITEBTH = PicoMite + USB CDC console + BLE HID host. Same CYW43
@@ -318,7 +318,7 @@ extern "C"
 #undef MAX_CPU
 #define MAX_CPU 396000
 #define MagicKey 0xB3A99D85
-#define FLASH_TARGET_OFFSET (1424 * 1024)
+#define FLASH_TARGET_OFFSET (1440 * 1024)
 #define HEAP_MEMORY_SIZE (256 * 1024)
 #else
 #define FLASH_TARGET_OFFSET (1104 * 1024)
