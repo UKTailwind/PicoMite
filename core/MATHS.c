@@ -2535,7 +2535,7 @@ void cmd_math(void)
 				int channel = getint(pi, 1, MAXPID);
 				if (PIDchannels[channel].interrupt == NULL)
 					error("Channel not initialised");
-				PIDchannels[channel].timenext = time_us_64() + (PIDchannels[channel].PIDparams->T * 1000);
+				PIDchannels[channel].timenext = time_us_64() + (PIDchannels[channel].PIDparams->T * 1000000);
 				PIDchannels[channel].active = true;
 				InterruptUsed = true;
 			}
