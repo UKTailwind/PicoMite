@@ -1,0 +1,13 @@
+S1a on the PC3, HDMIWEB at 378 MHz, full PC3 options. base = 6c6fdd8, s1a = S1a.
+solar_eclipse anchor (se_bench.py run A:/se.bas 2), golden output on every run:
+  WiFi not connected   base 13.890 s   s1a 13.723 s   -1.2%
+  WiFi connected       base 14.231 s   s1a 14.036 s   -1.4%
+WEB SCAN, WiFi not connected: base lists no network or one (it never polls
+  the WiFi chip without a connection); s1a lists them every time.
+WEB SCAN, WiFi connected: one network on both.
+Network goldens (webnpc webpage webservz webtcpe webtlse webudp wtest):
+  base and s1a identical (goldcmp: 14 outputs, 0 changed).
+TFTP, 128 KB sent and fetched back, at the prompt and with a busy loop
+  running (tftp_bench.py), builds alternated twice (s1a_tftp_ab.txt):
+  base send 54.4 KB/s fetch 302 KB/s (median 310), n=16
+  s1a  send 54.2 KB/s fetch 296 KB/s (median 304), n=16  - within noise

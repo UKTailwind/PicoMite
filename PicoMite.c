@@ -247,6 +247,7 @@ uint8_t PSRAMpin;
     volatile int WIFIconnected = 0;
     volatile int LastWifiErr = 0;
     int startupcomplete = 0;
+    int WebScanActive = 0;
     void ProcessWeb(int mode);
     char LCDAttrib = 0;
 #endif
@@ -915,6 +916,9 @@ uint8_t PSRAMpin;
             cursor_lastrun = timenow;
             CursorRefresh();
         }
+#endif
+#ifdef PICOMITEWEB
+        WebHeartbeat(timenow); // the LED is on the WiFi chip; blinks connected or not
 #endif
 #if defined(TOUCH_GESTURES) && !defined(PICOMITEVGA)
         /* Poll the wired panel's pen-down here, in the main thread, never
@@ -2691,7 +2695,8 @@ int __not_in_flash_func(MMInkey)(void)
     void __not_in_flash_func(CheckAbort)(void)
     {
 #ifdef PICOMITEWEB
-        ProcessWeb(1);
+        if (WIFIconnected || WebScanActive) // no network work without a connection
+            ProcessWeb(1);
 #endif
         routinechecks();
         if (MMAbort)

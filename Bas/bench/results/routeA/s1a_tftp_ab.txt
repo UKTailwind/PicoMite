@@ -1,0 +1,37 @@
+copied HDMIWEB_s1abase.uf2 in 27.0s
+s1abase prompt   send   54.8 KB/s  fetch  355.6 KB/s  OK
+s1abase prompt   send   57.2 KB/s  fetch  329.5 KB/s  OK
+s1abase running  send   55.1 KB/s  fetch  311.4 KB/s  OK
+s1abase running  send   55.3 KB/s  fetch  326.7 KB/s  OK
+s1abase prompt   send   55.0 KB/s  fetch  215.6 KB/s  OK
+s1abase prompt   send   53.9 KB/s  fetch  328.6 KB/s  OK
+s1abase running  send   56.0 KB/s  fetch  294.1 KB/s  OK
+s1abase running  send   53.4 KB/s  fetch  302.0 KB/s  OK
+copied HDMIWEB_s1a.uf2 in 26.9s
+s1a prompt   send   53.2 KB/s  fetch  330.0 KB/s  OK
+s1a prompt   send   56.3 KB/s  fetch  308.4 KB/s  OK
+s1a running  send   54.0 KB/s  fetch  309.9 KB/s  OK
+s1a running  send   55.3 KB/s  fetch  281.8 KB/s  OK
+s1a prompt   send   53.4 KB/s  fetch  323.5 KB/s  OK
+s1a prompt   send   54.3 KB/s  fetch  308.1 KB/s  OK
+s1a running  send   56.1 KB/s  fetch  289.2 KB/s  OK
+s1a running  send   53.0 KB/s  fetch  238.8 KB/s  OK
+copied HDMIWEB_s1abase.uf2 in 27.0s
+s1abase prompt   send   53.1 KB/s  fetch  273.5 KB/s  OK
+s1abase prompt   send   54.9 KB/s  fetch  330.1 KB/s  OK
+s1abase running  send   51.5 KB/s  fetch  311.3 KB/s  OK
+s1abase running  send   55.3 KB/s  fetch  309.5 KB/s  OK
+s1abase prompt   send   54.8 KB/s  fetch  316.4 KB/s  OK
+s1abase prompt   send   53.6 KB/s  fetch  293.8 KB/s  OK
+s1abase running  send   53.1 KB/s  fetch  239.7 KB/s  OK
+s1abase running  send   53.7 KB/s  fetch  301.1 KB/s  OK
+copied HDMIWEB_s1a.uf2 in 26.6s
+s1a prompt   send   53.3 KB/s  fetch  301.9 KB/s  OK
+s1a prompt   send   54.2 KB/s  fetch  333.3 KB/s  OK
+s1a running  send   51.9 KB/s  fetch  275.6 KB/s  OK
+s1a running  send   54.8 KB/s  fetch  248.6 KB/s  OK
+s1a prompt   send   55.1 KB/s  fetch  302.9 KB/s  OK
+s1a prompt   send   55.1 KB/s  fetch  316.7 KB/s  OK
+s1a running  send   53.3 KB/s  fetch  305.4 KB/s  OK
+s1a running  send   53.3 KB/s  fetch  258.8 KB/s  OK
+== AB DONE
