@@ -10262,7 +10262,7 @@ int checkdetailinterrupts(void)
                 }
                 if (TXlevel && pioTXinterrupts[sm][pio])
                 {
-                    int full = (pioinuse->sm->shiftctrl & (1 << 30)) ? 8 : 4;
+                    int full = (pioinuse->sm[sm].shiftctrl & (1 << 30)) ? 8 : 4;
                     if (TXlevel != full && pioTXlast[sm][pio] == full)
                     { // was the buffer full last time and not now and is an interrupt set?
                         intaddr = pioTXinterrupts[sm][pio];
