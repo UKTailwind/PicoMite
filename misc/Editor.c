@@ -4436,9 +4436,6 @@ fm_relaunch:
      * its own panel/buffer memory; without this cleanup a cached or
      * profiled program can starve the file manager of user heap.
      * These calls are safe no-ops when nothing is allocated.            */
-#ifdef CACHE
-    TraceCacheFree();
-#endif
     ProfilingFree();
     g_option_profiling = 0;
 
