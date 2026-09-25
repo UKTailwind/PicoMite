@@ -1015,16 +1015,21 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 	if (argc > 0 && *argv[0] == '#')
 	{ // check if the first arg is a file number
 		argv[0]++;
-		if ((*argv[0] == 'G') || (*argv[0] == 'g'))
+		if ((*argv[0] == 'G') || (*argv[0] == 'g') || (issymbol(*argv[0]) && SymNameEqual(argv[0], "GPS")))
 		{
-			argv[0]++;
-			if (!((*argv[0] == 'P') || (*argv[0] == 'p')))
-				SyntaxError();
-			;
-			argv[0]++;
-			if (!((*argv[0] == 'S') || (*argv[0] == 's')))
-				SyntaxError();
-			;
+			if (issymbol(*argv[0]))
+				argv[0] += symbolsize(*argv[0]); // GPS as a symbol (see Symbols.h)
+			else
+			{
+				argv[0]++;
+				if (!((*argv[0] == 'P') || (*argv[0] == 'p')))
+					SyntaxError();
+				;
+				argv[0]++;
+				if (!((*argv[0] == 'S') || (*argv[0] == 's')))
+					SyntaxError();
+				;
+			}
 			if (!GPSchannel)
 				error("GPS not activated");
 			if (argc != 3)
@@ -1667,14 +1672,14 @@ static void MIPS16 cmd_let_arraycopy(unsigned char *p_equals)
 	p = p_equals + 1; // step over the equals sign
 	skipspace(p);
 	rhs = p;
-	if (!isnamestart(*p))
+	if (!isnamestartsym(*p))
 		error("Expected an array");
 
 	// same resolution order as getvalue: a name followed by '(' that is in
 	// the sub/fun table is a function call, anything else is a variable
 	int fidx = -1;
 	{
-		unsigned char *tq = p + 1;
+		unsigned char *tq = issymbol(*p) ? p + symbolsize(*p) : p + 1;
 		while (isnamechar(*tq))
 			tq++;
 		if (*tq == '$' || *tq == '%' || *tq == '!')
@@ -3209,7 +3214,7 @@ void MIPS16 cmd_clear(void)
 
 void cmd_goto(void)
 {
-	if (isnamestart(*cmdline))
+	if (isnamestartsym(*cmdline))
 		nextstmt = findlabel(cmdline); // must be a label
 	else
 		nextstmt = findline(getinteger(cmdline), true); // try for a line number
@@ -4223,11 +4228,9 @@ void cmd_end(void)
 					if (subfun[best_idx] != NULL)
 					{
 						unsigned char *sp = subfun[best_idx] + sizeof(CommandToken);
+						int j;
 						skipspace(sp);
-						int j = 0;
-						while (j < MAXVARLEN && isnamechar(*sp))
-							nm[j++] = *sp++;
-						nm[j] = 0;
+						CopyName(sp, (unsigned char *)nm, &j);
 					}
 					uint32_t calls = g_perf_subcall_count[best_idx];
 					unsigned long long incl = (unsigned long long)g_perf_subtime_us[best_idx];
@@ -4260,11 +4263,9 @@ void cmd_end(void)
 					if (subfun[best_idx] != NULL)
 					{
 						unsigned char *sp = subfun[best_idx] + sizeof(CommandToken);
+						int j;
 						skipspace(sp);
-						int j = 0;
-						while (j < MAXVARLEN && isnamechar(*sp))
-							nm[j++] = *sp++;
-						nm[j] = 0;
+						CopyName(sp, (unsigned char *)nm, &j);
 					}
 					snprintf(buf, sizeof(buf), "  %10u  %s\r\n",
 							 (unsigned)best, nm[0] ? nm : "(unknown)");
@@ -4653,11 +4654,12 @@ void cmd_select(void)
 				t = type;
 				// check for CASE IS,  eg  CASE IS > 5  -or-  CASE > 5  and process it if it is
 				// an operator can be >, <>, etc but it can also be a prefix + or - so we must not catch them
-				if ((SaveCurrentLinePtr = checkstring(p, (unsigned char *)"IS")) || ((tokentype(*p) & T_OPER) && !(*p == GetTokenValue((unsigned char *)"+") || *p == GetTokenValue((unsigned char *)"-"))))
+				unsigned char *isp;
+				if ((isp = checkstring(p, (unsigned char *)"IS")) || ((tokentype(*p) & T_OPER) && !(*p == GetTokenValue((unsigned char *)"+") || *p == GetTokenValue((unsigned char *)"-"))))
 				{
 					int o;
-					if (SaveCurrentLinePtr)
-						p += 2;
+					if (isp)
+						p = isp;
 					skipspace(p);
 					if (tokentype(*p) & T_OPER)
 						o = *p++ - C_BASETOKEN; // get the operator
@@ -4978,6 +4980,44 @@ static inline int mystrncasecmp(
 	return 0;
 }
 
+// Does the argument list of a NEXT (at xstart) name the FOR variable vname
+// (vlen bytes)?  The name must be a whole word - bounded by non-namechars on
+// both sides, otherwise "row" would falsely match the tail of "nrow" (and
+// "col" of "ncol"), pairing the outer FOR with an inner NEXT.  Names may be
+// symbols (see Symbols.h): a plain variable is compared as a name, anything
+// more (an array element) as text with the symbols spelt out.
+static int NextNamesVar(unsigned char *xstart, unsigned char *vname, int vlen)
+{
+	const unsigned char *s;
+	int l;
+	unsigned char *e = NameView(vname, &s, &l), *xp;
+	if (*e == '$' || *e == '%' || *e == '!')
+		e++;
+	if (l && *e == 0)
+		return SymFindName(xstart, vname);
+	if (SymAny(vname, vlen))
+	{
+		unsigned char *v = GetTempMemory(STRINGSIZE);
+		vlen = SymExpand(v, vname, vlen, STRINGSIZE - 1);
+		if (vlen < 0)
+			return 0;
+		vname = v;
+	}
+	for (xp = xstart; *xp; xp++)
+		;
+	if (SymAny(xstart, xp - xstart))
+	{
+		unsigned char *x = GetTempMemory(STRINGSIZE);
+		if (SymExpand(x, xstart, xp - xstart, STRINGSIZE - 1) < 0)
+			return 0;
+		xstart = x;
+	}
+	for (xp = xstart; *xp; xp++)
+		if (mystrncasecmp(xp, vname, vlen) == 0 && (xp == xstart || !isnamechar(xp[-1])) && !isnamechar(xp[vlen]))
+			return 1;
+	return 0;
+}
+
 // FOR command
 #if LOWRAM
 void cmd_for(void)
@@ -4989,7 +5029,7 @@ void __not_in_flash_func(cmd_for)(void)
 
 	int i, t, vlen, test;
 	unsigned char ss[4]; // this will be used to split up the argument line
-	unsigned char *p, *tp, *xp;
+	unsigned char *p, *tp;
 	void *vptr;
 	unsigned char *vname, vtype;
 	//	static unsigned char fortoken, nexttoken;
@@ -5096,18 +5136,7 @@ void __not_in_flash_func(cmd_for)(void)
 			if (tkn == cmdNEXT)
 			{ // is it NEXT
 				unsigned char *xstart = p + sizeof(CommandToken);
-				xp = xstart;
-				// scan the NEXT's argument list for vname as a whole word —
-				// must be bounded by non-namechars on both sides, otherwise
-				// "row" would falsely match the tail of "nrow" (and "col" of
-				// "ncol"), pairing the outer FOR with an inner NEXT.
-				while (*xp)
-				{
-					if (mystrncasecmp(xp, vname, vlen) == 0 && (xp == xstart || !isnamechar(xp[-1])) && !isnamechar(xp[vlen]))
-						break;
-					xp++;
-				}
-				if (*xp)
+				if (NextNamesVar(xstart, vname, vlen))
 					t = 0; // found the matching NEXT
 				else
 					t--; // no luck, just decrement our stack counter
@@ -5239,13 +5268,24 @@ breakout:
 // a scalar name the fast path can take: no struct member, string, array or call
 static unsigned char *DoFastSkipName(unsigned char *p)
 {
-	if (!isnamestart(*p))
-		return NULL;
-	while (isnamechar(*p))
+	if (issymbol(*p))
 	{
-		if (*p == '.')
+		const unsigned char *s;
+		int l;
+		p = NameView(p, &s, &l);
+		if (memchr(s, '.', l))
 			return NULL;
-		p++;
+	}
+	else
+	{
+		if (!isnamestart(*p))
+			return NULL;
+		while (isnamechar(*p))
+		{
+			if (*p == '.')
+				return NULL;
+			p++;
+		}
 	}
 	if (*p == '$')
 		return NULL;
@@ -5307,7 +5347,7 @@ static void DoFastCompile(unsigned char *p, struct s_dostack *ds, int until)
 	int op, flags = 0;
 	ds->fast_state = DOFAST_OFF;
 	skipspace(p);
-	if (isnamestart(*p))
+	if (isnamestartsym(*p))
 	{ // var OP number
 		name = p;
 		if ((q = DoFastSkipName(p)) == NULL)
@@ -5724,7 +5764,7 @@ void cmd_gosub(void)
 	if (gosubindex >= MAXGOSUB)
 		error("Too many nested GOSUB");
 	char *return_to = (char *)nextstmt;
-	if (isnamestart(*cmdline))
+	if (isnamestartsym(*cmdline))
 		nextstmt = findlabel(cmdline);
 	else
 		nextstmt = findline(getinteger(cmdline), true);
@@ -8528,8 +8568,11 @@ unsigned char *CheckIfTypeSpecified(unsigned char *p, int *type, int AllowDefaul
 			g_StructArg = structidx; // Store struct index in global
 			// Advance past the type name
 			tp = p;
-			while (isnamechar(*tp))
-				tp++;
+			if (issymbol(*tp))
+				tp += symbolsize(*tp);
+			else
+				while (isnamechar(*tp))
+					tp++;
 			skipspace(tp);
 		}
 		else
@@ -10029,12 +10072,28 @@ const char *ParseStructMember(unsigned char *p, struct s_structdef *sd)
 	skipspace(p);
 
 	// Parse member name
-	if (!isnamestart(*p))
-		return "Invalid member definition in TYPE"; // Not a valid member definition
-
-	while (isnamechar(*p) && *p != '(' && namelen < MAXVARLEN)
+	if (issymbol(*p))
 	{
-		name[namelen++] = mytoupper(*p++);
+		const unsigned char *s;
+		int l;
+		p = NameView(p, &s, &l);
+		if (l > MAXVARLEN)
+			return "Invalid member definition in TYPE"; // as a name too long to read would be
+		while (namelen < l)
+		{
+			name[namelen] = mytoupper(s[namelen]);
+			namelen++;
+		}
+	}
+	else
+	{
+		if (!isnamestart(*p))
+			return "Invalid member definition in TYPE"; // Not a valid member definition
+
+		while (isnamechar(*p) && *p != '(' && namelen < MAXVARLEN)
+		{
+			name[namelen++] = mytoupper(*p++);
+		}
 	}
 	name[namelen] = 0;
 
@@ -10085,13 +10144,14 @@ const char *ParseStructMember(unsigned char *p, struct s_structdef *sd)
 	skipspace(p);
 
 	// Expect AS keyword (tokenized or literal)
+	unsigned char *asp;
 	if (*p == tokenAS)
 	{
 		p++; // Skip past token
 	}
-	else if ((p[0] == 'A' || p[0] == 'a') && (p[1] == 'S' || p[1] == 's') && !isnamechar(p[2]))
+	else if ((asp = checkstring(p, (unsigned char *)"AS")) != NULL)
 	{
-		p += 2; // Skip past literal AS
+		p = asp; // Skip past literal AS (text, or a symbol - see Symbols.h)
 	}
 	else
 	{
@@ -10149,10 +10209,22 @@ const char *ParseStructMember(unsigned char *p, struct s_structdef *sd)
 		unsigned char *tp2 = p;
 
 		// Parse the type name
-		while (isnamechar(*tp2) && typenamelen < MAXVARLEN)
+		if (issymbol(*tp2))
 		{
-			typename[typenamelen++] = mytoupper(*tp2++);
+			const unsigned char *s;
+			int l;
+			tp2 = NameView(tp2, &s, &l);
+			while (typenamelen < l && typenamelen < MAXVARLEN)
+			{
+				typename[typenamelen] = mytoupper(s[typenamelen]);
+				typenamelen++;
+			}
 		}
+		else
+			while (isnamechar(*tp2) && typenamelen < MAXVARLEN)
+			{
+				typename[typenamelen++] = mytoupper(*tp2++);
+			}
 		typename[typenamelen] = 0;
 
 		if (typenamelen > 0)
@@ -10235,10 +10307,22 @@ int MIPS16 FindStructType(unsigned char *name)
 	unsigned char uname[MAXVARLEN + 1];
 
 	// Convert to uppercase for comparison
-	while (isnamechar(*name) && *name != '.' && namelen < MAXVARLEN)
+	if (issymbol(*name))
 	{
-		uname[namelen++] = mytoupper(*name++);
+		const unsigned char *s;
+		int l;
+		NameView(name, &s, &l);
+		while (namelen < l && s[namelen] != '.' && namelen < MAXVARLEN)
+		{
+			uname[namelen] = mytoupper(s[namelen]);
+			namelen++;
+		}
 	}
+	else
+		while (isnamechar(*name) && *name != '.' && namelen < MAXVARLEN)
+		{
+			uname[namelen++] = mytoupper(*name++);
+		}
 	uname[namelen] = 0;
 
 	for (i = 0; i < g_structcnt; i++)
@@ -10839,6 +10923,15 @@ unsigned char *llist(unsigned char *b, unsigned char *p)
 			continue;
 		}
 
+		// a symbol: its spelling (see Symbols.h)
+		if (issymbol(*p))
+		{
+			b += SymExpand(b, p, symbolsize(*p), SYM_MAXLEN);
+			p += symbolsize(*p);
+			firstnonwhite = false;
+			continue;
+		}
+
 		// hey, an ordinary char, just copy it to the output
 		if (*p)
 		{
@@ -10895,11 +10988,13 @@ void execute_one_command(unsigned char *p)
 		cmdtoken = cmd;
 		cmdline = p + sizeof(CommandToken);
 		skipspace(cmdline);
-		commandtbl[cmd].fptr(); // execute the command
+		if (!SymAwareCommand(cmd))
+			cmdline = SymExpandStatement(cmdline); // see Symbols.h
+		commandtbl[cmd].fptr();					   // execute the command
 	}
 	else
 	{
-		if (!isnamestart(*p))
+		if (!isnamestartsym(*p))
 			error("Invalid character");
 		i = FindSubFun(p, false); // it could be a defined command
 		if (i >= 0)				  // >= 0 means it is a user defined command

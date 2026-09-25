@@ -2291,6 +2291,7 @@ void cmd_circle(void)
     CheckDisplay();
     if (CMM1)
     {
+        cmdline = SymExpandStatement(cmdline); // the CMM1 syntax reads its F flag as a character
         int x, y, radius, colour, fill;
         float aspect;
         getcsargs(&cmdline, 9);
@@ -2623,6 +2624,7 @@ void cmd_line(void)
     unsigned char *p;
     if (CMM1)
     {
+        cmdline = SymExpandStatement(cmdline); // the CMM1 syntax reads its B and F flags as characters
         int x1, y1, x2, y2, colour, box, fill;
         getcsargs(&cmdline, 5);
 

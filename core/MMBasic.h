@@ -504,6 +504,7 @@ extern "C"
 
     extern unsigned char *subfun[];
     extern char CurrentSubFunName[MAXVARLEN + 1];
+    extern unsigned char *CmdTokenPtr;
     extern char CurrentInterruptName[MAXVARLEN + 1];
 
     /* ============================================================================
@@ -797,6 +798,8 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
 #ifdef __cplusplus
 }
 #endif
+
+#include "Symbols.h" // names stored as symbols in a saved program
 
 #endif /* __MMBASIC_H */
        /*  @endcond */

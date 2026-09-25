@@ -196,6 +196,7 @@ void MemoryShareStop(void);
 int FreeSpaceOnHeap(void);
 int LargestContiguousHeap(void);
 int MemSize(void *addr);
+int MemRemaining(void *addr);
 static inline uint32_t __get_MSP(void)
 {
    uint32_t result;

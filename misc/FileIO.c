@@ -755,6 +755,7 @@ void MIPS16 cmd_psram(void)
         {
             int i = getint(argv[0], 1, MAXRAMSLOTS);
             ProgMemory = (uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
+            SymSetProgram(ProgMemory); // list the slot's names from its own symbol table
             if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
             {
                 ClearScreen(gui_bcolour);
@@ -771,6 +772,7 @@ void MIPS16 cmd_psram(void)
                 SyntaxError();
             ;
             ProgMemory = (unsigned char *)flash_progmemory;
+            SymSetProgram(ProgMemory);
         }
         else
         {
@@ -1285,6 +1287,7 @@ void MIPS16 cmd_flash(void)
             ProgMemory = (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
             if ((unsigned char)*ProgMemory != T_NEWLINE)
                 return;
+            SymSetProgram(ProgMemory); // list the slot's names from its own symbol table
             if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
             {
                 ClearScreen(gui_bcolour);
@@ -1301,6 +1304,7 @@ void MIPS16 cmd_flash(void)
                 SyntaxError();
             ;
             ProgMemory = (unsigned char *)flash_progmemory;
+            SymSetProgram(ProgMemory);
         }
         else
         {
@@ -4208,6 +4212,8 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
     memcpy(buf, tknbuf, STRINGSIZE); /* tokenise() writes through tknbuf */
     initFonts();
     clearrepeat();
+    SymMode = SYM_OFF; /* a library is saved as text: its names are not symbols */
+    SymRawBlock = 0;
     if (w)
         memset(base, 0, MAX_PROG_SIZE);
     else
@@ -4452,6 +4458,16 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     memset(ram, 0xFF, MAX_PROG_SIZE);
     realmempointer = (volatile uint32_t)ram;
     nbr = 0;
+    // symbols: a first pass collects the program's names so that the save
+    // below can write them as symbols (it stays text if they do not fit)
+    if (ProgMemory == ram)
+        SymTabProg = NULL; // the old program's table is gone
+    if (SymBegin(pm))
+    {
+        SymCount(pm);
+        SymRank();
+    }
+    multi = false;
     // this is used to count the number of bytes written to ram
     while (*pm)
     {
@@ -4500,6 +4516,15 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     }
     MemWriteByte(0);
     MemWriteAlign(); // this will flush the buffer and step the flash write pointer to the next word boundary
+    // the symbol table follows the program text, ahead of the CFunction records
+    if (SymTableSize())
+    {
+        if (((uint32_t)realmempointer - (uint32_t)ram) + SymTableSize() >= MAX_PROG_SIZE - 5)
+            goto exiterror;
+        nbr += SymTableSize();
+        SymTableWrite(MemWriteByte, (uint32_t)realmempointer - (uint32_t)ram);
+    }
+    SymEnd();
     // now we must scan the program looking for CFUNCTION/CSUB/DEFINEFONT statements, extract their data and program it into the flash used by  CFUNCTIONs
     // programs are terminated with two zero bytes and one or more bytes of 0xff.  The CFunction area starts immediately after that.
     // the format of a CFunction/CSub/Font in flash is:
@@ -4794,10 +4819,12 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     memcpy(tknbuf, buf, STRINGSIZE); // restore the token buffer in case there are other commands in it
                                      //    initConsole();
     clearrepeat();
+    SymSetProgram(ProgMemory);
     return;
 
 // we only get here in an error situation while writing the program to flash
 exiterror:
+    SymEnd();
     MemWriteByte(0);
     MemWriteByte(0);
     MemWriteByte(0); // terminate the program in flash

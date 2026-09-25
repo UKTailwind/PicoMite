@@ -1396,6 +1396,7 @@ bool cursor_handle_gui_subcommand(unsigned char *cmdline_in)
  * ==================================================================== */
 bool click_handle_gui_subcommand(unsigned char *cmdline_in)
 {
+    unsigned char *clicktoken = CmdTokenPtr; // this statement, to re-run if an interrupt arrives
     unsigned char *p;
     if ((p = checkstring(cmdline_in, (unsigned char *)"CLICK")) == NULL)
         return false;
@@ -1576,9 +1577,7 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
                    it; IRET returns us here with phase still == 1.
                    We resume the wait (or fall through to phase 2 if
                    `until` has already passed). */
-                while (*cmdline && *cmdline != cmdtoken)
-                    cmdline--;
-                InterruptReturn = cmdline;
+                InterruptReturn = clicktoken; // re-run this statement after the interrupt
                 return true;
             }
         }
@@ -1596,9 +1595,7 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
             CheckAbort();
             if (check_interrupt())
             {
-                while (*cmdline && *cmdline != cmdtoken)
-                    cmdline--;
-                InterruptReturn = cmdline;
+                InterruptReturn = clicktoken; // re-run this statement after the interrupt
                 return true;
             }
         }

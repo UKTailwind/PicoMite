@@ -443,6 +443,29 @@ unsigned char *PreprogramErrLine = NULL; // Line pointer where PrepareProgram er
 #ifndef rp2350
 static int subfun_letter_start[26];
 
+// Compare two names (symbol or text) ignoring case and any type suffix, like strcmp().
+static int CompareNames(unsigned char *p1, unsigned char *p2)
+{
+    const unsigned char *s1, *s2;
+    int l1, l2;
+    NameView(p1, &s1, &l1);
+    NameView(p2, &s2, &l2);
+    while (l1 && l2)
+    {
+        int c1 = mytoupper(*s1++);
+        int c2 = mytoupper(*s2++);
+        if (c1 != c2)
+            return c1 - c2;
+        l1--;
+        l2--;
+    }
+    if (l1)
+        return 1;
+    if (l2)
+        return -1;
+    return 0;
+}
+
 // Compare two SUB/FUNCTION identifiers by base name (case-insensitive), ignoring type suffixes.
 static int CompareSubFunBaseName(unsigned char *a, unsigned char *b)
 {
@@ -450,46 +473,15 @@ static int CompareSubFunBaseName(unsigned char *a, unsigned char *b)
     unsigned char *p2 = b + sizeof(CommandToken);
     skipspace(p1);
     skipspace(p2);
-
-    while (isnamechar(*p1) && isnamechar(*p2))
-    {
-        int c1 = mytoupper(*p1);
-        int c2 = mytoupper(*p2);
-        if (c1 != c2)
-            return c1 - c2;
-        p1++;
-        p2++;
-    }
-
-    if (isnamechar(*p1))
-        return 1;
-    if (isnamechar(*p2))
-        return -1;
-    return 0;
+    return CompareNames(p1, p2);
 }
 
 // Compare a caller identifier to a subfun entry by base name only.
 static int CompareNameToSubFunBase(unsigned char *name, unsigned char *sub)
 {
-    unsigned char *p1 = name;
     unsigned char *p2 = sub + sizeof(CommandToken);
     skipspace(p2);
-
-    while (isnamechar(*p1) && isnamechar(*p2))
-    {
-        int c1 = mytoupper(*p1);
-        int c2 = mytoupper(*p2);
-        if (c1 != c2)
-            return c1 - c2;
-        p1++;
-        p2++;
-    }
-
-    if (isnamechar(*p1))
-        return 1;
-    if (isnamechar(*p2))
-        return -1;
-    return 0;
+    return CompareNames(name, p2);
 }
 #endif
 
@@ -707,6 +699,7 @@ int cmdtoken;                                       // Token number of the comma
 unsigned char *cmdline;                             // Command line terminated with a zero unsigned char and trimmed of spaces
 unsigned char *nextstmt;                            // Pointer to the next statement to be executed.
 unsigned char *CurrentLinePtr, *SaveCurrentLinePtr; // Pointer to the current line (used in error reporting)
+unsigned char *CmdTokenPtr;                          // the command token of the statement being run (cmdline may point to a copy of its arguments)
 unsigned char *ContinuePoint;                       // Where to continue from if using the continue statement
 
 extern int TraceOn;
@@ -822,6 +815,7 @@ void MIPS16 InitBasic(void)
     cmdTYPE = GetCommandValue((unsigned char *)"Type");
     cmdEND_TYPE = GetCommandValue((unsigned char *)"End Type");
 #endif
+    SymInit();
     heapend = (uint32_t)&__heap_start + PICO_HEAP_SIZE;
     //  SInt(CommandTableSize);
     //   SIntComma(TokenTableSize);
@@ -880,6 +874,9 @@ int MIPS16 PrepareProgram(int ErrAbort)
 
     NbrFuncts = 0;
     CFunctionFlash = CFunctionLibrary = NULL;
+    // the symbol tables of the library and the program (NULL if they are text)
+    SymTabLib = LibPresent() ? SymFindTable(LibMemory) : NULL;
+    SymSetProgram(ProgMemory);
     if (LibPresent())
     {
         NbrFuncts = PrepareProgramExt(LibMemory, 0, &CFunctionLibrary, ErrAbort);
@@ -917,8 +914,11 @@ int MIPS16 PrepareProgram(int ErrAbort)
     for (i = 0; i < NbrFuncts; i++)
     {
         unsigned char *sp = subfun[i] + sizeof(CommandToken);
+        const unsigned char *spn;
+        int spl;
         skipspace(sp);
-        int first = mytoupper(*sp);
+        NameView(sp, &spn, &spl);
+        int first = spl ? mytoupper(*spn) : 0;
         if (first >= 'A' && first <= 'Z')
         {
             int idx = first - 'A';
@@ -950,19 +950,21 @@ int MIPS16 PrepareProgram(int ErrAbort)
         // First we will hash the function name and add it to the function table
         // This allows for a fast check of a variable name being the same as a function name
         // It also allows a hash look up for function name matching
+        const unsigned char *fn;
+        int fnlen;
         p1 = subfun[i];
         p1 += sizeof(CommandToken);
         skipspace(p1);
+        NameView(p1, &fn, &fnlen);
         p2 = (unsigned char *)printvar;
         namelen = 0;
         hash = FNV_offset_basis;
-        do
+        for (int k = 0; k < fnlen && namelen <= MAXVARLEN; k++)
         {
-            u = mytoupper(*p1);
+            u = mytoupper(fn[k]);
             hash ^= u;
             hash *= FNV_prime;
             *p2++ = u;
-            p1++;
             if (++namelen > MAXVARLEN)
             {
                 if (ErrAbort)
@@ -972,8 +974,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
                     return 1;
                 }
             }
-
-        } while (isnamechar(*p1));
+        }
         if (namelen != MAXVARLEN)
             *p2 = 0;
         hash %= MAXSUBFUN; // scale to size of table
@@ -1019,15 +1020,25 @@ int MIPS16 PrepareProgram(int ErrAbort)
     {
         for (j = i + 1; j < MAXSUBFUN && subfun[j] != NULL; j++)
         {
+            const unsigned char *n1, *n2;
+            int l1, l2;
             p1 = subfun[i];
             p1 += sizeof(CommandToken);
             skipspace(p1);
             p2 = subfun[j];
             p2 += sizeof(CommandToken);
             skipspace(p2);
-            while (1)
+            NameView(p1, &n1, &l1);
+            NameView(p2, &n2, &l2);
+            if (l1 == l2)
             {
-                if (!isnamechar(*p1) && !isnamechar(*p2))
+                while (l1 && mytoupper(*n1) == mytoupper(*n2))
+                {
+                    n1++;
+                    n2++;
+                    l1--;
+                }
+                if (l1 == 0)
                 {
                     if (ErrAbort)
                     {
@@ -1038,10 +1049,6 @@ int MIPS16 PrepareProgram(int ErrAbort)
                     }
                     return 0;
                 }
-                if (mytoupper(*p1) != mytoupper(*p2))
-                    break;
-                p1++;
-                p2++;
             }
         }
     }
@@ -1087,7 +1094,7 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
             subfun[i++] = p++; // save the address and step over the token
             p++;               // step past rest of command token
             skipspace(p);
-            if (!isnamestart(*p))
+            if (!isnamestartsym(*p))
             {
                 if (ErrAbort)
                 {
@@ -1113,7 +1120,7 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
             skipspace(tp);
 
             // Parse structure type name
-            if (!isnamestart(*tp))
+            if (!isnamestartsym(*tp))
             {
                 if (ErrAbort)
                 {
@@ -1123,9 +1130,15 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
                 continue;
             }
 
-            while (isnamechar(*tp) && namelen < MAXVARLEN)
             {
-                name[namelen++] = mytoupper(*tp++);
+                const unsigned char *tn;
+                int tnlen;
+                tp = NameView(tp, &tn, &tnlen);
+                while (namelen < tnlen && namelen < MAXVARLEN)
+                {
+                    name[namelen] = mytoupper(tn[namelen]);
+                    namelen++;
+                }
             }
             name[namelen] = 0;
 
@@ -1320,6 +1333,13 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
         p++;                                                        // the end of the program can have multiple zeros
     p++;                                                            // step over the terminating 0xff
     *CFunPtr = (unsigned char *)(((unsigned int)p + 0b11) & ~0b11); // CFunction flash (if it exists) starts on the next word address after the program in flash
+    {
+        // a symbol table (see Symbols.h) sits between the program and the CFunction records
+        const symtab_t *st = (const symtab_t *)*CFunPtr;
+        if ((unsigned char *)st + sizeof(symtab_t) <= plimit && st->magic == SYM_MAGIC &&
+            st->textlen == (uint32_t)((unsigned char *)st - (plimit - MAX_PROG_SIZE)) && st->size < MAX_PROG_SIZE)
+            *CFunPtr += st->size;
+    }
     if (i < MAXSUBFUN)
         subfun[i] = NULL;
     CurrentLinePtr = NULL;
@@ -1368,6 +1388,22 @@ void MIPS16 tokenise(int console)
     int i = 0;
     int firstnonwhite;
     int labelvalid;
+    // symbols: names in a program being saved become symbols (see Symbols.h),
+    // except in DATA statements, CSUB and DefineFont blocks, and &H/&O/&B numbers
+    static int tkDATA = -1, tkDEFINEFONT, tkENDCSUB, tkENDDEFINEFONT, tkSCHANGE, tkTOPBOTTOM, tkTILDE;
+    int symbols = !console && SymMode != SYM_OFF;
+    int symrawstmt = false; // this statement is DATA: its names stay text
+    int symrawnext = false; // the next name is the letter that selects a rewritten function's action
+    if (tkDATA < 0)
+    {
+        tkDATA = GetCommandValue((unsigned char *)"Data");
+        tkDEFINEFONT = GetCommandValue((unsigned char *)"DefineFont");
+        tkENDCSUB = GetCommandValue((unsigned char *)"End CSub");
+        tkENDDEFINEFONT = GetCommandValue((unsigned char *)"End DefineFont");
+        tkSCHANGE = GetTokenValue((unsigned char *)"SChange$(");
+        tkTOPBOTTOM = GetTokenValue((unsigned char *)"TopBottom(");
+        tkTILDE = GetTokenValue((unsigned char *)"~(");
+    }
 
     // first, make sure that only printable characters are in the line
     p = inpbuf;
@@ -1516,6 +1552,17 @@ void MIPS16 tokenise(int console)
                 p++;
             }
             firstnonwhite = true;
+            symrawstmt = false;
+            continue;
+        }
+
+        // a structure member after an array element, eg a(1).x - the dot is
+        // copied on its own so that the member is read as a name (and not
+        // as part of a number when it starts with E)
+        if (*p == '.' && op > tknbuf && op[-1] == ')' && isnamestart(p[1]))
+        {
+            *op++ = *p++;
+            firstnonwhite = false;
             continue;
         }
 
@@ -1629,6 +1676,15 @@ void MIPS16 tokenise(int console)
                         *op++ = *p++; // and in that case just copy everything
                 firstnonwhite = false;
                 labelvalid = false; // we do not want any labels after this
+                if (symbols)
+                {
+                    if (match_i == tkDATA)
+                        symrawstmt = true;
+                    else if (match_i == cmdCSUB || match_i == tkDEFINEFONT)
+                        SymRawBlock = true; // the declaration and the hex that follows stay text
+                    else if (match_i == tkENDCSUB || match_i == tkENDDEFINEFONT)
+                        SymRawBlock = false;
+                }
                 if (match_i == GetCommandValue((unsigned char *)"/*"))
                 {
                     multi = true;
@@ -1725,6 +1781,9 @@ void MIPS16 tokenise(int console)
                 i += C_BASETOKEN;
                 *op++ = i; // insert the token found
                 p = tp2;   // and step over it in the source text
+                // LCASE$( MAX( MM.HRES etc are rewritten as SChange$(L, TopBottom(A, ~(A) ...:
+                // the letter that follows selects the action and is read as a character
+                symrawnext = (i == tkSCHANGE || i == tkTOPBOTTOM || i == tkTILDE);
                 if (i == tokenTHEN || i == tokenELSE)
                     firstnonwhite = true; // a command is valid after a THEN or ELSE
                 else
@@ -1760,8 +1819,18 @@ void MIPS16 tokenise(int console)
                 }
 #endif
             }
-            while (isnamechar(*p))
-                *op++ = *p++; // copy the variable name
+            if (symbols && !symrawstmt && !SymRawBlock && !symrawnext && !(op > tknbuf && op[-1] == '&'))
+            {
+                tp = p;
+                while (isnamechar(*tp))
+                    tp++;
+                op = SymName(op, p, tp - p); // the name as a symbol (or text if it cannot be one)
+                p = tp;
+            }
+            else
+                while (isnamechar(*p))
+                    *op++ = *p++; // copy the variable name
+            symrawnext = false;
             firstnonwhite = false;
             labelvalid = false; // we do not want any labels after this
             continue;
@@ -1997,13 +2066,16 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
             if (g_perf_cmdcount && cmdtoken < PERF_CMDTOKEN_MAX)        \
                 g_perf_cmdcount[cmdtoken]++;                            \
             targ = T_CMD;                                               \
+            CmdTokenPtr = p;                                            \
+            if (!SymAwareCommand(cmdtoken))                             \
+                cmdline = SymExpandStatement(cmdline);                  \
             commandtbl[cmdtoken].fptr();                                \
         }                                                               \
         else                                                            \
         {                                                               \
-            if (!isnamestart(*p) && *p == '~')                          \
+            if (!isnamestartsym(*p) && *p == '~')                       \
                 StandardError(36);                                      \
-            else if (!isnamestart(*p))                                  \
+            else if (!isnamestartsym(*p))                               \
                 error("Invalid character: @", (int)(*p));               \
             {                                                           \
                 i = FindSubFun(p, false);                               \
@@ -2073,19 +2145,22 @@ int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
     unsigned char *tp, *ip;
 
     // copy the variable name into name
+    const unsigned char *nv;
+    int nl;
+    NameView(p, &nv, &nl);
+    if (nl == 0)
+        return -1;
     s = name;
     namelen = 0;
     do
     {
-        u = mytoupper(*p);
+        u = mytoupper(*nv++);
         hash ^= u;
-        //        PIntComma(u);
         hash *= FNV_prime;
         *s++ = u;
-        p++;
         if (++namelen > MAXVARLEN)
             error("Variable name too long");
-    } while (isnamechar(*p));
+    } while (--nl);
     //    PRet();
     *s = 0;
     hash %= MAXSUBFUN; // scale 0-512
@@ -2133,7 +2208,12 @@ int MIPS16 __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
     // subfun[] is pre-sorted by PrepareProgram() using base-name ordering.
     low = 0;
     high = n - 1;
-    first = mytoupper(*p);
+    const unsigned char *nv;
+    int nl;
+    unsigned char *pend = NameView(p, &nv, &nl);
+    if (nl == 0)
+        return -1;
+    first = mytoupper(*nv);
     if (first >= 'A' && first <= 'Z')
     {
         int li = first - 'A';
@@ -2176,12 +2256,8 @@ int MIPS16 __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
             // Preserve existing suffix matching behavior.
             p2 += sizeof(CommandToken);
             skipspace(p2);
-            p1 = p;
-            while (isnamechar(*p1) && isnamechar(*p2))
-            {
-                p1++;
-                p2++;
-            }
+            p1 = pend;
+            p2 = NameView(p2, &nv, &nl);
             if ((*p1 == '$' && *p2 == '$') || (*p1 == '%' && *p2 == '%') || (*p1 == '!' && *p2 == '!') || (!isnamechar(*p1) && !isnamechar(*p2)))
                 return mid;
             return -1;
@@ -2194,6 +2270,19 @@ int MIPS16 __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
     return -1;
 }
 #endif
+
+// BYVAL (kind 'V') or BYREF (kind 'R') at the start of a parameter in a
+// SUB/FUNCTION definition, written as one word or as BY VAL.  Returns the
+// start of the parameter's name, or NULL if the keyword is not there.
+static unsigned char *CheckByKeyword(unsigned char *p, int kind)
+{
+    unsigned char *q;
+    if ((q = checkstring(p, (unsigned char *)(kind == 'V' ? "BYVAL" : "BYREF"))) != NULL)
+        return q;
+    if ((q = checkstring(p, (unsigned char *)"BY")) != NULL)
+        return checkstring(q, (unsigned char *)(kind == 'V' ? "VAL" : "REF"));
+    return NULL;
+}
 
 // Argument-value union — file scope so the static argval array can use it.
 union u_argval
@@ -2346,7 +2435,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     unsigned char *argbuf2;
     unsigned char **argv2;
     int argc2;
-    unsigned char fun_name[MAXVARLEN + 1];
+    unsigned char fun_name[MAXVARLEN + 2]; // a name of MAXVARLEN characters, a type suffix and the terminator
     unsigned char *argbyref;
     int i;
     int ArgType, FunType;
@@ -2375,16 +2464,31 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     // copy the sub/fun name from the definition into temp storage and terminate
     // p is left pointing to the end of the name (ie, start of the argument list in the definition)
     CurrentLinePtr = SubLinePtr; // report errors at the definition
-    tp = fun_name;
-    *tp++ = *p++;
-    while (isnamechar(*p))
+    unsigned char defsuffix = 0, callsuffix = 0;
+    if (issymbol(*p))
+    {
+        const unsigned char *nv;
+        int nl;
+        p = NameView(p, &nv, &nl);
+        if (nl > MAXVARLEN)
+            nl = MAXVARLEN;
+        memcpy(fun_name, nv, nl);
+        tp = fun_name + nl;
+    }
+    else
+    {
+        tp = fun_name;
         *tp++ = *p++;
+        while (isnamechar(*p))
+            *tp++ = *p++;
+    }
     if (*p == '$' || *p == '%' || *p == '!')
     {
         if (!isfun)
         {
             error("Type specification is invalid: @", (int)(*p));
         }
+        defsuffix = *p;
         *tp++ = *p++;
     }
     *tp = 0;
@@ -2394,16 +2498,23 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 
     // find the end of the caller's identifier, tp is left pointing to the start of the caller's argument list
     CurrentLinePtr = CallersLinePtr; // report errors at the caller
-    tp = cmd + 1;
-    while (isnamechar(*tp))
-        tp++;
+    if (issymbol(*cmd))
+        tp = cmd + symbolsize(*cmd);
+    else
+    {
+        tp = cmd + 1;
+        while (isnamechar(*tp))
+            tp++;
+    }
     if (*tp == '$' || *tp == '%' || *tp == '!')
     {
         if (!isfun)
             error("Type specification");
+        callsuffix = *tp;
         tp++;
     }
-    if (mytoupper(*(p - 1)) != mytoupper(*(tp - 1)))
+    // the names are the same (FindSubFun matched them) so only the suffixes can differ
+    if (defsuffix != callsuffix)
         error("Inconsistent type suffix");
 
     // if this is a function we check to find if the function's type has been specified with AS <type> and save it
@@ -2515,7 +2626,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         if (i < argc1 && *argv1[i])
         {
             // check if the argument is a valid variable
-            if (i < argc1 && isnamestart(*argv1[i]) && *skipvar(argv1[i], false) == 0)
+            if (i < argc1 && isnamestartsym(*argv1[i]) && *skipvar(argv1[i], false) == 0)
             {
                 // yes, it is a variable (or perhaps a user defined function which looks the same)?
                 if (!(FindSubFun(argv1[i], 1) >= 0 && strchr((char *)argv1[i], '(') != NULL))
@@ -2544,9 +2655,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
             // check for BYVAL or BYREF in sub/fun definition
             argbyref[i] = 0;
             skipspace(argv2[i]);
-            if (toupper(*argv2[i]) == 'B' && toupper(*(argv2[i] + 1)) == 'Y')
+            unsigned char *byp;
+            if ((byp = CheckByKeyword(argv2[i], 'V')) != NULL || CheckByKeyword(argv2[i], 'R') != NULL)
             {
-                if ((checkstring(argv2[i] + 2, (unsigned char *)"VAL")) != NULL)
+                if (byp != NULL)
                 { // if BYVAL
                     // Only if not an array remove any pointer flag in the caller
                     argtype[i] = 0;
@@ -2565,16 +2677,16 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
                         if (*tp == ')')
                             error("Array as BYVAL not allowed $", argv1[i]);
                     }
-                    argv2[i] += 5; // skip to the variable start
+                    argv2[i] = byp; // skip to the variable start
                 }
                 else
                 {
-                    if ((checkstring(argv2[i] + 2, (unsigned char *)"REF")) != NULL)
+                    if ((byp = CheckByKeyword(argv2[i], 'R')) != NULL)
                     { // if BYREF
                         if ((argtype[i] & T_PTR) == 0)
                             error("Variable required for BYREF $", argv1[i]);
 
-                        argv2[i] += 5; // skip to the variable start
+                        argv2[i] = byp; // skip to the variable start
                         argbyref[i] = 1;
                     }
                 }
@@ -2608,16 +2720,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     { // count through the arguments in the definition of the sub/fun
         ArgType = T_NOTYPE;
         // skip BYVAL/BYREF keywords
-        if (toupper(*argv2[i]) == 'B' && toupper(*(argv2[i] + 1)) == 'Y')
         {
-            if ((checkstring(argv2[i] + 2, (unsigned char *)"VAL")) != NULL)
-            {
-                argv2[i] += 5;
-            }
-            else if ((checkstring(argv2[i] + 2, (unsigned char *)"REF")) != NULL)
-            {                  // if BYREF
-                argv2[i] += 5; // skip to the variable start
-            }
+            unsigned char *byp;
+            if ((byp = CheckByKeyword(argv2[i], 'V')) != NULL || (byp = CheckByKeyword(argv2[i], 'R')) != NULL)
+                argv2[i] = byp; // skip to the variable start
         }
 
         tp = skipvar(argv2[i], false); // point to after the variable
@@ -3348,9 +3454,20 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
                 p1 = p + 1;
                 p = getclosebracket(p);
                 p2 = ep = GetTempStrMemory();
-                // Use memcpy for bulk copy
+                // Use memcpy for bulk copy, spelling out any symbols (see Symbols.h)
                 i = p - p1;
                 memcpy(p2, p1, i);
+                if (!SymAwareFunction(c))
+                    for (int k = 0; k < i; k++)
+                        if (issymbol(p2[k]))
+                        {
+                            int n = SymExpand(p2, p1, i, STRINGSIZE - 1);
+                            if (n < 0)
+                                error("Line is too long");
+                            while (n < i)
+                                p2[n++] = 0; // a spelling can be shorter than its symbol
+                            break;
+                        }
             }
             p++;
             tmp = targ = TypeMask(tokentype(*tp));
@@ -3366,9 +3483,9 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
     else
     {
         // Variable or defined function
-        if (isnamestart(c))
+        if (isnamestartsym(c))
         {
-            tp = p + 1;
+            tp = issymbol(c) ? p + symbolsize(c) : p + 1;
             while (isnamechar(*tp))
                 tp++;
             c = *tp;
@@ -3854,18 +3971,23 @@ unsigned char *findlabel(unsigned char *labelptr)
 
     // convert the label to the token format and load into label[]
     // this assumes that the first character has already been verified as a valid label character
-    label[1] = mytoupper(*labelptr++);
-    hash ^= label[1];
-    hash *= FNV_prime;
-    for (i = 2;; i++)
     {
-        if (!isnamechar(*labelptr))
-            break; // the end of the label
-        if (i > MAXVARLEN)
+        const unsigned char *lv;
+        int ll;
+        NameView(labelptr, &lv, &ll);
+        if (ll == 0)
+        {
+            lv = labelptr;
+            ll = 1;
+        }
+        if (ll > MAXVARLEN)
             error("Label too long"); // too long, not a correctly formed label
-        label[i] = mytoupper(*labelptr++);
-        hash ^= label[i];
-        hash *= FNV_prime;
+        for (i = 1; i <= ll; i++)
+        {
+            label[i] = mytoupper(lv[i - 1]);
+            hash ^= label[i];
+            hash *= FNV_prime;
+        }
     }
     label[0] = i - 1;  // the length byte
     hash %= MAXSUBFUN; // scale to size of table
@@ -3913,14 +4035,19 @@ unsigned char MIPS16 *findlabel(unsigned char *labelptr)
 
     // convert the label to the token format and load into label[]
     // this assumes that the first character has already been verified as a valid label character
-    label[1] = *labelptr++;
-    for (i = 2;; i++)
     {
-        if (!isnamechar(*labelptr))
-            break; // the end of the label
-        if (i > MAXVARLEN)
+        const unsigned char *lv;
+        int ll;
+        NameView(labelptr, &lv, &ll);
+        if (ll == 0)
+        {
+            lv = labelptr;
+            ll = 1;
+        }
+        if (ll > MAXVARLEN)
             error("Label too long"); // too long, not a correctly formed label
-        label[i] = *labelptr++;
+        for (i = 1; i <= ll; i++)
+            label[i] = lv[i - 1];
     }
     label[0] = i - 1; // the length byte
 
@@ -4364,11 +4491,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                     // Copy member name from p
                     unsigned char membuf[MAXVARLEN + 1];
                     int ml = 0;
-                    while (isnamechar(*p) && ml < MAXVARLEN)
-                    {
-                        membuf[ml++] = *p++;
-                    }
-                    membuf[ml] = 0;
+                    p = CopyName(p, membuf, &ml);
                     if (*p == '$' || *p == '%' || *p == '!')
                         p++;
                     // Use static buffer for continuation
@@ -4785,17 +4908,36 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
 
     // check the first char for a legal variable name
     skipspace(p);
-    if (!isnamestart(*p))
-        error("Variable name");
-    do
+    if (issymbol(*p))
     {
-        u = mytoupper(*p++);
-        hash ^= u;
-        hash *= FNV_prime;
-        *s++ = u;
-        if (++namelen > MAXVARLEN)
+        const unsigned char *nv;
+        int nl;
+        p = NameView(p, &nv, &nl);
+        if (nl > MAXVARLEN)
             error("Variable name too long");
-    } while (isnamechar(*p));
+        while (nl--)
+        {
+            u = mytoupper(*nv++);
+            hash ^= u;
+            hash *= FNV_prime;
+            *s++ = u;
+            namelen++;
+        }
+    }
+    else
+    {
+        if (!isnamestart(*p))
+            error("Variable name");
+        do
+        {
+            u = mytoupper(*p++);
+            hash ^= u;
+            hash *= FNV_prime;
+            *s++ = u;
+            if (++namelen > MAXVARLEN)
+                error("Variable name too long");
+        } while (isnamechar(*p));
+    }
 #ifdef rp2350
     funhash = hash % MAXSUBFUN;
 #endif
@@ -5104,11 +5246,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                 // Parse member name into buffer
                 unsigned char membername[MAXVARLEN + 1];
                 int mn = 0;
-                while (isnamechar(*p) && mn < MAXVARLEN)
-                {
-                    membername[mn++] = *p++;
-                }
-                membername[mn] = 0;
+                p = CopyName(p, membername, &mn);
                 if (*p == '$' || *p == '%' || *p == '!')
                     p++;
 
@@ -5180,11 +5318,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                 // Parse member name into buffer
                 unsigned char membername[MAXVARLEN + 1];
                 int mn = 0;
-                while (isnamechar(*p) && mn < MAXVARLEN)
-                {
-                    membername[mn++] = *p++;
-                }
-                membername[mn] = 0;
+                p = CopyName(p, membername, &mn);
                 if (*p == '$' || *p == '%' || *p == '!')
                     p++;
 
@@ -5260,21 +5394,23 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     { // don't do this if we are defining the local variable for a function name
         for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
         {
+            const unsigned char *xv;
+            int xl;
             x = subfun[i]; // point to the command token
             x += sizeof(CommandToken);
             skipspace(x); // point to the identifier
-            s = name;     // point to the new variable
-            if (*s != toupper(*x))
+            NameView(x, &xv, &xl);
+            s = name; // point to the new variable
+            if (xl != namelen || *s != toupper(*xv))
                 continue; // quick first test
-            while (1)
+            while (xl && *s == toupper(*xv))
             {
-                if (!isnamechar(*s) && !isnamechar(*x))
-                    error("A sub/fun has the same name: $", name);
-                if (*s != toupper(*x) || *s == 0 || !isnamechar(*x) || s - name >= MAXVARLEN)
-                    break;
                 s++;
-                x++;
+                xv++;
+                xl--;
             }
+            if (xl == 0)
+                error("A sub/fun has the same name: $", name);
         }
     }
 #endif
@@ -5875,8 +6011,16 @@ void MIPS16 error(char *msg, ...)
         while (*msg)
         {
             tp = &tstr[strlen(tstr)]; // point to the end of the string
-            if (*msg == '$')          // insert a string
-                strcpy(tp, va_arg(ap, char *));
+            if (*msg == '$')          // insert a string, spelling out any symbols (see Symbols.h)
+            {
+                char *a = va_arg(ap, char *);
+                int room = sizeof(tstr) - 1 - (tp - tstr);
+                int n = SymExpand((unsigned char *)tp, (unsigned char *)a, strlen(a), room);
+                if (n < 0)
+                    strncpy(tp, a, room);
+                else
+                    tp[n] = 0;
+            }
             else if (*msg == '@') // insert a character
                 *tp = (va_arg(ap, int));
             else if (*msg == '%') // insert an integer
@@ -7122,22 +7266,32 @@ unsigned char MIPS16 __not_in_flash_func (*skipvar)(unsigned char *p, int noerro
     int i;
     int inquote = false;
 
+    int extra = 0; // characters a symbol stands for beyond its own bytes
     tp = p;
     // check the first char for a legal variable name
     skipspace(p);
-    if (!isnamestart(*p))
-        return tp;
-
-    do
+    if (issymbol(*p))
     {
-        p++;
-    } while (isnamechar(*p));
+        SymSpelling(p, &extra);
+        extra -= symbolsize(*p);
+        p += symbolsize(*p);
+    }
+    else
+    {
+        if (!isnamestart(*p))
+            return tp;
+
+        do
+        {
+            p++;
+        } while (isnamechar(*p));
+    }
 
     // check the terminating char.
     if (*p == '$' || *p == '%' || *p == '!')
         p++;
 
-    if (p - tp > MAXVARLEN)
+    if (p - tp + extra > MAXVARLEN)
     {
         if (noerror)
             return p;
@@ -7153,7 +7307,7 @@ unsigned char MIPS16 __not_in_flash_func (*skipvar)(unsigned char *p, int noerro
         // this is an array
 
         p++;
-        if (p - tp > MAXVARLEN)
+        if (p - tp + extra > MAXVARLEN)
         {
             if (noerror)
                 return p;
@@ -7198,16 +7352,21 @@ unsigned char MIPS16 __not_in_flash_func (*skipvar)(unsigned char *p, int noerro
 
         p = pp + 1; // skip the dot
         // skip the member name
-        if (!isnamestart(*p))
+        if (issymbol(*p))
+            p += symbolsize(*p);
+        else
         {
-            if (noerror)
-                return p;
-            error("Expected member name after '.'");
+            if (!isnamestart(*p))
+            {
+                if (noerror)
+                    return p;
+                error("Expected member name after '.'");
+            }
+            do
+            {
+                p++;
+            } while (isnamechar(*p));
         }
-        do
-        {
-            p++;
-        } while (isnamechar(*p));
         // check for type suffix on member
         if (*p == '$' || *p == '%' || *p == '!')
             p++;
@@ -7399,8 +7558,28 @@ void __not_in_flash_func(checkend)(unsigned char *p)
 unsigned char __not_in_flash_func (*checkstring)(unsigned char *p, unsigned char *tkn)
 {
     skipspace(p); // skip leading spaces
-    while (*tkn && (mytoupper(*tkn) == mytoupper(*p)))
+    while (*tkn)
     {
+        if (issymbol(*p))
+        {
+            // a name stored as a symbol matches if its spelling is the next
+            // word of the keyword (see Symbols.h)
+            const unsigned char *s;
+            int len;
+            s = SymSpelling(p, &len);
+            while (len && *tkn && mytoupper(*tkn) == mytoupper(*s))
+            {
+                tkn++;
+                s++;
+                len--;
+            }
+            if (len)
+                return NULL; // the name differs, or goes on past the keyword
+            p += symbolsize(*p);
+            continue;
+        }
+        if (mytoupper(*tkn) != mytoupper(*p))
+            break;
         tkn++;
         p++;
     } // compare the strings

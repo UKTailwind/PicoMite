@@ -1659,6 +1659,8 @@ void MIPS16 cmd_memory(void)
         while (*p)
             p++; // look for the zero marking the start of an element
     }
+    if (SymTabProg != NULL)
+        p += SymTabProg->size; // the program's symbol table counts as program (see Symbols.h)
     ProgramSize = ((p - ProgMemory) + 512) / 1024;
     ProgramPercent = ((p - ProgMemory) * 100) / (MAX_PROG_SIZE /*+ SAVEDVARS_FLASH_SIZE*/);
     if (ProgramPercent > 100)
@@ -2418,6 +2420,42 @@ unsigned int UsedHeap(void)
     }
 #endif
     return nbr * PAGESIZE;
+}
+
+// The bytes from addr to the end of the heap (or PSRAM) block that holds it,
+// or 0 if addr is not inside an allocated block.
+int MemRemaining(void *addr)
+{
+    unsigned char *a = (unsigned char *)addr, *pg, *p;
+    int bits;
+#ifdef rp2350
+    if (PSRAMsize && a >= (unsigned char *)PSRAMbase && a < (unsigned char *)(PSRAMbase + PSRAMsize))
+    {
+        pg = (unsigned char *)PSRAMbase + ((a - (unsigned char *)PSRAMbase) / PAGESIZE) * PAGESIZE;
+        for (p = pg; p < (unsigned char *)(PSRAMbase + PSRAMsize); p += PAGESIZE)
+        {
+            bits = SBitsGet(p);
+            if (!(bits & PUSED))
+                return 0;
+            if (bits & PLAST)
+                return p + PAGESIZE - a;
+        }
+        return 0;
+    }
+#endif
+    if (a >= MMHeap && a < MMHeap + heap_memory_size)
+    {
+        pg = MMHeap + ((a - MMHeap) / PAGESIZE) * PAGESIZE;
+        for (p = pg; p < MMHeap + heap_memory_size; p += PAGESIZE)
+        {
+            bits = MBitsGet(p);
+            if (!(bits & PUSED))
+                return 0;
+            if (bits & PLAST)
+                return p + PAGESIZE - a;
+        }
+    }
+    return 0;
 }
 
 int MemSize(void *addr)

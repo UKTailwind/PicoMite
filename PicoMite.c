@@ -4754,6 +4754,15 @@ uint32_t testPSRAM(void)
                 error("Flash erase problem");
             }
         nbr = 0;
+        // symbols: a first pass collects the program's names so that the save
+        // below can write them as symbols (it stays text if they do not fit)
+        SymTabProg = NULL; // the old program's table is gone
+        if (SymBegin(pm))
+        {
+            SymCount(pm);
+            SymRank();
+        }
+        multi = false;
         // this is used to count the number of bytes written to flash
         while (*pm)
         {
@@ -4814,6 +4823,15 @@ uint32_t testPSRAM(void)
         }
         FlashWriteByte(0);
         FlashWriteAlign(); // this will flush the buffer and step the flash write pointer to the next word boundary
+        // the symbol table follows the program text, ahead of the CFunction records
+        if (SymTableSize())
+        {
+            if ((int)((char *)realflashpointer - writebase) + SymTableSize() >= MAX_PROG_SIZE - 5)
+                goto exiterror;
+            nbr += SymTableSize();
+            SymTableWrite(FlashWriteByte, (uint32_t)((char *)realflashpointer - writebase));
+        }
+        SymEnd();
         // now we must scan the program looking for CFUNCTION/CSUB/DEFINEFONT statements, extract their data and program it into the flash used by  CFUNCTIONs
         // programs are terminated with two zero bytes and one or more bytes of 0xff.  The CFunction area starts immediately after that.
         // the format of a CFunction/CSub/Font in flash is:
@@ -5118,10 +5136,12 @@ uint32_t testPSRAM(void)
                                          //    initConsole();
         clearrepeat();
         enable_interrupts_pico();
+        SymSetProgram(ProgMemory); // the new program's table
         return;
 
     // we only get here in an error situation while writing the program to flash
     exiterror:
+        SymEnd();
         FlashWriteByte(0);
         FlashWriteByte(0);
         FlashWriteByte(0); // terminate the program in flash

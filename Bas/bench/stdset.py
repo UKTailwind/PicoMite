@@ -1,4 +1,4 @@
-"""stdset.py PORT pc3|vga OUT.json [--skip-put] [--only TEST ...]
+"""stdset.py PORT pc3|vga OUT.json [--skip-put] [--symbols-off] [--only TEST ...]
 
 The standard set every Route A step is measured with: resets the board (so no
 OPTION LOCAL VARIABLES or MODE left by an earlier program leaks in), uploads
@@ -66,6 +66,10 @@ def main():
            "metrics": {}, "checks": {}, "errors": []}
     res["cpuspeed"] = restart(port)
     print("restarted, cpuspeed", res["cpuspeed"], flush=True)
+    if "--symbols-off" in a:
+        # save every program as text for an A/B of symbols on the same firmware (not kept over a reset)
+        sh([SE, port, "cmd", "OPTION SYMBOLS OFF"], 30)
+        res["symbols"] = "off"
     sh([SE, port, "cmd", "LIBRARY DELETE"], 60)
     if not skip_put:
         args = [SE, port, "put"]

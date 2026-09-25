@@ -678,6 +678,7 @@ void fun_epoch(void)
 void cmd_pause(void)
 {
     static int interrupted = false;
+    unsigned char *pausetoken = CmdTokenPtr; // this statement, to re-run if an interrupt cuts the pause short
     MMFLOAT f;
     static uint64_t PauseTimer, IntPauseTimer;
     f = getnumber(cmdline) * 1000; // get the pulse width
@@ -714,9 +715,7 @@ void cmd_pause(void)
                 // to the interrupt routine.  When the interrupt routine finishes we should reexecute
                 // this stmt and because the variable interrupted is static we can see that we need to
                 // resume pausing rather than start a new pause time.
-                while (*cmdline && *cmdline != cmdtoken)
-                    cmdline--;             // step back to find the command token
-                InterruptReturn = cmdline; // point to it
+                InterruptReturn = pausetoken; // point to the command token
                 interrupted = true;        // show that this stmt was interrupted
                 return;                    // and let the interrupt run
             }
@@ -2036,7 +2035,7 @@ void MIPS16 cmd_library(void)
                 continue;
             }
 
-            if (*p >= C_BASETOKEN || isnamestart(*p))
+            if (*p >= C_BASETOKEN || isnamestartsym(*p))
                 CmdExpected = false; // stop looking for a CFunction, etc on this line
 
             if (*p == '"')
@@ -2071,6 +2070,12 @@ void MIPS16 cmd_library(void)
 
             if (p[0] == 0 && p[1] == 0)
                 break; // end of the program
+            if (issymbol(*p))
+            { // the library is saved as text: spell out the program's symbols (see Symbols.h)
+                m += SymExpand(m, p, symbolsize(*p), SYM_MAXLEN);
+                p += symbolsize(*p);
+                continue;
+            }
             *m++ = *p++;
         }
 
@@ -2106,6 +2111,8 @@ void MIPS16 cmd_library(void)
         p++;
         p++;
         p++; // step over the header of the four 0xff bytes
+        if (*(uint32_t *)p == SYM_MAGIC)
+            p += ((const symtab_t *)p)->size; // and the program's symbol table
 
         // step the memory to the next 4 word boundary
         //  while((unsigned int)p & 0b11) p++;
@@ -5238,6 +5245,18 @@ void MIPS16 cmd_option(void)
             OptionNoCheck = false;
             return;
         }
+        return;
+    }
+
+    tp = checkstring(cmdline, (unsigned char *)"SYMBOLS");
+    if (tp)
+    { // development switch, not saved: store the names in programs saved from now on as symbols (see Symbols.h) or as text
+        if (checkstring(tp, (unsigned char *)"ON"))
+            SymEnabled = true;
+        else if (checkstring(tp, (unsigned char *)"OFF"))
+            SymEnabled = false;
+        else
+            SyntaxError();
         return;
     }
 
@@ -10575,7 +10594,25 @@ GotAnInterrupt:
     CommandToken tkn = commandtbl_decode((const unsigned char *)intaddr);
     if (tkn == cmdSUB)
     {
-        strncpy(CurrentInterruptName, intaddr + 2, MAXVARLEN);
+        {
+            // the text after the SUB token, with any symbol spelt out (see Symbols.h)
+            unsigned char *q = (unsigned char *)intaddr + 2;
+            const unsigned char *s;
+            int l, n = 0;
+            memset(CurrentInterruptName, 0, MAXVARLEN);
+            while (*q && n < MAXVARLEN)
+            {
+                if (issymbol(*q))
+                {
+                    s = SymSpelling(q, &l);
+                    q += symbolsize(*q);
+                    while (l-- && n < MAXVARLEN)
+                        CurrentInterruptName[n++] = *s++;
+                }
+                else
+                    CurrentInterruptName[n++] = *q++;
+            }
+        }
         rti[0] = (cmdIRET & 0x7f) + C_BASETOKEN;
         rti[1] = (cmdIRET >> 7) + C_BASETOKEN; // tokens can be 14-bit
         if (gosubindex >= MAXGOSUB)
@@ -10642,7 +10679,7 @@ void __not_in_flash_func(IntSignal)(void)
 unsigned char *GetIntAddress(unsigned char *p)
 {
     int i;
-    if (isnamestart((uint8_t)*p))
+    if (isnamestartsym((uint8_t)*p))
     {                         // if it starts with a valid name char
         i = FindSubFun(p, 0); // try to find a matching subroutine
         if (i == -1)

@@ -121,7 +121,7 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
         *stride = sizeof(MMFLOAT); // Default stride for normal arrays (8 bytes)
     char pp[STRINGSIZE] = {0};
     strcpy(pp, (char *)p);
-    if (!isnamestart(pp[0]))
+    if (!isnamestartsym(pp[0]))
     { // found a literal
         *n = 1;
         return;
@@ -141,10 +141,13 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
             else
                 *n = (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) < *n ? (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) : *n;
             skipspace(p);
-            do
-            {
-                p++;
-            } while (isnamechar(*p));
+            if (issymbol(*p))
+                p += symbolsize(*p); // a name stored as a symbol (see Symbols.h)
+            else
+                do
+                {
+                    p++;
+                } while (isnamechar(*p));
             if (*p == '!' || *p == '%')
                 p++;
             if (*p == '(')
@@ -178,8 +181,11 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
         unsigned char *pcheck = p;
         skipspace(pcheck);
         // Skip past variable name
-        while (isnamechar(*pcheck))
-            pcheck++;
+        if (issymbol(*pcheck))
+            pcheck += symbolsize(*pcheck);
+        else
+            while (isnamechar(*pcheck))
+                pcheck++;
         if (*pcheck == '!' || *pcheck == '%' || *pcheck == '$')
             pcheck++;
         skipspace(pcheck);
