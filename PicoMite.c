@@ -247,6 +247,7 @@ uint8_t PSRAMpin;
     volatile int WIFIconnected = 0;
     volatile int LastWifiErr = 0;
     int startupcomplete = 0;
+    int WebScanActive = 0;
     void ProcessWeb(int mode);
     char LCDAttrib = 0;
 #endif

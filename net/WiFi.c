@@ -301,7 +301,11 @@
         static uint64_t lastheartmsec = 0;
         uint64_t timenow = time_us_64();
         if (!WIFIconnected && startupcomplete)
+        {
+            if (WebScanActive)
+                cyw43_arch_poll(); // WEB SCAN is waiting for results: poll the chip even with no connection
             goto flashonly;
+        }
         TCP_SERVER_T *state = (TCP_SERVER_T *)TCPstate;
         if (!state)
             return;
@@ -559,6 +563,7 @@ void cmd_web(void)
                                 StandardError(35);
                 }
                 scan_dups = GetMemory(32 * 100 + 1);
+                WebScanActive = 1; // ProcessWeb must poll for the results even with no connection
                 cyw43_wifi_scan_options_t scan_options = {0};
                 int err = cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, scan_result);
                 if (err == 0)
@@ -575,6 +580,7 @@ void cmd_web(void)
                 while (Timer4)
                         if (startupcomplete)
                                 ProcessWeb(0);
+                WebScanActive = 0;
                 if (scan_dest)
                 {
                         uint64_t *p = (uint64_t *)scan_dest;

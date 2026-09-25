@@ -675,6 +675,7 @@ extern volatile int WIFIconnected;
 extern volatile int LastWifiErr;
 extern volatile int scantimer;
 extern int startupcomplete;
+extern int WebScanActive; // WEB SCAN is waiting for results: ProcessWeb polls with no connection
 #endif
 
 /* ============================================================================
