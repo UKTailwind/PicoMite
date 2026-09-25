@@ -96,7 +96,7 @@ extern "C"
       HEAP_MEMORY_SIZE are provisional — tune against build_limits.txt /
       GetHighestHexAddress.py. Bump MagicKey when Option layout/defaults
       change so stale cached options get rewritten. */
-#define FLASH_TARGET_OFFSET (1504 * 1024)
+#define FLASH_TARGET_OFFSET (1520 * 1024)
    /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
       kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
       pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
