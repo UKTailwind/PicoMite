@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Main Bug Report</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+
+</head>
+<body>
+<header class="hero"><div class="wrap">
+<div class="eyebrow">main at cbd99fb · open issues</div>
+<h1>Bugs found on main, September 2026</h1>
+<p>These turned up during the interpreter performance work on <code>development</code>. They were found by testing on the boards and by three read-only code surveys. Each one below is present on <code>main</code>. For each, the report gives where it is, what goes wrong, how to confirm it, and a suggested fix. None is fixed on main. Four are already fixed on <code>development</code> and can be ported.</p>
+<p class="ref">Line numbers are main at cbd99fb (2026-09-25). "Confirmed" means seen on a board; "by reading" means found in the code and not yet reproduced.</p>
+</div></header>
+<div class="wrap">
+<nav class="toc">
+<a href="#summary">Summary</a><a href="#ported">Fixed on development</a><a href="#reading">Found by reading</a><a href="#stepper">Stepper</a><a href="#done">Already fixed on main</a>
+</nav>
+
+<section id="summary">
+<h2>Summary</h2>
+<div class="tablewrap"><table>
+<tr><th>#</th><th>Area</th><th>Problem</th><th>Evidence</th><th>Severity</th><th>Status</th></tr>
+<tr><td>1</td><td>PIO interrupts</td><td>TX "was full" test reads SM0's SHIFTCTRL for every state machine</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on development 791bf93</td></tr>
+<tr><td>2</td><td>I2C slave</td><td>clearing a slave-ready bit can wipe one the ISR sets at the same moment</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on development 791bf93</td></tr>
+<tr><td>3</td><td>WiFi</td><td>WEB SCAN without a connection never polls, so it finds nothing</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on development a07e8f2</td></tr>
+<tr><td>4</td><td>DO loops</td><td>the trace cache's DO fast path truncates a fractional limit</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on development 04361c0</td></tr>
+<tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
+<tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
+<tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr><td>11</td><td>Interrupts</td><td>the IRETURN stub <code>rti[2]</code> has no terminator</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>13</td><td>OPTION PROFILING</td><td>interrupt SUBs and ON…GOSUB unbalance the per-SUB frames</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>to check</td></tr>
+<tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>removed on development 04361c0</td></tr>
+<tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
+<tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+</table></div>
+<p>Suggested order: 1-4 first, since they are small, already tested, and only need porting. Then 5, 7 and 18.</p>
+</section>
+
+<section id="ported">
+<h2>Fixed on development, still on main</h2>
+
+<div class="card"><h3>1 · PIO TX interrupt: wrong FIFO depth for SMs 1-3</h3>
+<p><b>Where:</b> <code>core/MM_Misc.c:10265</code>, <code>checkdetailinterrupts</code>: <code>int full = (pioinuse-&gt;sm-&gt;shiftctrl &amp; (1 &lt;&lt; 30)) ? 8 : 4;</code></p>
+<ul>
+<li><b>What goes wrong:</b> <code>pioinuse-&gt;sm</code> is the array, so this always reads state machine 0's SHIFTCTRL. For SMs 1-3 the "TX FIFO was full" depth depends on whether SM0's FIFO is joined, not their own. A PIO TX interrupt on SM 1-3 then fires on the wrong edge or never fires.</li>
+<li><b>Confirm:</b> join the TX FIFO on SM1 but not SM0, then arm a PIO TX interrupt on SM1 and fill the FIFO. The interrupt should fire when the level drops from 8.</li>
+<li><b>Fix:</b> <code>pioinuse-&gt;sm[sm].shiftctrl</code>, as on development in 791bf93.</li>
+</ul></div>
+
+<div class="card"><h3>2 · I2C slave: lost ready bit</h3>
+<p><b>Where:</b> the clears are at <code>core/MM_Misc.c:10410, 10416, 10422, 10428</code> (<code>I2C_Status &amp;= ~…</code>). The ISRs set bits at <code>io/I2C.c:391, 396</code> (and 407, 412 for I2C2).</p>
+<ul>
+<li><b>What goes wrong:</b> the main loop's <code>&amp;=</code> is a load, a modify and a store. If the I2C interrupt sets the other ready bit between the load and the store, the store wipes it. A receive and a send request arriving together can lose one interrupt.</li>
+<li><b>Fix:</b> clear the bit with interrupts masked (<code>save_and_disable_interrupts</code>/<code>restore_interrupts</code>), as <code>ClearI2CStatus()</code> does on development in 791bf93.</li>
+</ul></div>
+
+<div class="card"><h3>3 · WEB SCAN without a WiFi connection finds nothing</h3>
+<p><b>Where:</b> <code>net/WiFi.c:304</code>: <code>if (!WIFIconnected &amp;&amp; startupcomplete) goto flashonly;</code> in <code>ProcessWeb</code>, and WEB SCAN's wait loop at <code>net/WiFi.c:575</code>.</p>
+<ul>
+<li><b>What goes wrong:</b> the build uses lwIP's poll mode, where scan results arrive only through <code>cyw43_arch_poll()</code>. Without a connection <code>ProcessWeb</code> skips straight to the heartbeat, so nothing polls. The only results that get through are ones processed during the next scan's start-up command.</li>
+<li><b>Confirmed</b> on the PC3 (HDMIWEB, no OPTION WIFI): one run listed no networks, the next listed one. Development listed them every time.</li>
+<li><b>Fix:</b> a flag (<code>WebScanActive</code> on development) set for the scan's wait. <code>ProcessWeb</code> polls whenever it is set, even with no connection (development a07e8f2).</li>
+</ul></div>
+
+<div class="card"><h3>4 · DO fast path truncates a fractional limit</h3>
+<p><b>Where:</b> <code>core/MMtrace.c:3497</code>, <code>dofast_fill</code>: <code>*out_limit_i = (ctype == T_INT) ? limi : (int64_t)limf;</code>. This path is always on in the eleven trace-cache builds, even with the trace cache switched off.</p>
+<ul>
+<li><b>What goes wrong:</b> an integer variable compared with a fractional number compares against the truncated number. <code>DO : INC i% : LOOP WHILE i% &lt; 2.5</code> stops at 2; the evaluator (and every other build) runs to 3.</li>
+<li><b>Fix:</b> compare in float unless both sides are integers, as the evaluator does. On development the whole fast path was rewritten and moved into Commands.c (04361c0); <code>Bas/bench/inttests/dotest.bas</code> checks 16 condition forms against the evaluator. On main the smallest fix is to keep a float limit when the number is not an integer.</li>
+</ul></div>
+</section>
+
+<section id="reading">
+<h2>Found by reading the code</h2>
+
+<div class="card"><h3>5 · STATIC after a nested call attaches to the wrong variable</h3>
+<p><b>Where:</b> <code>core/MMBasic.c:2629</code> sets <code>CurrentSubFunName</code> on every SUB/FUNCTION entry and nothing restores it. STATIC builds its backing variable's name from it at <code>core/Commands.c:8778-8788</code> (<code>SUBNAME + "\x1e" + VAR</code>).</p>
+<ul>
+<li><b>What goes wrong:</b> in <code>SUB A</code>, a STATIC executed <i>after</i> a call to <code>SUB B</code> is mangled as <code>B\x1eVAR</code>. It can find or create B's static instead of its own, sharing or losing state. <code>CurrentInterruptName</code> also overrides the SUB name for every STATIC run inside an interrupt SUB, including in SUBs that the interrupt SUB calls.</li>
+<li><b>Confirm:</b> <code>SUB A : B : STATIC n : INC n : PRINT n : END SUB</code> with a <code>SUB B</code> that has a <code>STATIC n</code> of its own; call A several times and watch n.</li>
+<li><b>Fix:</b> save <code>CurrentSubFunName</code> in the frame and restore it on return. Alternatively, derive the name from <code>subfun[index]</code> of the current frame when the STATIC executes.</li>
+</ul></div>
+
+<div class="card"><h3>6 · OPTION LOCAL VARIABLES above the compile-time size overflows <code>g_hashlist</code></h3>
+<p><b>Where:</b> <code>core/MMBasic.c:225</code> <code>struct s_hash g_hashlist[MAXLOCALVARS]</code>. <code>maxlocalvars</code> can be raised up to MAXVARS-32 at <code>:6481</code>, and each local is pushed with no bound at <code>:5253</code>.</p>
+<ul>
+<li><b>What goes wrong:</b> with more live locals than the compile-time MAXLOCALVARS, <code>g_hashlist[g_hashlistpointer++]</code> writes past the array into whatever follows in BSS.</li>
+<li><b>Fix:</b> size <code>g_hashlist</code> to MAXVARS, or cap OPTION LOCAL VARIABLES at MAXLOCALVARS, or bound the push and raise "Too many local variables".</li>
+</ul></div>
+
+<div class="card"><h3>7 · Probe loops that can hang</h3>
+<ul>
+<li><b>Global variables:</b> <code>probe_global_slot</code> (<code>core/MMBasic.c:4556</code>) only checks for wrap-around when called from inside a SUB. At level 0 a global region full of live entries and tombstones loops forever.</li>
+<li><b>Labels:</b> <code>hashlabels</code>' guard <code>if (originalhash &lt; 0)</code> (<code>:3713</code>) tests an unsigned value, so it is never true. A full <code>funtbl</code> loops forever at PrepareProgram.</li>
+<li><b>SUB lookup:</b> <code>FindSubFun</code> on the RP2350 probes <code>funtbl</code> with no bound.</li>
+<li><b>Fix:</b> a counted probe (at most the table size) on each loop, with an error on overflow.</li>
+</ul></div>
+
+<div class="card"><h3>8 · RP2350: GOTO a label that shares a SUB's name</h3>
+<p><b>Where:</b> SUB/FUNCTION names and labels share <code>funtbl</code>. For a label, <code>index</code> is a line pointer; for a SUB it is a small <code>subfun</code> index. The RP2350 <code>findlabel</code> (<code>core/MMBasic.c:3742</code>) does not check which kind it found.</p>
+<ul>
+<li><b>What goes wrong:</b> GOTO/GOSUB/RESTORE naming a SUB (or a label and a SUB with the same name) returns the SUB index as a program pointer, and execution jumps to low memory. The RP2040 scans the program for real labels and is not affected.</li>
+<li><b>Fix:</b> accept only <code>index &gt;= MAXSUBFUN</code> in <code>findlabel</code>, as FindSubFun accepts only <code>&lt; MAXSUBFUN</code>. Either reject a label that duplicates a SUB name at PrepareProgram, or allow both and keep them apart.</li>
+</ul></div>
+
+<div class="card"><h3>9 · FindSubFun ignores its type argument on the RP2350</h3>
+<p><b>Where:</b> the RP2350 FindSubFun at <code>core/MMBasic.c:1966</code> never reads <code>type</code>. The RP2040 version at <code>:2020</code> filters SUB/CSUB (0) from FUNCTION (1) and checks the suffix.</p>
+<ul>
+<li><b>What goes wrong:</b> a SUB or CSUB name used with <code>()</code> inside an expression is found as a function on the RP2350 but not on the RP2040, so the same program behaves differently on the two chips.</li>
+<li><b>Fix:</b> filter by kind on the RP2350 as the RP2040 does.</li>
+</ul></div>
+
+<div class="card"><h3>10 · Unchecked buffer lengths: CALL, and tokenise's output</h3>
+<ul>
+<li><b>CALL:</b> <code>cmd_call</code> (<code>core/Commands.c:8318</code>) and <code>fun_call</code> (<code>core/Functions.c:243</code>) <code>strcat</code> the argument text onto the name in a 256-byte temporary string with no length check. A long argument list overruns it.</li>
+<li><b>tokenise:</b> <code>tokenise</code> never checks its output position in <code>tknbuf</code> (256 bytes). Output can be longer than input: the 2-byte line header, the line number, an inserted LET or PRINT, and the CALC <code>MM.ANSWER</code> insertion.</li>
+<li><b>Fix:</b> check the length before each <code>strcat</code> ("String too long"), and bound the <code>tknbuf</code> writes.</li>
+</ul></div>
+
+<div class="card"><h3>11 · IRETURN stub has no terminator</h3>
+<p><b>Where:</b> <code>core/MM_Misc.c:10213</code> <code>static char rti[2]</code> holds only the 2-byte IRETURN token. The END SUB of an interrupt SUB returns to it, and <code>skipelement</code>/<code>checkend</code> read the byte after it.</p>
+<ul><li><b>Fix:</b> <code>static char rti[4]</code>, zero-filled after the token.</li></ul></div>
+
+<div class="card"><h3>12 · CountLines on lines longer than 253 bytes</h3>
+<p><b>Where:</b> <code>core/MMBasic.c:3953</code> <code>p += p[0] + 2;</code>. This is reached only for lines whose skip byte is 0xFE (length unknown). The label length is in <code>p[1]</code>.</p>
+<ul><li><b>Fix:</b> <code>p += p[1] + 2;</code>. <b>Effect:</b> a wrong line count for errors or listing positions in programs with very long lines.</li></ul></div>
+
+<div class="card"><h3>13 · OPTION PROFILING frames unbalanced by interrupts and ON…GOSUB</h3>
+<p><b>Where:</b> a SUB-style interrupt (<code>GotAnInterrupt</code>, <code>core/MM_Misc.c:10527</code>) and ON…GOSUB (<code>core/Commands.c:8625</code>) raise <code>g_LocalIndex</code> without <code>EnterLocalFrame</code>. Their END SUB or RETURN goes through <code>cmd_return</code>, which calls <code>LeaveLocalFrame</code> (<code>:5976</code>).</p>
+<ul><li><b>Effect:</b> the frame of the SUB that was interrupted is popped, so OPTION PROFILING's per-SUB times are charged to the wrong SUB. Only the CACHE builds that keep these frames are affected; <code>g_LocalIndex</code> stays balanced.</li>
+<li><b>Fix:</b> call <code>EnterLocalFrame</code> at both entries.</li></ul></div>
+
+<div class="card"><h3>14 · MM.INFO(VARCNT) stale</h3>
+<p><b>Where:</b> <code>g_varcnt</code> is updated only when a variable is created. <code>erase()</code> (<code>core/MMBasic.c:6577</code>) and <code>ClearVars(level)</code> decrement <code>g_Globalvarcnt</code>/<code>g_Localvarcnt</code> but not the total. MM.INFO(VARCNT) is at <code>core/MM_Misc.c:9358</code>.</p>
+<ul><li><b>Fix:</b> return <code>g_Globalvarcnt + g_Localvarcnt</code>, or update <code>g_varcnt</code> alongside them.</li></ul></div>
+
+<div class="card"><h3>15 · CSUB header: <code>int dims[]</code> only for PICORP2350 (to verify)</h3>
+<p><b>Where:</b> <code>PicoCFunctions.h:400</code> selects <code>int dims[MAXDIM]</code> only <code>#ifdef PICORP2350</code>, else <code>short</code>. Every RP2350 firmware build uses <code>int dimtbl[5]</code>, and the variable-table layout is part of the CSUB ABI (CallTable 0x60).</p>
+<ul><li><b>Check:</b> how CSUBs are compiled for the other RP2350 targets (HDMI, HDMIUSB, VGARP2350 …). If <code>PICORP2350</code> is not defined for them, a CSUB that walks <code>g_vartbl</code> reads the wrong offsets.</li></ul></div>
+
+<div class="card"><h3>16 · Leak when a nested call's argument errors under ON ERROR SKIP</h3>
+<p><b>Where:</b> <code>DefinedSubFunMem</code> (<code>core/MMBasic.c:536</code>) is one global sentinel. It is set during argument processing (<code>:2387</code>) and cleared on success (<code>:2628</code>). In <code>Foo(Bar(x), bad)</code> the inner call clears it. If the outer call's later argument then errors under OPTION ERROR SKIP, the error handler does not unwind the outer frame.</p>
+<ul><li><b>Effect:</b> the gosub frame and the heap argument buffers leak. <b>Fix:</b> a per-call sentinel saved and restored around the argument evaluation.</li></ul></div>
+
+<div class="card"><h3>17 · Trace cache keeps global indices it never invalidates</h3>
+<p><b>Where:</b> <code>core/MMtrace.c</code>. Its LET/INC ops store global slot indices and raw pointers. <code>TraceCacheInvalidateAll</code> (<code>:3287</code>) is called only by the trace cache's own option commands, although the file's comments say DIM, ERASE, REDIM and CLEAR invalidate it.</p>
+<ul><li><b>Effect</b> (only with OPTION TRACECACHE ON): after ERASE or REDIM, a cached LET can write into a slot now used by another variable. <b>Status:</b> the trace cache was removed on development (04361c0).</li></ul></div>
+</section>
+
+<section id="stepper">
+<h2>Stepper (RP2350)</h2>
+<div class="card"><h3>18 · RUN during a stepper job wipes the heap under the ISR</h3>
+<ul>
+<li><b>What goes wrong:</b> RUN clears and reinitialises the heap while the stepper timer interrupt may still be walking planner blocks and arc buffers that live in it.</li>
+<li><b>Fix:</b> stop the stepper subsystem (disable its IRQ and drop the queue) before ClearRuntime and InitHeap, as END should.</li>
+</ul></div>
+<div class="card"><h3>19 · STEPPER ESTOP leaks the executing arc's buffer</h3>
+<ul><li><b>What goes wrong:</b> ESTOP drops the queue, but the buffer of the arc being executed is not handed to the retired list. <b>Fix:</b> one line: retire the current block's payload in the ESTOP path.</li></ul></div>
+<div class="card"><h3>20 · Arcs slower than the requested feed rate</h3>
+<ul><li><b>What goes wrong:</b> on the PC3 test rig, arcs ran at about 2.4 mm/s with F6000 requested; straight moves were not affected. <b>Next step:</b> check the arc segment feed-rate clamp and the per-segment junction speed against the planner.</li></ul></div>
+</section>
+
+<section id="done">
+<h2>Already fixed on main in this period</h2>
+<ul>
+<li>48b4680: on the RP2040, a variable could take a SUB or FUNCTION's name (the check stepped one byte into a 2-byte token).</li>
+<li>aaf8f7c: the stepper ISR freed heap memory in interrupt context.</li>
+<li>7f65ade: MAP MAXIMITE striped every second column in HDMI MODE 2.</li>
+<li>9130631: MATH PID START's first callback came 1000 times too early.</li>
+<li>ed4ddbc: SETTICK accepted a period of -1.</li>
+<li>d05bb96: ON KEY k did not work on a UART serial console.</li>
+<li>cbd99fb: ONESHOT shared its GPIO-callback bit with the PS/2 mouse.</li>
+</ul>
+<p>Not a bug: recursion from inside a FOR/NEXT or DO/LOOP corrupts the loop, which the manual documents (Recursion, page 41).</p>
+</section>
+</div>
+</body>
+</html>
