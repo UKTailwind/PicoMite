@@ -177,5 +177,76 @@ static inline unsigned char *CopyName(unsigned char *p, unsigned char *buf, int 
 
 // A name starts at p: a symbol, or text beginning with a letter or underscore
 #define isnamestartsym(c) (isnamestart(c) || issymbol(c))
+
+/* Bindings (S5/S6).  Each distinct name (case ignored) read through one of
+   the program's symbols gets a canonical entry, made the first time one of
+   its spellings is read.  The entry remembers the global variable, the SUB
+   or FUNCTION and the label of that name once they have been found, and the
+   newest local variable of that name, so lookups skip the name search.
+
+   Locals form a shadow stack per name: making a local saves the entry's
+   local binding in SymLShadow[slot] and points it at the new slot; ClearVars
+   frees locals newest first and puts each binding back.  So the binding is
+   always the newest live local of its name, and a local is visible only at
+   its own level, which a local at any other level cannot be.
+
+   A binding is cleared where the thing it points to goes away: ClearVars(0)
+   and erase() for globals, ClearVars(level) for locals; the SUB and label
+   bindings last as long as the program (PrepareProgram starts afresh).  A
+   local made from text (EXECUTE, a library, the prompt) has no entry; while
+   any is alive a global binding is not trusted inside a SUB.
+
+   What every lookup reads (SymCanonOf, SymG, SymL, SymS and the local
+   shadows) is kept in SRAM, about 8 bytes a name; the rest goes to PSRAM
+   when there is some, so the bindings take as little as possible of the
+   program's own SRAM heap. */
+typedef struct
+{
+    unsigned char *labind; // the label's line, NULL = not looked up yet
+    uint16_t id;           // a symbol id spelling this name
+    uint16_t next;         // next entry in the same hash chain + 1, 0 = none
+    uint16_t flags;        // SYMC_DOT: the name holds a '.' (it may be a structure member path)
+} symcold_t;
+#define SYM_UNBOUND (-2)
+#define SYMC_DOT 1
+#define SYM_LTEXT 0xFFFF // SymLCanon: a local made from text
+
+extern uint16_t *SymCanonOf; // canonical entry + 1 of each program symbol id, 0 = not seen yet
+extern int16_t *SymG;        // per entry: g_vartbl slot of the global of the name, -1 = not bound
+extern int16_t *SymL;        // per entry: g_vartbl slot of the newest live local of the name, -1 = none
+extern int16_t *SymS;        // per entry: subfun[] index, -1 = none, SYM_UNBOUND = not looked up yet
+extern symcold_t *SymCold;   // per entry: the rest
+extern unsigned int SymCanonCount;
+extern int16_t *SymLShadow; // per local slot: the local binding its local hid
+extern uint16_t *SymLCanon; // per local slot: canonical entry + 1, SYM_LTEXT, or 0 = not tracked
+extern unsigned int SymLSlots; // slots the two arrays above cover
+extern int SymTextLocals;   // live locals made from text
+int SymCanonNew(const unsigned char *p);
+void SymBindInit(void);
+void SymBindFree(void);
+void SymBindForget(void);
+void SymBindReset(void);
+void SymBindForgetSlot(int slot);
+void SymLocalMade(int slot, int k);
+void SymLocalFreed(int slot);
+
+// The canonical entry of the program symbol at p, or -1 if there are no
+// bindings (a library symbol, or no memory for them).
+static inline __attribute__((always_inline)) int SymCanonAt(const unsigned char *p)
+{
+    unsigned int id, c;
+    if (SymCanonOf == NULL || (p[0] & 2))
+        return -1;
+    id = symdigit[p[1] & 0x7f];
+    if (!(p[0] & 1))
+        id = SYM_NSHORT + id * SYM_NSHORT + symdigit[p[2] & 0x7f];
+    if (id >= SymCanonCount)
+        return -1;
+    c = SymCanonOf[id];
+    if (c)
+        return c - 1;
+    return SymCanonNew(p); // the first use of this spelling
+}
+
 #endif
 /*  @endcond */

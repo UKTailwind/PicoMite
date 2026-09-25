@@ -2062,6 +2062,7 @@ void InitHeap(bool all)
        later IfTableFree() hand back memory that now belongs to something
        else - see IfTableForget() in Commands.c. */
     IfTableForget();
+    SymBindForget(); /* and the symbol bindings (see Symbols.h) */
 #ifdef STRUCTENABLED
     /* Same for the TYPE definitions, which are GetMemory blocks too. */
     StructTableForget();

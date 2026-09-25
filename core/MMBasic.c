@@ -877,6 +877,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
     // the symbol tables of the library and the program (NULL if they are text)
     SymTabLib = LibPresent() ? SymFindTable(LibMemory) : NULL;
     SymSetProgram(ProgMemory);
+    SymBindInit();
     if (LibPresent())
     {
         NbrFuncts = PrepareProgramExt(LibMemory, 0, &CFunctionLibrary, ErrAbort);
@@ -2136,7 +2137,7 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
 // returns with the index of the sub/function in the table or -1 if not found
 // if type = 0 then look for a sub otherwise a function
 #ifdef rp2350
-int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
+static int __not_in_flash_func(FindSubFunText)(unsigned char *p, int type)
 {
     unsigned char *s;
     unsigned char name[MAXVARLEN + 1];
@@ -2193,7 +2194,7 @@ int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
     return -1;
 }
 #else
-int MIPS16 __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
+static int MIPS16 __not_in_flash_func(FindSubFunText)(unsigned char *p, int type)
 {
     int n = 0;
     int low, high, mid, cmp;
@@ -2247,7 +2248,7 @@ int MIPS16 __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
                 if (!(tkn == cmdSUB || tkn == cmdCSUB))
                     return -1;
             }
-            else
+            else if (type > 0) // (type < 0: any kind, for FindSubFun's binding)
             {
                 if (!(tkn == cmdFUN /*|| tkn == cmdCFUN*/))
                     return -1;
@@ -2270,6 +2271,28 @@ int MIPS16 __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
     return -1;
 }
 #endif
+
+// A symbol remembers the SUB/FUNCTION of its name (see Symbols.h)
+int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
+{
+    int k;
+    if (issymbol(*p) && (k = SymCanonAt(p)) >= 0)
+    {
+        int i = SymS[k];
+        if (i == SYM_UNBOUND)
+            i = SymS[k] = FindSubFunText(p, -1);
+#ifndef rp2350
+        if (i >= 0)
+        { // the kind is checked as the search does on this chip
+            CommandToken tkn = commandtbl_decode(subfun[i]);
+            if (type == 0 ? !(tkn == cmdSUB || tkn == cmdCSUB) : !(tkn == cmdFUN))
+                return -1;
+        }
+#endif
+        return i;
+    }
+    return FindSubFunText(p, type);
+}
 
 // BYVAL (kind 'V') or BYREF (kind 'R') at the start of a parameter in a
 // SUB/FUNCTION definition, written as one word or as BY VAL.  Returns the
@@ -2436,6 +2459,8 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     unsigned char **argv2;
     int argc2;
     unsigned char fun_name[MAXVARLEN + 2]; // a name of MAXVARLEN characters, a type suffix and the terminator
+    unsigned char funsym[8];               // the name as its symbol and suffix, when it is one (see Symbols.h)
+    unsigned char *funvar = fun_name;      // what the function's variable is made from
     unsigned char *argbyref;
     int i;
     int ArgType, FunType;
@@ -2469,6 +2494,9 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     {
         const unsigned char *nv;
         int nl;
+        memcpy(funsym, p, symbolsize(*p));
+        funsym[symbolsize(*p)] = 0;
+        funvar = funsym;
         p = NameView(p, &nv, &nl);
         if (nl > MAXVARLEN)
             nl = MAXVARLEN;
@@ -2492,6 +2520,12 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         *tp++ = *p++;
     }
     *tp = 0;
+    if (funvar == funsym && defsuffix)
+    { // the suffix goes after the symbol
+        int k = strlen((char *)funsym);
+        funsym[k] = defsuffix;
+        funsym[k + 1] = 0;
+    }
 
     if (isfun && *p != '(' /*&& (*SubLinePtr != cmdCFUN)*/)
         error("Function definition");
@@ -2854,9 +2888,9 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     g_StructArg = SavedStructArg; // Restore struct index for function return type
 #endif
     if (FunArrayDims != NULL)
-        tp = FunArrayCreate(fun_name, FunArrayDims, FunType, &FunArrayCount); // declare the local result array
+        tp = FunArrayCreate(funvar, FunArrayDims, FunType, &FunArrayCount); // declare the local result array
     else
-        tp = findvar(fun_name, FunType | V_FUNCT); // declare the local variable
+        tp = findvar(funvar, FunType | V_FUNCT); // declare the local variable
     FunType = g_vartbl[g_VarIndex].type;
 #ifdef STRUCTENABLED
     int FunStructType = -1; // struct type index if returning a struct
@@ -3957,7 +3991,7 @@ void hashlabels(unsigned char *p, int ErrAbort)
 // returns a pointer to the T_NEWLINE token or throws an error if not found
 // non cached version
 
-unsigned char *findlabel(unsigned char *labelptr)
+static unsigned char *findlabel_text(unsigned char *labelptr)
 {
     //    char *p, *lastp = (char *)ProgMemory + 1;
     unsigned char *tp, *ip;
@@ -4022,7 +4056,7 @@ unsigned char *findlabel(unsigned char *labelptr)
 }
 #else
 
-unsigned char MIPS16 *findlabel(unsigned char *labelptr)
+static unsigned char MIPS16 *findlabel_text(unsigned char *labelptr)
 {
     char *p, *lastp = (char *)ProgMemory + 1;
     char *next;
@@ -4133,6 +4167,19 @@ unsigned char MIPS16 *findlabel(unsigned char *labelptr)
     }
 }
 #endif
+
+// A symbol remembers the label of its name (see Symbols.h)
+unsigned char *findlabel(unsigned char *labelptr)
+{
+    int k;
+    if (labelptr != NULL && issymbol(*labelptr) && (k = SymCanonAt(labelptr)) >= 0)
+    {
+        if (SymCold[k].labind == NULL)
+            SymCold[k].labind = findlabel_text(labelptr); // (an error if there is no such label)
+        return SymCold[k].labind;
+    }
+    return findlabel_text(labelptr);
+}
 
 // count the number of lines up to and including the line pointed to by the argument
 // used for error reporting in programs that do not use line numbers
@@ -4888,14 +4935,16 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     int i = 0, j, size, ifree = -1, globalifree, localifree, nbr, dnbr = 0, vtype = 0, vindex, namelen = 0, tmp;
     unsigned char *s = name, *x, u, suffix = 0;
     void *mptr;
-    int GlobalhashIndex, OriginalGlobalHash;
+    int GlobalhashIndex = 0, OriginalGlobalHash = 0; // (set from the hash before any search)
     int LocalhashIndex;
     uint32_t hash = FNV_offset_basis;
     int dim[MAXDIM];
     int dim_error_deferred = 0; // set if V_NOFIND_NULL deferred a "Dimensions" error
+    int symk = -1;              // the name's canonical entry, if it is a bound symbol (see Symbols.h)
+    unsigned char *symp = NULL; // that symbol, while its name is still unread
 #ifdef rp2350
     char *tp, *ip;
-    uint32_t funhash;
+    uint32_t funhash = 0;
 #endif
 #ifdef STRUCTENABLED
     g_StructMemberType = 0;   // Reset struct member type flag
@@ -4906,49 +4955,82 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     if (g_option_profiling)
         g_perf_findvar_calls++;
 
+    globalifree = -1;
+    tmp = -1;
+#ifdef rp2350
+#define FINDVAR_FUNHASH() funhash = hash % MAXSUBFUN
+#else
+#define FINDVAR_FUNHASH()
+#endif
+    // what the name's hash gives the search below
+#define FINDVAR_HASHES()                                                    \
+    do                                                                      \
+    {                                                                       \
+        FINDVAR_FUNHASH();                                                  \
+        GlobalhashIndex = (hash % maxglobalvars) + maxlocalvars;            \
+        OriginalGlobalHash = GlobalhashIndex - 1;                           \
+        if (OriginalGlobalHash < maxlocalvars)                              \
+            OriginalGlobalHash += maxglobalvars;                            \
+        if (namelen != MAXVARLEN)                                           \
+            *s = 0;                                                         \
+    } while (0)
+    // read a symbol's name into name[] as the text path would
+#define FINDVAR_SYMNAME(sp)                                                 \
+    do                                                                      \
+    {                                                                       \
+        const unsigned char *nv;                                            \
+        int nl;                                                             \
+        NameView(sp, &nv, &nl);                                             \
+        if (nl > MAXVARLEN)                                                 \
+            error("Variable name too long");                                \
+        while (nl--)                                                        \
+        {                                                                   \
+            u = mytoupper(*nv++);                                           \
+            hash ^= u;                                                      \
+            hash *= FNV_prime;                                              \
+            *s++ = u;                                                       \
+            namelen++;                                                      \
+        }                                                                   \
+    } while (0)
+#ifdef STRUCTENABLED
+#define FINDVAR_DOTBLOCKS(k) (g_structcnt > 0 && (SymCold[k].flags & SYMC_DOT))
+#else
+#define FINDVAR_DOTBLOCKS(c) 0
+#endif
+
     // check the first char for a legal variable name
     skipspace(p);
-    if (issymbol(*p))
+    if (issymbol(*p) && (symk = SymCanonAt(p)) >= 0 && !FINDVAR_DOTBLOCKS(symk))
     {
-        const unsigned char *nv;
-        int nl;
-        p = NameView(p, &nv, &nl);
-        if (nl > MAXVARLEN)
-            error("Variable name too long");
-        while (nl--)
-        {
-            u = mytoupper(*nv++);
-            hash ^= u;
-            hash *= FNV_prime;
-            *s++ = u;
-            namelen++;
-        }
+        // a symbol with bindings (see Symbols.h): its name is read only if
+        // the binding below cannot be used
+        symp = p;
+        p += symbolsize(*p);
     }
     else
     {
-        if (!isnamestart(*p))
-            error("Variable name");
-        do
+        symk = -1;
+        if (issymbol(*p))
         {
-            u = mytoupper(*p++);
-            hash ^= u;
-            hash *= FNV_prime;
-            *s++ = u;
-            if (++namelen > MAXVARLEN)
-                error("Variable name too long");
-        } while (isnamechar(*p));
+            FINDVAR_SYMNAME(p);
+            p += symbolsize(*p);
+        }
+        else
+        {
+            if (!isnamestart(*p))
+                error("Variable name");
+            do
+            {
+                u = mytoupper(*p++);
+                hash ^= u;
+                hash *= FNV_prime;
+                *s++ = u;
+                if (++namelen > MAXVARLEN)
+                    error("Variable name too long");
+            } while (isnamechar(*p));
+        }
+        FINDVAR_HASHES();
     }
-#ifdef rp2350
-    funhash = hash % MAXSUBFUN;
-#endif
-    GlobalhashIndex = (hash % maxglobalvars) + maxlocalvars; // CHANGED: was hash + MAXVARS/2
-    OriginalGlobalHash = GlobalhashIndex - 1;
-    if (OriginalGlobalHash < maxlocalvars)   // CHANGED: was MAXVARS/2
-        OriginalGlobalHash += maxglobalvars; // CHANGED: was MAXVARS/2
-    globalifree = -1;
-    tmp = -1;
-    if (namelen != MAXVARLEN)
-        *s = 0;
 
     // check the terminating char and set the type
     if (*p == '$')
@@ -4987,7 +5069,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // FindStructBase would do a full second hash+probe of the var table only to
     // return -1. Guarding on g_structcnt eliminates the double lookup for every
     // dotted variable name in programs that don't use STRUCT.
-    if (g_structcnt > 0)
+    if (g_structcnt > 0 && symp == NULL) // (a bound symbol has no '.' in its name)
     {
         unsigned char *dot = (unsigned char *)strchr((char *)name, '.');
         if (dot != NULL)
@@ -5109,6 +5191,30 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     }
 
     // we now have the variable name and, if it is an array, the parameters
+    if (symp != NULL)
+    {
+        // a bound symbol (see Symbols.h), unless this is a declaration: its
+        // local at this level, or else its global if no local can hide it
+        if (!(action & (V_LOCAL | V_DIM_VAR | V_DIM_NEW | V_FUNCT)))
+        {
+            i = SymL[symk];
+            if (i >= 0 && g_vartbl[i].level == g_LocalIndex)
+            {
+                ifree = -1;
+                goto findvar_found;
+            }
+            i = SymG[symk];
+            if (i >= 0 && (!g_LocalIndex || !SymTextLocals))
+            {
+                ifree = -1;
+                goto findvar_found;
+            }
+        }
+        FINDVAR_SYMNAME(symp); // otherwise search for it by name as always
+        FINDVAR_HASHES();
+        symp = NULL;
+    }
+
     // search the table looking for a match
 
     if (g_LocalIndex)
@@ -5173,9 +5279,12 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
 
     // if we found an existing and matching variable
     // set the global g_VarIndex indicating the index in the table
+findvar_found:
     if (ifree == -1 && g_vartbl[i].name[0] != 0)
     {
         g_VarIndex = vindex = i;
+        if (symk >= 0 && vindex >= maxlocalvars)
+            SymG[symk] = vindex; // bind the symbol to this global (see Symbols.h)
         if (g_option_profiling)
         {
             if (vindex < maxlocalvars)
@@ -5214,12 +5323,26 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         if (vtype == 0)
         {
             if (!(g_vartbl[vindex].type & (DefaultType | T_IMPLIED)))
+            {
+                if (symp != NULL)
+                { // the fast path did not read the name
+                    FINDVAR_SYMNAME(symp);
+                    *s = 0;
+                }
                 error("$ Different type already declared", name);
+            }
         }
         else
         {
             if (!(g_vartbl[vindex].type & vtype))
+            {
+                if (symp != NULL)
+                {
+                    FINDVAR_SYMNAME(symp);
+                    *s = 0;
+                }
                 error("$ Different type already declared", name);
+            }
         }
 
         // if it is a non arrayed variable or an empty array it is easy, just calculate and return a pointer to the value
@@ -5489,6 +5612,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         g_hashlist[g_hashlistpointer].level = g_LocalIndex;
         g_hashlist[g_hashlistpointer++].hash = ifree;
         g_vartbl[ifree].level = g_LocalIndex;
+        SymLocalMade(ifree, symk); // the name's newest local (see Symbols.h)
     }
     else
         g_vartbl[ifree].level = 0;
@@ -6636,6 +6760,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
 #endif
                 g_hashlist[i].level = -1;
                 newhashpointer = i; // set the new highest index
+                SymLocalFreed(hashcurrent); // its name's binding goes back to the local it hid
                 memset(&g_vartbl[hashcurrent], 0, sizeof(struct s_vartbl));
                 if (g_vartbl[hashnext].type)
                 {
@@ -6681,6 +6806,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
 #endif
             memset(&g_vartbl[i], 0, sizeof(struct s_vartbl));
         }
+        SymBindReset(); // every global binding has gone with its variable (see Symbols.h)
     }
     // then step through the for...next table and remove any loops at the level or greater
     for (i = 0; i < g_forindex; i++)
@@ -6820,7 +6946,8 @@ uint32_t erase(char *p, bool nofree)
         RAW_DIM(g_vartbl[j], 0) = 0;
         g_vartbl[j].level = 0;
         g_Globalvarcnt--;
-        DoFastForget(j); // a DO condition that pointed at this variable must evaluate again
+        DoFastForget(j);       // a DO condition that pointed at this variable must evaluate again
+        SymBindForgetSlot(j); // and so must a binding to it (see Symbols.h)
         break;
     }
     if (j == MAXVARS)

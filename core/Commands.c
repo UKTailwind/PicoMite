@@ -8690,8 +8690,14 @@ void MIPS16 cmd_dim(void)
 						VarName[k] = 0; // terminate the string on a non valid char
 						break;
 					}
-				strcat((char *)VarName, "\x1e");		  // use 0x1E (record separator) to avoid conflict with struct member syntax
-				strcat((char *)VarName, (char *)argv[i]); // by prefixing the var name with the sub/fun name
+				strcat((char *)VarName, "\x1e"); // use 0x1E (record separator) to avoid conflict with struct member syntax
+				{								  // by prefixing the var name with the sub/fun name, the name as text (see Symbols.h)
+					int n = strlen((char *)VarName);
+					int m = SymExpand(VarName + n, argv[i], strlen((char *)argv[i]), sizeof(VarName) - 1 - n);
+					if (m < 0)
+						error("Variable name too long");
+					VarName[n + m] = 0;
+				}
 				StaticVar = NAMELEN_STATIC;				  // flag for marking the variable as static
 			}
 			else

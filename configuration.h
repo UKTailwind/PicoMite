@@ -196,7 +196,9 @@ extern "C"
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c)
       costs ~1.4 KB - the across-the-board addition the note above said would
       need a step. */
-#define FLASH_TARGET_OFFSET (816 * 1024)
+   /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
+      went ~1.1 KB over 816 KB. */
+#define FLASH_TARGET_OFFSET (832 * 1024)
 #define HEAP_MEMORY_SIZE (100 * 1024)
 #define MagicKey 0x741677C8
 #endif

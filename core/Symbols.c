@@ -244,6 +244,217 @@ unsigned char *SYMRAM(SymExpandStatement)(unsigned char *p)
 }
 
 /********************************************************************************************************************************************
+ bindings (see Symbols.h)
+********************************************************************************************************************************************/
+uint16_t *SymCanonOf = NULL;
+int16_t *SymG = NULL, *SymL = NULL, *SymS = NULL;
+symcold_t *SymCold = NULL;
+unsigned int SymCanonCount = 0;
+int16_t *SymLShadow = NULL;
+uint16_t *SymLCanon = NULL;
+unsigned int SymLSlots = 0;
+int SymTextLocals = 0;
+static uint16_t *SymCanonHead = NULL; // hash chain heads
+extern struct s_hash g_hashlist[MAXLOCALVARS];
+extern int g_hashlistpointer;
+int GetLocalVarHashSize(void);
+static unsigned int SymCanonMask, SymNCanon;
+static void *SymHotBlock = NULL, *SymColdBlock = NULL;
+
+// the spelling of program symbol id
+static const unsigned char *SymIdSpelling(unsigned int id, int *len)
+{
+    const unsigned char *n = (const unsigned char *)SymTabProg + SymTabProg->names + ((const uint16_t *)(SymTabProg + 1))[id];
+    *len = n[0];
+    return n + 1;
+}
+
+// The first read of the program symbol at p: find the canonical entry of its
+// name, or make one.  Returns its index, or -1.
+int SymCanonNew(const unsigned char *p)
+{
+    const unsigned char *s, *t;
+    int len, tlen, k;
+    unsigned int id, n, bucket;
+    uint32_t h = FNV_offset_basis;
+    if ((s = SymLookup(p, &len)) == NULL)
+        return -1;
+    id = symdigit[p[1] & 0x7f];
+    if (!(p[0] & 1))
+        id = SYM_NSHORT + id * SYM_NSHORT + symdigit[p[2] & 0x7f];
+    for (k = 0; k < len; k++)
+    {
+        h ^= mytoupper(s[k]);
+        h *= FNV_prime;
+    }
+    bucket = h & SymCanonMask;
+    for (n = SymCanonHead[bucket]; n; n = SymCold[n - 1].next)
+    {
+        t = SymIdSpelling(SymCold[n - 1].id, &tlen);
+        if (tlen != len)
+            continue;
+        for (k = 0; k < len && mytoupper(s[k]) == mytoupper(t[k]); k++)
+            ;
+        if (k == len)
+        {
+            SymCanonOf[id] = n; // another spelling of a name already seen
+            return n - 1;
+        }
+    }
+    if (SymNCanon >= SymCanonCount)
+        return -1;
+    n = SymNCanon;
+    SymG[n] = SymL[n] = -1;
+    SymS[n] = SYM_UNBOUND;
+    SymCold[n].labind = NULL;
+    SymCold[n].flags = memchr(s, '.', len) ? SYMC_DOT : 0;
+    SymCold[n].id = id;
+    SymCold[n].next = SymCanonHead[bucket];
+    SymCanonHead[bucket] = ++SymNCanon;
+    SymCanonOf[id] = SymNCanon;
+    return n;
+}
+
+// Called by PrepareProgram: start the program's bindings afresh.  They are
+// sized to the program's symbols and live in the BASIC heap; the part every
+// lookup reads is in SRAM, the rest in PSRAM when there is some.  Without
+// the memory the program simply runs without them.
+void SymBindInit(void)
+{
+    unsigned int count, hsize = 64, slots;
+    SymBindFree();
+    if (SymTabProg == NULL || SymTabProg->count == 0)
+        return;
+    count = SymTabProg->count;
+    while (hsize < count)
+        hsize <<= 1;
+    slots = GetLocalVarHashSize() > MAXLOCALVARS ? GetLocalVarHashSize() : MAXLOCALVARS;
+    int hot = count * 4 * sizeof(int16_t) + slots * 2 * sizeof(int16_t);
+#ifdef rp2350
+    // A program with many names is usually one that fills the SRAM heap, and
+    // what it would lose to the bindings spills its own data to PSRAM (Elite:
+    // +20% for 9 KB).  So only a small hot block takes SRAM when there is PSRAM.
+    SymHotBlock = (PSRAMsize && hot > 4096) ? GetPSMemoryNull(hot) : NULL;
+    if (SymHotBlock == NULL)
+#endif
+        SymHotBlock = GetMemoryNull(hot);
+    if (SymHotBlock == NULL)
+        return;
+    int cold = count * sizeof(symcold_t) + hsize * sizeof(uint16_t);
+#ifdef rp2350
+    SymColdBlock = PSRAMsize ? GetPSMemoryNull(cold) : NULL;
+    if (SymColdBlock == NULL)
+#endif
+        SymColdBlock = GetMemoryNull(cold);
+    if (SymColdBlock == NULL)
+    {
+        SymBindFree();
+        return;
+    }
+    // (both blocks come zeroed)
+    SymCanonOf = (uint16_t *)SymHotBlock;
+    SymG = (int16_t *)(SymCanonOf + count);
+    SymL = SymG + count;
+    SymS = SymL + count;
+    SymLShadow = SymS + count;
+    SymLCanon = (uint16_t *)(SymLShadow + slots);
+    SymLSlots = slots;
+    SymCold = (symcold_t *)SymColdBlock;
+    SymCanonHead = (uint16_t *)(SymCold + count);
+    SymCanonCount = count;
+    SymCanonMask = hsize - 1;
+    SymNCanon = 0;
+    // locals alive now (left by an error, or made before these bindings)
+    // have no entry: count them as made from text until they go
+    for (int i = 0; i < g_hashlistpointer; i++)
+        if (g_hashlist[i].level > 0 && g_hashlist[i].hash >= 0)
+        {
+            if ((unsigned)g_hashlist[i].hash < SymLSlots)
+                SymLCanon[g_hashlist[i].hash] = SYM_LTEXT;
+            SymTextLocals++;
+        }
+}
+
+// InitHeap has wiped the heap the bindings lived in
+void SymBindForget(void)
+{
+    SymHotBlock = SymColdBlock = NULL;
+    SymCanonOf = SymCanonHead = SymLCanon = NULL;
+    SymG = SymL = SymS = SymLShadow = NULL;
+    SymCold = NULL;
+    SymCanonCount = SymNCanon = SymLSlots = 0;
+    SymTextLocals = 0;
+}
+
+void SymBindFree(void)
+{
+    if (SymHotBlock != NULL)
+        FreeMemorySafe(&SymHotBlock);
+    if (SymColdBlock != NULL)
+        FreeMemorySafe(&SymColdBlock);
+    SymBindForget();
+}
+
+// ClearVars(0): every variable has gone
+void SymBindReset(void)
+{
+    for (unsigned int i = 0; i < SymNCanon; i++)
+        SymG[i] = SymL[i] = -1;
+    if (SymLCanon != NULL)
+        memset(SymLCanon, 0, SymLSlots * sizeof(uint16_t));
+    SymTextLocals = 0;
+}
+
+// findvar made a local in slot, for canonical entry k (-1: its name was text).
+// A slot past the shadow arrays (OPTION LOCAL VARIABLES raised since) is
+// counted as a text local too.
+void SYMRAM(SymLocalMade)(int slot, int k)
+{
+    if (SymLCanon == NULL)
+        return;
+    if ((unsigned)slot >= SymLSlots)
+        SymTextLocals++;
+    else if (k >= 0)
+    {
+        SymLShadow[slot] = SymL[k];
+        SymL[k] = slot;
+        SymLCanon[slot] = k + 1;
+    }
+    else
+    {
+        SymLCanon[slot] = SYM_LTEXT;
+        SymTextLocals++;
+    }
+}
+
+// ClearVars is freeing the local in slot (newest first)
+void SYMRAM(SymLocalFreed)(int slot)
+{
+    unsigned int c;
+    if (SymLCanon == NULL)
+        return;
+    if ((unsigned)slot >= SymLSlots)
+    {
+        SymTextLocals--;
+        return;
+    }
+    c = SymLCanon[slot];
+    if (c == SYM_LTEXT)
+        SymTextLocals--;
+    else if (c)
+        SymL[c - 1] = SymLShadow[slot];
+    SymLCanon[slot] = 0;
+}
+
+// erase(): the global in this slot has gone
+void SymBindForgetSlot(int slot)
+{
+    for (unsigned int i = 0; i < SymNCanon; i++)
+        if (SymG[i] == slot)
+            SymG[i] = -1;
+}
+
+/********************************************************************************************************************************************
  commands that read symbols themselves
 
  Every other command is given its arguments with the symbols spelt out, so
@@ -258,7 +469,7 @@ static const char *const SymAwareNames[] = {
     "Continue", "Select Case", "Case", "Case Else", "End Select",
     "Sub", "Function", "End Sub", "End Function", "CSub", "End CSub",
     "DefineFont", "End DefineFont", "Rem", "/*", "*/", "Data",
-    "Return", "IReturn", "Print", "Inc", "GoTo", "GoSub",
+    "Return", "IReturn", "Print", "Inc", "GoTo", "GoSub", "Dim", "Local", "Static",
     // graphics (Draw.c, Blit.c, Sprite.c): arguments read through the evaluator and getargaddress()
     "Pixel", "Line", "Box", "RBox", "Circle", "Triangle", "Arc", "Bezier", "CLS",
     "Colour", "Color", "Text", "Font", "Blit", "Sprite", "Refresh",
