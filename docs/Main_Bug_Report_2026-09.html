@@ -106,7 +106,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <header class="hero"><div class="wrap">
 <div class="eyebrow">main at cbd99fb · open issues</div>
 <h1>Bugs found on main, September 2026</h1>
-<p>These turned up during the interpreter performance work on <code>development</code>. They were found by testing on the boards and by three read-only code surveys. Each one below is present on <code>main</code>. For each, the report gives where it is, what goes wrong, how to confirm it, and a suggested fix. None is fixed on main. Four are already fixed on <code>development</code> and can be ported.</p>
+<p>These turned up during the interpreter performance work on <code>development</code>. They were found by testing on the boards and by three read-only code surveys. Each one below is present on <code>main</code>. For each, the report gives where it is, what goes wrong, how to confirm it, and a suggested fix. None is fixed on main. Items 1-4 were fixed on <code>development</code> and have since been ported to main.</p>
 <p class="ref">Line numbers are main at cbd99fb (2026-09-25). "Confirmed" means seen on a board; "by reading" means found in the code and not yet reproduced.</p>
 </div></header>
 <div class="wrap">
@@ -118,10 +118,10 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <h2>Summary</h2>
 <div class="tablewrap"><table>
 <tr><th>#</th><th>Area</th><th>Problem</th><th>Evidence</th><th>Severity</th><th>Status</th></tr>
-<tr><td>1</td><td>PIO interrupts</td><td>TX "was full" test reads SM0's SHIFTCTRL for every state machine</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on development 791bf93</td></tr>
-<tr><td>2</td><td>I2C slave</td><td>clearing a slave-ready bit can wipe one the ISR sets at the same moment</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on development 791bf93</td></tr>
-<tr><td>3</td><td>WiFi</td><td>WEB SCAN without a connection never polls, so it finds nothing</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on development a07e8f2</td></tr>
-<tr><td>4</td><td>DO loops</td><td>the trace cache's DO fast path truncates a fractional limit</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on development 04361c0</td></tr>
+<tr><td>1</td><td>PIO interrupts</td><td>TX "was full" test reads SM0's SHIFTCTRL for every state machine</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main b7aad97</td></tr>
+<tr><td>2</td><td>I2C slave</td><td>clearing a slave-ready bit can wipe one the ISR sets at the same moment</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main 0227df6</td></tr>
+<tr><td>3</td><td>WiFi</td><td>WEB SCAN without a connection never polls, so it finds nothing</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main bd1a965</td></tr>
+<tr><td>4</td><td>DO loops</td><td>the trace cache's DO fast path truncates a fractional limit</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main 4c42f0c</td></tr>
 <tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
 <tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 <tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
@@ -139,11 +139,11 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 </table></div>
-<p>Suggested order: 1-4 first, since they are small, already tested, and only need porting. Then 5, 7 and 18.</p>
+<p>Items 1-4 are done. Suggested order for the rest: 5, 7 and 18.</p>
 </section>
 
 <section id="ported">
-<h2>Fixed on development, still on main</h2>
+<h2>Fixed on development, ported to main (b7aad97, 0227df6, bd1a965, 4c42f0c)</h2>
 
 <div class="card"><h3>1 · PIO TX interrupt: wrong FIFO depth for SMs 1-3</h3>
 <p><b>Where:</b> <code>core/MM_Misc.c:10265</code>, <code>checkdetailinterrupts</code>: <code>int full = (pioinuse-&gt;sm-&gt;shiftctrl &amp; (1 &lt;&lt; 30)) ? 8 : 4;</code></p>
