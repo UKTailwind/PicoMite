@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Route B Design</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+
+</head>
+<body>
+<header class="hero"><div class="wrap">
+<div class="eyebrow">Route B &middot; design for review</div>
+<h1>A compiled statement stream</h1>
+<p>The G3 prototype showed that the interpreter's overhead is not in any one routine but in re-reading text. The same kernels run as typed wordcode were 8.8-22x faster than the interpreter with symbols, on both chips. This design turns that prototype into firmware without changing what a program means. The tokenised program stays the master copy. A compiler turns it into a stream of statement records, kept in a program slot. An executor runs the stream and leaves the interpreter's state exactly as the text interpreter would at every statement boundary. Anything not compiled runs through its existing command handler, so a program is always runnable, whatever the compiler has not learned yet.</p>
+<p class="ref">Branch development at 8740953 &middot; evidence: G3 (commit 3140045, Bas/bench/results/g3), the Phase 1 report, and four read-only code surveys for this design (statement loop and control flow; calls and variables; evaluator and built-ins; storage, lifecycle, interrupts and errors).</p>
+</div></header>
+<div class="wrap">
+<nav class="toc">
+<a href="#summary">Summary</a><a href="#evidence">Evidence</a><a href="#shape">The shape</a><a href="#stream">The stream</a><a href="#compile">Compiling</a><a href="#run">Running</a><a href="#same">Staying identical</a><a href="#vars">Variables and types</a><a href="#expr">Expressions</a><a href="#flow">Control flow</a><a href="#calls">Calls</a><a href="#builtins">Built-ins and the value splice</a><a href="#where">Where it lives</a><a href="#cost">Size, RAM, time</a><a href="#risk">Risks</a><a href="#phases">Phases and gates</a><a href="#decide">Decisions</a><a href="#bugs">Found on the way</a>
+</nav>
+
+<section id="summary">
+<h2>Summary</h2>
+<ul>
+<li><b>The text stays the program.</b> LIST, EDIT, SAVE, the library, CSUBs, error lines and TRACE all work from the tokenised image as today. The stream is a cache derived from it. If the stream is missing, stale or refused, the program simply runs as text.</li>
+<li><b>Compiled at RUN, only when the program has changed.</b> Everything that runs a program passes through <code>PrepareProgram(true)</code>. There, a CRC of the image is checked against the stamp in the stream slot, and the program is compiled only if the two differ. That covers every way a program arrives (LOAD, AUTOSAVE, EDIT, XMODEM, FLASH/RAM LOAD and RUN, CHAIN, LIBRARY LOAD) without touching any of the image writers.</li>
+<li><b>One record per statement.</b> Each record starts with a statement marker that does the interpreter's per-statement work. It is followed by either compiled code or a <i>fallback</i> that calls the statement's own command handler with exactly the <code>cmdline</code>, <code>nextstmt</code> and <code>cmdtoken</code> the text loop would give it.</li>
+<li><b>Same variables, same stacks.</b> Variables stay in <code>g_vartbl</code> and the heap and are reached through the S5/S6 bindings. FOR, DO, GOSUB and SUB frames use <code>g_forstack</code>, <code>g_dostack</code>, <code>gosubstack</code> and <code>g_LocalIndex</code> exactly as the text interpreter does. So interrupts, ON ERROR, CHAIN, SAVE CONTEXT and any fallback statement see nothing different.</li>
+<li><b>Same arithmetic.</b> Operators, conversions and number parsing are moved into shared helpers that the text evaluator and the executor both call. They cannot drift apart. A shadow mode evaluates each compiled expression both ways and stops on the first difference.</li>
+<li><b>Five phases, each with a gate.</b>
+<ul>
+<li>P1: fallback records only; the plumbing, at no loss of speed.</li>
+<li>P2: numeric statements on globals.</li>
+<li>P3: locals and calls.</li>
+<li>P4: arrays, SELECT, GOTO/GOSUB and simple strings.</li>
+<li>P5: the value splice for built-in functions and graphics commands.</li>
+</ul></li>
+<li><b>Cost:</b> 15-25 KB of flash in the end, grown phase by phase, and under 1 KB of static RAM. During development the stream lives in RAM slot 4 on the PC3 and flash slot 2 on the RP2040.</li>
+</ul>
+</section>
+
+<section id="evidence">
+<h2>Evidence (gate G3, 2026-09-25)</h2>
+<p>A 40-opcode wordcode VM was built as a CSUB with <code>armcfgen</code> and fed hand-compiled wordcode. It has typed int and float operations, bounds-checked arrays, BYREF pointers and a per-statement marker that does the interpreter's tail work. Four kernels ran three ways: interpreted, as wordcode, and as plain C.</p>
+<div class="tablewrap"><table>
+<tr><th>Kernel</th><th class="num">PC3 interp / VM / C (ms)</th><th class="num">Interp&divide;VM</th><th class="num">VGA RP2040 interp / VM / C (ms)</th><th class="num">Interp&divide;VM</th></tr>
+<tr><td>Integer loop in a SUB</td><td class="num">468 / 23.6 / 1.1</td><td class="num">19.8x</td><td class="num">864 / 45.0 / 5.1</td><td class="num">19.2x</td></tr>
+<tr><td>Insertion sort</td><td class="num">759 / 45.7 / 0.9</td><td class="num">16.6x</td><td class="num">1345 / 82.5 / 2.1</td><td class="num">16.3x</td></tr>
+<tr><td>Julia inner loop</td><td class="num">730 / 62.3 / 19.8</td><td class="num">11.7x</td><td class="num">1472 / 168 / 93</td><td class="num">8.8x</td></tr>
+<tr><td>findleap &times;4000</td><td class="num">830 / 49.2 / 9.3</td><td class="num">16.9x</td><td class="num">2192 / 99 / 25</td><td class="num">22.1x</td></tr>
+</table></div>
+<ul>
+<li><b>Coverage:</b> 100% of the anchor's sampled time is on statements this design compiles. The figure is 97-100% for Exile, 98% for Elite and 84-95% for Prince of Pico, whose remainder is its scenario harness's text parser.</li>
+<li><b>Capacity:</b> a host-side estimate puts the stream at 0.04-0.65x of each corpus program's tokenised image.</li>
+<li><b>Projection, not a measurement:</b> the anchor at about 3-3.6 s on the PC3, against 13.4 s now and MicroPython's 9 s.</li>
+</ul>
+<p>The prototype's figures are an upper bound for three reasons. Its variables were reached through pre-resolved addresses; its locals lived in its own frame; and its statement marker did less than the real tail. This design pays for all three to keep state identical, so the firmware result will be lower. P2 and P3 each measure it.</p>
+</section>
+
+<section id="shape">
+<h2>The shape</h2>
+<div class="grid2">
+<div class="card"><h3>Compiler</h3><p>Runs inside <code>PrepareProgram(true)</code> when the image's CRC does not match the stream's stamp. It walks the tokenised image, the same bytes the text interpreter reads. It asks the interpreter's own code every structural question (which NEXT closes this FOR, where this IF's ELSE is, what this label resolves to) so the answers cannot differ. It writes the stream unit by unit, sequentially, straight into the slot.</p></div>
+<div class="card"><h3>Executor</h3><p>A computed-goto loop, like the prototype's. <code>ExecuteProgram</code> hands over to it whenever the next statement lies in the program image and a live stream exists. The executor hands back when control leaves the image: library code, the prompt's <code>tknbuf</code>, EXECUTE, or the empty statement that ends a FUNCTION body.</p></div>
+<div class="card"><h3>Shared helpers</h3><p>The code that must give identical answers is factored out of the text interpreter and called by both paths: operators, conversions, the number parser, element addressing and the block scans. The interpreter's behaviour does not change; its code is moved, not rewritten.</p></div>
+<div class="card"><h3>Fallback</h3><p>Any statement the compiler does not handle becomes a fallback record, which calls <code>commandtbl[token].fptr()</code> or <code>DefinedSubFun</code> with exactly the globals the text loop would set up. P1 is nothing but fallback records. The compiled subset grows phase by phase behind the same interface.</p></div>
+</div>
+</section>
+
+<section id="stream">
+<h2>The stream</h2>
+<p>A slot holds one stream: a header, a statement map, the code and a unit table.</p>
+<div class="tablewrap"><table>
+<tr><th>Part</th><th>Contents</th></tr>
+<tr><td>Header</td><td>
+<ul>
+<li>Magic <code>"RB01"</code> and the format version.</li>
+<li>A firmware build hash: opcode numbers and helper indices are private to a build, so a stream from another build is stale.</li>
+<li>The stamp: the image's length and CRC32, and its <code>SymTabProg</code> count.</li>
+<li>The offsets and sizes of the other parts.</li>
+</ul></td></tr>
+<tr><td>Statement map</td><td>
+<ul>
+<li>One entry per statement, sorted by text offset: text offset (24 bits) to record offset (24 bits), 6 bytes each.</li>
+<li>Used only when control arrives from a text pointer: an interrupt, IRETURN, a fallback that changed <code>nextstmt</code>, or ON ERROR SKIP.</li>
+<li>A 64-entry direct-mapped cache in RAM keeps a loop driven by a fallback NEXT from searching it every pass.</li>
+</ul></td></tr>
+<tr><td>Code</td><td>
+<ul>
+<li>16-bit words: opcode in the low byte, a small operand in the high byte, extension words after it, as in the prototype.</li>
+<li>Records appear in text order, one per statement. Jumps are relative, so the stream runs from any address.</li>
+<li>Integer and float constants are inline, parsed at compile time by the interpreter's own number parser.</li>
+</ul></td></tr>
+<tr><td>Unit table</td><td>
+<ul>
+<li>For each SUB/FUNCTION (by <code>subfun[]</code> index): the entry record, and the compiled parameter list (see <a href="#calls">Calls</a>).</li>
+<li>For each label the program jumps to: its record.</li>
+</ul></td></tr>
+</table></div>
+<h3>The statement record</h3>
+<p>Every record begins with <code>STMT</code>. It carries the statement's text offset and a line-start flag, and does two jobs:</p>
+<ol>
+<li><b>The tail of the statement before it.</b> This is what the text loop does after each statement (MMBasic.c:2114-2126):
+<ul>
+<li>the ON ERROR SKIP count;</li>
+<li><code>ClearTempMemory</code> if <code>g_TempMemoryIsChanged</code>;</li>
+<li>the core 1 stack check;</li>
+<li><code>CheckAbort</code> and <code>check_interrupt</code> unless OPTION NOCHECK.</li>
+</ul>
+Before any of these, <code>nextstmt</code> is set to <i>this</i> statement's text, which is exactly what the text loop has in <code>nextstmt</code> at that moment. So an interrupt's <code>InterruptReturn</code> and Ctrl-C's <code>ContinuePoint</code> come out the same.</li>
+<li><b>The head of this statement.</b> At a line start it sets <code>CurrentLinePtr</code> to the line's T_NEWLINE, writes <code>TraceBuff</code>, and prints <code>[n]</code> under TRACE ON, as at MMBasic.c:2003-2031.</li>
+</ol>
+<p>Entering the executor starts at the head, skipping the tail, just as the text loop has no tail before its first statement. The tail's cheap tests are inlined: <code>IntReady.any</code>, <code>MMAbort</code>, the <code>routinechecks</code> 100 &micro;s cadence and the ProcessWeb cadence on WEB builds. The functions are called only when a test says so, as the prototype's marker did.</p>
+<p>After <code>STMT</code> comes one of:</p>
+<ul>
+<li><b>CMD</b> (fallback): the command token, and the <code>cmdline</code> and <code>nextstmt</code> offsets precomputed by the same <code>skipspace</code>/<code>skipelement</code> the loop uses. It sets <code>cmdtoken</code>, <code>cmdline</code>, <code>nextstmt</code>, <code>CmdTokenPtr</code> and <code>targ = T_CMD</code>, expands symbols for commands not on <code>SymAwareNames</code>, and calls the handler.</li>
+<li><b>SUBCALL</b> (fallback): the text loop's user-SUB path, <code>FindSubFun</code> then <code>DefinedSubFun(false, ...)</code> (MMBasic.c:2082-2091).</li>
+<li><b>Compiled code</b> for the statement.</li>
+</ul>
+<p>After a fallback, if the handler left <code>nextstmt</code> at the precomputed end of its element (the common case), execution continues with the next record. Otherwise the new <code>nextstmt</code> is looked up in the cache and the map. If it lies outside the image, the executor returns it to the text loop.</p>
+</section>
+
+<section id="compile">
+<h2>Compiling</h2>
+<h3>When</h3>
+<ul>
+<li><code>PrepareProgram(true)</code> runs for RUN, FLASH/RAM RUN and CHAIN, CHAIN, LIBRARY LOAD's restart, EDIT's save-and-run, and the boot autorun.</li>
+<li>With OPTION COMPILE on, it computes the image's CRC32. That takes a few milliseconds for the largest images.</li>
+<li>If the CRC matches the stamp, it only checks the header and maps the stream. Otherwise it compiles.</li>
+<li>The prompt's <code>PrepareProgram(false)</code> never compiles.</li>
+<li>Images saved without symbols (OPTION SYMBOLS OFF, or older images) are not compiled: operands name variables by symbol id.</li>
+</ul>
+<h3>How</h3>
+<ol>
+<li><b>Survey pass.</b> One walk over the image finds:
+<ul>
+<li>the units (the main program, and each SUB and FUNCTION);</li>
+<li>each unit's parameter list;</li>
+<li>every declaration's type (DIM, LOCAL, STATIC, CONST, <code>AS</code> types, OPTION DEFAULT in text order);</li>
+<li>the statement count, which sizes the map;</li>
+<li>anything that makes a unit unsafe to compile beyond fallback, such as a GOTO into the middle of a loop body from outside it.</li>
+</ul></li>
+<li><b>Per unit, two passes.</b>
+<ul>
+<li>The first pass measures each statement's code and records its offset in a table for that unit.</li>
+<li>The second emits, with every forward jump inside the unit already known.</li>
+<li>Jumps between units go through the unit table.</li>
+</ul>
+There is no whole-program parse tree and no global fix-up list. Compile RAM is the largest unit's offset table (4 bytes a statement), two 256-byte page buffers (code and map), the header page and the unit table.</li>
+<li><b>Output</b> is written sequentially: code pages and map pages as they fill, and the header last.
+<ul>
+<li>On the PC3 the slot is PSRAM, written directly.</li>
+<li>On the RP2040 it is flash: the slot's sectors are erased as the write reaches them, and pages are programmed with the existing <code>safe_flash_range_*</code> wrappers.</li>
+<li>If the stream would exceed <code>MAX_PROG_SIZE</code> the compile is abandoned and the program runs as text. <code>MM.INFO</code> reports why.</li>
+</ul></li>
+</ol>
+<h3>Structural answers come from the interpreter</h3>
+<p>The compiler must match FOR to NEXT, DO to LOOP, IF to ELSEIF/ELSE/ENDIF and SELECT to CASE exactly as the handlers do at run time, including their odd cases. So those scans are factored out of the handlers and called by both:</p>
+<ul>
+<li>the FOR scan with <code>NextNamesVar</code> (Commands.c:5026-5168);</li>
+<li>the DO/LOOP scan (5470);</li>
+<li>the SELECT/CASE scan (4603);</li>
+<li><code>IfTableLookup</code>, already built by PrepareProgram (Commands.c:3241-3541);</li>
+<li><code>findlabel</code>/<code>findline</code> for labels.</li>
+</ul>
+<p>Where a structure is irregular (NEXT naming two variables, a GOTO into a loop, a CASE list containing strings), the statements involved are compiled as fallback. The text handler then does exactly what it does today.</p>
+</section>
+
+<section id="run">
+<h2>Running</h2>
+<ul>
+<li><b>Hand-over.</b> The text loop's <code>p = nextstmt</code> step gains one test: while a stream is live and <code>p</code> lies in the program image, it calls <code>RunStream(p)</code>. That covers:
+<ul>
+<li>RUN, which only sets <code>nextstmt = ProgMemory</code> inside the prompt's <code>ExecuteProgram(tknbuf)</code>;</li>
+<li>a library SUB returning into the program;</li>
+<li><code>MM.END</code>/<code>MM.PROMPT</code> calls;</li>
+<li>a FUNCTION body's nested <code>ExecuteProgram</code>.</li>
+</ul>
+The test costs nothing while the stream is off, and two compares per statement while library or prompt code runs.</li>
+<li><b>Hand-back.</b> <code>RunStream</code> returns the text pointer at which the text loop should continue. That happens when control leaves the image; the <code>"\0\0\0"</code> that <code>cmd_endfun</code> leaves in <code>nextstmt</code> ends the nested loop as it does now. END and errors leave by <code>longjmp</code>, as they do from any handler.</li>
+<li><b>Return addresses.</b> <code>gosubstack</code> keeps its text pointers, because fallback RETURN, <code>error()</code>'s unwind and CHAIN read them. A parallel array of record addresses, indexed by <code>gosubindex</code>, lets a compiled RETURN or END SUB go straight back without a map lookup. The executor uses that record address only if the <code>gosubstack</code> text pointer is the one it recorded, so a frame pushed by text code is never misread.</li>
+<li><b>Nesting.</b> A compiled FUNCTION call runs the body in a nested <code>RunStream</code>. It saves and restores <code>ErrNext</code>, <code>nextstmt</code>, <code>cmdline</code>, <code>cmdtoken</code> and <code>CurrentLinePtr</code> exactly as <code>DefinedSubFun</code> and <code>getvalue</code> do around their nested <code>ExecuteProgram</code> (MMBasic.c:2925-2934, 3545). The executor's C frame is kept small, because the core 0 stack is 8 KB and deep recursion already reaches it.</li>
+</ul>
+</section>
+
+<section id="same">
+<h2>Staying identical</h2>
+<p>Between statements, other code reads the following (survey 1, section 4). The stream keeps each one as the text loop would:</p>
+<div class="tablewrap"><table>
+<tr><th>State</th><th>Read by</th><th>How the stream keeps it</th></tr>
+<tr><td><code>CurrentLinePtr</code></td><td>errors, <code>MMerrline</code>, EDIT after an error, TRACE, the PC sampler, <code>findlabel</code>, RESTORE, <code>check_interrupt</code> (NULL means immediate mode)</td><td><code>STMT</code> at each line start; set wherever GOTO, GOSUB, RETURN and ELSEIF set it; saved and restored around FUNCTION calls</td></tr>
+<tr><td><code>nextstmt</code></td><td>interrupts (<code>InterruptReturn</code>), Ctrl-C (<code>ContinuePoint</code>), fallback control flow</td><td>set by <code>STMT</code> before the tail; precomputed for each fallback</td></tr>
+<tr><td><code>cmdline</code>, <code>cmdtoken</code>, <code>CmdTokenPtr</code></td><td>NEXT, LOOP, IF and ELSE compare <code>cmdline</code> by address; cmd_if, cmd_do and cmd_subfun test <code>cmdtoken</code></td><td>set by CMD exactly as the loop sets them: pointers into the image, and a symbol-expanded copy only for the commands the loop copies too</td></tr>
+<tr><td>FOR, DO and GOSUB stacks, <code>g_LocalIndex</code></td><td>fallback NEXT/LOOP/RETURN/EXIT, <code>ClearVars(level)</code>, CHAIN's SaveContext, interrupts</td><td>compiled FOR, DO, GOSUB and CALL push and pop the same entries with the same fields</td></tr>
+<tr><td>ON ERROR SKIP state</td><td><code>error()</code>'s <code>longjmp(ErrNext)</code></td><td>see below</td></tr>
+<tr><td>Temporary memory</td><td><code>GetTempMemory</code> callers; the tail's <code>ClearTempMemory</code></td><td>compiled string operations use the same allocator; <code>STMT</code> runs the same tail</td></tr>
+<tr><td><code>TraceBuff</code>, TRACE ON</td><td>TRACE LIST, TRACE output</td><td><code>STMT</code> at each line start</td></tr>
+</table></div>
+<ul>
+<li><b>ON ERROR SKIP/IGNORE.</b> While <code>OptionErrorSkip</code> is non-zero, the executor switches to a variant that arms <code>setjmp(ErrNext)</code> around each statement, as the text loop does (MMBasic.c:2099-2112). On a caught error it restores <code>g_LocalIndex</code> and temporary memory, then continues at the record after the failing statement's map entry. The executor's position is kept in a global, not a register, so the <code>longjmp</code> cannot lose it.</li>
+<li><b>Interrupts</b> are taken at the same boundaries with the same effects.
+<ul>
+<li><code>GotAnInterrupt</code> redirects <code>nextstmt</code> to the handler's text; the executor maps it to the handler's record.</li>
+<li>IRETURN (a fallback) sets <code>nextstmt</code> back to the interrupted statement, and the map finds it.</li>
+<li>PAUSE and the touch waits call <code>check_interrupt</code> mid-command and re-run their statement through <code>InterruptReturn = CmdTokenPtr</code>. They are fallbacks, so this is unchanged.</li>
+</ul></li>
+<li><b>Ctrl-C and CONTINUE:</b> <code>ContinuePoint = nextstmt</code> at the <code>mark</code> landing is a text pointer, so CONTINUE re-enters through the map.</li>
+<li><b>CHAIN, SAVE/LOAD CONTEXT and RAM FILE LOAD</b> save and restore only interpreter state, never executor state. The executor keeps nothing across a statement boundary that cannot be rebuilt from that state and the map.</li>
+</ul>
+</section>
+
+<section id="vars">
+<h2>Variables and types</h2>
+<ul>
+<li><b>Operands are symbol ids.</b>
+<ul>
+<li>At stream load, <code>SymCanonOf</code> is filled for every program id, so an operand reaches its canonical entry with one load.</li>
+<li>A local is found by <code>SymL[k]</code> when <code>g_vartbl[slot].level == g_LocalIndex</code>.</li>
+<li>A global is found by <code>SymG[k]</code> when <code>!g_LocalIndex || !SymTextLocals</code>. This is findvar's fast path (MMBasic.c:5203-5225), without the call and without the text.</li>
+<li>Otherwise the operand takes the slow path: <code>findvar</code> on a short buffer holding the symbol bytes. It returns exactly findvar's result, including implicit creation and the OPTION EXPLICIT error.</li>
+</ul></li>
+<li><b>Bound once per statement.</b>
+<ul>
+<li>A compiled statement starts by binding each distinct variable it uses. Each binding checks the variable's type and <code>T_PTR</code> against what the code was compiled for.</li>
+<li>If a check fails, the statement runs as a fallback instead, before anything has happened.</li>
+<li>Variables used after a user FUNCTION call in the same statement are re-bound after the call. The callee can create globals, and in principle ERASE one.</li>
+<li><code>T_PTR</code> (BYREF parameters, STATIC, array parameters) is resolved during binding, so the operations themselves only ever see a data address.</li>
+</ul></li>
+<li><b>Static types.</b> The survey pass gives each name a type per unit, from:
+<ul>
+<li>its suffix;</li>
+<li>its declarations (DIM/LOCAL/STATIC/CONST <code>AS</code>, FUNCTION <code>AS</code>);</li>
+<li>the OPTION DEFAULT in force at that point in the text.</li>
+</ul>
+A name whose type cannot be fixed (declared with two types, or used before a conditional OPTION DEFAULT) is <i>dynamic</i>. Statements that use it are fallbacks. The binding check makes a wrong guess cost a fallback, never a wrong answer.</li>
+<li><b>Not compiled at first:</b> struct and dotted names (<code>FINDVAR_DOTBLOCKS</code>), and STATIC declarations. Statements using them are fallbacks. STATIC variables themselves are ordinary <code>T_PTR</code> locals once made, so reading them is compiled.</li>
+</ul>
+</section>
+
+<section id="expr">
+<h2>Expressions</h2>
+<ul>
+<li><b>Same grammar.</b> The compiler climbs precedence exactly as <code>doexpr</code> does (MMBasic.c:3293-3398), from the same <code>tokentbl[].precedence</code> values, left-associative at equal precedence. Unary <code>- + NOT INV</code> bind tighter than <code>^</code> (<code>-2^2</code> is 4). Operands are evaluated left to right, so user FUNCTION side effects occur in the same order.</li>
+<li><b>Same promotion.</b> doexpr's rules are applied at compile time, since types are static:
+<ul>
+<li>string against number is left to the fallback, which raises the error at the same moment it does today;</li>
+<li>T_NBR-only operators (<code>/</code>) convert integers to float;</li>
+<li>T_INT-only operators (<code>&#92; MOD AND OR XOR &lt;&lt; &gt;&gt;</code>) convert floats with <code>FloatToInt64</code>;</li>
+<li>mixed operands of other operators promote the integer to float;</li>
+<li>comparisons return integer 0/1.</li>
+</ul></li>
+<li><b>Same code.</b> Each operator body in Operators.c becomes a value-level inline helper: for example the float add with its +INF "Overflow" check, the integer power loop, divide-by-zero, and <code>compare()</code>. The existing <code>op_*</code> functions and the executor both call these helpers.
+<ul>
+<li>Integer add, subtract, multiply and the bitwise operators are inlined, because their semantics are the machine's.</li>
+<li>Assignment to an integer uses <code>FloatToInt64</code>; subscripts use <code>FloatToInt32</code>.</li>
+<li>Numeric literals are parsed once at compile time by getvalue's own parser, factored out (MMBasic.c:3597-3691), including its fast <code>/scale</code> path and <code>fast_strtod</code>. The constants are therefore bit-identical to what the text path computes.</li>
+</ul></li>
+<li><b>Shadow mode</b> (<code>OPTION COMPILE SHADOW</code>). Each compiled LET right-hand side, IF/ELSEIF condition and FOR limit is also evaluated through the text evaluator on the statement's own text, and the two results are compared bit for bit.
+<ul>
+<li>Expressions that call user FUNCTIONs or RND, TIMER, INKEY$ and the like are marked unshadowable at compile time, because evaluating them twice would change the program.</li>
+<li>A mismatch stops the program with both values and the line.</li>
+<li>This is the main test tool from P2 on, and it runs on any program.</li>
+</ul></li>
+</ul>
+</section>
+
+<section id="flow">
+<h2>Control flow</h2>
+<div class="tablewrap"><table>
+<tr><th>Statement</th><th>Compiled as</th><th>Kept identical</th></tr>
+<tr><td>IF / ELSEIF / ELSE / ENDIF</td><td>conditional jumps; single-line IF with THEN/ELSE parts compiled inline</td><td>truth is <code>value != 0</code> after the same conversion; <code>CurrentLinePtr</code> set at an ELSEIF as <code>retest_an_if</code> does</td></tr>
+<tr><td>FOR / NEXT</td><td>start and limit evaluated once; a <code>g_forstack</code> entry pushed with its <code>var</code>, <code>vartype</code>, <code>level</code>, TO and STEP, <code>forptr</code> and <code>nextptr</code>; NEXT adds STEP, tests and jumps back</td><td>the same entry, so a fallback NEXT or EXIT FOR, <code>ClearVars(level)</code> and CHAIN all find it. A compiled NEXT checks that the top entry is its own and otherwise calls <code>cmd_next</code>.</td></tr>
+<tr><td>DO / LOOP / EXIT DO</td><td>a <code>g_dostack</code> entry and jumps; the condition compiled</td><td>the DoFast state is left off; the entry's pointers are the text ones</td></tr>
+<tr><td>SELECT CASE</td><td>selector evaluated once into an executor temporary; each CASE a compare chain</td><td><code>CurrentLinePtr</code> set to each CASE line before its values are evaluated, as the scan does</td></tr>
+<tr><td>GOTO / GOSUB / RETURN</td><td>direct jumps through the unit table; GOSUB pushes <code>gosubstack</code>/<code>errorstack</code>, does <code>g_LocalIndex++</code> and EnterLocalFrame</td><td>ON &hellip; GOSUB/GOTO and computed targets stay fallbacks</td></tr>
+<tr><td>EXIT FOR / CONTINUE FOR / DO</td><td>pops and jumps</td><td>as Commands.c:3160, 5654, 5663</td></tr>
+</table></div>
+</section>
+
+<section id="calls">
+<h2>Calls</h2>
+<ul>
+<li>For each SUB and FUNCTION, the survey pass decodes its parameter list once: names (as symbols), <code>AS</code> types, BYVAL/BYREF, and array parameters. This is the work <code>DefinedSubFun</code> repeats on every call, splitting both argument lists with <code>makeargs</code>. Phase 1 put that at 21% of a call loop.</li>
+<li><b>A compiled call</b> evaluates its arguments, then reproduces DefinedSubFun's effects in the same order (MMBasic.c:2450-2959):
+<ol>
+<li><code>errorstack</code> and <code>gosubstack</code> are pushed (NULL for a FUNCTION).</li>
+<li>Variable arguments are passed by reference (<code>T_PTR</code> to the caller's data, with the same type-mismatch demotion to a copy); expressions are passed by value.</li>
+<li><code>g_LocalIndex++</code>, and EnterLocalFrame on SUBPROFILE builds.</li>
+<li>Each parameter local is created with its name, through the same creation code findvar uses, so <code>SymLocalMade</code> runs as usual.</li>
+<li><code>CurrentSubFunName</code> is set (STATIC relies on it).</li>
+<li>For a FUNCTION, the result variable is created and the body runs nested.</li>
+</ol>
+END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and the FUNCTION epilogue do.</li>
+<li><b>Left to <code>DefinedSubFun</code> as fallbacks:</b> CSUBs, library SUBs (libraries stay text), struct parameters, element-addressed array arguments such as <code>a(3)</code> passed as an array, missing arguments, array-returning FUNCTIONs, and CALL/CALL(). The compiled path covers the forms the corpus uses; the census counts them in P3.</li>
+</ul>
+</section>
+
+<section id="builtins">
+<h2>Built-ins and the value splice</h2>
+<p>A built-in function or a graphics command reads its arguments from text: <code>getnumber(ep)</code>, or <code>getargs</code> and then <code>getnumber(argv[i])</code>. The <b>value splice</b> gives them values already computed, without changing the handlers:</p>
+<ul>
+<li>A new token byte, <code>T_VALUE</code>, followed by one index byte, refers to an entry in a small table of values in RAM. The byte comes from 0x08-0x1D, which never occurs in program text because <code>tokenise</code> turns control characters into spaces (MMBasic.c:1411-1416).</li>
+<li><code>getvalue</code> learns this one case: it returns the entry and its type.</li>
+<li>The index byte is drawn from printable characters that none of the byte scanners react to. That excludes <code>" ( ) , ' =</code>, and 0. So <code>makeargs</code>, <code>getclosebracket</code>, <code>skipexpression</code> and <code>skipelement</code> pass a spliced argument through as an ordinary operand.</li>
+<li>Compiled code evaluates the arguments, fills the table, and writes <code>T_VALUE i , T_VALUE j , &hellip;</code> into a temporary buffer.
+<ul>
+<li>A command's handler is called with <code>cmdline</code> pointing at that buffer.</li>
+<li>A function's handler (<code>tokentbl[f].fptr</code>) is called with <code>ep</code> pointing at it, and its result is read from <code>fret</code>/<code>iret</code>/<code>sret</code> and <code>targ</code>.</li>
+</ul></li>
+<li>This skips the parsing of every argument but runs the handler unchanged. It is exact by construction, because the handler does not know the difference.</li>
+<li>P5 starts with SIN, COS, TAN, ATN, SQR, ABS, INT, FIX, SGN, EXP, LOG, DEG, RAD and PI, then PIXEL, LINE and BOX. Commands whose handlers compare argument text (<code>checkstring</code> on keywords) keep those keywords as text in the buffer and splice only the numeric arguments.</li>
+</ul>
+</section>
+
+<section id="where">
+<h2>Where the stream lives</h2>
+<ul>
+<li><b>PC3 and other PSRAM builds:</b> RAM slot 4 (image slot 7, <code>ImageSlotAddress</code>, FileIO.c:1073-1086). It is written at memory speed and is lost at power-off, like any RAM slot. While OPTION COMPILE is on, RAM SAVE 4 and RAM FILE LOAD into slot 4 are refused.</li>
+<li><b>RP2040, and RP2350 builds without PSRAM:</b> flash slot 2. Slot 3 holds the library, and slot 1 is left for the user. The slot is rewritten only when the program has changed since its last compile, so an edit-and-run cycle costs one erase of the slot, as saving the program already does. While OPTION COMPILE is on, FLASH SAVE 2 is refused.</li>
+<li><b>Before any figure is quoted</b> it is confirmed once from a flash slot, because PSRAM and flash timings differ behind the XIP cache.</li>
+<li>Where the stream lives in a release is deferred until the concept is proven, as you asked. So are the capacity-optimal alternatives (a stream written beside the image at save time, or a single image that LIST decompiles).</li>
+</ul>
+</section>
+
+<section id="cost">
+<h2>Size, RAM and time</h2>
+<div class="tablewrap"><table>
+<tr><th>Item</th><th>Estimate</th><th>Note</th></tr>
+<tr><td>Flash, P1</td><td class="num">3-5 KB</td><td>executor loop, fallback records, map and cache, stamp and slot handling, OPTION COMPILE</td></tr>
+<tr><td>Flash, P2-P5</td><td class="num">+12-20 KB</td><td>expression and statement compiler, typed operations, calls, splice. The prototype's 40-opcode VM was 3.3 KB on the M0+.</td></tr>
+<tr><td>Flash headroom now</td><td class="num">VGA 13.8 KB; HDMIWEB 22.9 KB</td><td>the RP2040 VGA will probably need one 16 KB step at P2 or P3; that is your decision when the size is known</td></tr>
+<tr><td>Static RAM</td><td class="num">&lt; 1 KB</td><td>map cache 512 B, return-record array 200 B (<code>MAXGOSUB</code> 50), splice table, executor state</td></tr>
+<tr><td>Executor in RAM?</td><td class="num">0 at first</td><td>the prototype ran from XIP flash on both chips and was still 9-22x faster. RAM placement on the RP2350 is tried only if P2 measures a gain worth its heap page (4 KB quantum).</td></tr>
+<tr><td>Compile RAM (transient)</td><td class="num">1-8 KB</td><td>largest unit's offsets plus page buffers; taken before the program's own variables exist, and freed</td></tr>
+<tr><td>Stream size</td><td class="num">0.2-0.7x image</td><td>P1 records are about 10 bytes plus a 6-byte map entry per statement: the anchor's 1,250 statements take about 20 KB against its 71 KB image. The G3 estimate for compiled code is 0.04-0.65x.</td></tr>
+<tr><td>Compile time</td><td class="num">to measure</td><td>one image walk plus two passes per unit; on the RP2040 also the erase and programming of up to 100-120 KB of flash, only after a change</td></tr>
+</table></div>
+</section>
+
+<section id="risk">
+<h2>Risks and how each is contained</h2>
+<div class="tablewrap"><table>
+<tr><th>Risk</th><th>Containment</th></tr>
+<tr><td>A compiled result differs from the text result</td><td>shared helpers for every operator, conversion and literal; shadow mode on the goldens and games; the binding check turns a wrong type assumption into a fallback</td></tr>
+<tr><td>Interpreter state differs at a boundary</td><td>the table in <a href="#same">Staying identical</a>; the interrupt tests (Bas/bench/inttests), CHAIN and CONTEXT (symchain.py), ON ERROR SKIP and TRACE cases added to the goldens run with OPTION COMPILE on</td></tr>
+<tr><td>Structure matched differently (FOR/NEXT, IF/ENDIF, SELECT)</td><td>the compiler calls the handlers' own scans; irregular structures stay fallbacks</td></tr>
+<tr><td>Stale stream</td><td>the CRC of the whole image and the firmware build hash are checked at every RUN-type entry; no writer has to remember the stream</td></tr>
+<tr><td>Flash wear and time on the RP2040</td><td>recompile only on change; runs batched as the plan says</td></tr>
+<tr><td>C stack depth</td><td>nested FUNCTION calls add an executor frame where they now add an <code>ExecuteProgram</code> frame; the executor's frame is kept smaller, and recursion tests run on both boards</td></tr>
+<tr><td>Build variants</td><td>the feature is gated per variant. PICOMIN is excluded. On the M0+ the executor is compiled at -O2, never -O3. Each variant's flash map is checked every phase.</td></tr>
+<tr><td>Behaviour that depends on text being re-read (EXECUTE, EVAL, CALL "name", the prompt)</td><td>unchanged: that code is text and runs in the text loop</td></tr>
+</table></div>
+</section>
+
+<section id="phases">
+<h2>Phases and gates</h2>
+<div class="phase"><div class="num">P1<small>plumbing</small></div><div>
+<h3>Records only</h3>
+<p class="meta">Stamp and slot handling, the compiler's survey and emit skeleton, STMT/CMD/SUBCALL records, the map and its cache, the executor's entry and exit, and OPTION COMPILE ON|OFF.</p>
+<ul>
+<li>The only possible gains are the per-statement header walk, the <code>skipelement</code> pre-scan and the token decode, which the records precompute. Expect 0-5%.</li>
+<li><b>Gate:</b>
+<ul>
+<li>goldens identical on both boards with OPTION COMPILE ON;</li>
+<li>interrupt tests, symchain, cmtloop and the three games' checks unchanged;</li>
+<li>stdset shows nothing slower than text beyond the 1% placement floor.</li>
+</ul></li>
+</ul></div></div>
+<div class="phase"><div class="num">P2<small>numbers</small></div><div>
+<h3>Numeric statements on globals</h3>
+<p class="meta">The expression compiler, the shared helpers and shadow mode; compiled LET, IF/ELSEIF/ELSE, FOR/NEXT, DO/LOOP and EXIT on global numeric scalars.</p>
+<ul>
+<li><b>Gate:</b>
+<ul>
+<li>shadow mode clean on the goldens and the games;</li>
+<li>the G3 kernels rewritten at program level are at least 5x faster than text on both boards, which shows the prototype's speed survives in firmware.</li>
+</ul></li>
+</ul></div></div>
+<div class="phase"><div class="num">P3<small>calls</small></div><div>
+<h3>Locals and calls</h3>
+<p class="meta">LOCAL, parameters, compiled CALL, FUNCTION calls in expressions, END/EXIT SUB/FUNCTION.</p>
+<ul>
+<li><b>Gate:</b>
+<ul>
+<li>the Exile kernel matches all 2,384 ticks of <code>run_phystest.py</code>;</li>
+<li>the anchor improves on both boards;</li>
+<li>the G3 kernels as written (in SUBs) are at least 8x faster.</li>
+</ul></li>
+</ul></div></div>
+<div class="phase"><div class="num">P4<small>breadth</small></div><div>
+<h3>Arrays, SELECT, GOTO/GOSUB, simple strings</h3>
+<p class="meta">Element addressing through the shared helper; SELECT CASE; labels; string assignment, concatenation and comparison.</p>
+<ul>
+<li><b>Gate:</b> the three games are faster and pass their checks, and the census's share of compiled statements, measured with <code>[PERF]</code> counts of fallback records, reaches the G3 figures.</li>
+</ul></div></div>
+<div class="phase"><div class="num">P5<small>splice</small></div><div>
+<h3>The value splice</h3>
+<p class="meta">T_VALUE in <code>getvalue</code>; pure numeric built-ins; then PIXEL, LINE and BOX.</p>
+<ul>
+<li><b>Gate:</b> goldens and shadow mode clean; the anchor (SIN/COS-heavy) and Elite's frame improve.</li>
+</ul></div></div>
+<p>Each phase lands as small commits, each built and run on both boards. Full stdset and goldens runs happen at each gate, with functional checks between.</p>
+</section>
+
+<section id="decide">
+<div class="decide"><div class="eyebrow">Decisions for Peter</div>
+<ol>
+<li><b>Compile at RUN when the image has changed,</b> stamped by a CRC of the image, rather than in every image writer at save time? (Recommended: one path covers every way a program arrives.)</li>
+<li><b>Stream slots while developing:</b> RAM slot 4 on the PC3 and flash slot 2 on the RP2040, refused to the user while OPTION COMPILE is on?</li>
+<li><b>OPTION COMPILE ON | OFF | SHADOW</b> as a RAM-only development switch, like OPTION SYMBOLS, off by default until the P3 gate?</li>
+<li><b>Libraries stay text:</b> library SUBs called from a compiled program run interpreted. (Recommended for now; libraries are saved without symbols.)</li>
+<li><b>Bugs found while preparing this</b> (below). The comment fast-path fix is on development; should it be ported to main, where it has been since 6.03.00? And should MAX/MIN and ABS/SGN be fixed, on both branches? (The CHAIN fix concerns symbols, which exist only on development.)</li>
+</ol>
+</div>
+</section>
+
+<section id="bugs">
+<h2>Found on the way</h2>
+<ul>
+<li><b>Fixed on development, 8740953: a loop whose first line ends in <code>: ' comment</code> ran once.</b>
+<ul>
+<li><code>FOR i = 1 TO 3 : ' c</code> ran its body once, and <code>DO : ' d</code> left after one pass. A GOSUB line ending the same way returned past its next line.</li>
+<li>Cause: the comment fast path in <code>ExecuteProgram</code> skipped to the line after the last T_NEWLINE crossed, but NEXT, LOOP and RETURN come back mid-line.</li>
+<li>The code is in the repository's first commit, so 6.03.00 onward have it. Without the colon (<code>FOR i = 1 TO 3 ' c</code>) the comment is part of the FOR statement and was never affected.</li>
+<li>Test: Bas/bench/cmtloop.py (fails before the fix, passes after, on both boards).</li>
+</ul></li>
+<li><b>Fixed on development, 8d3ee25: symbols after CHAIN.</b>
+<ul>
+<li>This was a bug in the S5/S6 work. CHAIN prepared the new program's bindings in a fresh heap and then restored the old heap over them.</li>
+<li>Result: <code>DIM z = x * 10 + y</code> printed 0 in the chained program.</li>
+<li>The bindings are now rebuilt in <code>SaveContext</code>/<code>RestoreContext</code>. Test: Bas/bench/symchain.py, which covers CHAIN and SAVE/LOAD CONTEXT.</li>
+</ul></li>
+<li><b>Not fixed, confirmed on the PC3: MAX and MIN clamp at the single-precision limit.</b>
+<ul>
+<li><code>MAX(-1e300, -2e300)</code> gives -3.402823466e+38, and <code>MIN(1e300, 2e300)</code> gives 3.402823466e+38.</li>
+<li>Cause: <code>fun_max_min</code> starts from -FLT_MAX or +FLT_MAX (Functions.c:1855).</li>
+</ul></li>
+<li><b>Not fixed, confirmed: <code>ABS(1e19)</code> raises "Number too large".</b>
+<ul>
+<li><code>fun_abs</code> and <code>fun_sgn</code> evaluate their argument with an integer target, so a float beyond 2<sup>63</sup> goes through <code>FloatToInt64</code> (Functions.c:555, 1232).</li>
+</ul></li>
+<li><b>By reading only, not tested:</b>
+<ul>
+<li><code>FloatToInt64</code> lets NaN and exactly 2<sup>63</sup> through to an undefined C conversion (MMBasic.c:7174-7183).</li>
+<li><code>op_subtract</code> has no infinity check, unlike add and multiply.</li>
+<li>The BYVAL check reads <code>g_vartbl[0]</code> for an expression argument (MMBasic.c:2702-2723).</li>
+</ul></li>
+</ul>
+<p>Route B reproduces each of these exactly, because it calls the same helpers. Fixing one changes both paths at once.</p>
+</section>
+
+<footer>Written for Peter's review, 2026-09-26. Branch development at 8740953. Evidence files: Bas/bench/g3, Bas/bench/results/g3, docs/Interpreter_Performance_Plan.html (Route B section), docs/Interpreter_S5S6_Symbols_Design.html.</footer>
+</div>
+</body>
+</html>
