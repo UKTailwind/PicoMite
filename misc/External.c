@@ -139,7 +139,7 @@ volatile char IrVarType;
 volatile char IrState, IrGotMsg;
 int IrBits, IrCount;
 unsigned char *IrInterrupt;
-#define CALLBACK_ONESHOT 64
+#define CALLBACK_ONESHOT 128
 #define ONESHOT_STATE_IDLE 0
 #define ONESHOT_STATE_PREDELAY 1
 #define ONESHOT_STATE_PULSE 2

@@ -2628,7 +2628,7 @@ void cmd_settick(void)
         return;
     }
     else
-        period = getint(argv[0], -1, INT_MAX);
+        period = getint(argv[0], 0, INT_MAX);
     if (period == 0)
     {
         TickInt[irq] = NULL; // turn off the interrupt
