@@ -29,6 +29,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "WiFi.h" // setwifi() — defined in net/WiFi.c
 #endif
 #include "pico/stdlib.h"
+#include "hardware/sync.h" // save_and_disable_interrupts(): not pulled in by the headers above on every build
 #include "hardware/clocks.h"
 #include <time.h>
 // #include "upng.h"
@@ -10204,6 +10205,15 @@ Tick Interrupts (1 to 4 in that order)
 
 ************************************************************************************************/
 
+// clear an I2C slave-ready bit; the I2C interrupt sets bits in the same word,
+// so a plain &= could overwrite one it sets between the read and the write
+static void ClearI2CStatus(volatile unsigned int *status, unsigned int bit)
+{
+    uint32_t save = save_and_disable_interrupts();
+    *status &= ~bit;
+    restore_interrupts(save);
+}
+
 // check if an interrupt has occured and if so, set the next command to the interrupt routine
 // will return true if interrupt detected or false if not
 int checkdetailinterrupts(void)
@@ -10407,25 +10417,25 @@ int checkdetailinterrupts(void)
 
     if ((I2C_Status & I2C_Status_Slave_Receive_Rdy))
     {
-        I2C_Status &= ~I2C_Status_Slave_Receive_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C_Status, I2C_Status_Slave_Receive_Rdy); // clear completed flag
         intaddr = I2C_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
     if ((I2C_Status & I2C_Status_Slave_Send_Rdy))
     {
-        I2C_Status &= ~I2C_Status_Slave_Send_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C_Status, I2C_Status_Slave_Send_Rdy); // clear completed flag
         intaddr = I2C_Slave_Send_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
     if ((I2C2_Status & I2C_Status_Slave_Receive_Rdy))
     {
-        I2C2_Status &= ~I2C_Status_Slave_Receive_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C2_Status, I2C_Status_Slave_Receive_Rdy); // clear completed flag
         intaddr = I2C2_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
     if ((I2C2_Status & I2C_Status_Slave_Send_Rdy))
     {
-        I2C2_Status &= ~I2C_Status_Slave_Send_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C2_Status, I2C_Status_Slave_Send_Rdy); // clear completed flag
         intaddr = I2C2_Slave_Send_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
