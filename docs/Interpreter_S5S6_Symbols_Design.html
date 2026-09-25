@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Symbols Design (S5/S6)</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+
+</head>
+<body>
+<header class="hero"><div class="wrap">
+<div class="eyebrow">Route A · S5/S6 · design for review</div>
+<h1>Symbols with lazy, per-frame binding</h1>
+<p>MMBasic spends 16-34% of every measured workload finding names. Each time a statement runs, it reads the name's text again, hashes it, probes a table and compares strings. This design stores each name in the program as a 2- or 3-byte symbol, and binds each symbol once to its SUB, label or global. Locals are bound per call frame. The binding happens the first time a symbol is used, so variables are still created on first use, as today.</p>
+<p class="ref">Branch development at a07e8f2 · evidence: Phase 1 report, and three read-only code surveys (variables, program format, calls) done for this design.</p>
+</div></header>
+<div class="wrap">
+<nav class="toc">
+<a href="#summary">Summary</a><a href="#today">Where the time goes</a><a href="#format">Symbols in the program</a><a href="#bind">Binding</a><a href="#text">What stays text</a><a href="#images">Images, slots, library</a><a href="#cost">Size and RAM</a><a href="#risk">Risks</a><a href="#phases">Phases and tests</a><a href="#decide">Decisions</a><a href="#bugs">Found on the way</a>
+</nav>
+
+<section id="summary">
+<h2>Summary</h2>
+<ul>
+<li><b>In the stored program:</b> every identifier becomes a symbol token, 2 bytes for the 63 most used names and 3 bytes for the rest. This covers variables, SUB and FUNCTION names, labels, and the sub-keywords of commands. Each program image carries a table of the names as spelled. LIST prints each name exactly as it was typed, so its output does not change.</li>
+<li><b>Binding at run time:</b> each distinct name gets a small record: its global slot, its SUB/FUNCTION index and its label. These are filled in the first time the name is used and cleared when the thing they point to goes away. Locals use a per-name "shadow" stack. Creating a local pushes it and ending the frame pops it, so a local is found in constant time at any recursion depth.</li>
+<li><b>Lookup becomes a few loads.</b> There is no hash, no probe, no string compare and no division. The current name-hashing code stays as the fallback. It serves runtime strings (EXECUTE, EVAL, CALL "name", the prompt), programs saved before this change, and the first use of each name.</li>
+<li><b>Programs get smaller.</b> Sandglass, the largest program, shrinks by about 18 KB and Elite by about 9 KB. The smallest measured program, solar_eclipse, grows by 132 bytes. <b>RAM:</b> on the RP2350 the bindings replace the 18 KB <code>funtbl</code>, a net saving. On the RP2040 they take about 7 KB of heap for a 500-name program.</li>
+<li><b>Expected gain:</b> most of the 16-34% spent in <code>findvar</code>. Also removed are the +46-48% cost of a LOCAL read at recursion depth 10, the RP2040's +21-47% on calls and array reads with 200 SUBs, and its 67x cost for a far GOSUB. These figures are estimates; phases 2 and 3 measure them.</li>
+<li><b>Four phases,</b> each tested on both boards and committed on its own. Phase 1 changes only the format and must be exactly as correct as today before any speed work begins.</li>
+</ul>
+</section>
+
+<section id="today">
+<h2>Where the time goes today</h2>
+<p>This is the path for reading an existing global scalar, from the variable survey (instruction estimates, not measurements):</p>
+<ol>
+<li><code>getvalue</code> walks the name. An array reference also runs <code>FindSubFun</code> first: a second hash on the RP2350, and on the RP2040 a count of the whole SUB table followed by a binary search.</li>
+<li><code>findvar</code> reads the name one character at a time, upper-casing it and hashing it. That is about 12-15 cycles a character on the RP2350 and 20-25 on the RP2040.</li>
+<li>It divides <code>hash % maxglobalvars</code> on every call, even when the name turns out to be local. On the RP2040 this is a library call.</li>
+<li>Inside a SUB it also runs the local probe. That probe does another division, and then one more for each probe step. Every recursion level's copy of a local sits in the same chain, so a lookup at depth D does D name compares and D divisions.</li>
+<li>It compares names in the table. Then comes the type and dimension checking, which stays after this change.</li>
+</ol>
+<p>Two earlier measurements shape the design:</p>
+<ul>
+<li><b>A cache keyed on the name's address in the program gained only 1.15%</b> (Phase 0). Array indices, built-in function arguments and SUB arguments are copied into buffers before <code>findvar</code> reads them, so the address is lost. A symbol id is carried along by those copies.</li>
+<li><b>Recursion makes locals linear</b> (Phase 1, +46-48% at depth 10). Binding has to be per frame, not per name.</li>
+</ul>
+</section>
+
+<section id="format">
+<h2>Symbols in the stored program</h2>
+<h3>Encoding</h3>
+<ul>
+<li>A symbol is an introducer byte followed by one or two payload characters. Payload characters come from a 63-character alphabet: <code>0-9 A-Z a-z _</code>.
+<ul>
+<li><b>Introducers:</b> <code>0x04</code> program long, <code>0x05</code> program short, <code>0x06</code> library long, <code>0x07</code> library short. That gives 63 short ids and 3,969 long ids per image.</li>
+<li><b>Short ids:</b> the tokeniser gives them to the 63 most used names. That covers 46-80% of name uses in the measured programs.</li>
+</ul></li>
+<li><b>Why these bytes:</b>
+<ul>
+<li><code>tokenise</code> already turns every control character in source text into a space, so 0x04-0x07 cannot come from what the user typed.</li>
+<li>Every payload character is a name character. That keeps it clear of what scanners act on: statement ends (0), quotes, brackets, commas, comment marks, and token bytes 0x80 and above.</li>
+<li>Code that has not been updated sees 0x04 as "not a name" and stops with a syntax error. So anything the audit missed fails loudly in testing and cannot give a wrong result.</li>
+</ul></li>
+<li><b>What stays around the symbol:</b> type suffixes, array brackets and struct dots stay as they are. <code>a$(i)</code> becomes <code>&lt;sym a&gt; $ ( &lt;sym i&gt; )</code>. A dotted name <code>p.x</code> is a single symbol, because <code>.</code> is a name character.</li>
+<li><b>Spelling:</b> each distinct spelling gets its own id, so <code>Foo</code> and <code>FOO</code> list back exactly as typed. Both map to the same binding (see <a href="#bind">Binding</a>).</li>
+</ul>
+<h3>The symbol table travels inside the image</h3>
+<ul>
+<li><b>Where it goes:</b> after the program's <code>0,0</code> end marker and before the CSUB and font records.
+<ul>
+<li>It holds a magic word, a count, an offset for each spelling, the names, a canonical index for each id, and a hash index for text lookups.</li>
+<li>The CSUB records address code by its offset in the program text. That text comes before the table, so those offsets keep working. <code>SaveProgramToFlash</code> computes them after tokenising anyway.</li>
+</ul></li>
+<li><b>Copies:</b> flash slots, RAM slots, LIBRARY DISK SAVE files and FLASH DISK LOAD copy images byte for byte, so the table goes with them.</li>
+<li><b>Images from older firmware:</b> they have no table. Every name in them is raw text, which the kept fallback runs at today's speed. Saving the program again gives it symbols. Nothing is refused.</li>
+</ul>
+<h3>Who reads names, and what changes</h3>
+<div class="tablewrap"><table>
+<tr><th>Reader</th><th>Sites</th><th>Change</th></tr>
+<tr><td><code>checkstring</code> (sub-keywords such as INTEGER, OUTPUT, X)</td><td class="num">1,742</td><td>One function. A symbol matches a keyword when its canonical name equals the keyword. No call site changes.</td></tr>
+<tr><td>Direct string compares on argument text (<code>str_equal</code>, <code>strcasecmp</code>, …)</td><td class="num">173</td><td>Audit. Many compare evaluated strings, not program text, and need nothing. Those that compare argument text move to a symbol-aware helper.</td></tr>
+<tr><td>Hand-written name parsing (<code>isnamestart</code>/<code>isnamechar</code>)</td><td class="num">105</td><td>Audit. 47 are in MMBasic.c's core readers, which are being rewritten anyway; 11 are in the trace cache.</td></tr>
+<tr><td>Single-letter keywords tested by character (<code>toupper(*p)=='X'</code>)</td><td class="num">to count</td><td>Audit, then use a helper that accepts a one-letter symbol.</td></tr>
+<tr><td><code>skipvar</code>, <code>getvalue</code>, <code>findvar</code>, <code>FindSubFun</code>, <code>findlabel</code>, <code>makeargs</code>, <code>DefinedSubFun</code>, <code>llist</code>, error messages</td><td class="num">core</td><td>Rewritten to understand symbols. <code>makeargs</code> and <code>getargs</code> copy bytes, so symbols reach the evaluator unchanged.</td></tr>
+</table></div>
+<p>Why not keep sub-keywords as text? The firmware compares 893 distinct words against argument text, and they include most single letters as well as INTEGER, FLOAT and STRING. Those collide with the commonest names: Elite's <code>N</code> alone is used 883 times, and a third of solar_eclipse's name uses match one of these words. Any word kept as text would stay slow, so every identifier becomes a symbol and the comparisons learn to read symbols.</p>
+</section>
+
+<section id="bind">
+<h2>Binding</h2>
+<h3>The canonical table</h3>
+<p><code>PrepareProgram</code> builds it at RUN, CHAIN, LIBRARY LOAD, and before each prompt command, as it builds <code>funtbl</code> and <code>subfun</code> today.</p>
+<ul>
+<li><b>Contents:</b> one canonical entry per distinct upper-case name across the program and the library.</li>
+<li><b>Id maps:</b> a map from program ids to canonical entries and one from library ids. When there is no library and a name has only one spelling, the map is the identity.</li>
+<li><b>Old-format images:</b> SUB, FUNCTION and label names found as raw text are added to the table too.</li>
+<li><b>What it replaces:</b> the RP2350 <code>funtbl</code>, <code>hashlabels</code>, the RP2040 sort, first-letter index and binary search, and the RP2040's scan of <code>subfun[]</code> for name clashes.</li>
+</ul>
+<p>Each canonical entry holds:</p>
+<div class="tablewrap"><table>
+<tr><th>Field</th><th>Bytes</th><th>Meaning</th></tr>
+<tr><td><code>gbind</code></td><td class="num">2</td><td>global slot in <code>g_vartbl</code>, or none</td></tr>
+<tr><td><code>lbind</code></td><td class="num">2</td><td>newest local slot with this name, at any level, or none</td></tr>
+<tr><td><code>sbind</code></td><td class="num">2</td><td><code>subfun</code> index, or none (set at PrepareProgram)</td></tr>
+<tr><td><code>labind</code></td><td class="num">2</td><td>index into the label pointer table, or none (set at PrepareProgram)</td></tr>
+</table></div>
+<h3>Lookup (the fast path)</h3>
+<pre><code>canon = map[id]
+s = lbind[canon]
+if (s != NONE &amp;&amp; g_vartbl[s].level == g_LocalIndex)  -&gt; the local
+else if ((s = gbind[canon]) != NONE)                  -&gt; the global
+else -&gt; slow path: today's name lookup, which creates the
+        variable if needed and then fills gbind / pushes lbind</code></pre>
+<ul>
+<li><b>After the slot is found:</b> the type, dimension and array-index work is unchanged. So are the checks and errors.</li>
+<li><b>SUB/FUNCTION calls and array references:</b> the <code>FindSubFun</code> test becomes one load of <code>sbind</code>.</li>
+<li><b>GOTO, GOSUB, RESTORE and interrupt targets:</b> one load of <code>labind</code>.</li>
+</ul>
+<h3>Locals: the per-frame shadow stack (S6)</h3>
+<ul>
+<li><b>Creating a local</b> (LOCAL, STATIC, a parameter or a FUNCTION result) at level L saves the old <code>lbind[canon]</code> in a per-slot array <code>lshadow[slot]</code>, then sets <code>lbind[canon] = slot</code>.</li>
+<li><b>Freeing a level:</b> <code>ClearVars(level)</code> already frees locals newest first, using <code>g_hashlist</code>. For each one it restores <code>lbind[canon] = lshadow[slot]</code>. A second array, <code>lcanon[slot]</code>, supplies the canonical index without hashing again.</li>
+<li><b>Visibility is unchanged:</b> only locals at exactly the current level are visible, and the level check does that. A callee without its own <code>x</code> sees the caller's <code>x</code> in <code>lbind</code>, but at the wrong level, so it falls through to the global. GOSUB and interrupts raise the level as today.</li>
+<li><b>Recursion:</b> finding a local at depth 10 costs the same as at depth 1.</li>
+<li><b>By-reference parameters, STATIC pointers and FOR variables</b> keep pointing into <code>g_vartbl</code> as today, because slots never move.</li>
+</ul>
+<h3>One rule for staleness</h3>
+<p>A binding is cleared at the moment its slot is freed.</p>
+<ul>
+<li>Only three paths free slots: <code>ClearVars(level)</code> (locals), <code>ClearVars(0)</code> (everything: RUN, NEW, CLEAR, CHAIN, errors at the top level), and <code>erase()</code> (ERASE and REDIM).</li>
+<li>ERASE and REDIM find the canonical entry by name, which is fine for rare commands, and clear <code>gbind</code>. <code>ClearVars(0)</code> clears every binding.</li>
+<li>Nothing else deletes or moves a variable, so no other code needs to know about bindings.</li>
+</ul>
+</section>
+
+<section id="text">
+<h2>What stays text, and the kept fallback</h2>
+<ul>
+<li><b>Never turned into symbols:</b>
+<ul>
+<li>string literals;</li>
+<li>comments (<code>'</code>, REM, <code>/* */</code>);</li>
+<li>DATA items: unquoted strings are case-sensitive data, and READ must return them as typed;</li>
+<li>CSUB and DefineFont hex lines, which must stay byte-exact until the binary is extracted;</li>
+<li>OPTION and CONFIGURE board names, which are rewritten before tokenising.</li>
+</ul></li>
+<li><b>Runtime strings</b> (the prompt, EXECUTE, EVAL, CALL "name", the MM.STARTUP, MM.PROMPT and MM.END hooks, CSUB RunBasicSub):
+<ul>
+<li>they are tokenised as today;</li>
+<li>names already in the canonical table get its ids, so the fast path works there too;</li>
+<li>other names stay text and use the fallback.</li>
+</ul>
+They run at the caller's level, as today.</li>
+<li><b>The fallback</b> is today's <code>findvar</code>, <code>FindSubFun</code> and <code>findlabel</code> text path. It gets its answers from the canonical table instead of <code>funtbl</code>. When it creates a variable it also fills the bindings, so the next symbol lookup is fast.</li>
+<li><b>By name as today:</b> CHAIN, VAR SAVE/RESTORE, <code>g_vartbl</code> and the CSUB interface are unchanged. A chained program starts with empty bindings and fills them as each name is used.</li>
+</ul>
+</section>
+
+<section id="images">
+<h2>Images, slots, library, editing</h2>
+<ul>
+<li><b>Save paths:</b> <code>SaveProgramToFlash</code>, <code>SaveProgramToRAM</code> and <code>SaveLibraryImage</code> gain a first pass that collects names and counts their uses (for the short ids). The symbol table is written after the text.</li>
+<li><b>EDIT and AUTOSAVE APPEND</b> go through LIST and then tokenise again, so the table is rebuilt whenever the program changes.</li>
+<li><b>LIBRARY SAVE</b> already rewrites at token level (it merges the library with the program, drops comments and recomputes the skip bytes). It now also merges the two symbol tables into one library table and renumbers the program's symbols as library symbols. This is the largest single piece of new code.</li>
+<li><b>The library and the program share one namespace,</b> as today. They have different introducer bytes, so a library SUB called with program arguments decodes each symbol against the right table.</li>
+<li><b>LIST, the editor, SAVE, XMODEM S and error-line display</b> all go through <code>llist</code>. It prints each symbol's spelling from the right table.</li>
+<li><b>The trace cache</b> has its own name reader and variable resolver, and it keeps global slot indices that nothing ever invalidates. The design removes it in phase 1 (see Decisions).</li>
+</ul>
+</section>
+
+<section id="cost">
+<h2>Size and RAM</h2>
+<h3>Program size</h3>
+<p>Estimated from the source files with the command and function tables applied. Strings, comments, DATA and CSUB blocks are excluded. The 63 most used names get 2-byte symbols and the rest 3 bytes. The symbol table costs each spelling plus 3 bytes.</p>
+<div class="tablewrap"><table>
+<tr><th>Program</th><th class="num">Name uses</th><th class="num">Name bytes now</th><th class="num">Distinct</th><th class="num">Short-id share</th><th class="num">Symbols</th><th class="num">Table</th><th class="num">Change</th></tr>
+<tr><td>Sandglass player</td><td class="num">10,565</td><td class="num">55,850</td><td class="num">1,019</td><td class="num">46%</td><td class="num">26,864</td><td class="num">10,571</td><td class="num">−18,415</td></tr>
+<tr><td>Elite (built)</td><td class="num">10,162</td><td class="num">43,777</td><td class="num">975</td><td class="num">49%</td><td class="num">25,505</td><td class="num">9,365</td><td class="num">−8,907</td></tr>
+<tr><td>Picanoid</td><td class="num">3,251</td><td class="num">15,320</td><td class="num">447</td><td class="num">55%</td><td class="num">7,962</td><td class="num">4,316</td><td class="num">−3,042</td></tr>
+<tr><td>Arkanoid</td><td class="num">3,142</td><td class="num">14,815</td><td class="num">433</td><td class="num">55%</td><td class="num">7,688</td><td class="num">4,210</td><td class="num">−2,917</td></tr>
+<tr><td>Thrust</td><td class="num">2,376</td><td class="num">10,690</td><td class="num">332</td><td class="num">55%</td><td class="num">5,811</td><td class="num">2,996</td><td class="num">−1,883</td></tr>
+<tr><td>Chuckie</td><td class="num">2,539</td><td class="num">10,274</td><td class="num">304</td><td class="num">60%</td><td class="num">6,102</td><td class="num">2,518</td><td class="num">−1,654</td></tr>
+<tr><td>Exile physics</td><td class="num">2,451</td><td class="num">9,592</td><td class="num">313</td><td class="num">66%</td><td class="num">5,733</td><td class="num">3,201</td><td class="num">−658</td></tr>
+<tr><td>solar_eclipse (anchor)</td><td class="num">4,387</td><td class="num">11,388</td><td class="num">254</td><td class="num">80%</td><td class="num">9,650</td><td class="num">1,870</td><td class="num">+132</td></tr>
+</table></div>
+<p>The largest programs shrink the most, so the program-capacity rule is met with room to spare. On HDMIWEB, sandglass should load without the <code>,C</code> crunch it needs today.</p>
+<h3>RAM</h3>
+<ul>
+<li><b>Bindings:</b> 8 bytes per canonical name. The id maps and the text-lookup hash add about 6 more. Sandglass (1,019 names) needs about 14 KB.
+<ul>
+<li><b>RP2350:</b> this replaces the 18,432-byte <code>funtbl</code>, a net saving of about 4 KB.</li>
+<li><b>RP2040:</b> it comes from the heap, sized to the program: about 7 KB for 500 names. Putting the text-lookup hash in the image instead of RAM brings that to about 5 KB.</li>
+</ul></li>
+<li><b>Local shadows:</b> <code>lshadow</code> and <code>lcanon</code> cost 4 bytes per local slot: 1 KB on the RP2350 and 960 bytes on the RP2040.</li>
+<li><b>Flash (firmware):</b> the new code less the retired hash and sort code. Probably a few KB, to be measured in phase 1. HDMIWEB now has 15.7 KB free.</li>
+</ul>
+</section>
+
+<section id="risk">
+<h2>Risks and how each is contained</h2>
+<div class="tablewrap"><table>
+<tr><th>Risk</th><th>Containment</th></tr>
+<tr><td>Code the audit misses still reads names as text</td><td>It sees byte 0x04 and raises a syntax error, never a wrong result. Phase 1 has no speed work, so every golden, game check, interrupt test and a LIST round trip of every program in <code>Bas/</code> must match today before phase 2 starts.</td></tr>
+<tr><td>Sub-keywords (INTEGER, OUTPUT, single letters)</td><td>The change to <code>checkstring</code> covers 1,742 call sites at once. The 173 direct compares and the character-level single-letter tests are audited and listed in the phase 1 commit.</td></tr>
+<tr><td>A binding goes stale</td><td>There is one rule: bindings are cleared where slots are freed, in three functions. A debug build can also check every fast-path hit against the slow path, running both and comparing the result.</td></tr>
+<tr><td>Library and program symbols mixed up</td><td>Separate introducer bytes, and LIBRARY SAVE renumbers. The library test suite (<code>Bas/libtest</code>) covers it.</td></tr>
+<tr><td>Old images in slots, the library and .lib files</td><td>They run on the fallback at today's speed; saving again gives them symbols.</td></tr>
+<tr><td>The CSUB ABI and PEEK/POKE VARTBL</td><td>Unchanged: the layout of <code>g_vartbl</code> does not change in phases 1-3.</td></tr>
+<tr><td>Cost of PrepareProgram before each prompt command</td><td>Building the canonical table hashes each name once, about a thousand hashes for the largest program. If it is ever noticeable, it can be skipped when neither image has changed.</td></tr>
+</table></div>
+</section>
+
+<section id="phases">
+<h2>Phases and tests</h2>
+<ol>
+<li><b>The format, at today's speed.</b>
+<ul>
+<li>Tokeniser and image table; <code>llist</code>; the canonical table in PrepareProgram, replacing <code>funtbl</code>, <code>hashlabels</code> and the RP2040 sort.</li>
+<li>The symbol-aware core readers resolve by name through the table, with no bindings yet.</li>
+<li>The <code>checkstring</code> change and the audit fixes; LIBRARY SAVE merging; the trace cache removed.</li>
+<li><i>Tests:</i> LIST round trip of every <code>Bas/</code> program and the goldens corpus; goldens on both boards; the three games' checks; the interrupt tests; libtest; EDIT and AUTOSAVE by hand; program sizes; MEMORY before and after.</li>
+</ul></li>
+<li><b>S5, global, SUB and label bindings.</b> <code>gbind</code>, <code>sbind</code> and <code>labind</code>, the fast path in <code>getvalue</code>, <code>findvar</code>, <code>FindSubFun</code> and <code>findlabel</code>, and clearing in the three functions that free slots. <i>Tests:</i> the anchor, the standard set and the goldens; the Phase 1 name micro-tests (200 SUBs, far labels); the debug build's check of fast path against slow path.</li>
+<li><b>S6, per-frame locals.</b> The <code>lbind</code> shadow stack. <i>Tests:</i> the recursion micro-tests (depth 1 against depth 10), call loops, the games and the goldens.</li>
+<li><b>Optional, later.</b> Store a symbol id in <code>g_vartbl</code> in place of the 32-byte name. That saves 14-28 KB of RAM per variant but changes the CSUB interface and PEEK(VARHEADER). Also cache struct members per symbol, and add call descriptors (S3b), which build on symbols.</li>
+</ol>
+</section>
+
+<section id="decide">
+<div class="gate"><div class="eyebrow">Decided 2026-09-25</div>
+<p>1 yes; 2 yes; 3 yes; 4 remove the trace cache; 5 yes, for the moment; 6 keep for later.</p></div>
+<div class="decide"><div class="eyebrow">Decisions for Peter</div>
+<ol>
+<li><b>Symbolise every identifier</b> and teach <code>checkstring</code> and the audited compares to read symbols, rather than keeping sub-keywords as text? (Recommended; keeping them as text would leave the commonest names slow.)</li>
+<li><b>Keep every spelling</b> so that LIST output is unchanged? (Recommended; it costs a few table entries.) The alternative is to list each name as first spelled.</li>
+<li><b>Older images run on the text path</b> until saved again, with no forced conversion? (Recommended.)</li>
+<li><b>Remove the trace cache in phase 1?</b> It reads names itself, and it keeps global slot indices that nothing invalidates.</li>
+<li><b>RP2040 bindings on the heap</b> (about 5-7 KB for a 500-name program): acceptable?</li>
+<li><b>Phase 4</b> (a symbol id in <code>g_vartbl</code>, which changes the CSUB interface): consider later, or rule it out now?</li>
+</ol></div>
+</section>
+
+<section id="bugs">
+<h2>Found on the way (not part of this design)</h2>
+<p>The surveys turned these up by reading the code. None has been tested on a board. They are listed for you to prioritise, and none is fixed here.</p>
+<ol>
+<li><b><code>CurrentSubFunName</code> is not restored after a nested call returns</b> (MMBasic.c:2736). A STATIC executed after a call is mangled with the callee's name, so it may pick up the wrong backing variable. It probably deserves a test.</li>
+<li><b>OPTION LOCAL VARIABLES above the compile-time MAXLOCALVARS can overflow <code>g_hashlist</code></b> (MMBasic.c:332, 5359).</li>
+<li><b>Probe loops that can spin forever:</b>
+<ul>
+<li>The global probe has no wrap guard at level 0.</li>
+<li><code>hashlabels</code>' guard <code>originalhash&lt;0</code> is unsigned, so it is never true.</li>
+<li><code>FindSubFun</code>'s probe has no bound.</li>
+</ul>
+Each can spin when its table is full.</li>
+<li><b>On the RP2350 <code>findlabel</code> does not filter out SUB entries</b>, so GOTO to a label that has a SUB's name would use a small integer as a pointer.</li>
+<li><b><code>FindSubFun</code> ignores its type argument on the RP2350</b> but not on the RP2040, so a CSUB or SUB name used as a function behaves differently on the two chips.</li>
+<li><b><code>cmd_call</code> and <code>fun_call</code> append the argument text to a 256-byte buffer with no length check.</b> <code>tokenise</code> also has no bound on its output in <code>tknbuf</code>.</li>
+<li><b>The <code>rti[2]</code> IRETURN stub has no terminator,</b> so <code>skipelement</code> and <code>checkend</code> read past it.</li>
+<li><b><code>CountLines</code> uses <code>p[0]</code> where it means <code>p[1]</code></b> (MMBasic.c:4060), on lines longer than 253 bytes.</li>
+<li><b>Unbalanced frames on CACHE builds:</b> a SUB-style interrupt and ON…GOSUB never enter a frame but do leave one, so profiling misattributes the time.</li>
+<li><b><code>MM.INFO(VARCNT)</code> is stale</b> after ERASE and after locals are freed.</li>
+<li><b>The CSUB header's <code>int dims[]</code> layout</b> is selected only <code>#ifdef PICORP2350</code>, although every RP2350 build uses int dimensions (PicoCFunctions.h:393-413). Worth checking against a CSUB that reads <code>g_vartbl</code> on HDMIUSB.</li>
+<li><b>If an argument errors under ON ERROR SKIP</b> while a nested call has cleared <code>DefinedSubFunMem</code>, the outer call's frame and buffers leak.</li>
+</ol>
+</section>
+</div>
+</body>
+</html>
