@@ -311,6 +311,10 @@ void on_uart_irq0()
 				MMAbort = true;						 // set the flag for the interpreter to see
 				ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
 			}
+			else if (cc == keyselect && KeyInterrupt != NULL)
+			{
+				Keycomplete = true; // ON KEY k: signal the interrupt, don't buffer the key
+			}
 			else
 			{
 				ConsoleRxBufHead = (ConsoleRxBufHead + 1) % CONSOLE_RX_BUF_SIZE; // advance the head of the queue
@@ -378,6 +382,10 @@ void on_uart_irq1()
 			{										 // if the user wants to stop the progran
 				MMAbort = true;						 // set the flag for the interpreter to see
 				ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
+			}
+			else if (cc == keyselect && KeyInterrupt != NULL)
+			{
+				Keycomplete = true; // ON KEY k: signal the interrupt, don't buffer the key
 			}
 			else
 			{
