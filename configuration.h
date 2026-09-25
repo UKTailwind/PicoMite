@@ -177,7 +177,9 @@ extern "C"
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c).
       It fitted without this at +284 bytes, and the font handling then took all
       but 108 of them - which is no place to stop. */
-#define FLASH_TARGET_OFFSET (848 * 1024)
+   /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
+      went 1.4 KB over 848 KB. */
+#define FLASH_TARGET_OFFSET (864 * 1024)
 #define MagicKey 0x6DE27504
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
@@ -343,7 +345,9 @@ extern "C"
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c)
       costs ~1.4 KB and this variant had only 0.4 KB spare. Flash moves in 16 KB
       steps, so one step. */
-#define FLASH_TARGET_OFFSET (928 * 1024)
+   /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
+      went 2.9 KB over 928 KB. */
+#define FLASH_TARGET_OFFSET (944 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which

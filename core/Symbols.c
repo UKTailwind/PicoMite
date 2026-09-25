@@ -34,8 +34,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
 
-// the few routines run for every name or statement live in RAM on both chips
+// the few routines run for every name or statement live in RAM, except on the
+// RP2040 WebMite, whose RAM has no room for them
+#if defined(PICOMITEWEB) && !defined(rp2350)
+#define SYMRAM(f) f
+#define SYMRAMDATA
+#else
 #define SYMRAM(f) __not_in_flash_func(f)
+#define SYMRAMDATA __not_in_flash("data")
+#endif
 
 const symtab_t *SymTabProg = NULL;
 const symtab_t *SymTabLib = NULL;
@@ -46,7 +53,7 @@ int SymLongest = 0;
 
 // the payload alphabet: 0-9 A-Z a-z _ are the digits 0-62, anything else is 0xFF
 #define XX 0xFF
-__not_in_flash("data") const unsigned char symdigit[128] = {
+SYMRAMDATA const unsigned char symdigit[128] = {
     XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX,
     XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX,
     XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX, XX,

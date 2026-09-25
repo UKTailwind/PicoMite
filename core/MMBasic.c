@@ -2273,7 +2273,11 @@ static int MIPS16 __not_in_flash_func(FindSubFunText)(unsigned char *p, int type
 #endif
 
 // A symbol remembers the SUB/FUNCTION of its name (see Symbols.h)
+#if defined(PICOMITEWEB) && !defined(rp2350)
+int FindSubFun(unsigned char *p, int type) // (RAM is too short on the RP2040 WebMite)
+#else
 int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
+#endif
 {
     int k;
     if (issymbol(*p) && (k = SymCanonAt(p)) >= 0)
