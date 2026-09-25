@@ -4326,6 +4326,9 @@ _Static_assert(sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) +
 void SaveContext(void)
 {
 	CloseAudio(1);
+	/* the symbol bindings live in the heap and belong to this program: keep
+	   them out of the snapshot (see the end of RestoreContext) */
+	SymBindFree();
 #if defined(rp2350)
 	/* free the stepper ISR's finished arc buffers before the heap is
 	   snapshotted, so the snapshot holds no pending links */
@@ -4420,6 +4423,7 @@ void SaveContext(void)
 #if defined(rp2350)
 	}
 #endif
+	SymBindInit(); // (the program carries on: SAVE CONTEXT)
 }
 void RestoreContext(bool keep)
 {
@@ -4514,6 +4518,12 @@ void RestoreContext(bool keep)
 #if defined(rp2350)
 	}
 #endif
+	/* The heap is the saved one now, so any bindings made since SaveContext
+	   (CHAIN prepared the new program in a fresh heap) point into memory that
+	   belongs to something else: drop them without freeing and start again
+	   in the restored heap, for whichever program is now current. */
+	SymBindForget();
+	SymBindInit();
 }
 extern void chdir(char *p);
 void MIPS16 do_chain(unsigned char *cmdline)
