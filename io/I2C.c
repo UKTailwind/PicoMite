@@ -429,7 +429,7 @@ void i2cSlave(unsigned char *p)
   I2C_Slave_Addr = addr;
   I2C_Slave_Send_IntLine = (char *)GetIntAddress(argv[2]);    // get the interrupt routine's location
   I2C_Slave_Receive_IntLine = (char *)GetIntAddress(argv[4]); // get the interrupt routine's location
-  InterruptUsed = true;
+  IntReady.poll = 1;
   i2c_set_slave_mode(i2c0, true, I2C_Slave_Addr);
   // Enable the I2C interrupts we want to process
   i2c0->hw->intr_mask = I2C_IC_INTR_STAT_R_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS;
@@ -456,7 +456,7 @@ void i2c2Slave(unsigned char *p)
   I2C2_Slave_Addr = addr;
   I2C2_Slave_Send_IntLine = (char *)GetIntAddress(argv[2]);    // get the interrupt routine's location
   I2C2_Slave_Receive_IntLine = (char *)GetIntAddress(argv[4]); // get the interrupt routine's location
-  InterruptUsed = true;
+  IntReady.poll = 1;
   i2c_set_slave_mode(i2c1, true, I2C2_Slave_Addr);
   // Enable the I2C interrupts we want to process
   i2c1->hw->intr_mask = I2C_IC_INTR_STAT_R_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS;
@@ -1933,7 +1933,7 @@ void MIPS16 cmd_Nunchuck(void)
     if (argc == 1)
     {
       nunInterruptc[5] = (char *)GetIntAddress(argv[0]); // get the interrupt location
-      InterruptUsed = true;
+      IntReady.poll = 1;
     }
     nunchuck1 = 1;
     while (nunchuck1 == 1)
@@ -2002,7 +2002,7 @@ void MIPS16 cmd_Classic(void)
     if (argc >= 1)
     {
       nunInterruptc[0] = (char *)GetIntAddress(argv[0]); // get the interrupt location
-      InterruptUsed = true;
+      IntReady.poll = 1;
       nunstruct[0].x1 = 0b111111111111111;
       if (argc == 3)
         nunstruct[0].x1 = getint(argv[2], 0, 0b111111111111111);

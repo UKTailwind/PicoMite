@@ -1027,7 +1027,7 @@ void cmd_gui(void)
                 GuiIntUpVector = (char *)GetIntAddress(argv[2]); // and for the up routine
             else
                 GuiIntUpVector = NULL;
-            InterruptUsed = true;
+            IntReady.poll = 1;
         }
         gui_int_down = gui_int_up = false;
         return;

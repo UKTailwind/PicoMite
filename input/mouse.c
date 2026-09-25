@@ -487,7 +487,7 @@ void cmd_mouse(void)
     ;
     n = getint(argv[0], 2, 2);
     nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
-    InterruptUsed = true;
+    IntReady.poll = 1;
     return;
   }
   else if ((tp = checkstring(cmdline, (unsigned char *)"SET")))

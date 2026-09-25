@@ -67,7 +67,25 @@ struct s_inttbl
  * ============================================================================ */
 extern struct s_inttbl inttbl[NBRINTERRUPTS];
 extern unsigned char *InterruptReturn;
-extern int InterruptUsed;
+
+/* What check_interrupt() must do after each statement. It tests .any with a
+   single load: zero means no interrupt can be due, so the scan is skipped.
+   .count  interrupts signalled by their source (IntSignal) and not yet
+           scanned for. Each scan consumes one, so interrupts that arrive
+           together are served by consecutive statements.
+   .poll   an armed source has no signal of its own, so scan every statement */
+typedef union
+{
+   uint32_t any;
+   struct
+   {
+      uint16_t count;
+      uint8_t poll;
+      uint8_t spare;
+   };
+} IntReady_t;
+extern volatile IntReady_t IntReady;
+void IntSignal(void);
 
 /* ============================================================================
  * External variables - Tick timer configuration

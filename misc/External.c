@@ -2060,7 +2060,7 @@ process:
             inttbl[i].lohi = T_BOTH;
             break;
         }
-        InterruptUsed = true;
+        IntReady.poll = 1;
     }
 }
 /*
@@ -2744,7 +2744,7 @@ void MIPS16 cmd_ir(void)
             StandardError(6);
         if (ir_vtype & T_NBR)
             IrVarType |= 0b10;
-        InterruptUsed = true;
+        IntReady.poll = 1;
         IrInterrupt = GetIntAddress(argv[4]); // get the interrupt location
         IrInit();
     }
@@ -3420,7 +3420,7 @@ void cmd_keypad(void)
                 keypad_pins[i + keypadrows] = j;
             }
             PadLookup = a1float;
-            InterruptUsed = true;
+            IntReady.poll = 1;
         }
         else
         {
@@ -3437,7 +3437,7 @@ void cmd_keypad(void)
                 StandardError(22);
             if (!(g_vartbl[g_VarIndex].type & T_NBR))
                 error("Floating point variable required");
-            InterruptUsed = true;
+            IntReady.poll = 1;
             KeypadInterrupt = GetIntAddress(argv[2]); // get the interrupt location
             for (i = 0; i < 8; i++)
             {
@@ -5430,7 +5430,7 @@ void MIPS16 cmd_adc(void)
 #endif
         if (argc == 5)
         {
-            InterruptUsed = true;
+            IntReady.poll = 1;
             ADCInterrupt = (char *)GetIntAddress(argv[4]); // get the interrupt location
         }
         else
@@ -5743,7 +5743,7 @@ void MIPS16 ClearExternalIO(void)
 #if !defined(PICOMITEVGA) || (defined(HDMI) && !defined(HDMICUTDOWN))
     cameraclose();
 #endif
-    InterruptUsed = false;
+    IntReady.any = 0;
     InterruptReturn = NULL;
     irq_set_enabled(DMA_IRQ_1, false);
 #ifdef rp2350

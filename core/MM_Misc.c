@@ -29,6 +29,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "WiFi.h" // setwifi() — defined in net/WiFi.c
 #endif
 #include "pico/stdlib.h"
+#include "hardware/sync.h" // save_and_disable_interrupts(): not pulled in by the headers above on every build
 #include "hardware/clocks.h"
 #include <time.h>
 // #include "upng.h"
@@ -1887,6 +1888,7 @@ void cmd_ireturn(void)
     checkend(cmdline);
     nextstmt = InterruptReturn;
     InterruptReturn = NULL;
+    IntSignal(); // scan once more: another interrupt may be due, or a level one (e.g. COM data left unread) may still be true
     if (g_LocalIndex)
         ClearVars(g_LocalIndex--, true); // delete any local variables
     g_TempMemoryIsChanged = true;        // signal that temporary memory should be checked
@@ -2640,8 +2642,7 @@ void cmd_settick(void)
     {
         TickPeriod[irq] = period;
         TickInt[irq] = GetIntAddress(argv[2]); // get a pointer to the interrupt routine
-        TickTimer[irq] = 0;                    // set the timer running
-        InterruptUsed = true;
+        TickTimer[irq] = 0;                    // set the timer running (the 1 ms timer signals when it is due)
         TickActive[irq] = 1;
     }
 }
@@ -9524,7 +9525,7 @@ void cmd_csubinterrupt(void)
         {
             CSubInterrupt = (char *)GetIntAddress(argv[0]);
             CSubComplete = 0;
-            InterruptUsed = true;
+            IntReady.poll = 1;
         }
     }
     else
@@ -10221,6 +10222,15 @@ Tick Interrupts (1 to 4 in that order)
 
 ************************************************************************************************/
 
+// clear an I2C slave-ready bit; the I2C interrupt sets bits in the same word,
+// so a plain &= could overwrite one it sets between the read and the write
+static void ClearI2CStatus(volatile unsigned int *status, unsigned int bit)
+{
+    uint32_t save = save_and_disable_interrupts();
+    *status &= ~bit;
+    restore_interrupts(save);
+}
+
 // check if an interrupt has occured and if so, set the next command to the interrupt routine
 // will return true if interrupt detected or false if not
 int checkdetailinterrupts(void)
@@ -10279,7 +10289,7 @@ int checkdetailinterrupts(void)
                 }
                 if (TXlevel && pioTXinterrupts[sm][pio])
                 {
-                    int full = (pioinuse->sm->shiftctrl & (1 << 30)) ? 8 : 4;
+                    int full = (pioinuse->sm[sm].shiftctrl & (1 << 30)) ? 8 : 4;
                     if (TXlevel != full && pioTXlast[sm][pio] == full)
                     { // was the buffer full last time and not now and is an interrupt set?
                         intaddr = pioTXinterrupts[sm][pio];
@@ -10424,25 +10434,25 @@ int checkdetailinterrupts(void)
 
     if ((I2C_Status & I2C_Status_Slave_Receive_Rdy))
     {
-        I2C_Status &= ~I2C_Status_Slave_Receive_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C_Status, I2C_Status_Slave_Receive_Rdy); // clear completed flag
         intaddr = I2C_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
     if ((I2C_Status & I2C_Status_Slave_Send_Rdy))
     {
-        I2C_Status &= ~I2C_Status_Slave_Send_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C_Status, I2C_Status_Slave_Send_Rdy); // clear completed flag
         intaddr = I2C_Slave_Send_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
     if ((I2C2_Status & I2C_Status_Slave_Receive_Rdy))
     {
-        I2C2_Status &= ~I2C_Status_Slave_Receive_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C2_Status, I2C_Status_Slave_Receive_Rdy); // clear completed flag
         intaddr = I2C2_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
     if ((I2C2_Status & I2C_Status_Slave_Send_Rdy))
     {
-        I2C2_Status &= ~I2C_Status_Slave_Send_Rdy; // clear completed flag
+        ClearI2CStatus(&I2C2_Status, I2C_Status_Slave_Send_Rdy); // clear completed flag
         intaddr = I2C2_Slave_Send_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
@@ -10595,11 +10605,27 @@ int __not_in_flash_func(check_interrupt)(void)
     /* Cursor refresh lives in routinechecks() — it fires from the
        prompt's getchar loop too, so the cursor tracks the mouse even
        when no program is running. */
-    if (!InterruptUsed)
-        return 0; // quick exit if there are no interrupts set
+    if (!IntReady.any)
+        return 0; // quick exit: nothing signalled and nothing to poll
     if (InterruptReturn != NULL || CurrentLinePtr == NULL)
         return 0; // skip if we are in an interrupt or in immediate mode
+    if (IntReady.count)
+    { // consume one signal; sources only ever add, so this cannot underflow
+        uint32_t save = save_and_disable_interrupts();
+        IntReady.count--;
+        restore_interrupts(save);
+    }
     return checkdetailinterrupts();
+}
+
+// called by an interrupt source (ISR, callback or command) when it has an
+// interrupt ready, so that check_interrupt() scans after the next statement
+void __not_in_flash_func(IntSignal)(void)
+{
+    uint32_t save = save_and_disable_interrupts();
+    if (IntReady.count != 0xFFFF)
+        IntReady.count++;
+    restore_interrupts(save);
 }
 
 // get the address for a MMBasic interrupt

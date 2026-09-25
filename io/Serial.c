@@ -546,7 +546,7 @@ void MIPS16 SerialOpen(unsigned char *spec)
 
 	if (argc >= 7)
 	{
-		InterruptUsed = true;
+		IntReady.poll = 1;
 		argv[6] = (unsigned char *)strupr((char *)argv[6]);
 		interrupt = (char *)GetIntAddress(argv[6]); // get the interrupt location
 	}
@@ -563,7 +563,7 @@ void MIPS16 SerialOpen(unsigned char *spec)
 		ilevel = 1;
 
 	/*	if(argc >= 11) {
-			InterruptUsed = true;
+			IntReady.poll = 1;
 			argv[6]=strupr(argv[10]);
 			TXinterrupt = GetIntAddress(argv[10]);							// get the interrupt location
 		} else

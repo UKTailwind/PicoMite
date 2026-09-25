@@ -114,7 +114,7 @@ void cmd_udp(unsigned char *p)
             SyntaxError();
         ;
         UDPinterrupt = (char *)GetIntAddress(argv[0]);
-        InterruptUsed = true;
+        IntReady.poll = 1;
         UDPreceive = 0;
         return;
     }

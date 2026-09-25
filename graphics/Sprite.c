@@ -1699,7 +1699,7 @@ void cmd_sprite(void)
     {
         getcsargs(&p, 1);
         STCollisionInterrupt = (char *)GetIntAddress(argv[0]); // get the interrupt location
-        InterruptUsed = true;
+        IntReady.poll = 1;
         return;
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"NOSTINTERRUPT")))
@@ -1711,7 +1711,7 @@ void cmd_sprite(void)
     {
         getcsargs(&p, 1);
         COLLISIONInterrupt = (char *)GetIntAddress(argv[0]); // get the interrupt location
-        InterruptUsed = true;
+        IntReady.poll = 1;
         return;
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"NOINTERRUPT")))

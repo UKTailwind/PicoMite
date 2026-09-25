@@ -282,7 +282,6 @@ extern const uint8_t PINMAP[30];
  * External variables - Interrupt handling
  * ============================================================================ */
 extern unsigned char *InterruptReturn;
-extern int InterruptUsed;
 extern volatile int CallBackEnabled;
 
 /* Interrupt timers and values */

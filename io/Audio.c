@@ -1691,7 +1691,7 @@ void MIPS16 cmd_play(void)
 					error("No program running");
 				WAVInterrupt = (char *)GetIntAddress(argv[6]); // get the interrupt location
 				WAVcomplete = false;
-				InterruptUsed = true;
+				IntReady.poll = 1;
 			}
 			if (duration == 0)
 				return;
@@ -1789,7 +1789,7 @@ void MIPS16 cmd_play(void)
 				error("No program running");
 			WAVInterrupt = (char *)GetIntAddress(argv[10]); // get the interrupt location
 			WAVcomplete = false;
-			InterruptUsed = true;
+			IntReady.poll = 1;
 		}
 		audiorepeat = 1;
 		float actualrate = freq;
@@ -1875,7 +1875,7 @@ void MIPS16 cmd_play(void)
 				error("No program running");
 			WAVInterrupt = (char *)GetIntAddress(argv[argc - 1]); // get the interrupt location
 			WAVcomplete = false;
-			InterruptUsed = true;
+			IntReady.poll = 1;
 		}
 		// Stop existing ISR before changing buffers/state (prevents glitch on restart)
 		if (CurrentlyPlaying == P_SAMPLE || CurrentlyPlaying == P_PAUSE_SAMPLE)
@@ -2364,7 +2364,7 @@ void MIPS16 cmd_play(void)
 			if (!CurrentLinePtr)
 				error("No program running");
 			WAVInterrupt = (char *)GetIntAddress(argv[2]); // get the interrupt location
-			InterruptUsed = true;
+			IntReady.poll = 1;
 		}
 		if (FatFSFileSystem)
 		{
@@ -2456,7 +2456,7 @@ void MIPS16 cmd_play(void)
 			if (!CurrentLinePtr)
 				error("No program running");
 			WAVInterrupt = (char *)GetIntAddress(argv[2]); // get the interrupt location
-			InterruptUsed = true;
+			IntReady.poll = 1;
 		}
 		if (FatFSFileSystem)
 		{
@@ -2688,7 +2688,7 @@ void MIPS16 cmd_play(void)
 			if (!CurrentLinePtr)
 				error("No program running");
 			WAVInterrupt = (char *)GetIntAddress(argv[2]); // get the interrupt location
-			InterruptUsed = true;
+			IntReady.poll = 1;
 		}
 		if (FatFSFileSystem)
 		{
@@ -2851,7 +2851,7 @@ void MIPS16 cmd_play(void)
 			if (!CurrentLinePtr)
 				error("No program running");
 			WAVInterrupt = (char *)GetIntAddress(argv[2]); // get the interrupt location
-			InterruptUsed = true;
+			IntReady.poll = 1;
 		}
 		if (FatFSFileSystem)
 		{
@@ -2963,7 +2963,7 @@ void MIPS16 cmd_play(void)
 			if (!CurrentLinePtr)
 				error("No program running");
 			WAVInterrupt = (char *)GetIntAddress(argv[2]); // get the interrupt location
-			InterruptUsed = true;
+			IntReady.poll = 1;
 			noloop = 1;
 		}
 		else

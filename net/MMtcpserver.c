@@ -795,7 +795,7 @@ int cmd_tcpserver(void)
                         SyntaxError();
                 ;
                 TCPreceiveInterrupt = (char *)GetIntAddress(argv[0]);
-                InterruptUsed = true;
+                IntReady.poll = 1;
                 TCPreceived = 0;
                 return 1;
         }

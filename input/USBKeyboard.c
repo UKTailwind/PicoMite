@@ -3042,7 +3042,7 @@ void cmd_gamepad(void)
 		;
 		n = getint(argv[0], 1, 4);
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
-		InterruptUsed = true;
+		IntReady.poll = 1;
 		nunstruct[n].x1 = 0b1111111111111111;
 		if (argc == 5)
 			nunstruct[n].x1 = getint(argv[4], 0, 0b1111111111111111);
@@ -3146,7 +3146,7 @@ void cmd_mouse(void)
 		;
 		n = getint(argv[0], 1, 4);
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
-		InterruptUsed = true;
+		IntReady.poll = 1;
 		return;
 	}
 	else if ((tp = checkstring(cmdline, (unsigned char *)"SET")))

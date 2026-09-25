@@ -2537,7 +2537,7 @@ void cmd_math(void)
 					error("Channel not initialised");
 				PIDchannels[channel].timenext = time_us_64() + (PIDchannels[channel].PIDparams->T * 1000000);
 				PIDchannels[channel].active = true;
-				InterruptUsed = true;
+				IntReady.poll = 1;
 			}
 			else if ((pi = checkstring(tp, (unsigned char *)"STOP")))
 			{

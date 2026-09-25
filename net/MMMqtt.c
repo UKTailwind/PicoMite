@@ -289,7 +289,7 @@ int cmd_mqtt(void)
     if (argc == 9)
     {
       MQTTInterrupt = (char *)GetIntAddress(argv[8]);
-      InterruptUsed = true;
+      IntReady.poll = 1;
     }
     else
       MQTTInterrupt = NULL;

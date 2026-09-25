@@ -345,7 +345,7 @@ uint8_t PSRAMpin;
     const uint8_t *flash_progmemory = (const uint8_t *)(XIP_BASE + PROGSTART);
     const uint8_t *flash_libmemory = (const uint8_t *)(XIP_BASE + PROGSTART - MAX_PROG_SIZE);
     int ticks_per_second;
-    int InterruptUsed;
+    volatile IntReady_t IntReady;
     int calibrate = 0;
     char id_out[12];
     MMFLOAT VCC = 3.3;
@@ -2406,13 +2406,12 @@ int __not_in_flash_func(MMInkey)(void)
             CallCFuncmSec();
 
         // === Interrupt tick timers ===
-        if (InterruptUsed)
+        // the scan fires a tick once TickTimer > TickPeriod, so signal on the
+        // millisecond it first gets there; the scan then winds it back
+        for (int i = 0; i < NBRSETTICKS; i++)
         {
-            for (int i = 0; i < NBRSETTICKS; i++)
-            {
-                if (TickActive[i])
-                    TickTimer[i]++;
-            }
+            if (TickActive[i] && TickTimer[i]++ == TickPeriod[i])
+                IntSignal();
         }
 
         // === Watchdog timer ===
