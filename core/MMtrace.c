@@ -3556,6 +3556,8 @@ int TraceCacheCompileDoFast(unsigned char *condptr,
         if (!is_stmt_end(*pp))
             return 0;
 
+        if (vtype == T_INT && ctype == T_NBR)
+            return 0; /* integer against a fractional number: the evaluator compares in float */
         dofast_fill(scope, vtype, vidx, ctype, limi, limf, op_code,
                     upname, uplen, out_var, out_varindex,
                     out_is_local, out_frame_gen, out_type, out_op,
@@ -3603,6 +3605,8 @@ int TraceCacheCompileDoFast(unsigned char *condptr,
             scope == SCOPE_GLOBAL_ARR || scope == SCOPE_LOCAL_ARR)
             return 0;
 
+        if (vtype == T_INT && ctype == T_NBR)
+            return 0; /* integer against a fractional number: the evaluator compares in float */
         dofast_fill(scope, vtype, vidx, ctype, limi, limf, op_code,
                     upname, uplen, out_var, out_varindex,
                     out_is_local, out_frame_gen, out_type, out_op,
