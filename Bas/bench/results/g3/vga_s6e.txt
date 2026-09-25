@@ -1,0 +1,8 @@
+RUN
+G3START PicoMiteVGA  6.040051  315 MHz chip C60
+G3 K1_intloop interp_ms 863.64 vm_ms 45.00 native_ms 5.10 interp/vm 19.19 vm/native 8.82 stmts  60002 vmstatus  0 check  1 (210000 210000 210000)
+G3 K2_insertsort interp_ms 1345.03 vm_ms 82.53 native_ms 2.06 interp/vm 16.30 vm/native 39.96 stmts  120022 vmstatus  0 check  1 (89 99192)
+G3 K3_julia interp_ms 1471.79 vm_ms 167.58 native_ms 93.28 interp/vm 8.78 vm/native 1.80 stmts  100375 vmstatus  0 check  1 (13122 13122 13122)
+G3 K4_findleap interp_ms 2192.34 vm_ms 99.43 native_ms 24.95 interp/vm 22.05 vm/native 3.98 stmts  79105 vmstatus  0 check  1 (60027 60027)
+G3END
+> 

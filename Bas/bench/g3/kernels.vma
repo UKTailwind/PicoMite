@@ -1,0 +1,354 @@
+; G3 prototype wordcode: the four kernels, compiled by hand one statement
+; at a time exactly as the BASIC in g3.bas reads them.  STMT n marks each
+; statement boundary (n = the kernel's statement number).
+;
+; Frames: CALL nargs, target, nlocals moves the arguments into locals
+; 0..nargs-1.  A BYREF argument is an address (LAD), read with LDP/STP.
+; Globals are slots%() (addresses); arrays are descriptors in arrd%():
+; 0 = the sort array, 1 = jdleap(), 2 = leapsec().
+; Float constants fk(): 0 = 0.0, 1 = 1.0, 2 = 2.0, 3 = 4.0
+
+main1:                  ; k1 N%, R%
+    LDG 0
+    LAD 0
+    CALL 2, k1, 4
+    LDL 0
+    STG 1
+    END
+main2:                  ; k2 b%(), N%
+    LDG 0
+    CALL 1, k2, 5
+    END
+main3:                  ; k3 w, h, xd, yd, rOfs, iOfs, cRe, cIm, mit, ck
+    LDG 2
+    LDG 3
+    LDG 4
+    LDG 5
+    LDG 6
+    LDG 7
+    LDG 8
+    LDG 9
+    LDG 10
+    LAD 0
+    CALL 10, k3, 21
+    LDL 0
+    STG 11
+    END
+main4:                  ; k4 N%, tot
+    LDG 0
+    LAD 0
+    CALL 2, k4, 6
+    LDL 0
+    STG 12
+    END
+
+; Sub k1(n%, s%)  locals: 0 n, 1 s (byref), 2 i%, 3 limit
+k1:
+    STMT 1              ; s% = 0
+    LCI 0
+    STP 1
+    STMT 2              ; For i% = 1 To n%
+    LCI 1
+    STL 2
+    LDL 0
+    STL 3
+    LDL 2
+    LDL 3
+    GTI
+    JNZ k1_end
+k1_body:
+    STMT 3              ; s% = s% + (i% And 7) * 3
+    LDP 1
+    LDL 2
+    LCI 7
+    ANDI
+    LCI 3
+    MULI
+    ADDI
+    STP 1
+    STMT 4              ; If s% > 1000000 Then s% = s% - 1000000
+    LDP 1
+    LCW 1000000
+    GTI
+    JZ k1_skip
+    LDP 1
+    LCW 1000000
+    SUBI
+    STP 1
+k1_skip:
+    STMT 5              ; Next i%
+    FNXI 2, 3, k1_body
+k1_end:
+    RET
+
+; Sub k2(a%(), n%)  locals: 0 n, 1 i%, 2 j%, 3 v%, 4 limit
+k2:
+    STMT 1              ; For i% = 1 To n% - 1
+    LCI 1
+    STL 1
+    LDL 0
+    LCI 1
+    SUBI
+    STL 4
+    LDL 1
+    LDL 4
+    GTI
+    JNZ k2_end
+k2_body:
+    STMT 2              ; v% = a%(i%)
+    LDL 1
+    ALD 0
+    STL 3
+    STMT 3              ; j% = i% - 1
+    LDL 1
+    LCI 1
+    SUBI
+    STL 2
+k2_do:
+    STMT 4              ; Do While j% >= 0
+    LDL 2
+    LCI 0
+    GEI
+    JZ k2_loopend
+    STMT 5              ; If a%(j%) <= v% Then Exit Do
+    LDL 2
+    ALD 0
+    LDL 3
+    LEI
+    JNZ k2_loopend
+    STMT 6              ; a%(j% + 1) = a%(j%)
+    LDL 2
+    LCI 1
+    ADDI
+    LDL 2
+    ALD 0
+    AST 0
+    STMT 7              ; j% = j% - 1
+    LDL 2
+    LCI 1
+    SUBI
+    STL 2
+    STMT 8              ; Loop
+    JMP k2_do
+k2_loopend:
+    STMT 9              ; a%(j% + 1) = v%
+    LDL 2
+    LCI 1
+    ADDI
+    LDL 3
+    AST 0
+    STMT 10             ; Next i%
+    FNXI 1, 4, k2_body
+k2_end:
+    RET
+
+; Sub k3(w, h, xd, yd, rOfs, iOfs, cRe, cIm, mit, ck)
+; locals: 0 w, 1 h, 2 xd, 3 yd, 4 rOfs, 5 iOfs, 6 cRe, 7 cIm, 8 mit, 9 ck (byref),
+;         10 X, 11 Y, 12 CX, 13 CY, 14 Zr, 15 Zi, 16 COUNT, 17 new_Zr, 18 new_Zi,
+;         19 X limit, 20 Y limit
+k3:
+    STMT 1              ; For X = 0 To (w - 1)
+    LCF 0
+    STL 10
+    LDL 0
+    LCF 1
+    SUBF
+    STL 19
+    LDL 10
+    LDL 19
+    GTF
+    JNZ k3_end
+k3_xbody:
+    STMT 2              ; CX = X * xd + rOfs
+    LDL 10
+    LDL 2
+    MULF
+    LDL 4
+    ADDF
+    STL 12
+    STMT 3              ; For Y = 0 To (h - 1)
+    LCF 0
+    STL 11
+    LDL 1
+    LCF 1
+    SUBF
+    STL 20
+    LDL 11
+    LDL 20
+    GTF
+    JNZ k3_ydone
+k3_ybody:
+    STMT 4              ; CY = Y * yd + iOfs
+    LDL 11
+    LDL 3
+    MULF
+    LDL 5
+    ADDF
+    STL 13
+    STMT 5              ; Zr = CX
+    LDL 12
+    STL 14
+    STMT 6              ; Zi = CY
+    LDL 13
+    STL 15
+    STMT 7              ; COUNT = 0
+    LCF 0
+    STL 16
+k3_do:
+    STMT 8              ; Do While ((COUNT <= mit) And ((Zr * Zr + Zi * Zi) < 4))
+    LDL 16
+    LDL 8
+    LEF
+    LDL 14
+    LDL 14
+    MULF
+    LDL 15
+    LDL 15
+    MULF
+    ADDF
+    LCF 3
+    LTF
+    ANDI
+    JZ k3_doend
+    STMT 9              ; new_Zr = Zr * Zr - Zi * Zi + cRe
+    LDL 14
+    LDL 14
+    MULF
+    LDL 15
+    LDL 15
+    MULF
+    SUBF
+    LDL 6
+    ADDF
+    STL 17
+    STMT 10             ; new_Zi = 2 * Zr * Zi + cIm
+    LCF 2
+    LDL 14
+    MULF
+    LDL 15
+    MULF
+    LDL 7
+    ADDF
+    STL 18
+    STMT 11             ; Zr = new_Zr
+    LDL 17
+    STL 14
+    STMT 12             ; Zi = new_Zi
+    LDL 18
+    STL 15
+    STMT 13             ; COUNT = COUNT + 1
+    LDL 16
+    LCF 1
+    ADDF
+    STL 16
+    STMT 14             ; Loop
+    JMP k3_do
+k3_doend:
+    STMT 15             ; ck = ck + COUNT
+    LDP 9
+    LDL 16
+    ADDF
+    STP 9
+    STMT 16             ; Next Y
+    FNXF 11, 20, k3_ybody
+k3_ydone:
+    STMT 17             ; Next X
+    FNXF 10, 19, k3_xbody
+k3_end:
+    RET
+
+; Sub findleap(jday, leapsecond)  locals: 0 jday (byref), 1 leapsecond (byref), 2 i, 3 limit
+findleap:
+    STMT 1              ; If (jday <= jdleap(1)) Then
+    LDP 0
+    LCI 1
+    ALD 1
+    LEF
+    JZ fl_a
+    STMT 2              ; leapsecond = leapsec(1)
+    LCI 1
+    ALD 2
+    STP 1
+    STMT 3              ; Exit Sub
+    RET
+fl_a:
+    STMT 5              ; If (jday >= jdleap(28)) Then
+    LDP 0
+    LCI 28
+    ALD 1
+    GEF
+    JZ fl_b
+    STMT 6              ; leapsecond = leapsec(28)
+    LCI 28
+    ALD 2
+    STP 1
+    STMT 7              ; Exit Sub
+    RET
+fl_b:
+    STMT 9              ; For i = 1 To 27
+    LCI 1
+    STL 2
+    LCI 27
+    STL 3
+fl_body:
+    STMT 10             ; If (jday >= jdleap(i) And jday < jdleap(i + 1)) Then
+    LDP 0
+    LDL 2
+    ALD 1
+    GEF
+    LDP 0
+    LDL 2
+    LCI 1
+    ADDI
+    ALD 1
+    LTF
+    ANDI
+    JZ fl_next
+    STMT 11             ; leapsecond = leapsec(i)
+    LDL 2
+    ALD 2
+    STP 1
+    STMT 12             ; Exit Sub
+    RET
+fl_next:
+    STMT 14             ; Next i
+    FNXI 2, 3, fl_body
+    STMT 15             ; End Sub
+    RET
+
+; Sub k4(n%, tot)  locals: 0 n, 1 tot (byref), 2 k%, 3 limit, 4 jd, 5 ls
+k4:
+    STMT 1              ; tot = 0
+    LCF 0
+    STP 1
+    STMT 2              ; For k% = 1 To n%
+    LCI 1
+    STL 2
+    LDL 0
+    STL 3
+    LDL 2
+    LDL 3
+    GTI
+    JNZ k4_end
+k4_body:
+    STMT 3              ; jd = 2441000 + (k% Mod 17000)
+    LCW 2441000
+    LDL 2
+    LCW 17000
+    MODI
+    ADDI
+    CVIF
+    STL 4
+    STMT 4              ; findleap jd, ls
+    LAD 4
+    LAD 5
+    CALL 2, findleap, 4
+    STMT 5              ; tot = tot + ls
+    LDP 1
+    LDL 5
+    ADDF
+    STP 1
+    STMT 6              ; Next k%
+    FNXI 2, 3, k4_body
+k4_end:
+    RET

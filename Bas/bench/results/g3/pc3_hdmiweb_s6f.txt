@@ -1,0 +1,8 @@
+RUN
+G3START PicoMiteHDMIWEB RP2350B  6.040051  378 MHz chip D21
+G3 K1_intloop interp_ms 468.25 vm_ms 23.63 native_ms 1.07 interp/vm 19.82 vm/native 22.00 stmts  60002 vmstatus  0 check  1 (210000 210000 210000)
+G3 K2_insertsort interp_ms 759.44 vm_ms 45.67 native_ms 0.91 interp/vm 16.63 vm/native 50.13 stmts  120022 vmstatus  0 check  1 (89 99192)
+G3 K3_julia interp_ms 729.64 vm_ms 62.27 native_ms 19.78 interp/vm 11.72 vm/native 3.15 stmts  100375 vmstatus  0 check  1 (13122 13122 13122)
+G3 K4_findleap interp_ms 829.95 vm_ms 49.19 native_ms 9.32 interp/vm 16.87 vm/native 5.28 stmts  79105 vmstatus  0 check  1 (60027 60027)
+G3END
+> 

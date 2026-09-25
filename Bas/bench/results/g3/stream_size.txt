@@ -1,0 +1,7 @@
+program              image   symbols    stream   s/img   s/sym   statements: code / splice / fallback
+anchor               71047     72499     32768   0.46x   0.45x   1150 / 3 / 95  (647 float constants)
+Exile                33058     34611      7760   0.23x   0.22x   425 / 35 / 92  (1 float constants)
+Elite program       113048    108032     70408   0.62x   0.65x   4529 / 250 / 536  (18 float constants)
+Elite library        32211     31846      1139   0.04x   0.04x   38 / 0 / 18  (0 float constants)
+Prince of Pico      141804    128204     67933   0.48x   0.53x   4864 / 39 / 667  (0 float constants)
+G3 kernels            1430      1843       824   0.58x   0.45x   61 / 0 / 0  (0 float constants)
