@@ -4859,7 +4859,7 @@ void cmd_map(void)
         for (int i = 0; i < 16; i++)
         {
             map16quads[i] = remap332[i] = RGB332(CMM1map[i]) | (RGB332(CMM1map[i]) << 8) | (RGB332(CMM1map[i]) << 16) | (RGB332(CMM1map[i]) << 24);
-            map16pairs[i] = remap555[i] = RGB555(CMM1map[i]) | (RGB555(CMM1map[i]) << 8);
+            map16pairs[i] = remap555[i] = RGB555(CMM1map[i]) | (RGB555(CMM1map[i]) << 16);
         }
         ResetMapRGB((const uint32_t *)CMM1map);
     }
