@@ -370,7 +370,14 @@ extern "C"
 #define MagicKey 0x40287BEA
 #define HEAP_MEMORY_SIZE (128 * 1024)
 #else
-#define HEAP_MEMORY_SIZE (120 * 1024)
+   /* +8 KB (2026-09-26): removing the trace cache left 13 KB of RAM spare.
+      The program area here is a fixed 120 KB (MAX_PROG_SIZE below), so the
+      heap grows without moving anything in flash; about 5 KB stays spare. */
+#define HEAP_MEMORY_SIZE (128 * 1024)
+   /* -16 KB (2026-09-26): back to 912 KB.  Removing the trace cache left 34 KB
+      of flash spare, so the step taken on 2026-09-22 (below) returns to the
+      A: drive with about 18 KB still spare.  Moving the offset again means
+      the first boot after the upgrade does a full clean. */
    /* +16 KB (2026-09-22): this variant was down to 28 bytes, so anything
       at all broke it - the littlefs bound checks and the cold-start settle
       wait together needed 56.  Living on tens of bytes means every change
@@ -380,7 +387,7 @@ extern "C"
       the magic key check fails on the first boot after the upgrade and the
       board does a full clean - existing A: drives and options do not
       survive.  See [[project_flash_target_offset_alignment]]. */
-#define FLASH_TARGET_OFFSET (928 * 1024)
+#define FLASH_TARGET_OFFSET (912 * 1024)
 #define MagicKey 0xA17DE2A2
 #endif
 #endif
