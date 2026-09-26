@@ -10216,7 +10216,7 @@ int checkdetailinterrupts(void)
 {
     int i, v;
     char *intaddr;
-    static char rti[2];
+    static char rti[4]; // the IRETURN token, then zeros: the statement has to end in this array
     for (int i = 1; i <= MAXPID; i++)
     {
         if (PIDchannels[i].interrupt != NULL && time_us_64() > PIDchannels[i].timenext && PIDchannels[i].active)
