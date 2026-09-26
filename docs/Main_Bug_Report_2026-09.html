@@ -141,7 +141,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>confirmed, both boards</td><td><span class="pill ok">low</span></td><td>heap leak fixed on main 52078f6; nested case left</td></tr>
 <tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>gone: trace cache removed on main c50b6bc</td></tr>
 <tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main db99419</td></tr>
-<tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 2794fe3</td></tr>
 <tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 <tr class="rec"><td>21</td><td>Program flow</td><td>a FOR, DO or GOSUB line ending in <code>: ' comment</code> leaves the loop, or returns past the next line</td><td>confirmed, both boards</td><td><span class="pill bad">high</span></td><td>fixed on development 8740953; open on main</td></tr>
 <tr><td>22</td><td>MAX, MIN</td><td>results clamp at the single-precision limit, &plusmn;3.4e38</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
@@ -293,7 +293,8 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <li><b>Noted, not changed:</b> CTRL-C does not stop motion; <code>do_end</code> aborts the stepper only after an error, so a queued job carries on after CTRL-C.</li>
 </ul></div>
 <div class="card"><h3>19 · STEPPER ESTOP leaks the executing arc's buffer</h3>
-<ul><li><b>What goes wrong:</b> ESTOP drops the queue, but the buffer of the arc being executed is not handed to the retired list. <b>Fix:</b> one line: retire the current block's payload in the ESTOP path.</li></ul></div>
+<ul><li><b>What goes wrong:</b> ESTOP drops the queue, but the buffer of the arc being executed is not handed to the retired list; the next block the ISR loads overwrites the pointer. Only the STEPPER ESTOP command path missed it: the hardware E-STOP and limit trips, the error abort and STEPPER CLOSE release it.</li>
+<li><b>Confirmed and fixed (2794fe3):</b> the ESTOP path calls <code>stepper_release_current_arc()</code>. A 157&nbsp;mm arc stopped after 1&nbsp;s lost 3,584 bytes until the next RUN; now 0. Test: <code>Bas/bench/estoparc19.py</code> (PC3 with audio disabled, X on GP2/GP3, Y on GP4/GP5).</li></ul></div>
 <div class="card"><h3>20 · Arcs slower than the requested feed rate</h3>
 <ul><li><b>What goes wrong:</b> on the PC3 test rig, arcs ran at about 2.4 mm/s with F6000 requested; straight moves were not affected. <b>Next step:</b> check the arc segment feed-rate clamp and the per-segment junction speed against the planner.</li></ul></div>
 </section>
