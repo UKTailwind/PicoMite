@@ -1861,11 +1861,10 @@ void fun_max_min(void)
 		SyntaxError();
 	;
 	bool cmp = (*argv[0] == 'A'); // true for max, false for min
-	if (cmp)
-		nbr = -FLT_MAX;
-	else
-		nbr = FLT_MAX;
-	for (i = 2; i < argc; i += 2)
+	if (argc < 3)
+		SyntaxError();
+	nbr = getnumber(argv[2]); // start from the first value: a starting bound would clamp the result
+	for (i = 4; i < argc; i += 2)
 	{
 		f = getnumber(argv[i]);
 		if (cmp && f > nbr)
