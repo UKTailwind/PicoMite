@@ -9281,7 +9281,7 @@ void MIPS16 fun_info(void)
     {
         if (checkstring(ep, (unsigned char *)"VARCNT"))
         {
-            iret = (int64_t)((uint32_t)g_varcnt);
+            iret = (int64_t)(g_Globalvarcnt + g_Localvarcnt); // live counts: ERASE and a SUB's return lower them
             targ = T_INT;
             return;
         }
