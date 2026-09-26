@@ -2011,9 +2011,12 @@ int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
             }
             if (j == 0 && (*(char *)tp == 0 || namelen == MAXVARLEN) && funtbl[hash].index < MAXSUBFUN)
             { // found a matching name
-                //				MMPrintString("Found : ");MMPrintString((char *)name);MMPrintString(", hash key : ");PInt(hash);PRet();
-                return funtbl[hash].index;
-                break;
+                // it must also be the kind asked for, as on the RP2040: a SUB or CSUB for
+                // a statement (type 0), a FUNCTION for an expression (type 1)
+                CommandToken tkn = commandtbl_decode(subfun[funtbl[hash].index]);
+                if (type ? tkn == cmdFUN : (tkn == cmdSUB || tkn == cmdCSUB))
+                    return funtbl[hash].index;
+                return -1;
             }
         }
         hash++;
