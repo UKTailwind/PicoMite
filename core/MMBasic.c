@@ -3792,7 +3792,9 @@ unsigned char *findlabel(unsigned char *labelptr)
                 ip++;
                 tp++;
             }
-            if (i == 0 && (*(char *)tp == 0))
+            // a label's entry holds its line's address; a SUB/FUNCTION of the same
+            // name shares the table with an index below MAXSUBFUN: skip it
+            if (i == 0 && (*(char *)tp == 0) && funtbl[hash].index >= MAXSUBFUN)
             { // found a matching name
                 return (unsigned char *)funtbl[hash].index;
             }
