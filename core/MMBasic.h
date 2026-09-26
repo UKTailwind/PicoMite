@@ -802,6 +802,7 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
 #endif
 
 #include "Symbols.h" // names stored as symbols in a saved program
+#include "Stream.h"  // the compiled statement stream (Route B)
 
 #endif /* __MMBASIC_H */
        /*  @endcond */

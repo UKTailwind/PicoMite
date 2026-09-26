@@ -847,6 +847,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
     unsigned char *p1, *p2;
 #endif
 
+    RBLive = 0; // a compiled stream is trusted only after RUN checks its stamp (see Stream.h)
     // Clear any previous error state
     PreprogramErrMsg[0] = 0;
     PreprogramErrLine = NULL;
@@ -1068,6 +1069,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
     //    		MMPrintString(funtbl[i].name);PIntHC(funtbl[i].index);PIntComma(i);PRet();
     //    	}
     //    }
+    RBPrepare(); // OPTION COMPILE: check the stream's stamp, and compile if the program changed
     return 0;
 }
 

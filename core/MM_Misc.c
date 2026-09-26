@@ -5259,6 +5259,20 @@ void MIPS16 cmd_option(void)
         return;
     }
 
+    tp = checkstring(cmdline, (unsigned char *)"COMPILE");
+    if (tp)
+    { // development switch, not saved: run programs from a compiled statement stream (see Stream.h)
+        if (checkstring(tp, (unsigned char *)"ON"))
+            RBMode = RB_ON;
+        else if (checkstring(tp, (unsigned char *)"OFF"))
+            RBMode = RB_OFF;
+        else if (checkstring(tp, (unsigned char *)"SHADOW"))
+            RBMode = RB_SHADOW;
+        else
+            SyntaxError();
+        return;
+    }
+
     tp = checkstring(cmdline, (unsigned char *)"BASE");
     if (tp)
     {
@@ -8206,6 +8220,13 @@ void MIPS16 fun_info(void)
         {
             iret = (int64_t)(uint32_t)CallTable;
             targ = T_INT;
+            return;
+        }
+        else if (checkstring(ep, (unsigned char *)"COMPILE"))
+        { // what OPTION COMPILE did at the last RUN (see Stream.h)
+            RBStatus((char *)sret);
+            CtoM(sret);
+            targ = T_STR;
             return;
         }
         else if (checkstring(ep, (unsigned char *)"CPUSPEED"))

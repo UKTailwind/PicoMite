@@ -50,6 +50,7 @@ set(COMMON_SOURCES
 	PicoMite.c
 	core/MMBasic.c
 	core/Symbols.c
+	core/Stream.c
 	core/Operators.c
 	misc/Custom.c
 	core/Functions.c
