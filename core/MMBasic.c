@@ -2152,6 +2152,9 @@ static unsigned char *s_argv2[MAX_ARG_COUNT];
 static unsigned char s_argbyref[MAX_ARG_COUNT];
 static bool defsubfun_static_in_use = false;
 #endif
+// The argument block of the call whose arguments are being processed (while
+// DefinedSubFunMem is set).  An error there frees it and its string copies.
+static union u_argval *DefinedSubFunArgval;
 // This function is responsible for executing a defined subroutine or function.
 // As these two are similar they are processed in the one lump of code.
 //
@@ -2417,6 +2420,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         argbyref = (void *)argv2 + MAX_ARG_COUNT * sizeof(unsigned char *);
     }
     DefinedSubFunMem = 1; // sentinel: arg processing in progress (cleared on success, checked by error handler for local-state recovery)
+    DefinedSubFunArgval = argval;
     // now split up the arguments in the caller
     CurrentLinePtr = CallersLinePtr; // report errors at the caller
     argc1 = 0;
@@ -5853,6 +5857,26 @@ void MIPS16 error(char *msg, ...)
 #endif
         }
         gosubindex--;
+        // free the string arguments copied so far and the argument block itself,
+        // or each skipped error leaks them (about 2.8 KB on the RP2040).  The
+        // RP2350's static block is released below.  A nested call in the argument
+        // list clears the sentinel, so an error after it still leaks the outer
+        // call's frame and block - bug report item 16, left as an edge case.
+        {
+            union u_argval *av = DefinedSubFunArgval;
+            int *at = (int *)((char *)av + MAX_ARG_COUNT * sizeof(union u_argval));
+#ifdef rp2350
+            if (av == s_argval)
+                at = s_argtype;
+#endif
+            for (int i = 0; i < MAX_ARG_COUNT; i++)
+                if ((at[i] & T_STR) && !(at[i] & T_PTR) && av[i].s != NULL)
+                    FreeMemorySafe((void **)&av[i].s);
+#ifdef rp2350
+            if (av != s_argval)
+#endif
+                FreeMemory((void *)av);
+        }
         DefinedSubFunMem = 0;
     }
 #ifdef rp2350

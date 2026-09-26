@@ -4331,6 +4331,12 @@ uint32_t testPSRAM(void)
             ProgMemory = (uint8_t *)flash_progmemory;
             ContinuePoint = nextstmt; // in case the user wants to use the continue command
             *tknbuf = 0;              // we do not want to run whatever is in the token buffer
+            {
+                /* a call whose arguments were being processed (a CTRL-C in them) is gone:
+                   a later error must not free its argument block */
+                extern uint32_t DefinedSubFunMem;
+                DefinedSubFunMem = 0;
+            }
             // Do NOT reset optionangle/useoptionangle here - this landing pad fires
             // after every prompt command, so resetting would cancel an OPTION ANGLE
             // DEGREES set at the prompt. ClearRuntime() resets it at program start
