@@ -137,7 +137,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading; no visible effect</td><td><span class="pill ok">low</span></td><td>fixed on main 1a999a3</td></tr>
 <tr><td>13</td><td>OPTION PROFILING</td><td>interrupt SUBs and ON…GOSUB unbalance the per-SUB frames</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 7238252</td></tr>
 <tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main aa98747</td></tr>
-<tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>to check</td></tr>
+<tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>not a firmware bug; header comment corrected on main 63dea76</td></tr>
 <tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>gone: trace cache removed on main c50b6bc</td></tr>
 <tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
@@ -267,7 +267,9 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 
 <div class="card"><h3>15 · CSUB header: <code>int dims[]</code> only for PICORP2350 (to verify)</h3>
 <p><b>Where:</b> <code>PicoCFunctions.h:400</code> selects <code>int dims[MAXDIM]</code> only <code>#ifdef PICORP2350</code>, else <code>short</code>. Every RP2350 firmware build uses <code>int dimtbl[5]</code>, and the variable-table layout is part of the CSUB ABI (CallTable 0x60).</p>
-<ul><li><b>Check:</b> how CSUBs are compiled for the other RP2350 targets (HDMI, HDMIUSB, VGARP2350 …). If <code>PICORP2350</code> is not defined for them, a CSUB that walks <code>g_vartbl</code> reads the wrong offsets.</li></ul></div>
+<ul><li><b>Check:</b> how CSUBs are compiled for the other RP2350 targets (HDMI, HDMIUSB, VGARP2350 …). If <code>PICORP2350</code> is not defined for them, a CSUB that walks <code>g_vartbl</code> reads the wrong offsets.</li></ul>
+<ul><li><b>Checked:</b> not a firmware bug. In the header <code>PICORP2350</code> is the CSUB author's chip select, not the firmware variant: with it defined the header gives MAXDIM 5 and <code>int dims[]</code>, as every RP2350 build has (<code>rp2350</code> comes from <code>IS_RP2350</code>), and without it 6 and <code>short</code>, as every RP2040 build has. The other fields line up byte for byte.</li>
+<li><b>Corrected (63dea76):</b> the switch's comment said it was "kept only for any chip-specific user code", which invites leaving it defined for an RP2040. It now says that it sets the variable-table layout and must match the chip.</li></ul></div>
 
 <div class="card"><h3>16 · Leak when a nested call's argument errors under ON ERROR SKIP</h3>
 <p><b>Where:</b> <code>DefinedSubFunMem</code> (<code>core/MMBasic.c:536</code>) is one global sentinel. It is set during argument processing (<code>:2387</code>) and cleared on success (<code>:2628</code>). In <code>Foo(Bar(x), bad)</code> the inner call clears it. If the outer call's later argument then errors under OPTION ERROR SKIP, the error handler does not unwind the outer frame.</p>
