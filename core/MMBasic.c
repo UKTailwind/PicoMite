@@ -1893,7 +1893,12 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
                 // T_NEWLINE check guards the LAST line of a program, where
                 // skip points just past the line terminator into the
                 // program-end 0,0 terminator (not a real T_NEWLINE).
-                if (line_start != NULL && line_skip >= 3 && line_skip != T_NEWLINE_SKIP_NONE && line_skip != 0xFF && line_start[line_skip] == T_NEWLINE)
+                // The comment must also lie in the line line_start describes:
+                // NEXT, LOOP, RETURN and IRETURN jump into the middle of a
+                // line without crossing its T_NEWLINE, and a comment reached
+                // that way (FOR i = 1 TO 3 : ' c) would otherwise skip to the
+                // line after the one last crossed - out of the loop.
+                if (line_start != NULL && line_skip >= 3 && line_skip != T_NEWLINE_SKIP_NONE && line_skip != 0xFF && p > line_start && p < line_start + line_skip && line_start[line_skip] == T_NEWLINE)
                 {
                     p = line_start + line_skip;
                     continue;
