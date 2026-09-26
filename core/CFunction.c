@@ -201,13 +201,13 @@ void CallExecuteProgram(char *p)
 {
     unsigned char *nextstmtSaved = nextstmt;
     g_LocalIndex++;
-#ifdef CACHE
+#ifdef SUBPROFILE
     EnterLocalFrame();
 #endif
     ExecuteProgram((unsigned char *)p);
     nextstmt = nextstmtSaved;
     g_LocalIndex--;
-#ifdef CACHE
+#ifdef SUBPROFILE
     LeaveLocalFrame();
 #endif
     g_TempMemoryIsChanged = true; // signal that temporary memory should be checked

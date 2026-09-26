@@ -6203,13 +6203,13 @@ void MIPS16 DrawRectangleUser(int x1, int y1, int x2, int y2, int c)
         IntToStr(callstr + strlen(callstr), c, 10);
         callstr[strlen(callstr) + 1] = 0; // two NULL chars required to terminate the call
         g_LocalIndex++;
-#ifdef CACHE
+#ifdef SUBPROFILE
         EnterLocalFrame();
 #endif
         ExecuteProgram((unsigned char *)callstr);
         nextstmt = nextstmtSaved;
         g_LocalIndex--;
-#ifdef CACHE
+#ifdef SUBPROFILE
         LeaveLocalFrame();
 #endif
         g_TempMemoryIsChanged = true; // signal that temporary memory should be checked
@@ -6249,12 +6249,12 @@ void MIPS16 DrawBitmapUser(int x1, int y1, int width, int height, int scale, int
         IntToStr(callstr + strlen(callstr), (unsigned int)bitmap, 16);
         callstr[strlen(callstr) + 1] = 0; // two NULL chars required to terminate the call
         g_LocalIndex++;
-#ifdef CACHE
+#ifdef SUBPROFILE
         EnterLocalFrame();
 #endif
         ExecuteProgram((unsigned char *)callstr);
         g_LocalIndex--;
-#ifdef CACHE
+#ifdef SUBPROFILE
         LeaveLocalFrame();
 #endif
         g_TempMemoryIsChanged = true; // signal that temporary memory should be checked

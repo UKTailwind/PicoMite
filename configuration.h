@@ -356,7 +356,13 @@ extern "C"
 #define HEAP_MEMORY_SIZE (124 * 1024)
 #else
 #ifdef PICOMITEMIN
-#define FLASH_TARGET_OFFSET (688 * 1024)
+   /* +16 KB (2026-09-26): the DO loop fast path (DoFastCompile in Commands.c)
+      took this variant 712 bytes over 688 KB.  The program size drops 4 KB to
+      pay for it (MAX_PROG_SIZE below): the program area and the three flash
+      slots are each one program size, so the A: drive still starts at the
+      same address and keeps its size.  The option sector moves, though, so
+      the first boot after the upgrade does a full clean. */
+#define FLASH_TARGET_OFFSET (704 * 1024)
 #define MagicKey 0x40287BEA
 #define HEAP_MEMORY_SIZE (128 * 1024)
 #else
@@ -390,7 +396,9 @@ extern "C"
 /* ============================================================================
  * Memory configuration
  * ============================================================================ */
-#if defined(PICOMITE) && !defined(rp2350)
+#if defined(PICOMITEMIN)
+#define MAX_PROG_SIZE (116 * 1024) // 4 KB less, for the 16 KB of FLASH_TARGET_OFFSET above
+#elif defined(PICOMITE) && !defined(rp2350)
 #define MAX_PROG_SIZE (120 * 1024) // Maximum program size in bytes (adjust as needed     )
 #else
 #define MAX_PROG_SIZE HEAP_MEMORY_SIZE

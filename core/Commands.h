@@ -76,24 +76,24 @@ typedef struct s_dostack
     unsigned char *doptr;    // pointer to the DO statement
     unsigned char level;     // the sub/function level that the loop was created
     unsigned char untiltest; // 1 if DO UNTIL (exits when condition becomes true)
-#ifdef CACHE
-    // Fast condition: pre-resolved VAR OP CONST comparison compiled at DO setup
-    // time so cmd_loop can do a direct load+compare with no hash probe or replay.
-    // do_fast_var == NULL means the fast path is not available for this loop.
-    void    *do_fast_var;           // direct ptr to variable storage in g_vartbl
-    int      do_fast_varindex;      // g_vartbl index (for local re-resolution)
-    uint16_t do_fast_frame_gen;     // g_local_frame_gen at compile time
-    uint8_t  do_fast_is_local;      // 1 = local variable
-    uint8_t  do_fast_type;          // T_INT or T_NBR
-    uint8_t  do_fast_op;            // DOFAST_LT/GT/LTE/GTE/EQ/NE
-    uint8_t  do_fast_is_until;      // 1 = UNTIL sense (invert result)
-    union { long long int i; MMFLOAT f; } do_fast_limit;
-    unsigned char do_fast_name[MAXVARLEN + 1]; // upper-cased; for local re-resolve
-#endif
+    // DO fast path (see DoFastCompile in Commands.c): a "var OP number"
+    // condition resolved once, so LOOP compares without the evaluator
+    unsigned char fast_state; // DOFAST_UNTRIED, DOFAST_ON or DOFAST_OFF
+    unsigned char fast_op;    // DOFAST_LT .. DOFAST_NE, applied to (var - limit)
+    unsigned char fast_until; // 1 = the condition is an UNTIL: invert it
+    unsigned char fast_flags; // DOFAST_VARINT: the variable is an integer; DOFAST_INTCMP: compare as integers
+    int fast_varindex;        // the variable's g_vartbl slot (ERASE switches the fast path off)
+    void *fast_var;           // the variable's value
+    union
+    {
+        long long int i;
+        MMFLOAT f;
+    } fast_limit;
 } dostackval;
 
 extern struct s_dostack g_dostack[MAXDOLOOPS];
 extern int g_doindex;
+void DoFastForget(int slot);
 
 extern unsigned char *gosubstack[MAXGOSUB];
 extern unsigned char *errorstack[MAXGOSUB];

@@ -39,9 +39,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "Custom.h"
 #include "Hardware_Includes.h"
 #include "Turtle.h"
-#ifdef CACHE
-#include "MMtrace.h"
-#endif
 #include "hardware/flash.h"
 #ifndef PICOMITEWEB
 #include "pico/multicore.h"
@@ -162,7 +159,7 @@ uint32_t g_perf_findvar_locals;        // findvar() calls that resolved to a loc
 uint32_t g_perf_findvar_globals;       // findvar() calls that resolved to a global slot
 uint64_t g_perf_start_us;              // time_us_64() sampled at program start
 int g_option_profiling = 0;            // OPTION PROFILING - master gate
-#ifdef CACHE
+#ifdef SUBPROFILE
 // Per-frame call-stack profiling buffers; allocated with ProfilingAlloc().
 uint64_t *g_subentry_us = NULL;
 uint64_t *g_subchild_us = NULL;
@@ -178,7 +175,7 @@ void ProfilingAlloc(void)
         g_perf_subtime_us = (uint64_t *)GetMemory(MAXSUBFUN * sizeof(uint64_t));
     if (g_perf_subexcl_us == NULL)
         g_perf_subexcl_us = (uint64_t *)GetMemory(MAXSUBFUN * sizeof(uint64_t));
-#ifdef CACHE
+#ifdef SUBPROFILE
     if (g_subentry_us == NULL)
         g_subentry_us = (uint64_t *)GetMemory(MAXGOSUB * sizeof(uint64_t));
     if (g_subchild_us == NULL)
@@ -189,7 +186,7 @@ void ProfilingAlloc(void)
     memset(g_perf_subcall_count, 0, MAXSUBFUN * sizeof(uint32_t));
     memset(g_perf_subtime_us, 0, MAXSUBFUN * sizeof(uint64_t));
     memset(g_perf_subexcl_us, 0, MAXSUBFUN * sizeof(uint64_t));
-#ifdef CACHE
+#ifdef SUBPROFILE
     memset(g_subentry_us, 0, MAXGOSUB * sizeof(uint64_t));
     memset(g_subchild_us, 0, MAXGOSUB * sizeof(uint64_t));
 #endif
@@ -206,7 +203,7 @@ void ProfilingFree(void)
     FreeMemorySafe((void **)&g_perf_subcall_count);
     FreeMemorySafe((void **)&g_perf_subtime_us);
     FreeMemorySafe((void **)&g_perf_subexcl_us);
-#ifdef CACHE
+#ifdef SUBPROFILE
     FreeMemorySafe((void **)&g_subentry_us);
     FreeMemorySafe((void **)&g_subchild_us);
 #endif
@@ -232,7 +229,7 @@ int g_hashlistpointer = 0;
 // frame's locals start.  `g_framebase_stack[]` saves the previous base on
 // every level transition (sub/fun entry, gosub, CFunction call).
 // ---------------------------------------------------------------------------
-#ifdef CACHE
+#ifdef SUBPROFILE
 int g_localframe_base = 0;       // first hashlist index in current frame
 int g_framebase_stack[MAXGOSUB]; // saved bases, one per active level
 int g_framebase_sp = 0;          // stack pointer / current depth
@@ -262,7 +259,6 @@ void EnterLocalFrame(void)
     /* g_current_sub_idx is left unchanged here; DefinedSubFun overrides it
      * for sub/fun calls right after this returns.  GOSUB/CFun keep the
      * caller's current sub as the "enclosing" context.                    */
-    TraceBumpFrameGen(); // any cached local-var slot in a trace is now stale
 }
 
 // Pop one frame on exit from a local scope.  Called *immediately after*
@@ -297,7 +293,6 @@ void LeaveLocalFrame(void)
         g_localframe_base = 0;
         g_current_sub_idx = -1;
     }
-    TraceBumpFrameGen(); // returning to the caller's frame: invalidate cached locals
 }
 
 // Reset all frame-stack state (called from ClearVars(0,...) and on RUN start).
@@ -306,7 +301,6 @@ static inline void ResetLocalFrames(void)
     g_framebase_sp = 0;
     g_localframe_base = 0;
     g_current_sub_idx = -1;
-    TraceBumpFrameGen();
 }
 #endif
 unsigned char *LibMemory; // This is where the library is stored. At the last flash slot (4)
@@ -2499,7 +2493,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     // for each one we create the local variable and compare its type to that supplied in the callers list
     CurrentLinePtr = SubLinePtr; // any errors must be at the definition
     g_LocalIndex++;
-#ifdef CACHE
+#ifdef SUBPROFILE
     EnterLocalFrame();         // open a new local-variable frame for this sub/fun
     g_current_sub_idx = index; // for trace-cache per-sub opt-in
 #endif
@@ -2701,7 +2695,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         *sa = tp;                    // for a string we just need to return the local memory
     *typ = FunType;                  // save the function type for the caller
     ClearVars(g_LocalIndex--, true); // delete any local variables
-#ifdef CACHE
+#ifdef SUBPROFILE
     LeaveLocalFrame(); // pop this sub/fun's local frame
 #endif
     g_TempMemoryIsChanged = true; // signal that temporary memory should be checked
@@ -5813,7 +5807,7 @@ void MIPS16 error(char *msg, ...)
         if (g_LocalIndex != DefinedSubFunLocalIndex)
         {
             ClearVars(g_LocalIndex, true);
-#ifdef CACHE
+#ifdef SUBPROFILE
             LeaveLocalFrame(); // unwind the partially-entered frame
 #endif
         }
@@ -6469,7 +6463,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
     g_OptionBase = 0;
     g_DimUsed = false;
     g_hashlistpointer = 0;
-#ifdef CACHE
+#ifdef SUBPROFILE
     ResetLocalFrames(); // discard all per-frame side-index state
 #endif
 }
@@ -6575,6 +6569,7 @@ uint32_t erase(char *p, bool nofree)
         RAW_DIM(g_vartbl[j], 0) = 0;
         g_vartbl[j].level = 0;
         g_Globalvarcnt--;
+        DoFastForget(j); // a DO condition that pointed at this variable must evaluate again
         break;
     }
     if (j == MAXVARS)

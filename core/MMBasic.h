@@ -412,7 +412,7 @@ extern "C"
     extern int g_Localvarcnt;
     extern int g_VarIndex;
     extern int g_LocalIndex;
-#ifdef CACHE
+#ifdef SUBPROFILE
     /* Local-variable frame tracking — see MMBasic.c */
     extern int g_localframe_base;
     extern int g_framebase_stack[MAXGOSUB];

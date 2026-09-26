@@ -91,9 +91,6 @@ set(COMMON_SOURCES
 	graphics/RGB121.c
 	third_party_mod/re.c
 )
-set(CACHE_SOURCES
-	core/MMtrace.c
-)
 set(DISPLAY_SOURCES
 	graphics/SSD1963.c
 	graphics/Touch.c
@@ -294,7 +291,7 @@ set(PICO_RAND_VARIANTS
 	HDMIBTH
 	HDMIWEB
 )
-set(USES_CACHE_VARIANTS
+set(USES_SUBPROFILE_VARIANTS
 	HDMIUSB
 	PICO
 	PICORP2350
@@ -323,7 +320,7 @@ compile_is_in(IS_HDMI ${HDMI_VARIANTS})
 compile_is_in(IS_PICOMITE ${PICOMITE_VARIANTS})
 compile_is_in(USES_PICO_MULTICORE ${PICO_MULTICORE_VARIANTS})
 compile_is_in(USES_PICO_RAND ${PICO_RAND_VARIANTS})
-compile_is_in(USES_CACHE ${USES_CACHE_VARIANTS})
+compile_is_in(USES_SUBPROFILE ${USES_SUBPROFILE_VARIANTS})
 compile_is_in(IS_BT ${BT_VARIANTS})
 compile_is_in(IS_BTH ${BTH_VARIANTS})
 
@@ -566,10 +563,9 @@ if(USES_RAYCASTER)
 	target_sources(PicoMite PRIVATE graphics/Raycaster.c)
 endif()
 
-if(USES_CACHE)
-	target_sources(PicoMite PRIVATE ${CACHE_SOURCES})
-	target_compile_definitions(PicoMite PRIVATE CACHE)
-	set_source_files_properties(core/MMtrace.c PROPERTIES COMPILE_FLAGS -Os)
+if(USES_SUBPROFILE)
+	# frame tracking for OPTION PROFILING's per-SUB times
+	target_compile_definitions(PicoMite PRIVATE SUBPROFILE)
 endif()
 
 foreach(source IN LISTS OPTIMIZED_SOURCES)

@@ -915,10 +915,6 @@ void MIPS16 __not_in_flash_func(cmd_inc)(void)
 #endif
 	unsigned char *p, *q;
 	int vtype;
-#ifdef CACHE
-	if ((g_trace_cache_flags & TCF_LET_NUM) && TraceCacheTryInc(cmdline))
-		return;
-#endif
 	getcsargs(&cmdline, 3);
 	if (argc == 1)
 	{
@@ -1776,12 +1772,6 @@ void MIPS16 __not_in_flash_func(cmd_let)(void)
 	unsigned char *p1, *p2;
 	int vartype; // effective type (may differ for struct members)
 
-#ifdef CACHE
-	/* Trace-cache fast path (Phase 1.1: top-level global scalar LET only).
-	 * Gate inline so the OFF case is one load + one branch (no call).        */
-	if ((g_trace_cache_flags & (TCF_LET_NUM | TCF_LET_STR)) && TraceCacheTryLet(cmdline))
-		return;
-#endif
 	p1 = cmdline;
 	// search through the line looking for the equals sign
 	while (*p1 && tokenfunction(*p1) != op_equal)
@@ -3219,31 +3209,10 @@ void MIPS16 cmd_clear(void)
 
 void cmd_goto(void)
 {
-#ifdef CACHE
-	/* Guard: only cache when cmdline is a stable ProgMemory pointer.
-	 * When called from cmd_if's testgoto path the fix above ensures this,
-	 * but the execute_one_command path (IF..THEN cmd ELSE) still passes an
-	 * argbuf pointer — skip caching for any non-ProgMemory cmdline.       */
-	int _goto_cacheable = (g_trace_cache_flags & TCF_JUMP) &&
-						  cmdline >= ProgMemory && cmdline < ProgMemory + MAX_PROG_SIZE;
-	if (_goto_cacheable)
-	{
-		unsigned char *cached_tgt;
-		if (TraceCacheTryJump(cmdline, &cached_tgt))
-		{
-			nextstmt = CurrentLinePtr = cached_tgt;
-			return;
-		}
-	}
-#endif
 	if (isnamestart(*cmdline))
 		nextstmt = findlabel(cmdline); // must be a label
 	else
 		nextstmt = findline(getinteger(cmdline), true); // try for a line number
-#ifdef CACHE
-	if (_goto_cacheable)
-		TraceCacheStoreJump(cmdline, nextstmt);
-#endif
 	CurrentLinePtr = nextstmt;
 }
 
@@ -3673,11 +3642,6 @@ void MIPS16 __not_in_flash_func(cmd_if)(void)
 	unsigned char ss[3]; // this will be used to split up the argument line
 	unsigned char *p, *tp;
 	unsigned char *rp = NULL;
-#ifdef CACHE
-	/* Save the cmdline pointer BEFORE getargs (makeargs) can advance it.
-	 * This stable ProgMemory pointer is the cache key for the IF condition. */
-	unsigned char *if_cond_key = cmdline;
-#endif
 	/* Address of the IF / ELSEIF command token in ProgMemory (or LibMemory).
 	 * Used as the key into the IF jump table built by PrepareProgram so the
 	 * false-branch can skip directly to the matching ELSEIF / ELSE / ENDIF
@@ -3718,20 +3682,7 @@ retest_an_if:
 		SyntaxError();
 	;
 
-#ifdef CACHE
-	{
-		int _cached_r;
-		if ((g_trace_cache_flags & TCF_IF) && TraceCacheTryIf(if_cond_key, &_cached_r))
-		{
-			r = _cached_r;
-			goto if_condition_done;
-		}
-	}
-#endif
 	r = (getnumber(argv[0]) != 0); // evaluate the expression controlling the if statement
-#ifdef CACHE
-if_condition_done:;
-#endif
 
 	if (r)
 	{
@@ -3748,31 +3699,7 @@ if_condition_done:;
 			// Because the test was TRUE we are just interested in the THEN cmd stage.
 			if (*argv[1] == tokenGOTO)
 			{
-#ifdef CACHE
-				/* argv[2] points into the local argbuf stack buffer, not ProgMemory.
-				 * Every IF...GoTo statement with the same-length condition shares the
-				 * same argbuf address, so the jump cache would return the first label
-				 * cached for all of them.  Scan from if_cond_key (a stable ProgMemory
-				 * pointer saved before getargs) to find tokenGOTO, then skip past it
-				 * and any spaces (mirroring what makeargs does) to give cmd_goto a
-				 * unique, ProgMemory-anchored cache key and correct argument.        */
-				{
-					unsigned char *goto_arg = if_cond_key;
-					while (*goto_arg && *goto_arg != tokenGOTO)
-						goto_arg++;
-					if (*goto_arg == tokenGOTO)
-					{
-						goto_arg++; /* skip tokenGOTO byte  */
-						while (*goto_arg == ' ')
-							goto_arg++; /* skip spaces          */
-						cmdline = goto_arg;
-					}
-					else
-						cmdline = argv[2]; /* fallback: should never happen */
-				}
-#else
 				cmdline = argv[2];
-#endif
 				cmd_goto();
 				return;
 			}
@@ -3824,9 +3751,6 @@ if_condition_done:;
 					nextstmt = p;
 					testgoto = false;
 					testelseif = true;
-#ifdef CACHE
-					if_cond_key = cmdline; /* each ELSEIF has its own cache entry */
-#endif
 					if_token_addr = target;
 					goto retest_an_if;
 				}
@@ -3886,9 +3810,6 @@ if_condition_done:;
 						nextstmt = p;
 						testgoto = false;
 						testelseif = true;
-#ifdef CACHE
-						if_cond_key = cmdline; /* each ELSEIF has its own cache entry */
-#endif
 						goto retest_an_if;
 					}
 
@@ -4191,81 +4112,6 @@ void cmd_end(void)
 				 (unsigned)g_perf_findvar_globals, global_pct,
 				 (unsigned)g_perf_usercmd_count);
 		perf_print(buf, &list_cnt);
-#ifdef CACHE
-		snprintf(buf, sizeof(buf),
-				 "[PERF] tracecache: flags=0x%02x size=%d replays=%u compiles_ok=%u compiles_bad=%u\r\n",
-				 (unsigned)g_trace_cache_flags,
-				 TraceCacheGetSize(),
-				 (unsigned)g_trace_replays,
-				 (unsigned)g_trace_compiles_ok,
-				 (unsigned)g_trace_compiles_bad);
-		if (g_trace_cache_flags)
-			perf_print(buf, &list_cnt);
-		snprintf(buf, sizeof(buf),
-				 "[PERF] tracecache: lookup_null=%u alloc_fail=%u optin_skip=%u jump_hits=%u\r\n",
-				 (unsigned)g_trace_lookup_null,
-				 (unsigned)g_trace_alloc_fail,
-				 (unsigned)g_trace_optin_skip,
-				 (unsigned)g_trace_jump_hits);
-		if (g_trace_cache_flags)
-			perf_print(buf, &list_cnt);
-		// Per-sub cache hit table (top-20 by total LET+IF replays).
-		if (g_trace_cache_flags)
-		{
-			extern uint32_t *g_tc_sub_let_hits;
-			extern uint32_t *g_tc_sub_if_hits;
-			extern unsigned char *subfun[];
-			// Check whether any sub has hits, or top-level has hits.
-			int any = 0;
-			if (g_tc_sub_let_hits && g_tc_sub_if_hits)
-				for (int k = 0; k <= MAXSUBFUN; k++)
-					if (g_tc_sub_let_hits[k] || g_tc_sub_if_hits[k])
-					{
-						any = 1;
-						break;
-					}
-			if (any)
-			{
-				uint32_t *scratch = (uint32_t *)GetMemory((MAXSUBFUN + 1) * sizeof(uint32_t));
-				for (int k = 0; k <= MAXSUBFUN; k++)
-					scratch[k] = g_tc_sub_let_hits[k] + g_tc_sub_if_hits[k];
-				perf_print("[PERF] tracecache hits by SUB (top 20):\r\n", &list_cnt);
-				perf_print("        let_hits   if_hits     total  name\r\n", &list_cnt);
-				for (int rank = 0; rank < 20; rank++)
-				{
-					uint32_t best = 0;
-					int best_idx = -1;
-					for (int k = 0; k <= MAXSUBFUN; k++)
-						if (scratch[k] > best)
-						{
-							best = scratch[k];
-							best_idx = k;
-						}
-					if (best_idx < 0 || best == 0)
-						break;
-					char nm[MAXVARLEN + 1];
-					nm[0] = 0;
-					if (best_idx < MAXSUBFUN && subfun[best_idx] != NULL)
-					{
-						unsigned char *sp = subfun[best_idx] + sizeof(CommandToken);
-						skipspace(sp);
-						int j = 0;
-						while (j < MAXVARLEN && isnamechar(*sp))
-							nm[j++] = *sp++;
-						nm[j] = 0;
-					}
-					snprintf(buf, sizeof(buf), "  %10u  %8u  %8u  %s\r\n",
-							 (unsigned)g_tc_sub_let_hits[best_idx],
-							 (unsigned)g_tc_sub_if_hits[best_idx],
-							 (unsigned)best,
-							 nm[0] ? nm : "(top-level)");
-					perf_print(buf, &list_cnt);
-					scratch[best_idx] = 0;
-				}
-				FreeMemorySafe((void **)&scratch);
-			}
-		}
-#endif
 		// Find and print the top-20 most-executed builtin commands.
 		perf_print("[PERF] top commands by dispatch count:\r\n", &list_cnt);
 		for (int rank = 0; rank < 20; rank++)
@@ -4726,18 +4572,6 @@ void cmd_select(void)
 		Mstrcpy((unsigned char *)s, (unsigned char *)v);
 		ClearSpecificTempMemory(v); // free temp memory now that value is copied
 	}
-#ifdef CACHE
-	{
-		unsigned char *cached_nextstmt;
-		if (TraceCacheTrySelect(cmdline, nextstmt, type,
-								(long long int)i64, (MMFLOAT)f,
-								&cached_nextstmt))
-		{
-			nextstmt = cached_nextstmt;
-			return;
-		}
-	}
-#endif
 	// now search through the program looking for a matching CASE statement
 	// i tracks the nesting level of any nested SELECT CASE commands
 	SaveCurrentLinePtr = CurrentLinePtr; // save where we are because we will have to fake CurrentLinePtr to get errors reported correctly
@@ -4889,19 +4723,6 @@ void cmd_case(void)
 {
 	int i;
 	unsigned char *p;
-#ifdef CACHE
-	unsigned char *entry_key = nextstmt; /* stable ProgMemory ptr; used as jump cache key */
-	int _case_cacheable = (g_trace_cache_flags & TCF_JUMP) != 0;
-	if (_case_cacheable)
-	{
-		unsigned char *cached_target;
-		if (TraceCacheTryJump(entry_key, &cached_target))
-		{
-			nextstmt = cached_target;
-			return;
-		}
-	}
-#endif
 	// search through the program looking for a END SELECT statement
 	// i tracks the nesting level of any nested SELECT CASE commands
 	i = 1;
@@ -4919,10 +4740,6 @@ void cmd_case(void)
 			// found our matching END SELECT stmt.  Step over it and continue with the statement after it
 			skipelement(p);
 			nextstmt = p;
-#ifdef CACHE
-			if (_case_cacheable)
-				TraceCacheStoreJump(entry_key, p);
-#endif
 			break;
 		}
 	}
@@ -5341,6 +5158,220 @@ breakout:
 	}
 }
 
+/* ---------------------------------------------------------------------------
+   DO fast path. A WHILE/UNTIL condition of the form "var OP number" or
+   "number OP var" - var a numeric scalar, OP one of < > <= >= = <> - is
+   resolved once to a pointer at the variable's value, so each LOOP compares
+   directly instead of running the expression evaluator. The compare repeats
+   the evaluator's own (compare() in Operators.c): as integers only when both
+   sides are integers, otherwise in float, by the sign of the difference. The
+   number is read by the evaluator itself, so its value and type are exactly
+   what the normal path gets. A DO WHILE condition is compiled when the DO
+   starts and a LOOP WHILE one at its first LOOP, where the evaluator would
+   first read it, so an error is reported where it always was. The pointer
+   stays valid while the DO entry exists: a local cannot go before its frame
+   (which also drops the entry), and erase() calls DoFastForget for a global.
+   --------------------------------------------------------------------------- */
+#define DOFAST_UNTRIED 0
+#define DOFAST_ON 1
+#define DOFAST_OFF 2
+#define DOFAST_LT 1
+#define DOFAST_GT 2
+#define DOFAST_LTE 3
+#define DOFAST_GTE 4
+#define DOFAST_EQ 5
+#define DOFAST_NE 6
+#define DOFAST_VARINT 1	  // the variable is an integer
+#define DOFAST_INTCMP 2	  // both sides are integers: compare as integers
+#define DOFAST_LITFIRST 4 // "number OP var": the difference is number - var
+
+// a scalar name the fast path can take: no struct member, string, array or call
+static unsigned char *DoFastSkipName(unsigned char *p)
+{
+	if (!isnamestart(*p))
+		return NULL;
+	while (isnamechar(*p))
+	{
+		if (*p == '.')
+			return NULL;
+		p++;
+	}
+	if (*p == '$')
+		return NULL;
+	if (*p == '%' || *p == '!')
+		p++;
+	unsigned char *q = p;
+	skipspace(q);
+	if (*q == '(')
+		return NULL;
+	return p;
+}
+
+// a numeric literal: the characters getvalue() takes as a number
+static unsigned char *DoFastSkipNumber(unsigned char *p)
+{
+	if (*p == '&')
+	{
+		int c = mytoupper(p[1]);
+		if (c != 'H' && c != 'O' && c != 'B')
+			return NULL;
+		p += 2;
+		if (!isxdigit(*p))
+			return NULL;
+		while (isxdigit(*p))
+			p++;
+		return p;
+	}
+	if (!((*p >= '0' && *p <= '9') || *p == '.'))
+		return NULL;
+	while ((*p >= '0' && *p <= '9') || *p == '.' || *p == '+' || *p == '-' || *p == 'E' || *p == 'e')
+		p++;
+	return p;
+}
+
+static int DoFastOp(unsigned char c)
+{
+	if (c < C_BASETOKEN || !(tokentype(c) & T_OPER))
+		return 0;
+	void (*fp)(void) = tokenfunction(c);
+	if (fp == op_lt)
+		return DOFAST_LT;
+	if (fp == op_gt)
+		return DOFAST_GT;
+	if (fp == op_lte)
+		return DOFAST_LTE;
+	if (fp == op_gte)
+		return DOFAST_GTE;
+	if (fp == op_equal)
+		return DOFAST_EQ;
+	if (fp == op_ne)
+		return DOFAST_NE;
+	return 0;
+}
+
+// compile the condition at p for the DO entry ds; leaves fast_state ON or OFF
+static void DoFastCompile(unsigned char *p, struct s_dostack *ds, int until)
+{
+	unsigned char *name, *lit, *litend, *q;
+	int op, flags = 0;
+	ds->fast_state = DOFAST_OFF;
+	skipspace(p);
+	if (isnamestart(*p))
+	{ // var OP number
+		name = p;
+		if ((q = DoFastSkipName(p)) == NULL)
+			return;
+		skipspace(q);
+		if ((op = DoFastOp(*q)) == 0)
+			return;
+		q++;
+		skipspace(q);
+		lit = q;
+		if ((litend = DoFastSkipNumber(q)) == NULL)
+			return;
+		q = litend;
+	}
+	else
+	{ // number OP var
+		lit = p;
+		if ((litend = DoFastSkipNumber(p)) == NULL)
+			return;
+		q = litend;
+		skipspace(q);
+		if ((op = DoFastOp(*q)) == 0)
+			return;
+		q++;
+		skipspace(q);
+		name = q;
+		if ((q = DoFastSkipName(q)) == NULL)
+			return;
+		flags |= DOFAST_LITFIRST;
+	}
+	skipspace(q);
+	if (!(*q == 0 || *q == '\''))
+		return; // more to the condition than that
+	unsigned char buf[40];
+	int n = litend - lit;
+	if (n >= (int)sizeof(buf))
+		return;
+	memcpy(buf, lit, n);
+	buf[n] = 0;
+	MMFLOAT f;
+	long long int i64;
+	unsigned char *s;
+	int t = T_NOTYPE;
+	evaluate(buf, &f, &i64, &s, &t, false); // the number, read exactly as the evaluator reads it
+	void *var = findvar(name, V_NOFIND_NULL);
+	if (var == NULL)
+		return; // not created yet: the normal path will do that
+	int vt = g_vartbl[g_VarIndex].type;
+#ifdef STRUCTENABLED
+	if (g_StructMemberType || (vt & T_STRUCT))
+		return;
+#endif
+	if ((vt & (T_STR | T_CONST)) || !(vt & (T_INT | T_NBR)) || DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+		return;
+	if (vt & T_INT)
+		flags |= DOFAST_VARINT;
+	if ((vt & T_INT) && (t & T_INT))
+	{
+		flags |= DOFAST_INTCMP;
+		ds->fast_limit.i = i64;
+	}
+	else
+		ds->fast_limit.f = (t & T_INT) ? (MMFLOAT)i64 : f;
+	ds->fast_var = var;
+	ds->fast_varindex = g_VarIndex;
+	ds->fast_op = op;
+	ds->fast_until = until;
+	ds->fast_flags = flags;
+	ds->fast_state = DOFAST_ON;
+}
+
+// the condition's value (before any UNTIL), computed as the evaluator would
+static inline int __attribute__((always_inline)) DoFastTest(struct s_dostack *ds)
+{
+	long long int r;
+	if (ds->fast_flags & DOFAST_INTCMP)
+	{
+		long long int v = *(long long int *)ds->fast_var, l = ds->fast_limit.i;
+		if (ds->fast_op == DOFAST_EQ)
+			return v == l;
+		if (ds->fast_op == DOFAST_NE)
+			return v != l;
+		r = (ds->fast_flags & DOFAST_LITFIRST) ? l - v : v - l;
+	}
+	else
+	{
+		MMFLOAT v = (ds->fast_flags & DOFAST_VARINT) ? (MMFLOAT) * (long long int *)ds->fast_var : *(MMFLOAT *)ds->fast_var;
+		MMFLOAT d = (ds->fast_flags & DOFAST_LITFIRST) ? ds->fast_limit.f - v : v - ds->fast_limit.f;
+		r = (d > 0) ? 1 : (d < 0) ? -1 : 0;
+	}
+	switch (ds->fast_op)
+	{
+	case DOFAST_LT:
+		return r < 0;
+	case DOFAST_GT:
+		return r > 0;
+	case DOFAST_LTE:
+		return r <= 0;
+	case DOFAST_GTE:
+		return r >= 0;
+	case DOFAST_EQ:
+		return r == 0;
+	default:
+		return r != 0;
+	}
+}
+
+// ERASE/REDIM freed the global in this slot: DO conditions using it evaluate normally
+void DoFastForget(int slot)
+{
+	for (int i = 0; i < g_doindex; i++)
+		if (g_dostack[i].fast_state == DOFAST_ON && g_dostack[i].fast_varindex == slot)
+			g_dostack[i].fast_state = DOFAST_OFF;
+}
+
 #if LOWRAM
 void cmd_do(void)
 {
@@ -5375,7 +5406,7 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 		{
 			while (i < g_doindex - 1)
 			{
-				g_dostack[i] = g_dostack[i + 1]; // copy all fields including do_fast_*
+				g_dostack[i] = g_dostack[i + 1]; // copy all fields
 				i++;
 			}
 			g_doindex--;
@@ -5425,46 +5456,13 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 			error("LOOP has an UNTIL test");
 	}
 
-	// Pre-compile fast condition: try to resolve a simple VAR OP CONST or
-	// CONST OP VAR comparison into direct pointer + constant at setup time,
-	// so cmd_loop can evaluate it with an inline load+compare instead of
-	// going through TraceCacheTryIf → replay_common on every iteration.
-	{
-#ifdef CACHE
-		g_dostack[g_doindex].do_fast_var = NULL; // default: no fast path
-		unsigned char *fast_src = NULL;
-		int fast_is_until = 0;
-		if (evalp != NULL)
-		{
-			// Condition is on the DO line (DO WHILE/UNTIL expr)
-			fast_src = evalp;
-			fast_is_until = doUntil;
-		}
-		else if (*loop_arg == tokenWHILE || *loop_arg == tokenUNTIL)
-		{
-			// Condition is on the LOOP line (DO ... LOOP WHILE/UNTIL expr)
-			fast_is_until = (*loop_arg == tokenUNTIL);
-			fast_src = loop_arg + 1; // past the WHILE/UNTIL token byte
-		}
-		if (fast_src != NULL)
-		{
-			struct s_dostack *ds = &g_dostack[g_doindex];
-			if (TraceCacheCompileDoFast(fast_src,
-										&ds->do_fast_var,
-										&ds->do_fast_varindex,
-										&ds->do_fast_is_local,
-										&ds->do_fast_frame_gen,
-										&ds->do_fast_type,
-										&ds->do_fast_op,
-										&ds->do_fast_limit.i,
-										&ds->do_fast_limit.f,
-										ds->do_fast_name))
-			{
-				ds->do_fast_is_until = (uint8_t)fast_is_until;
-			}
-		}
-#endif
-	}
+	// the DO fast path: a DO WHILE/UNTIL condition is compiled here, a LOOP
+	// WHILE/UNTIL one at the first LOOP (where the evaluator first reads it)
+	g_dostack[g_doindex].fast_state = DOFAST_UNTRIED;
+	if (evalp != NULL)
+		DoFastCompile(evalp, &g_dostack[g_doindex], doUntil);
+	else if (*loop_arg != tokenWHILE && *loop_arg != tokenUNTIL)
+		g_dostack[g_doindex].fast_state = DOFAST_OFF; // DO ... LOOP with no condition
 
 	g_doindex++;
 
@@ -5472,17 +5470,7 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 	if (g_dostack[g_doindex - 1].evalptr != NULL)
 	{
 		int condval;
-#ifdef CACHE
-		{
-			int _cached_r;
-			if ((g_trace_cache_flags & TCF_LOOP) && TraceCacheTryIf(g_dostack[g_doindex - 1].evalptr, &_cached_r))
-				condval = _cached_r;
-			else
-				condval = (getnumber(g_dostack[g_doindex - 1].evalptr) != 0);
-		}
-#else
 		condval = (getnumber(g_dostack[g_doindex - 1].evalptr) != 0);
-#endif
 		if (g_dostack[g_doindex - 1].untiltest)
 			condval = !condval; // DO UNTIL: skip body if condition is already true
 		if (!condval)
@@ -5513,107 +5501,22 @@ void MIPS16 __not_in_flash_func(cmd_loop)(void)
 		if (p == cmdline)
 		{
 			// found a match
-			// first check if the DO statement had a WHILE component
-			// if not find the WHILE statement here and evaluate it
-#ifdef CACHE
-			// Fast path: if cmd_do pre-compiled a simple VAR OP CONST condition,
-			// evaluate it with a direct load+compare — no hash probe, no replay.
-			if (g_dostack[i].do_fast_var != NULL)
+			struct s_dostack *ds = &g_dostack[i];
+			if (ds->fast_state == DOFAST_UNTRIED)
+			{ // a LOOP WHILE/UNTIL condition, read for the first time
+				ds->fast_state = DOFAST_OFF;
+				if (*cmdline == tokenWHILE || *cmdline == tokenUNTIL)
+					DoFastCompile(cmdline + 1, ds, *cmdline == tokenUNTIL);
+			}
+			if (ds->fast_state == DOFAST_ON)
 			{
-				struct s_dostack *ds = &g_dostack[i];
-				// Re-resolve local variable if the call frame has changed
-				if (ds->do_fast_is_local && ds->do_fast_frame_gen != g_local_frame_gen)
-				{
-					void *new_var = NULL;
-					int loc_size = GetLocalVarHashSize();
-					for (int j = 0; j < loc_size; j++)
-					{
-						if (g_vartbl[j].name[0] == 0)
-							continue;
-						if (g_vartbl[j].level != g_LocalIndex)
-							continue;
-						if (DimIsAllocated(RAW_DIM(g_vartbl[j], 0)))
-							continue;
-						int t = g_vartbl[j].type;
-						if (ds->do_fast_type == T_INT && !(t & T_INT))
-							continue;
-						if (ds->do_fast_type == T_NBR && !(t & T_NBR))
-							continue;
-						if (strncmp((char *)g_vartbl[j].name,
-									(char *)ds->do_fast_name, MAXVARLEN) != 0)
-							continue;
-						new_var = (t & T_PTR)
-									  ? (void *)g_vartbl[j].val.s
-									  : (void *)&g_vartbl[j].val;
-						ds->do_fast_varindex = j;
-						break;
-					}
-					if (new_var == NULL)
-					{
-						ds->do_fast_var = NULL; // local gone — disable fast path
-						goto do_loop_slow;
-					}
-					ds->do_fast_var = new_var;
-					ds->do_fast_frame_gen = g_local_frame_gen;
-				}
-				if (ds->do_fast_type == T_INT)
-				{
-					long long int val = *(long long int *)ds->do_fast_var;
-					long long int lim = ds->do_fast_limit.i;
-					switch (ds->do_fast_op)
-					{
-					case DOFAST_LT:
-						tst = (val < lim);
-						break;
-					case DOFAST_GT:
-						tst = (val > lim);
-						break;
-					case DOFAST_LTE:
-						tst = (val <= lim);
-						break;
-					case DOFAST_GTE:
-						tst = (val >= lim);
-						break;
-					case DOFAST_EQ:
-						tst = (val == lim);
-						break;
-					default:
-						tst = (val != lim);
-						break; /* DOFAST_NE */
-					}
-				}
-				else
-				{
-					MMFLOAT val = *(MMFLOAT *)ds->do_fast_var;
-					MMFLOAT lim = ds->do_fast_limit.f;
-					switch (ds->do_fast_op)
-					{
-					case DOFAST_LT:
-						tst = (val < lim);
-						break;
-					case DOFAST_GT:
-						tst = (val > lim);
-						break;
-					case DOFAST_LTE:
-						tst = (val <= lim);
-						break;
-					case DOFAST_GTE:
-						tst = (val >= lim);
-						break;
-					case DOFAST_EQ:
-						tst = (val == lim);
-						break;
-					default:
-						tst = (val != lim);
-						break;
-					}
-				}
-				if (ds->do_fast_is_until)
+				tst = DoFastTest(ds);
+				if (ds->fast_until)
 					tst = !tst;
 				goto do_loop_branch;
 			}
-		do_loop_slow:
-#endif
+			// first check if the DO statement had a WHILE component
+			// if not find the WHILE statement here and evaluate it
 			if (g_dostack[i].evalptr == NULL)
 			{ // if it was a DO without a WHILE/UNTIL
 				if (*cmdline >= 0x80)
@@ -5623,17 +5526,7 @@ void MIPS16 __not_in_flash_func(cmd_loop)(void)
 					int isUntil = (*cmdline == tokenUNTIL);
 					unsigned char *condkey = ++cmdline; // advance past the keyword token
 					int condval;
-#ifdef CACHE
-					{
-						int _cached_r;
-						if ((g_trace_cache_flags & TCF_LOOP) && TraceCacheTryIf(condkey, &_cached_r))
-							condval = _cached_r;
-						else
-							condval = (getnumber(condkey) != 0);
-					}
-#else
 					condval = (getnumber(condkey) != 0);
-#endif
 					tst = isUntil ? !condval : condval;
 				}
 				else
@@ -5645,24 +5538,11 @@ void MIPS16 __not_in_flash_func(cmd_loop)(void)
 			else
 			{ // if was DO WHILE or DO UNTIL
 				int condval;
-#ifdef CACHE
-				{
-					int _cached_r;
-					if ((g_trace_cache_flags & TCF_LOOP) && TraceCacheTryIf(g_dostack[i].evalptr, &_cached_r))
-						condval = _cached_r;
-					else
-						condval = (getnumber(g_dostack[i].evalptr) != 0);
-				}
-#else
 				condval = (getnumber(g_dostack[i].evalptr) != 0);
-#endif
 				tst = g_dostack[i].untiltest ? !condval : condval; // UNTIL inverts: loop while condition is false
 				checkend(cmdline);								   // make sure that there is nothing else
 			}
-#ifdef CACHE
 		do_loop_branch:
-#endif
-
 			// test the expression value and reset the program pointer if we are still looping
 			// otherwise remove this entry from the do stack
 			if (tst)
@@ -5793,34 +5673,16 @@ void cmd_gosub(void)
 	if (gosubindex >= MAXGOSUB)
 		error("Too many nested GOSUB");
 	char *return_to = (char *)nextstmt;
-#ifdef CACHE
-	int _gosub_cacheable = (g_trace_cache_flags & TCF_JUMP) &&
-						   cmdline >= ProgMemory && cmdline < ProgMemory + MAX_PROG_SIZE;
-	if (_gosub_cacheable)
-	{
-		unsigned char *cached_tgt;
-		if (TraceCacheTryJump(cmdline, &cached_tgt))
-		{
-			nextstmt = cached_tgt;
-			goto gosub_resolved;
-		}
-	}
-#endif
 	if (isnamestart(*cmdline))
 		nextstmt = findlabel(cmdline);
 	else
 		nextstmt = findline(getinteger(cmdline), true);
-#ifdef CACHE
-	if (_gosub_cacheable)
-		TraceCacheStoreJump(cmdline, nextstmt);
-gosub_resolved:;
-#endif
 	IgnorePIN = false;
 
 	errorstack[gosubindex] = CurrentLinePtr;
 	gosubstack[gosubindex++] = (unsigned char *)return_to;
 	g_LocalIndex++;
-#ifdef CACHE
+#ifdef SUBPROFILE
 	EnterLocalFrame(); // open a new local-variable frame for this GOSUB
 #endif
 	CurrentLinePtr = nextstmt;
@@ -5972,7 +5834,7 @@ void MIPS16 __not_in_flash_func(cmd_return)(void)
 	if (gosubindex == 0 || gosubstack[gosubindex - 1] == NULL)
 		error("Nothing to return to");
 	ClearVars(g_LocalIndex--, true); // delete any local variables
-#ifdef CACHE
+#ifdef SUBPROFILE
 	LeaveLocalFrame(); // pop this GOSUB's local frame
 #endif
 	g_TempMemoryIsChanged = true;		 // signal that temporary memory should be checked
@@ -8345,51 +8207,16 @@ void MIPS16 cmd_restore(void)
 	}
 	else
 	{
-#ifdef CACHE
-		unsigned char *restore_key = cmdline; /* stable key before skipspace  */
-#endif
 		skipspace(cmdline);
 		if (*cmdline == '"')
 		{
-#ifdef CACHE
-			if (g_trace_cache_flags & TCF_RESTORE)
-			{
-				unsigned char *cached_tgt;
-				if (TraceCacheTryJump(restore_key, &cached_tgt))
-				{
-					NextDataLine = cached_tgt;
-					NextData = 0;
-					return;
-				}
-			}
-#endif
 			NextDataLine = findlabel(getCstring(cmdline));
 			NextData = 0;
-#ifdef CACHE
-			if (g_trace_cache_flags & TCF_RESTORE)
-				TraceCacheStoreJump(restore_key, NextDataLine);
-#endif
 		}
 		else if (isdigit(*cmdline) || *cmdline == GetTokenValue((unsigned char *)"+") || *cmdline == GetTokenValue((unsigned char *)"-") || *cmdline == '.')
 		{
-#ifdef CACHE
-			if (g_trace_cache_flags & TCF_RESTORE)
-			{
-				unsigned char *cached_tgt;
-				if (TraceCacheTryJump(restore_key, &cached_tgt))
-				{
-					NextDataLine = cached_tgt;
-					NextData = 0;
-					return;
-				}
-			}
-#endif
 			NextDataLine = findline(getinteger(cmdline), true); // try for a line number
 			NextData = 0;
-#ifdef CACHE
-			if (g_trace_cache_flags & TCF_RESTORE)
-				TraceCacheStoreJump(restore_key, NextDataLine);
-#endif
 		}
 		else
 		{
@@ -8422,23 +8249,7 @@ void MIPS16 cmd_restore(void)
 			}
 			else if (isnamestart(*cmdline))
 			{
-#ifdef CACHE
-				if (g_trace_cache_flags & TCF_RESTORE)
-				{
-					unsigned char *cached_tgt;
-					if (TraceCacheTryJump(restore_key, &cached_tgt))
-					{
-						NextDataLine = cached_tgt;
-						NextData = 0;
-						return;
-					}
-				}
-#endif
 				NextDataLine = findlabel(cmdline); // must be a label
-#ifdef CACHE
-				if (g_trace_cache_flags & TCF_RESTORE)
-					TraceCacheStoreJump(restore_key, NextDataLine);
-#endif
 			}
 			NextData = 0;
 		}
