@@ -2224,9 +2224,10 @@ static int __not_in_flash_func(FindSubFunText)(unsigned char *p, int type)
             if (j == 0 && (*(char *)tp == 0 || namelen == MAXVARLEN) && funtbl[hash].index < MAXSUBFUN)
             { // found a matching name
                 // it must also be the kind asked for, as on the RP2040: a SUB or CSUB for
-                // a statement (type 0), a FUNCTION for an expression (type 1)
+                // a statement (type 0), a FUNCTION for an expression (type 1), or
+                // either (type < 0, for FindSubFun's binding of a symbol)
                 CommandToken tkn = commandtbl_decode(subfun[funtbl[hash].index]);
-                if (type ? tkn == cmdFUN : (tkn == cmdSUB || tkn == cmdCSUB))
+                if (type < 0 || (type ? tkn == cmdFUN : (tkn == cmdSUB || tkn == cmdCSUB)))
                     return funtbl[hash].index;
                 return -1;
             }
@@ -2329,14 +2330,12 @@ int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
         int i = SymS[k];
         if (i == SYM_UNBOUND)
             i = SymS[k] = FindSubFunText(p, -1);
-#ifndef rp2350
         if (i >= 0)
-        { // the kind is checked as the search does on this chip
+        { // the kind is checked as the text search does (on both chips since main's item 9)
             CommandToken tkn = commandtbl_decode(subfun[i]);
             if (type == 0 ? !(tkn == cmdSUB || tkn == cmdCSUB) : !(tkn == cmdFUN))
                 return -1;
         }
-#endif
         return i;
     }
     return FindSubFunText(p, type);
