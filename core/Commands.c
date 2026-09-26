@@ -5608,7 +5608,7 @@ void cmd_randomize(void)
 	if (argc == 1)
 		i = getinteger(argv[0]);
 	else
-		i = time_us_32();
+		i = time_us_32() & 0x7FFFFFFF; // the counter passes 2^31 after 35.8 minutes: keep the seed positive
 	if (i < 0)
 		StandardError(21);
 	srand(i);
