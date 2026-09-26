@@ -1133,7 +1133,7 @@ void fun_instr(void)
 // Truncate an expression to the next whole number less than or equal to the argument.
 void fun_int(void)
 {
-	iret = floor(getnumber(ep));
+	iret = FloatToInt64(floor(getnumber(ep))); // range-checked: a plain cast turned NaN, INF and 1e30 into 9223372036854775807
 	targ = T_INT;
 }
 
@@ -1141,7 +1141,7 @@ void fun_int(void)
 // to the right of the decimal point.
 void fun_fix(void)
 {
-	iret = getnumber(ep);
+	iret = FloatToInt64(trunc(getnumber(ep))); // range-checked, as INT
 	targ = T_INT;
 }
 

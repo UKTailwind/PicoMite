@@ -6302,9 +6302,9 @@ void MIPS16 FloatToStr(char *p, MMFLOAT f, int m, int n, unsigned char ch)
     int exp, trim = false, digit;
     MMFLOAT rounding;
     char *pp;
-    if (f == INFINITY)
-    {
-        strcpy(p, "INF");
+    if (isinf(f) || isnan(f))
+    { // the code below cannot format these: -INF printed garbage, and hung the RP2040
+        strcpy(p, isnan(f) ? "NAN" : (f > 0 ? "INF" : "-INF"));
         return;
     }
     ch &= 0x7f; // make sure that ch is an ASCII char
@@ -6868,7 +6868,7 @@ int FloatToInt32(MMFLOAT x)
 int __not_in_flash_func(FloatToInt32)(MMFLOAT x)
 {
 #endif
-    if (x < LONG_MIN - 0.5 || x > LONG_MAX + 0.5)
+    if (isnan(x) || x < LONG_MIN - 0.5 || x > LONG_MAX + 0.5) // NaN fails every comparison
         error("Number too large");
     return (x >= 0 ? (int)(x + 0.5) : (int)(x - 0.5));
 }
@@ -6880,7 +6880,9 @@ long long int FloatToInt64(MMFLOAT x)
 long long int __not_in_flash_func(FloatToInt64)(MMFLOAT x)
 {
 #endif
-    if (x < (-(0x7fffffffffffffffLL) - 1) - 0.5 || x > 0x7fffffffffffffffLL + 0.5)
+    // NaN fails every comparison, and 2^63 itself is out of range: as a double
+    // the old bound 0x7fffffffffffffff + 0.5 rounded to 2^63 and let it through
+    if (isnan(x) || x < -9223372036854775808.0 || x >= 9223372036854775808.0)
         error("Number too large");
     if ((x < -0xfffffffffffff) || (x > 0xfffffffffffff))
         return (long long int)(x);
