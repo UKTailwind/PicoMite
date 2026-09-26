@@ -130,8 +130,8 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main b0f448e</td></tr>
 <tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>confirmed (hard fault)</td><td><span class="pill warn">medium</span></td><td>fixed on main d2a8fa9</td></tr>
 <tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>part 1 fixed on main 1c95cd1; part 2 not reachable in practice</td></tr>
-<tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
-<tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main 2d5307e</td></tr>
+<tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main edc7999</td></tr>
 <tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 <tr><td>11</td><td>Interrupts</td><td>the IRETURN stub <code>rti[2]</code> has no terminator</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
