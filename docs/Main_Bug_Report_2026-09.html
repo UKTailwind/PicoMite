@@ -134,7 +134,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main edc7999</td></tr>
 <tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>confirmed (tokenise)</td><td><span class="pill warn">medium</span></td><td>tokenise fixed on main c4ea0e2; the rest left, see the card</td></tr>
 <tr><td>11</td><td>Interrupts</td><td>the IRETURN stub <code>rti[2]</code> has no terminator</td><td>by reading; latent</td><td><span class="pill ok">low</span></td><td>fixed on main fc1ca32</td></tr>
-<tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading; no visible effect</td><td><span class="pill ok">low</span></td><td>fixed on main 1a999a3</td></tr>
 <tr><td>13</td><td>OPTION PROFILING</td><td>interrupt SUBs and ON…GOSUB unbalance the per-SUB frames</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>to check</td></tr>
@@ -251,7 +251,8 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 
 <div class="card"><h3>12 · CountLines on lines longer than 253 bytes</h3>
 <p><b>Where:</b> <code>core/MMBasic.c:3953</code> <code>p += p[0] + 2;</code>. This is reached only for lines whose skip byte is 0xFE (length unknown). The label length is in <code>p[1]</code>.</p>
-<ul><li><b>Fix:</b> <code>p += p[1] + 2;</code>. <b>Effect:</b> a wrong line count for errors or listing positions in programs with very long lines.</li></ul></div>
+<ul><li><b>Effect:</b> none visible. A label starts its line, and a line with skip byte 0xFE is at least 250 bytes, so the wrong skip (5 bytes whatever the label's length) stays inside the line and the line count is right.</li>
+<li><b>Fix (1a999a3):</b> <code>p += p[1] + 2;</code>, as every other label skip in the source already does.</li></ul></div>
 
 <div class="card"><h3>13 · OPTION PROFILING frames unbalanced by interrupts and ON…GOSUB</h3>
 <p><b>Where:</b> a SUB-style interrupt (<code>GotAnInterrupt</code>, <code>core/MM_Misc.c:10527</code>) and ON…GOSUB (<code>core/Commands.c:8625</code>) raise <code>g_LocalIndex</code> without <code>EnterLocalFrame</code>. Their END SUB or RETURN goes through <code>cmd_return</code>, which calls <code>LeaveLocalFrame</code> (<code>:5976</code>).</p>
