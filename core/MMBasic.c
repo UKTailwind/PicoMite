@@ -1263,8 +1263,20 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
 //  - convert the colon to a zero char
 // the result in tknbuf[] is terminated with MMFLOAT zero chars
 //  if the arg console is true then do not add a line number
+// a line whose tokenised form will not fit in tknbuf (with its three terminating
+// zeros) is refused rather than written over the variables that follow tknbuf:
+// from the console that is the error "Line is too long"; otherwise tokenise returns
+// 1 and leaves the error to the caller, which may have a flash write to close first
 
-void MIPS16 tokenise(int console)
+#define TKNPUT(c)                          \
+    do                                     \
+    {                                      \
+        if (op >= tknbuf + STRINGSIZE - 3) \
+            goto toolong;                  \
+        *op++ = (c);                       \
+    } while (0)
+
+int MIPS16 tokenise(int console)
 {
     unsigned char *p, *op, *tp;
     int i = 0;
@@ -1378,7 +1390,7 @@ void MIPS16 tokenise(int console)
         // just copy a space
         if (*p == ' ')
         {
-            *op++ = *p++;
+            TKNPUT(*p++);
             continue;
         }
 
@@ -1388,9 +1400,9 @@ void MIPS16 tokenise(int console)
         {
             do
             {
-                *op++ = *p++;
+                TKNPUT(*p++);
             } while (*p != '"' && *p);
-            *op++ = '"';
+            TKNPUT('"');
             if (*p == '"')
                 p++;
             continue;
@@ -1401,7 +1413,7 @@ void MIPS16 tokenise(int console)
         {
             do
             {
-                *op++ = *p++;
+                TKNPUT(*p++);
             } while (*p);
             continue;
         }
@@ -1409,12 +1421,12 @@ void MIPS16 tokenise(int console)
         // check for multiline separator (colon) and replace with a zero char
         if (*p == ':')
         {
-            *op++ = 0;
+            TKNPUT(0);
             p++;
             while (*p == ':')
             { // insert a space between consecutive colons
-                *op++ = ' ';
-                *op++ = 0;
+                TKNPUT(' ');
+                TKNPUT(0);
                 p++;
             }
             firstnonwhite = true;
@@ -1427,17 +1439,19 @@ void MIPS16 tokenise(int console)
         if (firstnonwhite && console && (IsDigitinline(*p) || *p == '(' || (*p == '.' && IsDigitinline(p[1]))))
         {
             unsigned short tkn = GetCommandValue((unsigned char *)"Calc");
-            *op++ = (tkn & 0x7f) + C_BASETOKEN;
-            *op++ = (tkn >> 7) + C_BASETOKEN;
+            TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+            TKNPUT((tkn >> 7) + C_BASETOKEN);
             firstnonwhite = false;
         }
         // Implied CALC with implicit MM.ANSWER as left operand: line starts with a binary operator
         else if (firstnonwhite && console && (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '\\' || *p == '^' || *p == '<' || *p == '>'))
         {
             unsigned short tkn = GetCommandValue((unsigned char *)"Calc");
-            *op++ = (tkn & 0x7f) + C_BASETOKEN;
-            *op++ = (tkn >> 7) + C_BASETOKEN;
+            TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+            TKNPUT((tkn >> 7) + C_BASETOKEN);
             // emit "MM.ANSWER" as raw chars — getvalue reads it as a variable reference
+            if (op + 9 > tknbuf + STRINGSIZE - 3)
+                goto toolong;
             memcpy(op, "MM.ANSWER", 9);
             op += 9;
             firstnonwhite = false;
@@ -1448,15 +1462,15 @@ void MIPS16 tokenise(int console)
             while (IsDigitinline(*p) || *p == '.' || *p == 'E' || *p == 'e')
                 if (*p == 'E' || *p == 'e')
                 {                 // check for '+' or '-' as part of the exponent
-                    *op++ = *p++; // copy the number
+                    TKNPUT(*p++); // copy the number
                     if (*p == '+' || *p == '-')
                     {                 // BUGFIX by Gerard Sexton
-                        *op++ = *p++; // copy the '+' or '-'
+                        TKNPUT(*p++); // copy the '+' or '-'
                     }
                 }
                 else
                 {
-                    *op++ = *p++; // copy the number
+                    TKNPUT(*p++); // copy the number
                 }
             firstnonwhite = false;
             continue;
@@ -1521,14 +1535,14 @@ void MIPS16 tokenise(int console)
             {
                 // we have found a command
                 //                *op++ = match_i + C_BASETOKEN;                      // insert the token found
-                *op++ = (match_i & 0x7f) + C_BASETOKEN;
-                *op++ = (match_i >> 7) + C_BASETOKEN; // tokens can be 14-bit
+                TKNPUT((match_i & 0x7f) + C_BASETOKEN);
+                TKNPUT((match_i >> 7) + C_BASETOKEN); // tokens can be 14-bit
                 p = match_p;                          // step over the command in the source
                 if (isalpha(*(p - 1)) && *p == ' ')
                     p++;                                                // if the command is followed by a space skip over it
                 if (match_i == GetCommandValue((unsigned char *)"Rem")) // check if it is a REM command
                     while (*p)
-                        *op++ = *p++; // and in that case just copy everything
+                        TKNPUT(*p++); // and in that case just copy everything
                 firstnonwhite = false;
                 labelvalid = false; // we do not want any labels after this
                 if (match_i == GetCommandValue((unsigned char *)"/*"))
@@ -1560,10 +1574,10 @@ void MIPS16 tokenise(int console)
                 if (*tp == ':')
                 {                       // Yes !!  It is a label
                     labelvalid = false; // we do not want any more labels
-                    *op++ = T_LABEL;    // insert the token
-                    *op++ = tp - p;     // insert the length of the label
+                    TKNPUT(T_LABEL);    // insert the token
+                    TKNPUT(tp - p);     // insert the length of the label
                     for (i = tp - p; i > 0; i--)
-                        *op++ = *p++; // copy the label
+                        TKNPUT(*p++); // copy the label
                     p++;              // step over the terminating colon
                     continue;
                 }
@@ -1592,9 +1606,9 @@ void MIPS16 tokenise(int console)
                 if (icalc != TokenTableSize - 1)
                 {
                     unsigned short calc_tkn = GetCommandValue((unsigned char *)"Calc");
-                    *op++ = (calc_tkn & 0x7f) + C_BASETOKEN;
-                    *op++ = (calc_tkn >> 7) + C_BASETOKEN;
-                    *op++ = icalc + C_BASETOKEN;
+                    TKNPUT((calc_tkn & 0x7f) + C_BASETOKEN);
+                    TKNPUT((calc_tkn >> 7) + C_BASETOKEN);
+                    TKNPUT(icalc + C_BASETOKEN);
                     p = tscan;
                     firstnonwhite = false;
                     continue;
@@ -1625,7 +1639,7 @@ void MIPS16 tokenise(int console)
             {
                 // we have a  match
                 i += C_BASETOKEN;
-                *op++ = i; // insert the token found
+                TKNPUT(i); // insert the token found
                 p = tp2;   // and step over it in the source text
                 if (i == tokenTHEN || i == tokenELSE)
                     firstnonwhite = true; // a command is valid after a THEN or ELSE
@@ -1646,8 +1660,8 @@ void MIPS16 tokenise(int console)
                 if (*tp == '=')
                 {
                     unsigned short tkn = GetCommandValue((unsigned char *)"Let"); // is it an implied let?
-                    *op++ = (tkn & 0x7f) + C_BASETOKEN;
-                    *op++ = (tkn >> 7) + C_BASETOKEN; // tokens can be 14-bit
+                    TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+                    TKNPUT((tkn >> 7) + C_BASETOKEN); // tokens can be 14-bit
                 }
 #ifdef CALCPROMPT
                 else if (console && (*tp == '+' || *tp == '-' ||
@@ -1657,13 +1671,13 @@ void MIPS16 tokenise(int console)
                 {
                     // Implied CALC: identifier followed by an operator (symbol or text op like AND/OR/MOD)
                     unsigned short tkn = GetCommandValue((unsigned char *)"Calc");
-                    *op++ = (tkn & 0x7f) + C_BASETOKEN;
-                    *op++ = (tkn >> 7) + C_BASETOKEN;
+                    TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+                    TKNPUT((tkn >> 7) + C_BASETOKEN);
                 }
 #endif
             }
             while (isnamechar(*p))
-                *op++ = *p++; // copy the variable name
+                TKNPUT(*p++); // copy the variable name
             firstnonwhite = false;
             labelvalid = false; // we do not want any labels after this
             continue;
@@ -1685,7 +1699,7 @@ void MIPS16 tokenise(int console)
         }
 
         // something else, so just copy the one character
-        *op++ = *p++;
+        TKNPUT(*p++);
         labelvalid = false; // we do not want any labels after this
         firstnonwhite = false;
     }
@@ -1721,7 +1735,15 @@ void MIPS16 tokenise(int console)
         else
             tknbuf[1] = T_NEWLINE_SKIP_NONE;
     }
+    return 0;
+
+toolong:
+    tknbuf[0] = tknbuf[1] = tknbuf[2] = 0; // nothing half-tokenised is left to run or save
+    if (console)
+        error("Line is too long");
+    return 1;
 }
+#undef TKNPUT
 
 int CheckEmpty(char *p)
 {

@@ -4238,7 +4238,12 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
         *p = 0;
         if (*inpbuf == 0)
             continue;
-        tokenise(false);
+        if (tokenise(false))
+        {
+            if (!w)
+                FlashWriteClose(); /* turns interrupts back on */
+            error("Line is too long");
+        }
         p = tknbuf;
         while (!(p[0] == 0 && p[1] == 0))
         {
@@ -4443,7 +4448,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
 {
     unsigned char *p, fontnbr, prevchar = 0, buf[STRINGSIZE];
     unsigned short endtoken, tkn;
-    int nbr, i, n, SaveSizeAddr;
+    int nbr, i, n, SaveSizeAddr, toolong = false;
     multi = false;
     uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realmemsave;
     initFonts();
@@ -4485,7 +4490,11 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
         if (*inpbuf == 0 && (*pm == 0 || (!isprint((uint8_t)*pm) && pm[1] == 0)))
             break; // don't save a trailing newline
 
-        tokenise(false); // turn into executable code
+        if (tokenise(false)) // turn into executable code
+        {
+            toolong = true; // it does not fit in tknbuf
+            goto exiterror;
+        }
         p = tknbuf;
         while (!(p[0] == 0 && p[1] == 0))
         {
@@ -4802,6 +4811,8 @@ exiterror:
     MemWriteByte(0);
     MemWriteByte(0); // terminate the program in flash
     MemWriteClose();
+    if (toolong)
+        error("Line is too long");
     StandardError(29);
 }
 int MemLoadProgram(unsigned char *fname, unsigned char *ram)

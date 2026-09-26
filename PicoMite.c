@@ -4732,7 +4732,7 @@ uint32_t testPSRAM(void)
         unsigned char *p, fontnbr, prevchar = 0, buf[STRINGSIZE];
         unsigned short endtoken, tkn;
         int nbr, i, j, n, SaveSizeAddr;
-        bool continuation = false;
+        bool continuation = false, toolong = false;
         multi = false;
         uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realflashsave;
         const uint8_t *scanbase = (region == LIBRARY_FLASH) ? flash_libmemory : flash_progmemory;
@@ -4799,7 +4799,11 @@ uint32_t testPSRAM(void)
                 inpbuf[strlen((char *)inpbuf) - 2] = 0; // strip the continuation character
                 goto contloop;
             }
-            tokenise(false); // turn into executable code
+            if (tokenise(false)) // turn into executable code
+            {
+                toolong = true; // it does not fit in tknbuf
+                goto exiterror;
+            }
             p = tknbuf;
             while (!(p[0] == 0 && p[1] == 0))
             {
@@ -5126,6 +5130,8 @@ uint32_t testPSRAM(void)
         FlashWriteByte(0);
         FlashWriteByte(0); // terminate the program in flash
         FlashWriteClose();
+        if (toolong)
+            error("Line is too long");
         StandardError(29);
     }
 

@@ -644,7 +644,7 @@ long long int FloatToInt64(MMFLOAT x);
     /* ============================================================================
      * Function declarations - Tokenization and execution
      * ============================================================================ */
-    void tokenise(int console);
+    int tokenise(int console);
     void ExecuteProgram(unsigned char *);
     void AddProgramLine(int append);
     int GetCommandValue(unsigned char *n);
