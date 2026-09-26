@@ -4262,6 +4262,8 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                     evaluate(argv[ai], &f, &in, (unsigned char **)&s, &targ, false);
                     if (targ == T_NBR)
                         in = FloatToInt32(f);
+                    else if (targ == T_INT && in != (int)in)
+                        error("Index out of bounds"); // too big for any array: must not wrap to a small index
                     mem_dim[ai / 2] = (int)in;
                 }
 
@@ -4386,6 +4388,8 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                 evaluate(argv[ai], &f, &in, (unsigned char **)&s, &targ, false);
                 if (targ == T_NBR)
                     in = FloatToInt32(f);
+                else if (targ == T_INT && in != (int)in)
+                    error("Index out of bounds"); // too big for any array: must not wrap to a small index
                 mem_dim[ai / 2] = (int)in;
             }
 
@@ -4876,6 +4880,8 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                     dnbr = MAXDIM; // force an error to be thrown later (with the correct message)
                 if (targ == T_NBR)
                     in = FloatToInt32(f);
+                else if (targ == T_INT && in != (int)in)
+                    error("Index out of bounds"); // too big for any array: must not wrap to a small index
                 dim[i / 2] = in;
                 if (dim[i / 2] < g_OptionBase)
                 {
