@@ -558,8 +558,10 @@ void fun_abs(void)
 	MMFLOAT f;
 	long long int i64;
 
-	targ = T_INT;
+	targ = T_NOTYPE; // not T_INT: that converts a float to an integer, "Number too large" from 2^63
 	evaluate(ep, &f, &i64, &s, &targ, false); // get the value and type of the argument
+	if (targ & T_STR)
+		StandardError(20);
 	if (targ & T_NBR)
 		fret = fabs(f);
 	else
@@ -1234,8 +1236,10 @@ void fun_sgn(void)
 	unsigned char *s;
 	MMFLOAT f;
 	long long int i64;
-	int t = T_INT;
+	int t = T_NOTYPE; // not T_INT: that converts a float to an integer, "Number too large" from 2^63
 	evaluate(ep, &f, &i64, &s, &t, false);
+	if (t & T_STR)
+		StandardError(20);
 	if (t & T_INT)
 		iret = (i64 > 0LL) - (i64 < 0LL);
 	else
