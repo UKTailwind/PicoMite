@@ -245,6 +245,10 @@ extern "C"
    include configuration.h). Defining it here too would produce a redefine
    warning because -D and #define without a body resolve to different bodies. */
 #define HEAP_MEMORY_SIZE (256 * 1024)
+   /* +16 KB (2026-09-26): the interrupt-pending counter (S1c) took this variant
+      636 bytes over 1456 KB; it had been down to 188 bytes.  Peter chose the
+      offset alone, so the A: drive is 16 KB smaller.  Moving the offset moves
+      the option sector, so the first boot after the upgrade does a full clean. */
 #define FLASH_TARGET_OFFSET (1472 * 1024)
 #else
 #define MagicKey 0x6E75BE94
@@ -362,11 +366,24 @@ extern "C"
 #define HEAP_MEMORY_SIZE (124 * 1024)
 #else
 #ifdef PICOMITEMIN
-#define FLASH_TARGET_OFFSET (688 * 1024)
+   /* +16 KB (2026-09-26): the DO loop fast path (DoFastCompile in Commands.c)
+      took this variant 712 bytes over 688 KB.  The program size drops 4 KB to
+      pay for it (MAX_PROG_SIZE below): the program area and the three flash
+      slots are each one program size, so the A: drive still starts at the
+      same address and keeps its size.  The option sector moves, though, so
+      the first boot after the upgrade does a full clean. */
+#define FLASH_TARGET_OFFSET (704 * 1024)
 #define MagicKey 0x40287BEA
 #define HEAP_MEMORY_SIZE (128 * 1024)
 #else
-#define HEAP_MEMORY_SIZE (120 * 1024)
+   /* +8 KB (2026-09-26): removing the trace cache left 13 KB of RAM spare.
+      The program area here is a fixed 120 KB (MAX_PROG_SIZE below), so the
+      heap grows without moving anything in flash; about 5 KB stays spare. */
+#define HEAP_MEMORY_SIZE (128 * 1024)
+   /* -16 KB (2026-09-26): back to 912 KB.  Removing the trace cache left 34 KB
+      of flash spare, so the step taken on 2026-09-22 (below) returns to the
+      A: drive with about 18 KB still spare.  Moving the offset again means
+      the first boot after the upgrade does a full clean. */
    /* +16 KB (2026-09-22): this variant was down to 28 bytes, so anything
       at all broke it - the littlefs bound checks and the cold-start settle
       wait together needed 56.  Living on tens of bytes means every change
@@ -376,7 +393,7 @@ extern "C"
       the magic key check fails on the first boot after the upgrade and the
       board does a full clean - existing A: drives and options do not
       survive.  See [[project_flash_target_offset_alignment]]. */
-#define FLASH_TARGET_OFFSET (928 * 1024)
+#define FLASH_TARGET_OFFSET (912 * 1024)
 #define MagicKey 0xA17DE2A2
 #endif
 #endif
@@ -396,7 +413,9 @@ extern "C"
 /* ============================================================================
  * Memory configuration
  * ============================================================================ */
-#if defined(PICOMITE) && !defined(rp2350)
+#if defined(PICOMITEMIN)
+#define MAX_PROG_SIZE (116 * 1024) // 4 KB less, for the 16 KB of FLASH_TARGET_OFFSET above
+#elif defined(PICOMITE) && !defined(rp2350)
 #define MAX_PROG_SIZE (120 * 1024) // Maximum program size in bytes (adjust as needed     )
 #else
 #define MAX_PROG_SIZE HEAP_MEMORY_SIZE

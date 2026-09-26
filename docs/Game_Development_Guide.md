@@ -1357,48 +1357,30 @@ END
     per-object physics update measured at 9.8 ms in BASIC ran in 0.28 ms as a
     CSUB doing exactly the same arithmetic. Keep the CSUB's state in an integer
     array shared with the BASIC so nothing has to be copied across the boundary
-    each call.
+    each call. The mmb2csub tool (`user-tools/mmb2csub.py`, described in
+    `mmb2csub.pdf`) does the conversion for you, from the BASIC routine itself.
 
-### The trace cache
+### Finding the hot spots
 
-`OPTION TRACECACHE ON n` compiles the assignments and `IF` conditions it sees
-into a form it can replay, which is worth having in a game because a game is a
-handful of statements executed hundreds of times a frame. Three things about it
-are not obvious and each one cost a measurement to learn.
+Measure before you change anything. `OPTION PROFILING ON` at the top of the
+program prints a report at `END`: the commands executed most often, and the
+SUBs and FUNCTIONs called most and taking the most time. Profile one
+representative run, for example a fixed number of frames, and work on the top
+few entries only. `option-profiling-cache.pdf` has the full reference.
 
-**The size rounds up to a power of two.** `ON 100` and `ON 80` are the same 128
-slots; only 128 and 256 differ in that range. A carefully chosen number between
-them changes nothing at all, which is an easy afternoon to lose.
+Earlier versions offered a statement cache, `OPTION TRACECACHE` with
+`OPTION CACHE SUB` and `OPTION CACHE DEBUG`, aimed at games. It was removed in
+V6.04.00 because it rarely paid for itself and could make programs slower.
+Delete those lines from existing programs: they now stop with "Invalid
+Option". The one part of it that helped everywhere, the DO loop fast path, is
+now automatic in every build.
 
-**Aim it.** `OPTION CACHE SUB DrawStars, DrawScanner` restricts caching to the
-subs you name, so the slots go to the loops that run every frame instead of
-being spent on start-up code that runs once. `OPTION CACHE DEBUG ON` then prints
-every statement that would not compile, which is how you find out that the inner
-loop you were counting on is built round a call to one of your own
-`FUNCTION`s - the cache cannot compile those, and the statement stays
-interpreted however many slots you give it.
-
-**It comes out of the same heap as everything else,** at roughly 216 bytes a
-slot: 128 slots is about 27 KB and 256 about 54 KB. It is also taken *lazily*,
-at the first statement that wants a slot, which is long after your start-up code
-has worked out how much room it has for other things.
-
-So the size is a machine-dependent decision, not a constant. Ask at run time:
-
-```basic
-IF MM.INFO(PSRAM SIZE) > 0 THEN
-  OPTION TRACECACHE ON 256
-ELSE
-  OPTION TRACECACHE ON 128
-ENDIF
-```
-
-Measured on one game over an identical 300-frame run, going from 128 to 256
-slots on a machine with PSRAM took the cache misses from 18,618 to 757 and the
-frame from 41.9 ms to 37.7 ms - about a tenth, for nothing but a number. 512
-slots took the misses to zero and the frame to 37.1 ms, which was not worth
-another 54 KB. `OPTION PROFILING ON` reports all of those counters at `END`; see
-`option-profiling-cache.pdf` for the full reference.
+Its replacement, and a far more powerful one, is the **mmb2csub** tool
+(`user-tools/mmb2csub.py`). Once the profile has named the one or two routines
+that take the time, mmb2csub compiles each of them to machine code and puts
+it back into your program as a CSUB, with the calls unchanged - typically 10
+to 35 times faster for loops and arithmetic, where the trace cache gained a
+few percent at best. `mmb2csub.pdf` explains how to use it.
 
 
 ### Memory Considerations
@@ -1420,7 +1402,7 @@ Use `FLASH LOAD IMAGE` to keep large images in flash rather than RAM. Use SPRITE
 ### Living within the heap
 
 Everything above competes for one pool, and several of the biggest consumers are
-invisible in your source: the framebuffer, the trace cache, each `DRAW3D`
+invisible in your source: the framebuffer, each `DRAW3D`
 object, the audio buffers. `MM.INFO(HEAP)` reports what is free and `MEMORY`
 breaks it down. Three habits make the difference between a game that fits and
 one that dies unpredictably.

@@ -4331,6 +4331,12 @@ uint32_t testPSRAM(void)
             ProgMemory = (uint8_t *)flash_progmemory;
             ContinuePoint = nextstmt; // in case the user wants to use the continue command
             *tknbuf = 0;              // we do not want to run whatever is in the token buffer
+            {
+                /* a call whose arguments were being processed (a CTRL-C in them) is gone:
+                   a later error must not free its argument block */
+                extern uint32_t DefinedSubFunMem;
+                DefinedSubFunMem = 0;
+            }
             // Do NOT reset optionangle/useoptionangle here - this landing pad fires
             // after every prompt command, so resetting would cancel an OPTION ANGLE
             // DEGREES set at the prompt. ClearRuntime() resets it at program start
@@ -4732,7 +4738,7 @@ uint32_t testPSRAM(void)
         unsigned char *p, fontnbr, prevchar = 0, buf[STRINGSIZE];
         unsigned short endtoken, tkn;
         int nbr, i, j, n, SaveSizeAddr;
-        bool continuation = false;
+        bool continuation = false, toolong = false;
         multi = false;
         uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realflashsave;
         const uint8_t *scanbase = (region == LIBRARY_FLASH) ? flash_libmemory : flash_progmemory;
@@ -4808,7 +4814,11 @@ uint32_t testPSRAM(void)
                 inpbuf[strlen((char *)inpbuf) - 2] = 0; // strip the continuation character
                 goto contloop;
             }
-            tokenise(false); // turn into executable code
+            if (tokenise(false)) // turn into executable code
+            {
+                toolong = true; // it does not fit in tknbuf
+                goto exiterror;
+            }
             p = tknbuf;
             while (!(p[0] == 0 && p[1] == 0))
             {
@@ -5146,6 +5156,8 @@ uint32_t testPSRAM(void)
         FlashWriteByte(0);
         FlashWriteByte(0); // terminate the program in flash
         FlashWriteClose();
+        if (toolong)
+            error("Line is too long");
         StandardError(29);
     }
 

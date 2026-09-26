@@ -558,8 +558,10 @@ void fun_abs(void)
 	MMFLOAT f;
 	long long int i64;
 
-	targ = T_INT;
+	targ = T_NOTYPE; // not T_INT: that converts a float to an integer, "Number too large" from 2^63
 	evaluate(ep, &f, &i64, &s, &targ, false); // get the value and type of the argument
+	if (targ & T_STR)
+		StandardError(20);
 	if (targ & T_NBR)
 		fret = fabs(f);
 	else
@@ -1131,7 +1133,7 @@ void fun_instr(void)
 // Truncate an expression to the next whole number less than or equal to the argument.
 void fun_int(void)
 {
-	iret = floor(getnumber(ep));
+	iret = FloatToInt64(floor(getnumber(ep))); // range-checked: a plain cast turned NaN, INF and 1e30 into 9223372036854775807
 	targ = T_INT;
 }
 
@@ -1139,7 +1141,7 @@ void fun_int(void)
 // to the right of the decimal point.
 void fun_fix(void)
 {
-	iret = getnumber(ep);
+	iret = FloatToInt64(trunc(getnumber(ep))); // range-checked, as INT
 	targ = T_INT;
 }
 
@@ -1234,8 +1236,10 @@ void fun_sgn(void)
 	unsigned char *s;
 	MMFLOAT f;
 	long long int i64;
-	int t = T_INT;
+	int t = T_NOTYPE; // not T_INT: that converts a float to an integer, "Number too large" from 2^63
 	evaluate(ep, &f, &i64, &s, &t, false);
+	if (t & T_STR)
+		StandardError(20);
 	if (t & T_INT)
 		iret = (i64 > 0LL) - (i64 < 0LL);
 	else
@@ -1861,11 +1865,10 @@ void fun_max_min(void)
 		SyntaxError();
 	;
 	bool cmp = (*argv[0] == 'A'); // true for max, false for min
-	if (cmp)
-		nbr = -FLT_MAX;
-	else
-		nbr = FLT_MAX;
-	for (i = 2; i < argc; i += 2)
+	if (argc < 3)
+		SyntaxError();
+	nbr = getnumber(argv[2]); // start from the first value: a starting bound would clamp the result
+	for (i = 4; i < argc; i += 2)
 	{
 		f = getnumber(argv[i]);
 		if (cmp && f > nbr)

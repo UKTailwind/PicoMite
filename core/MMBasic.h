@@ -372,6 +372,9 @@ extern "C"
         short hash;
         short level;
     } hash_val;
+    // g_hashlist records every live local, so it must hold as many as OPTION LOCAL
+    // VARIABLES can allow (not just the default MAXLOCALVARS)
+#define MAXLOCALLIST (MAXVARS - 32)
 
     /* Token table structure */
     struct s_tokentbl
@@ -503,9 +506,7 @@ extern "C"
     extern int PSize;
 
     extern unsigned char *subfun[];
-    extern char CurrentSubFunName[MAXVARLEN + 1];
     extern unsigned char *CmdTokenPtr;
-    extern char CurrentInterruptName[MAXVARLEN + 1];
 
     /* ============================================================================
      * External variables - Buffers
@@ -572,15 +573,16 @@ extern "C"
      * Function declarations - Type conversions
      * ============================================================================ */
 #ifndef MMBASIC_C_INTERNAL
+    /* keep these in step with the copies in MMBasic.c */
     static inline int FloatToInt32(MMFLOAT x)
     {
-        if (x < LONG_MIN - 0.5 || x > LONG_MAX + 0.5)
+        if (isnan(x) || x < LONG_MIN - 0.5 || x > LONG_MAX + 0.5) // NaN fails every comparison
             error("Number too large");
         return (x >= 0 ? (int)(x + 0.5) : (int)(x - 0.5));
     }
     static inline long long int FloatToInt64(MMFLOAT x)
     {
-        if (x < (-(0x7fffffffffffffffLL) - 1) - 0.5 || x > 0x7fffffffffffffffLL + 0.5)
+        if (isnan(x) || x < -9223372036854775808.0 || x >= 9223372036854775808.0) // and 2^63 is out of range
             error("Number too large");
         if ((x < -0xfffffffffffff) || (x > 0xfffffffffffff))
             return (long long int)(x);
@@ -653,7 +655,7 @@ long long int FloatToInt64(MMFLOAT x);
     /* ============================================================================
      * Function declarations - Tokenization and execution
      * ============================================================================ */
-    void tokenise(int console);
+    int tokenise(int console);
     void ExecuteProgram(unsigned char *);
     void AddProgramLine(int append);
     int GetCommandValue(unsigned char *n);

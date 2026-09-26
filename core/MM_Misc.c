@@ -1891,7 +1891,6 @@ void cmd_ireturn(void)
     if (g_LocalIndex)
         ClearVars(g_LocalIndex--, true); // delete any local variables
     g_TempMemoryIsChanged = true;        // signal that temporary memory should be checked
-    *CurrentInterruptName = 0;           // for static vars we are not in an interrupt
 #ifdef GUICONTROLS
     if (DelayedDrawKeyboard)
     {
@@ -9318,7 +9317,7 @@ void MIPS16 fun_info(void)
     {
         if (checkstring(ep, (unsigned char *)"VARCNT"))
         {
-            iret = (int64_t)((uint32_t)g_varcnt);
+            iret = (int64_t)(g_Globalvarcnt + g_Localvarcnt); // live counts: ERASE and a SUB's return lower them
             targ = T_INT;
             return;
         }
@@ -10253,7 +10252,7 @@ int checkdetailinterrupts(void)
 {
     int i, v;
     char *intaddr;
-    static char rti[2];
+    static char rti[4]; // the IRETURN token, then zeros: the statement has to end in this array
     for (int i = 1; i <= MAXPID; i++)
     {
         if (PIDchannels[i].interrupt != NULL && time_us_64() > PIDchannels[i].timenext && PIDchannels[i].active)
@@ -10594,33 +10593,31 @@ GotAnInterrupt:
     CommandToken tkn = commandtbl_decode((const unsigned char *)intaddr);
     if (tkn == cmdSUB)
     {
-        {
-            // the text after the SUB token, with any symbol spelt out (see Symbols.h)
-            unsigned char *q = (unsigned char *)intaddr + 2;
-            const unsigned char *s;
-            int l, n = 0;
-            memset(CurrentInterruptName, 0, MAXVARLEN);
-            while (*q && n < MAXVARLEN)
-            {
-                if (issymbol(*q))
-                {
-                    s = SymSpelling(q, &l);
-                    q += symbolsize(*q);
-                    while (l-- && n < MAXVARLEN)
-                        CurrentInterruptName[n++] = *s++;
-                }
-                else
-                    CurrentInterruptName[n++] = *q++;
-            }
-        }
         rti[0] = (cmdIRET & 0x7f) + C_BASETOKEN;
         rti[1] = (cmdIRET >> 7) + C_BASETOKEN; // tokens can be 14-bit
         if (gosubindex >= MAXGOSUB)
             error("Too many SUBs for interrupt");
         errorstack[gosubindex] = CurrentLinePtr;
+        substack[gosubindex] = (unsigned char *)intaddr;  // for STATIC: the interrupt SUB is the SUB running
         gosubstack[gosubindex++] = (unsigned char *)rti; // return from the subroutine to the dummy IRETURN command
         g_LocalIndex++;                                  // return from the subroutine will decrement g_LocalIndex
-        skipelement(intaddr);                            // point to the body of the subroutine
+#ifdef SUBPROFILE
+        EnterLocalFrame(); // its END SUB closes a profiling frame, so open one here
+#endif
+        if (g_option_profiling)
+        { // count (and time) the interrupt SUB under its own name
+            for (i = 0; i < MAXSUBFUN; i++)
+                if (subfun[i] == (unsigned char *)intaddr)
+                {
+                    if (g_perf_subcall_count)
+                        g_perf_subcall_count[i]++;
+#ifdef SUBPROFILE
+                    g_current_sub_idx = i;
+#endif
+                    break;
+                }
+        }
+        skipelement(intaddr); // point to the body of the subroutine
     }
     nextstmt = (unsigned char *)intaddr; // the next command will be in the interrupt routine
     return 1;

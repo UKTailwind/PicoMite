@@ -51,7 +51,11 @@ That is not a happy accident. The code is compiled for the Cortex-M0+, which
 the RP2350 also executes; it is position-independent, so it does not care
 where the firmware loads it; and it finds the firmware's routines through a
 table it locates *at run time* rather than at an address baked in when it was
-built. Nothing in the blob depends on the chip or on the variant.
+built. Nothing in the blob depends on the chip or on the variant. In
+particular, the generated code never reads the firmware's variable table or
+its `Option` structure, the two things whose layout does differ between the
+chips and variants. (A hand-written CSUB that reads them has to be built for
+the board it runs on; see the CSUB manual, armcfgen.)
 
 Tested rather than assumed: the same file — same bytes, same checksum —
 produces byte-identical output on a PicoMiteVGA running on an RP2040 and a

@@ -65,7 +65,6 @@ void __not_in_flash_func(op_invalid)(void)
 
 void __not_in_flash_func(op_exp)(void)
 {
-    long long int i;
     if (targ & T_NBR)
     {
         fret = (MMFLOAT)pow(farg1, farg2);
@@ -80,8 +79,18 @@ void __not_in_flash_func(op_exp)(void)
             fret = (MMFLOAT)pow((MMFLOAT)iarg1, (MMFLOAT)iarg2);
         }
         else
-            for (iret = i = 1; i <= iarg2; i++)
-                iret *= iarg1;
+        { // by squaring: at most 64 steps (one per unit ran for minutes on a big exponent,
+          // with no CTRL-C), and unsigned so the wrap-around is the same, but defined
+            unsigned long long r = 1, b = (unsigned long long)iarg1, e = (unsigned long long)iarg2;
+            while (e)
+            {
+                if (e & 1)
+                    r *= b;
+                b *= b;
+                e >>= 1;
+            }
+            iret = (long long int)r;
+        }
     }
 }
 

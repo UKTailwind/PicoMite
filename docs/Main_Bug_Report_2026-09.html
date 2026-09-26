@@ -104,14 +104,19 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 </head>
 <body>
 <header class="hero"><div class="wrap">
-<div class="eyebrow">main at cbd99fb · open issues</div>
+<div class="eyebrow">main at 1adeb0e · open issues · updated 26 September 2026</div>
 <h1>Bugs found on main, September 2026</h1>
-<p>These turned up during the interpreter performance work on <code>development</code>. They were found by testing on the boards and by three read-only code surveys. Each one below is present on <code>main</code>. For each, the report gives where it is, what goes wrong, how to confirm it, and a suggested fix. None is fixed on main. Items 1-4 were fixed on <code>development</code> and have since been ported to main.</p>
-<p class="ref">Line numbers are main at cbd99fb (2026-09-25). "Confirmed" means seen on a board; "by reading" means found in the code and not yet reproduced.</p>
+<p>These turned up during the interpreter performance work on <code>development</code>. They were found by testing on the boards and by read-only code surveys. Each one below is present on <code>main</code>. For each, the report gives where it is, what goes wrong, how to confirm it, and a suggested fix.</p>
+<ul>
+<li>Items 1-4 were fixed on <code>development</code> and have since been ported to main.</li>
+<li>Items 21-27 were added on 26 September. Item 21 is fixed on development, not yet on main.</li>
+<li>Peter's plan is to work through the open items on main one at a time, each analysed in turn. That starts after the trace cache removal, the ProcessWeb changes and the interrupt changes have been brought to main.</li>
+</ul>
+<p class="ref">Line numbers for items 1-20 are main at cbd99fb (2026-09-25); for items 21-27, main at 1adeb0e. "Confirmed" means seen on a board; "by reading" means found in the code and not yet reproduced.</p>
 </div></header>
 <div class="wrap">
 <nav class="toc">
-<a href="#summary">Summary</a><a href="#ported">Fixed on development</a><a href="#reading">Found by reading</a><a href="#stepper">Stepper</a><a href="#done">Already fixed on main</a>
+<a href="#summary">Summary</a><a href="#ported">Fixed on development</a><a href="#reading">Found by reading</a><a href="#stepper">Stepper</a><a href="#routeb">Found 26 September</a><a href="#done">Already fixed on main</a>
 </nav>
 
 <section id="summary">
@@ -122,22 +127,32 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>2</td><td>I2C slave</td><td>clearing a slave-ready bit can wipe one the ISR sets at the same moment</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main 0227df6</td></tr>
 <tr><td>3</td><td>WiFi</td><td>WEB SCAN without a connection never polls, so it finds nothing</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main bd1a965</td></tr>
 <tr><td>4</td><td>DO loops</td><td>the trace cache's DO fast path truncates a fractional limit</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main 4c42f0c</td></tr>
-<tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
-<tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
-<tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
-<tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
-<tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
-<tr><td>11</td><td>Interrupts</td><td>the IRETURN stub <code>rti[2]</code> has no terminator</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>13</td><td>OPTION PROFILING</td><td>interrupt SUBs and ON…GOSUB unbalance the per-SUB frames</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>to check</td></tr>
-<tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>removed on development 04361c0</td></tr>
-<tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
-<tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main b0f448e</td></tr>
+<tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>confirmed (hard fault)</td><td><span class="pill warn">medium</span></td><td>fixed on main d2a8fa9</td></tr>
+<tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>part 1 fixed on main 1c95cd1; part 2 not reachable in practice</td></tr>
+<tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main 2d5307e</td></tr>
+<tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main edc7999</td></tr>
+<tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>confirmed (tokenise)</td><td><span class="pill warn">medium</span></td><td>tokenise fixed on main c4ea0e2; the rest left, see the card</td></tr>
+<tr><td>11</td><td>Interrupts</td><td>the IRETURN stub <code>rti[2]</code> has no terminator</td><td>by reading; latent</td><td><span class="pill ok">low</span></td><td>fixed on main fc1ca32</td></tr>
+<tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading; no visible effect</td><td><span class="pill ok">low</span></td><td>fixed on main 1a999a3</td></tr>
+<tr><td>13</td><td>OPTION PROFILING</td><td>interrupt SUBs and ON…GOSUB unbalance the per-SUB frames</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 7238252</td></tr>
+<tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main aa98747</td></tr>
+<tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>checked by reading</td><td><span class="pill ok">low?</span></td><td>not a firmware bug; header comment and manuals corrected on main 63dea76</td></tr>
+<tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>confirmed, both boards</td><td><span class="pill ok">low</span></td><td>heap leak fixed on main 52078f6; nested case left</td></tr>
+<tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>gone: trace cache removed on main c50b6bc</td></tr>
+<tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main db99419</td></tr>
+<tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 2794fe3</td></tr>
+<tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>deferred (Peter, 26 September)</td></tr>
+<tr class="rec"><td>21</td><td>Program flow</td><td>a FOR, DO or GOSUB line ending in <code>: ' comment</code> leaves the loop, or returns past the next line</td><td>confirmed, both boards</td><td><span class="pill bad">high</span></td><td>fixed on main e49d3ff (from development 8740953)</td></tr>
+<tr><td>22</td><td>MAX, MIN</td><td>results clamp at the single-precision limit, &plusmn;3.4e38</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 50c9aa0</td></tr>
+<tr><td>23</td><td>ABS, SGN</td><td>a float of 2<sup>63</sup> or more raises "Number too large"</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 16d0413</td></tr>
+<tr><td>24</td><td>Arrays</td><td>integer subscripts are cut to 32 bits before the bounds check: <code>a(4294967297)</code> reads <code>a(1)</code></td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main 8f617d8</td></tr>
+<tr><td>25</td><td>Arithmetic</td><td>only +infinity from + and * is trapped; subtraction and -infinity never are</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>-INF/NaN printing fixed on main a40112b (option A)</td></tr>
+<tr><td>26</td><td>Conversions</td><td>NaN becomes 9223372036854775807, printed and assigned without an error</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main a40112b (option A)</td></tr>
+<tr><td>27</td><td>Operator ^</td><td>an integer power runs one multiplication per unit of the exponent, with no Ctrl-C</td><td>confirmed (timing)</td><td><span class="pill ok">low</span></td><td>fixed on main c04dc39</td></tr>
+<tr><td>28</td><td>RANDOMIZE (RP2040)</td><td>a bare RANDOMIZE raises "Number out of bounds" once the board has been up about 36 minutes</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main 1457087</td></tr>
+<tr class="rec"><td>29</td><td>Program flow</td><td>calling a one-letter SUB alone on a line skips the next line</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main 9c1aeb9</td></tr>
+<tr><td>30</td><td>Local variables</td><td>markers left by freed locals were never cleared; after a deep recursion a new local failed with "Too many local variables"</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main 8127da0</td></tr>
 </table></div>
 <p>Items 1-4 are done. Suggested order for the rest: 5, 7 and 18.</p>
 </section>
@@ -218,35 +233,50 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 
 <div class="card"><h3>10 · Unchecked buffer lengths: CALL, and tokenise's output</h3>
 <ul>
-<li><b>CALL:</b> <code>cmd_call</code> (<code>core/Commands.c:8318</code>) and <code>fun_call</code> (<code>core/Functions.c:243</code>) <code>strcat</code> the argument text onto the name in a 256-byte temporary string with no length check. A long argument list overruns it.</li>
-<li><b>tokenise:</b> <code>tokenise</code> never checks its output position in <code>tknbuf</code> (256 bytes). Output can be longer than input: the 2-byte line header, the line number, an inserted LET or PRINT, and the CALC <code>MM.ANSWER</code> insertion.</li>
-<li><b>Fix:</b> check the length before each <code>strcat</code> ("String too long"), and bound the <code>tknbuf</code> writes.</li>
+<li><b>tokenise:</b> <code>tokenise</code> never checked its output position in <code>tknbuf</code> (256 bytes), and output can be longer than input: the 2-byte line header, the line number, an inserted LET or PRINT, and the CALC token with <code>MM.ANSWER</code> on every prompt statement that starts with an operator. Confirmed 26 September: a program line of 62 short assignments (about 374 bytes tokenised) restarted the RP2040 VGA board, and <code>+1:</code> typed 80 times at the prompt (about 1,190 bytes) hung it.</li>
+<li><b>Fix (c4ea0e2):</b> <code>tknbuf</code> stays at 256 bytes. Every write to it is checked, and a line that will not fit is refused with "Line is too long". While a program is being saved, <code>tokenise</code> returns 1 instead, so SaveProgramToFlash, SaveProgramToRAM and the library save close their write first (SaveProgramToFlash has interrupts off until then). A 204-character line that tokenises to 242 bytes still runs. Test: <code>Bas/bench/tknbuf10.py</code>.</li>
+<li><b>Left as they are.</b> None of these has been reported by users, so Peter scaled the fix back to <code>tknbuf</code> (26 September):
+<ul>
+<li>CALL and CALL() still <code>strcat</code> the argument text onto the name in a 256-byte temporary string.</li>
+<li>Listing: LIST, SAVE, EDIT and the error display expand <code>?</code> to "Print " and add a space after each command name, so a listed line can reach about 900 characters from a 255-character source. The callers' buffers, <code>replaceAlpha</code> (256 bytes) and <code>str_replace</code> (288 bytes) all hold it. LIST of a line of <code>?n:</code> statements hard-faulted the PC3. With OPTION CONTINUATION LINES, the " _" breaks <code>format_string</code> adds can overrun LIST's 256-byte buffer on an ordinary 255-character line.</li>
+<li>Before tokenising, <code>MIN(</code>, <code>MAX(</code>, <code>LEFT$(</code>, <code>HEX$(</code> and similar names are expanded as text (<code>MIN(</code> becomes <code>TOPBOTTOM(I,</code>) through <code>str_replace</code>'s 288-byte stack buffer. A 241-character line of nested <code>MIN(</code> at the prompt hard-faulted the PC3 (<code>PC=42504F54</code>, the text "TOPB").</li>
+<li>At the prompt only: EVAL saves <code>tknbuf</code> with <code>strcpy</code>, which stops at the first statement, so a long EVAL followed by another statement gives "Invalid character"; EXECUTE drops the rest of the line. Both confirmed on the PC3. Programs are not affected.</li>
+</ul></li>
 </ul></div>
 
 <div class="card"><h3>11 · IRETURN stub has no terminator</h3>
 <p><b>Where:</b> <code>core/MM_Misc.c:10213</code> <code>static char rti[2]</code> holds only the 2-byte IRETURN token. The END SUB of an interrupt SUB returns to it, and <code>skipelement</code>/<code>checkend</code> read the byte after it.</p>
-<ul><li><b>Fix:</b> <code>static char rti[4]</code>, zero-filled after the token.</li></ul></div>
+<ul><li><b>Effect today:</b> none. In both maps (RP2040 VGA, RP2350 HDMIWEB) the next variable needs 4-byte alignment, so the byte after <code>rti</code> is linker fill and always zero. A 1-byte variable whose name sorted just after <code>rti</code> would have broken every interrupt SUB's return with "Unexpected text".</li>
+<li><b>Fix (fc1ca32):</b> <code>static char rti[4]</code>; the zeros are now part of the array. It takes the two bytes of fill, so RAM use is unchanged.</li></ul></div>
 
 <div class="card"><h3>12 · CountLines on lines longer than 253 bytes</h3>
 <p><b>Where:</b> <code>core/MMBasic.c:3953</code> <code>p += p[0] + 2;</code>. This is reached only for lines whose skip byte is 0xFE (length unknown). The label length is in <code>p[1]</code>.</p>
-<ul><li><b>Fix:</b> <code>p += p[1] + 2;</code>. <b>Effect:</b> a wrong line count for errors or listing positions in programs with very long lines.</li></ul></div>
+<ul><li><b>Effect:</b> none visible. A label starts its line, and a line with skip byte 0xFE is at least 250 bytes, so the wrong skip (5 bytes whatever the label's length) stays inside the line and the line count is right.</li>
+<li><b>Fix (1a999a3):</b> <code>p += p[1] + 2;</code>, as every other label skip in the source already does.</li></ul></div>
 
 <div class="card"><h3>13 · OPTION PROFILING frames unbalanced by interrupts and ON…GOSUB</h3>
 <p><b>Where:</b> a SUB-style interrupt (<code>GotAnInterrupt</code>, <code>core/MM_Misc.c:10527</code>) and ON…GOSUB (<code>core/Commands.c:8625</code>) raise <code>g_LocalIndex</code> without <code>EnterLocalFrame</code>. Their END SUB or RETURN goes through <code>cmd_return</code>, which calls <code>LeaveLocalFrame</code> (<code>:5976</code>).</p>
 <ul><li><b>Effect:</b> the frame of the SUB that was interrupted is popped, so OPTION PROFILING's per-SUB times are charged to the wrong SUB. Only the CACHE builds that keep these frames are affected; <code>g_LocalIndex</code> stays balanced.</li>
-<li><b>Fix:</b> call <code>EnterLocalFrame</code> at both entries.</li></ul></div>
+<li><b>Confirmed</b> on the PC3: a SUB that ran 1 s with a 50 ms SETTICK SUB firing into it was timed at 51 ms, one that ran 0.5 s after an ON GOSUB at 82 &micro;s, and the tick SUB was missing from the report.</li>
+<li><b>Fix (7238252):</b> both entries call <code>EnterLocalFrame</code>. An interrupt SUB is also counted and timed under its own name, since the dispatch that counts SUB calls never sees it. Now 1,000,061 &micro;s, 500,065 &micro;s, and the tick SUB with 19 calls. Test: <code>Bas/bench/prof13.py</code>.</li></ul></div>
 
 <div class="card"><h3>14 · MM.INFO(VARCNT) stale</h3>
 <p><b>Where:</b> <code>g_varcnt</code> is updated only when a variable is created. <code>erase()</code> (<code>core/MMBasic.c:6577</code>) and <code>ClearVars(level)</code> decrement <code>g_Globalvarcnt</code>/<code>g_Localvarcnt</code> but not the total. MM.INFO(VARCNT) is at <code>core/MM_Misc.c:9358</code>.</p>
-<ul><li><b>Fix:</b> return <code>g_Globalvarcnt + g_Localvarcnt</code>, or update <code>g_varcnt</code> alongside them.</li></ul></div>
+<ul><li><b>Confirmed</b> on the PC3: erasing one array, then two LOCALs, then returning from the SUB changed the count by 0, 1 and 1 where the manual's "number of variables in use" needs -1, 2 and 0.</li>
+<li><b>Fix (aa98747):</b> MM.INFO(VARCNT) returns <code>g_Globalvarcnt + g_Localvarcnt</code>. Test: <code>Bas/bench/varcnt14.py</code>, passes on the PC3 and the VGA.</li></ul></div>
 
 <div class="card"><h3>15 · CSUB header: <code>int dims[]</code> only for PICORP2350 (to verify)</h3>
 <p><b>Where:</b> <code>PicoCFunctions.h:400</code> selects <code>int dims[MAXDIM]</code> only <code>#ifdef PICORP2350</code>, else <code>short</code>. Every RP2350 firmware build uses <code>int dimtbl[5]</code>, and the variable-table layout is part of the CSUB ABI (CallTable 0x60).</p>
-<ul><li><b>Check:</b> how CSUBs are compiled for the other RP2350 targets (HDMI, HDMIUSB, VGARP2350 …). If <code>PICORP2350</code> is not defined for them, a CSUB that walks <code>g_vartbl</code> reads the wrong offsets.</li></ul></div>
+<ul><li><b>Check:</b> how CSUBs are compiled for the other RP2350 targets (HDMI, HDMIUSB, VGARP2350 …). If <code>PICORP2350</code> is not defined for them, a CSUB that walks <code>g_vartbl</code> reads the wrong offsets.</li></ul>
+<ul><li><b>Checked:</b> not a firmware bug. In the header <code>PICORP2350</code> is the CSUB author's chip select, not the firmware variant: with it defined the header gives MAXDIM 5 and <code>int dims[]</code>, as every RP2350 build has (<code>rp2350</code> comes from <code>IS_RP2350</code>), and without it 6 and <code>short</code>, as every RP2040 build has. The other fields line up byte for byte.</li>
+<li><b>Corrected (63dea76):</b> the switch's comment said it was "kept only for any chip-specific user code", which invites leaving it defined for an RP2040. It now says that it sets the variable-table layout and must match the chip.</li>
+<li><b>Manuals qualified:</b> armcfgen (the CSUB manual), the mmb2csub manual and the V6.04.00 release notes said one compiled CSUB runs unchanged on both chips and every variant. That holds only for a CSUB that reads neither <code>g_vartbl</code> (<code>dims[]</code>: 5 &times; <code>int</code> on the RP2350, 6 &times; <code>short</code> on the RP2040) nor <code>Option</code> (laid out per variant). armcfgen &sect;1.5 now says so, with how to build one that does; mmb2csub notes that its generated code reads neither, so its claim stands. The user manual makes no such claim.</li></ul></div>
 
 <div class="card"><h3>16 · Leak when a nested call's argument errors under ON ERROR SKIP</h3>
 <p><b>Where:</b> <code>DefinedSubFunMem</code> (<code>core/MMBasic.c:536</code>) is one global sentinel. It is set during argument processing (<code>:2387</code>) and cleared on success (<code>:2628</code>). In <code>Foo(Bar(x), bad)</code> the inner call clears it. If the outer call's later argument then errors under OPTION ERROR SKIP, the error handler does not unwind the outer frame.</p>
-<ul><li><b>Effect:</b> the gosub frame and the heap argument buffers leak. <b>Fix:</b> a per-call sentinel saved and restored around the argument evaluation.</li></ul></div>
+<ul><li><b>Wider than it read.</b> The <code>gosubstack</code> holds every SUB and FUNCTION call, not only GOSUBs. And the error cleanup undid the call's frame but freed nothing, so even without a nested call, every skipped error in a call's arguments leaked: on the RP2040 the 2.8&nbsp;KB argument block (50 errors in <code>Foo(1/z, 1)</code> used up the VGA's heap, 100,608 bytes, after which each call leaked its frame as well), and on both chips the 256-byte copy of each string argument (13,312 bytes over 50 on the PC3).</li>
+<li><b>Fixed (52078f6):</b> the cleanup frees the string copies made so far and the argument block; the prompt's landing clears the sentinel so a CTRL-C cannot leave a stale block. Test: <code>Bas/bench/argleak16.py</code>, heap unchanged on both boards.</li>
+<li><b>Left as an edge case</b> (Peter, 26 September): a nested call in the argument list. <code>Foo(Bar(1), 1/z)</code> - Bar's success clears the one sentinel - and <code>Foo(Bar(1/z))</code> - the cleanup undoes one level - still leak the outer call's frame (and on the RP2040 its argument block). After 50 such skipped errors no SUB or FUNCTION can be called ("Too many nested SUB/FUN"; seen on the PC3 with a 45-deep call). The full fix would keep a per-call record on the C stack (about 25 lines, no RAM).</li></ul></div>
 
 <div class="card"><h3>17 · Trace cache keeps global indices it never invalidates</h3>
 <p><b>Where:</b> <code>core/MMtrace.c</code>. Its LET/INC ops store global slot indices and raw pointers. <code>TraceCacheInvalidateAll</code> (<code>:3287</code>) is called only by the trace cache's own option commands, although the file's comments say DIM, ERASE, REDIM and CLEAR invalidate it.</p>
@@ -258,12 +288,91 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <div class="card"><h3>18 · RUN during a stepper job wipes the heap under the ISR</h3>
 <ul>
 <li><b>What goes wrong:</b> RUN clears and reinitialises the heap while the stepper timer interrupt may still be walking planner blocks and arc buffers that live in it.</li>
-<li><b>Fix:</b> stop the stepper subsystem (disable its IRQ and drop the queue) before ClearRuntime and InitHeap, as END should.</li>
+<li><b>Confirmed</b> on the PC3 (audio disabled, one axis on GP10/GP22, no motor): after a program queued 80 s of moves and ended, the next RUN found the stepper still active with the job frozen on the wiped buffer. Also: a re-run program could not STEPPER INIT ("Stepper already initialized"), and the STEPPER CLOSE used to get round that (<code>Testfiles/FishFeeder.bas</code>) freed the stale buffer pointer. The Stepper Reference says nothing about RUN or END.</li>
+<li><b>Fix (db99419):</b> <code>InitHeap</code> calls <code>stepper_close_subsystem()</code> before the wipe (Peter chose this over stopping it on RUN/NEW/LOAD only), so every heap wipe - RUN, NEW, LOAD, CHAIN, and FILES / EDIT FILE / RAM FILE LOAD from inside a program - ends a stepper job and a program must STEPPER INIT again. Test: <code>Bas/bench/steprun18.py</code>.</li>
+<li><b>Noted, not changed:</b> CTRL-C does not stop motion; <code>do_end</code> aborts the stepper only after an error, so a queued job carries on after CTRL-C.</li>
 </ul></div>
 <div class="card"><h3>19 · STEPPER ESTOP leaks the executing arc's buffer</h3>
-<ul><li><b>What goes wrong:</b> ESTOP drops the queue, but the buffer of the arc being executed is not handed to the retired list. <b>Fix:</b> one line: retire the current block's payload in the ESTOP path.</li></ul></div>
+<ul><li><b>What goes wrong:</b> ESTOP drops the queue, but the buffer of the arc being executed is not handed to the retired list; the next block the ISR loads overwrites the pointer. Only the STEPPER ESTOP command path missed it: the hardware E-STOP and limit trips, the error abort and STEPPER CLOSE release it.</li>
+<li><b>Confirmed and fixed (2794fe3):</b> the ESTOP path calls <code>stepper_release_current_arc()</code>. A 157&nbsp;mm arc stopped after 1&nbsp;s lost 3,584 bytes until the next RUN; now 0. Test: <code>Bas/bench/estoparc19.py</code> (PC3 with audio disabled, X on GP2/GP3, Y on GP4/GP5).</li></ul></div>
 <div class="card"><h3>20 · Arcs slower than the requested feed rate</h3>
-<ul><li><b>What goes wrong:</b> on the PC3 test rig, arcs ran at about 2.4 mm/s with F6000 requested; straight moves were not affected. <b>Next step:</b> check the arc segment feed-rate clamp and the per-segment junction speed against the planner.</li></ul></div>
+<ul><li><b>What goes wrong:</b> on the PC3 test rig, arcs ran at about 2.4 mm/s with F6000 requested; straight moves were not affected. <b>Next step:</b> check the arc segment feed-rate clamp and the per-segment junction speed against the planner.</li>
+<li><b>Deferred</b> (Peter, 26 September: not today's issue). One unexamined data point: on the PC3 (audio disabled, X on GP2/GP3, Y on GP4/GP5, 50&nbsp;mm/s, 200&nbsp;mm/s&sup2;), a program that timed a 157&nbsp;mm straight move and then a 157&nbsp;mm semicircle, both at F6000, had not finished after 280&nbsp;s. The stepper was still active when it was stopped.</li></ul></div>
+</section>
+
+<section id="routeb">
+<h2>Found on 26 September</h2>
+<p>These turned up while designing Route B on <code>development</code>, from four code surveys and board checks on the PC3 and the RP2040 VGA. Line numbers are for <code>main</code> at 1adeb0e. "Confirmed" means seen on a board running a <code>development</code> build whose code in that area is the same as main's.</p>
+
+<div class="card"><h3>21 · A loop whose first line ends in <code>: ' comment</code> runs once</h3>
+<p><b>Where:</b> the comment fast path in <code>ExecuteProgram</code>, <code>core/MMBasic.c:1871</code>. It jumps to the line after <code>line_start</code>, the last T_NEWLINE the loop crossed. NEXT, LOOP, RETURN and IRETURN jump back into the middle of an earlier line without crossing its T_NEWLINE, so a comment element they land on is taken to belong to the wrong line.</p>
+<ul>
+<li><b>Effect:</b> each of these is broken.
+<ul>
+<li><code>FOR i = 1 TO 3 : ' c</code> runs its body once.</li>
+<li><code>DO : ' d &hellip; LOOP UNTIL k = 2</code> leaves after one pass.</li>
+<li><code>GOSUB x : ' c</code> returns to the line after the RETURN's line.</li>
+</ul>
+Without the colon (<code>FOR i = 1 TO 3 ' c</code>) the comment is part of the FOR statement, and nothing goes wrong. The code is in the repository's first commit, so every release since 6.03.00 has it.</li>
+<li><b>Confirm:</b> <code>Bas/bench/cmtloop.py PORT</code> fails on both boards before the fix and passes after it.</li>
+<li><b>Fix:</b> also require <code>p &gt; line_start &amp;&amp; p &lt; line_start + line_skip</code> (development 8740953; on main e49d3ff). The same shortcut in <code>GetNextCommand</code> (<code>:7194</code>) is safe, because its <code>line_start</code> is local to one forward scan.</li>
+</ul></div>
+
+<div class="card"><h3>22 · MAX and MIN clamp at the single-precision limit</h3>
+<p><b>Where:</b> <code>fun_max_min</code>, <code>core/Functions.c:1855-1890</code>, starts from <code>-FLT_MAX</code> or <code>FLT_MAX</code>.</p>
+<ul><li><b>Effect:</b> <code>MAX(-1e300, -2e300)</code> gives -3.402823466e+38, and <code>MIN(1e300, 2e300)</code> gives 3.402823466e+38. <b>Fix:</b> start from the first argument, or from <code>-DBL_MAX</code>/<code>DBL_MAX</code>.</li>
+<li><b>Fixed (50c9aa0):</b> MAX and MIN start from their first argument. Test: <code>Bas/bench/maxsub22.py</code> (PC3 and PICOMIN).</li></ul></div>
+
+<div class="card"><h3>23 · ABS and SGN reject floats of 2<sup>63</sup> or more</h3>
+<p><b>Where:</b> <code>fun_abs</code> and <code>fun_sgn</code> (<code>core/Functions.c:555, 1232</code>) evaluate their argument with an integer target type, so a float argument goes through <code>FloatToInt64</code>.</p>
+<ul><li><b>Effect:</b> <code>ABS(1e19)</code> raises "Number too large". <b>Fix:</b> evaluate with <code>T_NOTYPE</code> and branch on the type that comes back.</li>
+<li><b>More detail (26 September):</b> both chips; any float of magnitude 2<sup>63</sup> or more fails (<code>ABS(-1e19)</code>, <code>SGN(1e300)</code>), while <code>ABS(-1.5)</code> and <code>ABS(1e18)</code> work. <code>evaluate</code> with an integer target always runs <code>FloatToInt64</code> on a float result but still returns the float, which ABS and SGN then use, so the conversion's only effect is the error. No other function does this. Fix: evaluate with T_NOTYPE (two words). Awaiting Peter.</li>
+<li><b>Fixed (16d0413):</b> ABS and SGN evaluate with no target type and refuse a string themselves. Test: <code>Bas/bench/numedge23.py</code>, PC3 and VGA.</li></ul></div>
+
+<div class="card"><h3>24 · Integer subscripts are cut to 32 bits before the bounds check</h3>
+<p><b>Where:</b> the subscript loops in <code>findvar</code> (<code>core/MMBasic.c:4834</code>) and the struct-member paths (<code>:4220, 4344</code>). A float subscript goes through <code>FloatToInt32</code>, but an integer one is stored with <code>dim[i] = in</code>, which truncates the 64-bit value.</p>
+<ul><li><b>Effect:</b> with <code>DIM a(3)</code>, <code>a(4294967297)</code> reads <code>a(1)</code> without an error. A runaway index in a user's program can therefore hit the wrong element silently. <b>Fix:</b> range-check <code>in</code> against <code>INT_MIN</code>/<code>INT_MAX</code> before the assignment and raise "Index out of bounds".</li>
+<li><b>Fixed (8f617d8):</b> Peter: no array can be that big, so it should just error. An integer subscript that does not fit in 32 bits is now "Index out of bounds" at all three sites (before, <code>a(2^31)</code> wrapped negative and said "Dimensions"). Test: <code>Bas/bench/maxsub22.py</code>.</li></ul></div>
+
+<div class="card"><h3>25 · Only +infinity is trapped, and subtraction never is</h3>
+<p><b>Where:</b> <code>core/Operators.c</code>. <code>op_add</code>, <code>op_mul</code>, <code>op_div</code> and <code>op_exp</code> test <code>fret == INFINITY</code>; <code>op_subtract</code> has no test, and nothing tests <code>-INFINITY</code>.</p>
+<ul><li><b>Effect:</b> <code>1e308 + 1e308</code> raises "Overflow", but <code>1e308 - (-1e308)</code> prints INF (both seen on the PC3). By reading, no operation traps -INF. <b>Fix:</b> test <code>isinf(fret)</code> in all five, if raising an error is the intended behaviour.</li>
+<li><b>More detail (26 September):</b> functions do not check either (<code>EXP(1000)</code> prints INF). <b>Printing -infinity is broken:</b> <code>FloatToStr</code> special-cases only +INF, so for -INF it takes <code>(int)</code> of an infinite exponent, divides -inf by inf and recurses with NaN: garbage on the RP2350 (<code>9223372036854775807e+2147483647</code>) and a hang on the RP2040 VGA (<code>?-1e308-1e308</code> needed a hardware reset). Options put to Peter: (A) make printing and <code>FloatToInt64</code> safe for -INF and NaN; (B) also trap <code>isinf()</code> in all five operators. Awaiting Peter.</li>
+<li><b>Fixed, option A (a40112b):</b> <code>FloatToStr</code> prints -INF and NAN. Arithmetic still produces INF and NaN (option B, trapping in the operators, not taken).</li></ul></div>
+
+<div class="card"><h3>26 · NaN becomes 9223372036854775807</h3>
+<p><b>Where:</b> <code>FloatToInt64</code> (<code>core/MMBasic.c:6789</code>). Its range test is false for NaN, so NaN reaches the C conversion. Exactly 2<sup>63</sup> also passes the test, because the bound rounds to 2<sup>63</sup>, and then converts with undefined behaviour.</p>
+<ul><li><b>Effect:</b> with <code>x</code> infinite (item 25), <code>y = x - x</code> prints 9223372036854775807, and <code>z% = y</code> stores it. <b>Fix:</b> reject NaN, and use <code>&gt;=</code> 9223372036854775808.0 as the upper bound.</li>
+<li><b>More detail (26 September):</b> <code>INF-INF</code> prints as 9223372036854775807, and INT, FIX, CINT and assignment to an integer all give 9223372036854775807 without an error (PC3). Goes with item 25 option A. Awaiting Peter.</li>
+<li><b>Fixed, option A (a40112b):</b> FloatToInt64 and FloatToInt32 (and their inline copies in MMBasic.h, which the other files use) refuse NaN, and FloatToInt64 refuses 2<sup>63</sup> itself. INT and FIX, which used plain casts, now go through FloatToInt64 as well, so INT(1e30) and FIX(-1e30) raise "Number too large" too. On the RP2040 INF-INF is INF (its soft-float library). Test: <code>Bas/bench/numedge23.py</code>.</li></ul></div>
+
+<div class="card"><h3>27 · A large integer exponent runs one loop step per unit</h3>
+<p><b>Where:</b> <code>op_exp</code>'s integer branch: <code>for (iret = i = 1; i &lt;= iarg2; i++) iret *= iarg1</code>.</p>
+<ul><li><b>Effect:</b> <code>1 ^ 30000000</code> took 800 ms on the PC3, so <code>1 ^ 4000000000</code> would lock the board for about two minutes. Ctrl-C cannot stop it, because the loop never returns to the interpreter. <b>Fix:</b> exponentiation by squaring, which is at most 64 steps and gives the same wrapped result.</li>
+<li><b>More detail (26 September):</b> <code>1^30000000</code> takes 1.04 s on the PC3 and <code>1^300000000</code> 10.4 s; a CTRL-C after 1 s was acted on only when the loop ended. Fix: exponentiation by squaring (about 8 lines, same wrapped results, faster above an exponent of about 4). Awaiting Peter.</li>
+<li><b>Fixed (c04dc39):</b> exponentiation by squaring in unsigned arithmetic: at most 64 steps, same wrapped results; <code>1^4000000000</code> under 100&nbsp;ms.</li></ul></div>
+<div class="card"><h3>28 · A bare RANDOMIZE fails after about 36 minutes (RP2040)</h3>
+<p><b>Where:</b> <code>cmd_randomize</code>, <code>core/Commands.c</code>, the <code>#ifndef rp2350</code> version: <code>i = time_us_32();</code> into an <code>int</code>, then <code>if (i &lt; 0) StandardError(21);</code>.</p>
+<ul><li><b>Effect:</b> the microsecond counter passes 2<sup>31</sup> after 35.8 minutes of uptime, so the seed turns negative and a bare <code>RANDOMIZE</code> reports "Number out of bounds". It works again for the next 35.8 minutes after the counter wraps at 71.6 minutes, and so on. Found by the goldens corpus (<code>mathr.bas</code>, line 58) on the RP2040 VGA on 26 September, and reproduced at the prompt. The RP2350 has its own RANDOMIZE and is not affected. <b>Fix:</b> take the time seed as <code>time_us_32() &amp; 0x7FFFFFFF</code>, so only a user-supplied negative seed is refused.</li>
+<li><b>Fixed (1457087):</b> the time seed is masked with <code>0x7FFFFFFF</code>; a negative seed the user gives is still refused. Checked on the PICOMIN.</li></ul></div>
+<div class="card"><h3>29 · Calling a one-letter SUB alone on a line skips the next line</h3>
+<p><b>Where:</b> the pre-scan in <code>ExecuteProgram</code>, <code>core/MMBasic.c:1873</code>: <code>nextstmt = cmdline = p + sizeof(CommandToken);</code> runs for every statement that is not a comment, including a call to a user SUB, which starts with the name rather than a 2-byte command token.</p>
+<ul>
+<li><b>Effect:</b> for a one-letter SUB called with no arguments and nothing after it on the line, the statement is the letter and its terminating 0. Two bytes on is the next line's header, so <code>skipelement</code> runs to the end of the <i>next</i> line. DefinedSubFun pushes that as the return address, and the line after the call is skipped silently.</li>
+<li>Seen on the PC3 on 26 September, while testing item 5:
+<ul>
+<li><code>SUB Q</code> ... <code>Q</code> followed by <code>PRINT "next line"</code> never prints.</li>
+<li>These are unaffected: a two-letter name, <code>Q 1</code>, <code>Q : PRINT ...</code>, and <code>CALL "Q"</code>.</li>
+</ul>
+The code is in the repository's first commit, and probably upstream since commands became 2-byte tokens.</li>
+<li><b>Fix:</b> add <code>sizeof(CommandToken)</code> only when <code>p[0]</code> and <code>p[1]</code> are both command-token bytes; for a SUB call start at <code>p</code>.</li>
+</ul></div>
+<div class="card"><h3>30 · Markers left by freed locals filled the local variable table</h3>
+<p><b>Where:</b> <code>ClearVars(level)</code>, <code>core/MMBasic.c</code>. A returning frame's locals are freed newest first; a freed slot whose next slot is in use becomes a marker (<code>T_BLOCKED</code>), so that a search for a variable further along the run does not stop early. Nothing cleared a marker once it was no longer needed.</p>
+<ul><li><b>Effect:</b> unwinding a deep recursion frees every local while its older neighbour is still live, so the whole run is left as markers. New locals reuse the marker nearest the end of their search path, the empty slots get used up, and a search that finds none goes all the way round: "Too many local variables", after <code>ClearVars(0)</code> has wiped every variable, although most of the region is free. Found on 26 September while testing item 6: with OPTION LOCAL VARIABLES 400, a recursion holding 350 live locals failed on its second pass. Short names spread badly with that modulus (19 slots apart, against 147 at 256), which made it worse. At the default split, 250 of 256 survived repeated passes.</li>
+<li><b>Fix (8127da0):</b> when the slot after the one being freed is empty, <code>ClearVars</code> empties it and any run of markers just before it. After a full unwind the region is clean. Test: <code>Bas/bench/locvars6.py</code>.</li>
+<li>Item 7 part 2 is the same mechanism for globals: <code>erase()</code> leaves markers the same way. Peter judged it not reachable in practice (erased globals are reused and rare), so it is not changed.</li></ul></div>
+<p class="ref">Also found, but not on main: CHAIN and SAVE/LOAD CONTEXT left stale symbol bindings on development (fixed there in 8d3ee25). Symbols exist only on development.</p>
 </section>
 
 <section id="done">

@@ -50,8 +50,11 @@
 // #define PICOMITEVGA
 // #define PICOMITEWEB
 
-/***  PICO2/RP2350 chip select - no longer affects the CallTable address (found
- ***  at runtime via VTOR, see below); kept only for any chip-specific user code ***/
+/***  PICO2/RP2350 chip select - define it for every RP2350 build (PicoMite, VGA, HDMI,
+ ***  WEB...) and comment it out for every RP2040 build.  It sets MAXDIM and the type of
+ ***  s_vartbl.dims[] to match the firmware (RP2350: 5 x int, RP2040: 6 x short), so a
+ ***  CSUB that reads g_vartbl works only on the chip it was compiled for.  It no longer
+ ***  affects the CallTable address, which is found at runtime via VTOR (see below) ***/
 #define PICORP2350
 
 /***  Uncomment this define if HDMI pins required  ***/

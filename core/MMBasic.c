@@ -75,8 +75,10 @@ static int maxglobalvars = MAXGLOBALVARS;
 int CommandTableSize, TokenTableSize;
 #ifdef rp2350
 struct s_funtbl funtbl[MAXSUBFUN];
-// void hashlabels(int errabort);
-void hashlabels(unsigned char *p, int ErrAbort);
+// entries in funtbl (SUBs, FUNCTIONs and labels): at most MAXSUBFUN - 1, so that
+// there is always an empty slot and every search of the table ends
+static int funtbl_used;
+int hashlabels(unsigned char *p, int ErrAbort);
 // Character classification - single memory access vs function calls
 __not_in_flash("data") const unsigned char name_start_tbl[256] = {
     ['A' ... 'Z'] = 1, ['a' ... 'z'] = 1, ['_'] = 1};
@@ -129,8 +131,6 @@ int emptyarray = 0;
 int g_FunReturnArrayCount = 0;            // >0 means DefinedSubFun just returned a whole array (element count); consumed by cmd_let's array assignment, an error anywhere else
 int TempStringClearStart;                 // used to prevent clearing of space in an expression that called a FUNCTION
 unsigned char *subfun[MAXSUBFUN];         // table used to locate all subroutines and functions
-char CurrentSubFunName[MAXVARLEN + 1];    // the name of the current sub or fun
-char CurrentInterruptName[MAXVARLEN + 1]; // the name of the current interrupt function
 jmp_buf jmprun;
 jmp_buf mark;                     // longjump to recover from an error and abort
 jmp_buf ErrNext;                  // longjump to recover from an error and continue
@@ -326,7 +326,7 @@ void PcsStart(int entries)
 // unsigned char lastcmd[STRINGSIZE];                                           // used to store the last command in case it is needed by the EDIT command
 unsigned char PromptString[MAXPROMPTLEN]; // the prompt for input, an empty string means use the default
 int ProgramChanged;                       // true if the program in memory has been changed and not saved
-struct s_hash g_hashlist[MAXLOCALVARS] = {0};
+struct s_hash g_hashlist[MAXLOCALLIST] = {0};
 int g_hashlistpointer = 0;
 
 // ---------------------------------------------------------------------------
@@ -946,6 +946,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
     // check the sub/fun table for duplicates
 #ifdef rp2350
     memset(funtbl, 0, sizeof(struct s_funtbl) * MAXSUBFUN);
+    funtbl_used = 0;
     for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
     {
         // First we will hash the function name and add it to the function table
@@ -978,6 +979,17 @@ int MIPS16 PrepareProgram(int ErrAbort)
         }
         if (namelen != MAXVARLEN)
             *p2 = 0;
+        if (funtbl_used >= MAXSUBFUN - 1)
+        {
+            if (ErrAbort)
+            {
+                SetPreprogramError("Too many subroutines, functions and labels", subfun[i]);
+                ProgramValid = 0;
+                return 1;
+            }
+            break; // (at the prompt: RUN will report it)
+        }
+        funtbl_used++;
         hash %= MAXSUBFUN; // scale to size of table
         while (funtbl[hash].name[0] != 0)
         {
@@ -988,13 +1000,10 @@ int MIPS16 PrepareProgram(int ErrAbort)
         funtbl[hash].index = i;
         memcpy(funtbl[hash].name, printvar, (namelen == MAXVARLEN ? namelen : namelen + 1));
     }
-    if (LibPresent())
-    {
-        hashlabels(LibMemory, ErrAbort);
-        // if(!ErrAbort) return;
-    }
-    hashlabels(ProgMemory, ErrAbort);
-    // if(!ErrAbort) return;
+    if (LibPresent() && hashlabels(LibMemory, ErrAbort))
+        return 1;
+    if (hashlabels(ProgMemory, ErrAbort))
+        return 1;
 
 #endif
     /* Build the IF/ELSEIF/ELSE/ENDIF jump table.  Done unconditionally
@@ -1382,8 +1391,20 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
 //  - convert the colon to a zero char
 // the result in tknbuf[] is terminated with MMFLOAT zero chars
 //  if the arg console is true then do not add a line number
+// a line whose tokenised form will not fit in tknbuf (with its three terminating
+// zeros) is refused rather than written over the variables that follow tknbuf:
+// from the console that is the error "Line is too long"; otherwise tokenise returns
+// 1 and leaves the error to the caller, which may have a flash write to close first
 
-void MIPS16 tokenise(int console)
+#define TKNPUT(c)                          \
+    do                                     \
+    {                                      \
+        if (op >= tknbuf + STRINGSIZE - 3) \
+            goto toolong;                  \
+        *op++ = (c);                       \
+    } while (0)
+
+int MIPS16 tokenise(int console)
 {
     unsigned char *p, *op, *tp;
     int i = 0;
@@ -1513,7 +1534,7 @@ void MIPS16 tokenise(int console)
         // just copy a space
         if (*p == ' ')
         {
-            *op++ = *p++;
+            TKNPUT(*p++);
             continue;
         }
 
@@ -1523,9 +1544,9 @@ void MIPS16 tokenise(int console)
         {
             do
             {
-                *op++ = *p++;
+                TKNPUT(*p++);
             } while (*p != '"' && *p);
-            *op++ = '"';
+            TKNPUT('"');
             if (*p == '"')
                 p++;
             continue;
@@ -1536,7 +1557,7 @@ void MIPS16 tokenise(int console)
         {
             do
             {
-                *op++ = *p++;
+                TKNPUT(*p++);
             } while (*p);
             continue;
         }
@@ -1544,12 +1565,12 @@ void MIPS16 tokenise(int console)
         // check for multiline separator (colon) and replace with a zero char
         if (*p == ':')
         {
-            *op++ = 0;
+            TKNPUT(0);
             p++;
             while (*p == ':')
             { // insert a space between consecutive colons
-                *op++ = ' ';
-                *op++ = 0;
+                TKNPUT(' ');
+                TKNPUT(0);
                 p++;
             }
             firstnonwhite = true;
@@ -1562,7 +1583,7 @@ void MIPS16 tokenise(int console)
         // as part of a number when it starts with E)
         if (*p == '.' && op > tknbuf && op[-1] == ')' && isnamestart(p[1]))
         {
-            *op++ = *p++;
+            TKNPUT(*p++);
             firstnonwhite = false;
             continue;
         }
@@ -1573,17 +1594,19 @@ void MIPS16 tokenise(int console)
         if (firstnonwhite && console && (IsDigitinline(*p) || *p == '(' || (*p == '.' && IsDigitinline(p[1]))))
         {
             unsigned short tkn = GetCommandValue((unsigned char *)"Calc");
-            *op++ = (tkn & 0x7f) + C_BASETOKEN;
-            *op++ = (tkn >> 7) + C_BASETOKEN;
+            TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+            TKNPUT((tkn >> 7) + C_BASETOKEN);
             firstnonwhite = false;
         }
         // Implied CALC with implicit MM.ANSWER as left operand: line starts with a binary operator
         else if (firstnonwhite && console && (*p == '+' || *p == '-' || *p == '*' || *p == '/' || *p == '\\' || *p == '^' || *p == '<' || *p == '>'))
         {
             unsigned short tkn = GetCommandValue((unsigned char *)"Calc");
-            *op++ = (tkn & 0x7f) + C_BASETOKEN;
-            *op++ = (tkn >> 7) + C_BASETOKEN;
+            TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+            TKNPUT((tkn >> 7) + C_BASETOKEN);
             // emit "MM.ANSWER" as raw chars — getvalue reads it as a variable reference
+            if (op + 9 > tknbuf + STRINGSIZE - 3)
+                goto toolong;
             memcpy(op, "MM.ANSWER", 9);
             op += 9;
             firstnonwhite = false;
@@ -1594,15 +1617,15 @@ void MIPS16 tokenise(int console)
             while (IsDigitinline(*p) || *p == '.' || *p == 'E' || *p == 'e')
                 if (*p == 'E' || *p == 'e')
                 {                 // check for '+' or '-' as part of the exponent
-                    *op++ = *p++; // copy the number
+                    TKNPUT(*p++); // copy the number
                     if (*p == '+' || *p == '-')
                     {                 // BUGFIX by Gerard Sexton
-                        *op++ = *p++; // copy the '+' or '-'
+                        TKNPUT(*p++); // copy the '+' or '-'
                     }
                 }
                 else
                 {
-                    *op++ = *p++; // copy the number
+                    TKNPUT(*p++); // copy the number
                 }
             firstnonwhite = false;
             continue;
@@ -1667,14 +1690,14 @@ void MIPS16 tokenise(int console)
             {
                 // we have found a command
                 //                *op++ = match_i + C_BASETOKEN;                      // insert the token found
-                *op++ = (match_i & 0x7f) + C_BASETOKEN;
-                *op++ = (match_i >> 7) + C_BASETOKEN; // tokens can be 14-bit
+                TKNPUT((match_i & 0x7f) + C_BASETOKEN);
+                TKNPUT((match_i >> 7) + C_BASETOKEN); // tokens can be 14-bit
                 p = match_p;                          // step over the command in the source
                 if (isalpha(*(p - 1)) && *p == ' ')
                     p++;                                                // if the command is followed by a space skip over it
                 if (match_i == GetCommandValue((unsigned char *)"Rem")) // check if it is a REM command
                     while (*p)
-                        *op++ = *p++; // and in that case just copy everything
+                        TKNPUT(*p++); // and in that case just copy everything
                 firstnonwhite = false;
                 labelvalid = false; // we do not want any labels after this
                 if (symbols)
@@ -1715,10 +1738,10 @@ void MIPS16 tokenise(int console)
                 if (*tp == ':')
                 {                       // Yes !!  It is a label
                     labelvalid = false; // we do not want any more labels
-                    *op++ = T_LABEL;    // insert the token
-                    *op++ = tp - p;     // insert the length of the label
+                    TKNPUT(T_LABEL);    // insert the token
+                    TKNPUT(tp - p);     // insert the length of the label
                     for (i = tp - p; i > 0; i--)
-                        *op++ = *p++; // copy the label
+                        TKNPUT(*p++); // copy the label
                     p++;              // step over the terminating colon
                     continue;
                 }
@@ -1747,9 +1770,9 @@ void MIPS16 tokenise(int console)
                 if (icalc != TokenTableSize - 1)
                 {
                     unsigned short calc_tkn = GetCommandValue((unsigned char *)"Calc");
-                    *op++ = (calc_tkn & 0x7f) + C_BASETOKEN;
-                    *op++ = (calc_tkn >> 7) + C_BASETOKEN;
-                    *op++ = icalc + C_BASETOKEN;
+                    TKNPUT((calc_tkn & 0x7f) + C_BASETOKEN);
+                    TKNPUT((calc_tkn >> 7) + C_BASETOKEN);
+                    TKNPUT(icalc + C_BASETOKEN);
                     p = tscan;
                     firstnonwhite = false;
                     continue;
@@ -1780,7 +1803,7 @@ void MIPS16 tokenise(int console)
             {
                 // we have a  match
                 i += C_BASETOKEN;
-                *op++ = i; // insert the token found
+                TKNPUT(i); // insert the token found
                 p = tp2;   // and step over it in the source text
                 // LCASE$( MAX( MM.HRES etc are rewritten as SChange$(L, TopBottom(A, ~(A) ...:
                 // the letter that follows selects the action and is read as a character
@@ -1804,8 +1827,8 @@ void MIPS16 tokenise(int console)
                 if (*tp == '=')
                 {
                     unsigned short tkn = GetCommandValue((unsigned char *)"Let"); // is it an implied let?
-                    *op++ = (tkn & 0x7f) + C_BASETOKEN;
-                    *op++ = (tkn >> 7) + C_BASETOKEN; // tokens can be 14-bit
+                    TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+                    TKNPUT((tkn >> 7) + C_BASETOKEN); // tokens can be 14-bit
                 }
 #ifdef CALCPROMPT
                 else if (console && (*tp == '+' || *tp == '-' ||
@@ -1815,8 +1838,8 @@ void MIPS16 tokenise(int console)
                 {
                     // Implied CALC: identifier followed by an operator (symbol or text op like AND/OR/MOD)
                     unsigned short tkn = GetCommandValue((unsigned char *)"Calc");
-                    *op++ = (tkn & 0x7f) + C_BASETOKEN;
-                    *op++ = (tkn >> 7) + C_BASETOKEN;
+                    TKNPUT((tkn & 0x7f) + C_BASETOKEN);
+                    TKNPUT((tkn >> 7) + C_BASETOKEN);
                 }
 #endif
             }
@@ -1825,12 +1848,14 @@ void MIPS16 tokenise(int console)
                 tp = p;
                 while (isnamechar(*tp))
                     tp++;
+                if (op + (tp - p > 3 ? tp - p : 3) > tknbuf + STRINGSIZE - 3)
+                    goto toolong; // a symbol is at most 3 bytes, the text tp - p
                 op = SymName(op, p, tp - p); // the name as a symbol (or text if it cannot be one)
                 p = tp;
             }
             else
                 while (isnamechar(*p))
-                    *op++ = *p++; // copy the variable name
+                    TKNPUT(*p++); // copy the variable name
             symrawnext = false;
             firstnonwhite = false;
             labelvalid = false; // we do not want any labels after this
@@ -1853,7 +1878,7 @@ void MIPS16 tokenise(int console)
         }
 
         // something else, so just copy the one character
-        *op++ = *p++;
+        TKNPUT(*p++);
         labelvalid = false; // we do not want any labels after this
         firstnonwhite = false;
     }
@@ -1889,7 +1914,15 @@ void MIPS16 tokenise(int console)
         else
             tknbuf[1] = T_NEWLINE_SKIP_NONE;
     }
+    return 0;
+
+toolong:
+    tknbuf[0] = tknbuf[1] = tknbuf[2] = 0; // nothing half-tokenised is left to run or save
+    if (console)
+        error("Line is too long");
+    return 1;
 }
+#undef TKNPUT
 
 int CheckEmpty(char *p)
 {
@@ -2051,8 +2084,11 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
                 }
                 nextstmt = cmdline = p + 1;
             }
+            else if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+                nextstmt = cmdline = p + sizeof(CommandToken); // a command token
             else
-                nextstmt = cmdline = p + sizeof(CommandToken);
+                nextstmt = cmdline = p; // a call to a user SUB starts with its name, which can be
+                                        // one letter: skipping two bytes would pass the line's end
             skipspace(cmdline);
             skipelement(nextstmt);
             if (*p && *p != '\'')
@@ -2187,9 +2223,12 @@ static int __not_in_flash_func(FindSubFunText)(unsigned char *p, int type)
             }
             if (j == 0 && (*(char *)tp == 0 || namelen == MAXVARLEN) && funtbl[hash].index < MAXSUBFUN)
             { // found a matching name
-                //				MMPrintString("Found : ");MMPrintString((char *)name);MMPrintString(", hash key : ");PInt(hash);PRet();
-                return funtbl[hash].index;
-                break;
+                // it must also be the kind asked for, as on the RP2040: a SUB or CSUB for
+                // a statement (type 0), a FUNCTION for an expression (type 1)
+                CommandToken tkn = commandtbl_decode(subfun[funtbl[hash].index]);
+                if (type ? tkn == cmdFUN : (tkn == cmdSUB || tkn == cmdCSUB))
+                    return funtbl[hash].index;
+                return -1;
             }
         }
         hash++;
@@ -2348,6 +2387,9 @@ static unsigned char *s_argv2[MAX_ARG_COUNT];
 static unsigned char s_argbyref[MAX_ARG_COUNT];
 static bool defsubfun_static_in_use = false;
 #endif
+// The argument block of the call whose arguments are being processed (while
+// DefinedSubFunMem is set).  An error there frees it and its string copies.
+static union u_argval *DefinedSubFunArgval;
 // This function is responsible for executing a defined subroutine or function.
 // As these two are similar they are processed in the one lump of code.
 //
@@ -2610,6 +2652,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     if (gosubindex >= MAXGOSUB)
         error("Too many nested SUB/FUN");
     errorstack[gosubindex] = CallersLinePtr;
+    substack[gosubindex] = SubLinePtr;                  // for STATIC: the variables belong to this SUB/FUNCTION
     gosubstack[gosubindex++] = isfun ? NULL : nextstmt; // NULL signifies that this is returned to by ending ExecuteProgram()
                                                         // Acquire argval-area buffers. The fast path points each local at the
                                                         // matching file-scope static array (no allocation, no offset arithmetic,
@@ -2645,6 +2688,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         argbyref = (void *)argv2 + MAX_ARG_COUNT * sizeof(unsigned char *);
     }
     DefinedSubFunMem = 1; // sentinel: arg processing in progress (cleared on success, checked by error handler for local-state recovery)
+    DefinedSubFunArgval = argval;
     // now split up the arguments in the caller
     CurrentLinePtr = CallersLinePtr; // report errors at the caller
     argc1 = 0;
@@ -2881,7 +2925,6 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     }
 #endif
     DefinedSubFunMem = 0; // we got here so we wont need to cleanup any memory
-    strcpy((char *)CurrentSubFunName, (char *)fun_name);
     // if it is a defined command we simply point to the first statement in our command and allow ExecuteProgram() to carry on as before
     // exit from the sub is via cmd_return which will decrement g_LocalIndex
     if (!isfun)
@@ -3917,11 +3960,12 @@ unsigned char MIPS16 *findline(int nbr, int mustfind)
     return p;
 }
 #ifdef rp2350
-void hashlabels(unsigned char *p, int ErrAbort)
+// returns 1 if the table is full and ErrAbort (the error has been set), else 0
+int hashlabels(unsigned char *p, int ErrAbort)
 {
     // unsigned char *p = (unsigned char *)ProgMemory;
     int j, u, namelen;
-    uint32_t originalhash, hash = FNV_offset_basis;
+    uint32_t hash = FNV_offset_basis;
     // char *lastp = (char *)ProgMemory + 1;
     char *lastp = (char *)p + 1;
     // now do the search
@@ -3974,22 +4018,22 @@ void hashlabels(unsigned char *p, int ErrAbort)
                 hash *= FNV_prime;
                 namelen++;
             }
+            if (funtbl_used >= MAXSUBFUN - 1)
+            {
+                if (ErrAbort)
+                {
+                    SetPreprogramError("Too many subroutines, functions and labels", (unsigned char *)lastp);
+                    ProgramValid = 0;
+                    return 1;
+                }
+                return 0; // (at the prompt: RUN will report it)
+            }
+            funtbl_used++;
             hash %= MAXSUBFUN; // scale to size of table
-            originalhash = hash - 1;
-            if (originalhash < 0)
-                originalhash += MAXSUBFUN;
-            while (funtbl[hash].name[0] != 0 && hash != originalhash)
+            while (funtbl[hash].name[0] != 0)
             {
                 hash++;
                 hash %= MAXSUBFUN;
-            }
-            if (hash == originalhash)
-            {
-                MMPrintString("Error: Too many labels - erasing program\r\n");
-                unsigned char dummy = 0;
-                cmdline = &dummy;
-                cmd_new();
-                // jump back to the input prompt
             }
             funtbl[hash].index = (uint32_t)lastp;
             for (j = 0; j < p[0]; j++)
@@ -3999,6 +4043,7 @@ void hashlabels(unsigned char *p, int ErrAbort)
         }
         p++;
     }
+    return 0;
 }
 
 // search through program memory looking for a label.
@@ -4055,7 +4100,9 @@ static unsigned char *findlabel_text(unsigned char *labelptr)
                 ip++;
                 tp++;
             }
-            if (i == 0 && (*(char *)tp == 0))
+            // a label's entry holds its line's address; a SUB/FUNCTION of the same
+            // name shares the table with an index below MAXSUBFUN: skip it
+            if (i == 0 && (*(char *)tp == 0) && funtbl[hash].index >= MAXSUBFUN)
             { // found a matching name
                 return (unsigned char *)funtbl[hash].index;
             }
@@ -4239,7 +4286,7 @@ int MIPS16 CountLines(unsigned char *target)
 
         if (*p == T_LABEL)
         {
-            p += p[0] + 2; // still looking! skip over the label
+            p += p[1] + 2; // still looking! skip over the label
             continue;
         }
 
@@ -4507,6 +4554,8 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                     evaluate(argv[ai], &f, &in, (unsigned char **)&s, &targ, false);
                     if (targ == T_NBR)
                         in = FloatToInt32(f);
+                    else if (targ == T_INT && in != (int)in)
+                        error("Index out of bounds"); // too big for any array: must not wrap to a small index
                     mem_dim[ai / 2] = (int)in;
                 }
 
@@ -4627,6 +4676,8 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                 evaluate(argv[ai], &f, &in, (unsigned char **)&s, &targ, false);
                 if (targ == T_NBR)
                     in = FloatToInt32(f);
+                else if (targ == T_INT && in != (int)in)
+                    error("Index out of bounds"); // too big for any array: must not wrap to a small index
                 mem_dim[ai / 2] = (int)in;
             }
 
@@ -5171,6 +5222,8 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                     dnbr = MAXDIM; // force an error to be thrown later (with the correct message)
                 if (targ == T_NBR)
                     in = FloatToInt32(f);
+                else if (targ == T_INT && in != (int)in)
+                    error("Index out of bounds"); // too big for any array: must not wrap to a small index
                 dim[i / 2] = in;
                 if (dim[i / 2] < g_OptionBase)
                 {
@@ -6000,8 +6053,8 @@ void MIPS16 __not_in_flash_func(makeargs)(unsigned char **p, int maxargs, unsign
 
         // anything else is just copied into the argument
         *op++ = *tp++;
-        if (expect_cmd)
-            *op++ = *tp++; // copy rest of command token
+        if (expect_cmd && tp[-1] >= C_BASETOKEN && *tp >= C_BASETOKEN)
+            *op++ = *tp++; // copy rest of command token (not after a SUB name, which can be one letter)
         expect_cmd = false;
     }
     if (expect_bracket && *tp != ')')
@@ -6201,6 +6254,26 @@ void MIPS16 error(char *msg, ...)
 #endif
         }
         gosubindex--;
+        // free the string arguments copied so far and the argument block itself,
+        // or each skipped error leaks them (about 2.8 KB on the RP2040).  The
+        // RP2350's static block is released below.  A nested call in the argument
+        // list clears the sentinel, so an error after it still leaks the outer
+        // call's frame and block - bug report item 16, left as an edge case.
+        {
+            union u_argval *av = DefinedSubFunArgval;
+            int *at = (int *)((char *)av + MAX_ARG_COUNT * sizeof(union u_argval));
+#ifdef rp2350
+            if (av == s_argval)
+                at = s_argtype;
+#endif
+            for (int i = 0; i < MAX_ARG_COUNT; i++)
+                if ((at[i] & T_STR) && !(at[i] & T_PTR) && av[i].s != NULL)
+                    FreeMemorySafe((void **)&av[i].s);
+#ifdef rp2350
+            if (av != s_argval)
+#endif
+                FreeMemory((void *)av);
+        }
         DefinedSubFunMem = 0;
     }
 #ifdef rp2350
@@ -6615,9 +6688,9 @@ void MIPS16 FloatToStr(char *p, MMFLOAT f, int m, int n, unsigned char ch)
     int exp, trim = false, digit;
     MMFLOAT rounding;
     char *pp;
-    if (f == INFINITY)
-    {
-        strcpy(p, "INF");
+    if (isinf(f) || isnan(f))
+    { // the code below cannot format these: -INF printed garbage, and hung the RP2040
+        strcpy(p, isnan(f) ? "NAN" : (f > 0 ? "INF" : "-INF"));
         return;
     }
     ch &= 0x7f; // make sure that ch is an ASCII char
@@ -6781,6 +6854,23 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                     g_vartbl[hashcurrent].type = T_BLOCKED; // block slot
                     g_vartbl[hashcurrent].name[0] = '~';    // safety precaution
                 }
+                else
+                {
+                    // The slot after this one is empty, so no search can pass through
+                    // this slot, or through a run of markers just before it, to reach a
+                    // live variable: empty those markers too.  Without this every local
+                    // freed newest-first stays a marker for good, and a deep recursion
+                    // leaves the local region full of them, with no empty slot to stop
+                    // a search ("Too many local variables").
+                    int k = hashcurrent;
+                    for (;;)
+                    {
+                        k = (k == 0 ? maxlocalvars : k) - 1;
+                        if (g_vartbl[k].type != T_BLOCKED)
+                            break;
+                        memset(&g_vartbl[k], 0, sizeof(struct s_vartbl));
+                    }
+                }
                 g_Localvarcnt--;
             }
         }
@@ -6862,7 +6952,7 @@ void MIPS16 cmd_localvars(unsigned char *p)
 {
     if (g_Globalvarcnt || g_Localvarcnt)
         error("Variables already declared");
-    int i = getint(p, 32, MAXVARS - 32);
+    int i = getint(p, 32, MAXLOCALLIST);
     maxlocalvars = i;
     maxglobalvars = MAXVARS - i;
 }
@@ -7167,7 +7257,7 @@ int FloatToInt32(MMFLOAT x)
 int __not_in_flash_func(FloatToInt32)(MMFLOAT x)
 {
 #endif
-    if (x < LONG_MIN - 0.5 || x > LONG_MAX + 0.5)
+    if (isnan(x) || x < LONG_MIN - 0.5 || x > LONG_MAX + 0.5) // NaN fails every comparison
         error("Number too large");
     return (x >= 0 ? (int)(x + 0.5) : (int)(x - 0.5));
 }
@@ -7179,7 +7269,9 @@ long long int FloatToInt64(MMFLOAT x)
 long long int __not_in_flash_func(FloatToInt64)(MMFLOAT x)
 {
 #endif
-    if (x < (-(0x7fffffffffffffffLL) - 1) - 0.5 || x > 0x7fffffffffffffffLL + 0.5)
+    // NaN fails every comparison, and 2^63 itself is out of range: as a double
+    // the old bound 0x7fffffffffffffff + 0.5 rounded to 2^63 and let it through
+    if (isnan(x) || x < -9223372036854775808.0 || x >= 9223372036854775808.0)
         error("Number too large");
     if ((x < -0xfffffffffffff) || (x > 0xfffffffffffff))
         return (long long int)(x);

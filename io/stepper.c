@@ -4070,6 +4070,7 @@ void cmd_stepper(void)
         stepper_reset_accumulator_carry();
         stepper_dwell_active = false;
         stepper_dwell_until_tick = 0;
+        stepper_release_current_arc(); // or the next block's load drops the executing arc's buffer
 
         stepper_system.motion_active = false;
 
