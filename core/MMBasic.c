@@ -129,8 +129,6 @@ int emptyarray = 0;
 int g_FunReturnArrayCount = 0;            // >0 means DefinedSubFun just returned a whole array (element count); consumed by cmd_let's array assignment, an error anywhere else
 int TempStringClearStart;                 // used to prevent clearing of space in an expression that called a FUNCTION
 unsigned char *subfun[MAXSUBFUN];         // table used to locate all subroutines and functions
-char CurrentSubFunName[MAXVARLEN + 1];    // the name of the current sub or fun
-char CurrentInterruptName[MAXVARLEN + 1]; // the name of the current interrupt function
 jmp_buf jmprun;
 jmp_buf mark;                     // longjump to recover from an error and abort
 jmp_buf ErrNext;                  // longjump to recover from an error and continue
@@ -2347,6 +2345,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     if (gosubindex >= MAXGOSUB)
         error("Too many nested SUB/FUN");
     errorstack[gosubindex] = CallersLinePtr;
+    substack[gosubindex] = SubLinePtr;                  // for STATIC: the variables belong to this SUB/FUNCTION
     gosubstack[gosubindex++] = isfun ? NULL : nextstmt; // NULL signifies that this is returned to by ending ExecuteProgram()
                                                         // Acquire argval-area buffers. The fast path points each local at the
                                                         // matching file-scope static array (no allocation, no offset arithmetic,
@@ -2623,7 +2622,6 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     }
 #endif
     DefinedSubFunMem = 0; // we got here so we wont need to cleanup any memory
-    strcpy((char *)CurrentSubFunName, (char *)fun_name);
     // if it is a defined command we simply point to the first statement in our command and allow ExecuteProgram() to carry on as before
     // exit from the sub is via cmd_return which will decrement g_LocalIndex
     if (!isfun)

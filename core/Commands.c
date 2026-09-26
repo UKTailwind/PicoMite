@@ -850,6 +850,9 @@ int g_doindex; // counts the number of nested DO/LOOP loops
 // stack to keep track of GOSUBs, SUBs and FUNCTIONs
 unsigned char *gosubstack[MAXGOSUB];
 unsigned char *errorstack[MAXGOSUB];
+// the SUB/FUNCTION definition (its subfun[] token) each frame is running, NULL
+// for a GOSUB: STATIC names its variable after the innermost one
+unsigned char *substack[MAXGOSUB];
 int gosubindex;
 
 unsigned char g_DimUsed = false; // used to catch OPTION BASE after DIM has been used
@@ -5680,6 +5683,7 @@ void cmd_gosub(void)
 	IgnorePIN = false;
 
 	errorstack[gosubindex] = CurrentLinePtr;
+	substack[gosubindex] = NULL; // a GOSUB runs in the SUB it was called from
 	gosubstack[gosubindex++] = (unsigned char *)return_to;
 	g_LocalIndex++;
 #ifdef SUBPROFILE
@@ -8432,6 +8436,7 @@ void cmd_on(void)
 			if (gosubindex >= MAXGOSUB)
 				error("Too many nested GOSUB");
 			errorstack[gosubindex] = CurrentLinePtr;
+			substack[gosubindex] = NULL; // a GOSUB runs in the SUB it was called from
 			gosubstack[gosubindex++] = nextstmt;
 			g_LocalIndex++;
 		}
@@ -8506,8 +8511,6 @@ unsigned char *SetValue(unsigned char *p, int t, void *v)
 	MMFLOAT f;
 	long long int i64;
 	unsigned char *s;
-	char TempCurrentSubFunName[MAXVARLEN + 1];
-	strcpy(TempCurrentSubFunName, (char *)CurrentSubFunName); // save the current sub/fun name
 	if (t & T_STR)
 	{
 		p = evaluate(p, &f, &i64, &s, &t, true);
@@ -8529,7 +8532,6 @@ unsigned char *SetValue(unsigned char *p, int t, void *v)
 		else
 			(*(long long int *)v) = FloatToInt64(f);
 	}
-	strcpy((char *)CurrentSubFunName, TempCurrentSubFunName); // restore the current sub/fun name
 	return p;
 }
 
@@ -8585,17 +8587,19 @@ void MIPS16 cmd_dim(void)
 			{
 				if (g_LocalIndex == 0)
 					error("Invalid here");
-				// create a unique global name
-				if (*CurrentInterruptName)
-					strcpy((char *)VarName, CurrentInterruptName); // we must be in an interrupt sub
-				else
-					strcpy((char *)VarName, CurrentSubFunName); // normal sub/fun
-				for (k = 1; k <= MAXVARLEN; k++)
-					if (!isnamechar(VarName[k]))
-					{
-						VarName[k] = 0; // terminate the string on a non valid char
-						break;
-					}
+				// create a unique global name from the name of the SUB/FUNCTION this
+				// runs in: the innermost call frame that has one (a GOSUB has none),
+				// so neither a call made earlier in the SUB nor an interrupt changes it
+				unsigned char *def = NULL;
+				for (k = gosubindex - 1; k >= 0 && def == NULL; k--)
+					def = substack[k];
+				if (def == NULL)
+					error("Invalid here");
+				def += sizeof(CommandToken); // the name as the definition spells it, without a type suffix
+				skipspace(def);
+				for (k = 0; k < MAXVARLEN && isnamechar(def[k]); k++)
+					VarName[k] = def[k];
+				VarName[k] = 0;
 				strcat((char *)VarName, "\x1e");		  // use 0x1E (record separator) to avoid conflict with struct member syntax
 				strcat((char *)VarName, (char *)argv[i]); // by prefixing the var name with the sub/fun name
 				StaticVar = NAMELEN_STATIC;				  // flag for marking the variable as static

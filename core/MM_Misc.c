@@ -1892,7 +1892,6 @@ void cmd_ireturn(void)
     if (g_LocalIndex)
         ClearVars(g_LocalIndex--, true); // delete any local variables
     g_TempMemoryIsChanged = true;        // signal that temporary memory should be checked
-    *CurrentInterruptName = 0;           // for static vars we are not in an interrupt
 #ifdef GUICONTROLS
     if (DelayedDrawKeyboard)
     {
@@ -10558,12 +10557,12 @@ GotAnInterrupt:
     CommandToken tkn = commandtbl_decode((const unsigned char *)intaddr);
     if (tkn == cmdSUB)
     {
-        strncpy(CurrentInterruptName, intaddr + 2, MAXVARLEN);
         rti[0] = (cmdIRET & 0x7f) + C_BASETOKEN;
         rti[1] = (cmdIRET >> 7) + C_BASETOKEN; // tokens can be 14-bit
         if (gosubindex >= MAXGOSUB)
             error("Too many SUBs for interrupt");
         errorstack[gosubindex] = CurrentLinePtr;
+        substack[gosubindex] = (unsigned char *)intaddr;  // for STATIC: the interrupt SUB is the SUB running
         gosubstack[gosubindex++] = (unsigned char *)rti; // return from the subroutine to the dummy IRETURN command
         g_LocalIndex++;                                  // return from the subroutine will decrement g_LocalIndex
         skipelement(intaddr);                            // point to the body of the subroutine

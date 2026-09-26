@@ -97,6 +97,7 @@ void DoFastForget(int slot);
 
 extern unsigned char *gosubstack[MAXGOSUB];
 extern unsigned char *errorstack[MAXGOSUB];
+extern unsigned char *substack[MAXGOSUB];
 extern int gosubindex;
 extern unsigned char g_DimUsed;
 

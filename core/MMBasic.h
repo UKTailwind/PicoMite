@@ -494,8 +494,6 @@ extern "C"
     extern int PSize;
 
     extern unsigned char *subfun[];
-    extern char CurrentSubFunName[MAXVARLEN + 1];
-    extern char CurrentInterruptName[MAXVARLEN + 1];
 
     /* ============================================================================
      * External variables - Buffers
