@@ -112,6 +112,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 </header>
 <div class="wrap">
 <nav class="toc" aria-label="Sections">
+  <a href="#status">Status</a>
   <a href="#purpose">1 Purpose and ground rules</a>
   <a href="#time">2 Where the time goes</a>
   <a href="#learned">3 What we know already</a>
@@ -121,6 +122,55 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
   <a href="#risks">7 Risks</a>
   <a href="#decisions">8 Decisions for Peter</a>
 </nav>
+
+<!-- ============================================================ status -->
+<section id="status">
+  <div class="eyebrow">Status · 26 September 2026 · development at 9650f69</div>
+  <h2>Where the programme stands</h2>
+  <div class="gate"><div class="eyebrow">Paused here</div>
+  <p>On 26 September Peter paused the programme to bring what it has learned to <code>main</code>, in this order:</p>
+  <ol>
+    <li>Remove the trace cache, keeping the DO loop fast path on the builds it suits.</li>
+    <li>The ProcessWeb changes (S1a).</li>
+    <li>The interrupt changes (S1c).</li>
+    <li>The bug list, one bug at a time: <code>docs/Main_Bug_Report_2026-09.html</code>.</li>
+  </ol>
+  <p>Route B resumes afterwards, from its design review.</p></div>
+
+  <h3>Done on development</h3>
+  <div class="tablewrap"><table>
+    <tr><th>Step</th><th>Commits</th><th>Result</th></tr>
+    <tr><td>Phase 0, Phase 1</td><td>0183e77 &hellip; a166789</td><td><code>docs/Interpreter_Phase0_Results.html</code>, <code>docs/Interpreter_Phase1_Results.html</code></td></tr>
+    <tr><td>S10 allocator hint</td><td>b4ef437</td><td>top-down first-free hint only</td></tr>
+    <tr><td>S1c interrupt-pending counter</td><td>791bf93, 6c6fdd8, 862ec45, 142734c</td><td><code>IntReady</code> counter signalled by the sources; InterruptUsed removed; tests in <code>Bas/bench/inttests</code></td></tr>
+    <tr><td>S1a ProcessWeb cadence</td><td>a07e8f2</td><td>no network work without a connection; WEB SCAN polls; anchor 1.2-1.4% faster on HDMIWEB</td></tr>
+    <tr><td>Trace cache removed (S5/S6 phase 1a)</td><td>04361c0</td><td>DO fast path kept on all builds; frame tracking and per-SUB profiling under SUBPROFILE</td></tr>
+    <tr><td>S5/S6 symbols and bindings</td><td>e3298b9, 9cdcfe8, b44dacc, 317da5b</td><td>design in <code>docs/Interpreter_S5S6_Symbols_Design.html</code>. Symbols against text, same firmware: PC3 anchor -8.2%, Exile -5.7%, Elite -9.2%, Prince of Pico -11.4%; RP2040 anchor -12.4%, julia -19.1%, knivd -7.3%.</td></tr>
+    <tr><td>Two fixes found while designing Route B</td><td>8d3ee25, 8740953</td><td>CHAIN and SAVE/LOAD CONTEXT rebuild the symbol bindings (<code>Bas/bench/symchain.py</code>); the comment fast path no longer leaves a loop whose first line ends in <code>: ' comment</code> (<code>Bas/bench/cmtloop.py</code>, also on main as bug 21)</td></tr>
+  </table></div>
+
+  <h3>Route A's verdict and gate G3</h3>
+  <ul>
+    <li><b>Route A:</b> on the PC3 it removed about 10% of the anchor's overhead, against the 37-38% MicroPython removes. Peter judged further Route A steps not worth their risk and moved to G3.</li>
+    <li><b>G3 passed (25 September, 3140045).</b> A wordcode VM run as a CSUB was 8.8-22x faster than the interpreter with symbols, on both boards. The census, the stream size and the overhead conditions all passed. The one open item is whether the full VM fits in the RP2040 VGA's flash. Kit: <code>Bas/bench/g3</code>; results: <code>Bas/bench/results/g3</code>.</li>
+    <li><b>Route B: go</b> (Peter, 25 September). Design: <code>docs/Interpreter_RouteB_Design.html</code> (9650f69). Five decisions await Peter's review, and P1 does not start before them.</li>
+  </ul>
+
+  <h3>Open on development</h3>
+  <ul>
+    <li><b>The RP2040 WebMite does not link.</b> Its <code>.heap</code> runs 1,660 B past RAM with symbols, even after the symbol helpers moved to flash on that build (317da5b). The options put to Peter:
+      <ol>
+        <li>Move <code>cmd_loop</code> and <code>cmd_print</code> to flash on WEB RP2040 only (recommended).</li>
+        <li>Shrink the C heap from 10 KB to 8 KB.</li>
+        <li>Shrink the BASIC heap from 88 KB to 84 KB.</li>
+      </ol>
+    </li>
+    <li><b>The funtbl replacement</b> (18 KB of BSS on the RP2350, to be given to the heap) is proposed, not started.</li>
+    <li><b>OPTION SYMBOLS</b> is a development A/B switch, to be removed at the end unless Peter keeps it.</li>
+    <li><b>The manual and help</b> still describe OPTION TRACECACHE and OPTION CACHE.</li>
+    <li><b>A side issue from S1c:</b> after a PID handler has run inside a loop, statements are about 3% slower (in <code>findvar</code>).</li>
+  </ul>
+</section>
 
 <!-- ============================================================ 1 -->
 <section id="purpose">

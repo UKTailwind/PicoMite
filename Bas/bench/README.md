@@ -84,6 +84,31 @@ The characterisation behind `docs/Interpreter_Phase1_Results.html`:
 - **Games (`games/`):** `make_games.py` builds headless, fixed-length copies of the Exile kernel, Elite and Prince of Pico from the repository, and `gamebench.py` runs them. No game data is kept here; the Prince of Pico data comes from a local conversion.
 - **Sampler size on the PC3:** use `SAMPLE, 16384`. The tables then go to PSRAM and do not distort allocation.
 
+## Symbols and interpreter regression tests
+
+Each drives one board on its serial port and prints PASS or FAIL.
+
+| script | checks |
+|---|---|
+| `symab.py`, `symtime.py`, `rtlist.py`, `symsizes.py` | OPTION SYMBOLS A/Bs on the same firmware: output, timing, LIST round trip, saved size |
+| `symchain.py PORT` | CHAIN and SAVE/LOAD CONTEXT keep each name bound to its own variable (fixed in 8d3ee25) |
+| `cmtloop.py PORT` | FOR, DO and GOSUB lines ending in `: ' comment` (fixed in 8740953) |
+| `inttests/inttests.py` | the S1c interrupt sources |
+
+## Gate G3: the Route B prototype (`g3/`, `results/g3/`)
+
+- **`vm.c`** is a 40-opcode wordcode VM built as a CSUB; **`native.c`** has the same kernels in C, as the floor.
+- **Building the CSUBs:**
+  - M0+: `armcfgen.py vm.c --compile -n VMRUN -e main -O 2 -I <repo> -o vm_m0.txt`.
+  - M33: the same command with `armcfgen33.py`, which is armcfgen with `-mcpu=cortex-m33`.
+  - CSUB C code cannot use `/` or `%` on integers (there is no libgcc).
+- **`kernels.vma`** holds the hand-compiled wordcode: an integer loop, insertion sort, the Julia loop and findleap.
+- **`make_g3.py`** assembles it and writes `g3_m0.bas` / `g3_m33.bas`.
+- **`g3run.py PORT m0|m33`** uploads the harness and runs it. The harness times each kernel three ways and checks that the results agree.
+- **`census.py`** gives the compilable share of the busiest lines and SUBs from saved profiles. The mapping from PCSLINE to file line is set per workload.
+- **`stream_est.py`** (with `measure.py`) estimates stream size against the tokenised image.
+- **Results** (2026-09-25): the VM is 8.8-22x faster than the interpreter on the PC3 and the RP2040 VGA; the census is 84-100%; the stream is 0.04-0.65x of the image. The Route B design is `docs/Interpreter_RouteB_Design.html`.
+
 ## Results so far (`results/`)
 
 Anchor at 378 MHz on the PC3 unless stated, three runs each, spread under
