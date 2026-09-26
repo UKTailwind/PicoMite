@@ -139,7 +139,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>to check</td></tr>
 <tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>removed on development 04361c0; removal on main is next</td></tr>
+<tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>gone: trace cache removed on main c50b6bc</td></tr>
 <tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
 <tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
