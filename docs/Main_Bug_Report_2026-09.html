@@ -151,6 +151,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>26</td><td>Conversions</td><td>NaN becomes 9223372036854775807, printed and assigned without an error</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>27</td><td>Operator ^</td><td>an integer power runs one multiplication per unit of the exponent, with no Ctrl-C</td><td>confirmed (timing)</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>28</td><td>RANDOMIZE (RP2040)</td><td>a bare RANDOMIZE raises "Number out of bounds" once the board has been up about 36 minutes</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr class="rec"><td>29</td><td>Program flow</td><td>calling a one-letter SUB alone on a line skips the next line</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>open</td></tr>
 </table></div>
 <p>Items 1-4 are done. Suggested order for the rest: 5, 7 and 18.</p>
 </section>
@@ -323,6 +324,18 @@ Without the colon (<code>FOR i = 1 TO 3 ' c</code>) the comment is part of the F
 <div class="card"><h3>28 · A bare RANDOMIZE fails after about 36 minutes (RP2040)</h3>
 <p><b>Where:</b> <code>cmd_randomize</code>, <code>core/Commands.c</code>, the <code>#ifndef rp2350</code> version: <code>i = time_us_32();</code> into an <code>int</code>, then <code>if (i &lt; 0) StandardError(21);</code>.</p>
 <ul><li><b>Effect:</b> the microsecond counter passes 2<sup>31</sup> after 35.8 minutes of uptime, so the seed turns negative and a bare <code>RANDOMIZE</code> reports "Number out of bounds". It works again for the next 35.8 minutes after the counter wraps at 71.6 minutes, and so on. Found by the goldens corpus (<code>mathr.bas</code>, line 58) on the RP2040 VGA on 26 September, and reproduced at the prompt. The RP2350 has its own RANDOMIZE and is not affected. <b>Fix:</b> take the time seed as <code>time_us_32() &amp; 0x7FFFFFFF</code>, so only a user-supplied negative seed is refused.</li></ul></div>
+<div class="card"><h3>29 · Calling a one-letter SUB alone on a line skips the next line</h3>
+<p><b>Where:</b> the pre-scan in <code>ExecuteProgram</code>, <code>core/MMBasic.c:1873</code>: <code>nextstmt = cmdline = p + sizeof(CommandToken);</code> runs for every statement that is not a comment, including a call to a user SUB, which starts with the name rather than a 2-byte command token.</p>
+<ul>
+<li><b>Effect:</b> for a one-letter SUB called with no arguments and nothing after it on the line, the statement is the letter and its terminating 0. Two bytes on is the next line's header, so <code>skipelement</code> runs to the end of the <i>next</i> line. DefinedSubFun pushes that as the return address, and the line after the call is skipped silently.</li>
+<li>Seen on the PC3 on 26 September, while testing item 5:
+<ul>
+<li><code>SUB Q</code> ... <code>Q</code> followed by <code>PRINT "next line"</code> never prints.</li>
+<li>These are unaffected: a two-letter name, <code>Q 1</code>, <code>Q : PRINT ...</code>, and <code>CALL "Q"</code>.</li>
+</ul>
+The code is in the repository's first commit, and probably upstream since commands became 2-byte tokens.</li>
+<li><b>Fix:</b> add <code>sizeof(CommandToken)</code> only when <code>p[0]</code> and <code>p[1]</code> are both command-token bytes; for a SUB call start at <code>p</code>.</li>
+</ul></div>
 <p class="ref">Also found, but not on main: CHAIN and SAVE/LOAD CONTEXT left stale symbol bindings on development (fixed there in 8d3ee25). Symbols exist only on development.</p>
 </section>
 
