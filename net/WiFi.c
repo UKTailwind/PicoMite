@@ -292,20 +292,35 @@
         cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
     }
 
+    /* Runs the network: polls the WiFi chip (in lwIP's poll mode nothing moves
+       otherwise) and does the TCP server's housekeeping. With no connection
+       there is nothing to do, unless WEB SCAN is waiting for its results.
+       The poll keeps the cadence it was tuned to: at most once per 100 calls
+       or once per ms. The housekeeping works to seconds (the server's response
+       timeout) and to 5 ms (the telnet flush), so it runs once per ms rather
+       than after every statement. The heartbeat LED is WebHeartbeat's job. */
     void __not_in_flash_func(ProcessWeb)(int mode)
     {
         static uint64_t flushtimer = 0;
         static uint64_t lastusec = 0;
+        static uint64_t nexthousekeeping = 0;
         static int testcount = 0;
-        static int lastonoff = 0;
-        static uint64_t lastheartmsec = 0;
+        if (!startupcomplete || !(WIFIconnected || WebScanActive))
+            return;
         uint64_t timenow = time_us_64();
-        if (!WIFIconnected && startupcomplete)
+        if (testcount == 0 || timenow > lastusec)
         {
-            if (WebScanActive)
-                cyw43_arch_poll(); // WEB SCAN is waiting for results: poll the chip even with no connection
-            goto flashonly;
+            lastusec = timenow + 1000;
+            testcount = 0;
+            cyw43_arch_poll();
         }
+        web_async_check_error();
+        testcount++;
+        if (testcount == 100)
+            testcount = 0;
+        if (timenow < nexthousekeeping)
+            return;
+        nexthousekeeping = timenow + 1000;
         TCP_SERVER_T *state = (TCP_SERVER_T *)TCPstate;
         if (!state)
             return;
@@ -340,17 +355,6 @@
                 }
             }
         }
-        if (testcount == 0 || timenow > lastusec)
-        {
-            lastusec = timenow + 1000;
-            testcount = 0;
-            if (startupcomplete)
-                cyw43_arch_poll();
-        }
-        web_async_check_error();
-        testcount++;
-        if (testcount == 100)
-            testcount = 0;
         if (!mode)
             return;
         if (state->telnet_pcb_no != 99)
@@ -361,24 +365,32 @@
                 flushtimer = timenow + 5000;
             }
         }
-    flashonly:;
+    }
+
+    /* The heartbeat LED is on the WiFi chip (each change is an SPI
+       transaction), so it is driven from the main loop: routinechecks calls
+       this every 100 us or so, connected or not. It blinks every 0.5 s with a
+       connection and every 1 s without. */
+    void __not_in_flash_func(WebHeartbeat)(uint64_t timenow)
+    {
+        static int lastonoff = 0;
+        static uint64_t lastheartmsec = 0;
+        if (!startupcomplete)
+            return;
         if (Option.NoHeartbeat)
         {
             if (lastonoff != 2)
             {
-                if (startupcomplete)
-                {
-                    if (cyw43_arch_gpio_get(CYW43_WL_GPIO_LED_PIN))
-                        cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
-                    lastonoff = 2;
-                }
+                if (cyw43_arch_gpio_get(CYW43_WL_GPIO_LED_PIN))
+                    cyw43_arch_gpio_put(CYW43_WL_GPIO_LED_PIN, 0);
+                lastonoff = 2;
             }
         }
         else
         {
             if (lastonoff == 2)
                 lastonoff = 0;
-            if (timenow - lastheartmsec > (WIFIconnected ? 500000 : 1000000) && startupcomplete)
+            if (timenow - lastheartmsec > (WIFIconnected ? 500000 : 1000000))
             {
                 lastheartmsec = timenow;
                 if (lastonoff)

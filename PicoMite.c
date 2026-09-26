@@ -917,6 +917,9 @@ uint8_t PSRAMpin;
             CursorRefresh();
         }
 #endif
+#ifdef PICOMITEWEB
+        WebHeartbeat(timenow); // the LED is on the WiFi chip; blinks connected or not
+#endif
 #if defined(TOUCH_GESTURES) && !defined(PICOMITEVGA)
         /* Poll the wired panel's pen-down here, in the main thread, never
            from the 1ms timer ISR (the GT911's TOUCH_DOWN is an I2C
@@ -2683,7 +2686,8 @@ int __not_in_flash_func(MMInkey)(void)
     void __not_in_flash_func(CheckAbort)(void)
     {
 #ifdef PICOMITEWEB
-        ProcessWeb(1);
+        if (WIFIconnected || WebScanActive) // no network work without a connection
+            ProcessWeb(1);
 #endif
         routinechecks();
         if (MMAbort)

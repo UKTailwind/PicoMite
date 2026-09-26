@@ -7695,7 +7695,7 @@ void ResetOptions(bool startup)
         /* RP2350-B (QFN-80) is the PGA2350 / Pico Plus 2 package which
            has no on-board GPIO LED, so the regular gpio heartbeat is
            suppressed. PICOMITEWEB drives the LED via cyw43_arch and
-           keeps NoHeartbeat=0 so its ProcessWeb-based poll runs. The BT
+           keeps NoHeartbeat=0 so WebHeartbeat (from routinechecks) runs. The BT
            hosts (PICOMITEBTH / PICOMITEHDMIBTH) are likewise excluded:
            they keep NoHeartbeat at its 0 default so bt_keyboard_poll()
            blinks the CYW43 on-module LED (the GPIO heartbeat is already

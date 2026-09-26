@@ -6282,7 +6282,7 @@ void MIPS16 cmd_option(void)
             /* CYW43-bearing builds — the heartbeat LED is on the
                wireless chip, not a GPIO, so OPTION HEARTBEAT ON/OFF
                only toggles Option.NoHeartbeat. The polling functions
-               (ProcessWeb / bt_keyboard_poll / bt_console_poll) honour
+               (WebHeartbeat / bt_keyboard_poll / bt_console_poll) honour
                that flag and either drive the chip LED or leave it
                dark. No pin to reconfigure; clear heartbeatpin so
                OPTION LIST doesn't report a phantom HEARTBEAT PIN. */
