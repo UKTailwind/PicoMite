@@ -128,8 +128,8 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>3</td><td>WiFi</td><td>WEB SCAN without a connection never polls, so it finds nothing</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main bd1a965</td></tr>
 <tr><td>4</td><td>DO loops</td><td>the trace cache's DO fast path truncates a fractional limit</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main 4c42f0c</td></tr>
 <tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main b0f448e</td></tr>
-<tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
-<tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
+<tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>confirmed (hard fault)</td><td><span class="pill warn">medium</span></td><td>fixed on main d2a8fa9</td></tr>
+<tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>part 1 fixed on main 1c95cd1; part 2 not reachable in practice</td></tr>
 <tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 <tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
@@ -152,6 +152,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>27</td><td>Operator ^</td><td>an integer power runs one multiplication per unit of the exponent, with no Ctrl-C</td><td>confirmed (timing)</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>28</td><td>RANDOMIZE (RP2040)</td><td>a bare RANDOMIZE raises "Number out of bounds" once the board has been up about 36 minutes</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 <tr class="rec"><td>29</td><td>Program flow</td><td>calling a one-letter SUB alone on a line skips the next line</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main 9c1aeb9</td></tr>
+<tr><td>30</td><td>Local variables</td><td>markers left by freed locals were never cleared; after a deep recursion a new local failed with "Too many local variables"</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main 8127da0</td></tr>
 </table></div>
 <p>Items 1-4 are done. Suggested order for the rest: 5, 7 and 18.</p>
 </section>
@@ -336,6 +337,11 @@ Without the colon (<code>FOR i = 1 TO 3 ' c</code>) the comment is part of the F
 The code is in the repository's first commit, and probably upstream since commands became 2-byte tokens.</li>
 <li><b>Fix:</b> add <code>sizeof(CommandToken)</code> only when <code>p[0]</code> and <code>p[1]</code> are both command-token bytes; for a SUB call start at <code>p</code>.</li>
 </ul></div>
+<div class="card"><h3>30 · Markers left by freed locals filled the local variable table</h3>
+<p><b>Where:</b> <code>ClearVars(level)</code>, <code>core/MMBasic.c</code>. A returning frame's locals are freed newest first; a freed slot whose next slot is in use becomes a marker (<code>T_BLOCKED</code>), so that a search for a variable further along the run does not stop early. Nothing cleared a marker once it was no longer needed.</p>
+<ul><li><b>Effect:</b> unwinding a deep recursion frees every local while its older neighbour is still live, so the whole run is left as markers. New locals reuse the marker nearest the end of their search path, the empty slots get used up, and a search that finds none goes all the way round: "Too many local variables", after <code>ClearVars(0)</code> has wiped every variable, although most of the region is free. Found on 26 September while testing item 6: with OPTION LOCAL VARIABLES 400, a recursion holding 350 live locals failed on its second pass. Short names spread badly with that modulus (19 slots apart, against 147 at 256), which made it worse. At the default split, 250 of 256 survived repeated passes.</li>
+<li><b>Fix (8127da0):</b> when the slot after the one being freed is empty, <code>ClearVars</code> empties it and any run of markers just before it. After a full unwind the region is clean. Test: <code>Bas/bench/locvars6.py</code>.</li>
+<li>Item 7 part 2 is the same mechanism for globals: <code>erase()</code> leaves markers the same way. Peter judged it not reachable in practice (erased globals are reused and rare), so it is not changed.</li></ul></div>
 <p class="ref">Also found, but not on main: CHAIN and SAVE/LOAD CONTEXT left stale symbol bindings on development (fixed there in 8d3ee25). Symbols exist only on development.</p>
 </section>
 
