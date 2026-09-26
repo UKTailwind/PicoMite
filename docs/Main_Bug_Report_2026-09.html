@@ -104,14 +104,19 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 </head>
 <body>
 <header class="hero"><div class="wrap">
-<div class="eyebrow">main at cbd99fb · open issues</div>
+<div class="eyebrow">main at 1adeb0e · open issues · updated 26 September 2026</div>
 <h1>Bugs found on main, September 2026</h1>
-<p>These turned up during the interpreter performance work on <code>development</code>. They were found by testing on the boards and by three read-only code surveys. Each one below is present on <code>main</code>. For each, the report gives where it is, what goes wrong, how to confirm it, and a suggested fix. None is fixed on main. Items 1-4 were fixed on <code>development</code> and have since been ported to main.</p>
-<p class="ref">Line numbers are main at cbd99fb (2026-09-25). "Confirmed" means seen on a board; "by reading" means found in the code and not yet reproduced.</p>
+<p>These turned up during the interpreter performance work on <code>development</code>. They were found by testing on the boards and by read-only code surveys. Each one below is present on <code>main</code>. For each, the report gives where it is, what goes wrong, how to confirm it, and a suggested fix.</p>
+<ul>
+<li>Items 1-4 were fixed on <code>development</code> and have since been ported to main.</li>
+<li>Items 21-27 were added on 26 September. Item 21 is fixed on development, not yet on main.</li>
+<li>Peter's plan is to work through the open items on main one at a time, each analysed in turn. That starts after the trace cache removal, the ProcessWeb changes and the interrupt changes have been brought to main.</li>
+</ul>
+<p class="ref">Line numbers for items 1-20 are main at cbd99fb (2026-09-25); for items 21-27, main at 1adeb0e. "Confirmed" means seen on a board; "by reading" means found in the code and not yet reproduced.</p>
 </div></header>
 <div class="wrap">
 <nav class="toc">
-<a href="#summary">Summary</a><a href="#ported">Fixed on development</a><a href="#reading">Found by reading</a><a href="#stepper">Stepper</a><a href="#done">Already fixed on main</a>
+<a href="#summary">Summary</a><a href="#ported">Fixed on development</a><a href="#reading">Found by reading</a><a href="#stepper">Stepper</a><a href="#routeb">Found 26 September</a><a href="#done">Already fixed on main</a>
 </nav>
 
 <section id="summary">
@@ -134,10 +139,17 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>to check</td></tr>
 <tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
-<tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>removed on development 04361c0</td></tr>
+<tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>removed on development 04361c0; removal on main is next</td></tr>
 <tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
 <tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr class="rec"><td>21</td><td>Program flow</td><td>a FOR, DO or GOSUB line ending in <code>: ' comment</code> leaves the loop, or returns past the next line</td><td>confirmed, both boards</td><td><span class="pill bad">high</span></td><td>fixed on development 8740953; open on main</td></tr>
+<tr><td>22</td><td>MAX, MIN</td><td>results clamp at the single-precision limit, &plusmn;3.4e38</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>23</td><td>ABS, SGN</td><td>a float of 2<sup>63</sup> or more raises "Number too large"</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>24</td><td>Arrays</td><td>integer subscripts are cut to 32 bits before the bounds check: <code>a(4294967297)</code> reads <code>a(1)</code></td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr><td>25</td><td>Arithmetic</td><td>only +infinity from + and * is trapped; subtraction and -infinity never are</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>26</td><td>Conversions</td><td>NaN becomes 9223372036854775807, printed and assigned without an error</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>27</td><td>Operator ^</td><td>an integer power runs one multiplication per unit of the exponent, with no Ctrl-C</td><td>confirmed (timing)</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 </table></div>
 <p>Items 1-4 are done. Suggested order for the rest: 5, 7 and 18.</p>
 </section>
@@ -264,6 +276,50 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <ul><li><b>What goes wrong:</b> ESTOP drops the queue, but the buffer of the arc being executed is not handed to the retired list. <b>Fix:</b> one line: retire the current block's payload in the ESTOP path.</li></ul></div>
 <div class="card"><h3>20 · Arcs slower than the requested feed rate</h3>
 <ul><li><b>What goes wrong:</b> on the PC3 test rig, arcs ran at about 2.4 mm/s with F6000 requested; straight moves were not affected. <b>Next step:</b> check the arc segment feed-rate clamp and the per-segment junction speed against the planner.</li></ul></div>
+</section>
+
+<section id="routeb">
+<h2>Found on 26 September</h2>
+<p>These turned up while designing Route B on <code>development</code>, from four code surveys and board checks on the PC3 and the RP2040 VGA. Line numbers are for <code>main</code> at 1adeb0e. "Confirmed" means seen on a board running a <code>development</code> build whose code in that area is the same as main's.</p>
+
+<div class="card"><h3>21 · A loop whose first line ends in <code>: ' comment</code> runs once</h3>
+<p><b>Where:</b> the comment fast path in <code>ExecuteProgram</code>, <code>core/MMBasic.c:1871</code>. It jumps to the line after <code>line_start</code>, the last T_NEWLINE the loop crossed. NEXT, LOOP, RETURN and IRETURN jump back into the middle of an earlier line without crossing its T_NEWLINE, so a comment element they land on is taken to belong to the wrong line.</p>
+<ul>
+<li><b>Effect:</b> each of these is broken.
+<ul>
+<li><code>FOR i = 1 TO 3 : ' c</code> runs its body once.</li>
+<li><code>DO : ' d &hellip; LOOP UNTIL k = 2</code> leaves after one pass.</li>
+<li><code>GOSUB x : ' c</code> returns to the line after the RETURN's line.</li>
+</ul>
+Without the colon (<code>FOR i = 1 TO 3 ' c</code>) the comment is part of the FOR statement, and nothing goes wrong. The code is in the repository's first commit, so every release since 6.03.00 has it.</li>
+<li><b>Confirm:</b> <code>Bas/bench/cmtloop.py PORT</code> fails on both boards before the fix and passes after it.</li>
+<li><b>Fix:</b> also require <code>p &gt; line_start &amp;&amp; p &lt; line_start + line_skip</code> (development 8740953). The same shortcut in <code>GetNextCommand</code> (<code>:7194</code>) is safe, because its <code>line_start</code> is local to one forward scan.</li>
+</ul></div>
+
+<div class="card"><h3>22 · MAX and MIN clamp at the single-precision limit</h3>
+<p><b>Where:</b> <code>fun_max_min</code>, <code>core/Functions.c:1855-1890</code>, starts from <code>-FLT_MAX</code> or <code>FLT_MAX</code>.</p>
+<ul><li><b>Effect:</b> <code>MAX(-1e300, -2e300)</code> gives -3.402823466e+38, and <code>MIN(1e300, 2e300)</code> gives 3.402823466e+38. <b>Fix:</b> start from the first argument, or from <code>-DBL_MAX</code>/<code>DBL_MAX</code>.</li></ul></div>
+
+<div class="card"><h3>23 · ABS and SGN reject floats of 2<sup>63</sup> or more</h3>
+<p><b>Where:</b> <code>fun_abs</code> and <code>fun_sgn</code> (<code>core/Functions.c:555, 1232</code>) evaluate their argument with an integer target type, so a float argument goes through <code>FloatToInt64</code>.</p>
+<ul><li><b>Effect:</b> <code>ABS(1e19)</code> raises "Number too large". <b>Fix:</b> evaluate with <code>T_NOTYPE</code> and branch on the type that comes back.</li></ul></div>
+
+<div class="card"><h3>24 · Integer subscripts are cut to 32 bits before the bounds check</h3>
+<p><b>Where:</b> the subscript loops in <code>findvar</code> (<code>core/MMBasic.c:4834</code>) and the struct-member paths (<code>:4220, 4344</code>). A float subscript goes through <code>FloatToInt32</code>, but an integer one is stored with <code>dim[i] = in</code>, which truncates the 64-bit value.</p>
+<ul><li><b>Effect:</b> with <code>DIM a(3)</code>, <code>a(4294967297)</code> reads <code>a(1)</code> without an error. A runaway index in a user's program can therefore hit the wrong element silently. <b>Fix:</b> range-check <code>in</code> against <code>INT_MIN</code>/<code>INT_MAX</code> before the assignment and raise "Index out of bounds".</li></ul></div>
+
+<div class="card"><h3>25 · Only +infinity is trapped, and subtraction never is</h3>
+<p><b>Where:</b> <code>core/Operators.c</code>. <code>op_add</code>, <code>op_mul</code>, <code>op_div</code> and <code>op_exp</code> test <code>fret == INFINITY</code>; <code>op_subtract</code> has no test, and nothing tests <code>-INFINITY</code>.</p>
+<ul><li><b>Effect:</b> <code>1e308 + 1e308</code> raises "Overflow", but <code>1e308 - (-1e308)</code> prints INF (both seen on the PC3). By reading, no operation traps -INF. <b>Fix:</b> test <code>isinf(fret)</code> in all five, if raising an error is the intended behaviour.</li></ul></div>
+
+<div class="card"><h3>26 · NaN becomes 9223372036854775807</h3>
+<p><b>Where:</b> <code>FloatToInt64</code> (<code>core/MMBasic.c:6789</code>). Its range test is false for NaN, so NaN reaches the C conversion. Exactly 2<sup>63</sup> also passes the test, because the bound rounds to 2<sup>63</sup>, and then converts with undefined behaviour.</p>
+<ul><li><b>Effect:</b> with <code>x</code> infinite (item 25), <code>y = x - x</code> prints 9223372036854775807, and <code>z% = y</code> stores it. <b>Fix:</b> reject NaN, and use <code>&gt;=</code> 9223372036854775808.0 as the upper bound.</li></ul></div>
+
+<div class="card"><h3>27 · A large integer exponent runs one loop step per unit</h3>
+<p><b>Where:</b> <code>op_exp</code>'s integer branch: <code>for (iret = i = 1; i &lt;= iarg2; i++) iret *= iarg1</code>.</p>
+<ul><li><b>Effect:</b> <code>1 ^ 30000000</code> took 800 ms on the PC3, so <code>1 ^ 4000000000</code> would lock the board for about two minutes. Ctrl-C cannot stop it, because the loop never returns to the interpreter. <b>Fix:</b> exponentiation by squaring, which is at most 64 steps and gives the same wrapped result.</li></ul></div>
+<p class="ref">Also found, but not on main: CHAIN and SAVE/LOAD CONTEXT left stale symbol bindings on development (fixed there in 8d3ee25). Symbols exist only on development.</p>
 </section>
 
 <section id="done">
