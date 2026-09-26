@@ -6392,6 +6392,23 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                     g_vartbl[hashcurrent].type = T_BLOCKED; // block slot
                     g_vartbl[hashcurrent].name[0] = '~';    // safety precaution
                 }
+                else
+                {
+                    // The slot after this one is empty, so no search can pass through
+                    // this slot, or through a run of markers just before it, to reach a
+                    // live variable: empty those markers too.  Without this every local
+                    // freed newest-first stays a marker for good, and a deep recursion
+                    // leaves the local region full of them, with no empty slot to stop
+                    // a search ("Too many local variables").
+                    int k = hashcurrent;
+                    for (;;)
+                    {
+                        k = (k == 0 ? maxlocalvars : k) - 1;
+                        if (g_vartbl[k].type != T_BLOCKED)
+                            break;
+                        memset(&g_vartbl[k], 0, sizeof(struct s_vartbl));
+                    }
+                }
                 g_Localvarcnt--;
             }
         }
