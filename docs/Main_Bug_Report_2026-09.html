@@ -127,7 +127,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>2</td><td>I2C slave</td><td>clearing a slave-ready bit can wipe one the ISR sets at the same moment</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main 0227df6</td></tr>
 <tr><td>3</td><td>WiFi</td><td>WEB SCAN without a connection never polls, so it finds nothing</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main bd1a965</td></tr>
 <tr><td>4</td><td>DO loops</td><td>the trace cache's DO fast path truncates a fractional limit</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>fixed on main 4c42f0c</td></tr>
-<tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
+<tr class="rec"><td>5</td><td>STATIC</td><td>a STATIC used after a nested call can attach to the wrong variable</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main b0f448e</td></tr>
 <tr><td>6</td><td>OPTION LOCAL VARIABLES</td><td>a value above the compile-time size overflows <code>g_hashlist</code></td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 <tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
 <tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
@@ -151,7 +151,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>26</td><td>Conversions</td><td>NaN becomes 9223372036854775807, printed and assigned without an error</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>27</td><td>Operator ^</td><td>an integer power runs one multiplication per unit of the exponent, with no Ctrl-C</td><td>confirmed (timing)</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>28</td><td>RANDOMIZE (RP2040)</td><td>a bare RANDOMIZE raises "Number out of bounds" once the board has been up about 36 minutes</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
-<tr class="rec"><td>29</td><td>Program flow</td><td>calling a one-letter SUB alone on a line skips the next line</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>open</td></tr>
+<tr class="rec"><td>29</td><td>Program flow</td><td>calling a one-letter SUB alone on a line skips the next line</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main 9c1aeb9</td></tr>
 </table></div>
 <p>Items 1-4 are done. Suggested order for the rest: 5, 7 and 18.</p>
 </section>
