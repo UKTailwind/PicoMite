@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build Bas/armcfgen.docx from Bas/armcfgen.md.
+Build docs/armcfgen.docx from docs/armcfgen.md.
 
 A small Markdown -> .docx converter (python-docx) covering the subset used by the
 manual: # .. #### headings, fenced ``` code blocks, | pipe tables |, - bullets,
@@ -9,7 +9,7 @@ untouched, and Word wraps table cells itself, so there is none of the latin-1 /
 manual-wrapping fuss the PDF generator needs.
 
 Convert to PDF afterwards with Word or LibreOffice (File > Export as PDF), or:
-    soffice --headless --convert-to pdf Bas/armcfgen.docx
+    soffice --headless --convert-to pdf docs/armcfgen.docx
 """
 
 import os
@@ -21,8 +21,9 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, '..', 'Bas', 'armcfgen.md')
-OUT = os.path.join(HERE, '..', 'Bas', 'armcfgen.docx')
+# armcfgen.md moved from Bas/ to docs/, and the docx lives beside it
+SRC = os.path.join(HERE, 'armcfgen.md')
+OUT = os.path.join(HERE, 'armcfgen.docx')
 
 CODE_FONT = 'Consolas'
 CODE_SIZE = 8.5
@@ -39,21 +40,45 @@ def shade(paragraph, fill):
 
 
 def add_inline(paragraph, text, base_bold=False):
-    """Render a run sequence handling **bold** and `code`."""
-    for tok in re.split(r'(\*\*.+?\*\*|`[^`]*`)', text):
-        if not tok:
-            continue
-        if tok.startswith('**') and tok.endswith('**'):
-            r = paragraph.add_run(tok[2:-2])
-            r.bold = True
-        elif tok.startswith('`') and tok.endswith('`'):
-            r = paragraph.add_run(tok[1:-1])
+    """Render a run sequence handling **bold**, *italic* and `code`; a code span
+    may sit inside bold (**... `Option` ...**), and * inside a code span is
+    literal, as is a lone * with no closing one."""
+    state = {'bold': False, 'italic': False}
+
+    def flush(s, code=False):
+        if not s:
+            return
+        r = paragraph.add_run(s)
+        if code:
             r.font.name = CODE_FONT
             r.font.size = Pt(9)
+        if state['bold'] or base_bold:
+            r.bold = True
+        if state['italic']:
+            r.italic = True
+
+    buf, i = '', 0
+    while i < len(text):
+        if text.startswith('**', i):
+            flush(buf)
+            buf = ''
+            state['bold'] = not state['bold']
+            i += 2
+        elif text[i] == '*' and (state['italic'] or re.match(r'\*\S[^*]*?\S?\*(?!\*)', text[i:])):
+            flush(buf)
+            buf = ''
+            state['italic'] = not state['italic']
+            i += 1
+        elif text[i] == '`' and text.find('`', i + 1) > i:
+            j = text.find('`', i + 1)
+            flush(buf)
+            buf = ''
+            flush(text[i + 1:j], code=True)
+            i = j + 1
         else:
-            r = paragraph.add_run(tok)
-            if base_bold:
-                r.bold = True
+            buf += text[i]
+            i += 1
+    flush(buf)
 
 
 def add_code(doc, lines):
@@ -127,7 +152,8 @@ def convert(doc, md):
                 add_table(doc, rows[0], rows[1:])
             continue
 
-        # headings
+        # headings (Word styles them; a code span in one just loses its backticks)
+        stripped = stripped.replace('`', '') if line.startswith('#') else stripped
         if line.startswith('#### '):
             doc.add_heading(stripped[5:], level=3)
         elif line.startswith('### '):
@@ -138,20 +164,44 @@ def convert(doc, md):
             doc.add_heading(stripped[2:], level=0)
         elif stripped == '---':
             pass  # section breaks are conveyed by headings
-        elif stripped.startswith('> '):
+        elif stripped.startswith('>'):
+            # a note: every following '>' line belongs to it
+            text = stripped[1:].strip()
+            while i + 1 < len(lines) and lines[i + 1].strip().startswith('>'):
+                i += 1
+                text += ' ' + lines[i].strip()[1:].strip()
             p = doc.add_paragraph(style='Intense Quote')
-            add_inline(p, stripped[2:])
+            add_inline(p, text)
         elif stripped.startswith('- ') or stripped.startswith('* '):
+            i, text = gather(lines, i, stripped[2:])
             p = doc.add_paragraph(style='List Bullet')
-            add_inline(p, stripped[2:])
+            add_inline(p, text)
         elif re.match(r'^\d+\.\s', stripped):
+            i, text = gather(lines, i, stripped)
             p = doc.add_paragraph()
             p.paragraph_format.left_indent = Pt(14)
-            add_inline(p, stripped)
+            add_inline(p, text)
         elif stripped:
+            i, text = gather(lines, i, stripped)
             p = doc.add_paragraph()
-            add_inline(p, stripped)
+            add_inline(p, text)
         i += 1
+
+
+def starts_block(s):
+    """True when a stripped line begins something other than more text."""
+    return (not s or s.startswith(('#', '```', '|', '>', '- ', '* ', '---'))
+            or re.match(r'^\d+\.\s', s) is not None)
+
+
+def gather(lines, i, text):
+    """The Markdown is hard-wrapped: join the lines that continue this
+    paragraph, bullet or numbered item (up to a blank line or a new block)
+    into one, so Word gets whole paragraphs.  Returns the last line used."""
+    while i + 1 < len(lines) and not starts_block(lines[i + 1].strip()):
+        i += 1
+        text += ' ' + lines[i].strip()
+    return i, text
 
 
 def main():
