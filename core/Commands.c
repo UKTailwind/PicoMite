@@ -8445,6 +8445,9 @@ void cmd_on(void)
 			substack[gosubindex] = NULL; // a GOSUB runs in the SUB it was called from
 			gosubstack[gosubindex++] = nextstmt;
 			g_LocalIndex++;
+#ifdef SUBPROFILE
+			EnterLocalFrame(); // RETURN closes a profiling frame, as for GOSUB
+#endif
 		}
 
 		if (isnamestart(*argv[r * 2]))

@@ -10565,7 +10565,23 @@ GotAnInterrupt:
         substack[gosubindex] = (unsigned char *)intaddr;  // for STATIC: the interrupt SUB is the SUB running
         gosubstack[gosubindex++] = (unsigned char *)rti; // return from the subroutine to the dummy IRETURN command
         g_LocalIndex++;                                  // return from the subroutine will decrement g_LocalIndex
-        skipelement(intaddr);                            // point to the body of the subroutine
+#ifdef SUBPROFILE
+        EnterLocalFrame(); // its END SUB closes a profiling frame, so open one here
+#endif
+        if (g_option_profiling)
+        { // count (and time) the interrupt SUB under its own name
+            for (i = 0; i < MAXSUBFUN; i++)
+                if (subfun[i] == (unsigned char *)intaddr)
+                {
+                    if (g_perf_subcall_count)
+                        g_perf_subcall_count[i]++;
+#ifdef SUBPROFILE
+                    g_current_sub_idx = i;
+#endif
+                    break;
+                }
+        }
+        skipelement(intaddr); // point to the body of the subroutine
     }
     nextstmt = (unsigned char *)intaddr; // the next command will be in the interrupt routine
     return 1;
