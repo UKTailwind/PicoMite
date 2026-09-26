@@ -143,7 +143,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main db99419</td></tr>
 <tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 2794fe3</td></tr>
 <tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>deferred (Peter, 26 September)</td></tr>
-<tr class="rec"><td>21</td><td>Program flow</td><td>a FOR, DO or GOSUB line ending in <code>: ' comment</code> leaves the loop, or returns past the next line</td><td>confirmed, both boards</td><td><span class="pill bad">high</span></td><td>fixed on development 8740953; open on main</td></tr>
+<tr class="rec"><td>21</td><td>Program flow</td><td>a FOR, DO or GOSUB line ending in <code>: ' comment</code> leaves the loop, or returns past the next line</td><td>confirmed, both boards</td><td><span class="pill bad">high</span></td><td>fixed on main e49d3ff (from development 8740953)</td></tr>
 <tr><td>22</td><td>MAX, MIN</td><td>results clamp at the single-precision limit, &plusmn;3.4e38</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>23</td><td>ABS, SGN</td><td>a float of 2<sup>63</sup> or more raises "Number too large"</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>24</td><td>Arrays</td><td>integer subscripts are cut to 32 bits before the bounds check: <code>a(4294967297)</code> reads <code>a(1)</code></td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
@@ -315,7 +315,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 </ul>
 Without the colon (<code>FOR i = 1 TO 3 ' c</code>) the comment is part of the FOR statement, and nothing goes wrong. The code is in the repository's first commit, so every release since 6.03.00 has it.</li>
 <li><b>Confirm:</b> <code>Bas/bench/cmtloop.py PORT</code> fails on both boards before the fix and passes after it.</li>
-<li><b>Fix:</b> also require <code>p &gt; line_start &amp;&amp; p &lt; line_start + line_skip</code> (development 8740953). The same shortcut in <code>GetNextCommand</code> (<code>:7194</code>) is safe, because its <code>line_start</code> is local to one forward scan.</li>
+<li><b>Fix:</b> also require <code>p &gt; line_start &amp;&amp; p &lt; line_start + line_skip</code> (development 8740953; on main e49d3ff). The same shortcut in <code>GetNextCommand</code> (<code>:7194</code>) is safe, because its <code>line_start</code> is local to one forward scan.</li>
 </ul></div>
 
 <div class="card"><h3>22 · MAX and MIN clamp at the single-precision limit</h3>
