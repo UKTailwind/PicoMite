@@ -75,8 +75,10 @@ static int maxglobalvars = MAXGLOBALVARS;
 int CommandTableSize, TokenTableSize;
 #ifdef rp2350
 struct s_funtbl funtbl[MAXSUBFUN];
-// void hashlabels(int errabort);
-void hashlabels(unsigned char *p, int ErrAbort);
+// entries in funtbl (SUBs, FUNCTIONs and labels): at most MAXSUBFUN - 1, so that
+// there is always an empty slot and every search of the table ends
+static int funtbl_used;
+int hashlabels(unsigned char *p, int ErrAbort);
 // Character classification - single memory access vs function calls
 __not_in_flash("data") const unsigned char name_start_tbl[256] = {
     ['A' ... 'Z'] = 1, ['a' ... 'z'] = 1, ['_'] = 1};
@@ -836,6 +838,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
     // check the sub/fun table for duplicates
 #ifdef rp2350
     memset(funtbl, 0, sizeof(struct s_funtbl) * MAXSUBFUN);
+    funtbl_used = 0;
     for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
     {
         // First we will hash the function name and add it to the function table
@@ -867,6 +870,17 @@ int MIPS16 PrepareProgram(int ErrAbort)
         } while (isnamechar(*p1));
         if (namelen != MAXVARLEN)
             *p2 = 0;
+        if (funtbl_used >= MAXSUBFUN - 1)
+        {
+            if (ErrAbort)
+            {
+                SetPreprogramError("Too many subroutines, functions and labels", subfun[i]);
+                ProgramValid = 0;
+                return 1;
+            }
+            break; // (at the prompt: RUN will report it)
+        }
+        funtbl_used++;
         hash %= MAXSUBFUN; // scale to size of table
         while (funtbl[hash].name[0] != 0)
         {
@@ -877,13 +891,10 @@ int MIPS16 PrepareProgram(int ErrAbort)
         funtbl[hash].index = i;
         memcpy(funtbl[hash].name, printvar, (namelen == MAXVARLEN ? namelen : namelen + 1));
     }
-    if (LibPresent())
-    {
-        hashlabels(LibMemory, ErrAbort);
-        // if(!ErrAbort) return;
-    }
-    hashlabels(ProgMemory, ErrAbort);
-    // if(!ErrAbort) return;
+    if (LibPresent() && hashlabels(LibMemory, ErrAbort))
+        return 1;
+    if (hashlabels(ProgMemory, ErrAbort))
+        return 1;
 
 #endif
     /* Build the IF/ELSEIF/ELSE/ENDIF jump table.  Done unconditionally
@@ -3646,11 +3657,12 @@ unsigned char MIPS16 *findline(int nbr, int mustfind)
     return p;
 }
 #ifdef rp2350
-void hashlabels(unsigned char *p, int ErrAbort)
+// returns 1 if the table is full and ErrAbort (the error has been set), else 0
+int hashlabels(unsigned char *p, int ErrAbort)
 {
     // unsigned char *p = (unsigned char *)ProgMemory;
     int j, u, namelen;
-    uint32_t originalhash, hash = FNV_offset_basis;
+    uint32_t hash = FNV_offset_basis;
     // char *lastp = (char *)ProgMemory + 1;
     char *lastp = (char *)p + 1;
     // now do the search
@@ -3703,22 +3715,22 @@ void hashlabels(unsigned char *p, int ErrAbort)
                 hash *= FNV_prime;
                 namelen++;
             }
+            if (funtbl_used >= MAXSUBFUN - 1)
+            {
+                if (ErrAbort)
+                {
+                    SetPreprogramError("Too many subroutines, functions and labels", (unsigned char *)lastp);
+                    ProgramValid = 0;
+                    return 1;
+                }
+                return 0; // (at the prompt: RUN will report it)
+            }
+            funtbl_used++;
             hash %= MAXSUBFUN; // scale to size of table
-            originalhash = hash - 1;
-            if (originalhash < 0)
-                originalhash += MAXSUBFUN;
-            while (funtbl[hash].name[0] != 0 && hash != originalhash)
+            while (funtbl[hash].name[0] != 0)
             {
                 hash++;
                 hash %= MAXSUBFUN;
-            }
-            if (hash == originalhash)
-            {
-                MMPrintString("Error: Too many labels - erasing program\r\n");
-                unsigned char dummy = 0;
-                cmdline = &dummy;
-                cmd_new();
-                // jump back to the input prompt
             }
             funtbl[hash].index = (uint32_t)lastp;
             for (j = 0; j < p[0]; j++)
@@ -3728,6 +3740,7 @@ void hashlabels(unsigned char *p, int ErrAbort)
         }
         p++;
     }
+    return 0;
 }
 
 // search through program memory looking for a label.
