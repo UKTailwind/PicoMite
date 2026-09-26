@@ -386,7 +386,7 @@ A name whose type cannot be fixed (declared with two types, or used before a con
 <li>For a FUNCTION, the result variable is created and the body runs nested.</li>
 </ol>
 END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and the FUNCTION epilogue do.</li>
-<li><b>Left to <code>DefinedSubFun</code> as fallbacks:</b> CSUBs, library SUBs (libraries stay text), struct parameters, element-addressed array arguments such as <code>a(3)</code> passed as an array, missing arguments, array-returning FUNCTIONs, and CALL/CALL(). The compiled path covers the forms the corpus uses; the census counts them in P3.</li>
+<li><b>Left to <code>DefinedSubFun</code> as fallbacks:</b> CSUBs, struct parameters, element-addressed array arguments such as <code>a(3)</code> passed as an array, missing arguments, array-returning FUNCTIONs, and CALL/CALL(). The compiled path covers the forms the corpus uses; the census counts them in P3.</li>
 </ul>
 </section>
 
@@ -498,13 +498,13 @@ END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and 
 </section>
 
 <section id="decide">
-<div class="decide"><div class="eyebrow">Decisions for Peter</div>
+<div class="decide"><div class="eyebrow">Decisions (Peter, 26 September 2026)</div>
 <ol>
-<li><b>Compile at RUN when the image has changed,</b> stamped by a CRC of the image, rather than in every image writer at save time? (Recommended: one path covers every way a program arrives.)</li>
-<li><b>Stream slots while developing:</b> RAM slot 4 on the PC3 and flash slot 2 on the RP2040, refused to the user while OPTION COMPILE is on?</li>
-<li><b>OPTION COMPILE ON | OFF | SHADOW</b> as a RAM-only development switch, like OPTION SYMBOLS, off by default until the P3 gate?</li>
-<li><b>Libraries stay text:</b> library SUBs called from a compiled program run interpreted. (Recommended for now; libraries are saved without symbols.)</li>
-<li><b>Bugs found while preparing this</b> (below). The comment fast-path fix is on development; should it be ported to main, where it has been since 6.03.00? And should MAX/MIN and ABS/SGN be fixed, on both branches? (The CHAIN fix concerns symbols, which exist only on development.)</li>
+<li><b>Compile at RUN when the image has changed,</b> stamped by a CRC of the image: <b>yes</b>.</li>
+<li><b>Stream slots while developing:</b> RAM slot 4 on the PC3 and flash slot 2 on the RP2040, refused to the user while OPTION COMPILE is on: <b>yes</b>.</li>
+<li><b>OPTION COMPILE ON | OFF | SHADOW</b> as a RAM-only development switch, off by default until the P3 gate: <b>yes</b>.</li>
+<li><b>Libraries are compiled too</b>, not left as text. Consequences: the stamp's CRC and the statement map cover the library image as well as the program, so the executor stays in compiled code across a call into the library; LIBRARY SAVE gains symbols (the library table the symbol format already reserves, found through <code>SymTabLib</code>), added in P2 so library names bind like the program's; and library SUBs leave the list of <code>DefinedSubFun</code> fallbacks in P3.</li>
+<li><b>Bugs found while preparing this:</b> all fixed on main (the comment fast path e49d3ff, MAX/MIN 50c9aa0, ABS/SGN 16d0413) and merged into development with V6.04.00RC2 (ac6ca56).</li>
 </ol>
 </div>
 </section>
