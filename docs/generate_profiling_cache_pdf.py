@@ -29,7 +29,7 @@ class PDF(FPDF):
     def header(self):
         self.set_font('Helvetica', 'B', 16)
         self.set_text_color(0, 51, 102)
-        self.cell(0, 10, 'OPTION PROFILING and OPTION TRACECACHE', 0, 1, 'C')
+        self.cell(0, 10, 'OPTION PROFILING and Built-in Optimisations', 0, 1, 'C')
         self.set_font('Helvetica', '', 11)
         self.cell(0, 6, 'PicoMite MMBasic - Performance Optimisation Guide', 0, 1, 'C')
         self.set_text_color(0, 0, 0)
@@ -331,8 +331,9 @@ def parse_and_render(md_path, pdf):
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    md_path = os.path.join(script_dir, 'docs', 'option-profiling-cache.md')
-    pdf_path = os.path.join(script_dir, 'docs', 'option-profiling-cache.pdf')
+    # (the script lives in docs/ beside the .md; the PDFs live in PDF/)
+    md_path = os.path.join(script_dir, 'option-profiling-cache.md')
+    pdf_path = os.path.join(script_dir, '..', 'PDF', 'option-profiling-cache.pdf')
 
     pdf = PDF()
     pdf.set_margins(15, 20, 15)
