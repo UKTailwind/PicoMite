@@ -1869,8 +1869,11 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
                 }
                 nextstmt = cmdline = p + 1;
             }
+            else if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+                nextstmt = cmdline = p + sizeof(CommandToken); // a command token
             else
-                nextstmt = cmdline = p + sizeof(CommandToken);
+                nextstmt = cmdline = p; // a call to a user SUB starts with its name, which can be
+                                        // one letter: skipping two bytes would pass the line's end
             skipspace(cmdline);
             skipelement(nextstmt);
             if (*p && *p != '\'')
@@ -5619,8 +5622,8 @@ void MIPS16 __not_in_flash_func(makeargs)(unsigned char **p, int maxargs, unsign
 
         // anything else is just copied into the argument
         *op++ = *tp++;
-        if (expect_cmd)
-            *op++ = *tp++; // copy rest of command token
+        if (expect_cmd && tp[-1] >= C_BASETOKEN && *tp >= C_BASETOKEN)
+            *op++ = *tp++; // copy rest of command token (not after a SUB name, which can be one letter)
         expect_cmd = false;
     }
     if (expect_bracket && *tp != ')')
