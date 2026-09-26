@@ -177,6 +177,7 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
         if (p->tot_len > 0)
         {
                 TCPreceived = 1;
+                if (TCPreceiveInterrupt != NULL) IntSignal();
                 if (!CurrentLinePtr)
                 { // deal with requests when we don't want them
                         tcp_recved(tpcb, p->tot_len);
@@ -795,7 +796,7 @@ int cmd_tcpserver(void)
                         SyntaxError();
                 ;
                 TCPreceiveInterrupt = (char *)GetIntAddress(argv[0]);
-                InterruptUsed = true;
+                IntSignal();
                 TCPreceived = 0;
                 return 1;
         }

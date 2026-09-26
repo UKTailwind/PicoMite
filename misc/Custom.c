@@ -781,7 +781,7 @@ void MIPS16 cmd_pio(void)
                         if (nbr == 0)
                                 error("Interrupt incopmpatible with continuous running");
                         DMAinterruptRX = (char *)GetIntAddress(argv[8]);
-                        InterruptUsed = true;
+                        IntReady.poll |= INT_POLL_SCAN;
                 }
                 int dmasize = DMA_SIZE_32;
                 if (argc >= 11 && *argv[10])
@@ -974,7 +974,7 @@ void MIPS16 cmd_pio(void)
                         if (ring_mode || continuous_retrigger)
                                 error("Interrupt incompatible with continuous running");
                         DMAinterruptTX = (char *)GetIntAddress(argv[8]);
-                        InterruptUsed = true;
+                        IntReady.poll |= INT_POLL_SCAN;
                 }
 
                 // Validate buffer alignment and size
@@ -1146,7 +1146,7 @@ void MIPS16 cmd_pio(void)
                                 if (pioRXinterrupts[i][j] || pioTXinterrupts[i][j])
                                 {
                                         piointerrupt = 1;
-                                        InterruptUsed = 1;
+                                        IntReady.poll |= INT_POLL_SCAN;
                                 }
                         }
                 }

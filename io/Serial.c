@@ -253,8 +253,10 @@ void tuh_cdc_rx_cb(uint8_t idx)
 		unsigned char *rxbuf = *cdc_rx_buf[idx];
 		volatile int *head = cdc_rx_head[idx];
 		volatile int *tail = cdc_rx_tail[idx];
+		bool got = false;
 		while ((count = tuh_cdc_read(idx, buf, sizeof(buf))) > 0)
 		{
+			got = true;
 			for (uint32_t i = 0; i < count; i++)
 			{
 				rxbuf[*head] = buf[i];
@@ -265,6 +267,14 @@ void tuh_cdc_rx_cb(uint8_t idx)
 				}
 				*head = next;
 			}
+		}
+		if (got && *cdc_interrupt[idx] != NULL)
+		{ // signal the COM interrupt if the buffer is at or above its level
+			int n = *head - *tail;
+			if (n < 0)
+				n += bsize;
+			if (n >= *cdc_ilevel[idx])
+				IntSignal();
 		}
 	}
 	else
@@ -301,6 +311,14 @@ void on_uart_irq0()
 				{													 // if the buffer has overflowed
 					com1Rx_tail = (com1Rx_tail + 1) % com1_buf_size; // throw away the oldest char
 				}
+				if (com1_interrupt != NULL)
+				{ // signal the COM1 interrupt on the byte that brings the buffer up to its level
+					int n = com1Rx_head - com1Rx_tail;
+					if (n < 0)
+						n += com1_buf_size;
+					if (n == com1_ilevel)
+						IntSignal();
+				}
 			}
 		}
 		else
@@ -314,6 +332,7 @@ void on_uart_irq0()
 			else if (cc == keyselect && KeyInterrupt != NULL)
 			{
 				Keycomplete = true; // ON KEY k: signal the interrupt, don't buffer the key
+				IntSignal();
 			}
 			else
 			{
@@ -322,6 +341,8 @@ void on_uart_irq0()
 				{																	 // if the buffer has overflowed
 					ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
 				}
+				if (OnKeyGOSUB != NULL)
+					IntSignal(); // ON KEY: a key is waiting
 			}
 		}
 	}
@@ -373,6 +394,14 @@ void on_uart_irq1()
 				{													 // if the buffer has overflowed
 					com2Rx_tail = (com2Rx_tail + 1) % com2_buf_size; // throw away the oldest char
 				}
+				if (com2_interrupt != NULL)
+				{ // signal the COM2 interrupt on the byte that brings the buffer up to its level
+					int n = com2Rx_head - com2Rx_tail;
+					if (n < 0)
+						n += com2_buf_size;
+					if (n == com2_ilevel)
+						IntSignal();
+				}
 			}
 		}
 		else
@@ -386,6 +415,7 @@ void on_uart_irq1()
 			else if (cc == keyselect && KeyInterrupt != NULL)
 			{
 				Keycomplete = true; // ON KEY k: signal the interrupt, don't buffer the key
+				IntSignal();
 			}
 			else
 			{
@@ -394,6 +424,8 @@ void on_uart_irq1()
 				{																	 // if the buffer has overflowed
 					ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
 				}
+				if (OnKeyGOSUB != NULL)
+					IntSignal(); // ON KEY: a key is waiting
 			}
 		}
 	}
@@ -546,7 +578,7 @@ void MIPS16 SerialOpen(unsigned char *spec)
 
 	if (argc >= 7)
 	{
-		InterruptUsed = true;
+		IntSignal(); // the receive paths signal when the buffer reaches the level
 		argv[6] = (unsigned char *)strupr((char *)argv[6]);
 		interrupt = (char *)GetIntAddress(argv[6]); // get the interrupt location
 	}
@@ -563,7 +595,7 @@ void MIPS16 SerialOpen(unsigned char *spec)
 		ilevel = 1;
 
 	/*	if(argc >= 11) {
-			InterruptUsed = true;
+			IntSignal();
 			argv[6]=strupr(argv[10]);
 			TXinterrupt = GetIntAddress(argv[10]);							// get the interrupt location
 		} else

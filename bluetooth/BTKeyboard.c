@@ -2562,6 +2562,7 @@ static void bth_gamepad_publish(const hid_gamepad_descriptor_t *desc,
         nunstruct[n].y0 != hat)
     {
         nunfoundc[n] = 1;
+        if (nunInterruptc[n] != NULL) IntSignal();
     }
 
     nunstruct[n].ax = a[0];

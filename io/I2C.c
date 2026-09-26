@@ -389,11 +389,13 @@ void __not_in_flash_func(i2c0_irq_handler)(void)
   {
     i2c0->hw->intr_mask = I2C_IC_INTR_MASK_M_RD_REQ_BITS;
     I2C_Status |= I2C_Status_Slave_Receive_Rdy;
+    IntSignal();
   }
   else if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS)
   {
     i2c0->hw->clr_rd_req;
     I2C_Status |= I2C_Status_Slave_Send_Rdy;
+    IntSignal();
   }
 }
 void __not_in_flash_func(i2c1_irq_handler)(void)
@@ -405,11 +407,13 @@ void __not_in_flash_func(i2c1_irq_handler)(void)
   {
     i2c1->hw->intr_mask = I2C_IC_INTR_MASK_M_RD_REQ_BITS;
     I2C2_Status |= I2C_Status_Slave_Receive_Rdy;
+    IntSignal();
   }
   else if (status & I2C_IC_INTR_STAT_R_RD_REQ_BITS)
   {
     i2c1->hw->clr_rd_req;
     I2C2_Status |= I2C_Status_Slave_Send_Rdy;
+    IntSignal();
   }
 }
 void i2cSlave(unsigned char *p)
@@ -429,7 +433,7 @@ void i2cSlave(unsigned char *p)
   I2C_Slave_Addr = addr;
   I2C_Slave_Send_IntLine = (char *)GetIntAddress(argv[2]);    // get the interrupt routine's location
   I2C_Slave_Receive_IntLine = (char *)GetIntAddress(argv[4]); // get the interrupt routine's location
-  InterruptUsed = true;
+  IntSignal();
   i2c_set_slave_mode(i2c0, true, I2C_Slave_Addr);
   // Enable the I2C interrupts we want to process
   i2c0->hw->intr_mask = I2C_IC_INTR_STAT_R_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS;
@@ -456,7 +460,7 @@ void i2c2Slave(unsigned char *p)
   I2C2_Slave_Addr = addr;
   I2C2_Slave_Send_IntLine = (char *)GetIntAddress(argv[2]);    // get the interrupt routine's location
   I2C2_Slave_Receive_IntLine = (char *)GetIntAddress(argv[4]); // get the interrupt routine's location
-  InterruptUsed = true;
+  IntSignal();
   i2c_set_slave_mode(i2c1, true, I2C2_Slave_Addr);
   // Enable the I2C interrupts we want to process
   i2c1->hw->intr_mask = I2C_IC_INTR_STAT_R_RX_FULL_BITS | I2C_IC_INTR_MASK_M_RD_REQ_BITS;
@@ -682,6 +686,7 @@ void CheckI2CKeyboard(int noerror, int read)
         if (ConsoleRxBuf[ConsoleRxBufHead] == keyselect && KeyInterrupt != NULL)
         {
           Keycomplete = true;
+          IntSignal();
         }
         else
         {
@@ -690,6 +695,8 @@ void CheckI2CKeyboard(int noerror, int read)
           {                                                                  // if the buffer has overflowed
             ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
           }
+          if (OnKeyGOSUB != NULL)
+            IntSignal(); // ON KEY: a key is waiting
         }
       }
     }
@@ -1876,11 +1883,13 @@ void nunproc(void)
   {
     lastc = 1;
     nunfoundc[5] = 1;
+    if (nunInterruptc[5] != NULL) IntSignal();
   }
   if (lastz == 0 && nunstruct[5].Z)
   {
     lastz = 1;
     nunfoundc[5] = 1;
+    if (nunInterruptc[5] != NULL) IntSignal();
   }
   if (nunstruct[5].C == 0)
     lastc = 0;
@@ -1933,7 +1942,7 @@ void MIPS16 cmd_Nunchuck(void)
     if (argc == 1)
     {
       nunInterruptc[5] = (char *)GetIntAddress(argv[0]); // get the interrupt location
-      InterruptUsed = true;
+      IntSignal();
     }
     nunchuck1 = 1;
     while (nunchuck1 == 1)
@@ -2002,7 +2011,7 @@ void MIPS16 cmd_Classic(void)
     if (argc >= 1)
     {
       nunInterruptc[0] = (char *)GetIntAddress(argv[0]); // get the interrupt location
-      InterruptUsed = true;
+      IntSignal();
       nunstruct[0].x1 = 0b111111111111111;
       if (argc == 3)
         nunstruct[0].x1 = getint(argv[2], 0, 0b111111111111111);
@@ -2058,6 +2067,7 @@ void classicproc(void)
   if (inttest != buttonlast)
   {
     nunfoundc[0] = 1;
+    if (nunInterruptc[0] != NULL) IntSignal();
   }
   buttonlast = inttest;
   nunstruct[0].ax = (nunbuff[0] & 0b111111) << 2;
@@ -4283,6 +4293,7 @@ static void MIPS16 PicoCalcKeyEvent(uint16_t buff)
       if (ConsoleRxBuf[ConsoleRxBufHead] == keyselect && KeyInterrupt != NULL)
       {
         Keycomplete = true;
+        IntSignal();
       }
       else
       {
@@ -4291,6 +4302,8 @@ static void MIPS16 PicoCalcKeyEvent(uint16_t buff)
         {                                                                  // if the buffer has overflowed
           ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
         }
+        if (OnKeyGOSUB != NULL)
+          IntSignal(); // ON KEY: a key is waiting
       }
     }
   }

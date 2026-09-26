@@ -373,6 +373,7 @@ void process_xbox(uint8_t const *report, uint16_t len, uint8_t n)
 	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
 	{
 		nunfoundc[n] = 1;
+		if (nunInterruptc[n] != NULL) IntSignal();
 	}
 	nunstruct[n].x0 = b;
 }
@@ -2120,6 +2121,7 @@ process:;
 	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
 	{
 		nunfoundc[n] = 1;
+		if (nunInterruptc[n] != NULL) IntSignal();
 	}
 	nunstruct[n].x0 = b;
 }
@@ -2166,6 +2168,7 @@ void process_sony_ds3(uint8_t const *report, uint16_t len, uint8_t n)
 	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
 	{
 		nunfoundc[n] = 1;
+		if (nunInterruptc[n] != NULL) IntSignal();
 	}
 	nunstruct[n].x0 = b;
 }
@@ -2236,6 +2239,7 @@ void process_sony_ds4(uint8_t const *report, uint16_t len, uint8_t n)
 		if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
 		{
 			nunfoundc[n] = 1;
+			if (nunInterruptc[n] != NULL) IntSignal();
 		}
 		nunstruct[n].x0 = b;
 	}
@@ -3042,7 +3046,7 @@ void cmd_gamepad(void)
 		;
 		n = getint(argv[0], 1, 4);
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
-		InterruptUsed = true;
+		IntSignal();
 		nunstruct[n].x1 = 0b1111111111111111;
 		if (argc == 5)
 			nunstruct[n].x1 = getint(argv[4], 0, 0b1111111111111111);
@@ -3146,7 +3150,7 @@ void cmd_mouse(void)
 		;
 		n = getint(argv[0], 1, 4);
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
-		InterruptUsed = true;
+		IntSignal();
 		return;
 	}
 	else if ((tp = checkstring(cmdline, (unsigned char *)"SET")))

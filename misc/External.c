@@ -835,7 +835,10 @@ void MIPS16 ExtCfg(int pin, int cfg, int option)
 
     for (i = 0; i < NBRINTERRUPTS; i++)
         if (inttbl[i].pin == pin)
+        {
             inttbl[i].pin = 0; // start off by disable a software interrupt (if set) on this pin
+            IntPinDisarm(pin);
+        }
     gpio_set_input_enabled(PinDef[pin].GPno, false);
     gpio_deinit(PinDef[pin].GPno);
     gpio_set_input_hysteresis_enabled(PinDef[pin].GPno, true);
@@ -2015,7 +2018,10 @@ process:
 
                 for (i = 0; i < NBRINTERRUPTS; i++)
                     if (inttbl[i].pin == pin)
+                    {
                         inttbl[i].pin = 0; // disable the software interrupt on this pin
+                        IntPinDisarm(pin);
+                    }
             }
             else
                 error("Pin %/| is reserved on startup", pin, pin);
@@ -2047,6 +2053,7 @@ process:
             error("Too many interrupts");
         inttbl[i].pin = pin;
         inttbl[i].intp = (char *)GetIntAddress(argv[4]); // get the interrupt routine's location
+        IntPinArm(pin);                                  // watch its edges from here on
         inttbl[i].last = ExtInp(pin);                    // save the current pin value for the first test
         switch (value)
         { // and set trigger polarity
@@ -2060,7 +2067,6 @@ process:
             inttbl[i].lohi = T_BOTH;
             break;
         }
-        InterruptUsed = true;
     }
 }
 /*
@@ -2744,7 +2750,7 @@ void MIPS16 cmd_ir(void)
             StandardError(6);
         if (ir_vtype & T_NBR)
             IrVarType |= 0b10;
-        InterruptUsed = true;
+        IntSignal();
         IrInterrupt = GetIntAddress(argv[4]); // get the interrupt location
         IrInit();
     }
@@ -3420,7 +3426,7 @@ void cmd_keypad(void)
                 keypad_pins[i + keypadrows] = j;
             }
             PadLookup = a1float;
-            InterruptUsed = true;
+            IntReady.poll |= INT_POLL_SCAN;
         }
         else
         {
@@ -3437,7 +3443,7 @@ void cmd_keypad(void)
                 StandardError(22);
             if (!(g_vartbl[g_VarIndex].type & T_NBR))
                 error("Floating point variable required");
-            InterruptUsed = true;
+            IntReady.poll |= INT_POLL_SCAN;
             KeypadInterrupt = GetIntAddress(argv[2]); // get the interrupt location
             for (i = 0; i < 8; i++)
             {
@@ -3663,6 +3669,7 @@ void cmd_keyscan(void)
                     if (ConsoleRxBuf[ConsoleRxBufHead] == keyselect && KeyInterrupt != NULL)
                     {
                         Keycomplete = true;
+                        IntSignal();
                     }
                     else
                     {
@@ -3671,6 +3678,8 @@ void cmd_keyscan(void)
                         {                                                                    // if the buffer has overflowed
                             ConsoleRxBufTail = (ConsoleRxBufTail + 1) % CONSOLE_RX_BUF_SIZE; // throw away the oldest char
                         }
+                        if (OnKeyGOSUB != NULL)
+                            IntSignal(); // ON KEY: a key is waiting
                     }
                 }
             }
@@ -5303,6 +5312,7 @@ void __not_in_flash_func(ADCint)()
     else
         adcint = adcint2;
     ADCDualBuffering = true;
+    if (ADCInterrupt) IntSignal();
 }
 /*  @endcond */
 
@@ -5430,7 +5440,7 @@ void MIPS16 cmd_adc(void)
 #endif
         if (argc == 5)
         {
-            InterruptUsed = true;
+            IntReady.poll |= INT_POLL_SCAN;
             ADCInterrupt = (char *)GetIntAddress(argv[4]); // get the interrupt location
         }
         else
@@ -5663,7 +5673,10 @@ void MIPS16 cmd_adc(void)
             last_adc = 99;
         }
         else
+        {
             dmarunning = true;
+            IntReady.poll |= INT_POLL_SCAN; // the end of the DMA is polled by the interrupt scan
+        }
         return;
     }
     tp = checkstring(cmdline, (unsigned char *)"CLOSE");
@@ -5743,7 +5756,7 @@ void MIPS16 ClearExternalIO(void)
 #if !defined(PICOMITEVGA) || (defined(HDMI) && !defined(HDMICUTDOWN))
     cameraclose();
 #endif
-    InterruptUsed = false;
+    IntReady.any = 0;
     InterruptReturn = NULL;
     irq_set_enabled(DMA_IRQ_1, false);
 #ifdef rp2350
@@ -5846,6 +5859,7 @@ void MIPS16 ClearExternalIO(void)
     {
         inttbl[i].pin = 0; // disable all interrupts
     }
+    IntPinsClear();
 #ifdef rp2350
     if (Option.special == 1)
     {

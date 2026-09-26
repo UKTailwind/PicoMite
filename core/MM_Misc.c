@@ -1888,6 +1888,7 @@ void cmd_ireturn(void)
     checkend(cmdline);
     nextstmt = InterruptReturn;
     InterruptReturn = NULL;
+    IntSignal(); // scan once more: another interrupt may be due, or a level one (e.g. COM data left unread) may still be true
     if (g_LocalIndex)
         ClearVars(g_LocalIndex--, true); // delete any local variables
     g_TempMemoryIsChanged = true;        // signal that temporary memory should be checked
@@ -2641,8 +2642,7 @@ void cmd_settick(void)
     {
         TickPeriod[irq] = period;
         TickInt[irq] = GetIntAddress(argv[2]); // get a pointer to the interrupt routine
-        TickTimer[irq] = 0;                    // set the timer running
-        InterruptUsed = true;
+        TickTimer[irq] = 0;                    // set the timer running (the 1 ms timer signals when it is due)
         TickActive[irq] = 1;
     }
 }
@@ -9432,7 +9432,7 @@ void cmd_csubinterrupt(void)
         {
             CSubInterrupt = (char *)GetIntAddress(argv[0]);
             CSubComplete = 0;
-            InterruptUsed = true;
+            IntReady.poll |= INT_POLL_SCAN;
         }
     }
     else
@@ -10129,6 +10129,79 @@ Tick Interrupts (1 to 4 in that order)
 
 ************************************************************************************************/
 
+// Interrupt pins (SETPIN n, INTH/INTL/INTB) get no GPIO interrupt. The IO
+// bank's raw INTR registers latch both edges of every pin whether or not its
+// interrupt is enabled, so check_interrupt() scans only when one of the armed
+// pins has latched an edge. The scan clears those latches and then compares
+// levels exactly as before. Nothing else clears these bits: the SDK's GPIO
+// dispatcher only acknowledges pins whose interrupt is enabled.
+#define INTPIN_REGS ((NUM_BANK0_GPIOS + 7) / 8)
+#define INTPIN_EDGES(gp) (0xCu << (4 * ((gp) & 7))) // EDGE_LOW | EDGE_HIGH
+static uint32_t IntPinMask[INTPIN_REGS];            // edge bits of the pins in inttbl[]
+static uint8_t IntPinReg[INTPIN_REGS], IntPinRegs;  // the registers holding them, and how many
+
+// list the INTR registers that hold armed pins (a peripheral read is slow, so
+// the checks read only those) and say whether there are pins to watch
+static void IntPinList(void)
+{
+    int n = 0;
+    for (int r = 0; r < INTPIN_REGS; r++)
+        if (IntPinMask[r])
+            IntPinReg[n++] = r;
+    IntPinRegs = n;
+    if (n)
+        IntReady.poll |= INT_POLL_PINS;
+    else
+        IntReady.poll &= ~INT_POLL_PINS;
+}
+
+// start watching an interrupt pin; call before reading its level into inttbl[].last
+void IntPinArm(int pin)
+{
+    int gp = PinDef[pin].GPno;
+    io_bank0_hw->intr[gp >> 3] = INTPIN_EDGES(gp); // forget edges from before (write 1 to clear)
+    IntPinMask[gp >> 3] |= INTPIN_EDGES(gp);
+    IntPinList();
+}
+
+void IntPinDisarm(int pin)
+{
+    int gp = PinDef[pin].GPno;
+    IntPinMask[gp >> 3] &= ~INTPIN_EDGES(gp);
+    IntPinList();
+}
+
+void IntPinsClear(void)
+{
+    memset(IntPinMask, 0, sizeof(IntPinMask));
+    IntPinList();
+}
+
+// has an armed interrupt pin latched an edge?
+static __force_inline int IntPinEdge(void) // inlined: check_interrupt() runs from RAM
+{
+    for (int k = 0; k < IntPinRegs; k++)
+    {
+        int r = IntPinReg[k];
+        if (io_bank0_hw->intr[r] & IntPinMask[r])
+            return 1;
+    }
+    return 0;
+}
+
+// Is a source armed that has no signal of its own, so that the scan must run
+// every statement? PID deadlines, the PIO FIFOs, the end of a PIO DMA (TX
+// also waits for its FIFO to drain), ADC START, the keypad scan and CSUB
+// interrupts (a CSUB sets CSubComplete through a pointer) are polled.
+static int PolledSourceArmed(void)
+{
+    for (int i = 1; i <= MAXPID; i++)
+        if (PIDchannels[i].interrupt != NULL && PIDchannels[i].active)
+            return 1;
+    return piointerrupt || DMAinterruptRX || DMAinterruptTX || (ADCInterrupt && dmarunning) ||
+           KeypadInterrupt || CSubInterrupt;
+}
+
 // clear an I2C slave-ready bit; the I2C interrupt sets bits in the same word,
 // so a plain &= could overwrite one it sets between the read and the write
 static void ClearI2CStatus(volatile unsigned int *status, unsigned int bit)
@@ -10423,6 +10496,13 @@ int checkdetailinterrupts(void)
         goto GotAnInterrupt;
     }
 
+    for (i = 0; i < IntPinRegs; i++)
+    { // take the pins' latched edges: the loop below compares levels, and any later edge latches again
+        int r = IntPinReg[i];
+        uint32_t e = io_bank0_hw->intr[r] & IntPinMask[r];
+        if (e)
+            io_bank0_hw->intr[r] = e;
+    }
     for (i = 0; i < NBRINTERRUPTS; i++)
     { // scan through the interrupt table
         if (inttbl[i].pin != 0)
@@ -10455,6 +10535,8 @@ int checkdetailinterrupts(void)
     }
 
     // if no interrupt was found then return having done nothing
+    if ((IntReady.poll & INT_POLL_SCAN) && !PolledSourceArmed())
+        IntReady.poll &= ~INT_POLL_SCAN; // the last source without a signal has gone
     return 0;
 
     // an interrupt was found if we jumped to here
@@ -10512,11 +10594,29 @@ int __not_in_flash_func(check_interrupt)(void)
     /* Cursor refresh lives in routinechecks() — it fires from the
        prompt's getchar loop too, so the cursor tracks the mouse even
        when no program is running. */
-    if (!InterruptUsed)
-        return 0; // quick exit if there are no interrupts set
+    if (!IntReady.any)
+        return 0; // quick exit: nothing signalled and nothing to poll
     if (InterruptReturn != NULL || CurrentLinePtr == NULL)
         return 0; // skip if we are in an interrupt or in immediate mode
+    if (IntReady.count)
+    { // consume one signal; sources only ever add, so this cannot underflow
+        uint32_t save = save_and_disable_interrupts();
+        IntReady.count--;
+        restore_interrupts(save);
+    }
+    else if (!(IntReady.poll & INT_POLL_SCAN) && !IntPinEdge())
+        return 0; // only interrupt pins to watch, and none has moved
     return checkdetailinterrupts();
+}
+
+// called by an interrupt source (ISR, callback or command) when it has an
+// interrupt ready, so that check_interrupt() scans after the next statement
+void __not_in_flash_func(IntSignal)(void)
+{
+    uint32_t save = save_and_disable_interrupts();
+    if (IntReady.count != 0xFFFF)
+        IntReady.count++;
+    restore_interrupts(save);
 }
 
 // get the address for a MMBasic interrupt

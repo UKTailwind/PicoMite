@@ -377,6 +377,7 @@ void CheckSTCollisions(int bnbr, int *n)
                 sb->collisions[(*n)++] = (char)(0x80 | i); // Mark as ST collision with object number
             }
             STCollisionFound = true;
+            if (STCollisionInterrupt != NULL) IntSignal();
             sprite_hit_st = bnbr;
             st_which_collided = i;
         }
@@ -550,6 +551,7 @@ void ProcessCollisions(int bnbr)
         if (n > 1)
         {
             CollisionFound = true;
+            if (COLLISIONInterrupt != NULL) IntSignal();
             sprite_which_collided = bnbr;
             spritebuff[bnbr]->collisions[0] = n - 1;
         }
@@ -614,6 +616,7 @@ void ProcessCollisions(int bnbr)
         if (bcol > 1)
         {
             CollisionFound = true;
+            if (COLLISIONInterrupt != NULL) IntSignal();
             sprite_which_collided = 0;
             spritebuff[0]->collisions[0] = bcol - 1;
         }
@@ -1699,7 +1702,7 @@ void cmd_sprite(void)
     {
         getcsargs(&p, 1);
         STCollisionInterrupt = (char *)GetIntAddress(argv[0]); // get the interrupt location
-        InterruptUsed = true;
+        IntSignal();
         return;
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"NOSTINTERRUPT")))
@@ -1711,7 +1714,7 @@ void cmd_sprite(void)
     {
         getcsargs(&p, 1);
         COLLISIONInterrupt = (char *)GetIntAddress(argv[0]); // get the interrupt location
-        InterruptUsed = true;
+        IntSignal();
         return;
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"NOINTERRUPT")))

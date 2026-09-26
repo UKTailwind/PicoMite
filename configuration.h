@@ -241,7 +241,11 @@ extern "C"
    include configuration.h). Defining it here too would produce a redefine
    warning because -D and #define without a body resolve to different bodies. */
 #define HEAP_MEMORY_SIZE (256 * 1024)
-#define FLASH_TARGET_OFFSET (1456 * 1024)
+   /* +16 KB (2026-09-26): the interrupt-pending counter (S1c) took this variant
+      636 bytes over 1456 KB; it had been down to 188 bytes.  Peter chose the
+      offset alone, so the A: drive is 16 KB smaller.  Moving the offset moves
+      the option sector, so the first boot after the upgrade does a full clean. */
+#define FLASH_TARGET_OFFSET (1472 * 1024)
 #else
 #define MagicKey 0x6E75BE94
 #define MAXSUBFUN 256

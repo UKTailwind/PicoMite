@@ -394,6 +394,7 @@ void __not_in_flash_func(MNInterrupt)(uint64_t dd)
               if ((mouse[0] & 1) && !(LastCode & 1) && (mSecTimer - lefttimer > 16))
               { // left button press
                 nunfoundc[2] = 1;
+                if (nunInterruptc[2] != NULL) IntSignal();
                 if (nunstruct[2].type >= 500 || nunstruct[2].type < 100)
                   nunstruct[2].type = 0;
                 else
@@ -487,7 +488,7 @@ void cmd_mouse(void)
     ;
     n = getint(argv[0], 2, 2);
     nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
-    InterruptUsed = true;
+    IntSignal();
     return;
   }
   else if ((tp = checkstring(cmdline, (unsigned char *)"SET")))

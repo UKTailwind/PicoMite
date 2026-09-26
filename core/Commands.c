@@ -4022,7 +4022,7 @@ void do_end(bool ecmd)
 		TickInt[i] = NULL;
 		TickActive[i] = 0;
 	}
-	InterruptUsed = 0;
+	IntReady.any = 0;
 	InterruptReturn = NULL;
 	memset(inpbuf, 0, STRINGSIZE);
 	CloseAudio(1);
@@ -8328,7 +8328,7 @@ void cmd_on(void)
 		else
 		{
 			OnPS2GOSUB = GetIntAddress(argv[0]); // get a pointer to the interrupt routine
-			InterruptUsed = true;
+			IntSignal();						 // a PS2 code may already be waiting
 		}
 		return;
 	}
@@ -8345,7 +8345,7 @@ void cmd_on(void)
 			else
 			{
 				OnKeyGOSUB = GetIntAddress(argv[0]); // get a pointer to the interrupt routine
-				InterruptUsed = true;
+				IntSignal();						 // keys may already be waiting
 			}
 			return;
 		}
@@ -8365,7 +8365,7 @@ void cmd_on(void)
 				else
 				{
 					KeyInterrupt = (char *)GetIntAddress(argv[2]); // get a pointer to the interrupt routine
-					InterruptUsed = true;
+					IntSignal();
 				}
 			}
 			return;

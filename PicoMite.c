@@ -346,7 +346,7 @@ uint8_t PSRAMpin;
     const uint8_t *flash_progmemory = (const uint8_t *)(XIP_BASE + PROGSTART);
     const uint8_t *flash_libmemory = (const uint8_t *)(XIP_BASE + PROGSTART - MAX_PROG_SIZE);
     int ticks_per_second;
-    int InterruptUsed;
+    volatile IntReady_t IntReady;
     int calibrate = 0;
     char id_out[12];
     MMFLOAT VCC = 3.3;
@@ -1033,12 +1033,15 @@ uint8_t PSRAMpin;
                 else if (c == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
+                    IntSignal();
                 }
                 else
                 {
                     ConsoleRxBuf[ConsoleRxBufHead] = c;
                     ConsoleRxBufHead = (ConsoleRxBufHead + 1) % CONSOLE_RX_BUF_SIZE;
                     space--;
+                    if (OnKeyGOSUB != NULL)
+                        IntSignal(); // ON KEY: a key is waiting
                 }
             }
         }
@@ -1085,12 +1088,15 @@ uint8_t PSRAMpin;
                 else if (c == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
+                    IntSignal();
                 }
                 // Normal character - store in buffer
                 else
                 {
                     ConsoleRxBuf[ConsoleRxBufHead] = c;
                     ConsoleRxBufHead = (ConsoleRxBufHead + 1) % CONSOLE_RX_BUF_SIZE;
+                    if (OnKeyGOSUB != NULL)
+                        IntSignal(); // ON KEY: a key is waiting
                 }
             }
         }
@@ -1241,12 +1247,15 @@ uint8_t PSRAMpin;
                 else if (b == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
+                    IntSignal();
                 }
                 else
                 {
                     ConsoleRxBuf[ConsoleRxBufHead] = b;
                     ConsoleRxBufHead = (ConsoleRxBufHead + 1) % CONSOLE_RX_BUF_SIZE;
                     space--;
+                    if (OnKeyGOSUB != NULL)
+                        IntSignal(); // ON KEY: a key is waiting
                 }
             }
         }
@@ -2410,13 +2419,12 @@ int __not_in_flash_func(MMInkey)(void)
             CallCFuncmSec();
 
         // === Interrupt tick timers ===
-        if (InterruptUsed)
+        // the scan fires a tick once TickTimer > TickPeriod, so signal on the
+        // millisecond it first gets there; the scan then winds it back
+        for (int i = 0; i < NBRSETTICKS; i++)
         {
-            for (int i = 0; i < NBRSETTICKS; i++)
-            {
-                if (TickActive[i])
-                    TickTimer[i]++;
-            }
+            if (TickActive[i] && TickTimer[i]++ == TickPeriod[i])
+                IntSignal();
         }
 
         // === Watchdog timer ===
@@ -2621,6 +2629,7 @@ int __not_in_flash_func(MMInkey)(void)
                     else
                         *(long long int *)IrCmd = IrCmdTmp;
                     IrGotMsg = true;
+                    if (IrInterrupt != NULL) IntSignal();
                     NextIrTick += 250;
                 }
                 IrTimeout = IrTick + 150;

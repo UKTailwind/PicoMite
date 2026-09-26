@@ -1027,7 +1027,7 @@ void cmd_gui(void)
                 GuiIntUpVector = (char *)GetIntAddress(argv[2]); // and for the up routine
             else
                 GuiIntUpVector = NULL;
-            InterruptUsed = true;
+            IntSignal();
         }
         gui_int_down = gui_int_up = false;
         return;
@@ -4178,6 +4178,7 @@ void ProcessTouch(void)
 #endif
 
         gui_int_down = true; // signal that a MMBasic interrupt is valid
+        if (GuiIntDownVector) IntSignal();
         for (r = 1; r < Option.MaxCtrls; r++)
         {
             if (Ctrl[r].type && TouchX >= Ctrl[r].x1 && TouchY >= Ctrl[r].y1 && TouchX <= Ctrl[r].x2 && TouchY <= Ctrl[r].y2)
@@ -4399,7 +4400,11 @@ void ProcessTouch(void)
             {
                 DrawListBoxPopup(KEY_KEY_UP);
                 if (InvokingCtrl == 0)
+                {
                     gui_int_up = true; // a selection was committed: fire the GUI up interrupt
+                    if (GuiIntUpVector)
+                        IntSignal();
+                }
                 else
                     gui_int_down = false;
                 return;
@@ -4418,6 +4423,7 @@ void ProcessTouch(void)
 #endif
 
         gui_int_up = true;
+        if (GuiIntUpVector) IntSignal();
         if (CurrentRef)
         {
             if (Ctrl[CurrentRef].type)

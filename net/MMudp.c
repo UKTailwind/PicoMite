@@ -58,6 +58,7 @@ udp_recv_func(void *arg, struct udp_pcb *upcb, struct pbuf *p, const ip_addr_t *
     //	udp_sendto(upcb, p, addr, port);
     pbuf_free(p);
     UDPreceive = 1;
+    if (UDPinterrupt != NULL) IntSignal();
 }
 void udp_server_init(void)
 {
@@ -114,7 +115,7 @@ void cmd_udp(unsigned char *p)
             SyntaxError();
         ;
         UDPinterrupt = (char *)GetIntAddress(argv[0]);
-        InterruptUsed = true;
+        IntSignal();
         UDPreceive = 0;
         return;
     }

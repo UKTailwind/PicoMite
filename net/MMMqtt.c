@@ -112,6 +112,7 @@ mqtt_incoming_data_cb(void *arg, const u8_t *data, u16_t len, u8_t flags)
   memcpy(&messagebuff[1], data, mylen);
   messagebuff[0] = mylen;
   MQTTComplete = 1;
+  if (MQTTInterrupt != NULL) IntSignal();
 }
 
 static void
@@ -289,7 +290,7 @@ int cmd_mqtt(void)
     if (argc == 9)
     {
       MQTTInterrupt = (char *)GetIntAddress(argv[8]);
-      InterruptUsed = true;
+      IntSignal();
     }
     else
       MQTTInterrupt = NULL;
