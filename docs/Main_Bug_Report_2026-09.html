@@ -132,7 +132,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr class="rec"><td>7</td><td>Name tables</td><td>three probe loops can hang when their table is full</td><td>by reading</td><td><span class="pill bad">high</span></td><td>part 1 fixed on main 1c95cd1; part 2 not reachable in practice</td></tr>
 <tr><td>8</td><td>Labels (RP2350)</td><td>GOTO to a label named like a SUB uses a SUB index as a pointer</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>fixed on main 2d5307e</td></tr>
 <tr><td>9</td><td>FindSubFun</td><td>the type argument is ignored on RP2350 but used on RP2040</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main edc7999</td></tr>
-<tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>by reading</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
+<tr><td>10</td><td>CALL, tokenise</td><td>no length checks on two 256-byte buffers</td><td>confirmed (tokenise)</td><td><span class="pill warn">medium</span></td><td>tokenise fixed on main c4ea0e2; the rest left, see the card</td></tr>
 <tr><td>11</td><td>Interrupts</td><td>the IRETURN stub <code>rti[2]</code> has no terminator</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>13</td><td>OPTION PROFILING</td><td>interrupt SUBs and ON…GOSUB unbalance the per-SUB frames</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
@@ -233,9 +233,15 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 
 <div class="card"><h3>10 · Unchecked buffer lengths: CALL, and tokenise's output</h3>
 <ul>
-<li><b>CALL:</b> <code>cmd_call</code> (<code>core/Commands.c:8318</code>) and <code>fun_call</code> (<code>core/Functions.c:243</code>) <code>strcat</code> the argument text onto the name in a 256-byte temporary string with no length check. A long argument list overruns it.</li>
-<li><b>tokenise:</b> <code>tokenise</code> never checks its output position in <code>tknbuf</code> (256 bytes). Output can be longer than input: the 2-byte line header, the line number, an inserted LET or PRINT, and the CALC <code>MM.ANSWER</code> insertion.</li>
-<li><b>Fix:</b> check the length before each <code>strcat</code> ("String too long"), and bound the <code>tknbuf</code> writes.</li>
+<li><b>tokenise:</b> <code>tokenise</code> never checked its output position in <code>tknbuf</code> (256 bytes), and output can be longer than input: the 2-byte line header, the line number, an inserted LET or PRINT, and the CALC token with <code>MM.ANSWER</code> on every prompt statement that starts with an operator. Confirmed 26 September: a program line of 62 short assignments (about 374 bytes tokenised) restarted the RP2040 VGA board, and <code>+1:</code> typed 80 times at the prompt (about 1,190 bytes) hung it.</li>
+<li><b>Fix (c4ea0e2):</b> <code>tknbuf</code> stays at 256 bytes. Every write to it is checked, and a line that will not fit is refused with "Line is too long". While a program is being saved, <code>tokenise</code> returns 1 instead, so SaveProgramToFlash, SaveProgramToRAM and the library save close their write first (SaveProgramToFlash has interrupts off until then). A 204-character line that tokenises to 242 bytes still runs. Test: <code>Bas/bench/tknbuf10.py</code>.</li>
+<li><b>Left as they are.</b> None of these has been reported by users, so Peter scaled the fix back to <code>tknbuf</code> (26 September):
+<ul>
+<li>CALL and CALL() still <code>strcat</code> the argument text onto the name in a 256-byte temporary string.</li>
+<li>Listing: LIST, SAVE, EDIT and the error display expand <code>?</code> to "Print " and add a space after each command name, so a listed line can reach about 900 characters from a 255-character source. The callers' buffers, <code>replaceAlpha</code> (256 bytes) and <code>str_replace</code> (288 bytes) all hold it. LIST of a line of <code>?n:</code> statements hard-faulted the PC3. With OPTION CONTINUATION LINES, the " _" breaks <code>format_string</code> adds can overrun LIST's 256-byte buffer on an ordinary 255-character line.</li>
+<li>Before tokenising, <code>MIN(</code>, <code>MAX(</code>, <code>LEFT$(</code>, <code>HEX$(</code> and similar names are expanded as text (<code>MIN(</code> becomes <code>TOPBOTTOM(I,</code>) through <code>str_replace</code>'s 288-byte stack buffer. A 241-character line of nested <code>MIN(</code> at the prompt hard-faulted the PC3 (<code>PC=42504F54</code>, the text "TOPB").</li>
+<li>At the prompt only: EVAL saves <code>tknbuf</code> with <code>strcpy</code>, which stops at the first statement, so a long EVAL followed by another statement gives "Invalid character"; EXECUTE drops the rest of the line. Both confirmed on the PC3. Programs are not affected.</li>
+</ul></li>
 </ul></div>
 
 <div class="card"><h3>11 · IRETURN stub has no terminator</h3>
