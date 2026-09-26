@@ -136,7 +136,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>11</td><td>Interrupts</td><td>the IRETURN stub <code>rti[2]</code> has no terminator</td><td>by reading; latent</td><td><span class="pill ok">low</span></td><td>fixed on main fc1ca32</td></tr>
 <tr><td>12</td><td>CountLines</td><td><code>p[0]</code> where <code>p[1]</code> is meant, on long lines</td><td>by reading; no visible effect</td><td><span class="pill ok">low</span></td><td>fixed on main 1a999a3</td></tr>
 <tr><td>13</td><td>OPTION PROFILING</td><td>interrupt SUBs and ON…GOSUB unbalance the per-SUB frames</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main 7238252</td></tr>
-<tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
+<tr><td>14</td><td>MM.INFO(VARCNT)</td><td>stale after ERASE and after locals are freed</td><td>confirmed</td><td><span class="pill ok">low</span></td><td>fixed on main aa98747</td></tr>
 <tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>by reading, unverified</td><td><span class="pill ok">low?</span></td><td>to check</td></tr>
 <tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>gone: trace cache removed on main c50b6bc</td></tr>
@@ -262,7 +262,8 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 
 <div class="card"><h3>14 · MM.INFO(VARCNT) stale</h3>
 <p><b>Where:</b> <code>g_varcnt</code> is updated only when a variable is created. <code>erase()</code> (<code>core/MMBasic.c:6577</code>) and <code>ClearVars(level)</code> decrement <code>g_Globalvarcnt</code>/<code>g_Localvarcnt</code> but not the total. MM.INFO(VARCNT) is at <code>core/MM_Misc.c:9358</code>.</p>
-<ul><li><b>Fix:</b> return <code>g_Globalvarcnt + g_Localvarcnt</code>, or update <code>g_varcnt</code> alongside them.</li></ul></div>
+<ul><li><b>Confirmed</b> on the PC3: erasing one array, then two LOCALs, then returning from the SUB changed the count by 0, 1 and 1 where the manual's "number of variables in use" needs -1, 2 and 0.</li>
+<li><b>Fix (aa98747):</b> MM.INFO(VARCNT) returns <code>g_Globalvarcnt + g_Localvarcnt</code>. Test: <code>Bas/bench/varcnt14.py</code>, passes on the PC3 and the VGA.</li></ul></div>
 
 <div class="card"><h3>15 · CSUB header: <code>int dims[]</code> only for PICORP2350 (to verify)</h3>
 <p><b>Where:</b> <code>PicoCFunctions.h:400</code> selects <code>int dims[MAXDIM]</code> only <code>#ifdef PICORP2350</code>, else <code>short</code>. Every RP2350 firmware build uses <code>int dimtbl[5]</code>, and the variable-table layout is part of the CSUB ABI (CallTable 0x60).</p>
