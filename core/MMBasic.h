@@ -372,6 +372,9 @@ extern "C"
         short hash;
         short level;
     } hash_val;
+    // g_hashlist records every live local, so it must hold as many as OPTION LOCAL
+    // VARIABLES can allow (not just the default MAXLOCALVARS)
+#define MAXLOCALLIST (MAXVARS - 32)
 
     /* Token table structure */
     struct s_tokentbl

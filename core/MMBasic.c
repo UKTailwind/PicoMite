@@ -217,7 +217,7 @@ void ResetPerfCounters(void)
 // unsigned char lastcmd[STRINGSIZE];                                           // used to store the last command in case it is needed by the EDIT command
 unsigned char PromptString[MAXPROMPTLEN]; // the prompt for input, an empty string means use the default
 int ProgramChanged;                       // true if the program in memory has been changed and not saved
-struct s_hash g_hashlist[MAXLOCALVARS] = {0};
+struct s_hash g_hashlist[MAXLOCALLIST] = {0};
 int g_hashlistpointer = 0;
 
 // ---------------------------------------------------------------------------
@@ -6472,7 +6472,7 @@ void MIPS16 cmd_localvars(unsigned char *p)
 {
     if (g_Globalvarcnt || g_Localvarcnt)
         error("Variables already declared");
-    int i = getint(p, 32, MAXVARS - 32);
+    int i = getint(p, 32, MAXLOCALLIST);
     maxlocalvars = i;
     maxglobalvars = MAXVARS - i;
 }
