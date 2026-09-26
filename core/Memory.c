@@ -1989,6 +1989,12 @@ void InitHeap(bool all)
        hand it back while the bitmap is still valid, then wipe.          */
     BBCSoundRelease();
 #ifdef rp2350
+    /* The stepper's planner buffer and arc buffers are in this heap too, and its
+       100 kHz interrupt reads them: shut the subsystem down (IRQ off, buffers
+       freed) while they are still valid, so RUN, NEW, LOAD, CHAIN... never leave
+       it running on wiped memory.  A program must STEPPER INIT again. */
+    extern void stepper_close_subsystem(void);
+    stepper_close_subsystem();
     /* the stepper ISR's arc buffers waiting to be freed were in this heap */
     extern void StepperForgetRetired(void);
     StepperForgetRetired();
