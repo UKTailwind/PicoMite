@@ -3985,7 +3985,7 @@ int MIPS16 CountLines(unsigned char *target)
 
         if (*p == T_LABEL)
         {
-            p += p[0] + 2; // still looking! skip over the label
+            p += p[1] + 2; // still looking! skip over the label
             continue;
         }
 
