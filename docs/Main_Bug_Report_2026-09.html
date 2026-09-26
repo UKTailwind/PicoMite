@@ -140,7 +140,7 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <tr><td>15</td><td>CSUB header</td><td><code>int dims[]</code> selected only for PICORP2350</td><td>checked by reading</td><td><span class="pill ok">low?</span></td><td>not a firmware bug; header comment and manuals corrected on main 63dea76</td></tr>
 <tr><td>16</td><td>ON ERROR SKIP</td><td>a nested call inside an argument can leak the outer call's frame</td><td>confirmed, both boards</td><td><span class="pill ok">low</span></td><td>heap leak fixed on main 52078f6; nested case left</td></tr>
 <tr><td>17</td><td>Trace cache</td><td>global slot indices are never invalidated</td><td>by reading</td><td><span class="pill ok">low</span></td><td>gone: trace cache removed on main c50b6bc</td></tr>
-<tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>by reading</td><td><span class="pill bad">high</span></td><td>open</td></tr>
+<tr class="rec"><td>18</td><td>Stepper</td><td>RUN during a job wipes the heap under the ISR</td><td>confirmed</td><td><span class="pill bad">high</span></td><td>fixed on main db99419</td></tr>
 <tr><td>19</td><td>Stepper</td><td>STEPPER ESTOP leaks the buffer of the arc that is executing</td><td>by reading</td><td><span class="pill ok">low</span></td><td>open</td></tr>
 <tr><td>20</td><td>Stepper</td><td>arcs ran at about 2.4 mm/s with F6000 requested</td><td>confirmed</td><td><span class="pill warn">medium</span></td><td>open</td></tr>
 <tr class="rec"><td>21</td><td>Program flow</td><td>a FOR, DO or GOSUB line ending in <code>: ' comment</code> leaves the loop, or returns past the next line</td><td>confirmed, both boards</td><td><span class="pill bad">high</span></td><td>fixed on development 8740953; open on main</td></tr>
@@ -288,7 +288,9 @@ footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid 
 <div class="card"><h3>18 · RUN during a stepper job wipes the heap under the ISR</h3>
 <ul>
 <li><b>What goes wrong:</b> RUN clears and reinitialises the heap while the stepper timer interrupt may still be walking planner blocks and arc buffers that live in it.</li>
-<li><b>Fix:</b> stop the stepper subsystem (disable its IRQ and drop the queue) before ClearRuntime and InitHeap, as END should.</li>
+<li><b>Confirmed</b> on the PC3 (audio disabled, one axis on GP10/GP22, no motor): after a program queued 80 s of moves and ended, the next RUN found the stepper still active with the job frozen on the wiped buffer. Also: a re-run program could not STEPPER INIT ("Stepper already initialized"), and the STEPPER CLOSE used to get round that (<code>Testfiles/FishFeeder.bas</code>) freed the stale buffer pointer. The Stepper Reference says nothing about RUN or END.</li>
+<li><b>Fix (db99419):</b> <code>InitHeap</code> calls <code>stepper_close_subsystem()</code> before the wipe (Peter chose this over stopping it on RUN/NEW/LOAD only), so every heap wipe - RUN, NEW, LOAD, CHAIN, and FILES / EDIT FILE / RAM FILE LOAD from inside a program - ends a stepper job and a program must STEPPER INIT again. Test: <code>Bas/bench/steprun18.py</code>.</li>
+<li><b>Noted, not changed:</b> CTRL-C does not stop motion; <code>do_end</code> aborts the stepper only after an error, so a queued job carries on after CTRL-C.</li>
 </ul></div>
 <div class="card"><h3>19 · STEPPER ESTOP leaks the executing arc's buffer</h3>
 <ul><li><b>What goes wrong:</b> ESTOP drops the queue, but the buffer of the arc being executed is not handed to the retired list. <b>Fix:</b> one line: retire the current block's payload in the ESTOP path.</li></ul></div>
