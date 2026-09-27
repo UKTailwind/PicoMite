@@ -878,7 +878,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
     NbrFuncts = 0;
     CFunctionFlash = CFunctionLibrary = NULL;
     // the symbol tables of the library and the program (NULL if they are text)
-    SymTabLib = LibPresent() ? SymFindTable(LibMemory) : NULL;
+    SymSetLibrary(LibPresent() ? LibMemory : NULL);
     SymSetProgram(ProgMemory);
     SymBindInit();
     if (LibPresent())

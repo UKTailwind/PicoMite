@@ -42,7 +42,7 @@ base = MM.Info(FLASH ADDRESS 8)
 slot = MM.Info(FLASH ADDRESS 5) - MM.Info(FLASH ADDRESS 4)   ' MAX_PROG_SIZE
 Check "library starts with a line", Peek(BYTE base), 1
 tag = base + slot - 8
-Check "hash tag magic", Peek(WORD tag), &H42494C52
+Check "hash tag magic", Peek(WORD tag), &H32494C52
 Check "hash is non-zero", Peek(WORD tag + 4) <> 0, 1
 
 ' ---- the slot is the library's while it is active

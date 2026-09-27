@@ -1953,10 +1953,13 @@ void MIPS16 cmd_library(void)
                 error("Flash Slot % already in use", MAXFLASHSLOTS);
             ;
         }
-        // first copy the current program code residing in the Library area to RAM
+        // first copy the current program code residing in the Library area to RAM.
+        // Its symbols stay as they are, and its table goes after the new text.
+        const symtab_t *libtab = NULL;
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE)
         {
             p = ProgMemory - Option.LIBRARY_FLASH_SIZE;
+            libtab = SymFindTable(p);
             while (!(p[0] == 0 && p[1] == 0))
                 *m++ = *p++;
             *m++ = 0; // terminate the last line
@@ -2121,6 +2124,12 @@ void MIPS16 cmd_library(void)
         *m++ = 0xFF;
         *m++ = 0xFF;
         *m++ = 0xFF; // write 4 byte of the csub binary header
+        if (libtab != NULL)
+        { // the old library's symbol table, which its text still uses
+            memcpy(m, libtab, libtab->size);
+            ((symtab_t *)m)->textlen = m - MemBuff;
+            m += libtab->size;
+        }
 
         // now copy the CFunction/CSub/Font data
         // =====================================
@@ -2545,6 +2554,8 @@ void MIPS16 cmd_library(void)
             p++;
             i++;
         }
+        if (*(uint32_t *)p == SYM_MAGIC)
+            i += ((const symtab_t *)p)->size; // the library's symbol table
 
         // Now add the binary used for CSUB and Fonts
         if (CFunctionLibrary != NULL)

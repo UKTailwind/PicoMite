@@ -756,6 +756,7 @@ void MIPS16 cmd_psram(void)
             int i = getint(argv[0], 1, MAXRAMSLOTS);
             ProgMemory = (uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
             SymSetProgram(ProgMemory); // list the slot's names from its own symbol table
+            SymSetLibrary(ProgMemory); // (a library's names are library symbols)
             if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
             {
                 ClearScreen(gui_bcolour);
@@ -772,6 +773,7 @@ void MIPS16 cmd_psram(void)
                 SyntaxError();
             ;
             ProgMemory = (unsigned char *)flash_progmemory;
+            SymSetLibrary(LibPresent() ? LibMemory : NULL);
             SymSetProgram(ProgMemory);
         }
         else
@@ -796,10 +798,14 @@ void MIPS16 cmd_psram(void)
                         {
                             char *p = (char *)pp;
                             MMPrintString(": \"");
+                            SymSetProgram((unsigned char *)PSRAMblock + (i - 1) * MAX_PROG_SIZE); // the slot's own names
+                            SymSetLibrary((unsigned char *)PSRAMblock + (i - 1) * MAX_PROG_SIZE); // (a library's are library symbols)
                             buff[0] = '\'';
                             buff[1] = '#';
                             while (buff[0] == '\'' && buff[1] == '#')
                                 p = (char *)llist((unsigned char *)buff, (unsigned char *)p);
+                            SymSetLibrary(LibPresent() ? LibMemory : NULL);
+                            SymSetProgram(ProgMemory);
                             MMPrintString(buff);
                             MMPrintString("\"\r\n");
                         }
@@ -1292,6 +1298,7 @@ void MIPS16 cmd_flash(void)
             if ((unsigned char)*ProgMemory != T_NEWLINE)
                 return;
             SymSetProgram(ProgMemory); // list the slot's names from its own symbol table
+            SymSetLibrary(ProgMemory); // (a library's names are library symbols)
             if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
             {
                 ClearScreen(gui_bcolour);
@@ -1308,6 +1315,7 @@ void MIPS16 cmd_flash(void)
                 SyntaxError();
             ;
             ProgMemory = (unsigned char *)flash_progmemory;
+            SymSetLibrary(LibPresent() ? LibMemory : NULL);
             SymSetProgram(ProgMemory);
         }
         else
@@ -1332,10 +1340,14 @@ void MIPS16 cmd_flash(void)
                         {
                             char *p = (char *)pp;
                             MMPrintString(": \"");
+                            SymSetProgram((unsigned char *)flash_target_contents + (i - 1) * MAX_PROG_SIZE); // the slot's own names
+                            SymSetLibrary((unsigned char *)flash_target_contents + (i - 1) * MAX_PROG_SIZE); // (a library's are library symbols)
                             buff[0] = '\'';
                             buff[1] = '#';
                             while (buff[0] == '\'' && buff[1] == '#')
                                 p = (char *)llist((unsigned char *)buff, (unsigned char *)p);
+                            SymSetLibrary(LibPresent() ? LibMemory : NULL);
+                            SymSetProgram(ProgMemory);
                             MMPrintString(buff);
                             MMPrintString("\"\r\n");
                         }
@@ -4103,6 +4115,14 @@ int LibraryImageValid(const unsigned char *lib)
     p++;
     cfp = (const unsigned int *)(((uintptr_t)p + 3) & ~(uintptr_t)3);
     cfplimit = (const unsigned int *)limit;
+    if ((const unsigned char *)cfp + sizeof(symtab_t) <= limit && *cfp == SYM_MAGIC)
+    { /* the library's symbol table comes first (see Symbols.h) */
+        const symtab_t *st = (const symtab_t *)cfp;
+        if (st->textlen != (uint32_t)((const unsigned char *)cfp - lib) || (st->size & 3) ||
+            st->size > (uint32_t)(limit - (const unsigned char *)cfp))
+            return 0;
+        cfp += st->size / 4;
+    }
     while (cfp < cfplimit && *cfp != 0xffffffffu)
     {
         unsigned int words;
@@ -4210,24 +4230,71 @@ int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashou
         else                   \
             FlashWriteByte(c); \
     } while (0)
+/* The next line of the library source at *pm, read into inpbuf the way the
+   saver reads it (printable characters only); empty lines are skipped.  0 at
+   the end of the source. */
+static int LibSourceLine(unsigned char **pm, int *prevchar)
+{
+    unsigned char *p, *s = *pm;
+    while (*s)
+    {
+        p = inpbuf;
+        while (!(*s == 0 || *s == '\r' || (*s == '\n' && *prevchar != '\r')))
+        {
+            if (isprint((uint8_t)*s))
+                *p++ = *s;
+            *prevchar = *s++;
+        }
+        if (*s)
+            *prevchar = *s++;
+        *p = 0;
+        if (*inpbuf)
+        {
+            *pm = s;
+            return 1;
+        }
+    }
+    *pm = s;
+    return 0;
+}
+
+static unsigned char *LibTablePtr;
+static void LibTablePut(unsigned char c)
+{
+    *LibTablePtr++ = c;
+}
+
 void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t binlen, int nfix, unsigned char *base)
 {
-    unsigned char *p, buf[STRINGSIZE];
+    unsigned char *p, *src, buf[STRINGSIZE];
     unsigned short tkn;
     int i, prevchar = 0;
     unsigned char *w = base;
     unsigned char *lib = base ? base : LibMemory;
+    uint32_t libstart = 0; /* flash: realflashpointer (an offset in flash, not an address) at the slot's start */
 
     memcpy(buf, tknbuf, STRINGSIZE); /* tokenise() writes through tknbuf */
     initFonts();
     clearrepeat();
-    SymMode = SYM_OFF; /* a library is saved as text: its names are not symbols */
-    SymRawBlock = 0;
+    /* The library's names are saved as library symbols with a table of their
+       own (see Symbols.h), counted over exactly the lines written below.
+       Without the memory to count them the library is saved as text. */
+    if (SymBegin(pm))
+    {
+        SymLibSave = 1;
+        multi = false;
+        for (src = pm; LibSourceLine(&src, &prevchar);)
+            tokenise(false); /* (a line too long is reported when it is written) */
+        multi = false;
+        SymRank();
+        prevchar = 0;
+    }
     if (w)
         memset(base, 0, MAX_PROG_SIZE);
     else
     {
         FlashWriteInit(LIBRARY_FLASH);
+        libstart = realflashpointer;
         safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
         int j = MAX_PROG_SIZE / 4;
         int *pp = (int *)LibMemory;
@@ -4239,22 +4306,13 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
             }
     }
 
-    while (*pm)
+    multi = false;
+    SymRawBlock = 0;
+    for (src = pm; LibSourceLine(&src, &prevchar);)
     {
-        p = inpbuf;
-        while (!(*pm == 0 || *pm == '\r' || (*pm == '\n' && prevchar != '\r')))
-        {
-            if (isprint((uint8_t)*pm))
-                *p++ = *pm;
-            prevchar = *pm++;
-        }
-        if (*pm)
-            prevchar = *pm++;
-        *p = 0;
-        if (*inpbuf == 0)
-            continue;
         if (tokenise(false))
         {
+            SymEnd();
             if (!w)
                 FlashWriteClose(); /* turns interrupts back on */
             error("Line is too long");
@@ -4263,8 +4321,11 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
         while (!(p[0] == 0 && p[1] == 0))
         {
             LIBPUT(*p++);
-            if (w ? (w - base) >= MAX_PROG_SIZE - 16 - 512 : (int)((char *)realflashpointer - (char *)LibMemory) >= MAX_PROG_SIZE - 5)
+            if (w ? (w - base) >= MAX_PROG_SIZE - 16 - 512 : (int)(realflashpointer - libstart) >= MAX_PROG_SIZE - 5)
+            {
+                SymEnd();
                 error("Library too big");
+            }
         }
         LIBPUT(0);
     }
@@ -4275,11 +4336,27 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
             *w++ = 0;
         memset(w, 0xFF, 4);
         w += 4;
-        if ((w - base) + binlen > MAX_PROG_SIZE - 16)
+        if ((w - base) + SymTableSize() + binlen > MAX_PROG_SIZE - 16)
+        {
+            SymEnd();
             error("Library too big");
+        }
+        LibTablePtr = w; /* the symbol table, ahead of the binaries */
+        SymTableWrite(LibTablePut, (uint32_t)(w - base));
+        w = LibTablePtr;
     }
     else
+    {
         FlashWriteAlign(); /* pads the block AND writes the 0xffffffff that marks the binaries */
+        if ((int)(realflashpointer - libstart) + SymTableSize() + (int)binlen >= MAX_PROG_SIZE - 5)
+        {
+            SymEnd();
+            FlashWriteClose();
+            error("Library too big");
+        }
+        SymTableWrite(FlashWriteByte, realflashpointer - libstart);
+    }
+    SymEnd();
 
     /* A routine's address is the offset of its token in the image, knowable only now the text
        is down. Fonts already carry their number and are skipped. */

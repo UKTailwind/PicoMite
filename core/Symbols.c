@@ -50,6 +50,8 @@ int SymMode = SYM_OFF;
 int SymRawBlock = 0;
 int SymEnabled = 1;
 int SymLongest = 0;
+static int SymLongestLib = 0; // the longest spelling in the library's table
+int SymLibSave = 0;
 
 // the payload alphabet: 0-9 A-Z a-z _ are the digits 0-62, anything else is 0xFF
 #define XX 0xFF
@@ -191,21 +193,39 @@ const symtab_t *SymFindTable(const unsigned char *image)
     return t;
 }
 
+// the longest spelling in table t
+static int SymLongestIn(const symtab_t *t)
+{
+    int longest = 0;
+    if (t != NULL)
+    {
+        const unsigned char *n = (const unsigned char *)t + t->names;
+        for (int i = 0; i < t->count; i++)
+        {
+            if (n[0] > longest)
+                longest = n[0];
+            n += n[0] + 1;
+        }
+    }
+    return longest;
+}
+
 // Point SymTabProg at the table of the program image at base
 void SymSetProgram(const unsigned char *image)
 {
     SymTabProg = SymFindTable(image);
-    SymLongest = 0;
-    if (SymTabProg != NULL)
-    {
-        const unsigned char *n = (const unsigned char *)SymTabProg + SymTabProg->names;
-        for (int i = 0; i < SymTabProg->count; i++)
-        {
-            if (n[0] > SymLongest)
-                SymLongest = n[0];
-            n += n[0] + 1;
-        }
-    }
+    SymLongest = SymLongestIn(SymTabProg);
+    if (SymLongest < SymLongestLib)
+        SymLongest = SymLongestLib;
+}
+
+// Point SymTabLib at the table of the library image (NULL: no library)
+void SymSetLibrary(const unsigned char *image)
+{
+    SymTabLib = SymFindTable(image);
+    SymLongestLib = SymLongestIn(SymTabLib);
+    if (SymLongest < SymLongestLib)
+        SymLongest = SymLongestLib;
 }
 
 // Copy n bytes of program text to dst, spelling out every symbol.  Returns
@@ -266,6 +286,7 @@ unsigned char *SYMRAM(SymExpandStatement)(unsigned char *p)
  bindings (see Symbols.h)
 ********************************************************************************************************************************************/
 uint16_t *SymCanonOf = NULL;
+unsigned int SymCanonLibBase = 0;
 int16_t *SymG = NULL, *SymL = NULL, *SymS = NULL;
 symcold_t *SymCold = NULL;
 unsigned int SymCanonCount = 0;
@@ -281,16 +302,22 @@ int GetLocalVarHashSize(void);
 static unsigned int SymCanonMask, SymNCanon;
 static void *SymHotBlock = NULL, *SymColdBlock = NULL;
 
-// the spelling of program symbol id
+// the spelling of symbol id (a library id when it is SymCanonLibBase or more)
 static const unsigned char *SymIdSpelling(unsigned int id, int *len)
 {
-    const unsigned char *n = (const unsigned char *)SymTabProg + SymTabProg->names + ((const uint16_t *)(SymTabProg + 1))[id];
+    const symtab_t *t = SymTabProg;
+    if (id >= SymCanonLibBase)
+    {
+        t = SymTabLib;
+        id -= SymCanonLibBase;
+    }
+    const unsigned char *n = (const unsigned char *)t + t->names + ((const uint16_t *)(t + 1))[id];
     *len = n[0];
     return n + 1;
 }
 
-// The first read of the program symbol at p: find the canonical entry of its
-// name, or make one.  Returns its index, or -1.
+// The first read of the symbol at p: find the canonical entry of its name,
+// or make one.  Returns its index, or -1.
 int SymCanonNew(const unsigned char *p)
 {
     const unsigned char *s, *t;
@@ -302,6 +329,10 @@ int SymCanonNew(const unsigned char *p)
     id = symdigit[p[1] & 0x7f];
     if (!(p[0] & 1))
         id = SYM_NSHORT + id * SYM_NSHORT + symdigit[p[2] & 0x7f];
+    if (p[0] & 2)
+        id += SymCanonLibBase;
+    if (id >= SymCanonCount)
+        return -1;
     for (k = 0; k < len; k++)
     {
         h ^= mytoupper(s[k]);
@@ -335,24 +366,30 @@ int SymCanonNew(const unsigned char *p)
     return n;
 }
 
-// The canonical entry of program symbol id, made if this is the first use of
-// its spelling: SymCanonAt for a caller that has the id but not the symbol's
-// bytes (Route B's binds, core/Stream.c).  -1 if there are no bindings.
+// The canonical entry of symbol id (as in SymCanonOf: a library id when it is
+// SymCanonLibBase or more), made if this is the first use of its spelling:
+// SymCanonAt for a caller that has the id but not the symbol's bytes (Route
+// B's binds, core/Stream.c).  -1 if there are no bindings.
 int SymCanonById(unsigned int id)
 {
-    unsigned char b[3];
+    unsigned char b[3], lib = 0;
     if (SymCanonOf == NULL || id >= SymCanonCount)
         return -1;
     if (SymCanonOf[id])
         return SymCanonOf[id] - 1;
+    if (id >= SymCanonLibBase)
+    {
+        id -= SymCanonLibBase;
+        lib = SYM_LIB_LONG - SYM_PROG_LONG;
+    }
     if (id < SYM_NSHORT)
     {
-        b[0] = SYM_PROG_SHORT;
+        b[0] = SYM_PROG_SHORT + lib;
         b[1] = symchars[id];
     }
     else
     {
-        b[0] = SYM_PROG_LONG;
+        b[0] = SYM_PROG_LONG + lib;
         b[1] = symchars[(id - SYM_NSHORT) / SYM_NSHORT];
         b[2] = symchars[(id - SYM_NSHORT) % SYM_NSHORT];
     }
@@ -360,16 +397,17 @@ int SymCanonById(unsigned int id)
 }
 
 // Called by PrepareProgram: start the program's bindings afresh.  They are
-// sized to the program's symbols and live in the BASIC heap; the part every
-// lookup reads is in SRAM, the rest in PSRAM when there is some.  Without
-// the memory the program simply runs without them.
+// sized to the program's and the library's symbols and live in the BASIC
+// heap; the part every lookup reads is in SRAM, the rest in PSRAM when there
+// is some.  Without the memory the program simply runs without them.
 void SymBindInit(void)
 {
     unsigned int count, hsize = 64, slots;
     SymBindFree();
-    if (SymTabProg == NULL || SymTabProg->count == 0)
+    SymCanonLibBase = SymTabProg != NULL ? SymTabProg->count : 0;
+    count = SymCanonLibBase + (SymTabLib != NULL ? SymTabLib->count : 0);
+    if (count == 0)
         return;
-    count = SymTabProg->count;
     while (hsize < count)
         hsize <<= 1;
     slots = GetLocalVarHashSize() > MAXLOCALVARS ? GetLocalVarHashSize() : MAXLOCALVARS;
@@ -427,7 +465,7 @@ void SymBindForget(void)
     SymCanonOf = SymCanonHead = SymLCanon = NULL;
     SymG = SymL = SymS = SymLShadow = NULL;
     SymCold = NULL;
-    SymCanonCount = SymNCanon = SymLSlots = 0;
+    SymCanonCount = SymNCanon = SymLSlots = SymCanonLibBase = 0;
     SymTextLocals = 0;
 }
 
@@ -614,6 +652,7 @@ int SymBegin(unsigned char *src)
     static const int sizes[] = {32768, 16384, 8192};
     SymMode = SYM_OFF;
     SymRawBlock = 0;
+    SymLibSave = 0;
     symblk = NULL;
     symblkowned = false;
     if (!SymEnabled)
@@ -657,6 +696,7 @@ void SymEnd(void)
 {
     SymMode = SYM_OFF;
     SymRawBlock = 0;
+    SymLibSave = 0;
     if (symblk != NULL && symblkowned)
         ClearSpecificTempMemory(symblk);
     symblk = NULL;
@@ -753,8 +793,9 @@ done:
 }
 
 // Called by tokenise() for each name in a program being saved.  Counts the
-// name, or writes its symbol, and returns the new output pointer.  Anything
-// that cannot be a symbol is written as text, which always works.
+// name, or writes its symbol (a library symbol while a library is saved), and
+// returns the new output pointer.  Anything that cannot be a symbol is written
+// as text, which always works.
 unsigned char *SymName(unsigned char *op, const unsigned char *name, int len)
 {
     uint32_t h = FNV_offset_basis;
@@ -807,13 +848,13 @@ unsigned char *SymName(unsigned char *op, const unsigned char *name, int len)
     i = e[n - 1].id;
     if (i < SYM_NSHORT)
     {
-        *op++ = SYM_PROG_SHORT;
+        *op++ = SymLibSave ? SYM_LIB_SHORT : SYM_PROG_SHORT;
         *op++ = symchars[i];
     }
     else
     {
         i -= SYM_NSHORT;
-        *op++ = SYM_PROG_LONG;
+        *op++ = SymLibSave ? SYM_LIB_LONG : SYM_PROG_LONG;
         *op++ = symchars[i / SYM_NSHORT];
         *op++ = symchars[i % SYM_NSHORT];
     }

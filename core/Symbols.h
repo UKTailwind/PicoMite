@@ -91,12 +91,14 @@ extern const unsigned char symdigit[128];
 extern int SymMode;     // SYM_OFF: names stay text
 extern int SymRawBlock; // inside a CSUB or DefineFont block: names stay text
 extern int SymEnabled;  // OPTION SYMBOLS: 0 = save programs as text
-extern int SymLongest;  // the longest spelling in the program's table
+extern int SymLongest;  // the longest spelling in the program's and the library's tables
+extern int SymLibSave;  // a library is being saved: its names become library symbols
 
 void SymInit(void);
 void SymDamaged(void);
 const symtab_t *SymFindTable(const unsigned char *image);
 void SymSetProgram(const unsigned char *image);
+void SymSetLibrary(const unsigned char *image);
 int SymExpand(unsigned char *dst, const unsigned char *src, int n, int cap);
 unsigned char *SymExpandStatement(unsigned char *p);
 int SymAwareCommand(int cmd);
@@ -194,8 +196,12 @@ static inline unsigned char *CopyName(unsigned char *p, unsigned char *buf, int 
    A binding is cleared where the thing it points to goes away: ClearVars(0)
    and erase() for globals, ClearVars(level) for locals; the SUB and label
    bindings last as long as the program (PrepareProgram starts afresh).  A
-   local made from text (EXECUTE, a library, the prompt) has no entry; while
-   any is alive a global binding is not trusted inside a SUB.
+   local made from text (EXECUTE, a library saved as text, the prompt) has no
+   entry; while any is alive a global binding is not trusted inside a SUB.
+
+   Library symbols share the entries: their ids follow the program's
+   (SymCanonLibBase + the library id), so a name is one entry wherever it is
+   read.
 
    What every lookup reads (SymCanonOf, SymG, SymL, SymS and the local
    shadows) is kept in SRAM, about 8 bytes a name; the rest goes to PSRAM
@@ -212,7 +218,8 @@ typedef struct
 #define SYMC_DOT 1
 #define SYM_LTEXT 0xFFFF // SymLCanon: a local made from text
 
-extern uint16_t *SymCanonOf; // canonical entry + 1 of each program symbol id, 0 = not seen yet
+extern uint16_t *SymCanonOf; // canonical entry + 1 of each symbol id, 0 = not seen yet
+extern unsigned int SymCanonLibBase; // library symbol id 0 in SymCanonOf: the program's count
 extern int16_t *SymG;        // per entry: g_vartbl slot of the global of the name, -1 = not bound
 extern int16_t *SymL;        // per entry: g_vartbl slot of the newest live local of the name, -1 = none
 extern int16_t *SymS;        // per entry: subfun[] index, -1 = none, SYM_UNBOUND = not looked up yet
@@ -237,16 +244,18 @@ void SymBindForgetSlot(int slot);
 void SymLocalMade(int slot, int k);
 void SymLocalFreed(int slot);
 
-// The canonical entry of the program symbol at p, or -1 if there are no
-// bindings (a library symbol, or no memory for them).
+// The canonical entry of the symbol at p, or -1 if there are no bindings
+// (no memory for them).
 static inline __attribute__((always_inline)) int SymCanonAt(const unsigned char *p)
 {
     unsigned int id, c;
-    if (SymCanonOf == NULL || (p[0] & 2))
+    if (SymCanonOf == NULL)
         return -1;
     id = symdigit[p[1] & 0x7f];
     if (!(p[0] & 1))
         id = SYM_NSHORT + id * SYM_NSHORT + symdigit[p[2] & 0x7f];
+    if (p[0] & 2)
+        id += SymCanonLibBase;
     if (id >= SymCanonCount)
         return -1;
     c = SymCanonOf[id];
