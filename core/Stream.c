@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 19       // the stream format
+#define RB_VERSION 21       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -307,7 +307,10 @@ static void RBTabTo(uint32_t b)
    now its fallback, with RB_COMPILED in its STMT word and its code after it:
 
      [n] [nbind] [stamp lo] [stamp hi] nbind x [id | suffix << 12 | RC_LIB | RC_TARGET] [type]
-     nbind x [address lo] [address hi]  wordcode
+     [pad] nbind x [address lo] [address hi]  wordcode
+
+   (the pad word is there when the addresses would not otherwise start on a
+   4-byte boundary, so that the executor can use them in place)
 
    n counts the words after itself.  Each bind names a variable by its
    symbol's id (SymCanonOf[id] finds its canonical entry in one load, and the
@@ -382,7 +385,19 @@ enum
     RC_CALL,     // a call to a user SUB with a parameters (see RBCompileCall)
     RC_NEXT,     // NEXT, as cmd_next does it
     RC_FCALL,    // a call to a user FUNCTION with a parameters, its value pushed (see RBFcall)
+    RC_CMPF,     // a comparison a (RK_) of two floats, as op_lt and the rest make it: 1 or 0
+    RC_CMPI,     // the same of two integers
+    RC_BITI,     // AND, OR or XOR (a: RK_AND...) of two integers, as op_and and the rest
 };
+#define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
+#define RK_LTE 1
+#define RK_GT 2
+#define RK_GTE 3
+#define RK_EQ 4
+#define RK_NE 5
+#define RK_AND 0 // RC_BITI
+#define RK_OR 1
+#define RK_XOR 2
 #define RP_VAR 1   // RC_CALL: the argument is a variable, bind (bits 8-15); else the next value
 #define RP_BYVAL 2 // RC_CALL: the parameter is BYVAL
 #define RP_INT 4   // RC_CALL: the argument is an integer, else a float
@@ -926,9 +941,13 @@ static int RBDoExpr(rbcx_t *x, unsigned char **pp, int *t1, int *o1)
     else if (fn == op_div || (fn == op_exp && a == T_NBR))
         RBOp(x, RC_OPF | (*o1 << 8), -1), a = T_NBR;
     else if (fn == op_ne || fn == op_equal || fn == op_gte || fn == op_lte || fn == op_lt || fn == op_gt)
-        RBOp(x, (a == T_NBR ? RC_OPF : RC_OPI) | (*o1 << 8), -1), a = T_INT;
-    else if (fn == op_divint || fn == op_mod || fn == op_shiftleft || fn == op_shiftright ||
-             fn == op_and || fn == op_or || fn == op_xor)
+    { // inline: what compare() and the operator make of the two values
+        int k = fn == op_lt ? RK_LT : fn == op_lte ? RK_LTE : fn == op_gt ? RK_GT : fn == op_gte ? RK_GTE : fn == op_equal ? RK_EQ : RK_NE;
+        RBOp(x, (a == T_NBR ? RC_CMPF : RC_CMPI) | (k << 8), -1), a = T_INT;
+    }
+    else if (fn == op_and || fn == op_or || fn == op_xor)
+        RBOp(x, RC_BITI | ((fn == op_and ? RK_AND : fn == op_or ? RK_OR : RK_XOR) << 8), -1), a = T_INT;
+    else if (fn == op_divint || fn == op_mod || fn == op_shiftleft || fn == op_shiftright)
         RBOp(x, RC_OPI | (*o1 << 8), -1), a = T_INT;
     else
         return 0; // integer ^, and anything else whose type is not certain
@@ -1725,6 +1744,13 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
     RBEmitWords(w, n);
     if (ncode)
     {
+        if (C.codelen & 2)
+        { // a pad word, so that the addresses start on a 4-byte boundary (the code is a page's)
+            int at = 4 + 2 * code[1];
+            memmove(code + at + 1, code + at, (ncode + 1 - at) * 2);
+            code[at] = 0;
+            ncode++;
+        }
         code[0] = ncode;
         RBEmitWords(code, ncode + 1);
     }
@@ -2290,6 +2316,8 @@ static const uint16_t *RBRAM(RBFind)(unsigned char *p)
 // 100 us: a PC-sampled compiled loop spent 39% of its time in them.
 #define RB_HOUSE_US 100
 static uint32_t RBHouseAt; // time_us_32() when the stream last called them
+#define RB_HOUSE_N 8 // the chain looks at abort, interrupts and the timer once in this many statements
+static int RBHouseN;  // statements the chain runs before it next looks
 static int RBRAM(RBTail)(unsigned char *here)
 {
     nextstmt = here;
@@ -2418,6 +2446,8 @@ static void RBShadowCond(unsigned char *p, int type, const void *v)
     if (text != comp)
         error("SHADOW: IF compiled %, text %", comp, text);
 }
+
+#define RB_INF 0x7FF0000000000000LL // +INFINITY's bits
 
 // a cell of RBRun's stack, or a bound variable's value
 union cell
@@ -2561,6 +2591,86 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
     return 1;
 }
 
+/* FOR's and DO's stack work, once a loop: in flash, as RBRun's RAM is the
+   stack's (see the design's notes on the stack). */
+// RC_FORP: cmd_for's stack work before its values, for the variable at vptr
+static __attribute__((noinline)) void RBForPush(void *vptr, int vartype)
+{
+    int i;
+    for (i = 0; i < g_forindex; i++)
+        if (g_forstack[i].var == vptr && g_forstack[i].level == g_LocalIndex)
+        { // the loop variable is already in the stack: remove it
+            while (i < g_forindex - 1)
+            {
+                g_forstack[i] = g_forstack[i + 1];
+                i++;
+            }
+            g_forindex--;
+            break;
+        }
+    if (g_forindex == MAXFORLOOPS)
+        error("Too many nested FOR loops");
+    g_forstack[g_forindex].var = vptr;
+    g_forstack[g_forindex].vartype = vartype; // the loop variable's type
+    g_forstack[g_forindex].level = g_LocalIndex;
+    g_forindex++; // incase functions use for loops
+}
+
+// RC_FORT: cmd_for after its values, TO at v[0] and STEP at v[1]; forptr is
+// the FOR's nextstmt + 1 and pc the keys of its NEXT and after it.  True if
+// the loop is done before it starts (nextstmt is then after its NEXT).
+static __attribute__((noinline)) int RBForStart(union cell *v, unsigned char *forptr, const uint16_t *pc)
+{
+    struct s_forstack *fs;
+    int test;
+    g_forindex--;
+    fs = &g_forstack[g_forindex];
+    memcpy(&fs->stepvalue, &v[1], 8);
+    memcpy(&fs->tovalue, &v[0], 8);
+    fs->forptr = forptr;
+    fs->nextptr = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
+    if (fs->vartype & T_INT)
+        test = (fs->stepvalue.i >= 0 && *(long long int *)fs->var > fs->tovalue.i) || (fs->stepvalue.i < 0 && *(long long int *)fs->var < fs->tovalue.i);
+    else
+        test = (fs->stepvalue.f >= 0 && *(MMFLOAT *)fs->var > fs->tovalue.f) || (fs->stepvalue.f < 0 && *(MMFLOAT *)fs->var < fs->tovalue.f);
+    if (test)
+    {
+        nextstmt = RBImage(pc[2] | ((uint32_t)pc[3] << 16));
+        return 1;
+    }
+    g_forindex++;
+    return 0;
+}
+
+// RC_DOP: cmd_do's stack work; doptr is the DO's nextstmt, evalptr its
+// condition (NULL: none), pc the op's flags and LOOP's key
+static __attribute__((noinline)) void RBDoPush(unsigned char *doptr, unsigned char *evalptr, const uint16_t *pc)
+{
+    struct s_dostack *ds;
+    int i;
+    for (i = 0; i < g_doindex; i++)
+        if (g_dostack[i].doptr == doptr)
+        { // this loop is already in the stack: remove it
+            while (i < g_doindex - 1)
+            {
+                g_dostack[i] = g_dostack[i + 1];
+                i++;
+            }
+            g_doindex--;
+            break;
+        }
+    if (g_doindex == MAXDOLOOPS)
+        error("Too many nested DO or WHILE loops");
+    ds = &g_dostack[g_doindex];
+    ds->evalptr = evalptr;
+    ds->doptr = doptr;
+    ds->level = g_LocalIndex;
+    ds->untiltest = (pc[0] & RD_UNTIL) != 0;
+    ds->loopptr = RBImage(pc[1] | ((uint32_t)pc[2] << 16));
+    ds->fast_state = DOFAST_OFF; // the compiled LOOP, or cmd_loop on the text
+    g_doindex++;
+}
+
 /* Bind a compiled statement's variables and run its code.  *rp and *ep are
    its record and its text.  Returns the end it gave nextstmt, or NULL if a
    bind failed and the fallback must run.
@@ -2583,7 +2693,7 @@ static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
     unsigned char *e = *ep, *end;
     unsigned int nw; // cmdl | next << 8
     uint16_t *stamp, *cache;
-    union cell *slot[RB_MAXBIND], st[RB_MAXDEPTH], *sp;
+    union cell *slot[RB_MAXBIND], **slotp, st[RB_MAXDEPTH], *sp; // slotp: the binds' addresses
     unsigned int nb, j, w;
     int loopi; // RC_LOOPF's stack entry
 again:
@@ -2594,10 +2704,11 @@ again:
     stamp = (uint16_t *)c;
     c += 2;
     cache = (uint16_t *)c + 2 * nb;
+    if ((uint32_t)cache & 2)
+        cache++; // the pad
     loopi = 0;
     if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == SymBindGen && !(g_LocalIndex && SymTextLocals))
-        for (j = 0; j < nb; j++) // what the binds found last time
-            slot[j] = (union cell *)(cache[2 * j] | ((uint32_t)cache[2 * j + 1] << 16));
+        slotp = (union cell **)cache; // what the binds found last time, used where it is
     else
     {
     for (j = 0; j < nb; j++, c += 2)
@@ -2625,13 +2736,11 @@ again:
         // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
         slot[j] = (v->type & T_PTR) ? (union cell *)v->val.s : (union cell *)&v->val;
     }
+    slotp = slot;
     if (RBCacheOK)
     { // keep them, the addresses first and the stamp last
         for (j = 0; j < nb; j++)
-        {
-            cache[2 * j] = (uint32_t)slot[j] & 0xFFFF;
-            cache[2 * j + 1] = (uint32_t)slot[j] >> 16;
-        }
+            ((union cell **)cache)[j] = slot[j];
         stamp[0] = SymBindGen & 0xFFFF;
         stamp[1] = SymBindGen >> 16;
     }
@@ -2675,6 +2784,9 @@ again:
         [RC_CALL] = &&L_CALL,
         [RC_NEXT] = &&L_NEXT,
         [RC_FCALL] = &&L_FCALL,
+        [RC_CMPF] = &&L_CMPF,
+        [RC_CMPI] = &&L_CMPI,
+        [RC_BITI] = &&L_BITI,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -2685,10 +2797,10 @@ again:
     pc = cache + 2 * nb;
     RBNEXT();
     L_LDG:
-            *sp++ = *slot[w >> 8];
+            *sp++ = *slotp[w >> 8];
             RBNEXT();
     L_STG:
-            *slot[w >> 8] = *--sp;
+            *slotp[w >> 8] = *--sp;
             RBNEXT();
     L_LK:
             memcpy(sp++, pc, 8);
@@ -2712,13 +2824,11 @@ again:
             pc++;
             RBNEXT();
     L_ADDF:
-        {
-            MMFLOAT r = sp[-2].f + sp[-1].f;
-            if (r == INFINITY)
+            sp--;
+            sp[-1].f = sp[-1].f + sp[0].f;
+            if (sp[-1].i == RB_INF) // r == INFINITY, on the bits
                 StandardError(15);
-            (--sp)[-1].f = r;
             RBNEXT();
-        }
     L_ADDI:
             sp[-2].i = sp[-2].i + sp[-1].i;
             sp--;
@@ -2732,13 +2842,11 @@ again:
             sp--;
             RBNEXT();
     L_MULF:
-        {
-            MMFLOAT r = sp[-2].f * sp[-1].f;
-            if (r == INFINITY)
+            sp--;
+            sp[-1].f = sp[-1].f * sp[0].f;
+            if (sp[-1].i == RB_INF)
                 StandardError(15);
-            (--sp)[-1].f = r;
             RBNEXT();
-        }
     L_MULI:
             sp[-2].i = sp[-2].i * sp[-1].i;
             sp--;
@@ -2772,7 +2880,70 @@ again:
             sp[-1].i = -sp[-1].i;
             RBNEXT();
     L_NOTF:
-            sp[-1].f = (sp[-1].f != 0) ? 0 : 1;
+            sp[-1].f = (sp[-1].i & 0x7FFFFFFFFFFFFFFFLL) ? 0 : 1; // (f != 0): NaN is not 0
+            RBNEXT();
+    L_CMPF: // compare() on floats: the sign of the difference, 0 for 0 and NaN; then the operator
+        {
+            union cell d;
+            unsigned long long m;
+            int r;
+            d.f = sp[-2].f - sp[-1].f;
+            m = (unsigned long long)d.i & 0x7FFFFFFFFFFFFFFFULL;
+            r = (m == 0 || m > (unsigned long long)RB_INF) ? 0 : (d.i < 0 ? -1 : 1);
+            goto cmp;
+    L_CMPI: // compare() on integers: the difference, as op_ne and op_equal test them
+            if ((w >> 8) >= RK_EQ)
+                r = sp[-2].i != sp[-1].i;
+            else
+            {
+                long long diff = sp[-2].i - sp[-1].i;
+                r = diff < 0 ? -1 : diff > 0;
+            }
+            if ((w >> 8) == RK_EQ)
+            {
+                sp[-2].i = !r;
+                sp--;
+                RBNEXT();
+            }
+            if ((w >> 8) == RK_NE)
+            {
+                sp[-2].i = r;
+                sp--;
+                RBNEXT();
+            }
+        cmp:
+            switch (w >> 8)
+            {
+            case RK_LT:
+                r = r < 0;
+                break;
+            case RK_LTE:
+                r = r <= 0;
+                break;
+            case RK_GT:
+                r = r > 0;
+                break;
+            case RK_GTE:
+                r = r >= 0;
+                break;
+            case RK_EQ:
+                r = r == 0;
+                break;
+            default:
+                r = r != 0;
+            }
+            sp[-2].i = r;
+            sp--;
+            RBNEXT();
+        }
+    L_BITI: // op_and, op_or, op_xor
+            if ((w >> 8) == RK_AND)
+                sp[-2].i = (long long int)((unsigned long long int)sp[-2].i & (unsigned long long int)sp[-1].i);
+            else if ((w >> 8) == RK_OR)
+                sp[-2].i = (long long int)((unsigned long long int)sp[-2].i | (unsigned long long int)sp[-1].i);
+            else
+                sp[-2].i = (long long int)((unsigned long long int)sp[-2].i ^ (unsigned long long int)sp[-1].i);
+            sp--;
             RBNEXT();
     L_NOTI:
             sp[-1].i = (sp[-1].i != 0) ? 0 : 1;
@@ -2800,84 +2971,23 @@ again:
             RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
             goto done; // the statement's end, which nextstmt is not: the executor looks it up
-    L_FORP: // cmd_for before its values
-        {
-            void *vptr = slot[w >> 8];
-            int i;
-            for (i = 0; i < g_forindex; i++)
-                if (g_forstack[i].var == vptr && g_forstack[i].level == g_LocalIndex)
-                { // the loop variable is already in the stack: remove it
-                    while (i < g_forindex - 1)
-                    {
-                        g_forstack[i] = g_forstack[i + 1];
-                        i++;
-                    }
-                    g_forindex--;
-                    break;
-                }
-            if (g_forindex == MAXFORLOOPS)
-                error("Too many nested FOR loops");
-            g_forstack[g_forindex].var = vptr;
-            g_forstack[g_forindex].vartype = *pc++; // the loop variable's type
-            g_forstack[g_forindex].level = g_LocalIndex;
-            g_forindex++; // incase functions use for loops
+    L_FORP: // cmd_for before its values (RBForPush)
+            RBForPush(slotp[w >> 8], *pc++);
             RBNEXT();
-        }
-    L_FORT: // cmd_for after its values
-        {
-            struct s_forstack *fs;
-            int test;
-            g_forindex--;
-            fs = &g_forstack[g_forindex];
-            memcpy(&fs->stepvalue, &sp[-1], 8);
-            memcpy(&fs->tovalue, &sp[-2], 8);
+    L_FORT: // cmd_for after its values (RBForStart)
             sp -= 2;
-            fs->forptr = e + (nw >> 8) + 1; // the FOR's nextstmt + 1
-            fs->nextptr = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-            if (fs->vartype & T_INT)
-                test = (fs->stepvalue.i >= 0 && *(long long int *)fs->var > fs->tovalue.i) || (fs->stepvalue.i < 0 && *(long long int *)fs->var < fs->tovalue.i);
-            else
-                test = (fs->stepvalue.f >= 0 && *(MMFLOAT *)fs->var > fs->tovalue.f) || (fs->stepvalue.f < 0 && *(MMFLOAT *)fs->var < fs->tovalue.f);
-            if (test)
+            if (RBForStart(sp, e + (nw >> 8) + 1, pc))
             { // the loop is done before it starts: on after its NEXT
                 RBRan++;
                 RBCode++;
-                nextstmt = RBImage(pc[2] | ((uint32_t)pc[3] << 16));
                 goto done;
             }
-            g_forindex++;
             pc += 4;
             RBNEXT();
-        }
-    L_DOP: // cmd_do's stack work
-        {
-            unsigned char *doptr = e + (nw >> 8); // the DO's nextstmt
-            struct s_dostack *ds;
-            int i;
-            for (i = 0; i < g_doindex; i++)
-                if (g_dostack[i].doptr == doptr)
-                { // this loop is already in the stack: remove it
-                    while (i < g_doindex - 1)
-                    {
-                        g_dostack[i] = g_dostack[i + 1];
-                        i++;
-                    }
-                    g_doindex--;
-                    break;
-                }
-            if (g_doindex == MAXDOLOOPS)
-                error("Too many nested DO or WHILE loops");
-            ds = &g_dostack[g_doindex];
-            ds->evalptr = (pc[0] & RD_COND) ? e + (w >> 8) : NULL;
-            ds->doptr = doptr;
-            ds->level = g_LocalIndex;
-            ds->untiltest = (pc[0] & RD_UNTIL) != 0;
-            ds->loopptr = RBImage(pc[1] | ((uint32_t)pc[2] << 16));
-            ds->fast_state = DOFAST_OFF; // the compiled LOOP, or cmd_loop on the text
-            g_doindex++;
+    L_DOP: // cmd_do's stack work (RBDoPush)
+            RBDoPush(e + (nw >> 8), (pc[0] & RD_COND) ? e + (w >> 8) : NULL, pc);
             pc += 3;
             RBNEXT();
-        }
     L_DOT: // the entry test: false goes after the LOOP
         {
             int c = (w >> 8) == T_NBR ? sp[-1].f != 0 : sp[-1].i != 0;
@@ -2944,7 +3054,7 @@ again:
     L_FCALL: // DefinedSubFun for a FUNCTION (RBCallFun): its value replaces the arguments
         {
             union cell res;
-            if (!RBCallFun(pc, w >> 8, slot, sp - pc[1], &res))
+            if (!RBCallFun(pc, w >> 8, slotp, sp - pc[1], &res))
                 goto fail;
             sp -= pc[1];
             *sp++ = res;
@@ -2952,7 +3062,7 @@ again:
             RBNEXT();
         }
     L_CALL: // DefinedSubFun for a SUB (RBCallSub)
-            if (!RBCallSub(pc, w >> 8, slot, sp - pc[1], e + (nw >> 8)))
+            if (!RBCallSub(pc, w >> 8, slotp, sp - pc[1], e + (nw >> 8)))
                 goto fail;
             goto done;
     L_NEXT: // cmd_next (Commands.c), line for line
@@ -3019,12 +3129,16 @@ done:
     else if ((t = RBFind(nextstmt)) == NULL)
         return RB_OUT;
     if ((t[0] & 0xFF) != RB_OP_END && (t[3] & 0xFF) != RB_OP_NOP && (t[0] & RB_COMPILED) &&
-        OptionErrorSkip == 0 && !g_TempMemoryIsChanged && !TraceOn
+        OptionErrorSkip == 0 && !g_TempMemoryIsChanged && !TraceOn &&
+        (--RBHouseN > 0 || (RBHouseN = RB_HOUSE_N,
 #ifndef PICOMITEWEB
-        && core1stack[0] == 0x12345678
+                            core1stack[0] == 0x12345678 &&
 #endif
-        && (OptionNoCheck || (!MMAbort && !IntReady.any && time_us_32() - RBHouseAt < RB_HOUSE_US)))
-    { // a compiled statement, and the tail has nothing to do (see RBTail): run it
+                            (OptionNoCheck || (!MMAbort && !IntReady.any && time_us_32() - RBHouseAt < RB_HOUSE_US)))))
+    { // a compiled statement, and the tail has nothing to do (see RBTail): run it.  What
+      // can change under the chain (ON ERROR SKIP, temporary memory, TRACE: a FUNCTION's
+      // body may) is looked at every statement; an abort, an interrupt, core 1's stack
+      // and the housekeeping timer once in RB_HOUSE_N (a few microseconds)
         {
             r = t;
             e = nextstmt = RBImage(RBKeyAt(r)); // the tail's nextstmt, which nothing moved
