@@ -8,7 +8,10 @@ for the default split only, so more live locals than the default wrote past it
 With the option at 400: 390 live locals across a recursion work and keep their
 values; more than 399 stop with "Not enough Local variable memory".  (A second
 deep pass is left out: the markers freed locals leave behind can fill the
-region - bug report item 30.)"""
+region - bug report item 30.)
+
+The split is the program's: RUN, NEW and LOAD put it back to the default, so a
+second program without the option cannot keep 390 locals."""
 import sys, os, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "elite_tools"))
 import pc3
@@ -35,5 +38,14 @@ out = pc3.ANSI.sub("", b._read())
 print(out)
 ok = ("390 locals ok" in out and "Not enough Local variable memory" in out
       and "FAULT" not in out and "corrupt" not in out and "should not" not in out)
-print("LOCVARS6", "PASS" if ok else "FAIL")
+SRC2 = SRC.replace("Option Local Variables 400" + chr(10), "")
+print("upload:", b.upload(SRC2, 30))
+b.drain(0.1)
+b.send_line("RUN")
+time.sleep(8)
+out2 = pc3.ANSI.sub("", b._read())
+print(out2)
+reset = "Not enough Local variable memory" in out2 and "390 locals ok" not in out2 and "FAULT" not in out2
+print("split back to the default:", "yes" if reset else "NO")
+print("LOCVARS6", "PASS" if ok and reset else "FAIL")
 b.close()
