@@ -1,0 +1,160 @@
+base pc3 2026-09-27 01:26:29  new pc3 2026-09-27 01:33:38
+ -52.58%  bench_micro2:DATA line with a 60-byte list in the body                          930 -> 441
+ -40.72%  bench_micro2:REM line (40 chars) in the body                                    749 -> 444
+ -23.26%  bench_micro2:' comment line (40 chars) in the body                               86 -> 66
+ -18.25%  bench_micro:a%=a%+1 + 40-char comment                                          2334 -> 1908
+  -7.74%  bench_heap:C_bottom80 a%=b% (no allocation)                                    1615 -> 1490
+  -6.56%  bench_micro2:a%=a%+1 (OPTION NOCHECK ON)                                       1495 -> 1397
+  -6.54%  bench_micro2:[depth 1] ly=lx*1.000001+0.5                                      3194 -> 2985
+  -6.53%  bench_micro2:[depth 10] ly=lx*1.000001+0.5                                     3141 -> 2936
+  -6.12%  bench_micro:s%=(s%+i%) AND 65535                                               3058 -> 2871
+  -6.04%  bench_micro:fy=1.23456789 (literal)                                            1787 -> 1679
+  -6.02%  bench_micro2:[depth 1] la=b% (global)                                          1512 -> 1421
+  -5.98%  bench_micro2:[depth 10] la=lb (LOCALs)                                         1523 -> 1432
+  -5.92%  bench_micro:[sub] ly=lx*1.000001+0.5                                           3159 -> 2972
+  -5.88%  bench_micro:30-char name = 30-char name                                        1531 -> 1441
+  -5.64%  bench_micro2:[depth 1] la=lb (LOCALs)                                          1508 -> 1423
+  -5.62%  bench_micro2:[depth 10] la=b% (global)                                         1495 -> 1411
+  -5.58%  bench_heap:A_empty a%=b% (no allocation)                                       1578 -> 1490
+  -5.45%  bench_heap:B_top80 a%=b% (no allocation)                                       1577 -> 1491
+  -5.42%  bench_micro2:[depth 1] ly=K1 (CONST)                                           1512 -> 1430
+  -5.21%  bench_micro2:[depth 10] ly=K1 (CONST)                                          1478 -> 1401
+  -5.09%  bench_micro2:a%=a%+1 (SETTICK 1 ms, empty handler)                             2103 -> 1996
+  -5.00%  bench_micro:fx=fx*1.000001+0.5                                                 3181 -> 3022
+  -4.81%  bench_micro:[sub] la=b% (global read from a SUB)                               1497 -> 1425
+  -4.72%  bench_micro2:a%=a%+1 (nothing armed)                                           2011 -> 1916
+  -4.67%  bench_gfx:ctl.assign                                                           1562 -> 1489
+  -4.66%  bench_micro:a%=a%+1                                                            1994 -> 1901
+  -4.62%  bench_micro:a%=a%+1 + 40 trailing spaces                                       2013 -> 1920
+  -4.62%  bench_micro2:a%=a%+1 (SETTICK armed, 60 s)                                     1992 -> 1900
+  -4.30%  bench_heap:B_top80 st$=t$+u$ (temp, bottom-up)                                 2790 -> 2670
+  -4.27%  bench_micro:[sub] la=lb (LOCALs)                                               1474 -> 1411
+  -4.16%  bench_gfx:H4.pixel.lit_offscreen                                               2259 -> 2165
+  -4.16%  bench_heap:C_bottom80 st$=t$+u$ (temp, bottom-up)                              2791 -> 2675
+  -4.10%  bench_subs200:a%=b%                                                            1512 -> 1450
+  -4.07%  bench_micro2:fy=MAX(1.25,2.5) (literals)                                       3538 -> 3394
+  -4.04%  bench_gfx:H4.pixel.lit_3digit                                                  2278 -> 2186
+  -3.97%  bench_heap:A_empty st$=MID$(t$,3,4) (temp, bottom-up)                          3876 -> 3722
+  -3.96%  bench_micro:[sub] ly=K1 (CONST read from a SUB)                                1515 -> 1455
+  -3.95%  bench_micro2:st$=MID$(t$,3,4) (literals)                                       3870 -> 3717
+  -3.95%  bench_micro:[sub] la=arr%(li AND 1023) (global array)                          4076 -> 3915
+  -3.80%  bench_subs200:y%=arr%(i% AND 1023)                                             4209 -> 4049
+  -3.79%  bench_gfx:H4.pixel.var_c                                                       2456 -> 2363
+  -3.78%  bench_heap:A_empty st$=t$+u$ (temp, bottom-up)                                 2803 -> 2697
+  -3.71%  bench_subs0:y%=arr%(i% AND 1023)                                               4205 -> 4049
+  -3.68%  bench_gfx:H4.pixel.lit_2arg                                                    1766 -> 1701
+  -3.67%  bench_heap:C_bottom80 st$=MID$(t$,3,4) (temp, bottom-up)                       3865 -> 3723
+  -3.65%  bench_heap:B_top80 st$=MID$(t$,3,4) (temp, bottom-up)                          3864 -> 3723
+  -3.63%  bench_gfx:H4.pixel.lit                                                         2122 -> 2045
+  -3.62%  bench_micro:y%=arr%(i% AND 1023)                                               4203 -> 4051
+  -3.54%  bench_micro:y%=arr2%(i% AND 31,7)                                              4496 -> 4337
+  -3.51%  bench_micro:st$=t$+u$                                                          2791 -> 2693
+  -3.38%  bench_gfx:H4.pixel.var                                                         3199 -> 3091
+  -3.37%  bench_micro:st$=LEFT$(t$,3)                                                    3562 -> 3442
+  -3.37%  julia_interp:julia240x180_interp_us_per_pixel                                235519 -> 227587
+  -3.37%  julia_interp:julia240x180_interp_us_per_render                          10174402350 -> 9831745665
+  -3.36%  julia_interp:julia240x180_interp_us_per_escape_iter                           21607 -> 20880
+  -3.36%  bench_micro2:fy=MAX(fx,fz) (variables)                                         3393 -> 3279
+  -3.35%  bench_micro:fy=fx (float)                                                      1492 -> 1442
+  -3.33%  bench_gfx:E9.boxfill.8x8                                                       4717 -> 4560
+  -3.24%  bench_gfx:local.H4.pixel.lit                                                   2127 -> 2058
+  -3.22%  bench_gfx:H4.box.lit                                                           4256 -> 4119
+  -3.22%  bench_micro2:fy=fx                                                             1493 -> 1445
+  -3.17%  bench_micro:[sub] ly=SIN(lx)                                                   2714 -> 2628
+  -3.16%  bench_gfx:local.E8.pixel64.net                                                 3106 -> 3008
+  -3.14%  bench_gfx:H4.pixel.var_x                                                       2644 -> 2561
+  -3.09%  bench_micro2:st$=MID$(t$,c%,d%) (variables)                                    4601 -> 4459
+  -2.95%  bench_heap:A_empty fy=SIN(fx) (argument temp)                                  2709 -> 2629
+  -2.88%  bench_heap:B_top80 fy=SIN(fx) (argument temp)                                  2707 -> 2629
+  -2.86%  bench_micro:a%=b% (1-char names)                                               1505 -> 1462
+  -2.86%  bench_subs0:a%=b%                                                              1506 -> 1463
+  -2.85%  bench_gfx:H4.line.var                                                          7044 -> 6843
+  -2.84%  bench_micro:arr%(i% AND 1023)=y%                                               4259 -> 4138
+  -2.80%  bench_heap:C_bottom80 fy=SIN(fx) (argument temp)                               2713 -> 2637
+  -2.79%  bench_subs200:fy=SIN(fx)                                                       2723 -> 2647
+  -2.78%  bench_micro2:fy=SIN nested 1 deep                                              2738 -> 2662
+  -2.71%  bench_micro:fy=SIN(fx)                                                         2728 -> 2654
+  -2.70%  bench_gfx:H4.line.lit                                                          5037 -> 4901
+  -2.64%  gfx_frames:gfx_elite_stardust_us_per_frame                                  2099089 -> 2043760
+  -2.59%  bench_gfx:local.H4.box.lit                                                     4246 -> 4136
+  -2.59%  bench_gfx:E8.pixel64.net                                                       3205 -> 3122
+  -2.58%  bench_gfx:H4.line.lit_4arg                                                     4335 -> 4223
+  -2.54%  bench_micro:fy=ABS(fx)                                                         2327 -> 2268
+  -2.53%  bench_micro2:call SeGlob (same body on global arrays)                         16284 -> 15872
+  -2.50%  bench_gfx:E9.line.8x8                                                          5010 -> 4885
+  -2.49%  bench_gfx:H4.circle.var                                                        7673 -> 7482
+  -2.44%  bench_gfx:local.H4.line.lit                                                    5074 -> 4950
+  -2.40%  bench_micro:fy=K1 (CONST)                                                      1497 -> 1461
+  -2.38%  bench_gfx:E9.circlefill.r4                                                     7591 -> 7410
+  -2.36%  bench_gfx:local.H4.pixel.var                                                   3045 -> 2973
+  -2.27%  bench_micro:st$=STR$(i%)                                                       3786 -> 3700
+  -2.27%  bench_gfx:H4.circle.lit                                                        5560 -> 5434
+  -2.26%  bench_micro2:fy=SIN nested 2 deep                                              3809 -> 3723
+  -2.21%  bench_gfx:local.H4.box.var                                                     6077 -> 5943
+  -2.17%  bench_gfx:local.E8.pixel64.gross                                               3732 -> 3651
+  -2.09%  bench_micro2:fy=SIN nested 3 deep                                              5016 -> 4911
+  -2.09%  gfx_frames:gfx_elite_ships_us_per_frame                                     4392226 -> 4300384
+  -2.09%  bench_gfx:local.H4.circle.var                                                  7469 -> 7313
+  -1.97%  bench_gfx:E8.pixel64.gross                                                     3810 -> 3735
+  -1.97%  bench_gfx:local.H4.line.var                                                    7064 -> 6925
+  -1.94%  bench_micro:fy=ABS nested 5 deep                                               5973 -> 5857
+  -1.93%  bench_gfx:H4.pixel.var_float                                                   4361 -> 4277
+  -1.92%  bench_gfx:local.H4.circle.lit                                                  5563 -> 5456
+  -1.91%  bench_micro:multi-line IF/ELSE/ENDIF (per pass)                                4194 -> 4114
+  -1.89%  bench_micro2:fy=SIN nested 4 deep                                              6228 -> 6110
+  -1.76%  bench_micro2:call S0L12 (0 params, 12 LOCAL scalars)                          17620 -> 17310
+  -1.74%  bench_micro2:fy=SIN nested 5 deep                                              7540 -> 7409
+  -1.57%  bench_gfx:H4.box.var                                                           7634 -> 7514
+  -1.51%  bench_micro:IF i% AND 1 THEN a%=1 ELSE a%=2                                    5364 -> 5283
+  -1.51%  bench_heap:A_empty st$=STR$(fx,0,3) (temp, bottom-up)                          9273 -> 9133
+  -1.51%  bench_micro2:call S6T a%..f% (AS INTEGER)                                     19922 -> 19622
+  -1.43%  bench_heap:C_bottom80 st$=STR$(fx,0,3) (temp, bottom-up)                       9291 -> 9158
+  -1.24%  bench_heap:B_top80 st$=STR$(fx,0,3) (temp, bottom-up)                          9258 -> 9143
+  -1.22%  bench_micro2:FOR 1-pass inner loop, body 3 lines                               5315 -> 5250
+  -1.16%  bench_micro:call SUB, 6 params + 4 LOCALs                                     21495 -> 21246
+  +1.05%  bench_heap:B_top80 call SUB with LOCAL la(3) (top-down)                        5437 -> 5494
+  +1.14%  bench_heap:A_empty call SUB with LOCAL s$ (top-down)                           4823 -> 4878
+  +1.16%  bench_gfx:E8.loop64.empty                                                       606 -> 613
+  +1.28%  bench_heap:B_top80 call SUB with LOCAL s$ (top-down)                           4852 -> 4914
+  +1.39%  bench_heap:C_bottom80 call SUB with LOCAL s$ (top-down)                        4811 -> 4878
+  +1.64%  bench_micro2:st$=STR$(fx,0,3) (literals)                                       8958 -> 9105
+  +2.12%  anchor:seconds                                                            16.634817 -> 16.987152
+  +2.56%  bench_gfx:local.E8.loop64.empty                                                 626 -> 642
+  +2.67%  gfx_frames:gfx_elite_dash_us_per_frame                                      2122614 -> 2179300
+  +3.30%  knivd_fixed:knivd_fixed_us_per_outer_pass                                   4925603 -> 5087986
+  +3.30%  knivd_fixed:knivd_fixed_us_per_inner_pass                                     49256 -> 50880
+  +3.33%  bench_micro2:call S3I 1,2,3 (literal args)                                     8233 -> 8507
+  +3.83%  bench_micro2:call S3I a%,b%,c% (suffixed int params)                           9226 -> 9579
+  +3.99%  gfx_frames:gfx_elite_fbcopy_us_per_frame                                      51708 -> 53771
+  +4.21%  bench_heap:A_empty call SUB with no LOCALs (control)                           2089 -> 2177
+  +4.21%  bench_heap:C_bottom80 call SUB with no LOCALs (control)                        2089 -> 2177
+  +4.21%  bench_heap:B_top80 call SUB with no LOCALs (control)                           2088 -> 2176
+  +4.54%  bench_micro:call SUB with no arguments                                         2048 -> 2141
+  +4.61%  bench_subs200:call S0                                                          2037 -> 2131
+  +5.25%  bench_micro2:GOSUB label near the top                                          1390 -> 1463
+  +5.89%  bench_subs0:call S0                                                            2037 -> 2157
+  +5.90%  bench_micro:GOSUB/RETURN                                                       1373 -> 1454
+ +11.11%  bench_micro:[sub] empty_for_loop                                                504 -> 560
+ +11.26%  bench_gfx:local.ctl.loop.empty                                                  506 -> 563
+ +14.52%  bench_micro2:empty_for_loop                                                     489 -> 560
+ +14.52%  bench_micro:empty_for_loop                                                      489 -> 560
+ +14.52%  bench_subs0:empty_for_loop                                                      489 -> 560
+ +14.52%  bench_subs200:empty_for_loop                                                    489 -> 560
+ +14.93%  bench_gfx:ctl.loop.empty                                                        489 -> 562
+ +20.15%  bench_micro2:call S0 (no params)                                               2055 -> 2469
+ +29.58%  bench_subs0:fy=SIN(fx)                                                         2732 -> 3540
+ +42.76%  bench_micro2:GOSUB label after 1000 lines                                      1389 -> 1983
+
+median change per test:
+  anchor            +2.12%  (1 figures, worst +2.12%, best +2.12%)
+  bench_gfx         -2.38%  (41 figures, worst +14.93%, best -4.67%)
+  bench_heap        -2.16%  (24 figures, worst +4.21%, best -7.74%)
+  bench_micro       -3.01%  (36 figures, worst +14.52%, best -18.25%)
+  bench_micro2      -1.75%  (52 figures, worst +42.76%, best -52.58%)
+  bench_subs0       +3.34%  (6 figures, worst +29.58%, best -3.71%)
+  bench_subs200     -0.98%  (6 figures, worst +14.52%, best -4.10%)
+  gfx_frames        -0.11%  (7 figures, worst +3.99%, best -2.64%)
+  julia_interp      -3.37%  (3 figures, worst -3.36%, best -3.37%)
+  knivd_fixed       +3.30%  (2 figures, worst +3.30%, best +3.30%)
+
+checks changed: 0

@@ -1,10 +1,12 @@
-"""stdset.py PORT pc3|vga OUT.json [--skip-put] [--symbols-off] [--only TEST ...]
+"""stdset.py PORT pc3|vga OUT.json [--skip-put] [--symbols-off] [--compile] [--only TEST ...]
 
 The standard set every Route A step is measured with: resets the board (so no
 OPTION LOCAL VARIABLES or MODE left by an earlier program leaks in), uploads
 the programs, runs each, and writes every figure to OUT.json:
   metrics  {"test:label": cycles or ms}   what stdcmp.py compares
   checks   {"test": "CHECK/GAMECHECK/golden lines"}   must never change
+--compile runs everything with OPTION COMPILE ON (Route B) and keeps what
+MM.INFO(COMPILE) said after each test in "compile", to show it ran compiled.
 Games (PC3 only) expect Bas/bench/phase1/games' programs already in A:/gb/
 (gamebench.py put); nothing of the games' data is uploaded from here.
 """
@@ -70,6 +72,17 @@ def main():
         # save every program as text for an A/B of symbols on the same firmware (not kept over a reset)
         sh([SE, port, "cmd", "OPTION SYMBOLS OFF"], 30)
         res["symbols"] = "off"
+    compiled = "--compile" in a
+    if compiled:
+        # Route B: RAM-only, so it is set after the reset and lasts until the next
+        sh([SE, port, "cmd", "OPTION COMPILE ON"], 30)
+        res["compile"] = {}
+
+    def compile_status(t):
+        if compiled:
+            m = re.search(r"(COMPILED|NONE|TEXT|OFF)[^\r\n]*", sh([SE, port, "cmd", "Print MM.Info(COMPILE)"], 30))
+            res["compile"][t] = m.group(0).strip() if m else "?"
+            print("  compile:", res["compile"][t], flush=True)
     sh([SE, port, "cmd", "LIBRARY DELETE"], 60)
     if not skip_put:
         args = [SE, port, "put"]
@@ -93,6 +106,7 @@ def main():
         else:
             res["errors"].append("anchor: " + out[-300:])
         print("anchor", secs, gold, flush=True)
+        compile_status("anchor")
 
     for t in BAS:
         if not want(t):
@@ -111,12 +125,13 @@ def main():
         if re.search(r"\bError\b", text) or "BENCHEND" not in text:
             res["errors"].append("%s: %s" % (t, " ".join(text.split())[-300:]))
         print(t, n, "figures", "ERROR" if res["errors"] and res["errors"][-1].startswith(t) else "", flush=True)
+        compile_status(t)
 
     if board == "pc3":
         for name, prog, extra in GAMES:
             if not want(name):
                 continue
-            out = sh([GAMEBENCH, port, "run", prog, "--runs", "1", "--label", outf + "." + name, "--timeout", "900"] + extra, 1000)
+            out = sh([GAMEBENCH, port, "run", prog, "--runs", "1", "--label", os.path.abspath(outf) + "." + name, "--timeout", "900"] + extra, 1000)
             for ln in out.splitlines():
                 if ln.startswith("{"):
                     j = json.loads(ln)
@@ -126,7 +141,10 @@ def main():
                     res["checks"][name] = " | ".join(j.get("check") or [])
                     if j.get("error") or j.get("stopped"):
                         res["errors"].append("%s: %s %s" % (name, j.get("error"), j.get("stopped")))
+            if name not in res["checks"]:  # gamebench failed before a run: keep what it said
+                res["errors"].append("%s: %s" % (name, " ".join(out.split())[-300:]))
             print(name, res["checks"].get(name, "NO RESULT"), flush=True)
+            compile_status(name)
 
     res["finished"] = time.strftime("%Y-%m-%d %H:%M:%S")
     json.dump(res, open(outf, "w"), indent=1)

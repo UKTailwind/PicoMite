@@ -34,6 +34,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  *
  * P1a: the development switch and the slot that will hold the stream.
  * P1b: the stamp, and writing the stream into its slot.
+ * P1c: the records and the statement map.
+ * P1d: the executor, running fallback records.
  */
 #ifndef __STREAM_H
 #define __STREAM_H
@@ -53,6 +55,15 @@ void RBGuardSlot(int ram, int slot); // refuse a command on the slot that holds 
 extern int RBLive;             // a stream matching the program is in the slot
 void RBPrepare(void);          // at the end of a successful PrepareProgram(true)
 void RBStatus(char *out);      // MM.INFO(COMPILE): what the last RUN did
+
+// P1d: the executor.  ExecuteProgram hands over to it while a live stream
+// holds the statement it is about to run.  It runs from RAM on the RP2350.
+// On the RP2040 it is still in flash, where it and the handlers it calls
+// (findvar, cmd_next) evict each other from the 16 KB two-way XIP cache
+// (pixart 29% slower than text); RAM for it there means crossing the 4 KB
+// page below AllMemory, i.e. 4 KB less heap and program memory.
+int RBInImage(unsigned char *p);             // p lies in the program or library image
+unsigned char *RunStream(unsigned char *p);  // run from p; returns where the text loop carries on
 
 #endif /* __STREAM_H */
 /*  @endcond */

@@ -1,0 +1,16 @@
+base pc3 2026-09-27 01:44:09  new pc3 2026-09-27 01:46:38
+CHECK CHANGED pop
+  base GAMECHECK pop_scen 274 of 274 checks passed
+  new  
+ERROR in new run: pop: Error : RAM slot 4 holds the compiled program: OPTION COMPILE OFF first None
+  +3.01%  elite:gamebench_ms_per_frame                                                 24.563 -> 25.302
+  +5.47%  exile:gamebench_ms_per_frame                                                12.1449 -> 12.8094
+  +5.67%  exile:gamekernel_ms_per_frame                                                11.876 -> 12.5493
+
+median change per test:
+  elite             +3.01%  (1 figures, worst +3.01%, best +3.01%)
+  exile             +5.57%  (2 figures, worst +5.67%, best +5.47%)
+
+figures in only one run: 2
+
+checks changed: 1

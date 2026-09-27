@@ -2035,6 +2035,12 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
 
     while (1)
     {
+        if (RBLive && RBInImage(p))
+        { // OPTION COMPILE: carry on in the compiled stream, back here where it cannot (see Stream.h)
+            p = RunStream(p);
+            if ((p[0] == 0 && p[1] == 0) || (p[0] == 0xff && p[1] == 0xff))
+                break;
+        }
         if (*p == 0)
             p++; // step over the zero byte marking the beginning of a new element
         if (*p == T_NEWLINE)
