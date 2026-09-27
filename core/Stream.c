@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 16       // the stream format
+#define RB_VERSION 18       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -380,6 +380,7 @@ enum
     RC_LOOPT,   // LOOP's test (a = RL_ flags): back to after the DO, or the entry goes
     RC_SHADOWCK, // OPTION COMPILE SHADOW: a condition anywhere: its type, then its key
     RC_CALL,     // a call to a user SUB with a parameters (see RBCompileCall)
+    RC_NEXT,     // NEXT, as cmd_next does it
 };
 #define RP_VAR 1   // RC_CALL: the argument is a variable, bind (bits 8-15); else the next value
 #define RP_BYVAL 2 // RC_CALL: the parameter is BYVAL
@@ -692,6 +693,7 @@ typedef struct
     uint16_t bind[RB_MAXBIND][2];
     uint16_t w[RB_MAXCODE];
     int n, depth, maxdepth, fail;
+    int lk; // 1 + where the last RC_LK's constant starts, 0: none (see RBCvif)
 } rbcx_t;
 
 static void RBOp(rbcx_t *x, int w, int cells)
@@ -834,6 +836,7 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
         else
             return 0;
         RBOp(x, RC_LK, 1);
+        x->lk = x->n + 1;
         for (j = 0; j < 4; j++)
             RBOp(x, k.w[j], 0);
         *pp = p;
@@ -848,6 +851,26 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
         return t;
     }
     return 0;
+}
+
+// RC_CVIF, unless the top of the stack is the constant just pushed: that is
+// converted now, as RC_CVIF would convert it
+static void RBCvif(rbcx_t *x)
+{
+    if (x->lk && x->n == x->lk + 3)
+    {
+        union
+        {
+            long long i;
+            MMFLOAT f;
+            uint16_t w[4];
+        } k;
+        memcpy(k.w, x->w + x->lk - 1, 8);
+        k.f = (MMFLOAT)k.i;
+        memcpy(x->w + x->lk - 1, k.w, 8);
+        return;
+    }
+    RBOp(x, RC_CVIF, 0);
 }
 
 // doexpr's step: the operator in *o1 with the left value of type *t1 already
@@ -871,7 +894,7 @@ static int RBDoExpr(rbcx_t *x, unsigned char **pp, int *t1, int *o1)
         if (a == T_INT)
             RBOp(x, RC_CVIF2, 0), a = T_NBR;
         if (t2 == T_INT)
-            RBOp(x, RC_CVIF, 0), t2 = T_NBR;
+            RBCvif(x), t2 = T_NBR;
     }
     else if (targ == T_INT)
     {
@@ -881,7 +904,7 @@ static int RBDoExpr(rbcx_t *x, unsigned char **pp, int *t1, int *o1)
             RBOp(x, RC_CVFI, 0), t2 = T_INT;
     }
     else if (a == T_NBR && t2 == T_INT)
-        RBOp(x, RC_CVIF, 0), t2 = T_NBR;
+        RBCvif(x), t2 = T_NBR;
     else if (a == T_INT && t2 == T_NBR)
         RBOp(x, RC_CVIF2, 0), a = T_NBR;
     if (!(ty & T_OPER) || !(ty & a))
@@ -939,7 +962,12 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
     if (*p && *p != '\'' && !(stop && *p == stop))
         return NULL; // evaluate's and checkend's errors are the text path's
     if (t != ttype) // as evaluate converts for cmd_let's type, then cmd_let stores it
-        RBOp(x, ttype == T_NBR ? RC_CVIF : RC_CVFI, 0);
+    {
+        if (ttype == T_NBR)
+            RBCvif(x);
+        else
+            RBOp(x, RC_CVFI, 0);
+    }
     if (RBMode == RB_SHADOW)
     { // SHADOW's check, compiled in only in that mode (it is in the stamp)
         RBOp(x, RC_SHADOW | ((rhs - x->entry) << 8), 0);
@@ -1123,6 +1151,17 @@ static int RBCompileCall(unsigned char *entry, unsigned char *tok, uint16_t *cod
     return RBFinish(&x, code);
 }
 
+// NEXT: cmd_next finds its loop by the NEXT's position, so the op needs no
+// operands and no binds
+static int RBCompileNext(unsigned char *entry, uint16_t *code)
+{
+    rbcx_t x;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    RBOp(&x, RC_NEXT, 0);
+    return RBFinish(&x, code);
+}
+
 // Compile LET g = expression into code[]: the words, or 0 to leave the
 // statement to its fallback.
 static int RBCompileLet(unsigned char *entry, unsigned char *p, uint16_t *code)
@@ -1264,7 +1303,12 @@ static int RBForPart(rbcx_t *x, unsigned char **pp, int vt)
     if (ex - x->entry > 255 || (t = RBEvaluate(x, &p)) == 0)
         return 0;
     if (t != vt)
-        RBOp(x, vt == T_NBR ? RC_CVIF : RC_CVFI, 0);
+    {
+        if (vt == T_NBR)
+            RBCvif(x);
+        else
+            RBOp(x, RC_CVFI, 0);
+    }
     if (RBMode == RB_SHADOW)
     {
         RBOp(x, RC_SHADOW | ((ex - x->entry) << 8), 0);
@@ -1506,6 +1550,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileDo(entry, base, libbit, cmdl, next, code + 1);
         else if (ct == cmdLOOP)
             ncode = RBCompileLoop(entry, base, libbit, tok, cmdl, code + 1);
+        else if (ct == cmdNEXT)
+            ncode = RBCompileNext(entry, code + 1);
         else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
             C.deftype = d;
     }
@@ -2118,7 +2164,7 @@ static int RBRAM(RBTail)(unsigned char *here)
 // Run the statement whose STMT record is r and whose text starts at e, as
 // the text loop would.  Returns where the statement ends, the nextstmt it was
 // given: if the handler leaves nextstmt there, the next record follows.
-static unsigned char *RBRAM(RBExec)(const uint16_t *r, unsigned char *e)
+static inline __attribute__((always_inline)) unsigned char *RBExec(const uint16_t *r, unsigned char *e)
 {
     unsigned char *p, *end;
     int i;
@@ -2220,23 +2266,114 @@ static void RBShadowCond(unsigned char *p, int type, const void *v)
         error("SHADOW: IF compiled %, text %", comp, text);
 }
 
-// Bind a compiled statement's variables and run its code.  Returns the end
-// it gave nextstmt, or NULL if a bind failed and the fallback must run.
-static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
+// a cell of RBRun's stack, or a bound variable's value
+union cell
 {
-    const uint16_t *c = r + RB_HDR(r) + 1, *pc;
-    const unsigned int nw = r[RB_HDR(r) - 1]; // cmdl | next << 8
-    uint16_t *stamp, *cache;
-    union cell
+    long long i;
+    MMFLOAT f;
+};
+
+// RC_CALL's work: what DefinedSubFun does for a SUB, in its order (see
+// RBCompileCall).  pc is at the op's operands, np the parameters, val the
+// first value argument on the VM's stack, end the call statement's end.
+// Returns 0, before anything has happened, if DefinedSubFun must do it.  In
+// flash: the time is findvar's, and RBRun's RAM is the stack's.
+static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union cell **slot, union cell *val, unsigned char *end)
+{
+    int idx = pc[0], i, at;
+    unsigned char *def = subfun[idx], *callers = CurrentLinePtr, nm[MAXVARLEN + 8];
+    union cell *src;
+    const uint16_t *pp = pc + 3;
+    struct s_vartbl *v;
+    // what would stop DefinedSubFun before it starts sends the call there
+    if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
+        return 0;
+    RBRan++;
+    RBCode++;
+    if (g_option_profiling)
     {
-        long long i;
-        MMFLOAT f;
-    } * slot[RB_MAXBIND], st[RB_MAXDEPTH], *sp = st;
-    unsigned int nb = *c++, j, w;
+        g_perf_usercmd_count++;
+        if (g_perf_subcall_count && idx < MAXSUBFUN)
+            g_perf_subcall_count[idx]++;
+    }
+    g_FunReturnArrayCount = 0;
+    DefinedSubFunLocalIndex = g_LocalIndex;
+    nextstmt = end; // where END SUB returns to
+    errorstack[gosubindex] = callers;
+    substack[gosubindex] = def; // for STATIC
+    gosubstack[gosubindex++] = nextstmt;
+    DefinedSubFunMem = 2; // an error from here on unwinds the call (no argument block)
+    g_LocalIndex++;
+#ifdef SUBPROFILE
+    EnterLocalFrame();
+    g_current_sub_idx = idx;
+#endif
+    CurrentLinePtr = def; // errors at the definition, until the first parameter is made (as DefinedSubFun has it)
+    for (i = 0; i < np; i++, pp += 3)
+    {
+        memcpy(nm, def + (pp[1] >> 8), pp[1] & 0xFF);
+        nm[pp[1] & 0xFF] = 0;
+        findvar(nm, pp[2] | V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK); // the parameter
+        v = &g_vartbl[g_VarIndex];
+        CurrentLinePtr = callers; // errors at the caller
+        src = (pp[0] & RP_VAR) ? slot[pp[0] >> 8] : val++;
+        at = (pp[0] & RP_INT) ? T_INT : T_NBR;
+        if ((pp[0] & (RP_VAR | RP_BYVAL)) == RP_VAR && TypeMask(v->type) == at)
+        { // a variable of the parameter's type: by reference
+            v->val.s = (unsigned char *)src;
+            v->type |= T_PTR;
+        }
+        else if ((v->type & T_NBR) && at == T_NBR)
+            v->val.f = src->f;
+        else if ((v->type & T_NBR) && at == T_INT)
+            v->val.f = src->i;
+        else if ((v->type & T_INT) && at == T_INT)
+            v->val.i = src->i;
+        else if ((v->type & T_INT) && at == T_NBR)
+            v->val.i = FloatToInt64(src->f);
+        else
+            error("Incompatible type"); // (a string parameter does not compile)
+    }
+    DefinedSubFunMem = 0;
+    CurrentLinePtr = callers;
+    nextstmt = def + (pc[2] & 0xFF); // the SUB's body
+    return 1;
+}
+
+/* Bind a compiled statement's variables and run its code.  *rp and *ep are
+   its record and its text.  Returns the end it gave nextstmt, or NULL if a
+   bind failed and the fallback must run.
+
+   The chain.  When the statement is done and the text loop's tail would have
+   nothing to do - no abort, interrupt or housekeeping due, no temporary
+   memory to clear, core 1's stack intact, no TRACE, no ON ERROR SKIP - and
+   the next record (the one after, past any IF parts, or nextstmt's) is a
+   compiled statement, RBRun does that tail and the next record's line
+   bookkeeping as RunStream would, and runs it: a loop's body, and a call's,
+   never leaves.
+
+   Returns the record that comes next (RB_OUT: nextstmt is not in the
+   stream), or NULL if a bind failed and the fallback must run: *rp and *ep
+   are then the record it stopped on and its text. */
+#define RB_OUT ((const uint16_t *)1)
+static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
+{
+    const uint16_t *r = *rp, *c, *pc, *t;
+    unsigned char *e = *ep, *end;
+    unsigned int nw; // cmdl | next << 8
+    uint16_t *stamp, *cache;
+    union cell *slot[RB_MAXBIND], st[RB_MAXDEPTH], *sp;
+    unsigned int nb, j, w;
+    int loopi; // RC_LOOPF's stack entry
+again:
+    c = r + RB_HDR(r) + 1;
+    nw = r[RB_HDR(r) - 1];
+    sp = st;
+    nb = *c++;
     stamp = (uint16_t *)c;
     c += 2;
     cache = (uint16_t *)c + 2 * nb;
-    int loopi = 0; // RC_LOOPF's stack entry
+    loopi = 0;
     if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == SymBindGen && !(g_LocalIndex && SymTextLocals))
         for (j = 0; j < nb; j++) // what the binds found last time
             slot[j] = (union cell *)(cache[2 * j] | ((uint32_t)cache[2 * j + 1] << 16));
@@ -2250,20 +2387,20 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         if (id < SymCanonCount && SymCanonOf && (sc = SymCanonOf[id]) != 0)
             k = sc - 1;
         else if ((k = SymCanonById(id)) < 0)
-            return NULL;
+            goto fail;
         i = SymL[k];
         if (i < 0 || g_vartbl[i].level != g_LocalIndex)
         { // not a local at this level: the global, if no text local can hide it
             i = SymG[k];
             if (i < 0 || (g_LocalIndex && SymTextLocals))
-                return NULL; // not bound yet, or a text local may hide it: findvar decides
+                goto fail; // not bound yet, or a text local may hide it: findvar decides
         }
         v = &g_vartbl[i];
         if (!DimIsScalar(RAW_DIM(*v, 0)) || (v->type & (T_STRUCT | T_STR)) ||
             (v->type & (T_INT | T_NBR)) != c[1] ||
             (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
             ((c[0] & RC_TARGET) && (v->type & T_CONST)))
-            return NULL;
+            goto fail;
         // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
         slot[j] = (v->type & T_PTR) ? (union cell *)v->val.s : (union cell *)&v->val;
     }
@@ -2315,6 +2452,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         [RC_LOOPT] = &&L_LOOPT,
         [RC_SHADOWCK] = &&L_SHADOWCK,
         [RC_CALL] = &&L_CALL,
+        [RC_NEXT] = &&L_NEXT,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -2422,7 +2560,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             RBNEXT();
     L_JFF:
             sp--;
-            if (!(sp[0].f != 0))
+            if ((sp[0].i & 0x7FFFFFFFFFFFFFFFLL) == 0) // sp[0].f == 0, without a library compare
                 pc += *pc;
             pc++;
             RBNEXT();
@@ -2439,7 +2577,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             RBRan++;
             RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-            return e + (nw >> 8); // the statement's end, which nextstmt is not: the executor looks it up
+            goto done; // the statement's end, which nextstmt is not: the executor looks it up
     L_FORP: // cmd_for before its values
         {
             void *vptr = slot[w >> 8];
@@ -2483,7 +2621,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBRan++;
                 RBCode++;
                 nextstmt = RBImage(pc[2] | ((uint32_t)pc[3] << 16));
-                return e + (nw >> 8);
+                goto done;
             }
             g_forindex++;
             pc += 4;
@@ -2530,7 +2668,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBRan++;
                 RBCode++;
                 nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-                return e + (nw >> 8);
+                goto done;
             }
             pc += 2;
             RBNEXT();
@@ -2566,7 +2704,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBRan++;
                 RBCode++;
                 nextstmt = g_dostack[loopi].doptr;
-                return e + (nw >> 8);
+                goto done;
             }
             g_doindex = loopi; // the loop has ended
             RBNEXT();
@@ -2581,78 +2719,107 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBShadowCond(e + (w >> 8), *pc, &sp[-1]);
             pc++;
             RBNEXT();
-    L_CALL: // DefinedSubFun for a SUB, in its order (see RBCompileCall)
+    L_CALL: // DefinedSubFun for a SUB (RBCallSub)
+            if (!RBCallSub(pc, w >> 8, slot, sp - pc[1], e + (nw >> 8)))
+                goto fail;
+            goto done;
+    L_NEXT: // cmd_next (Commands.c), line for line
         {
-            int np = w >> 8, idx = pc[0], i, at;
-            unsigned char *def = subfun[idx], *callers = CurrentLinePtr, nm[MAXVARLEN + 8];
-            union cell *val = sp - pc[1], *src; // the value arguments, first to last
-            const uint16_t *pp = pc + 3;
-            struct s_vartbl *v;
-            // what would stop DefinedSubFun before it starts sends the call there
-            if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
-                return NULL;
+            unsigned char *cl = e + (nw & 0xFF), *q; // its cmdline
+            int i, test;
+            for (i = g_forindex - 1; i >= 0; i--)
+            {
+                q = g_forstack[i].nextptr + sizeof(CommandToken);
+                skipspace(q);
+                if (q == cl)
+                    break;
+            }
+            if (i < 0)
+                goto fail; // "Cannot find a matching FOR": the fallback raises it
             RBRan++;
             RBCode++;
-            if (g_option_profiling)
+            nextstmt = e + (nw >> 8);
+        nextloop:
+            if (g_forstack[i].vartype & T_INT)
             {
-                g_perf_usercmd_count++;
-                if (g_perf_subcall_count && idx < MAXSUBFUN)
-                    g_perf_subcall_count[idx]++;
+                *(long long int *)g_forstack[i].var += g_forstack[i].stepvalue.i;
+                test = (g_forstack[i].stepvalue.i >= 0 && *(long long int *)g_forstack[i].var > g_forstack[i].tovalue.i) || (g_forstack[i].stepvalue.i < 0 && *(long long int *)g_forstack[i].var < g_forstack[i].tovalue.i);
             }
-            g_FunReturnArrayCount = 0;
-            DefinedSubFunLocalIndex = g_LocalIndex;
-            nextstmt = e + (nw >> 8); // where END SUB returns to
-            errorstack[gosubindex] = callers;
-            substack[gosubindex] = def; // for STATIC
-            gosubstack[gosubindex++] = nextstmt;
-            DefinedSubFunMem = 2; // an error from here on unwinds the call (no argument block)
-            g_LocalIndex++;
-#ifdef SUBPROFILE
-            EnterLocalFrame();
-            g_current_sub_idx = idx;
-#endif
-            CurrentLinePtr = def; // errors at the definition, until the first parameter is made (as DefinedSubFun has it)
-            for (i = 0; i < np; i++, pp += 3)
+            else
             {
-                memcpy(nm, def + (pp[1] >> 8), pp[1] & 0xFF);
-                nm[pp[1] & 0xFF] = 0;
-                findvar(nm, pp[2] | V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK); // the parameter
-                v = &g_vartbl[g_VarIndex];
-                CurrentLinePtr = callers; // errors at the caller
-                src = (pp[0] & RP_VAR) ? slot[pp[0] >> 8] : val++;
-                at = (pp[0] & RP_INT) ? T_INT : T_NBR;
-                if ((pp[0] & (RP_VAR | RP_BYVAL)) == RP_VAR && TypeMask(v->type) == at)
-                { // a variable of the parameter's type: by reference
-                    v->val.s = (unsigned char *)src;
-                    v->type |= T_PTR;
+                *(MMFLOAT *)g_forstack[i].var += g_forstack[i].stepvalue.f;
+                test = (g_forstack[i].stepvalue.f >= 0 && *(MMFLOAT *)g_forstack[i].var > g_forstack[i].tovalue.f) || (g_forstack[i].stepvalue.f < 0 && *(MMFLOAT *)g_forstack[i].var < g_forstack[i].tovalue.f);
+            }
+            if (test)
+            { // the loop has ended: out of the stack, and any other loop this NEXT closes
+                while (i < g_forindex - 1)
+                {
+                    g_forstack[i] = g_forstack[i + 1];
+                    i++;
                 }
-                else if ((v->type & T_NBR) && at == T_NBR)
-                    v->val.f = src->f;
-                else if ((v->type & T_NBR) && at == T_INT)
-                    v->val.f = src->i;
-                else if ((v->type & T_INT) && at == T_INT)
-                    v->val.i = src->i;
-                else if ((v->type & T_INT) && at == T_NBR)
-                    v->val.i = FloatToInt64(src->f);
-                else
-                    error("Incompatible type"); // (a string parameter does not compile)
+                g_forindex--;
+                for (i = g_forindex - 1; i >= 0; i--)
+                {
+                    q = g_forstack[i].nextptr + sizeof(CommandToken);
+                    skipspace(q);
+                    if (q == cl)
+                        goto nextloop;
+                }
             }
-            DefinedSubFunMem = 0;
-            CurrentLinePtr = callers;
-            nextstmt = def + (pc[2] & 0xFF); // the SUB's body
-            return e + (nw >> 8);
+            else
+                nextstmt = g_forstack[i].forptr; // back to the body
+            goto done;
         }
     L_END:
     RBRan++;
     RBCode++;
-    return nextstmt = e + (nw >> 8);
+    nextstmt = e + (nw >> 8);
+done:
+    // the next record: the one after, past any IF parts, or nextstmt's
+    end = e + (nw >> 8);
+    if (nextstmt == end)
+    {
+        t = r;
+        do
+            t += RB_HDR(t) + ((t[0] & RB_COMPILED) ? 1 + t[RB_HDR(t)] : 0);
+        while (t[0] & RB_PART);
+    }
+    else if ((t = RBFind(nextstmt)) == NULL)
+        return RB_OUT;
+    if ((t[0] & 0xFF) != RB_OP_END && (t[3] & 0xFF) != RB_OP_NOP && (t[0] & RB_COMPILED) &&
+        OptionErrorSkip == 0 && !g_TempMemoryIsChanged && !TraceOn
+#ifndef PICOMITEWEB
+        && core1stack[0] == 0x12345678
+#endif
+        && (OptionNoCheck || (!MMAbort && !IntReady.any && time_us_32() - RBHouseAt < RB_HOUSE_US)))
+    { // a compiled statement, and the tail has nothing to do (see RBTail): run it
+        {
+            r = t;
+            e = nextstmt = RBImage(RBKeyAt(r)); // the tail's nextstmt, which nothing moved
+            if (r[0] & RB_LINESTART)
+            { // RunStream's line bookkeeping (TRACE is off)
+                CurrentLinePtr = e;
+                TraceBuff[TraceBuffIndex] = e;
+                if (++TraceBuffIndex >= TRACE_BUFF_SIZE)
+                    TraceBuffIndex = 0;
+            }
+            goto again;
+        }
+    }
+    return t;
+fail:
+    *rp = r;
+    *ep = e;
+    return NULL;
 #undef RBNEXT
 }
 
 // RBExec while ON ERROR SKIP/IGNORE is in force: an error in the statement
 // comes back here, as it does to the text loop's setjmp, and the statement
-// counts as run.  Its own frame holds the jmp_buf's registers.
-static __attribute__((noinline)) unsigned char *RBRAM(RBExecSkip)(const uint16_t *r, unsigned char *e)
+// counts as run.  Its own frame holds the jmp_buf's registers.  In flash:
+// RBExec is folded into RunStream, which saves a frame on every FUNCTION
+// level the text path nests, and this is its copy for the rare case.
+static __attribute__((noinline)) unsigned char *RBExecSkip(const uint16_t *r, unsigned char *e)
 {
     int save = g_LocalIndex;
     if (setjmp(ErrNext) == 0)
@@ -2721,8 +2888,16 @@ unsigned char *RBRAM(RunStream)(unsigned char *p)
             r += 4;
             continue;
         }
-        if (!(r[0] & RB_COMPILED) || OptionErrorSkip != 0 || (end = RBRun(r, entry)) == NULL)
-            end = OptionErrorSkip == 0 ? RBExec(r, entry) : RBExecSkip(r, entry);
+        if ((r[0] & RB_COMPILED) && OptionErrorSkip == 0 && (t = RBRun(&r, &entry)) != NULL)
+        { // compiled, and done: RBRun found the next record
+            if (t != RB_OUT)
+            {
+                r = t;
+                continue;
+            }
+            goto leave;
+        }
+        end = OptionErrorSkip == 0 ? RBExec(r, entry) : RBExecSkip(r, entry);
         // where next: the next record, the record of a jump's target, or the text loop
         if (nextstmt == end)
         { // the next record, past any IF parts (reached only by cmd_if's jump)
@@ -2736,6 +2911,7 @@ unsigned char *RBRAM(RunStream)(unsigned char *p)
             r = t;
             continue;
         }
+    leave:
         ret = nextstmt; // leaving the stream, after this statement's tail
         if (RBTail(ret) && (t = RBFind(nextstmt)) != NULL)
         {

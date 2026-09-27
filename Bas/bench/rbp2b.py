@@ -62,7 +62,7 @@ a% = 3
   f2 = Len(s$) * 2
   ar(1) = a% + 1
   f3 = ar(1) * 2""" + """Print f1; f2; f3
-""" + STAT, lambda n: n == 0),
+""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c)
     ("div zero", """a% = 5 : b% = 0
 For i% = 1 To 3
   c = a% / b%

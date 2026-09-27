@@ -31,7 +31,7 @@ For i% = 1 To 1000
   w = 0.1
 Next
 Print a%; b!; c; d%; e; f%; g; h%; k!; x; y%; z%; w
-""" + STAT, lambda n: n == 4 * 998),
+""" + STAT, lambda n: n == 4 * 998 + 1000),  # the four LETs from the third pass, and every NEXT (P3c)
     ("const", """Const K = 5
 For i% = 1 To 3
   j = K
@@ -45,7 +45,7 @@ For i = 1 To 10
   b = a
 Next
 Print a; b
-""" + STAT, lambda n: n == 8),
+""" + STAT, lambda n: n == 8 + 10),  # and the NEXTs (P3c)
     ("dim as", """Dim n As Integer
 For i% = 1 To 10
   n = 2.5
