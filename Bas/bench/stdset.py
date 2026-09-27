@@ -1,4 +1,4 @@
-"""stdset.py PORT pc3|vga OUT.json [--skip-put] [--symbols-off] [--compile] [--only TEST ...]
+"""stdset.py PORT pc3|vga OUT.json [--skip-put] [--symbols-off] [--compile|--shadow] [--only TEST ...]
 
 The standard set every Route A step is measured with: resets the board (so no
 OPTION LOCAL VARIABLES or MODE left by an earlier program leaks in), uploads
@@ -6,7 +6,9 @@ the programs, runs each, and writes every figure to OUT.json:
   metrics  {"test:label": cycles or ms}   what stdcmp.py compares
   checks   {"test": "CHECK/GAMECHECK/golden lines"}   must never change
 --compile runs everything with OPTION COMPILE ON (Route B) and keeps what
-MM.INFO(COMPILE) said after each test in "compile", to show it ran compiled.
+MM.INFO(COMPILE) said after each test in "compile", to show it ran compiled;
+--shadow does the same with OPTION COMPILE SHADOW (a compiled result that
+differs from the text evaluator's stops the program with SHADOW: ...).
 Games (PC3 only) expect Bas/bench/phase1/games' programs already in A:/gb/
 (gamebench.py put); nothing of the games' data is uploaded from here.
 """
@@ -72,10 +74,10 @@ def main():
         # save every program as text for an A/B of symbols on the same firmware (not kept over a reset)
         sh([SE, port, "cmd", "OPTION SYMBOLS OFF"], 30)
         res["symbols"] = "off"
-    compiled = "--compile" in a
+    compiled = "--compile" in a or "--shadow" in a
     if compiled:
         # Route B: RAM-only, so it is set after the reset and lasts until the next
-        sh([SE, port, "cmd", "OPTION COMPILE ON"], 30)
+        sh([SE, port, "cmd", "OPTION COMPILE " + ("SHADOW" if "--shadow" in a else "ON")], 30)
         res["compile"] = {}
 
     def compile_status(t):

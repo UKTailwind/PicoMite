@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 4        // the stream format
+#define RB_VERSION 5        // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -294,10 +294,17 @@ static void RBTabTo(uint32_t b)
    happened; that is also how a variable is first made and bound, by the
    text path.  The wordcode runs on a stack of 64-bit cells.
 
-   P2a compiles LET g = literal and LET g = g2 for global integer and float
-   scalars.  A literal is evaluated at compile time by evaluate() itself,
-   with the type hint cmd_let gives it, so the value is the one the text path
-   computes; one that would not convert quietly stays text.
+   LET compiles when its target and every variable on the right are global
+   integer or float scalars and the right-hand side is a numeric expression
+   of literals, those variables, brackets, unary - + NOT INV and the binary
+   operators (P2b).  The compiler mirrors getvalue, doexpr and evaluate step
+   by step: the same operator table and precedence, the same order, the same
+   promotions and conversions.  A literal is read at compile time by getvalue
+   itself.  Float and integer + - * are done inline, with op_add's and
+   op_mul's overflow check; every other operator calls its own op_ function
+   with the arguments doexpr would give it, so the answer cannot differ.
+   What the compiler cannot decide statically stays text: strings,
+   functions, arrays, and integer ^ (a negative exponent makes it a float).
    --------------------------------------------------------------------------- */
 enum
 {
@@ -305,15 +312,33 @@ enum
     RC_LDG,    // push bound variable a
     RC_STG,    // pop into bound variable a
     RC_LK,     // push the 64-bit constant in the next four words
-    RC_CVIF,   // integer to float, as cmd_let stores an integer in a float
-    RC_CVFI,   // float to integer through FloatToInt64, as cmd_let does
-    RC_SHADOW, // OPTION COMPILE SHADOW: compare the top with the text evaluator's result
+    RC_CVIF,   // top: integer to float
+    RC_CVFI,   // top: float to integer through FloatToInt64
+    RC_CVIF2,  // the cell below the top, the same
+    RC_CVFI2,
+    RC_SHADOW, // OPTION COMPILE SHADOW: compare the top with the text evaluator's result on
+               // the text at a, converted to the type in the next word
+    RC_ADDF,   // + - * inline, as op_add, op_subtract and op_mul
+    RC_ADDI,
+    RC_SUBF,
+    RC_SUBI,
+    RC_MULF,
+    RC_MULI,
+    RC_OPF,    // any other operator a: its op_ function on two floats
+    RC_OPI,    // and on two integers
+    RC_NEGF,   // unary -, NOT and INV, as getvalue does them
+    RC_NEGI,
+    RC_NOTF,
+    RC_NOTI,
+    RC_INV,
 };
 #define RC_TARGET 0x8000 // bind: the statement assigns to it
-#define RB_MAXBIND 8
-#define RB_MAXCODE 48 // words of code one statement may compile to
+#define RB_MAXBIND 12
+#define RB_MAXCODE 96  // words of code one statement may compile to
+#define RB_MAXDEPTH 16 // cells of stack it may use
 
 static CommandToken RBTokLet; // the LET command, looked up once a compile
+unsigned char *getvalue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *oo, int *ta); // MMBasic.c
 
 static void RBEmitWords(const uint16_t *w, int n)
 {
@@ -377,89 +402,257 @@ static unsigned char *RBVarRef(unsigned char *p, int *suffix)
     return p;
 }
 
-// Compile LET g = literal or LET g = g2 into code[]; returns the words, or 0
-// to leave the statement to its fallback.
+// One statement's compilation.
+typedef struct
+{
+    unsigned char *entry;
+    int nbind;
+    uint16_t bind[RB_MAXBIND][2];
+    uint16_t w[RB_MAXCODE];
+    int n, depth, maxdepth, fail;
+} rbcx_t;
+
+static void RBOp(rbcx_t *x, int w, int cells)
+{
+    if (x->n >= RB_MAXCODE)
+    {
+        x->fail = 1;
+        return;
+    }
+    x->w[x->n++] = w;
+    x->depth += cells;
+    if (x->depth > x->maxdepth)
+        x->maxdepth = x->depth;
+}
+
+// The bind of the variable whose symbol is at p, made if it is new; -1 if
+// there is no room.  A symbol with its suffix is one variable.
+static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
+{
+    int off = p - x->entry, j;
+    if (off > 255)
+        return -1;
+    for (j = 0; j < x->nbind; j++)
+        if (((x->bind[j][0] >> 8) & 0x7F) == suffix &&
+            !memcmp(x->entry + (x->bind[j][0] & 0xFF), p, symbolsize(*p)))
+        {
+            if (target)
+                x->bind[j][0] |= RC_TARGET;
+            return j;
+        }
+    if (x->nbind >= RB_MAXBIND)
+        return -1;
+    x->bind[j][0] = off | (suffix << 8) | (target ? RC_TARGET : 0);
+    x->bind[j][1] = suffix ? suffix : T_NBR; // an unsuffixed name is taken to be the default float
+    x->nbind++;
+    return j;
+}
+
+// the operator after a value, as getvalue reads it
+static unsigned char *RBNextOp(unsigned char *p, int *op)
+{
+    skipspace(p);
+    if (tokentype(*p) & T_OPER)
+        *op = *p++ - C_BASETOKEN;
+    else
+        *op = E_END;
+    return p;
+}
+
+static int RBEvaluate(rbcx_t *x, unsigned char **pp);
+
+// getvalue: one value, and the operator after it in *op.  Returns its type,
+// T_INT or T_NBR, or 0 if the compiler cannot take it.
+static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
+{
+    unsigned char *p = *pp, c;
+    int t, j, suf;
+    skipspace(p);
+    c = *p;
+    if (c >= C_BASETOKEN)
+    {
+        void (*fn)(void);
+        if (c > 131)
+            return 0;
+        fn = tokenfunction(c);
+        if (fn != op_not && fn != op_inv && fn != op_subtract && fn != op_add)
+            return 0; // a function, or anything else: P5 and later
+        p++;
+        if ((t = RBValue(x, &p, op)) == 0)
+            return 0;
+        if (fn == op_not)
+            RBOp(x, t == T_NBR ? RC_NOTF : RC_NOTI, 0);
+        else if (fn == op_inv)
+        {
+            if (t == T_NBR)
+                RBOp(x, RC_CVFI, 0);
+            RBOp(x, RC_INV, 0);
+            t = T_INT;
+        }
+        else if (fn == op_subtract)
+            RBOp(x, t == T_NBR ? RC_NEGF : RC_NEGI, 0);
+        *pp = p;
+        return t;
+    }
+    if (isnamestartsym(c))
+    {
+        unsigned char *q = RBVarRef(p, &suf);
+        if (q == NULL || (j = RBBind(x, p, suf, 0)) < 0)
+            return 0;
+        RBOp(x, RC_LDG | (j << 8), 1);
+        *pp = RBNextOp(q, op);
+        return x->bind[j][1];
+    }
+    if ((c >= '0' && c <= '9') || c == '.')
+    { // a decimal literal, read by getvalue itself (whose number reader raises
+      // no error, so compiling cannot fail a RUN; &H and the like stay text)
+        MMFLOAT f;
+        long long i64;
+        unsigned char *str;
+        union
+        {
+            long long i;
+            MMFLOAT f;
+            uint16_t w[4];
+        } k;
+        if (RBLiteral(p) == NULL)
+            return 0;
+        p = getvalue(p, &f, &i64, &str, op, &t);
+        if (t & T_NBR)
+            k.f = f, t = T_NBR;
+        else if (t & T_INT)
+            k.i = i64, t = T_INT;
+        else
+            return 0;
+        RBOp(x, RC_LK, 1);
+        for (j = 0; j < 4; j++)
+            RBOp(x, k.w[j], 0);
+        *pp = p;
+        return t;
+    }
+    if (c == '(')
+    {
+        p++;
+        if ((t = RBEvaluate(x, &p)) == 0 || *p != ')')
+            return 0;
+        *pp = RBNextOp(p + 1, op);
+        return t;
+    }
+    return 0;
+}
+
+// doexpr's step: the operator in *o1 with the left value of type *t1 already
+// on the stack.  Leaves the result's type in *t1 and the next operator in *o1.
+static int RBDoExpr(rbcx_t *x, unsigned char **pp, int *t1, int *o1)
+{
+    const struct s_tokentbl *op;
+    void (*fn)(void);
+    int o2, t2, ty, targ, a = *t1;
+    if ((t2 = RBValue(x, pp, &o2)) == 0)
+        return 0;
+    while (o2 != E_END && tokentbl[*o1].precedence > tokentbl[o2].precedence)
+        if (!RBDoExpr(x, pp, &t2, &o2)) // the next operator binds tighter
+            return 0;
+    op = &tokentbl[*o1];
+    fn = op->fptr;
+    ty = op->type;
+    targ = ty & (T_NBR | T_INT);
+    if (targ == T_NBR)
+    {
+        if (a == T_INT)
+            RBOp(x, RC_CVIF2, 0), a = T_NBR;
+        if (t2 == T_INT)
+            RBOp(x, RC_CVIF, 0), t2 = T_NBR;
+    }
+    else if (targ == T_INT)
+    {
+        if (a == T_NBR)
+            RBOp(x, RC_CVFI2, 0), a = T_INT;
+        if (t2 == T_NBR)
+            RBOp(x, RC_CVFI, 0), t2 = T_INT;
+    }
+    else if (a == T_NBR && t2 == T_INT)
+        RBOp(x, RC_CVIF, 0), t2 = T_NBR;
+    else if (a == T_INT && t2 == T_NBR)
+        RBOp(x, RC_CVIF2, 0), a = T_NBR;
+    if (!(ty & T_OPER) || !(ty & a))
+        return 0; // "Invalid operator": the text path raises it
+    if (fn == op_add)
+        RBOp(x, a == T_NBR ? RC_ADDF : RC_ADDI, -1);
+    else if (fn == op_subtract)
+        RBOp(x, a == T_NBR ? RC_SUBF : RC_SUBI, -1);
+    else if (fn == op_mul)
+        RBOp(x, a == T_NBR ? RC_MULF : RC_MULI, -1);
+    else if (fn == op_div || (fn == op_exp && a == T_NBR))
+        RBOp(x, RC_OPF | (*o1 << 8), -1), a = T_NBR;
+    else if (fn == op_ne || fn == op_equal || fn == op_gte || fn == op_lte || fn == op_lt || fn == op_gt)
+        RBOp(x, (a == T_NBR ? RC_OPF : RC_OPI) | (*o1 << 8), -1), a = T_INT;
+    else if (fn == op_divint || fn == op_mod || fn == op_shiftleft || fn == op_shiftright ||
+             fn == op_and || fn == op_or || fn == op_xor)
+        RBOp(x, RC_OPI | (*o1 << 8), -1), a = T_INT;
+    else
+        return 0; // integer ^, and anything else whose type is not certain
+    *t1 = a;
+    *o1 = o2;
+    return 1;
+}
+
+// evaluate, without its end check: the expression's type, or 0
+static int RBEvaluate(rbcx_t *x, unsigned char **pp)
+{
+    int o, t = RBValue(x, pp, &o);
+    while (t && o != E_END)
+        if (!RBDoExpr(x, pp, &t, &o))
+            return 0;
+    return x->fail ? 0 : t;
+}
+
+// Compile LET g = expression into code[] as [nbind] binds wordcode; returns
+// the words, or 0 to leave the statement to its fallback.
 static int RBCompileLet(unsigned char *entry, unsigned char *p, uint16_t *code)
 {
-    unsigned char *tgt = p, *src, *rhs, *q;
-    int tsuf, ssuf, ttype, stype, n = 0;
-    MMFLOAT f;
-    long long i64;
-    unsigned char *str;
-    int t;
-    union
-    {
-        long long i;
-        MMFLOAT f;
-        uint16_t w[4];
-    } k;
-    if ((p = RBVarRef(p, &tsuf)) == NULL)
+    rbcx_t x;
+    unsigned char *q, *rhs;
+    int tsuf, tgt, ttype, t, n = 0, j;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    if ((q = RBVarRef(p, &tsuf)) == NULL || (tgt = RBBind(&x, p, tsuf, 1)) < 0)
         return 0;
+    ttype = x.bind[tgt][1];
+    p = q;
     skipspace(p);
     if (*p != tokenEQUAL)
         return 0;
     p++;
     skipspace(p);
     rhs = p;
-    ttype = tsuf ? tsuf : T_NBR; // P2a: an unsuffixed name is taken to be the default float
-    if (tgt - entry > 255 || rhs - entry > 255)
+    if (rhs - entry > 255 || (t = RBEvaluate(&x, &p)) == 0)
         return 0;
-    if ((q = RBVarRef(p, &ssuf)) != NULL)
-    { // LET g = g2
-        src = p;
-        stype = ssuf ? ssuf : T_NBR;
-        p = q;
-        skipspace(p);
-        if (*p && *p != '\'')
-            return 0;
-        if (src - entry > 255)
-            return 0;
-        code[n++] = 2;
-        code[n++] = (src - entry) | (ssuf << 8);
-        code[n++] = stype;
-        code[n++] = (tgt - entry) | (tsuf << 8) | RC_TARGET;
-        code[n++] = ttype;
-        code[n++] = RC_LDG | (0 << 8);
-        if (stype != ttype)
-            code[n++] = ttype == T_NBR ? RC_CVIF : RC_CVFI;
-    }
-    else if ((q = RBLiteral(p)) != NULL)
-    { // LET g = literal, evaluated now as cmd_let would evaluate it every time
-        p = q;
-        skipspace(p);
-        if (*p && *p != '\'')
-            return 0;
-        t = ttype;
-        evaluate(rhs, &f, &i64, &str, &t, false);
-        if (ttype == T_NBR)
-            k.f = (t & T_NBR) ? f : (MMFLOAT)i64;
-        else if (t & T_INT)
-            k.i = i64;
-        else if (isnan(f) || f < -9.0e18 || f > 9.0e18)
-            return 0; // FloatToInt64 would raise an error: leave that to the text path
-        else
-            k.i = FloatToInt64(f);
-        code[n++] = 1;
-        code[n++] = (tgt - entry) | (tsuf << 8) | RC_TARGET;
-        code[n++] = ttype;
-        code[n++] = RC_LK;
-        code[n++] = k.w[0];
-        code[n++] = k.w[1];
-        code[n++] = k.w[2];
-        code[n++] = k.w[3];
-    }
-    else
+    skipspace(p);
+    if (*p && *p != '\'')
+        return 0; // evaluate's and checkend's errors are the text path's
+    if (t != ttype) // as evaluate converts for cmd_let's type, then cmd_let stores it
+        RBOp(&x, ttype == T_NBR ? RC_CVIF : RC_CVFI, 0);
+    RBOp(&x, RC_SHADOW | ((rhs - entry) << 8), 0);
+    RBOp(&x, ttype, 0);
+    RBOp(&x, RC_STG | (tgt << 8), -1);
+    RBOp(&x, RC_END, 0);
+    if (x.fail || x.maxdepth > RB_MAXDEPTH || 1 + 2 * x.nbind + x.n > RB_MAXCODE)
         return 0;
-    code[n++] = RC_SHADOW | ((rhs - entry) << 8);
-    code[n++] = RC_STG | ((code[0] - 1) << 8); // the target is the last bind
-    code[n++] = RC_END;
-    return n;
+    code[n++] = x.nbind;
+    for (j = 0; j < x.nbind; j++)
+    {
+        code[n++] = x.bind[j][0];
+        code[n++] = x.bind[j][1];
+    }
+    memcpy(code + n, x.w, x.n * 2);
+    return n + x.n;
 }
 
 static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entry, int linestart,
                        unsigned char *tok, int cmd, unsigned char *cmdl, unsigned char *next)
 {
-    uint16_t code[RB_MAXCODE + 1];
+    uint16_t code[RB_MAXCODE + 2];
     int ncode = 0;
     uint32_t key = (uint32_t)(entry - base) | libbit;
     uint16_t w[6];
@@ -854,7 +1047,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
     {
         long long i;
         MMFLOAT f;
-    } * slot[RB_MAXBIND], st[8], *sp = st;
+    } * slot[RB_MAXBIND], st[RB_MAXDEPTH], *sp = st;
     unsigned int nb = *c++, j, w;
     for (j = 0; j < nb; j++, c += 2)
     {
@@ -897,9 +1090,85 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         case RC_CVFI:
             sp[-1].i = FloatToInt64(sp[-1].f);
             break;
+        case RC_CVIF2:
+            sp[-2].f = (MMFLOAT)sp[-2].i;
+            break;
+        case RC_CVFI2:
+            sp[-2].i = FloatToInt64(sp[-2].f);
+            break;
         case RC_SHADOW:
             if (RBMode == RB_SHADOW)
-                RBShadow(e + (w >> 8), c[-1], &sp[-1]); // c[-1]: the target's type, the last bind's
+                RBShadow(e + (w >> 8), *pc, &sp[-1]);
+            pc++;
+            break;
+        case RC_ADDF:
+        {
+            MMFLOAT r = sp[-2].f + sp[-1].f;
+            if (r == INFINITY)
+                StandardError(15);
+            (--sp)[-1].f = r;
+            break;
+        }
+        case RC_ADDI:
+            sp[-2].i = sp[-2].i + sp[-1].i;
+            sp--;
+            break;
+        case RC_SUBF:
+            sp[-2].f = sp[-2].f - sp[-1].f;
+            sp--;
+            break;
+        case RC_SUBI:
+            sp[-2].i = sp[-2].i - sp[-1].i;
+            sp--;
+            break;
+        case RC_MULF:
+        {
+            MMFLOAT r = sp[-2].f * sp[-1].f;
+            if (r == INFINITY)
+                StandardError(15);
+            (--sp)[-1].f = r;
+            break;
+        }
+        case RC_MULI:
+            sp[-2].i = sp[-2].i * sp[-1].i;
+            sp--;
+            break;
+        case RC_OPF: // doexpr's call, on floats
+            farg1 = sp[-2].f;
+            farg2 = sp[-1].f;
+            targ = T_NBR;
+            tokentbl[w >> 8].fptr();
+            sp--;
+            if (targ & T_NBR)
+                sp[-1].f = fret;
+            else
+                sp[-1].i = iret;
+            break;
+        case RC_OPI: // and on integers
+            iarg1 = sp[-2].i;
+            iarg2 = sp[-1].i;
+            targ = T_INT;
+            tokentbl[w >> 8].fptr();
+            sp--;
+            if (targ & T_NBR)
+                sp[-1].f = fret;
+            else
+                sp[-1].i = iret;
+            break;
+        case RC_NEGF:
+            sp[-1].f = -sp[-1].f;
+            break;
+        case RC_NEGI:
+            sp[-1].i = -sp[-1].i;
+            break;
+        case RC_NOTF:
+            sp[-1].f = (sp[-1].f != 0) ? 0 : 1;
+            break;
+        case RC_NOTI:
+            sp[-1].i = (sp[-1].i != 0) ? 0 : 1;
+            break;
+        case RC_INV:
+            sp[-1].i = ~sp[-1].i;
             break;
         default: // RC_END
             RBRan++;
