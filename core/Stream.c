@@ -1844,71 +1844,111 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             return NULL;
         slot[j] = (union cell *)&v->val;
     }
-    for (pc = c;;)
-    {
-        w = *pc++;
-        switch (w & 0xFF)
-        {
-        case RC_LDG:
+    // dispatch by computed goto through a table in RAM (the G3 prototype's
+    // way): no bounds check, one indirect branch an op
+    static void *const rbops[] __not_in_flash("rbops") = {
+        [RC_END] = &&L_END,
+        [RC_LDG] = &&L_LDG,
+        [RC_STG] = &&L_STG,
+        [RC_LK] = &&L_LK,
+        [RC_CVIF] = &&L_CVIF,
+        [RC_CVFI] = &&L_CVFI,
+        [RC_CVIF2] = &&L_CVIF2,
+        [RC_CVFI2] = &&L_CVFI2,
+        [RC_SHADOW] = &&L_SHADOW,
+        [RC_ADDF] = &&L_ADDF,
+        [RC_ADDI] = &&L_ADDI,
+        [RC_SUBF] = &&L_SUBF,
+        [RC_SUBI] = &&L_SUBI,
+        [RC_MULF] = &&L_MULF,
+        [RC_MULI] = &&L_MULI,
+        [RC_OPF] = &&L_OPF,
+        [RC_OPI] = &&L_OPI,
+        [RC_NEGF] = &&L_NEGF,
+        [RC_NEGI] = &&L_NEGI,
+        [RC_NOTF] = &&L_NOTF,
+        [RC_NOTI] = &&L_NOTI,
+        [RC_INV] = &&L_INV,
+        [RC_JFF] = &&L_JFF,
+        [RC_JFI] = &&L_JFI,
+        [RC_JMP] = &&L_JMP,
+        [RC_GOTO] = &&L_GOTO,
+        [RC_FORP] = &&L_FORP,
+        [RC_FORT] = &&L_FORT,
+        [RC_DOP] = &&L_DOP,
+        [RC_DOT] = &&L_DOT,
+        [RC_LOOPF] = &&L_LOOPF,
+        [RC_LOOPT] = &&L_LOOPT,
+        [RC_SHADOWCK] = &&L_SHADOWCK,
+        [RC_SHADOWC] = &&L_SHADOWC};
+#define RBNEXT()                   \
+    do                             \
+    {                              \
+        w = *pc++;                 \
+        goto *rbops[w & 0xFF];     \
+    } while (0)
+    pc = c;
+    RBNEXT();
+    L_LDG:
             *sp++ = *slot[w >> 8];
-            break;
-        case RC_STG:
+            RBNEXT();
+    L_STG:
             *slot[w >> 8] = *--sp;
-            break;
-        case RC_LK:
+            RBNEXT();
+    L_LK:
             memcpy(sp++, pc, 8);
             pc += 4;
-            break;
-        case RC_CVIF:
+            RBNEXT();
+    L_CVIF:
             sp[-1].f = (MMFLOAT)sp[-1].i;
-            break;
-        case RC_CVFI:
+            RBNEXT();
+    L_CVFI:
             sp[-1].i = FloatToInt64(sp[-1].f);
-            break;
-        case RC_CVIF2:
+            RBNEXT();
+    L_CVIF2:
             sp[-2].f = (MMFLOAT)sp[-2].i;
-            break;
-        case RC_CVFI2:
+            RBNEXT();
+    L_CVFI2:
             sp[-2].i = FloatToInt64(sp[-2].f);
-            break;
-        case RC_SHADOW:
+            RBNEXT();
+    L_SHADOW:
             if (RBMode == RB_SHADOW)
                 RBShadow(e + (w >> 8), *pc, &sp[-1]);
             pc++;
-            break;
-        case RC_ADDF:
+            RBNEXT();
+    L_ADDF:
         {
             MMFLOAT r = sp[-2].f + sp[-1].f;
             if (r == INFINITY)
                 StandardError(15);
             (--sp)[-1].f = r;
-            break;
+            RBNEXT();
         }
-        case RC_ADDI:
+    L_ADDI:
             sp[-2].i = sp[-2].i + sp[-1].i;
             sp--;
-            break;
-        case RC_SUBF:
+            RBNEXT();
+    L_SUBF:
             sp[-2].f = sp[-2].f - sp[-1].f;
             sp--;
-            break;
-        case RC_SUBI:
+            RBNEXT();
+    L_SUBI:
             sp[-2].i = sp[-2].i - sp[-1].i;
             sp--;
-            break;
-        case RC_MULF:
+            RBNEXT();
+    L_MULF:
         {
             MMFLOAT r = sp[-2].f * sp[-1].f;
             if (r == INFINITY)
                 StandardError(15);
             (--sp)[-1].f = r;
-            break;
+            RBNEXT();
         }
-        case RC_MULI:
+    L_MULI:
             sp[-2].i = sp[-2].i * sp[-1].i;
             sp--;
-            break;
-        case RC_OPF: // doexpr's call, on floats
+            RBNEXT();
+    L_OPF: // doexpr's call, on floats
             farg1 = sp[-2].f;
             farg2 = sp[-1].f;
             targ = T_NBR;
@@ -1918,8 +1958,8 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 sp[-1].f = fret;
             else
                 sp[-1].i = iret;
-            break;
-        case RC_OPI: // and on integers
+            RBNEXT();
+    L_OPI: // and on integers
             iarg1 = sp[-2].i;
             iarg2 = sp[-1].i;
             targ = T_INT;
@@ -1929,43 +1969,43 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 sp[-1].f = fret;
             else
                 sp[-1].i = iret;
-            break;
-        case RC_NEGF:
+            RBNEXT();
+    L_NEGF:
             sp[-1].f = -sp[-1].f;
-            break;
-        case RC_NEGI:
+            RBNEXT();
+    L_NEGI:
             sp[-1].i = -sp[-1].i;
-            break;
-        case RC_NOTF:
+            RBNEXT();
+    L_NOTF:
             sp[-1].f = (sp[-1].f != 0) ? 0 : 1;
-            break;
-        case RC_NOTI:
+            RBNEXT();
+    L_NOTI:
             sp[-1].i = (sp[-1].i != 0) ? 0 : 1;
-            break;
-        case RC_INV:
+            RBNEXT();
+    L_INV:
             sp[-1].i = ~sp[-1].i;
-            break;
-        case RC_JFF:
+            RBNEXT();
+    L_JFF:
             sp--;
             if (!(sp[0].f != 0))
                 pc += *pc;
             pc++;
-            break;
-        case RC_JFI:
+            RBNEXT();
+    L_JFI:
             sp--;
             if (sp[0].i == 0)
                 pc += *pc;
             pc++;
-            break;
-        case RC_JMP:
+            RBNEXT();
+    L_JMP:
             pc += *pc + 1;
-            break;
-        case RC_GOTO:
+            RBNEXT();
+    L_GOTO:
             RBRan++;
             RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
             return e + (r[5] >> 8); // the statement's end, which nextstmt is not: the executor looks it up
-        case RC_FORP: // cmd_for before its values
+    L_FORP: // cmd_for before its values
         {
             void *vptr = slot[w >> 8];
             int i;
@@ -1986,9 +2026,9 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             g_forstack[g_forindex].vartype = *pc++; // the loop variable's type
             g_forstack[g_forindex].level = g_LocalIndex;
             g_forindex++; // incase functions use for loops
-            break;
+            RBNEXT();
         }
-        case RC_FORT: // cmd_for after its values
+    L_FORT: // cmd_for after its values
         {
             struct s_forstack *fs;
             int test;
@@ -2012,9 +2052,9 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             }
             g_forindex++;
             pc += 4;
-            break;
+            RBNEXT();
         }
-        case RC_DOP: // cmd_do's stack work
+    L_DOP: // cmd_do's stack work
         {
             unsigned char *doptr = e + (r[5] >> 8); // the DO's nextstmt
             struct s_dostack *ds;
@@ -2041,9 +2081,9 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             ds->fast_state = DOFAST_OFF; // the compiled LOOP, or cmd_loop on the text
             g_doindex++;
             pc += 3;
-            break;
+            RBNEXT();
         }
-        case RC_DOT: // the entry test: false goes after the LOOP
+    L_DOT: // the entry test: false goes after the LOOP
         {
             int c = (w >> 8) == T_NBR ? sp[-1].f != 0 : sp[-1].i != 0;
             sp--;
@@ -2058,9 +2098,9 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 return e + (r[5] >> 8);
             }
             pc += 2;
-            break;
+            RBNEXT();
         }
-        case RC_LOOPF: // cmd_loop's search for its entry
+    L_LOOPF: // cmd_loop's search for its entry
         {
             unsigned char *cl = e + (r[5] & 0xFF), *q; // cmd_loop's cmdline
             for (loopi = 0; loopi < g_doindex; loopi++)
@@ -2072,9 +2112,9 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             }
             if (loopi == g_doindex)
                 error("LOOP without a matching DO");
-            break;
+            RBNEXT();
         }
-        case RC_LOOPT:
+    L_LOOPT:
         {
             int f = w >> 8, tst;
             if (f & RL_ALWAYS)
@@ -2094,24 +2134,23 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 return e + (r[5] >> 8);
             }
             g_doindex = loopi; // the loop has ended
-            break;
+            RBNEXT();
         }
-        case RC_SHADOWCK:
+    L_SHADOWCK:
             if (RBMode == RB_SHADOW)
                 RBShadowCond(RBImage(pc[1] | ((uint32_t)pc[2] << 16)), pc[0], &sp[-1]);
             pc += 3;
-            break;
-        case RC_SHADOWC:
+            RBNEXT();
+    L_SHADOWC:
             if (RBMode == RB_SHADOW)
                 RBShadowCond(e + (w >> 8), *pc, &sp[-1]);
             pc++;
-            break;
-        default: // RC_END
-            RBRan++;
-            RBCode++;
-            return nextstmt = e + (r[5] >> 8);
-        }
-    }
+            RBNEXT();
+    L_END:
+    RBRan++;
+    RBCode++;
+    return nextstmt = e + (r[5] >> 8);
+#undef RBNEXT
 }
 
 // RBExec while ON ERROR SKIP/IGNORE is in force: an error in the statement
