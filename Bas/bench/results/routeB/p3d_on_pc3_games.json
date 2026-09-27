@@ -1,0 +1,25 @@
+{
+ "board": "pc3",
+ "port": "COM16",
+ "started": "2026-09-27 20:47:29",
+ "metrics": {
+  "exile:gamebench_ms_per_frame": 9.355,
+  "exile:gamekernel_ms_per_frame": 9.1188,
+  "elite:gamebench_ms_per_frame": 18.933,
+  "pop:gamebench_ms_per_frame": 13.89,
+  "pop:gameframe_ms_per_frame": 9.847
+ },
+ "checks": {
+  "exile": "GAMECHECK exile_phys 18 of 18 end states match, unread feed 0, faults 0, notes 0 | GAMECHECK PASS",
+  "elite": "GAMECHECK elite_demo frames 600 shots 32 hits 14 kills 2 energy 255 fuel 70 slots 2 dead 0 witch 0 objs 32",
+  "pop": "GAMECHECK pop_scen 274 of 274 checks passed"
+ },
+ "errors": [],
+ "cpuspeed": "315000000",
+ "compile": {
+  "exile": "NONE 1 REUSED 0 STMTS 1963 RAN 2570609 MISS 355670 CODE 1175904",
+  "elite": "NONE 3 REUSED 0 STMTS 7143 RAN 968159 MISS 125539 CODE 385855",
+  "pop": "NONE 4 REUSED 0 STMTS 6235 RAN 2936628 MISS 744598 CODE 1053184"
+ },
+ "finished": "2026-09-27 20:49:35"
+}

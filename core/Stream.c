@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 18       // the stream format
+#define RB_VERSION 19       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -381,6 +381,7 @@ enum
     RC_SHADOWCK, // OPTION COMPILE SHADOW: a condition anywhere: its type, then its key
     RC_CALL,     // a call to a user SUB with a parameters (see RBCompileCall)
     RC_NEXT,     // NEXT, as cmd_next does it
+    RC_FCALL,    // a call to a user FUNCTION with a parameters, its value pushed (see RBFcall)
 };
 #define RP_VAR 1   // RC_CALL: the argument is a variable, bind (bits 8-15); else the next value
 #define RP_BYVAL 2 // RC_CALL: the parameter is BYVAL
@@ -694,6 +695,7 @@ typedef struct
     uint16_t w[RB_MAXCODE];
     int n, depth, maxdepth, fail;
     int lk; // 1 + where the last RC_LK's constant starts, 0: none (see RBCvif)
+    int calls, ncall; // a FUNCTION call may compile here (LET, IF); how many did (see RBFcall)
 } rbcx_t;
 
 static void RBOp(rbcx_t *x, int w, int cells)
@@ -771,6 +773,7 @@ static unsigned char *RBNextOp(unsigned char *p, int *op)
 }
 
 static int RBEvaluate(rbcx_t *x, unsigned char **pp);
+static int RBFcall(rbcx_t *x, unsigned char **pp, int *op);
 
 // getvalue: one value, and the operator after it in *op.  Returns its type,
 // T_INT or T_NBR, or 0 if the compiler cannot take it.
@@ -808,8 +811,13 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
     if (isnamestartsym(c))
     {
         unsigned char *q = RBVarRef(p, &suf);
-        if (q == NULL || (j = RBBind(x, p, suf, 0)) < 0)
-            return 0;
+        if (q == NULL && issymbol(c) && (t = RBFcall(x, &p, op)) != 0)
+        {
+            *pp = p;
+            return t;
+        }
+        if (q == NULL || x->ncall || (j = RBBind(x, p, suf, 0)) < 0)
+            return 0; // (after a call a variable is looked up again: DefinedSubFun's caller does)
         RBOp(x, RC_LDG | (j << 8), 1);
         *pp = RBNextOp(q, op);
         return x->bind[j][1];
@@ -946,6 +954,8 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
 {
     unsigned char *q, *rhs;
     int tsuf, tgt, ttype, t;
+    if (x->ncall)
+        return NULL; // a call before: cmd_let would find its target after it
     if ((q = RBVarRef(p, &tsuf)) == NULL || (tgt = RBBind(x, p, tsuf, 1)) < 0)
         return NULL;
     ttype = x->bind[tgt][1];
@@ -968,8 +978,9 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
         else
             RBOp(x, RC_CVFI, 0);
     }
-    if (RBMode == RB_SHADOW)
-    { // SHADOW's check, compiled in only in that mode (it is in the stamp)
+    if (RBMode == RB_SHADOW && !x->ncall)
+    { // SHADOW's check, compiled in only in that mode (it is in the stamp); not of a
+      // call, which the text evaluator would make again
         RBOp(x, RC_SHADOW | ((rhs - x->entry) << 8), 0);
         RBOp(x, ttype, 0);
     }
@@ -1011,13 +1022,179 @@ static int RBFinish(rbcx_t *x, uint16_t *code)
 #define RB_MAXPARAM 16
 unsigned char *CheckByKeyword(unsigned char *p, int kind); // MMBasic.c
 
+// a SUB or FUNCTION's parameters, and a call's arguments for them
+typedef struct
+{
+    int np, untyped;
+    int by[RB_MAXPARAM], ptype[RB_MAXPARAM], flags[RB_MAXPARAM]; // BYVAL 1, BYREF -1; declared type (0: OPTION DEFAULT's)
+    uint16_t name[RB_MAXPARAM], astype[RB_MAXPARAM];
+} rbparams_t;
+
+// The parameters of the definition at def, *pp at the list (after the name
+// and its suffix): 0 if the compiler cannot take them.  *pp is left after them.
+static int RBParams(unsigned char *def, unsigned char **pp, rbparams_t *pr)
+{
+    unsigned char *p = *pp, *b, *v;
+    int paren, suf, t, np = 0;
+    pr->untyped = 0;
+    skipspace(p);
+    paren = (*p == '(');
+    if (paren)
+        p++;
+    skipspace(p);
+    if (paren ? *p != ')' : (*p && *p != '\''))
+        while (1)
+        {
+            if (np == RB_MAXPARAM)
+                return 0;
+            pr->by[np] = 0;
+            pr->astype[np] = 0;
+            if ((b = CheckByKeyword(p, 'V')) != NULL)
+                p = b, pr->by[np] = 1;
+            else if ((b = CheckByKeyword(p, 'R')) != NULL)
+                p = b, pr->by[np] = -1;
+            skipspace(p);
+            if (!issymbol(*p))
+                return 0;
+            v = p;
+            p += symbolsize(*p);
+            suf = RBSuffix(&p);
+            if (suf == T_STR || p - def > 255)
+                return 0;
+            pr->name[np] = (p - v) | ((v - def) << 8); // the name and its suffix, for findvar
+            pr->ptype[np] = suf;
+            skipspace(p);
+            if (*p == '(')
+                return 0; // an array
+            if (*p == tokenAS)
+            {
+                p++;
+                skipspace(p);
+                t = RBTypeWord(&p);
+                if ((t != T_INT && t != T_NBR) || suf)
+                    return 0; // a string, a structure, or a type twice
+                pr->astype[np] = t | T_IMPLIED;
+                pr->ptype[np] = t;
+                skipspace(p);
+            }
+            else if (!suf)
+            {
+                if (pr->by[np] < 0)
+                    return 0; // BYREF: DefinedSubFun checks the types match
+                pr->untyped = 1; // OPTION DEFAULT's type, at the call
+            }
+            np++;
+            if (*p == ',')
+            {
+                p++;
+                skipspace(p);
+                continue;
+            }
+            if (paren ? *p != ')' : (*p && *p != '\''))
+                return 0;
+            break;
+        }
+    if (paren)
+        p++;
+    pr->np = np;
+    *pp = p;
+    return 1;
+}
+
+// the end of the argument at p: the next ',' at bracket depth 0, a comment,
+// the end, or (close) the ')' that closes the list
+static unsigned char *RBArgEnd(unsigned char *p, int close)
+{
+    int depth = 0, quote = 0;
+    for (; *p; p++)
+    {
+        if (*p == '"')
+            quote = !quote;
+        else if (quote)
+            continue;
+        else if (*p == '(' || (*p >= C_BASETOKEN && (tokentype(*p) & T_FUN)))
+            depth++;
+        else if (*p == ')')
+        {
+            if (depth == 0 && close)
+                break;
+            depth--;
+        }
+        else if ((*p == ',' && depth == 0) || *p == '\'')
+            break;
+    }
+    return p;
+}
+
+// The call's arguments at *qq, up to the statement's end or (close) the
+// bracket that closes them: an expression compiles to its value, a variable
+// binds (as a target, so a CONST, which DefinedSubFun passes by value, goes
+// to the fallback).  0 if the compiler cannot take them.
+static int RBArgs(rbcx_t *x, unsigned char **qq, int close, rbparams_t *pr, int *nval)
+{
+    unsigned char *q = *qq, *ae, *vq;
+    int na = 0, j, t, suf;
+    *nval = 0;
+    skipspace(q);
+    if (close ? *q != ')' : (*q && *q != '\''))
+        while (1)
+        {
+            ae = RBArgEnd(q, close);
+            skipspace(q);
+            if (q == ae || na == pr->np)
+                return 0; // a missing argument, or too many
+            vq = RBVarRef(q, &suf);
+            if (vq != NULL)
+                skipspace(vq);
+            if (vq == ae)
+            { // a variable: by reference, as DefinedSubFun passes it
+                if ((j = RBBind(x, q, suf, 1)) < 0)
+                    return 0;
+                if (pr->by[na] < 0 && x->bind[j][1] != pr->ptype[na])
+                    return 0; // BYREF of another type: DefinedSubFun's error
+                pr->flags[na] = (pr->by[na] > 0 ? RP_BYVAL : 0) | RP_VAR | (j << 8) | (x->bind[j][1] == T_INT ? RP_INT : 0);
+            }
+            else
+            { // an expression: its value
+                if (pr->by[na] < 0)
+                    return 0; // BYREF: "Variable required", which the fallback reports
+                if ((t = RBEvaluate(x, &q)) == 0)
+                    return 0;
+                skipspace(q);
+                if (q != ae)
+                    return 0;
+                pr->flags[na] = t == T_INT ? RP_INT : 0;
+                (*nval)++;
+            }
+            na++;
+            q = ae;
+            if (*q != ',')
+                break;
+            q++;
+        }
+    if (na != pr->np || (close && *q != ')'))
+        return 0; // a missing argument
+    *qq = q;
+    return 1;
+}
+
+// each parameter's words for RBMakeParams
+static void RBParamOps(rbcx_t *x, rbparams_t *pr)
+{
+    for (int i = 0; i < pr->np; i++)
+    {
+        RBOp(x, pr->flags[i], 0);
+        RBOp(x, pr->name[i], 0);
+        RBOp(x, pr->astype[i], 0);
+    }
+}
+
 static int RBCompileCall(unsigned char *entry, unsigned char *tok, uint16_t *code)
 {
     rbcx_t x;
-    unsigned char *def, *p, *q, *b, *v;
-    int idx, np = 0, na = 0, nval = 0, i, j, t, untyped = 0, paren, suf, flags[RB_MAXPARAM];
-    int by[RB_MAXPARAM], ptype[RB_MAXPARAM]; // BYVAL 1, BYREF -1; the declared type (0: OPTION DEFAULT's)
-    uint16_t name[RB_MAXPARAM], astype[RB_MAXPARAM];
+    rbparams_t pr;
+    unsigned char *def, *p, *q;
+    int idx, nval;
     if (!issymbol(*tok))
         return 0;
     q = tok + symbolsize(*tok);
@@ -1032,63 +1209,8 @@ static int RBCompileCall(unsigned char *entry, unsigned char *tok, uint16_t *cod
     if (!issymbol(*p))
         return 0;
     p += symbolsize(*p);
-    skipspace(p);
-    paren = (*p == '(');
-    if (paren)
-        p++;
-    skipspace(p);
-    if (paren ? *p != ')' : (*p && *p != '\''))
-        while (1)
-        {
-            if (np == RB_MAXPARAM)
-                return 0;
-            by[np] = 0;
-            astype[np] = 0;
-            if ((b = CheckByKeyword(p, 'V')) != NULL)
-                p = b, by[np] = 1;
-            else if ((b = CheckByKeyword(p, 'R')) != NULL)
-                p = b, by[np] = -1;
-            skipspace(p);
-            if (!issymbol(*p))
-                return 0;
-            v = p;
-            p += symbolsize(*p);
-            suf = RBSuffix(&p);
-            if (suf == T_STR || p - def > 255)
-                return 0;
-            name[np] = (p - v) | ((v - def) << 8); // the name and its suffix, for findvar
-            ptype[np] = suf;
-            skipspace(p);
-            if (*p == '(')
-                return 0; // an array
-            if (*p == tokenAS)
-            {
-                p++;
-                skipspace(p);
-                t = RBTypeWord(&p);
-                if ((t != T_INT && t != T_NBR) || suf)
-                    return 0; // a string, a structure, or a type twice
-                astype[np] = t | T_IMPLIED;
-                ptype[np] = t;
-                skipspace(p);
-            }
-            else if (!suf)
-            {
-                if (by[np] < 0)
-                    return 0; // BYREF: DefinedSubFun checks the types match
-                untyped = 1;  // OPTION DEFAULT's type, at the call
-            }
-            np++;
-            if (*p == ',')
-            {
-                p++;
-                skipspace(p);
-                continue;
-            }
-            if (paren ? *p != ')' : (*p && *p != '\''))
-                return 0;
-            break;
-        }
+    if (!RBParams(def, &p, &pr))
+        return 0;
     // the body: DefinedSubFun sets nextstmt to the zero that ends the header
     p = def;
     skipelement(p);
@@ -1098,57 +1220,86 @@ static int RBCompileCall(unsigned char *entry, unsigned char *tok, uint16_t *cod
     memset(&x, 0, sizeof(x));
     x.entry = entry;
     skipspace(q);
-    if (*q == '(')
+    if (*q == '(' || !RBArgs(&x, &q, 0, &pr, &nval))
         return 0;
-    if (*q && *q != '\'')
-        while (1)
-        {
-            unsigned char *ae = RBNextItem(q), *vq;
-            skipspace(q);
-            if (q == ae || na == np)
-                return 0; // a missing argument, or too many
-            vq = RBVarRef(q, &suf);
-            if (vq != NULL)
-                skipspace(vq);
-            if (vq == ae)
-            { // a variable: by reference, as DefinedSubFun passes it
-                if ((j = RBBind(&x, q, suf, 1)) < 0)
-                    return 0;
-                if (by[na] < 0 && x.bind[j][1] != ptype[na])
-                    return 0; // BYREF of another type: DefinedSubFun's error
-                flags[na] = (by[na] > 0 ? RP_BYVAL : 0) | RP_VAR | (j << 8) | (x.bind[j][1] == T_INT ? RP_INT : 0);
-            }
-            else
-            { // an expression: its value
-                if (by[na] < 0)
-                    return 0; // BYREF: "Variable required", which the fallback reports
-                if ((t = RBEvaluate(&x, &q)) == 0)
-                    return 0;
-                skipspace(q);
-                if (q != ae)
-                    return 0;
-                flags[na] = t == T_INT ? RP_INT : 0;
-                nval++;
-            }
-            na++;
-            q = ae;
-            if (*q != ',')
-                break;
-            q++;
-        }
-    if (na != np)
-        return 0; // a missing argument
-    RBOp(&x, RC_CALL | (np << 8), -nval);
+    RBOp(&x, RC_CALL | (pr.np << 8), -nval);
     RBOp(&x, idx, 0);
     RBOp(&x, nval, 0);
-    RBOp(&x, (p - def) | (untyped << 8), 0);
-    for (i = 0; i < np; i++)
-    {
-        RBOp(&x, flags[i], 0);
-        RBOp(&x, name[i], 0);
-        RBOp(&x, astype[i], 0);
-    }
+    RBOp(&x, (p - def) | (pr.untyped << 8), 0);
+    RBParamOps(&x, &pr);
     return RBFinish(&x, code);
+}
+
+/* P3d: a call to a user FUNCTION in an expression, as getvalue makes it (a
+   name with a bracket straight after it).  RC_FCALL does what DefinedSubFun
+   does for a FUNCTION (see RBCallFun).  Once it has run the statement cannot
+   go to its fallback, which would run the call again, so: only where the
+   statement allows it (LET and IF: FOR and DO have done their stack work
+   before their expressions), one call a statement, arguments free of calls,
+   and no variable used after it but a LET's own target, which cmd_let finds
+   before it evaluates (the callee may erase or make variables).  Left to
+   DefinedSubFun: a FUNCTION without a type (OPTION DEFAULT's), a string or
+   array result, and what RBCompileCall leaves. */
+static int RBFcall(rbcx_t *x, unsigned char **pp, int *op)
+{
+    rbparams_t pr;
+    unsigned char *p = *pp, *q, *def, *d, *fn;
+    int idx, suf, dsuf, t, ftype, astype = 0, nval;
+    if (!x->calls || x->ncall)
+        return 0;
+    q = p + symbolsize(*p);
+    suf = RBSuffix(&q);
+    if (*q != '(' || (idx = FindSubFun(p, 1)) < 0)
+        return 0;
+    def = subfun[idx];
+    if (commandtbl_decode(def) != cmdFUN)
+        return 0;
+    d = def + sizeof(CommandToken);
+    skipspace(d);
+    if (!issymbol(*d))
+        return 0;
+    fn = d;
+    d += symbolsize(*d);
+    dsuf = RBSuffix(&d);
+    if (dsuf != suf || *d != '(' || d - def > 255)
+        return 0; // DefinedSubFun's errors
+    ftype = dsuf;
+    if (!RBParams(def, &d, &pr))
+        return 0;
+    skipspace(d);
+    if (*d == tokenAS)
+    {
+        d++;
+        skipspace(d);
+        t = RBTypeWord(&d);
+        if ((t != T_INT && t != T_NBR) || dsuf)
+            return 0;
+        skipspace(d);
+        if (*d == '(')
+            return 0; // an array result
+        ftype = t;
+        astype = t | T_IMPLIED;
+    }
+    if (ftype != T_INT && ftype != T_NBR)
+        return 0; // a string, or OPTION DEFAULT's type
+    d = def;
+    skipelement(d);
+    if (d - def > 255)
+        return 0;
+    q++;
+    if (!RBArgs(x, &q, ')', &pr, &nval))
+        return 0;
+    q++;
+    RBOp(x, RC_FCALL | (pr.np << 8), 1 - nval);
+    RBOp(x, idx, 0);
+    RBOp(x, nval, 0);
+    RBOp(x, (d - def) | (pr.untyped << 8), 0);
+    RBOp(x, (fn + symbolsize(*fn) + (suf ? 1 : 0) - fn) | ((fn - def) << 8), 0); // the result's name, for findvar
+    RBOp(x, astype, 0);
+    RBParamOps(x, &pr);
+    x->ncall++;
+    *pp = RBNextOp(q, op);
+    return ftype;
 }
 
 // NEXT: cmd_next finds its loop by the NEXT's position, so the op needs no
@@ -1169,6 +1320,7 @@ static int RBCompileLet(unsigned char *entry, unsigned char *p, uint16_t *code)
     rbcx_t x;
     memset(&x, 0, sizeof(x));
     x.entry = entry;
+    x.calls = 1;
     if (RBLetInto(&x, p, 0) == NULL)
         return 0;
     RBOp(&x, RC_END, 0);
@@ -1220,6 +1372,7 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
     int t, jf, jmp;
     memset(&x, 0, sizeof(x));
     x.entry = entry;
+    x.calls = 1;
     skipspace(p);
     cond = p;
     if (cond - entry > 255 || (t = RBEvaluate(&x, &p)) == 0)
@@ -1228,8 +1381,8 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
     if (*p != tokenTHEN)
         return 0;
     p++;
-    if (RBMode == RB_SHADOW)
-    {
+    if (RBMode == RB_SHADOW && !x.ncall)
+    { // (not of a call, which the text evaluator would make again)
         RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
         RBOp(&x, t, 0);
     }
@@ -2278,36 +2431,16 @@ union cell
 // first value argument on the VM's stack, end the call statement's end.
 // Returns 0, before anything has happened, if DefinedSubFun must do it.  In
 // flash: the time is findvar's, and RBRun's RAM is the stack's.
-static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union cell **slot, union cell *val, unsigned char *end)
+// Each parameter of the call at def made by findvar as DefinedSubFun makes it,
+// and given its argument: a variable of its type by reference (unless BYVAL),
+// anything else converted.  CurrentLinePtr is left as DefinedSubFun leaves it:
+// the definition until the first parameter is made, the caller after.
+static void RBMakeParams(unsigned char *def, const uint16_t *pp, int np, union cell **slot, union cell *val, unsigned char *callers)
 {
-    int idx = pc[0], i, at;
-    unsigned char *def = subfun[idx], *callers = CurrentLinePtr, nm[MAXVARLEN + 8];
+    unsigned char nm[MAXVARLEN + 8];
     union cell *src;
-    const uint16_t *pp = pc + 3;
     struct s_vartbl *v;
-    // what would stop DefinedSubFun before it starts sends the call there
-    if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
-        return 0;
-    RBRan++;
-    RBCode++;
-    if (g_option_profiling)
-    {
-        g_perf_usercmd_count++;
-        if (g_perf_subcall_count && idx < MAXSUBFUN)
-            g_perf_subcall_count[idx]++;
-    }
-    g_FunReturnArrayCount = 0;
-    DefinedSubFunLocalIndex = g_LocalIndex;
-    nextstmt = end; // where END SUB returns to
-    errorstack[gosubindex] = callers;
-    substack[gosubindex] = def; // for STATIC
-    gosubstack[gosubindex++] = nextstmt;
-    DefinedSubFunMem = 2; // an error from here on unwinds the call (no argument block)
-    g_LocalIndex++;
-#ifdef SUBPROFILE
-    EnterLocalFrame();
-    g_current_sub_idx = idx;
-#endif
+    int i, at;
     CurrentLinePtr = def; // errors at the definition, until the first parameter is made (as DefinedSubFun has it)
     for (i = 0; i < np; i++, pp += 3)
     {
@@ -2334,9 +2467,97 @@ static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union
         else
             error("Incompatible type"); // (a string parameter does not compile)
     }
+}
+
+static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union cell **slot, union cell *val, unsigned char *end)
+{
+    int idx = pc[0];
+    unsigned char *def = subfun[idx], *callers = CurrentLinePtr;
+    const uint16_t *pp = pc + 3;
+    // what would stop DefinedSubFun before it starts sends the call there
+    if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
+        return 0;
+    RBRan++;
+    RBCode++;
+    if (g_option_profiling)
+    {
+        g_perf_usercmd_count++;
+        if (g_perf_subcall_count && idx < MAXSUBFUN)
+            g_perf_subcall_count[idx]++;
+    }
+    g_FunReturnArrayCount = 0;
+    DefinedSubFunLocalIndex = g_LocalIndex;
+    nextstmt = end; // where END SUB returns to
+    errorstack[gosubindex] = callers;
+    substack[gosubindex] = def; // for STATIC
+    gosubstack[gosubindex++] = nextstmt;
+    DefinedSubFunMem = 2; // an error from here on unwinds the call (no argument block)
+    g_LocalIndex++;
+#ifdef SUBPROFILE
+    EnterLocalFrame();
+    g_current_sub_idx = idx;
+#endif
+    RBMakeParams(def, pp, np, slot, val, callers);
     DefinedSubFunMem = 0;
     CurrentLinePtr = callers;
     nextstmt = def + (pc[2] & 0xFF); // the SUB's body
+    return 1;
+}
+
+// RC_FCALL's work: what DefinedSubFun does for a FUNCTION called from
+// getvalue, in its order; *res gets its value.  pc is at the op's operands:
+// [idx] [values] [body | untyped << 8] [result's name] [its AS type] and the
+// parameters.  The body runs in a nested ExecuteProgram, as DefinedSubFun
+// runs it.  Returns 0, before anything has happened, if DefinedSubFun must
+// do it.  In flash, as RBCallSub.
+extern uint32_t heapend; // MMBasic.c: the stack's floor
+static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union cell **slot, union cell *val, union cell *res)
+{
+    int idx = pc[0], ftype, savetoken;
+    unsigned char *def = subfun[idx], *callers = CurrentLinePtr, nm[MAXVARLEN + 8], *tp, *savecmdline, *savenext;
+    uint32_t stack;
+    // TestStackOverflow (MMBasic.c), which the text path's evaluator makes at every
+    // value: a recursion through compiled calls never reaches it
+    __asm volatile("MRS %0, msp" : "=r"(stack));
+    if (stack < heapend)
+        error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)heapend);
+    if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
+        return 0;
+    g_FunReturnArrayCount = 0;
+    DefinedSubFunLocalIndex = g_LocalIndex;
+    errorstack[gosubindex] = callers;
+    substack[gosubindex] = def; // for STATIC
+    gosubstack[gosubindex++] = NULL; // a FUNCTION: the end of ExecuteProgram returns to it
+    DefinedSubFunMem = 2; // an error from here on unwinds the call (no argument block)
+    g_LocalIndex++;
+#ifdef SUBPROFILE
+    EnterLocalFrame();
+    g_current_sub_idx = idx;
+#endif
+    RBMakeParams(def, pc + 5, np, slot, val, callers);
+    DefinedSubFunMem = 0;
+    memcpy(nm, def + (pc[3] >> 8), pc[3] & 0xFF);
+    nm[pc[3] & 0xFF] = 0;
+    tp = findvar(nm, pc[4] | V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK | V_FUNCT); // the result
+    ftype = g_vartbl[g_VarIndex].type;
+    savenext = nextstmt; // the globals the command that made the call uses
+    savetoken = cmdtoken;
+    savecmdline = cmdline;
+    ExecuteProgram(def + (pc[2] & 0xFF)); // the body
+    CurrentLinePtr = callers;
+    cmdline = savecmdline;
+    cmdtoken = savetoken;
+    nextstmt = savenext;
+    if (ftype & T_NBR)
+        res->f = *(MMFLOAT *)tp;
+    else
+        res->i = *(long long int *)tp;
+    ClearVars(g_LocalIndex--, true);
+#ifdef SUBPROFILE
+    LeaveLocalFrame();
+#endif
+    g_TempMemoryIsChanged = true;
+    gosubindex--;
     return 1;
 }
 
@@ -2453,6 +2674,7 @@ again:
         [RC_SHADOWCK] = &&L_SHADOWCK,
         [RC_CALL] = &&L_CALL,
         [RC_NEXT] = &&L_NEXT,
+        [RC_FCALL] = &&L_FCALL,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -2719,6 +2941,16 @@ again:
                 RBShadowCond(e + (w >> 8), *pc, &sp[-1]);
             pc++;
             RBNEXT();
+    L_FCALL: // DefinedSubFun for a FUNCTION (RBCallFun): its value replaces the arguments
+        {
+            union cell res;
+            if (!RBCallFun(pc, w >> 8, slot, sp - pc[1], &res))
+                goto fail;
+            sp -= pc[1];
+            *sp++ = res;
+            pc += 5 + 3 * (w >> 8);
+            RBNEXT();
+        }
     L_CALL: // DefinedSubFun for a SUB (RBCallSub)
             if (!RBCallSub(pc, w >> 8, slot, sp - pc[1], e + (nw >> 8)))
                 goto fail;
