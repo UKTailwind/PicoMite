@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 11       // the stream format
+#define RB_VERSION 12       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -99,10 +99,12 @@ static uint32_t RBCode = 0; // statements run as compiled code since RUN
 static const char *RBWhy = NULL; // why the last RUN ran as text
 
 // A stream is tied to the firmware that wrote it: a record holds command
-// token numbers, which another build may number differently.
+// token numbers, which another build may number differently.  And to the
+// mode: SHADOW compiles its checks in, ON leaves them out.
 static uint32_t RBBuildId(void)
 {
-    return ((uint32_t)RB_VERSION << 24) ^ ((uint32_t)CommandTableSize << 12) ^ (uint32_t)TokenTableSize ^ (uint32_t)MAX_PROG_SIZE;
+    return ((uint32_t)RB_VERSION << 24) ^ ((uint32_t)CommandTableSize << 12) ^ (uint32_t)TokenTableSize ^
+           (uint32_t)MAX_PROG_SIZE ^ (RBMode == RB_SHADOW ? 0x80000000u : 0);
 }
 
 static uint8_t *RBSlotBase(void)
@@ -869,8 +871,11 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
         return NULL; // evaluate's and checkend's errors are the text path's
     if (t != ttype) // as evaluate converts for cmd_let's type, then cmd_let stores it
         RBOp(x, ttype == T_NBR ? RC_CVIF : RC_CVFI, 0);
-    RBOp(x, RC_SHADOW | ((rhs - x->entry) << 8), 0);
-    RBOp(x, ttype, 0);
+    if (RBMode == RB_SHADOW)
+    { // SHADOW's check, compiled in only in that mode (it is in the stamp)
+        RBOp(x, RC_SHADOW | ((rhs - x->entry) << 8), 0);
+        RBOp(x, ttype, 0);
+    }
     RBOp(x, RC_STG | (tgt << 8), -1);
     return p;
 }
@@ -957,8 +962,11 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
     if (*p != tokenTHEN)
         return 0;
     p++;
-    RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
-    RBOp(&x, t, 0);
+    if (RBMode == RB_SHADOW)
+    {
+        RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
+        RBOp(&x, t, 0);
+    }
     jf = RBJump(&x, t == T_NBR ? RC_JFF : RC_JFI, -1);
     skipspace(p);
     if (*p == 0 || *p == '\'')
@@ -1030,8 +1038,11 @@ static int RBForPart(rbcx_t *x, unsigned char **pp, int vt)
         return 0;
     if (t != vt)
         RBOp(x, vt == T_NBR ? RC_CVIF : RC_CVFI, 0);
-    RBOp(x, RC_SHADOW | ((ex - x->entry) << 8), 0);
-    RBOp(x, vt, 0);
+    if (RBMode == RB_SHADOW)
+    {
+        RBOp(x, RC_SHADOW | ((ex - x->entry) << 8), 0);
+        RBOp(x, vt, 0);
+    }
     skipspace(p);
     *pp = p;
     return 1;
@@ -1165,8 +1176,11 @@ static int RBCompileDo(unsigned char *entry, unsigned char *base, uint32_t libbi
         skipspace(p);
         if (*p && *p != '\'')
             return 0;
-        RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
-        RBOp(&x, t, 0);
+        if (RBMode == RB_SHADOW)
+        {
+            RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
+            RBOp(&x, t, 0);
+        }
         RBOp(&x, RC_DOT | (t << 8), -1);
         RBKey(&x, base, libbit, after);
     }
@@ -1212,9 +1226,12 @@ static int RBCompileLoop(unsigned char *entry, unsigned char *base, uint32_t lib
         skipspace(p);
         if (*p && *p != '\'')
             return 0;
-        RBOp(&x, RC_SHADOWCK, 0);
-        RBOp(&x, t, 0);
-        RBKey(&x, base, libbit, cond);
+        if (RBMode == RB_SHADOW)
+        {
+            RBOp(&x, RC_SHADOWCK, 0);
+            RBOp(&x, t, 0);
+            RBKey(&x, base, libbit, cond);
+        }
         if (t == T_NBR)
             flags |= RL_NBR;
         RBOp(&x, RC_LOOPT | (flags << 8), -1);
