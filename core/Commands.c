@@ -5277,9 +5277,6 @@ breakout:
    stays valid while the DO entry exists: a local cannot go before its frame
    (which also drops the entry), and erase() calls DoFastForget for a global.
    --------------------------------------------------------------------------- */
-#define DOFAST_UNTRIED 0
-#define DOFAST_ON 1
-#define DOFAST_OFF 2
 #define DOFAST_LT 1
 #define DOFAST_GT 2
 #define DOFAST_LTE 3
@@ -5496,7 +5493,7 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 {
 #endif
 	int i, doUntil;
-	unsigned char *p, *tp, *evalp;
+	unsigned char *p, *evalp;
 	if (cmdtoken == cmdWHILE)
 		StandardError(36);
 	// if it is a DO loop find the WHILE/UNTIL token and (if found) get a pointer to its expression
@@ -5539,23 +5536,8 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 	g_dostack[g_doindex].untiltest = doUntil;
 
 	// now find the matching LOOP command
-	i = 1;
-	p = nextstmt;
-	while (1)
-	{
-		p = GetNextCommand(p, &tp, (unsigned char *)"No matching LOOP");
-		CommandToken tkn = commandtbl_decode(p);
-		if (tkn == cmdtoken)
-			i++; // entered a nested DO or WHILE loop
-		if (tkn == cmdLOOP)
-			i--; // exited a nested loop
-
-		if (i == 0)
-		{ // found our matching LOOP or WEND stmt
-			g_dostack[g_doindex].loopptr = p;
-			break;
-		}
-	}
+	p = DoFindLoop(nextstmt, cmdtoken, (unsigned char *)"No matching LOOP");
+	g_dostack[g_doindex].loopptr = p;
 
 	// Scan the LOOP statement's arguments (needed for conflict check and fast-cond)
 	unsigned char *loop_arg = p + sizeof(CommandToken);
@@ -5595,6 +5577,28 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 			nextstmt = g_dostack[g_doindex].loopptr; // point to the LOOP or WEND statement
 			skipelement(nextstmt);					 // skip to the next command
 		}
+	}
+}
+
+// The LOOP that closes the DO (command token dotoken) whose nextstmt is p.
+// With errmsg NULL it returns NULL where cmd_do raises its error, so the
+// compiler can ask too (core/Stream.c).
+unsigned char *DoFindLoop(unsigned char *p, CommandToken dotoken, unsigned char *errmsg)
+{
+	int i = 1;
+	unsigned char *tp;
+	while (1)
+	{
+		p = GetNextCommand(p, &tp, errmsg);
+		if (*p == 0)
+			return NULL; // the end of the program (only when errmsg is NULL)
+		CommandToken tkn = commandtbl_decode(p);
+		if (tkn == dotoken)
+			i++; // entered a nested DO or WHILE loop
+		if (tkn == cmdLOOP)
+			i--; // exited a nested loop
+		if (i == 0)
+			return p; // found our matching LOOP or WEND stmt
 	}
 }
 

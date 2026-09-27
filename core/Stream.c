@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 10       // the stream format
+#define RB_VERSION 11       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -254,6 +254,7 @@ enum
 #define RB_BSHIFT 5           // a bucket of the map's index is 32 bytes of text
 #define RB_PAGEUP(n) (((n) + RB_PAGE - 1) & ~(RB_PAGE - 1))
 
+#define RB_MAXDO 32 // DOs whose LOOP may compile their condition, per walk
 static struct
 {
     int pass;         // 1: count, 2: write
@@ -268,6 +269,11 @@ static struct
     int ntypes;
     int deftype; // OPTION DEFAULT in force at this point of the walk (text order)
     int part;    // the record being emitted is an IF's THEN or ELSE part
+    int ndo;     // DOs met so far in this walk, for their LOOPs:
+    struct
+    {
+        unsigned char *loop, *cond; // the LOOP's token, the DO's condition (NULL: none)
+    } dotab[RB_MAXDO];
 } C;
 
 // pass 2: every bucket up to and including b starts at map entry C.stmts
@@ -345,7 +351,18 @@ enum
     RC_SHADOWC, // OPTION COMPILE SHADOW: IF's condition at a, of the type in the next word
     RC_FORP,    // FOR, before its values: cmd_for's stack work for the loop variable, bind a
     RC_FORT,    // FOR, after: pop STEP and TO into its entry, test; keys of NEXT and after it follow
+    RC_DOP,     // DO: cmd_do's stack work; a = the condition's offset; flags, LOOP's key, after it
+    RC_DOT,     // DO's entry test on the condition (a = its type); the key after LOOP follows
+    RC_LOOPF,   // LOOP: find its stack entry as cmd_loop does
+    RC_LOOPT,   // LOOP's test (a = RL_ flags): back to after the DO, or the entry goes
+    RC_SHADOWCK, // OPTION COMPILE SHADOW: a condition anywhere: its type, then its key
 };
+#define RD_UNTIL 1  // RC_DOP: DO UNTIL
+#define RD_COND 2   // RC_DOP: DO WHILE or UNTIL: the condition is the DO's
+#define RL_ALWAYS 1 // RC_LOOPT: a plain LOOP
+#define RL_ENTRY 2  // RC_LOOPT: the DO's condition; WHILE or UNTIL as the entry says
+#define RL_UNTIL 4  // RC_LOOPT: LOOP UNTIL
+#define RL_NBR 8    // RC_LOOPT: the condition is a float
 #define RC_TARGET 0x8000 // bind: the statement assigns to it
 #define RC_SUFNBR 0x1000 // bind: written with ! (T_NBR)
 #define RC_SUFINT 0x2000 // bind: written with % (T_INT)
@@ -1088,6 +1105,126 @@ static int RBCompileFor(unsigned char *entry, unsigned char *base, uint32_t libb
     return RBFinish(&x, code);
 }
 
+/* DO [WHILE|UNTIL cond] and LOOP [WHILE|UNTIL cond], as cmd_do and cmd_loop
+   do them.  DO: its stack work (a stale entry for this DO removed, the depth
+   checked, the entry pushed with the DO fast path off, so a fallback LOOP
+   evaluates the text as it would anyway), then the entry test.  Its LOOP is
+   found at compile time by cmd_do's own scan (DoFindLoop).  LOOP: its entry
+   found as cmd_loop finds it, then the condition - the DO's, compiled again
+   here (binds are by symbol id, so its names may be anywhere), or the
+   LOOP's own, or none - and back to after the DO or the entry dropped.  A
+   form the text path would reject (a condition on both, text after LOOP)
+   stays text. */
+static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *p)
+{
+    uint32_t key = (uint32_t)(p - base) | libbit;
+    RBOp(x, key & 0xFFFF, 0);
+    RBOp(x, key >> 16, 0);
+}
+
+static int RBCompileDo(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *cmdl,
+                       unsigned char *next, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *p = cmdl, *cond = NULL, *loop, *after, *arg;
+    int until = 0, t;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    while (*p && *p != tokenWHILE && *p != tokenUNTIL)
+        p++; // cmd_do's own search for the condition
+    if (*p)
+    {
+        until = (*p == tokenUNTIL);
+        cond = p + 1;
+    }
+    if ((loop = DoFindLoop(next, cmdDO, NULL)) == NULL)
+        return 0; // no matching LOOP: the text path's error
+    after = loop;
+    skipelement(after);
+    arg = loop + sizeof(CommandToken);
+    while (*arg && *arg < 0x80)
+        arg++;
+    if (cond && (*arg == tokenWHILE || *arg == tokenUNTIL))
+        return 0; // "LOOP has a WHILE test": the text path's error
+    if (C.ndo < RB_MAXDO)
+    { // for the LOOP, which the walk meets later
+        C.dotab[C.ndo].loop = loop;
+        C.dotab[C.ndo].cond = cond;
+        C.ndo++;
+    }
+    if (cond && cond - entry > 255)
+        return 0;
+    RBOp(&x, RC_DOP | ((cond ? cond - entry : 0) << 8), 0);
+    RBOp(&x, (until ? RD_UNTIL : 0) | (cond ? RD_COND : 0), 0);
+    RBKey(&x, base, libbit, loop);
+    if (cond)
+    {
+        p = cond;
+        if ((t = RBEvaluate(&x, &p)) == 0)
+            return 0;
+        skipspace(p);
+        if (*p && *p != '\'')
+            return 0;
+        RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
+        RBOp(&x, t, 0);
+        RBOp(&x, RC_DOT | (t << 8), -1);
+        RBKey(&x, base, libbit, after);
+    }
+    RBOp(&x, RC_END, 0);
+    return RBFinish(&x, code);
+}
+
+static int RBCompileLoop(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *tok,
+                         unsigned char *cmdl, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *p = cmdl, *cond = NULL;
+    int flags, t, j;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    for (j = 0; j < C.ndo && C.dotab[j].loop != tok; j++)
+        ;
+    if (j == C.ndo)
+        return 0; // its DO did not compile, or was not met first: text
+    skipspace(p);
+    if (C.dotab[j].cond)
+    { // DO WHILE/UNTIL ... LOOP: the DO's condition, and nothing after LOOP
+        if (*p && *p != '\'')
+            return 0;
+        cond = C.dotab[j].cond;
+        flags = RL_ENTRY;
+    }
+    else if (*p == tokenWHILE || *p == tokenUNTIL)
+    {
+        flags = (*p == tokenUNTIL) ? RL_UNTIL : 0;
+        cond = p + 1;
+    }
+    else if (*p == 0 || *p == '\'')
+        flags = RL_ALWAYS;
+    else
+        return 0; // cmd_loop's syntax error
+    RBOp(&x, RC_LOOPF, 0);
+    if (cond)
+    {
+        p = cond;
+        if ((t = RBEvaluate(&x, &p)) == 0)
+            return 0;
+        skipspace(p);
+        if (*p && *p != '\'')
+            return 0;
+        RBOp(&x, RC_SHADOWCK, 0);
+        RBOp(&x, t, 0);
+        RBKey(&x, base, libbit, cond);
+        if (t == T_NBR)
+            flags |= RL_NBR;
+        RBOp(&x, RC_LOOPT | (flags << 8), -1);
+    }
+    else
+        RBOp(&x, RC_LOOPT | (flags << 8), 0);
+    RBOp(&x, RC_END, 0);
+    return RBFinish(&x, code);
+}
+
 static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entry, int linestart,
                        unsigned char *tok, int cmd, unsigned char *cmdl, unsigned char *next)
 {
@@ -1119,6 +1256,10 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileIf(entry, base, libbit, tok, cmdl, code + 1);
         else if (ct == RBTokFor)
             ncode = RBCompileFor(entry, base, libbit, cmdl, next, code + 1);
+        else if (ct == cmdDO)
+            ncode = RBCompileDo(entry, base, libbit, cmdl, next, code + 1);
+        else if (ct == cmdLOOP)
+            ncode = RBCompileLoop(entry, base, libbit, tok, cmdl, code + 1);
         else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
             C.deftype = d;
     }
@@ -1287,6 +1428,7 @@ static void RBWalkAll(void)
     C.codelen = 0;
     C.nextb = 0;
     C.deftype = T_NBR; // as ClearRuntime leaves DefaultType at RUN
+    C.ndo = 0;
     RBWalk(ProgMemory, 0);
     if (C.pass == 2)
         RBTabTo(C.nbprog - 1); // the program's last buckets end where the library's entries start
@@ -1678,6 +1820,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         MMFLOAT f;
     } * slot[RB_MAXBIND], st[RB_MAXDEPTH], *sp = st;
     unsigned int nb = *c++, j, w;
+    int loopi = 0; // RC_LOOPF's stack entry
     for (j = 0; j < nb; j++, c += 2)
     {
         unsigned int id = c[0] & RC_IDMASK, sc;
@@ -1871,6 +2014,93 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             pc += 4;
             break;
         }
+        case RC_DOP: // cmd_do's stack work
+        {
+            unsigned char *doptr = e + (r[5] >> 8); // the DO's nextstmt
+            struct s_dostack *ds;
+            int i;
+            for (i = 0; i < g_doindex; i++)
+                if (g_dostack[i].doptr == doptr)
+                { // this loop is already in the stack: remove it
+                    while (i < g_doindex - 1)
+                    {
+                        g_dostack[i] = g_dostack[i + 1];
+                        i++;
+                    }
+                    g_doindex--;
+                    break;
+                }
+            if (g_doindex == MAXDOLOOPS)
+                error("Too many nested DO or WHILE loops");
+            ds = &g_dostack[g_doindex];
+            ds->evalptr = (pc[0] & RD_COND) ? e + (w >> 8) : NULL;
+            ds->doptr = doptr;
+            ds->level = g_LocalIndex;
+            ds->untiltest = (pc[0] & RD_UNTIL) != 0;
+            ds->loopptr = RBImage(pc[1] | ((uint32_t)pc[2] << 16));
+            ds->fast_state = DOFAST_OFF; // the compiled LOOP, or cmd_loop on the text
+            g_doindex++;
+            pc += 3;
+            break;
+        }
+        case RC_DOT: // the entry test: false goes after the LOOP
+        {
+            int c = (w >> 8) == T_NBR ? sp[-1].f != 0 : sp[-1].i != 0;
+            sp--;
+            if (g_dostack[g_doindex - 1].untiltest)
+                c = !c;
+            if (!c)
+            {
+                g_doindex--;
+                RBRan++;
+                RBCode++;
+                nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
+                return e + (r[5] >> 8);
+            }
+            pc += 2;
+            break;
+        }
+        case RC_LOOPF: // cmd_loop's search for its entry
+        {
+            unsigned char *cl = e + (r[5] & 0xFF), *q; // cmd_loop's cmdline
+            for (loopi = 0; loopi < g_doindex; loopi++)
+            {
+                q = g_dostack[loopi].loopptr + sizeof(CommandToken);
+                skipspace(q);
+                if (q == cl)
+                    break;
+            }
+            if (loopi == g_doindex)
+                error("LOOP without a matching DO");
+            break;
+        }
+        case RC_LOOPT:
+        {
+            int f = w >> 8, tst;
+            if (f & RL_ALWAYS)
+                tst = 1;
+            else
+            {
+                tst = (f & RL_NBR) ? sp[-1].f != 0 : sp[-1].i != 0;
+                sp--;
+                if ((f & RL_UNTIL) || ((f & RL_ENTRY) && g_dostack[loopi].untiltest))
+                    tst = !tst;
+            }
+            if (tst)
+            { // loop again
+                RBRan++;
+                RBCode++;
+                nextstmt = g_dostack[loopi].doptr;
+                return e + (r[5] >> 8);
+            }
+            g_doindex = loopi; // the loop has ended
+            break;
+        }
+        case RC_SHADOWCK:
+            if (RBMode == RB_SHADOW)
+                RBShadowCond(RBImage(pc[1] | ((uint32_t)pc[2] << 16)), pc[0], &sp[-1]);
+            pc += 3;
+            break;
         case RC_SHADOWC:
             if (RBMode == RB_SHADOW)
                 RBShadowCond(e + (w >> 8), *pc, &sp[-1]);

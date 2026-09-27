@@ -94,6 +94,10 @@ typedef struct s_dostack
 
 extern struct s_dostack g_dostack[MAXDOLOOPS];
 extern int g_doindex;
+#define DOFAST_UNTRIED 0 // s_dostack.fast_state
+#define DOFAST_ON 1
+#define DOFAST_OFF 2
+unsigned char *DoFindLoop(unsigned char *p, CommandToken dotoken, unsigned char *errmsg);
 void DoFastForget(int slot);
 
 extern unsigned char *gosubstack[MAXGOSUB];

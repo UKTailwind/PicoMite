@@ -73,6 +73,48 @@ Next : Next : Next : Next : Next : Next : Next : Next : Next : Next
 For i = 1 To 3
 Print "x"
 """ + STAT, None),
+    # DO and LOOP (P2d, second part)
+    ("do forms", """Dim Integer i, s, t, u, v
+Do While i < 10 : s = s + i : i = i + 1 : Loop
+i = 0
+Do Until i >= 5 : t = t + i : i = i + 1 : Loop
+i = 0
+Do : u = u + i : i = i + 1 : Loop While i < 7
+i = 0
+Do : v = v + 1 : i = i + 1 : Loop Until i = 4
+i = 0
+Do
+  i = i + 1
+  If i = 6 Then Exit Do
+Loop
+Print s; t; u; v; i
+""" + STAT, lambda n: n > 0),
+    ("do nested skip", """Dim Integer i, j, s
+Do While i < 5
+  j = 0
+  Do While j < i
+    s = s + j
+    j = j + 1
+  Loop
+  i = i + 1
+Loop
+Do While s < 0 : s = -1 : Loop
+Print s; i; j
+""" + STAT, lambda n: n > 0),
+    ("do float cond", """Dim Float x
+Dim Integer n
+x = 1
+Do While x < 100.5
+  x = x * 1.7
+  n = n + 1
+Loop
+Print x; n
+""" + STAT, lambda n: n > 0),
+    ("loop has while", """Dim Integer i
+Do While i < 3
+  i = i + 1
+Loop While i < 5
+""" + STAT, None),
 ]
 
 b = pc3.PC3(sys.argv[1])
@@ -125,6 +167,42 @@ for mode in ("OFF", "ON"):
     print("K1 %-3s %s  %s" % (mode, " ".join(body)[-40:], stat))
 if res.get("OFF") and res.get("ON"):
     print("K1 speedup %.2fx" % (res["OFF"] / res["ON"]))
+
+# K3 of the G3 kernels (Julia, no PIXEL) at program level: FOR, DO WHILE, floats
+src = """Dim Float w = 40, h = 30, xd, yd, rOfs, iOfs, cRe, cIm, mit, ck
+Dim Float X, Y, CX, CY, Zr, Zi, COUNT, new_Zr, new_Zi, t
+xd = 3.0 / w : yd = 2.0 / h : rOfs = -2.0 : iOfs = -1.0
+cRe = -0.7 : cIm = 0.27015 : mit = 60
+t = Timer
+For X = 0 To (w - 1)
+  CX = X * xd + rOfs
+  For Y = 0 To (h - 1)
+    CY = Y * yd + iOfs
+    Zr = CX
+    Zi = CY
+    COUNT = 0
+    Do While ((COUNT <= mit) And ((Zr * Zr + Zi * Zi) < 4))
+      new_Zr = Zr * Zr - Zi * Zi + cRe
+      new_Zi = 2 * Zr * Zi + cIm
+      Zr = new_Zr
+      Zi = new_Zi
+      COUNT = COUNT + 1
+    Loop
+    ck = ck + COUNT
+  Next Y
+Next X
+Print "K3"; ck; Timer - t
+""" + STAT
+res = {}
+for mode in ("OFF", "ON", "SHADOW"):
+    b.cmd("OPTION COMPILE " + mode, 10)
+    body, stat = run(src)
+    m = re.search(r"K3 *(-?[\d.]+) +([\d.]+)", " ".join(body))
+    res[mode] = (m.group(1), float(m.group(2))) if m else None
+    print("K3 %-6s %s  %s" % (mode, " ".join(body)[-40:], stat))
+if res.get("OFF") and res.get("ON"):
+    ok = ok and res["OFF"][0] == res["ON"][0] == (res["SHADOW"] or ("?",))[0]
+    print("K3 speedup %.2fx" % (res["OFF"][1] / res["ON"][1]))
 b.cmd("OPTION COMPILE OFF", 10)
 print("RBP2D", "PASS" if ok else "FAIL")
 b.close()
