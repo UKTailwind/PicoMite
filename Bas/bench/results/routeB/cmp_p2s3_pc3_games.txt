@@ -1,0 +1,13 @@
+base pc3 2026-09-27 10:23:46  new pc3 2026-09-27 10:26:14
+  +1.60%  elite:gamebench_ms_per_frame                                                 24.327 -> 24.716
+  +2.03%  exile:gamebench_ms_per_frame                                                11.9903 -> 12.2342
+  +2.19%  exile:gamekernel_ms_per_frame                                               11.7183 -> 11.9747
+  +5.31%  pop:gamebench_ms_per_frame                                                   15.806 -> 16.645
+  +6.79%  pop:gameframe_ms_per_frame                                                   11.288 -> 12.055
+
+median change per test:
+  elite             +1.60%  (1 figures, worst +1.60%, best +1.60%)
+  exile             +2.11%  (2 figures, worst +2.19%, best +2.03%)
+  pop               +6.05%  (2 figures, worst +6.79%, best +5.31%)
+
+checks changed: 0

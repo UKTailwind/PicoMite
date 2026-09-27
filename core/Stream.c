@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 5        // the stream format
+#define RB_VERSION 6        // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -263,6 +263,9 @@ static struct
     uint32_t nbprog, ntab;    // the bucket index's size
     uint32_t nextb;           // pass 2: the next bucket to write
     int toolong;              // an offset did not fit its byte: the program runs as text
+    uint8_t *types;           // the survey: each name's declared type (see RBSurvey)
+    int ntypes;
+    int deftype; // OPTION DEFAULT in force at this point of the walk (text order)
 } C;
 
 // pass 2: every bucket up to and including b starts at map entry C.stmts
@@ -338,6 +341,192 @@ enum
 #define RB_MAXDEPTH 16 // cells of stack it may use
 
 static CommandToken RBTokLet; // the LET command, looked up once a compile
+static CommandToken RBTokDim, RBTokLocal, RBTokStatic, RBTokConst, RBTokOption;
+static CommandToken RBTokEndSub, RBTokEndFun;
+static unsigned char *RBLiteral(unsigned char *p);
+static int RBSuffix(unsigned char **p);
+
+/* The survey.  Before the first pass one walk reads every declaration, so an
+   unsuffixed name compiles with the type the program gives it rather than a
+   guess: DIM, LOCAL and STATIC with a type (DIM INTEGER a, b / DIM a AS
+   FLOAT) or a suffix, and CONST with a literal value.  A name declared with
+   two different types has none (RB_TMIXED).  A name that is a local
+   anywhere - LOCAL, STATIC, a parameter, a FUNCTION's own name, a CONST
+   inside a SUB - is marked RB_TLOCAL and not compiled in P2, whose
+   statements bind globals only: its bind would fail at every run and cost a
+   check on top of the fallback.  Types are kept per canonical entry
+   (SymCanonAt), so every spelling of a name shares one.  OPTION DEFAULT is
+   followed in text order by the walks themselves (deftype).  A wrong answer
+   costs only speed: the bind check sends the statement to its fallback. */
+#define RB_TTYPE (T_INT | T_NBR | T_STR) // the declared type's bits
+#define RB_TMIXED 0x08                   // declared with two types
+#define RB_TLOCAL 0x40                   // a local somewhere
+
+static void RBTypeName(unsigned char *p, int type, int local)
+{
+    int k = SymCanonAt(p), cur;
+    if (k < 0 || k >= C.ntypes)
+        return;
+    if (local)
+    {
+        C.types[k] |= RB_TLOCAL;
+        return; // a local's type is the unit's business (P3)
+    }
+    type &= RB_TTYPE;
+    cur = C.types[k] & RB_TTYPE;
+    if (!type || (C.types[k] & RB_TMIXED))
+        return;
+    if (cur == 0)
+        C.types[k] |= type;
+    else if (cur != type)
+        C.types[k] = (C.types[k] & ~RB_TTYPE) | RB_TMIXED;
+}
+
+// SUB and FUNCTION: every program symbol after the command is a local (the
+// parameters, their type words, and a FUNCTION's own name)
+static void RBSurveyUnit(unsigned char *p)
+{
+    for (; *p && *p != '\''; p++)
+        if (issymbol(*p) && !(*p & 2))
+        {
+            RBTypeName(p, 0, 1);
+            p += symbolsize(*p) - 1;
+        }
+}
+
+// the type keyword at p (INTEGER, FLOAT, STRING) or 0; steps *pp over it
+static int RBTypeWord(unsigned char **pp)
+{
+    unsigned char *tp;
+    if ((tp = checkstring(*pp, (unsigned char *)"INTEGER")) != NULL)
+        return *pp = tp, T_INT;
+    if ((tp = checkstring(*pp, (unsigned char *)"FLOAT")) != NULL)
+        return *pp = tp, T_NBR;
+    if ((tp = checkstring(*pp, (unsigned char *)"STRING")) != NULL)
+        return *pp = tp, T_STR;
+    return 0;
+}
+
+// the next ',' at bracket depth 0 in the element at p, or its end
+static unsigned char *RBNextItem(unsigned char *p)
+{
+    int depth = 0, quote = 0;
+    for (; *p; p++)
+    {
+        if (*p == '"')
+            quote = !quote;
+        else if (quote)
+            continue;
+        else if (*p == '(' || (*p >= C_BASETOKEN && (tokentype(*p) & T_FUN)))
+            depth++;
+        else if (*p == ')')
+            depth--;
+        else if ((*p == ',' && depth == 0) || *p == '\'')
+            break;
+    }
+    return p;
+}
+
+// DIM, LOCAL and STATIC: [AS] [type] name[suffix][(...)] [AS type] [= v], ...
+static void RBSurveyDim(unsigned char *p, int local)
+{
+    int implied, type, suf;
+    unsigned char *q;
+    skipspace(p);
+    if (*p == tokenAS)
+        p++;
+    skipspace(p);
+    implied = RBTypeWord(&p);
+    while (1)
+    {
+        skipspace(p);
+        if (!issymbol(*p) || (*p & 2))
+            return; // a name the survey cannot read ends it
+        q = p + symbolsize(*p);
+        suf = RBSuffix(&q);
+        type = suf ? suf : implied;
+        if (*q == '(')
+        { // the dimensions (getclosebracket would raise an error on bad text: the survey must not)
+            int d = 0;
+            for (; *q; q++)
+                if (*q == '(' || (*q >= C_BASETOKEN && (tokentype(*q) & T_FUN)))
+                    d++;
+                else if (*q == ')' && --d == 0)
+                {
+                    q++;
+                    break;
+                }
+        }
+        skipspace(q);
+        if (*q == tokenAS)
+        {
+            q++;
+            skipspace(q);
+            if (!type)
+                type = RBTypeWord(&q);
+        }
+        RBTypeName(p, type, local);
+        p = RBNextItem(q);
+        if (*p != ',')
+            return;
+        p++;
+    }
+}
+
+// CONST name = literal, ...: the literal's type, as getvalue reads it
+static void RBSurveyConst(unsigned char *p, int local)
+{
+    unsigned char *q, *v;
+    int suf, t;
+    while (1)
+    {
+        skipspace(p);
+        if (!issymbol(*p) || (*p & 2))
+            return;
+        q = p + symbolsize(*p);
+        suf = RBSuffix(&q);
+        skipspace(q);
+        if (*q != tokenEQUAL)
+            return;
+        v = q + 1;
+        skipspace(v);
+        t = suf;
+        if (!t && *v == '"')
+            t = T_STR;
+        else if (!t && (q = RBLiteral(v)) != NULL)
+        {
+            unsigned char *e = q;
+            skipspace(e);
+            if (*e == 0 || *e == ',' || *e == '\'')
+            { // a literal and nothing more: digits alone are an integer, as getvalue has it
+                t = T_INT;
+                for (; v < q; v++)
+                    if (*v == '.' || *v == 'E' || *v == 'e')
+                        t = T_NBR;
+            }
+        }
+        RBTypeName(p, t, local);
+        p = RBNextItem(v);
+        if (*p != ',')
+            return;
+        p++;
+    }
+}
+
+// OPTION DEFAULT type at cmdl: the new default, or -1 if this is another OPTION
+static int RBDefaultOption(unsigned char *p)
+{
+    unsigned char *tp = checkstring(p, (unsigned char *)"DEFAULT");
+    if (tp == NULL)
+        return -1;
+    if (checkstring(tp, (unsigned char *)"INTEGER"))
+        return T_INT;
+    if (checkstring(tp, (unsigned char *)"FLOAT"))
+        return T_NBR;
+    if (checkstring(tp, (unsigned char *)"STRING"))
+        return T_STR;
+    return T_NOTYPE; // NONE, or anything the text path will reject
+}
 unsigned char *getvalue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *oo, int *ta); // MMBasic.c
 
 static void RBEmitWords(const uint16_t *w, int n)
@@ -442,8 +631,24 @@ static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
         }
     if (x->nbind >= RB_MAXBIND)
         return -1;
+    {
+        int k = SymCanonAt(p), ty = (k >= 0 && k < C.ntypes) ? C.types[k] : 0, t = ty & RB_TTYPE;
+        if (ty & RB_TLOCAL)
+            return -1; // a local somewhere: P2 compiles globals only
+        if (!suffix)
+        { // an unsuffixed name: its declared type, else the OPTION DEFAULT in force,
+          // else (DEFAULT NONE with the declaration out of sight, in a library say,
+          // or two declarations) a guess of float, which the bind check verifies
+            if (t == T_STR)
+                return -1;
+            if ((ty & RB_TMIXED) || (t != T_INT && t != T_NBR))
+                t = (C.deftype == T_INT || C.deftype == T_NBR) ? C.deftype : T_NBR;
+            x->bind[j][1] = t;
+        }
+        else
+            x->bind[j][1] = suffix;
+    }
     x->bind[j][0] = off | (suffix << 8) | (target ? RC_TARGET : 0);
-    x->bind[j][1] = suffix ? suffix : T_NBR; // an unsuffixed name is taken to be the default float
     x->nbind++;
     return j;
 }
@@ -670,8 +875,15 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         m[1] = C.code.pos; // the record's offset in the slot
         RBPut(&C.map, m, sizeof(m));
     }
-    if (cmd > 0 && commandtbl_decode(tok) == RBTokLet)
-        ncode = RBCompileLet(entry, cmdl, code + 1);
+    if (cmd > 0)
+    {
+        CommandToken ct = commandtbl_decode(tok);
+        int d;
+        if (ct == RBTokLet)
+            ncode = RBCompileLet(entry, cmdl, code + 1);
+        else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
+            C.deftype = d;
+    }
     w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0) | (ncode ? RB_COMPILED : 0);
     w[n++] = key & 0xFFFF;
     w[n++] = key >> 16;
@@ -763,6 +975,7 @@ static void RBWalkAll(void)
     C.stmts = 0;
     C.codelen = 0;
     C.nextb = 0;
+    C.deftype = T_NBR; // as ClearRuntime leaves DefaultType at RUN
     RBWalk(ProgMemory, 0);
     if (C.pass == 2)
         RBTabTo(C.nbprog - 1); // the program's last buckets end where the library's entries start
@@ -772,6 +985,63 @@ static void RBWalkAll(void)
         RBTabTo(C.ntab - 1); // and the library's, and the sentinel, at the end of the map
 }
 
+// The survey's walk over the program: every DIM, LOCAL, STATIC and CONST.
+static void RBSurvey(void)
+{
+    unsigned char *p = ProgMemory, *cmdl;
+    CommandToken ct;
+    int inunit = 0;
+    C.ntypes = SymCanonOf ? SymCanonCount : 0;
+    C.types = C.ntypes ? GetTempMemory(C.ntypes) : NULL; // zeroed: no type known
+    if (!C.types)
+    {
+        C.ntypes = 0;
+        return;
+    }
+    skipspace(p);
+    while (1)
+    {
+        if (*p == 0)
+            p++;
+        if (*p == T_NEWLINE)
+            p += T_NEWLINE_HDR;
+        if (*p == T_LINENBR)
+            p += 3;
+        skipspace(p);
+        if (p[0] == T_LABEL)
+        {
+            p += p[1] + 2;
+            skipspace(p);
+        }
+        if (*p && *p != '\'')
+        {
+            if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+            {
+                ct = commandtbl_decode(p);
+                cmdl = p + sizeof(CommandToken);
+                if (ct == RBTokDim)
+                    RBSurveyDim(cmdl, 0); // DIM makes a global, even inside a SUB
+                else if (ct == RBTokLocal || ct == RBTokStatic)
+                    RBSurveyDim(cmdl, 1);
+                else if (ct == RBTokConst)
+                    RBSurveyConst(cmdl, inunit);
+                else if (ct == cmdSUB || ct == cmdFUN)
+                {
+                    inunit = 1;
+                    RBSurveyUnit(cmdl);
+                }
+                else if (ct == RBTokEndSub || ct == RBTokEndFun)
+                    inunit = 0;
+            }
+            skipelement(p);
+        }
+        else if (*p)
+            skipelement(p);
+        if ((p[0] == 0 && p[1] == 0) || (p[0] == 0xff && p[1] == 0xff))
+            break;
+    }
+}
+
 // Compile the program (and the library) into the slot.
 static void RBCompile(rbheader_t *h)
 {
@@ -779,6 +1049,14 @@ static void RBCompile(rbheader_t *h)
     memset(&C, 0, sizeof(C));
     W.full = 0;
     RBTokLet = GetCommandValue((unsigned char *)"Let");
+    RBTokDim = GetCommandValue((unsigned char *)"Dim");
+    RBTokLocal = GetCommandValue((unsigned char *)"Local");
+    RBTokStatic = GetCommandValue((unsigned char *)"Static");
+    RBTokConst = GetCommandValue((unsigned char *)"Const");
+    RBTokOption = GetCommandValue((unsigned char *)"Option");
+    RBTokEndSub = GetCommandValue((unsigned char *)"End Sub");
+    RBTokEndFun = GetCommandValue((unsigned char *)"End Function");
+    RBSurvey();
     C.pass = 1;
     RBWalkAll();
     C.nbprog = (C.progend >> RB_BSHIFT) + 1;

@@ -5,9 +5,10 @@ Every program runs with OPTION COMPILE OFF, ON and SHADOW and must print the
 same.  Compiled statements are counted by MM.INFO(COMPILE)'s CODE: a
 variable's first two assignments run through the fallback (findvar makes the
 variable the first time and binds its symbol the second, when it finds it);
-later ones run compiled.  A guess of the wrong type (OPTION DEFAULT
-INTEGER, DIM AS INTEGER), a CONST target, a LOCAL of the same name and ON
-ERROR SKIP all run the fallback.  Leaves OPTION COMPILE OFF."""
+later ones run compiled.  The survey types unsuffixed names from DIM/LOCAL/
+STATIC declarations, CONST literals and OPTION DEFAULT (text order), so those
+compile too.  A CONST target, a LOCAL of the same name and ON ERROR SKIP run
+the fallback.  Leaves OPTION COMPILE OFF."""
 import sys, os, re
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "elite_tools"))
 import pc3
@@ -44,13 +45,33 @@ For i = 1 To 10
   b = a
 Next
 Print a; b
-""" + STAT, lambda n: n == 0),
+""" + STAT, lambda n: n == 8),
     ("dim as", """Dim n As Integer
 For i% = 1 To 10
   n = 2.5
 Next
 Print n
-""" + STAT, lambda n: n == 0),
+""" + STAT, lambda n: n >= 8),
+    ("dim integer", """Option Default None
+Dim Integer p, q = 4
+Dim Float r
+Dim t As Float, u%
+For i% = 1 To 10
+  p = q + 1
+  r = p * 0.5
+  t = r + u%
+Next
+Print p; q; r; t
+""" + STAT, lambda n: n >= 24),
+    ("const read", """Const K = 3, F = 1.5
+Dim Integer z
+Dim y As Float
+For i% = 1 To 10
+  z = K * 2 + F
+  y = F / K
+Next
+Print z; y
+""" + STAT, lambda n: n >= 16),
     ("local", """a = 1
 S
 Print a
