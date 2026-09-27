@@ -273,6 +273,7 @@ int16_t *SymLShadow = NULL;
 uint16_t *SymLCanon = NULL;
 unsigned int SymLSlots = 0;
 int SymTextLocals = 0;
+uint32_t SymBindGen = 1; // see Symbols.h
 static uint16_t *SymCanonHead = NULL; // hash chain heads
 extern struct s_hash g_hashlist[MAXLOCALVARS];
 extern int g_hashlistpointer;
@@ -421,6 +422,7 @@ void SymBindInit(void)
 // InitHeap has wiped the heap the bindings lived in
 void SymBindForget(void)
 {
+    SymBindGen++;
     SymHotBlock = SymColdBlock = NULL;
     SymCanonOf = SymCanonHead = SymLCanon = NULL;
     SymG = SymL = SymS = SymLShadow = NULL;
@@ -441,6 +443,7 @@ void SymBindFree(void)
 // ClearVars(0): every variable has gone
 void SymBindReset(void)
 {
+    SymBindGen++;
     for (unsigned int i = 0; i < SymNCanon; i++)
         SymG[i] = SymL[i] = -1;
     if (SymLCanon != NULL)
@@ -453,6 +456,7 @@ void SymBindReset(void)
 // counted as a text local too.
 void SYMRAM(SymLocalMade)(int slot, int k)
 {
+    SymBindGen++;
     if (SymLCanon == NULL)
         return;
     if ((unsigned)slot >= SymLSlots)
@@ -474,6 +478,7 @@ void SYMRAM(SymLocalMade)(int slot, int k)
 void SYMRAM(SymLocalFreed)(int slot)
 {
     unsigned int c;
+    SymBindGen++;
     if (SymLCanon == NULL)
         return;
     if ((unsigned)slot >= SymLSlots)
@@ -492,6 +497,7 @@ void SYMRAM(SymLocalFreed)(int slot)
 // erase(): the global in this slot has gone
 void SymBindForgetSlot(int slot)
 {
+    SymBindGen++;
     for (unsigned int i = 0; i < SymNCanon; i++)
         if (SymG[i] == slot)
             SymG[i] = -1;

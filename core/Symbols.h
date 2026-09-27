@@ -222,6 +222,11 @@ extern int16_t *SymLShadow; // per local slot: the local binding its local hid
 extern uint16_t *SymLCanon; // per local slot: canonical entry + 1, SYM_LTEXT, or 0 = not tracked
 extern unsigned int SymLSlots; // slots the two arrays above cover
 extern int SymTextLocals;   // live locals made from text
+// Bumped by everything that can change what a name binds to: new bindings
+// (SymBindInit), every variable gone (SymBindReset), one gone (erase), a local
+// made or freed, and DefaultType changed (OPTION DEFAULT, RUN).  Route B's
+// compiled records reuse what their binds found while it is unchanged.
+extern uint32_t SymBindGen;
 int SymCanonNew(const unsigned char *p);
 int SymCanonById(unsigned int id);
 void SymBindInit(void);

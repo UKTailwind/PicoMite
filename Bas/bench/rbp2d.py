@@ -110,6 +110,23 @@ Do While x < 100.5
 Loop
 Print x; n
 """ + STAT, lambda n: n > 0),
+    # the bind cache: a variable erased and made again (another type, then
+    # the first type in a new slot) must never be read through a stale address
+    ("cache erase", """Dim Integer i
+Dim Float a = 1.5, b
+For i = 1 To 6
+  b = a * 2
+  Print b;
+  If i = 2 Then Erase a : Dim Integer a = 7
+  If i = 4 Then Erase a : Dim Float a = 0.25
+  S
+Next
+Print
+Sub S
+  Local q
+  q = 1
+End Sub
+""" + STAT, None),
     ("loop has while", """Dim Integer i
 Do While i < 3
   i = i + 1

@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 12       // the stream format
+#define RB_VERSION 13       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -295,7 +295,8 @@ static void RBTabTo(uint32_t b)
    A statement the compiler handles is still a CMD record, whose fields are
    now its fallback, with RB_COMPILED in its STMT word and its code after it:
 
-     [n] [nbind] nbind x [id | suffix << 12 | RC_TARGET] [type]  wordcode
+     [n] [nbind] [stamp lo] [stamp hi] nbind x [id | suffix << 12 | RC_TARGET] [type]
+     nbind x [address lo] [address hi]  wordcode
 
    n counts the words after itself.  Each bind names a variable by its
    symbol's id (SymCanonOf[id] finds its canonical entry in one load, and the
@@ -308,6 +309,15 @@ static void RBTabTo(uint32_t b)
    runs the fallback instead if any check fails, before anything has
    happened; that is also how a variable is first made and bound, by the
    text path.  The wordcode runs on a stack of 64-bit cells.
+
+   The bind cache.  Binding was a quarter of a compiled loop's time.  In a
+   stream in PSRAM a record keeps the addresses its binds found, stamped with
+   SymBindGen, and uses them again while the stamp matches: SymBindGen is
+   bumped by everything that can change what a name binds to (Symbols.h),
+   and a text local that may hide a global sends the record to its binds.  A
+   stream in flash cannot be written, so there every record binds each time.
+   A stream used again after a RUN, perhaps after a reboot that restarted
+   SymBindGen, has every stamp cleared first (RBClearCaches).
 
    LET compiles when its target and every variable on the right are global
    integer or float scalars and the right-hand side is a numeric expression
@@ -886,12 +896,18 @@ static int RBFinish(rbcx_t *x, uint16_t *code)
     int n = 0, j;
     if (x->fail || x->maxdepth > RB_MAXDEPTH || 1 + 2 * x->nbind + x->n > RB_MAXCODE)
         return 0;
+    if (1 + 2 + 4 * x->nbind + x->n > RB_MAXCODE)
+        return 0;
     code[n++] = x->nbind;
+    code[n++] = 0; // the bind cache's stamp: none yet
+    code[n++] = 0;
     for (j = 0; j < x->nbind; j++)
     {
         code[n++] = x->bind[j][0];
         code[n++] = x->bind[j][1];
     }
+    for (j = 0; j < 2 * x->nbind; j++)
+        code[n++] = 0; // the cached addresses
     memcpy(code + n, x->w, x->n * 2);
     return n + x->n;
 }
@@ -1617,6 +1633,7 @@ static struct
 static const uint8_t *RBBase;          // the live stream's slot
 static const uint32_t *RBMap;          // its statement map: key, record offset
 static const uint16_t *RBTab;          // the map's bucket index
+static int RBCacheOK;                  // the stream is in PSRAM: records may cache their binds
 static uint32_t RBNbProg, RBNTab;      // its program buckets, and all its entries
 extern uint32_t core1stack[];
 extern int TraceOn;
@@ -1625,12 +1642,37 @@ extern int TraceBuffIndex;
 extern uint32_t g_perf_usercmd_count;
 #define PERF_CMDTOKEN_MAX 1024 // as in MMBasic.c
 
+// Clear every compiled record's bind-cache stamp: a stream used again may
+// hold stamps from before a reboot, which restarted SymBindGen.
+static void RBClearCaches(void)
+{
+    const rbheader_t *h = (const rbheader_t *)RBSlotBase();
+    uint16_t *r = (uint16_t *)(RBSlotBase() + h->codeoff), *end = r + h->codelen / 2;
+    while (r < end)
+    {
+        if ((r[0] & 0xFF) == RB_OP_END)
+            r += 3;
+        else if ((r[3] & 0xFF) == RB_OP_NOP)
+            r += 4;
+        else if ((r[3] & 0xFF) != RB_OP_CMD)
+            r += 5;
+        else if (r[0] & RB_COMPILED)
+        {
+            r[8] = r[9] = 0; // the stamp, after [n] [nbind]
+            r += 7 + r[6];
+        }
+        else
+            r += 6;
+    }
+}
+
 static void RBMapStream(void)
 {
     const rbheader_t *h = (const rbheader_t *)RBSlotBase();
     RBBase = RBSlotBase();
     RBMap = (const uint32_t *)(RBBase + h->mapoff);
     RBTab = (const uint16_t *)(RBBase + h->tabof);
+    RBCacheOK = RBInPsram();
     RBNbProg = h->nbprog;
     RBNTab = h->ntab;
     memset(RBCache, 0, sizeof(RBCache));
@@ -1831,13 +1873,22 @@ static void RBShadowCond(unsigned char *p, int type, const void *v)
 static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
 {
     const uint16_t *c = r + 7, *pc;
+    uint16_t *stamp, *cache;
     union cell
     {
         long long i;
         MMFLOAT f;
     } * slot[RB_MAXBIND], st[RB_MAXDEPTH], *sp = st;
     unsigned int nb = *c++, j, w;
+    stamp = (uint16_t *)c;
+    c += 2;
+    cache = (uint16_t *)c + 2 * nb;
     int loopi = 0; // RC_LOOPF's stack entry
+    if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == SymBindGen && !(g_LocalIndex && SymTextLocals))
+        for (j = 0; j < nb; j++) // what the binds found last time
+            slot[j] = (union cell *)(cache[2 * j] | ((uint32_t)cache[2 * j + 1] << 16));
+    else
+    {
     for (j = 0; j < nb; j++, c += 2)
     {
         unsigned int id = c[0] & RC_IDMASK, sc;
@@ -1860,6 +1911,17 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             ((c[0] & RC_TARGET) && (v->type & T_CONST)))
             return NULL;
         slot[j] = (union cell *)&v->val;
+    }
+    if (RBCacheOK)
+    { // keep them, the addresses first and the stamp last
+        for (j = 0; j < nb; j++)
+        {
+            cache[2 * j] = (uint32_t)slot[j] & 0xFFFF;
+            cache[2 * j + 1] = (uint32_t)slot[j] >> 16;
+        }
+        stamp[0] = SymBindGen & 0xFFFF;
+        stamp[1] = SymBindGen >> 16;
+    }
     }
     // dispatch by computed goto through a table in RAM (the G3 prototype's
     // way): no bounds check, one indirect branch an op
@@ -1904,7 +1966,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         w = *pc++;                 \
         goto *rbops[w & 0xFF];     \
     } while (0)
-    pc = c;
+    pc = cache + 2 * nb;
     RBNEXT();
     L_LDG:
             *sp++ = *slot[w >> 8];
@@ -2318,6 +2380,8 @@ void RBPrepare(void)
         RBReused++;
         RBLive = 1;
         RBMapStream();
+        if (RBCacheOK)
+            RBClearCaches();
         return;
     }
     RBCompile(&h);
