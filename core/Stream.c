@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 8        // the stream format
+#define RB_VERSION 10       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -287,11 +287,13 @@ static void RBTabTo(uint32_t b)
    A statement the compiler handles is still a CMD record, whose fields are
    now its fallback, with RB_COMPILED in its STMT word and its code after it:
 
-     [n] [nbind] nbind x [symoff | suffix << 8 | RC_TARGET] [type]  wordcode
+     [n] [nbind] nbind x [id | suffix << 12 | RC_TARGET] [type]  wordcode
 
-   n counts the words after itself.  Each bind names a variable by the offset
-   of its symbol from the statement's entry, with the suffix it is written
-   with (0, T_INT or T_NBR) and the type the code was compiled for.  The
+   n counts the words after itself.  Each bind names a variable by its
+   symbol's id (SymCanonOf[id] finds its canonical entry in one load, and the
+   symbol may be anywhere: a LOOP compiles its DO's condition), with the
+   suffix it is written with (RC_SUFNBR, RC_SUFINT or none) and the type the
+   code was compiled for.  The
    executor binds each one exactly as findvar's fast path would find it (the
    local at this level, else the global when no text local can hide it),
    checks that it is a scalar of that type which the reference may name, and
@@ -341,14 +343,20 @@ enum
     RC_JMP,     // skip the number of words in the next word
     RC_GOTO,    // the statement ends by going to the text position in the next two words (a key)
     RC_SHADOWC, // OPTION COMPILE SHADOW: IF's condition at a, of the type in the next word
+    RC_FORP,    // FOR, before its values: cmd_for's stack work for the loop variable, bind a
+    RC_FORT,    // FOR, after: pop STEP and TO into its entry, test; keys of NEXT and after it follow
 };
 #define RC_TARGET 0x8000 // bind: the statement assigns to it
+#define RC_SUFNBR 0x1000 // bind: written with ! (T_NBR)
+#define RC_SUFINT 0x2000 // bind: written with % (T_INT)
+#define RC_IDMASK 0x0FFF // bind: the symbol id
 #define RB_MAXBIND 12
 #define RB_MAXCODE 96  // words of code one statement may compile to
 #define RB_MAXDEPTH 16 // cells of stack it may use
 
 static CommandToken RBTokLet; // the LET command, looked up once a compile
 static CommandToken RBTokIf, RBTokElse, RBTokEndIf, RBTokEnd_If;
+static CommandToken RBTokFor;
 static CommandToken RBTokDim, RBTokLocal, RBTokStatic, RBTokConst, RBTokOption;
 static CommandToken RBTokEndSub, RBTokEndFun;
 static unsigned char *RBLiteral(unsigned char *p);
@@ -626,12 +634,12 @@ static void RBOp(rbcx_t *x, int w, int cells)
 // there is no room.  A symbol with its suffix is one variable.
 static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
 {
-    int off = p - x->entry, j;
-    if (off > 255)
+    unsigned int id = SymIdAt(p), w0, j;
+    if (id > RC_IDMASK)
         return -1;
-    for (j = 0; j < x->nbind; j++)
-        if (((x->bind[j][0] >> 8) & 0x7F) == suffix &&
-            !memcmp(x->entry + (x->bind[j][0] & 0xFF), p, symbolsize(*p)))
+    w0 = id | (suffix == T_NBR ? RC_SUFNBR : suffix == T_INT ? RC_SUFINT : 0);
+    for (j = 0; j < (unsigned)x->nbind; j++)
+        if ((x->bind[j][0] & ~RC_TARGET) == w0)
         {
             if (target)
                 x->bind[j][0] |= RC_TARGET;
@@ -656,7 +664,7 @@ static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
         else
             x->bind[j][1] = suffix;
     }
-    x->bind[j][0] = off | (suffix << 8) | (target ? RC_TARGET : 0);
+    x->bind[j][0] = w0 | (target ? RC_TARGET : 0);
     x->nbind++;
     return j;
 }
@@ -986,6 +994,100 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
     return RBFinish(&x, code);
 }
 
+/* FOR var = start TO limit [STEP step], as cmd_for does it: its stack work
+   for the variable first (a stale entry for it at this level removed, the
+   depth checked, the entry pushed), then start stored in the variable before
+   limit and step are read, each converted to the variable's type as getnumber
+   or getinteger would; then the entry completed and the first test made.  The
+   matching NEXT is found at compile time by cmd_for's own scan (ForFindNext).
+   A FOR whose parts the compiler cannot take stays text. */
+// one of FOR's values: its code, converted to the loop variable's type as
+// getnumber or getinteger would, and its shadow check; 0 if it cannot compile
+static int RBForPart(rbcx_t *x, unsigned char **pp, int vt)
+{
+    unsigned char *p = *pp, *ex;
+    int t;
+    skipspace(p);
+    ex = p;
+    if (ex - x->entry > 255 || (t = RBEvaluate(x, &p)) == 0)
+        return 0;
+    if (t != vt)
+        RBOp(x, vt == T_NBR ? RC_CVIF : RC_CVFI, 0);
+    RBOp(x, RC_SHADOW | ((ex - x->entry) << 8), 0);
+    RBOp(x, vt, 0);
+    skipspace(p);
+    *pp = p;
+    return 1;
+}
+
+static int RBCompileFor(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *p,
+                        unsigned char *next, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *q, *var, *nx, *after, vname[MAXVARLEN + 8];
+    int suf, b, vt, j;
+    uint32_t key;
+    union
+    {
+        long long i;
+        MMFLOAT f;
+        uint16_t w[4];
+    } one;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    skipspace(p);
+    var = p;
+    if ((q = RBVarRef(p, &suf)) == NULL || (b = RBBind(&x, p, suf, 1)) < 0 || q - var > MAXVARLEN)
+        return 0;
+    vt = x.bind[b][1];
+    memcpy(vname, var, q - var); // cmd_for's vname: the variable as written
+    vname[q - var] = 0;
+    if ((nx = ForFindNext(next, vname, q - var, NULL)) == NULL)
+        return 0; // no matching NEXT: the text path's error
+    after = nx;
+    skipelement(after);
+    p = q;
+    skipspace(p);
+    if (*p != tokenEQUAL)
+        return 0;
+    p++;
+    RBOp(&x, RC_FORP | (b << 8), 0);
+    RBOp(&x, vt, 0);
+    if (!RBForPart(&x, &p, vt) || *p != tokenTO)
+        return 0;
+    RBOp(&x, RC_STG | (b << 8), -1); // start goes into the variable before the limit is read
+    p++;
+    if (!RBForPart(&x, &p, vt))
+        return 0;
+    if (*p == tokenSTEP)
+    {
+        p++;
+        if (!RBForPart(&x, &p, vt))
+            return 0;
+    }
+    else
+    { // no STEP: +1
+        if (vt == T_NBR)
+            one.f = 1.0;
+        else
+            one.i = 1;
+        RBOp(&x, RC_LK, 1);
+        for (j = 0; j < 4; j++)
+            RBOp(&x, one.w[j], 0);
+    }
+    if (*p && *p != '\'')
+        return 0;
+    RBOp(&x, RC_FORT | (b << 8), -2);
+    key = (uint32_t)(nx - base) | libbit;
+    RBOp(&x, key & 0xFFFF, 0);
+    RBOp(&x, key >> 16, 0);
+    key = (uint32_t)(after - base) | libbit;
+    RBOp(&x, key & 0xFFFF, 0);
+    RBOp(&x, key >> 16, 0);
+    RBOp(&x, RC_END, 0);
+    return RBFinish(&x, code);
+}
+
 static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entry, int linestart,
                        unsigned char *tok, int cmd, unsigned char *cmdl, unsigned char *next)
 {
@@ -1015,6 +1117,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileLet(entry, cmdl, code + 1);
         else if (ct == RBTokIf)
             ncode = RBCompileIf(entry, base, libbit, tok, cmdl, code + 1);
+        else if (ct == RBTokFor)
+            ncode = RBCompileFor(entry, base, libbit, cmdl, next, code + 1);
         else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
             C.deftype = d;
     }
@@ -1262,6 +1366,7 @@ static void RBCompile(rbheader_t *h)
     RBTokConst = GetCommandValue((unsigned char *)"Const");
     RBTokOption = GetCommandValue((unsigned char *)"Option");
     RBTokIf = GetCommandValue((unsigned char *)"If");
+    RBTokFor = GetCommandValue((unsigned char *)"For");
     RBTokElse = GetCommandValue((unsigned char *)"Else");
     RBTokEndIf = GetCommandValue((unsigned char *)"EndIf");
     RBTokEnd_If = GetCommandValue((unsigned char *)"End If");
@@ -1575,9 +1680,12 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
     unsigned int nb = *c++, j, w;
     for (j = 0; j < nb; j++, c += 2)
     {
-        int k = SymCanonAt(e + (c[0] & 0xFF)), i, suf = (c[0] >> 8) & 0x7F;
+        unsigned int id = c[0] & RC_IDMASK, sc;
+        int k, i, suf = (c[0] & RC_SUFNBR) ? T_NBR : (c[0] & RC_SUFINT) ? T_INT : 0;
         struct s_vartbl *v;
-        if (k < 0)
+        if (id < SymCanonCount && SymCanonOf && (sc = SymCanonOf[id]) != 0)
+            k = sc - 1;
+        else if ((k = SymCanonById(id)) < 0)
             return NULL;
         i = SymL[k];
         if (i >= 0 && g_vartbl[i].level == g_LocalIndex)
@@ -1714,6 +1822,55 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
             return e + (r[5] >> 8); // the statement's end, which nextstmt is not: the executor looks it up
+        case RC_FORP: // cmd_for before its values
+        {
+            void *vptr = slot[w >> 8];
+            int i;
+            for (i = 0; i < g_forindex; i++)
+                if (g_forstack[i].var == vptr && g_forstack[i].level == g_LocalIndex)
+                { // the loop variable is already in the stack: remove it
+                    while (i < g_forindex - 1)
+                    {
+                        g_forstack[i] = g_forstack[i + 1];
+                        i++;
+                    }
+                    g_forindex--;
+                    break;
+                }
+            if (g_forindex == MAXFORLOOPS)
+                error("Too many nested FOR loops");
+            g_forstack[g_forindex].var = vptr;
+            g_forstack[g_forindex].vartype = *pc++; // the loop variable's type
+            g_forstack[g_forindex].level = g_LocalIndex;
+            g_forindex++; // incase functions use for loops
+            break;
+        }
+        case RC_FORT: // cmd_for after its values
+        {
+            struct s_forstack *fs;
+            int test;
+            g_forindex--;
+            fs = &g_forstack[g_forindex];
+            memcpy(&fs->stepvalue, &sp[-1], 8);
+            memcpy(&fs->tovalue, &sp[-2], 8);
+            sp -= 2;
+            fs->forptr = e + (r[5] >> 8) + 1; // the FOR's nextstmt + 1
+            fs->nextptr = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
+            if (fs->vartype & T_INT)
+                test = (fs->stepvalue.i >= 0 && *(long long int *)fs->var > fs->tovalue.i) || (fs->stepvalue.i < 0 && *(long long int *)fs->var < fs->tovalue.i);
+            else
+                test = (fs->stepvalue.f >= 0 && *(MMFLOAT *)fs->var > fs->tovalue.f) || (fs->stepvalue.f < 0 && *(MMFLOAT *)fs->var < fs->tovalue.f);
+            if (test)
+            { // the loop is done before it starts: on after its NEXT
+                RBRan++;
+                RBCode++;
+                nextstmt = RBImage(pc[2] | ((uint32_t)pc[3] << 16));
+                return e + (r[5] >> 8);
+            }
+            g_forindex++;
+            pc += 4;
+            break;
+        }
         case RC_SHADOWC:
             if (RBMode == RB_SHADOW)
                 RBShadowCond(e + (w >> 8), *pc, &sp[-1]);

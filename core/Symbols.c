@@ -334,6 +334,30 @@ int SymCanonNew(const unsigned char *p)
     return n;
 }
 
+// The canonical entry of program symbol id, made if this is the first use of
+// its spelling: SymCanonAt for a caller that has the id but not the symbol's
+// bytes (Route B's binds, core/Stream.c).  -1 if there are no bindings.
+int SymCanonById(unsigned int id)
+{
+    unsigned char b[3];
+    if (SymCanonOf == NULL || id >= SymCanonCount)
+        return -1;
+    if (SymCanonOf[id])
+        return SymCanonOf[id] - 1;
+    if (id < SYM_NSHORT)
+    {
+        b[0] = SYM_PROG_SHORT;
+        b[1] = symchars[id];
+    }
+    else
+    {
+        b[0] = SYM_PROG_LONG;
+        b[1] = symchars[(id - SYM_NSHORT) / SYM_NSHORT];
+        b[2] = symchars[(id - SYM_NSHORT) % SYM_NSHORT];
+    }
+    return SymCanonNew(b);
+}
+
 // Called by PrepareProgram: start the program's bindings afresh.  They are
 // sized to the program's symbols and live in the BASIC heap; the part every
 // lookup reads is in SRAM, the rest in PSRAM when there is some.  Without

@@ -223,6 +223,7 @@ extern uint16_t *SymLCanon; // per local slot: canonical entry + 1, SYM_LTEXT, o
 extern unsigned int SymLSlots; // slots the two arrays above cover
 extern int SymTextLocals;   // live locals made from text
 int SymCanonNew(const unsigned char *p);
+int SymCanonById(unsigned int id);
 void SymBindInit(void);
 void SymBindFree(void);
 void SymBindForget(void);
@@ -247,6 +248,15 @@ static inline __attribute__((always_inline)) int SymCanonAt(const unsigned char 
     if (c)
         return c - 1;
     return SymCanonNew(p); // the first use of this spelling
+}
+
+// The program symbol id of the symbol at p (a program symbol)
+static inline __attribute__((always_inline)) unsigned int SymIdAt(const unsigned char *p)
+{
+    unsigned int id = symdigit[p[1] & 0x7f];
+    if (!(p[0] & 1))
+        id = SYM_NSHORT + id * SYM_NSHORT + symdigit[p[2] & 0x7f];
+    return id;
 }
 
 #endif

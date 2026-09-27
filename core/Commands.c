@@ -5037,6 +5037,36 @@ static int NextNamesVar(unsigned char *xstart, unsigned char *vname, int vlen)
 	return 0;
 }
 
+// The NEXT that closes the FOR loop on the variable vname, searching from p
+// (the FOR's nextstmt).  With errmsg NULL it returns NULL where cmd_for
+// raises its error, so the compiler can ask too (core/Stream.c).
+unsigned char *ForFindNext(unsigned char *p, unsigned char *vname, int vlen, unsigned char *errmsg)
+{
+	int t = 1;
+	unsigned char *tp;
+	while (1)
+	{
+		p = GetNextCommand(p, &tp, errmsg);
+		if (*p == 0)
+			return NULL; // the end of the program (only when errmsg is NULL)
+		CommandToken tkn = commandtbl_decode(p);
+
+		if (tkn == cmdFOR)
+			t++; // count the FOR
+
+		if (tkn == cmdNEXT)
+		{ // is it NEXT
+			unsigned char *xstart = p + sizeof(CommandToken);
+			if (NextNamesVar(xstart, vname, vlen))
+				t = 0; // found the matching NEXT
+			else
+				t--; // no luck, just decrement our stack counter
+		}
+		if (t == 0)
+			return p; // found the matching NEXT
+	}
+}
+
 // FOR command
 #if LOWRAM
 void cmd_for(void)
@@ -5046,9 +5076,9 @@ void __not_in_flash_func(cmd_for)(void)
 {
 #endif
 
-	int i, t, vlen, test;
+	int i, vlen, test;
 	unsigned char ss[4]; // this will be used to split up the argument line
-	unsigned char *p, *tp;
+	unsigned char *p;
 	void *vptr;
 	unsigned char *vname, vtype;
 	//	static unsigned char fortoken, nexttoken;
@@ -5140,32 +5170,8 @@ void __not_in_flash_func(cmd_for)(void)
 		g_forstack[g_forindex].forptr = nextstmt + 1; // return to here when looping
 
 		// now find the matching NEXT command
-		t = 1;
-		p = nextstmt;
-		while (1)
-		{
-			p = GetNextCommand(p, &tp, (unsigned char *)"No matching NEXT");
-			//            if(*p == fortoken) t++;                                 // count the FOR
-			//            if(*p == nexttoken) {                                   // is it NEXT
-			CommandToken tkn = commandtbl_decode(p);
-
-			if (tkn == cmdFOR)
-				t++; // count the FOR
-
-			if (tkn == cmdNEXT)
-			{ // is it NEXT
-				unsigned char *xstart = p + sizeof(CommandToken);
-				if (NextNamesVar(xstart, vname, vlen))
-					t = 0; // found the matching NEXT
-				else
-					t--; // no luck, just decrement our stack counter
-			}
-			if (t == 0)
-			{										// found the matching NEXT
-				g_forstack[g_forindex].nextptr = p; // pointer to the start of the NEXT command
-				break;
-			}
-		}
+		p = ForFindNext(nextstmt, vname, vlen, (unsigned char *)"No matching NEXT");
+		g_forstack[g_forindex].nextptr = p; // pointer to the start of the NEXT command
 
 		// test the loop value at the start
 		if (g_forstack[g_forindex].vartype & T_INT)
