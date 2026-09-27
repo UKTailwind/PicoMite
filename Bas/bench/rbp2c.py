@@ -63,6 +63,23 @@ For i = 1 To 10
 Next
 Print a
 """ + STAT, lambda n: n > 0),
+    # THEN and ELSE parts that are commands: records of their own (RB_PART),
+    # reached only by cmd_if's jump; a true IF with an ELSE must not fall
+    # into its ELSE part's record
+    ("then parts", """Dim Integer i, a, b
+For i = 1 To 6
+  If i > 3 Then Print "T"; i;
+  If i Mod 2 Then Print "o"; Else Print "e";
+  If i = 2 Then If a = 0 Then a = 5 Else a = 6
+  If i = 4 Then Inc b, 10 Else Inc b
+  If i = 5 Then S i
+Next
+Print
+Print a; b
+Sub S x
+  Print "S"; x;
+End Sub
+""" + STAT, None),
     ("text stays", """Dim Integer i, a, b
 For i = 1 To 10
   If i = 1 Then

@@ -115,8 +115,9 @@ Print "STAT "; MM.Info(COMPILE)
 s6 = run_status(prog4)
 m = re.search(r"RAN (\d+)", s6)
 check("loop runs from the stream", s6, bool(m) and int(m.group(1)) == 203)
-# a GOTO, a GOSUB, a SUB, a FUNCTION and an IF...THEN on one line (the IF
-# runs the GOTO after THEN itself): 21 statements
+# a GOTO, a GOSUB, a SUB, a FUNCTION and an IF...THEN GOTO on one line: 25
+# statements, the GOTO after THEN counted each time the IF is true (four),
+# since it runs from its own record (RB_PART)
 prog5 = """n = 0
 Again: n = n + 1
 If n < 5 Then GoTo Again
@@ -136,7 +137,7 @@ End Function
 """
 s7 = run_status(prog5)
 m = re.search(r"^(\d+) .*RAN (\d+)", s7)
-check("jumps and calls", s7, bool(m) and m.group(1) == "33" and int(m.group(2)) == 21)
+check("jumps and calls", s7, bool(m) and m.group(1) == "33" and int(m.group(2)) == 25)
 # TRACE prints a comment line's number too; ON ERROR SKIP resumes after the
 # failing statement.  The output must match the text loop's exactly.
 prog6 = """' header

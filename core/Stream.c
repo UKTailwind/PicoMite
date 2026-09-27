@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 7        // the stream format
+#define RB_VERSION 8        // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -249,6 +249,7 @@ enum
 };
 #define RB_LINESTART 0x100    // STMT: this statement starts a line (a T_NEWLINE at the entry)
 #define RB_COMPILED 0x200     // STMT: its CMD record is followed by compiled code (P2a)
+#define RB_PART 0x400         // STMT: the THEN or ELSE part of a single-line IF (see RBEmitIfParts)
 #define RB_LIBBIT 0x80000000u // a key in the library's image
 #define RB_BSHIFT 5           // a bucket of the map's index is 32 bytes of text
 #define RB_PAGEUP(n) (((n) + RB_PAGE - 1) & ~(RB_PAGE - 1))
@@ -266,6 +267,7 @@ static struct
     uint8_t *types;           // the survey: each name's declared type (see RBSurvey)
     int ntypes;
     int deftype; // OPTION DEFAULT in force at this point of the walk (text order)
+    int part;    // the record being emitted is an IF's THEN or ELSE part
 } C;
 
 // pass 2: every bucket up to and including b starts at map entry C.stmts
@@ -1016,7 +1018,7 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
             C.deftype = d;
     }
-    w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0) | (ncode ? RB_COMPILED : 0);
+    w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0) | (ncode ? RB_COMPILED : 0) | (C.part ? RB_PART : 0);
     w[n++] = key & 0xFFFF;
     w[n++] = key >> 16;
     if (cmd > 0)
@@ -1037,6 +1039,77 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         RBEmitWords(code, ncode + 1);
     }
     C.stmts++;
+}
+
+/* A single-line IF's parts.  When its condition is true and it has no ELSE,
+   cmd_if sends nextstmt to the byte after THEN; when false with an ELSE, to
+   the byte after ELSE.  Neither starts an element, so without a record of
+   their own each was a round trip to the text loop.  These records, marked
+   RB_PART, sit after the IF's own in the stream and in the map; running on
+   from a record skips them, so they are reached only by cmd_if's jump.  The
+   positions are found as cmd_if finds them: THEN by a plain search from the
+   IF's arguments, ELSE after the command the THEN part starts with.  A THEN
+   part that is itself an IF takes the rest of the element (cmd_if's argc = 3)
+   and has parts of its own. */
+static void RBEmitPart(unsigned char *base, uint32_t libbit, unsigned char *entry);
+
+static void RBEmitIfParts(unsigned char *base, uint32_t libbit, unsigned char *cmdl, unsigned char *next)
+{
+    unsigned char *then = cmdl, *q, *e;
+    while (then < next && *then && *then != tokenTHEN)
+        then++;
+    if (then >= next || *then != tokenTHEN)
+        return; // IF ... GOTO: cmd_if goes to its label itself
+    q = then + 1;
+    skipspace(q);
+    if (*q == 0 || *q == '\'' || (*q >= '0' && *q <= '9'))
+        return; // a multi-line IF, or THEN linenumber (cmd_if's findline)
+    if (q[0] >= C_BASETOKEN && q[1] >= C_BASETOKEN && commandtbl_decode(q) == RBTokIf)
+    {
+        RBEmitPart(base, libbit, then + 1); // IF ... THEN IF ...: the rest is the THEN part
+        return;
+    }
+    e = q + sizeof(CommandToken);
+    while (e < next && *e && *e != tokenELSE)
+        e++;
+    if (e < next && *e == tokenELSE)
+    { // with an ELSE: true runs the THEN part by execute_one_command, false goes after ELSE
+        q = e + 1;
+        skipspace(q);
+        if (!(*q >= '0' && *q <= '9'))
+            RBEmitPart(base, libbit, e + 1);
+    }
+    else
+        RBEmitPart(base, libbit, then + 1);
+}
+
+// one part: a statement from entry to the end of the IF's element, as the
+// text loop would meet it there
+static void RBEmitPart(unsigned char *base, uint32_t libbit, unsigned char *entry)
+{
+    unsigned char *p = entry, *tok, *cmdl, *next;
+    int cmd;
+    skipspace(p);
+    if (*p == 0 || *p == '\'')
+        return;
+    tok = p;
+    if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+    {
+        cmdl = next = p + sizeof(CommandToken);
+        cmd = 1;
+    }
+    else
+    {
+        cmdl = next = p;
+        cmd = 0;
+    }
+    skipspace(cmdl);
+    skipelement(next);
+    C.part = 1;
+    RBEmitStmt(base, libbit, entry, 0, tok, cmd, cmdl, next);
+    C.part = 0;
+    if (cmd && commandtbl_decode(tok) == RBTokIf)
+        RBEmitIfParts(base, libbit, cmdl, next);
 }
 
 // Walk one image as ExecuteProgram would, recording each statement.
@@ -1084,6 +1157,8 @@ static void RBWalk(unsigned char *base, uint32_t libbit)
             skipspace(cmdl);
             skipelement(next);
             RBEmitStmt(base, libbit, entry, linestart, tok, cmd, cmdl, next);
+            if (cmd > 0 && commandtbl_decode(tok) == RBTokIf)
+                RBEmitIfParts(base, libbit, cmdl, next);
             p = next;
         }
         else if (linestart) // a label or a line number alone
@@ -1714,8 +1789,10 @@ unsigned char *RBRAM(RunStream)(unsigned char *p)
             end = OptionErrorSkip == 0 ? RBExec(r, entry) : RBExecSkip(r, entry);
         // where next: the next record, the record of a jump's target, or the text loop
         if (nextstmt == end)
-        {
-            r += (r[3] & 0xFF) != RB_OP_CMD ? 5 : (r[0] & RB_COMPILED) ? 7 + r[6] : 6;
+        { // the next record, past any IF parts (reached only by cmd_if's jump)
+            do
+                r += (r[3] & 0xFF) != RB_OP_CMD ? 5 : (r[0] & RB_COMPILED) ? 7 + r[6] : 6;
+            while (r[0] & RB_PART);
             continue;
         }
         if ((t = RBFind(nextstmt)) != NULL) // NULL too if the statement compiled the program again (RUN)
