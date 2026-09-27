@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 15       // the stream format
+#define RB_VERSION 16       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -253,6 +253,9 @@ enum
 #define RB_COMPILED 0x200     // STMT: its CMD record is followed by compiled code (P2a)
 #define RB_PART 0x400         // STMT: the THEN or ELSE part of a single-line IF (see RBEmitIfParts)
 #define RB_LIBBIT 0x80000000u // a key in the library's image
+// the header words of a CMD record (STMT, CMD, token, cmdl | next) or a
+// SUBCALL record (STMT, SUBCALL, cmdl | next); compiled code follows either
+#define RB_HDR(r) (((r)[3] & 0xFF) == RB_OP_CMD ? 6 : 5)
 #define RB_BSHIFT 5           // a bucket of the map's index is 32 bytes of text
 #define RB_PAGEUP(n) (((n) + RB_PAGE - 1) & ~(RB_PAGE - 1))
 
@@ -376,7 +379,11 @@ enum
     RC_LOOPF,   // LOOP: find its stack entry as cmd_loop does
     RC_LOOPT,   // LOOP's test (a = RL_ flags): back to after the DO, or the entry goes
     RC_SHADOWCK, // OPTION COMPILE SHADOW: a condition anywhere: its type, then its key
+    RC_CALL,     // a call to a user SUB with a parameters (see RBCompileCall)
 };
+#define RP_VAR 1   // RC_CALL: the argument is a variable, bind (bits 8-15); else the next value
+#define RP_BYVAL 2 // RC_CALL: the parameter is BYVAL
+#define RP_INT 4   // RC_CALL: the argument is an integer, else a float
 #define RD_UNTIL 1  // RC_DOP: DO UNTIL
 #define RD_COND 2   // RC_DOP: DO WHILE or UNTIL: the condition is the DO's
 #define RL_ALWAYS 1 // RC_LOOPT: a plain LOOP
@@ -964,6 +971,158 @@ static int RBFinish(rbcx_t *x, uint16_t *code)
     return n + x->n;
 }
 
+/* P3b: a call to a user SUB.  The compiler reads the SUB's parameters once
+   (DefinedSubFun splits both lists with makeargs on every call) and the
+   call's arguments: an expression compiles to its value; a variable binds,
+   as a target so that a CONST, which DefinedSubFun passes by value, goes to
+   the fallback.  RC_CALL then does what DefinedSubFun does for a SUB (see
+   L_CALL).  Left to DefinedSubFun: a CSUB, a FUNCTION called as a SUB,
+   arguments in brackets, a missing argument, an array element or a call as
+   an argument, strings, arrays and structures, BYREF with an expression or
+   an untyped parameter, and a header longer than 255 bytes. */
+#define RB_MAXPARAM 16
+unsigned char *CheckByKeyword(unsigned char *p, int kind); // MMBasic.c
+
+static int RBCompileCall(unsigned char *entry, unsigned char *tok, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *def, *p, *q, *b, *v;
+    int idx, np = 0, na = 0, nval = 0, i, j, t, untyped = 0, paren, suf, flags[RB_MAXPARAM];
+    int by[RB_MAXPARAM], ptype[RB_MAXPARAM]; // BYVAL 1, BYREF -1; the declared type (0: OPTION DEFAULT's)
+    uint16_t name[RB_MAXPARAM], astype[RB_MAXPARAM];
+    if (!issymbol(*tok))
+        return 0;
+    q = tok + symbolsize(*tok);
+    if (*q == '$' || *q == '%' || *q == '!' || (idx = FindSubFun(tok, 0)) < 0)
+        return 0;
+    def = subfun[idx];
+    if (commandtbl_decode(def) != cmdSUB)
+        return 0;
+    // the definition's parameters
+    p = def + sizeof(CommandToken);
+    skipspace(p);
+    if (!issymbol(*p))
+        return 0;
+    p += symbolsize(*p);
+    skipspace(p);
+    paren = (*p == '(');
+    if (paren)
+        p++;
+    skipspace(p);
+    if (paren ? *p != ')' : (*p && *p != '\''))
+        while (1)
+        {
+            if (np == RB_MAXPARAM)
+                return 0;
+            by[np] = 0;
+            astype[np] = 0;
+            if ((b = CheckByKeyword(p, 'V')) != NULL)
+                p = b, by[np] = 1;
+            else if ((b = CheckByKeyword(p, 'R')) != NULL)
+                p = b, by[np] = -1;
+            skipspace(p);
+            if (!issymbol(*p))
+                return 0;
+            v = p;
+            p += symbolsize(*p);
+            suf = RBSuffix(&p);
+            if (suf == T_STR || p - def > 255)
+                return 0;
+            name[np] = (p - v) | ((v - def) << 8); // the name and its suffix, for findvar
+            ptype[np] = suf;
+            skipspace(p);
+            if (*p == '(')
+                return 0; // an array
+            if (*p == tokenAS)
+            {
+                p++;
+                skipspace(p);
+                t = RBTypeWord(&p);
+                if ((t != T_INT && t != T_NBR) || suf)
+                    return 0; // a string, a structure, or a type twice
+                astype[np] = t | T_IMPLIED;
+                ptype[np] = t;
+                skipspace(p);
+            }
+            else if (!suf)
+            {
+                if (by[np] < 0)
+                    return 0; // BYREF: DefinedSubFun checks the types match
+                untyped = 1;  // OPTION DEFAULT's type, at the call
+            }
+            np++;
+            if (*p == ',')
+            {
+                p++;
+                skipspace(p);
+                continue;
+            }
+            if (paren ? *p != ')' : (*p && *p != '\''))
+                return 0;
+            break;
+        }
+    // the body: DefinedSubFun sets nextstmt to the zero that ends the header
+    p = def;
+    skipelement(p);
+    if (p - def > 255)
+        return 0;
+    // the call's arguments
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    skipspace(q);
+    if (*q == '(')
+        return 0;
+    if (*q && *q != '\'')
+        while (1)
+        {
+            unsigned char *ae = RBNextItem(q), *vq;
+            skipspace(q);
+            if (q == ae || na == np)
+                return 0; // a missing argument, or too many
+            vq = RBVarRef(q, &suf);
+            if (vq != NULL)
+                skipspace(vq);
+            if (vq == ae)
+            { // a variable: by reference, as DefinedSubFun passes it
+                if ((j = RBBind(&x, q, suf, 1)) < 0)
+                    return 0;
+                if (by[na] < 0 && x.bind[j][1] != ptype[na])
+                    return 0; // BYREF of another type: DefinedSubFun's error
+                flags[na] = (by[na] > 0 ? RP_BYVAL : 0) | RP_VAR | (j << 8) | (x.bind[j][1] == T_INT ? RP_INT : 0);
+            }
+            else
+            { // an expression: its value
+                if (by[na] < 0)
+                    return 0; // BYREF: "Variable required", which the fallback reports
+                if ((t = RBEvaluate(&x, &q)) == 0)
+                    return 0;
+                skipspace(q);
+                if (q != ae)
+                    return 0;
+                flags[na] = t == T_INT ? RP_INT : 0;
+                nval++;
+            }
+            na++;
+            q = ae;
+            if (*q != ',')
+                break;
+            q++;
+        }
+    if (na != np)
+        return 0; // a missing argument
+    RBOp(&x, RC_CALL | (np << 8), -nval);
+    RBOp(&x, idx, 0);
+    RBOp(&x, nval, 0);
+    RBOp(&x, (p - def) | (untyped << 8), 0);
+    for (i = 0; i < np; i++)
+    {
+        RBOp(&x, flags[i], 0);
+        RBOp(&x, name[i], 0);
+        RBOp(&x, astype[i], 0);
+    }
+    return RBFinish(&x, code);
+}
+
 // Compile LET g = expression into code[]: the words, or 0 to leave the
 // statement to its fallback.
 static int RBCompileLet(unsigned char *entry, unsigned char *p, uint16_t *code)
@@ -1331,6 +1490,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         m[1] = C.code.pos; // the record's offset in the slot
         RBPut(&C.map, m, sizeof(m));
     }
+    if (cmd == 0)
+        ncode = RBCompileCall(entry, tok, code + 1);
     if (cmd > 0)
     {
         CommandToken ct = commandtbl_decode(tok);
@@ -1831,6 +1992,8 @@ extern int TraceOn;
 extern unsigned char *TraceBuff[TRACE_BUFF_SIZE];
 extern int TraceBuffIndex;
 extern uint32_t g_perf_usercmd_count;
+extern uint32_t DefinedSubFunMem;       // MMBasic.c: a call's arguments are being processed
+extern int DefinedSubFunLocalIndex;     // MMBasic.c: g_LocalIndex when it started
 #define PERF_CMDTOKEN_MAX 1024 // as in MMBasic.c
 
 // Clear every compiled record's bind-cache stamp: a stream used again may
@@ -1845,15 +2008,13 @@ static void RBClearCaches(void)
             r += 3;
         else if ((r[3] & 0xFF) == RB_OP_NOP)
             r += 4;
-        else if ((r[3] & 0xFF) != RB_OP_CMD)
-            r += 5;
         else if (r[0] & RB_COMPILED)
         {
-            r[8] = r[9] = 0; // the stamp, after [n] [nbind]
-            r += 7 + r[6];
+            r[RB_HDR(r) + 2] = r[RB_HDR(r) + 3] = 0; // the stamp, after [n] [nbind]
+            r += RB_HDR(r) + 1 + r[RB_HDR(r)];
         }
         else
-            r += 6;
+            r += RB_HDR(r);
     }
 }
 
@@ -2063,7 +2224,8 @@ static void RBShadowCond(unsigned char *p, int type, const void *v)
 // it gave nextstmt, or NULL if a bind failed and the fallback must run.
 static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
 {
-    const uint16_t *c = r + 7, *pc;
+    const uint16_t *c = r + RB_HDR(r) + 1, *pc;
+    const unsigned int nw = r[RB_HDR(r) - 1]; // cmdl | next << 8
     uint16_t *stamp, *cache;
     union cell
     {
@@ -2152,6 +2314,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         [RC_LOOPF] = &&L_LOOPF,
         [RC_LOOPT] = &&L_LOOPT,
         [RC_SHADOWCK] = &&L_SHADOWCK,
+        [RC_CALL] = &&L_CALL,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -2276,7 +2439,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             RBRan++;
             RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-            return e + (r[5] >> 8); // the statement's end, which nextstmt is not: the executor looks it up
+            return e + (nw >> 8); // the statement's end, which nextstmt is not: the executor looks it up
     L_FORP: // cmd_for before its values
         {
             void *vptr = slot[w >> 8];
@@ -2309,7 +2472,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             memcpy(&fs->stepvalue, &sp[-1], 8);
             memcpy(&fs->tovalue, &sp[-2], 8);
             sp -= 2;
-            fs->forptr = e + (r[5] >> 8) + 1; // the FOR's nextstmt + 1
+            fs->forptr = e + (nw >> 8) + 1; // the FOR's nextstmt + 1
             fs->nextptr = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
             if (fs->vartype & T_INT)
                 test = (fs->stepvalue.i >= 0 && *(long long int *)fs->var > fs->tovalue.i) || (fs->stepvalue.i < 0 && *(long long int *)fs->var < fs->tovalue.i);
@@ -2320,7 +2483,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBRan++;
                 RBCode++;
                 nextstmt = RBImage(pc[2] | ((uint32_t)pc[3] << 16));
-                return e + (r[5] >> 8);
+                return e + (nw >> 8);
             }
             g_forindex++;
             pc += 4;
@@ -2328,7 +2491,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         }
     L_DOP: // cmd_do's stack work
         {
-            unsigned char *doptr = e + (r[5] >> 8); // the DO's nextstmt
+            unsigned char *doptr = e + (nw >> 8); // the DO's nextstmt
             struct s_dostack *ds;
             int i;
             for (i = 0; i < g_doindex; i++)
@@ -2367,14 +2530,14 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBRan++;
                 RBCode++;
                 nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-                return e + (r[5] >> 8);
+                return e + (nw >> 8);
             }
             pc += 2;
             RBNEXT();
         }
     L_LOOPF: // cmd_loop's search for its entry
         {
-            unsigned char *cl = e + (r[5] & 0xFF), *q; // cmd_loop's cmdline
+            unsigned char *cl = e + (nw & 0xFF), *q; // cmd_loop's cmdline
             for (loopi = 0; loopi < g_doindex; loopi++)
             {
                 q = g_dostack[loopi].loopptr + sizeof(CommandToken);
@@ -2403,7 +2566,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBRan++;
                 RBCode++;
                 nextstmt = g_dostack[loopi].doptr;
-                return e + (r[5] >> 8);
+                return e + (nw >> 8);
             }
             g_doindex = loopi; // the loop has ended
             RBNEXT();
@@ -2418,10 +2581,71 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
                 RBShadowCond(e + (w >> 8), *pc, &sp[-1]);
             pc++;
             RBNEXT();
+    L_CALL: // DefinedSubFun for a SUB, in its order (see RBCompileCall)
+        {
+            int np = w >> 8, idx = pc[0], i, at;
+            unsigned char *def = subfun[idx], *callers = CurrentLinePtr, nm[MAXVARLEN + 8];
+            union cell *val = sp - pc[1], *src; // the value arguments, first to last
+            const uint16_t *pp = pc + 3;
+            struct s_vartbl *v;
+            // what would stop DefinedSubFun before it starts sends the call there
+            if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
+                return NULL;
+            RBRan++;
+            RBCode++;
+            if (g_option_profiling)
+            {
+                g_perf_usercmd_count++;
+                if (g_perf_subcall_count && idx < MAXSUBFUN)
+                    g_perf_subcall_count[idx]++;
+            }
+            g_FunReturnArrayCount = 0;
+            DefinedSubFunLocalIndex = g_LocalIndex;
+            nextstmt = e + (nw >> 8); // where END SUB returns to
+            errorstack[gosubindex] = callers;
+            substack[gosubindex] = def; // for STATIC
+            gosubstack[gosubindex++] = nextstmt;
+            DefinedSubFunMem = 2; // an error from here on unwinds the call (no argument block)
+            g_LocalIndex++;
+#ifdef SUBPROFILE
+            EnterLocalFrame();
+            g_current_sub_idx = idx;
+#endif
+            CurrentLinePtr = def; // errors at the definition, until the first parameter is made (as DefinedSubFun has it)
+            for (i = 0; i < np; i++, pp += 3)
+            {
+                memcpy(nm, def + (pp[1] >> 8), pp[1] & 0xFF);
+                nm[pp[1] & 0xFF] = 0;
+                findvar(nm, pp[2] | V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK); // the parameter
+                v = &g_vartbl[g_VarIndex];
+                CurrentLinePtr = callers; // errors at the caller
+                src = (pp[0] & RP_VAR) ? slot[pp[0] >> 8] : val++;
+                at = (pp[0] & RP_INT) ? T_INT : T_NBR;
+                if ((pp[0] & (RP_VAR | RP_BYVAL)) == RP_VAR && TypeMask(v->type) == at)
+                { // a variable of the parameter's type: by reference
+                    v->val.s = (unsigned char *)src;
+                    v->type |= T_PTR;
+                }
+                else if ((v->type & T_NBR) && at == T_NBR)
+                    v->val.f = src->f;
+                else if ((v->type & T_NBR) && at == T_INT)
+                    v->val.f = src->i;
+                else if ((v->type & T_INT) && at == T_INT)
+                    v->val.i = src->i;
+                else if ((v->type & T_INT) && at == T_NBR)
+                    v->val.i = FloatToInt64(src->f);
+                else
+                    error("Incompatible type"); // (a string parameter does not compile)
+            }
+            DefinedSubFunMem = 0;
+            CurrentLinePtr = callers;
+            nextstmt = def + (pc[2] & 0xFF); // the SUB's body
+            return e + (nw >> 8);
+        }
     L_END:
     RBRan++;
     RBCode++;
-    return nextstmt = e + (r[5] >> 8);
+    return nextstmt = e + (nw >> 8);
 #undef RBNEXT
 }
 
@@ -2503,7 +2727,7 @@ unsigned char *RBRAM(RunStream)(unsigned char *p)
         if (nextstmt == end)
         { // the next record, past any IF parts (reached only by cmd_if's jump)
             do
-                r += (r[3] & 0xFF) != RB_OP_CMD ? 5 : (r[0] & RB_COMPILED) ? 7 + r[6] : 6;
+                r += RB_HDR(r) + ((r[0] & RB_COMPILED) ? 1 + r[RB_HDR(r)] : 0);
             while (r[0] & RB_PART);
             continue;
         }

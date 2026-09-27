@@ -626,7 +626,7 @@ extern uint32_t core1stack[];
 unsigned char FunKey[NBRPROGKEYS][MAXKEYLEN + 1]; // data storage for the programmable function keys
 #endif
 
-uint32_t DefinedSubFunMem;   // Records memory allocated to DefinedSubFun in case of an error
+uint32_t DefinedSubFunMem;   // A call's arguments are being processed, in case of an error: 1 by DefinedSubFun, 2 by a compiled call (core/Stream.c), which has no argument block
 int DefinedSubFunLocalIndex; // Records LocalIndex at start of DefinedSubFun in case of an error
 /* Characters that can appear inside a numeric literal: 0-9 . + - E e.
    This sits on the hottest path in the interpreter - getvalue() scans every
@@ -6268,6 +6268,7 @@ void MIPS16 error(char *msg, ...)
         // RP2350's static block is released below.  A nested call in the argument
         // list clears the sentinel, so an error after it still leaks the outer
         // call's frame and block - bug report item 16, left as an edge case.
+        if (DefinedSubFunMem == 1)
         {
             union u_argval *av = DefinedSubFunArgval;
             int *at = (int *)((char *)av + MAX_ARG_COUNT * sizeof(union u_argval));
