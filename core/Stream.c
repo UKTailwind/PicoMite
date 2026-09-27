@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 21       // the stream format
+#define RB_VERSION 22       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -388,6 +388,10 @@ enum
     RC_CMPF,     // a comparison a (RK_) of two floats, as op_lt and the rest make it: 1 or 0
     RC_CMPI,     // the same of two integers
     RC_BITI,     // AND, OR or XOR (a: RK_AND...) of two integers, as op_and and the rest
+    RC_IDX,      // an array index on the top: to an int as findvar makes it (a: its type), base checked
+    RC_LDEL,     // an element of array bind a, its k indices (the next word) on the stack: its value
+    RC_ADEL,     // the same: its address, for RC_STP
+    RC_STP,      // pop a value, then an address, and store the value there
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -412,6 +416,7 @@ enum
 #define RC_SUFINT 0x2000 // bind: written with % (T_INT)
 #define RC_LIB 0x4000    // bind: a library symbol (its id follows the program's in SymCanonOf)
 #define RC_IDMASK 0x0FFF // bind: the symbol id
+#define RB_BARRAY 0x100  // bind's type word: an array, bound to its variable (RC_LDEL, RC_ADEL)
 #define RB_MAXBIND 12
 #define RB_MAXCODE 96  // words of code one statement may compile to
 #define RB_MAXDEPTH 16 // cells of stack it may use
@@ -728,7 +733,7 @@ static void RBOp(rbcx_t *x, int w, int cells)
 
 // The bind of the variable whose symbol is at p, made if it is new; -1 if
 // there is no room.  A symbol with its suffix is one variable.
-static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
+static int RBBindK(rbcx_t *x, unsigned char *p, int suffix, int target, int arr)
 {
     unsigned int id = SymIdAt(p), w0, j;
     if (id > RC_IDMASK)
@@ -737,6 +742,8 @@ static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
     for (j = 0; j < (unsigned)x->nbind; j++)
         if ((x->bind[j][0] & ~RC_TARGET) == w0)
         {
+            if ((x->bind[j][1] & RB_BARRAY) != arr)
+                return -1; // the name as an array and as a scalar: the text path's error
             if (target)
                 x->bind[j][0] |= RC_TARGET;
             return j;
@@ -770,10 +777,16 @@ static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
         }
         else
             x->bind[j][1] = suffix;
+        x->bind[j][1] |= arr;
     }
     x->bind[j][0] = w0 | (target ? RC_TARGET : 0);
     x->nbind++;
     return j;
+}
+
+static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
+{
+    return RBBindK(x, p, suffix, target, 0);
 }
 
 // the operator after a value, as getvalue reads it
@@ -789,6 +802,56 @@ static unsigned char *RBNextOp(unsigned char *p, int *op)
 
 static int RBEvaluate(rbcx_t *x, unsigned char **pp);
 static int RBFcall(rbcx_t *x, unsigned char **pp, int *op);
+static unsigned char *RBArgEnd(unsigned char *p, int close);
+
+/* P4a: an element of a numeric array, name(i [, j ...]) as findvar reads it
+   (a bracket straight after the name and its suffix, not a FUNCTION's): its
+   array bound, each index compiled and then RC_IDX, which converts and checks
+   it as findvar does straight after evaluating it; then op (RC_LDEL for its
+   value, RC_ADEL for its address) checks the count and the bounds.  Returns
+   the element's type, 0 if the compiler cannot take it; *pp is left after the
+   closing bracket. */
+static int RBElement(rbcx_t *x, unsigned char **pp, int op, int target)
+{
+    unsigned char *p = *pp, *q, *ae;
+    const unsigned char *sp;
+    int suf, j, t, k = 0, len;
+    if (!issymbol(*p))
+        return 0;
+    sp = SymSpelling(p, &len);
+    if (memchr(sp, '.', len))
+        return 0; // a structure's
+    q = p + symbolsize(*p);
+    suf = RBSuffix(&q);
+    if (suf == T_STR || *q != '(' || FindSubFun(p, 1) >= 0)
+        return 0;
+    if ((j = RBBindK(x, p, suf, target, RB_BARRAY)) < 0)
+        return 0;
+    q++;
+    while (1)
+    {
+        ae = RBArgEnd(q, ')');
+        skipspace(q);
+        if (q == ae || k == MAXDIM)
+            return 0; // an empty array, or too many indices: the text path's
+        if ((t = RBEvaluate(x, &q)) == 0)
+            return 0;
+        skipspace(q);
+        if (q != ae)
+            return 0;
+        RBOp(x, RC_IDX | (t << 8), 0);
+        k++;
+        if (*q != ',')
+            break;
+        q++;
+    }
+    if (*q != ')')
+        return 0;
+    RBOp(x, op | (j << 8), 1 - k);
+    RBOp(x, k, 0);
+    *pp = q + 1;
+    return x->bind[j][1] & (T_INT | T_NBR);
+}
 
 // getvalue: one value, and the operator after it in *op.  Returns its type,
 // T_INT or T_NBR, or 0 if the compiler cannot take it.
@@ -829,6 +892,11 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
         if (q == NULL && issymbol(c) && (t = RBFcall(x, &p, op)) != 0)
         {
             *pp = p;
+            return t;
+        }
+        if (q == NULL && issymbol(c) && !x->ncall && (t = RBElement(x, &p, RC_LDEL, 0)) != 0)
+        {
+            *pp = RBNextOp(p, op);
             return t;
         }
         if (q == NULL || x->ncall || (j = RBBind(x, p, suf, 0)) < 0)
@@ -975,9 +1043,19 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
     int tsuf, tgt, ttype, t;
     if (x->ncall)
         return NULL; // a call before: cmd_let would find its target after it
-    if ((q = RBVarRef(p, &tsuf)) == NULL || (tgt = RBBind(x, p, tsuf, 1)) < 0)
-        return NULL;
-    ttype = x->bind[tgt][1];
+    if ((q = RBVarRef(p, &tsuf)) == NULL)
+    { // an element: its address first, as cmd_let's findvar makes it before the right-hand side
+        q = p;
+        if ((ttype = RBElement(x, &q, RC_ADEL, 1)) == 0)
+            return NULL;
+        tgt = -1;
+    }
+    else
+    {
+        if ((tgt = RBBind(x, p, tsuf, 1)) < 0)
+            return NULL;
+        ttype = x->bind[tgt][1];
+    }
     p = q;
     skipspace(p);
     if (*p != tokenEQUAL)
@@ -1003,7 +1081,10 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
         RBOp(x, RC_SHADOW | ((rhs - x->entry) << 8), 0);
         RBOp(x, ttype, 0);
     }
-    RBOp(x, RC_STG | (tgt << 8), -1);
+    if (tgt < 0)
+        RBOp(x, RC_STP, -2);
+    else
+        RBOp(x, RC_STG | (tgt << 8), -1);
     return p;
 }
 
@@ -1177,6 +1258,22 @@ static int RBArgs(rbcx_t *x, unsigned char **qq, int close, rbparams_t *pr, int 
             { // an expression: its value
                 if (pr->by[na] < 0)
                     return 0; // BYREF: "Variable required", which the fallback reports
+                if (issymbol(*q))
+                { // name(...) alone and not a FUNCTION: DefinedSubFun passes the element by reference
+                    unsigned char *e = q + symbolsize(*q);
+                    RBSuffix(&e);
+                    if (*e == '(' && FindSubFun(q, 1) < 0)
+                    {
+                        e = RBArgEnd(e + 1, ')');
+                        if (*e == ')')
+                        {
+                            e++;
+                            skipspace(e);
+                            if (e == ae)
+                                return 0;
+                        }
+                    }
+                }
                 if ((t = RBEvaluate(x, &q)) == 0)
                     return 0;
                 skipspace(q);
@@ -2591,6 +2688,29 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
     return 1;
 }
 
+// findvar with the array v found and its k indices (ints) at idx: the count
+// of dimensions checked, each index against its bound, the element found as
+// findvar finds it
+static __attribute__((noinline)) union cell *RBElementAt(struct s_vartbl *v, union cell *idx, int k)
+{
+    int i, nbr, j;
+    for (i = 0; i < MAXDIM && !DimIsEnd(RAW_DIM(*v, i)); i++)
+        ;
+    if (i != k)
+        error("Array dimensions");
+    for (i = 0; i < k; i++)
+        if (idx[i].i > DimUpper(RAW_DIM(*v, i)) || idx[i].i < g_OptionBase)
+            error("Index out of bounds");
+    nbr = idx[0].i - g_OptionBase;
+    j = 1;
+    for (i = 1; i < k; i++)
+    {
+        j *= DimElements(RAW_DIM(*v, i - 1));
+        nbr += (idx[i].i - g_OptionBase) * j;
+    }
+    return (union cell *)(v->val.s + nbr * 8);
+}
+
 /* FOR's and DO's stack work, once a loop: in flash, as RBRun's RAM is the
    stack's (see the design's notes on the stack). */
 // RC_FORP: cmd_for's stack work before its values, for the variable at vptr
@@ -2728,11 +2848,16 @@ again:
                 goto fail; // not bound yet, or a text local may hide it: findvar decides
         }
         v = &g_vartbl[i];
-        if (!DimIsScalar(RAW_DIM(*v, 0)) || (v->type & (T_STRUCT | T_STR)) ||
-            (v->type & (T_INT | T_NBR)) != c[1] ||
+        if (((c[1] & RB_BARRAY) ? !DimIsRealArray(RAW_DIM(*v, 0)) : !DimIsScalar(RAW_DIM(*v, 0))) ||
+            (v->type & (T_STRUCT | T_STR)) || (v->type & (T_INT | T_NBR)) != (c[1] & (T_INT | T_NBR)) ||
             (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
             ((c[0] & RC_TARGET) && (v->type & T_CONST)))
             goto fail;
+        if (c[1] & RB_BARRAY)
+        {
+            slot[j] = (union cell *)v; // an array: its variable, for its dimensions and its data
+            continue;
+        }
         // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
         slot[j] = (v->type & T_PTR) ? (union cell *)v->val.s : (union cell *)&v->val;
     }
@@ -2787,6 +2912,10 @@ again:
         [RC_CMPF] = &&L_CMPF,
         [RC_CMPI] = &&L_CMPI,
         [RC_BITI] = &&L_BITI,
+        [RC_IDX] = &&L_IDX,
+        [RC_LDEL] = &&L_LDEL,
+        [RC_ADEL] = &&L_LDEL,
+        [RC_STP] = &&L_STP,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -2936,6 +3065,36 @@ again:
             sp--;
             RBNEXT();
         }
+    L_IDX: // findvar straight after evaluating an index
+        {
+            long long int in;
+            if ((w >> 8) == T_NBR)
+                in = FloatToInt32(sp[-1].f);
+            else
+            {
+                in = sp[-1].i;
+                if (in != (int)in)
+                    error("Index out of bounds"); // too big for any array: must not wrap to a small index
+            }
+            if (in < g_OptionBase)
+                error("Dimensions");
+            sp[-1].i = in;
+            RBNEXT();
+        }
+    L_LDEL: // findvar with the array found: the count, the bounds, the element (RBElementAt)
+        {
+            union cell *el = RBElementAt((struct s_vartbl *)slotp[w >> 8], sp - *pc, *pc);
+            sp -= *pc++;
+            if ((w & 0xFF) == RC_LDEL)
+                *sp++ = *el;
+            else
+                (sp++)->i = (long long int)(uint32_t)el;
+            RBNEXT();
+        }
+    L_STP:
+            sp -= 2;
+            *(union cell *)(uint32_t)sp[0].i = sp[1];
+            RBNEXT();
     L_BITI: // op_and, op_or, op_xor
             if ((w >> 8) == RK_AND)
                 sp[-2].i = (long long int)((unsigned long long int)sp[-2].i & (unsigned long long int)sp[-1].i);
