@@ -847,7 +847,9 @@ int MIPS16 PrepareProgram(int ErrAbort)
     unsigned char *p1, *p2;
 #endif
 
+#ifdef rp2350
     RBLive = 0; // a compiled stream is trusted only after RUN checks its stamp (see Stream.h)
+#endif
     // Clear any previous error state
     PreprogramErrMsg[0] = 0;
     PreprogramErrLine = NULL;

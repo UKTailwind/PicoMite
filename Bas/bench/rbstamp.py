@@ -1,9 +1,11 @@
-"""rbstamp.py PORT - Route B P1a/P1b: OPTION COMPILE, the stream slot guard
-and the stamp (docs/Interpreter_RouteB_Design.html).
+"""rbstamp.py PORT - Route B P1: OPTION COMPILE, where the stream lives, the
+stamp, the records and the executor (docs/Interpreter_RouteB_Design.html).
+Route B is RP2350-only: on an RP2040 this reports SKIP.
 
-P1a: OPTION COMPILE ON|OFF|SHADOW; while it is on, the slot that holds the
-stream (RAM slot 4 with PSRAM, flash slot 2 without) is refused to the slot
-commands, and only then.
+P1a: OPTION COMPILE ON|OFF|SHADOW.  With PSRAM the stream has a region of its
+own, so every RAM slot stays the user's: a compiled program's stream outlives
+RAM SAVE 4 and RAM ERASE 4.  Without PSRAM the stream is in flash slot 2, which
+the slot commands refuse while OPTION COMPILE is on, and only then.
 P1b: RUN compiles when the program (or library) has changed since the stream
 was written, and reuses the stream when it has not; a program saved without
 symbols runs as text.  MM.INFO(COMPILE) says which happened.
@@ -39,26 +41,33 @@ def run_status(src):
     return m.group(1).strip() if m else out.strip()[-120:]
 
 
+r = cmd("OPTION COMPILE OFF")
+if "rror" in r:
+    print("RBSTAMP SKIP: no OPTION COMPILE here (Route B is RP2350-only):", r)
+    sys.exit(0)
 r = cmd("?MM.INFO(PSRAM SIZE)")
 ram = bool(re.fullmatch(r"\s*\d+", r)) and int(r) > 0  # an error or 0: no PSRAM
-slotcmd = ("RAM", 4) if ram else ("FLASH", 2)
-print("stream slot:", "%s %d" % slotcmd)
+print("stream:", "its own PSRAM region" if ram else "flash slot 2")
 
 # P1a
-cmd("OPTION COMPILE OFF")
 check("MM.INFO(COMPILE) off", cmd("?MM.INFO(COMPILE)"), cmd("?MM.INFO(COMPILE)") == "OFF")
 check("bad mode", cmd("OPTION COMPILE BOGUS"), "syntax" in cmd("OPTION COMPILE BOGUS").lower())
 check("SHADOW accepted", cmd("OPTION COMPILE SHADOW") or "(no reply)", cmd("OPTION COMPILE SHADOW") == "")
 cmd("OPTION COMPILE ON")
-for sub in ("SAVE", "LOAD", "ERASE", "RUN"):
-    r = cmd("%s %s %d" % (slotcmd[0], sub, slotcmd[1]))
-    check("%s %s %d refused" % (slotcmd[0], sub, slotcmd[1]), r, "holds the compiled program" in r)
-other = 1
-r = cmd("%s LOAD %d" % (slotcmd[0], other))
-check("%s LOAD %d not refused" % (slotcmd[0], other), r, "holds the compiled program" not in r)
+if ram:
+    for c in ("RAM LOAD 4", "FLASH LOAD 2"):
+        r = cmd(c)
+        check(c + " not refused", r, "holds the compiled program" not in r)
+else:
+    for sub in ("SAVE", "LOAD", "ERASE", "RUN"):
+        r = cmd("FLASH %s 2" % sub)
+        check("FLASH %s 2 refused" % sub, r, "holds the compiled program" in r)
+    r = cmd("FLASH LOAD 1")
+    check("FLASH LOAD 1 not refused", r, "holds the compiled program" not in r)
+    cmd("OPTION COMPILE OFF")
+    r = cmd("FLASH LOAD 2")
+    check("OFF: FLASH LOAD 2 not refused", r, "holds the compiled program" not in r)
 cmd("OPTION COMPILE OFF")
-r = cmd("%s LOAD %d" % slotcmd)
-check("OFF: %s LOAD %d not refused" % slotcmd, r, "holds the compiled program" not in r)
 
 # P1b
 cmd("OPTION SYMBOLS ON")
@@ -78,6 +87,15 @@ check("same program: reused", s2, n2[0] == n1[0] and n2[1] == n1[1] + 1)
 s3 = run_status(prog2)
 n3 = [int(x) for x in re.findall(r"\d+", s3)] or [0, 0]
 check("changed program: compiled", s3, n3[0] == n2[0] + 1)
+if ram:  # the stream is in no RAM slot: saving over slot 4 and erasing it leave it alone
+    r = cmd("RAM SAVE 4") + cmd("RAM ERASE 4")
+    b.drain(0.1)
+    b.send_line("RUN")
+    s36 = re.search(r"STAT (.*)", pc3.ANSI.sub("", b.wait_prompt(30)))
+    s36 = s36.group(1).strip() if s36 else "?"
+    n36 = [int(x) for x in re.findall(r"\d+", s36)] or [0, 0]
+    check("RAM SAVE/ERASE 4: stream kept", (r or "(no reply)") + " | " + s36,
+          "rror" not in r and n36[0] == n3[0] and n36[1] == n3[1] + 1)
 prog3 = """' a comment line: no record
 x = 1 : y = 2 ' a comment in a statement
 Lbl: z = 3

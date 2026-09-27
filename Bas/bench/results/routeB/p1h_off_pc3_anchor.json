@@ -1,0 +1,14 @@
+{
+ "board": "pc3",
+ "port": "COM16",
+ "started": "2026-09-27 08:40:57",
+ "metrics": {
+  "anchor:seconds": 15.767719
+ },
+ "checks": {
+  "anchor": "golden"
+ },
+ "errors": [],
+ "cpuspeed": "315000000",
+ "finished": "2026-09-27 08:41:56"
+}

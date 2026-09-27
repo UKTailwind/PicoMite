@@ -411,8 +411,9 @@ END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and 
 <section id="where">
 <h2>Where the stream lives</h2>
 <ul>
-<li><b>PC3 and other PSRAM builds:</b> RAM slot 4 (image slot 7, <code>ImageSlotAddress</code>, FileIO.c:1073-1086). It is written at memory speed and is lost at power-off, like any RAM slot. While OPTION COMPILE is on, RAM SAVE 4 and RAM FILE LOAD into slot 4 are refused.</li>
-<li><b>RP2040, and RP2350 builds without PSRAM:</b> flash slot 2. Slot 3 holds the library, and slot 1 is left for the user. The slot is rewritten only when the program has changed since its last compile, so an edit-and-run cycle costs one erase of the slot, as saving the program already does. While OPTION COMPILE is on, FLASH SAVE 2 is refused.</li>
+<li><b>Route B is RP2350-only</b> (decision of 27 September). On the RP2040, Stream.c compiles to nothing and OPTION COMPILE is not an option.</li>
+<li><b>RP2350 with PSRAM:</b> a region of its own, what the 2 MB PSRAM reserve leaves above the context-save area and the five RAM slots (<code>PSRAMstream</code>, <code>PSRAMstreamsize</code> in configuration.h): 944 KB with HDMIWEB's 144 KB slots, 164 KB at the largest heap. It is written at memory speed and is lost at power-off. It is nobody's slot, so every RAM slot stays the user's; RAM slot 4 was used until Prince of Pico, which fills all five, showed why it could not be.</li>
+<li><b>RP2350 without PSRAM:</b> flash slot 2 for now. Slot 3 holds the library, and slot 1 is left for the user. The slot is rewritten only when the program has changed since its last compile, so an edit-and-run cycle costs one erase of the slot, as saving the program already does. While OPTION COMPILE is on, the flash slot commands refuse slot 2. A hidden flash slot of its own comes later (see the decisions).</li>
 <li><b>Before any figure is quoted</b> it is confirmed once from a flash slot, because PSRAM and flash timings differ behind the XIP cache.</li>
 <li>Where the stream lives in a release is deferred until the concept is proven, as you asked. So are the capacity-optimal alternatives (a stream written beside the image at save time, or a single image that LIST decompiles).</li>
 </ul>
@@ -458,11 +459,10 @@ END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and 
 <li><b>Gate status, 27 September 2026</b> (results in Bas/bench/results/routeB):
 <ul>
 <li><b>Behaviour: met.</b> With OPTION COMPILE ON the goldens match on both boards; only printed timings, the PC3's real RTC status (rtcreg) and rtest's dependence on wtest's file differ. The interrupt tests, symchain, cmtloop and every stdset CHECK are unchanged, and the Exile and Elite checks pass compiled. TRACE and ON ERROR SKIP print the same as text.</li>
-<li><b>Prince of Pico cannot run compiled on the PC3.</b> It loads its artwork into image slots 4-8, which are all five RAM slots, and RAM slot 4 holds the stream. The stream needs a PSRAM region of its own rather than a user slot.</li>
-<li><b>Speed on the RP2040: not met.</b> With the executor in flash, the standard set's median per test is 27-62% slower compiled than text; <code>a%=b%</code> takes twice as long. The PC samples put it in the XIP cache: RunStream, RBExec, RBFind, RBTail and cmd_next all lie within findvar's span modulo 8 KB of the 16 KB two-way cache, so every statement evicts findvar's lines. An experiment with the executor in RAM made pixart 0.9% faster compiled than text, but RAM for it crosses the 4 KB page below AllMemory, which on VGA means 4 KB less heap and program memory (and a moved A: drive).</li>
-<li><b>Speed on the RP2350: not met yet.</b> The executor is in RAM. Medians are 1-3% faster than text; assignments 4-8% faster; DATA, REM and comment lines in a loop 24-53% faster. Jumps are slower: an empty FOR loop 14.5%, GOSUB to a label 1,000 lines on 43%, the anchor 2.1%, KnivD 3.3%, Exile 5.5%, Elite 3%. The cause is the map cache: Exile misses it on 25% of its statements with 64 entries and on 15% with 512, and each miss is an 11-probe binary search in PSRAM, about 2.5 &micro;s.</li>
-<li><b>Placement moves text speed between builds.</b> pixart as text on the VGA: 10.8 s (merge build), 12.9 s (P1), 11.5 s (RAM experiment); sombrero on the PC3: 11.3, 12.4 and 13.0 s. Nothing in the text path changed. Compare OFF and ON on the same firmware only.</li>
-<li><b>Next:</b> a bucket index beside the map, written in the same sequential pass, so a miss costs two or three probes; the executor's hit path without volatile globals; then the decisions above (RAM on the RP2040, the stream's own PSRAM region).</li>
+<li><b>Prince of Pico</b> could not run compiled while the stream sat in RAM slot 4, since it loads its artwork into all five RAM slots. The stream now has a PSRAM region of its own, and PoP passes all 274 checks compiled.</li>
+<li><b>RP2040:</b> with the executor in flash the standard set ran 27-62% slower compiled (XIP thrash with findvar), and RAM for it would have cost a 4 KB page of heap. Route B is now RP2350-only.</li>
+<li><b>Speed on the PC3, accepted by Peter with the gap left to P2.</b> Three changes took the games from Exile +6.0%, Elite +3.2%, PoP +8.2% to Exile +3.0%, Elite +1.1%, PoP +5.3%, and the solar eclipse anchor from +2.1% to level (15.767 s text, 15.766 s compiled): a bucket index beside the map, so a cache miss costs a bucket read and one or two entries instead of an 11-probe binary search in PSRAM; the executor's position in locals rather than volatile globals, with ON ERROR SKIP's setjmp in a helper's own frame; and lookups that find nothing remembered (a true single-line IF sends nextstmt into its own element). What is left is the round trip to the text loop for the part after THEN and similar, which P2c removes by compiling IF.</li>
+<li><b>Placement moves text speed between builds.</b> pixart as text on the VGA: 10.8 s (merge build), 12.9 s (P1 with Route B code), 11.2 s (Route B removed from the RP2040); sombrero on the PC3: 11.3, 12.4 and 13.0 s over three builds. Nothing in the text path changed. Compare OFF and ON on the same firmware only.</li>
 </ul></li>
 <li>The only possible gains are the per-statement header walk, the <code>skipelement</code> pre-scan and the token decode, which the records precompute. Expect 0-5%.</li>
 <li><b>Gate:</b>
@@ -476,10 +476,18 @@ END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and 
 <h3>Numeric statements on globals</h3>
 <p class="meta">The expression compiler, the shared helpers and shadow mode; compiled LET, IF/ELSEIF/ELSE, FOR/NEXT, DO/LOOP and EXIT on global numeric scalars.</p>
 <ul>
+<li><b>Steps</b>, each built and run on the PC3 before the next:
+<ol>
+<li><b>P2a, the compiled record.</b> A CODE record after STMT carries the statement's binds, its wordcode and the fields of its fallback. The executor binds each variable (SymG through the canonical entry, the type and T_PTR checked, no local of that name live), runs the fallback if any bind fails, and otherwise runs the wordcode: computed goto, 16-bit words, a stack of 64-bit cells, as the G3 VM. First statements: <code>LET g = literal</code> and <code>LET g = g2</code> for global integer and float scalars. OPTION COMPILE SHADOW evaluates each compiled right-hand side through the text evaluator as well and stops on a difference.</li>
+<li><b>P2b, expressions.</b> Operator bodies move out of Operators.c into value-level helpers that op_* and the VM both call; literals go through getvalue's own number parser. Compiled: + - * / \ MOD ^, the comparisons, AND OR XOR NOT, unary minus, brackets, with doexpr's precedence and promotion. Shadow mode on the goldens and the games.</li>
+<li><b>P2c, IF.</b> Multi-line IF/ELSEIF/ELSE/ENDIF through IfTableLookup, and single-line IF with its THEN and ELSE parts compiled inline, which also ends the round trip to the text loop that costs P1 most of its remaining gap.</li>
+<li><b>P2d, loops.</b> FOR/NEXT keeping g_forstack as the text path does, DO/LOOP with g_dostack, EXIT FOR, EXIT DO and CONTINUE.</li>
+<li><b>P2e, libraries.</b> LIBRARY SAVE writes symbols, so library names bind like the program's.</li>
+</ol></li>
 <li><b>Gate:</b>
 <ul>
 <li>shadow mode clean on the goldens and the games;</li>
-<li>the G3 kernels rewritten at program level are at least 5x faster than text on both boards, which shows the prototype's speed survives in firmware.</li>
+<li>the G3 kernels rewritten at program level are at least 5x faster than text on the PC3, which shows the prototype's speed survives in firmware (Route B is RP2350-only).</li>
 </ul></li>
 </ul></div></div>
 <div class="phase"><div class="num">P3<small>calls</small></div><div>
@@ -516,6 +524,13 @@ END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and 
 <li><b>OPTION COMPILE ON | OFF | SHADOW</b> as a RAM-only development switch, off by default until the P3 gate: <b>yes</b>.</li>
 <li><b>Libraries are compiled too</b>, not left as text. Consequences: the stamp's CRC and the statement map cover the library image as well as the program, so the executor stays in compiled code across a call into the library; LIBRARY SAVE gains symbols (the library table the symbol format already reserves, found through <code>SymTabLib</code>), added in P2 so library names bind like the program's; and library SUBs leave the list of <code>DefinedSubFun</code> fallbacks in P3.</li>
 <li><b>Bugs found while preparing this:</b> all fixed on main (the comment fast path e49d3ff, MAX/MIN 50c9aa0, ABS/SGN 16d0413) and merged into development with V6.04.00RC2 (ac6ca56).</li>
+</ol>
+</div>
+<div class="decide"><div class="eyebrow">Decisions (Peter, 27 September 2026)</div>
+<ol>
+<li><b>Route B is RP2350-only.</b> The RP2040 has no 4 KB page of RAM below the heap for the executor, and from flash it runs slower than text. Removing Stream.c from the RP2040 build also returned its flash margin (8.4 to 12.4 KB) and RAM margin (212 to 820 bytes).</li>
+<li><b>The stream gets a PSRAM region of its own</b> instead of RAM slot 4: agreed. For boards without PSRAM Peter asked whether a new flash area is the equivalent. It is; it would sit after the program area, cost the A: drive MAX_PROG_SIZE on every RP2350 variant (the layout is fixed at build time, while PSRAM is a run-time option), and reformat A: once on upgrade. <b>Agreed:</b> flash slot 2 for the moment; a hidden flash slot of its own is added later, with the release that makes Route B a user feature.</li>
+<li><b>OPTION LOCAL VARIABLES is reset at RUN, NEW and LOAD</b> (ClearRuntime(true)), not on CHAIN, whose saved variables were placed with the split in force: agreed and done on development (e670e0a); main gets it later.</li>
 </ol>
 </div>
 </section>

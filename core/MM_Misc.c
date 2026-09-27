@@ -5259,6 +5259,7 @@ void MIPS16 cmd_option(void)
         return;
     }
 
+#ifdef rp2350
     tp = checkstring(cmdline, (unsigned char *)"COMPILE");
     if (tp)
     { // development switch, not saved: run programs from a compiled statement stream (see Stream.h)
@@ -5272,6 +5273,7 @@ void MIPS16 cmd_option(void)
             SyntaxError();
         return;
     }
+#endif
 
     tp = checkstring(cmdline, (unsigned char *)"BASE");
     if (tp)
@@ -8222,6 +8224,7 @@ void MIPS16 fun_info(void)
             targ = T_INT;
             return;
         }
+#ifdef rp2350
         else if (checkstring(ep, (unsigned char *)"COMPILE"))
         { // what OPTION COMPILE did at the last RUN (see Stream.h)
             RBStatus((char *)sret);
@@ -8229,6 +8232,7 @@ void MIPS16 fun_info(void)
             targ = T_STR;
             return;
         }
+#endif
         else if (checkstring(ep, (unsigned char *)"CPUSPEED"))
         {
             IntToStr((char *)sret, Option.CPU_Speed * 1000, 10);

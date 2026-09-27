@@ -557,6 +557,12 @@ extern "C"
    from the slots themselves it cannot drift again: five slots of MAX_PROG_SIZE
    is 1500 KB at the largest heap any variant has. */
 #define PSRAMblocksize (MAXRAMSLOTS * MAX_PROG_SIZE)
+/* Route B's compiled program (core/Stream.c) takes what the reserve has left
+   above the RAM slots: 944 KB with HDMIWEB's 144 KB slots, 164 KB at the
+   largest heap.  It is nobody's slot, so a program that fills every RAM slot
+   still runs compiled; RAM ERASE ALL (PSRAMblocksize) does not reach it. */
+#define PSRAMstream (PSRAMblock + PSRAMblocksize)
+#define PSRAMstreamsize (2 * 1024 * 1024 - 0x60000 - PSRAMblocksize)
 
 #else
 #ifndef PICOMITEWEB

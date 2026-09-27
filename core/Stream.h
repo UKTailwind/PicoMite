@@ -40,14 +40,15 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifndef __STREAM_H
 #define __STREAM_H
 
+#ifdef rp2350
 #define RB_OFF 0
 #define RB_ON 1
 #define RB_SHADOW 2
 extern int RBMode; // OPTION COMPILE ON | OFF | SHADOW: a development switch, not saved
 
-int RBStreamSlotRam(void);           // 1: the stream is in a RAM (PSRAM) slot, 0: in a flash slot
-int RBStreamSlot(void);              // that slot's number: RAM slot 4, or flash slot 2
-void RBGuardSlot(int ram, int slot); // refuse a command on the slot that holds the stream
+// Where the stream lives: with PSRAM, a region of its own above the RAM slots
+// (PSRAMstream); without, flash slot 2, which the slot commands then refuse.
+void RBGuardFlashSlot(int slot); // refuse a command on the flash slot that holds the stream
 
 // P1b: the stamp.  PrepareProgram(true) compares a CRC of the program and
 // library with the one the stream was compiled from, and compiles again only
@@ -56,14 +57,21 @@ extern int RBLive;             // a stream matching the program is in the slot
 void RBPrepare(void);          // at the end of a successful PrepareProgram(true)
 void RBStatus(char *out);      // MM.INFO(COMPILE): what the last RUN did
 
-// P1d: the executor.  ExecuteProgram hands over to it while a live stream
-// holds the statement it is about to run.  It runs from RAM on the RP2350.
-// On the RP2040 it is still in flash, where it and the handlers it calls
-// (findvar, cmd_next) evict each other from the 16 KB two-way XIP cache
-// (pixart 29% slower than text); RAM for it there means crossing the 4 KB
-// page below AllMemory, i.e. 4 KB less heap and program memory.
+// P1d: the executor, in RAM.  ExecuteProgram hands over to it while a live
+// stream holds the statement it is about to run.
 int RBInImage(unsigned char *p);             // p lies in the program or library image
 unsigned char *RunStream(unsigned char *p);  // run from p; returns where the text loop carries on
+#else
+// Route B is RP2350-only (Peter, 27 September 2026).  The RP2040 has no page
+// of RAM below the heap for the executor, and from flash the executor and the
+// handlers it calls (findvar, cmd_next) evict each other from the 16 KB XIP
+// cache: pixart ran 29% slower compiled than as text.  These compile away.
+#define RBLive 0
+static inline void RBGuardFlashSlot(int slot) { (void)slot; }
+static inline void RBPrepare(void) {}
+static inline int RBInImage(unsigned char *p) { (void)p; return 0; }
+static inline unsigned char *RunStream(unsigned char *p) { return p; }
+#endif
 
 #endif /* __STREAM_H */
 /*  @endcond */

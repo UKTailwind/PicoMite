@@ -725,15 +725,12 @@ void MIPS16 cmd_psram(void)
     unsigned char *p;
     if ((p = checkstring(cmdline, (unsigned char *)"ERASE ALL")))
     {
-        if (CurrentLinePtr)
-            RBGuardSlot(1, RBStreamSlot()); // the stream a running program executes from
         RamLibRelease();
         memset((void *)PSRAMblock, 0, PSRAMblocksize);
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"ERASE")))
     {
         int i = getint(p, 1, MAXRAMSLOTS);
-        RBGuardSlot(1, i); // not the slot that holds the compiled program (see Stream.h)
         uint8_t *j = (uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
         if (i == MAXRAMSLOTS)
             RamLibRelease(); /* erasing the library's slot lets it go */
@@ -742,7 +739,6 @@ void MIPS16 cmd_psram(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"OVERWRITE")))
     {
         int i = getint(p, 1, MAXRAMSLOTS);
-        RBGuardSlot(1, i); // not the slot that holds the compiled program (see Stream.h)
         if (i == MAXRAMSLOTS && RamLibMemory)
             error("RAM slot % holds the library", MAXRAMSLOTS);
         uint8_t *j = (uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
@@ -829,7 +825,6 @@ void MIPS16 cmd_psram(void)
             SyntaxError();
         ;
         int i = getint(argv[0], 1, MAXRAMSLOTS);
-        RBGuardSlot(1, i); // not the slot that holds the compiled program (see Stream.h)
         if (argc == 5)
         {
             if (checkstring(argv[4], (unsigned char *)"O") || checkstring(argv[4], (unsigned char *)"OVERWRITE"))
@@ -872,7 +867,6 @@ void MIPS16 cmd_psram(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"SAVE")))
     {
         int i = getint(p, 1, MAXRAMSLOTS);
-        RBGuardSlot(1, i); // not the slot that holds the compiled program (see Stream.h)
         if (i == MAXRAMSLOTS && RamLibMemory)
             error("RAM slot % holds the library", MAXRAMSLOTS);
         uint8_t *c = (uint8_t *)(PSRAMblock + ((i - 1) * MAX_PROG_SIZE));
@@ -886,7 +880,6 @@ void MIPS16 cmd_psram(void)
         if (CurrentLinePtr)
             StandardError(10);
         int j = (Option.PROG_FLASH_SIZE >> 2), i = getint(p, 1, MAXRAMSLOTS);
-        RBGuardSlot(1, i); // not the slot that holds the compiled program (see Stream.h)
         uint8_t *q = (uint8_t *)(PSRAMblock + ((i - 1) * MAX_PROG_SIZE));
         if (!(*q == T_NEWLINE))
             error("RAM slot empty");
@@ -928,7 +921,6 @@ void MIPS16 cmd_psram(void)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXRAMSLOTS);
-        RBGuardSlot(1, i); // not the slot that holds the compiled program (see Stream.h)
         if (i)
             ProgMemory = (unsigned char *)(PSRAMblock + ((i - 1) * MAX_PROG_SIZE));
         else
@@ -946,7 +938,6 @@ void MIPS16 cmd_psram(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
     {
         int i = getint(p, 0, MAXRAMSLOTS);
-        RBGuardSlot(1, i); // not the slot that holds the compiled program (see Stream.h)
         if (i)
             ProgMemory = (unsigned char *)(uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
         else
@@ -1153,7 +1144,7 @@ void MIPS16 cmd_flash(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"ERASE")))
     {
         int i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardSlot(0, i); // not the slot that holds the compiled program (see Stream.h)
+        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         uint32_t j = FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + ((i - 1) * MAX_PROG_SIZE);
@@ -1180,7 +1171,8 @@ void MIPS16 cmd_flash(void)
         /* Slots above the flash ones are RAM slots in PSRAM (RP2350 only);
            ImageSlotAddress() errors if there is no PSRAM. */
         bool toram = (i > MAXFLASHSLOTS);
-        RBGuardSlot(toram, toram ? i - MAXFLASHSLOTS : i); // not the compiled program's slot (see Stream.h)
+        if (!toram)
+            RBGuardFlashSlot(i); // not the compiled program's slot (see Stream.h)
         uint32_t *c = (uint32_t *)ImageSlotAddress(i);
 #ifdef rp2350
         if (i == MAXIMAGESLOTS && RamLibMemory)
@@ -1259,7 +1251,7 @@ void MIPS16 cmd_flash(void)
         if (CurrentLinePtr)
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardSlot(0, i); // not the slot that holds the compiled program (see Stream.h)
+        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         uint32_t j = FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + ((i - 1) * MAX_PROG_SIZE);
@@ -1414,7 +1406,7 @@ void MIPS16 cmd_flash(void)
             SyntaxError();
         ;
         int i = getint(argv[0], 1, MAXFLASHSLOTS);
-        RBGuardSlot(0, i); // not the slot that holds the compiled program (see Stream.h)
+        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (argc == 5)
         {
             if (checkstring(argv[4], (unsigned char *)"O") || checkstring(argv[4], (unsigned char *)"OVERWRITE"))
@@ -1459,7 +1451,7 @@ void MIPS16 cmd_flash(void)
         if (CurrentLinePtr)
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardSlot(0, i); // not the slot that holds the compiled program (see Stream.h)
+        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         uint32_t *c = (uint32_t *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
@@ -1495,7 +1487,7 @@ void MIPS16 cmd_flash(void)
         if (CurrentLinePtr)
             StandardError(10);
         int j = (Option.PROG_FLASH_SIZE >> 2), i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardSlot(0, i); // not the slot that holds the compiled program (see Stream.h)
+        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         uint8_t *q = (uint8_t *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
         if (!(*q == T_NEWLINE))
             error("Flash slot empty");
@@ -1539,7 +1531,7 @@ void MIPS16 cmd_flash(void)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXFLASHSLOTS);
-        RBGuardSlot(0, i); // not the slot that holds the compiled program (see Stream.h)
+        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         if (i)
@@ -1559,7 +1551,7 @@ void MIPS16 cmd_flash(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
     {
         int i = getint(p, 0, MAXFLASHSLOTS);
-        RBGuardSlot(0, i); // not the slot that holds the compiled program (see Stream.h)
+        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         if (i)
