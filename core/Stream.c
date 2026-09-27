@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 22       // the stream format
+#define RB_VERSION 23       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -392,6 +392,10 @@ enum
     RC_LDEL,     // an element of array bind a, its k indices (the next word) on the stack: its value
     RC_ADEL,     // the same: its address, for RC_STP
     RC_STP,      // pop a value, then an address, and store the value there
+    RC_EXITFOR,  // cmd_exitfor
+    RC_EXITDO,   // cmd_exit
+    RC_RETURN,   // cmd_return: END SUB, EXIT SUB, RETURN
+    RC_ENDFUN,   // cmd_endfun: END FUNCTION, EXIT FUNCTION
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -1418,6 +1422,22 @@ static int RBFcall(rbcx_t *x, unsigned char **pp, int *op)
     return ftype;
 }
 
+// P4b: EXIT FOR, EXIT DO, cmd_return and cmd_endfun, which take no operands:
+// only checkend's error (something after the command) is left to the text
+static int RBCompileExit(unsigned char *entry, unsigned char *cmdl, CommandToken ct, uint16_t *code)
+{
+    rbcx_t x;
+    void (*fn)(void) = commandtbl[ct].fptr;
+    int op = fn == cmd_exitfor ? RC_EXITFOR : fn == cmd_exit ? RC_EXITDO : fn == cmd_return ? RC_RETURN : fn == cmd_endfun ? RC_ENDFUN : 0;
+    skipspace(cmdl);
+    if (!op || (*cmdl && *cmdl != '\''))
+        return 0;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    RBOp(&x, op, 0);
+    return RBFinish(&x, code);
+}
+
 // NEXT: cmd_next finds its loop by the NEXT's position, so the op needs no
 // operands and no binds
 static int RBCompileNext(unsigned char *entry, uint16_t *code)
@@ -1484,7 +1504,7 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
                        unsigned char *p, uint16_t *code)
 {
     rbcx_t x;
-    unsigned char *cond, *target;
+    unsigned char *cond, *target, *thenp;
     int t, jf, jmp;
     memset(&x, 0, sizeof(x));
     x.entry = entry;
@@ -1497,6 +1517,7 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
     if (*p != tokenTHEN)
         return 0;
     p++;
+    thenp = p; // the THEN part's record, when it has one (RBEmitIfParts)
     if (RBMode == RB_SHADOW && !x.ncall)
     { // (not of a call, which the text evaluator would make again)
         RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
@@ -1522,7 +1543,26 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
     else
     { // a single-line IF
         if (!RBIsLet(p))
-            return 0;
+        { // P4b: a THEN part that is not a LET: with no ELSE, true goes to its record, as
+          // cmd_if sends nextstmt there (with an ELSE cmd_if runs it itself: text)
+            unsigned char *e = p;
+            if (*p >= '0' && *p <= '9')
+                return 0; // THEN linenumber: cmd_if's findline
+            if (!(p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN && commandtbl_decode(p) == RBTokIf))
+            { // (THEN IF: the rest of the element is the THEN part, ELSE and all)
+                e = p + sizeof(CommandToken);
+                while (*e && *e != tokenELSE)
+                    e++;
+                if (*e == tokenELSE)
+                    return 0;
+            }
+            RBGoto(&x, base, libbit, thenp);
+            RBLand(&x, jf);
+            target = p;
+            skipline(target); // false: past the line
+            RBGoto(&x, base, libbit, target);
+            return RBFinish(&x, code);
+        }
         p += sizeof(CommandToken);
         skipspace(p);
         if ((p = RBLetInto(&x, p, tokenELSE)) == NULL)
@@ -1823,6 +1863,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileNext(entry, code + 1);
         else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
             C.deftype = d;
+        else
+            ncode = RBCompileExit(entry, cmdl, ct, code + 1);
     }
     w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0) | (ncode ? RB_COMPILED : 0) | (C.part ? RB_PART : 0);
     w[n++] = key & 0xFFFF;
@@ -2711,6 +2753,22 @@ static __attribute__((noinline)) union cell *RBElementAt(struct s_vartbl *v, uni
     return (union cell *)(v->val.s + nbr * 8);
 }
 
+// RC_RETURN: cmd_return, END SUB's and RETURN's; 0, before anything happens,
+// if there is nothing to return to (the fallback raises the error)
+static __attribute__((noinline)) int RBReturn(void)
+{
+    if (gosubindex == 0 || gosubstack[gosubindex - 1] == NULL)
+        return 0;
+    ClearVars(g_LocalIndex--, true); // delete any local variables
+#ifdef SUBPROFILE
+    LeaveLocalFrame(); // pop this GOSUB's local frame
+#endif
+    g_TempMemoryIsChanged = true;        // signal that temporary memory should be checked
+    nextstmt = gosubstack[--gosubindex]; // return to the caller
+    CurrentLinePtr = errorstack[gosubindex];
+    return 1;
+}
+
 /* FOR's and DO's stack work, once a loop: in flash, as RBRun's RAM is the
    stack's (see the design's notes on the stack). */
 // RC_FORP: cmd_for's stack work before its values, for the variable at vptr
@@ -2916,6 +2974,10 @@ again:
         [RC_LDEL] = &&L_LDEL,
         [RC_ADEL] = &&L_LDEL,
         [RC_STP] = &&L_STP,
+        [RC_EXITFOR] = &&L_EXITFOR,
+        [RC_EXITDO] = &&L_EXITDO,
+        [RC_RETURN] = &&L_RETURN,
+        [RC_ENDFUN] = &&L_ENDFUN,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -3083,7 +3145,13 @@ again:
         }
     L_LDEL: // findvar with the array found: the count, the bounds, the element (RBElementAt)
         {
-            union cell *el = RBElementAt((struct s_vartbl *)slotp[w >> 8], sp - *pc, *pc);
+            struct s_vartbl *av = (struct s_vartbl *)slotp[w >> 8];
+            union cell *el;
+            if (*pc == 1 && !DimIsEnd(RAW_DIM(*av, 0)) && DimIsEnd(RAW_DIM(*av, 1)) &&
+                sp[-1].i <= DimUpper(RAW_DIM(*av, 0)) && sp[-1].i >= g_OptionBase)
+                el = (union cell *)(av->val.s + (sp[-1].i - g_OptionBase) * 8); // one dimension, in bounds
+            else
+                el = RBElementAt(av, sp - *pc, *pc);
             sp -= *pc++;
             if ((w & 0xFF) == RC_LDEL)
                 *sp++ = *el;
@@ -3091,6 +3159,35 @@ again:
                 (sp++)->i = (long long int)(uint32_t)el;
             RBNEXT();
         }
+    L_EXITFOR: // cmd_exitfor
+            if (g_forindex == 0)
+                goto fail; // "No FOR loop is in effect": the fallback raises it
+            nextstmt = g_forstack[--g_forindex].nextptr;
+            skipelement(nextstmt);
+            RBRan++;
+            RBCode++;
+            goto done;
+    L_EXITDO: // cmd_exit
+            if (g_doindex == 0)
+                goto fail;
+            nextstmt = g_dostack[--g_doindex].loopptr;
+            skipelement(nextstmt);
+            RBRan++;
+            RBCode++;
+            goto done;
+    L_RETURN: // cmd_return (RBReturn)
+            if (!RBReturn())
+                goto fail; // "Nothing to return to"
+            RBRan++;
+            RBCode++;
+            goto done;
+    L_ENDFUN: // cmd_endfun: the end of this run of ExecuteProgram
+            if (gosubindex == 0 || gosubstack[gosubindex - 1] != NULL)
+                goto fail;
+            nextstmt = (unsigned char *)"\0\0\0";
+            RBRan++;
+            RBCode++;
+            goto done;
     L_STP:
             sp -= 2;
             *(union cell *)(uint32_t)sp[0].i = sp[1];
