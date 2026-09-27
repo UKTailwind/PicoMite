@@ -1424,6 +1424,15 @@ static const uint16_t *RBRAM(RBFind)(unsigned char *p)
 
 // The text loop's tail after a statement, with nextstmt at here.  True if it
 // moved nextstmt (an interrupt).
+//
+// The text loop calls CheckAbort and check_interrupt after every statement.
+// They do real work only when an abort or an interrupt is pending, and
+// otherwise on routinechecks' 100 us cadence (USB, touch, the cursor, the
+// WiFi poll, which ProcessWeb also makes at least every ms).  The stream
+// calls them when MMAbort or IntReady says so, at once, and otherwise every
+// 100 us: a PC-sampled compiled loop spent 39% of its time in them.
+#define RB_HOUSE_US 100
+static uint32_t RBHouseAt; // time_us_32() when the stream last called them
 static int RBRAM(RBTail)(unsigned char *here)
 {
     nextstmt = here;
@@ -1437,8 +1446,13 @@ static int RBRAM(RBTail)(unsigned char *here)
 #endif
     if (!OptionNoCheck)
     {
-        CheckAbort();
-        check_interrupt();
+        uint32_t now = time_us_32();
+        if (MMAbort || IntReady.any || now - RBHouseAt >= RB_HOUSE_US)
+        {
+            RBHouseAt = now;
+            CheckAbort();
+            check_interrupt();
+        }
     }
     return nextstmt != here;
 }
