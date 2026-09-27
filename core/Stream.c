@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 3        // the stream format
+#define RB_VERSION 4        // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -95,6 +95,7 @@ static int RBCompiles = 0;
 static int RBReused = 0;
 static uint32_t RBRan = 0;  // statements run from the stream since RUN
 static uint32_t RBMiss = 0; // map lookups the cache did not answer (a bucket search each)
+static uint32_t RBCode = 0; // statements run as compiled code since RUN
 static const char *RBWhy = NULL; // why the last RUN ran as text
 
 // A stream is tied to the firmware that wrote it: a record holds command
@@ -247,6 +248,7 @@ enum
     RB_OP_NOP       // a comment, or a line with nothing to run: the head only
 };
 #define RB_LINESTART 0x100    // STMT: this statement starts a line (a T_NEWLINE at the entry)
+#define RB_COMPILED 0x200     // STMT: its CMD record is followed by compiled code (P2a)
 #define RB_LIBBIT 0x80000000u // a key in the library's image
 #define RB_BSHIFT 5           // a bucket of the map's index is 32 bytes of text
 #define RB_PAGEUP(n) (((n) + RB_PAGE - 1) & ~(RB_PAGE - 1))
@@ -274,6 +276,45 @@ static void RBTabTo(uint32_t b)
     }
 }
 
+/* ---------------------------------------------------------------------------
+   P2a: compiled statements.
+
+   A statement the compiler handles is still a CMD record, whose fields are
+   now its fallback, with RB_COMPILED in its STMT word and its code after it:
+
+     [n] [nbind] nbind x [symoff | suffix << 8 | RC_TARGET] [type]  wordcode
+
+   n counts the words after itself.  Each bind names a variable by the offset
+   of its symbol from the statement's entry, with the suffix it is written
+   with (0, T_INT or T_NBR) and the type the code was compiled for.  The
+   executor binds each one exactly as findvar's fast path would find it (the
+   local at this level, else the global when no text local can hide it),
+   checks that it is a scalar of that type which the reference may name, and
+   runs the fallback instead if any check fails, before anything has
+   happened; that is also how a variable is first made and bound, by the
+   text path.  The wordcode runs on a stack of 64-bit cells.
+
+   P2a compiles LET g = literal and LET g = g2 for global integer and float
+   scalars.  A literal is evaluated at compile time by evaluate() itself,
+   with the type hint cmd_let gives it, so the value is the one the text path
+   computes; one that would not convert quietly stays text.
+   --------------------------------------------------------------------------- */
+enum
+{
+    RC_END,    // the statement is done
+    RC_LDG,    // push bound variable a
+    RC_STG,    // pop into bound variable a
+    RC_LK,     // push the 64-bit constant in the next four words
+    RC_CVIF,   // integer to float, as cmd_let stores an integer in a float
+    RC_CVFI,   // float to integer through FloatToInt64, as cmd_let does
+    RC_SHADOW, // OPTION COMPILE SHADOW: compare the top with the text evaluator's result
+};
+#define RC_TARGET 0x8000 // bind: the statement assigns to it
+#define RB_MAXBIND 8
+#define RB_MAXCODE 48 // words of code one statement may compile to
+
+static CommandToken RBTokLet; // the LET command, looked up once a compile
+
 static void RBEmitWords(const uint16_t *w, int n)
 {
     if (C.pass == 2)
@@ -281,9 +322,145 @@ static void RBEmitWords(const uint16_t *w, int n)
     C.codelen += n * 2;
 }
 
+// A numeric literal the compiler can read: digits with an optional point and
+// exponent, at most 15 digits, then the end of the statement.  Returns the
+// end of the literal, or NULL.
+static unsigned char *RBLiteral(unsigned char *p)
+{
+    int digits = 0;
+    while (*p >= '0' && *p <= '9')
+        p++, digits++;
+    if (*p == '.')
+        for (p++; *p >= '0' && *p <= '9'; p++)
+            digits++;
+    if (digits == 0 || digits > 15)
+        return NULL;
+    if (*p == 'E' || *p == 'e')
+    {
+        p++;
+        if (*p == '+' || *p == '-')
+            p++;
+        if (!(*p >= '0' && *p <= '9'))
+            return NULL;
+        while (*p >= '0' && *p <= '9')
+            p++;
+    }
+    return p;
+}
+
+// The type suffix written after a name, as findvar reads it: 0, T_INT, T_NBR,
+// or T_STR (which the compiler leaves alone).  Steps *p over it.
+static int RBSuffix(unsigned char **p)
+{
+    int t = **p == '%' ? T_INT : **p == '!' ? T_NBR : **p == '$' ? T_STR : 0;
+    if (t)
+        (*p)++;
+    return t;
+}
+
+// A variable the compiler can bind: a program symbol whose spelling has no
+// '.' (a structure member path), with its suffix, not followed by a bracket.
+// Returns the byte after it, or NULL.
+static unsigned char *RBVarRef(unsigned char *p, int *suffix)
+{
+    const unsigned char *sp;
+    int len;
+    if (!issymbol(*p) || (*p & 2))
+        return NULL;
+    sp = SymSpelling(p, &len);
+    if (memchr(sp, '.', len))
+        return NULL;
+    p += symbolsize(*p);
+    *suffix = RBSuffix(&p);
+    if (*suffix == T_STR || *p == '(' || *p == '.')
+        return NULL;
+    return p;
+}
+
+// Compile LET g = literal or LET g = g2 into code[]; returns the words, or 0
+// to leave the statement to its fallback.
+static int RBCompileLet(unsigned char *entry, unsigned char *p, uint16_t *code)
+{
+    unsigned char *tgt = p, *src, *rhs, *q;
+    int tsuf, ssuf, ttype, stype, n = 0;
+    MMFLOAT f;
+    long long i64;
+    unsigned char *str;
+    int t;
+    union
+    {
+        long long i;
+        MMFLOAT f;
+        uint16_t w[4];
+    } k;
+    if ((p = RBVarRef(p, &tsuf)) == NULL)
+        return 0;
+    skipspace(p);
+    if (*p != tokenEQUAL)
+        return 0;
+    p++;
+    skipspace(p);
+    rhs = p;
+    ttype = tsuf ? tsuf : T_NBR; // P2a: an unsuffixed name is taken to be the default float
+    if (tgt - entry > 255 || rhs - entry > 255)
+        return 0;
+    if ((q = RBVarRef(p, &ssuf)) != NULL)
+    { // LET g = g2
+        src = p;
+        stype = ssuf ? ssuf : T_NBR;
+        p = q;
+        skipspace(p);
+        if (*p && *p != '\'')
+            return 0;
+        if (src - entry > 255)
+            return 0;
+        code[n++] = 2;
+        code[n++] = (src - entry) | (ssuf << 8);
+        code[n++] = stype;
+        code[n++] = (tgt - entry) | (tsuf << 8) | RC_TARGET;
+        code[n++] = ttype;
+        code[n++] = RC_LDG | (0 << 8);
+        if (stype != ttype)
+            code[n++] = ttype == T_NBR ? RC_CVIF : RC_CVFI;
+    }
+    else if ((q = RBLiteral(p)) != NULL)
+    { // LET g = literal, evaluated now as cmd_let would evaluate it every time
+        p = q;
+        skipspace(p);
+        if (*p && *p != '\'')
+            return 0;
+        t = ttype;
+        evaluate(rhs, &f, &i64, &str, &t, false);
+        if (ttype == T_NBR)
+            k.f = (t & T_NBR) ? f : (MMFLOAT)i64;
+        else if (t & T_INT)
+            k.i = i64;
+        else if (isnan(f) || f < -9.0e18 || f > 9.0e18)
+            return 0; // FloatToInt64 would raise an error: leave that to the text path
+        else
+            k.i = FloatToInt64(f);
+        code[n++] = 1;
+        code[n++] = (tgt - entry) | (tsuf << 8) | RC_TARGET;
+        code[n++] = ttype;
+        code[n++] = RC_LK;
+        code[n++] = k.w[0];
+        code[n++] = k.w[1];
+        code[n++] = k.w[2];
+        code[n++] = k.w[3];
+    }
+    else
+        return 0;
+    code[n++] = RC_SHADOW | ((rhs - entry) << 8);
+    code[n++] = RC_STG | ((code[0] - 1) << 8); // the target is the last bind
+    code[n++] = RC_END;
+    return n;
+}
+
 static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entry, int linestart,
                        unsigned char *tok, int cmd, unsigned char *cmdl, unsigned char *next)
 {
+    uint16_t code[RB_MAXCODE + 1];
+    int ncode = 0;
     uint32_t key = (uint32_t)(entry - base) | libbit;
     uint16_t w[6];
     int n = 0;
@@ -300,7 +477,9 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         m[1] = C.code.pos; // the record's offset in the slot
         RBPut(&C.map, m, sizeof(m));
     }
-    w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0);
+    if (cmd > 0 && commandtbl_decode(tok) == RBTokLet)
+        ncode = RBCompileLet(entry, cmdl, code + 1);
+    w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0) | (ncode ? RB_COMPILED : 0);
     w[n++] = key & 0xFFFF;
     w[n++] = key >> 16;
     if (cmd > 0)
@@ -315,6 +494,11 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
     if (cmd >= 0)
         w[n++] = (cmdl - entry) | ((next - entry) << 8);
     RBEmitWords(w, n);
+    if (ncode)
+    {
+        code[0] = ncode;
+        RBEmitWords(code, ncode + 1);
+    }
     C.stmts++;
 }
 
@@ -401,6 +585,7 @@ static void RBCompile(rbheader_t *h)
     uint32_t codeoff;
     memset(&C, 0, sizeof(C));
     W.full = 0;
+    RBTokLet = GetCommandValue((unsigned char *)"Let");
     C.pass = 1;
     RBWalkAll();
     C.nbprog = (C.progend >> RB_BSHIFT) + 1;
@@ -624,6 +809,106 @@ static unsigned char *RBRAM(RBExec)(const uint16_t *r, unsigned char *e)
     return end;
 }
 
+// OPTION COMPILE SHADOW: evaluate the right-hand side at p through the text
+// evaluator, convert it as cmd_let would for type, and stop if the compiled
+// value v differs from it in any bit.
+static void RBShadow(unsigned char *p, int type, const void *v)
+{
+    MMFLOAT f;
+    long long i64;
+    unsigned char *str;
+    int t = type;
+    union
+    {
+        long long i;
+        MMFLOAT f;
+    } x, c;
+    char a[40], b[40];
+    evaluate(p, &f, &i64, &str, &t, false);
+    if (type == T_NBR)
+        x.f = (t & T_NBR) ? f : (MMFLOAT)i64;
+    else
+        x.i = (t & T_INT) ? i64 : FloatToInt64(f);
+    memcpy(&c, v, sizeof(c));
+    if (x.i == c.i)
+        return;
+    if (type == T_NBR)
+    {
+        FloatToStr(a, c.f, 0, STR_AUTO_PRECISION, ' ');
+        FloatToStr(b, x.f, 0, STR_AUTO_PRECISION, ' ');
+    }
+    else
+    {
+        IntToStr(a, c.i, 10);
+        IntToStr(b, x.i, 10);
+    }
+    error("SHADOW: compiled $, text $", a, b);
+}
+
+// Bind a compiled statement's variables and run its code.  Returns the end
+// it gave nextstmt, or NULL if a bind failed and the fallback must run.
+static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
+{
+    const uint16_t *c = r + 7, *pc;
+    union cell
+    {
+        long long i;
+        MMFLOAT f;
+    } * slot[RB_MAXBIND], st[8], *sp = st;
+    unsigned int nb = *c++, j, w;
+    for (j = 0; j < nb; j++, c += 2)
+    {
+        int k = SymCanonAt(e + (c[0] & 0xFF)), i, suf = (c[0] >> 8) & 0x7F;
+        struct s_vartbl *v;
+        if (k < 0)
+            return NULL;
+        i = SymL[k];
+        if (i >= 0 && g_vartbl[i].level == g_LocalIndex)
+            return NULL; // a local: P2a compiles globals only
+        i = SymG[k];
+        if (i < 0 || (g_LocalIndex && SymTextLocals))
+            return NULL; // not bound yet, or a text local may hide it: findvar decides
+        v = &g_vartbl[i];
+        if (!DimIsScalar(RAW_DIM(*v, 0)) || (v->type & (T_PTR | T_STRUCT | T_STR)) ||
+            (v->type & (T_INT | T_NBR)) != c[1] ||
+            (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
+            ((c[0] & RC_TARGET) && (v->type & T_CONST)))
+            return NULL;
+        slot[j] = (union cell *)&v->val;
+    }
+    for (pc = c;;)
+    {
+        w = *pc++;
+        switch (w & 0xFF)
+        {
+        case RC_LDG:
+            *sp++ = *slot[w >> 8];
+            break;
+        case RC_STG:
+            *slot[w >> 8] = *--sp;
+            break;
+        case RC_LK:
+            memcpy(sp++, pc, 8);
+            pc += 4;
+            break;
+        case RC_CVIF:
+            sp[-1].f = (MMFLOAT)sp[-1].i;
+            break;
+        case RC_CVFI:
+            sp[-1].i = FloatToInt64(sp[-1].f);
+            break;
+        case RC_SHADOW:
+            if (RBMode == RB_SHADOW)
+                RBShadow(e + (w >> 8), c[-1], &sp[-1]); // c[-1]: the target's type, the last bind's
+            break;
+        default: // RC_END
+            RBRan++;
+            RBCode++;
+            return nextstmt = e + (r[5] >> 8);
+        }
+    }
+}
+
 // RBExec while ON ERROR SKIP/IGNORE is in force: an error in the statement
 // comes back here, as it does to the text loop's setjmp, and the statement
 // counts as run.  Its own frame holds the jmp_buf's registers.
@@ -696,11 +981,12 @@ unsigned char *RBRAM(RunStream)(unsigned char *p)
             r += 4;
             continue;
         }
-        end = OptionErrorSkip == 0 ? RBExec(r, entry) : RBExecSkip(r, entry);
+        if (!(r[0] & RB_COMPILED) || OptionErrorSkip != 0 || (end = RBRun(r, entry)) == NULL)
+            end = OptionErrorSkip == 0 ? RBExec(r, entry) : RBExecSkip(r, entry);
         // where next: the next record, the record of a jump's target, or the text loop
         if (nextstmt == end)
         {
-            r += (r[3] & 0xFF) == RB_OP_CMD ? 6 : 5;
+            r += (r[3] & 0xFF) != RB_OP_CMD ? 5 : (r[0] & RB_COMPILED) ? 7 + r[6] : 6;
             continue;
         }
         if ((t = RBFind(nextstmt)) != NULL) // NULL too if the statement compiled the program again (RUN)
@@ -747,7 +1033,7 @@ void RBPrepare(void)
     const rbheader_t *old = (const rbheader_t *)RBSlotBase();
     RBLive = 0;
     RBWhy = NULL;
-    RBRan = RBMiss = 0;
+    RBRan = RBMiss = RBCode = 0;
     if (RBMode == RB_OFF)
         return;
     if (SymTabProg == NULL)
@@ -803,6 +1089,8 @@ void RBStatus(char *out)
         IntToStr(out + strlen(out), RBRan, 10);
         strcat(out, " MISS ");
         IntToStr(out + strlen(out), RBMiss, 10);
+        strcat(out, " CODE ");
+        IntToStr(out + strlen(out), RBCode, 10);
     }
 }
 #endif // rp2350
