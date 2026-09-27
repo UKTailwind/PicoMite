@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 13       // the stream format
+#define RB_VERSION 14       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -295,14 +295,14 @@ static void RBTabTo(uint32_t b)
    A statement the compiler handles is still a CMD record, whose fields are
    now its fallback, with RB_COMPILED in its STMT word and its code after it:
 
-     [n] [nbind] [stamp lo] [stamp hi] nbind x [id | suffix << 12 | RC_TARGET] [type]
+     [n] [nbind] [stamp lo] [stamp hi] nbind x [id | suffix << 12 | RC_LIB | RC_TARGET] [type]
      nbind x [address lo] [address hi]  wordcode
 
    n counts the words after itself.  Each bind names a variable by its
    symbol's id (SymCanonOf[id] finds its canonical entry in one load, and the
-   symbol may be anywhere: a LOOP compiles its DO's condition), with the
-   suffix it is written with (RC_SUFNBR, RC_SUFINT or none) and the type the
-   code was compiled for.  The
+   symbol may be anywhere: a LOOP compiles its DO's condition), RC_LIB for a
+   library symbol, with the suffix it is written with (RC_SUFNBR, RC_SUFINT
+   or none) and the type the code was compiled for.  The
    executor binds each one exactly as findvar's fast path would find it (the
    local at this level, else the global when no text local can hide it),
    checks that it is a scalar of that type which the reference may name, and
@@ -378,6 +378,7 @@ enum
 #define RC_TARGET 0x8000 // bind: the statement assigns to it
 #define RC_SUFNBR 0x1000 // bind: written with ! (T_NBR)
 #define RC_SUFINT 0x2000 // bind: written with % (T_INT)
+#define RC_LIB 0x4000    // bind: a library symbol (its id follows the program's in SymCanonOf)
 #define RC_IDMASK 0x0FFF // bind: the symbol id
 #define RB_MAXBIND 12
 #define RB_MAXCODE 96  // words of code one statement may compile to
@@ -432,7 +433,7 @@ static void RBTypeName(unsigned char *p, int type, int local)
 static void RBSurveyUnit(unsigned char *p)
 {
     for (; *p && *p != '\''; p++)
-        if (issymbol(*p) && !(*p & 2))
+        if (issymbol(*p))
         {
             RBTypeName(p, 0, 1);
             p += symbolsize(*p) - 1;
@@ -485,7 +486,7 @@ static void RBSurveyDim(unsigned char *p, int local)
     while (1)
     {
         skipspace(p);
-        if (!issymbol(*p) || (*p & 2))
+        if (!issymbol(*p))
             return; // a name the survey cannot read ends it
         q = p + symbolsize(*p);
         suf = RBSuffix(&q);
@@ -526,7 +527,7 @@ static void RBSurveyConst(unsigned char *p, int local)
     while (1)
     {
         skipspace(p);
-        if (!issymbol(*p) || (*p & 2))
+        if (!issymbol(*p))
             return;
         q = p + symbolsize(*p);
         suf = RBSuffix(&q);
@@ -617,14 +618,14 @@ static int RBSuffix(unsigned char **p)
     return t;
 }
 
-// A variable the compiler can bind: a program symbol whose spelling has no
-// '.' (a structure member path), with its suffix, not followed by a bracket.
+// A variable the compiler can bind: a symbol whose spelling has no '.' (a
+// structure member path), with its suffix, not followed by a bracket.
 // Returns the byte after it, or NULL.
 static unsigned char *RBVarRef(unsigned char *p, int *suffix)
 {
     const unsigned char *sp;
     int len;
-    if (!issymbol(*p) || (*p & 2))
+    if (!issymbol(*p))
         return NULL;
     sp = SymSpelling(p, &len);
     if (memchr(sp, '.', len))
@@ -666,7 +667,7 @@ static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
     unsigned int id = SymIdAt(p), w0, j;
     if (id > RC_IDMASK)
         return -1;
-    w0 = id | (suffix == T_NBR ? RC_SUFNBR : suffix == T_INT ? RC_SUFINT : 0);
+    w0 = id | ((*p & 2) ? RC_LIB : 0) | (suffix == T_NBR ? RC_SUFNBR : suffix == T_INT ? RC_SUFINT : 0);
     for (j = 0; j < (unsigned)x->nbind; j++)
         if ((x->bind[j][0] & ~RC_TARGET) == w0)
         {
@@ -1471,19 +1472,12 @@ static void RBWalkAll(void)
         RBTabTo(C.ntab - 1); // and the library's, and the sentinel, at the end of the map
 }
 
-// The survey's walk over the program: every DIM, LOCAL, STATIC and CONST.
-static void RBSurvey(void)
+// The survey's walk over one image: every DIM, LOCAL, STATIC and CONST.
+static void RBSurveyImage(unsigned char *p)
 {
-    unsigned char *p = ProgMemory, *cmdl;
+    unsigned char *cmdl;
     CommandToken ct;
     int inunit = 0;
-    C.ntypes = SymCanonOf ? SymCanonCount : 0;
-    C.types = C.ntypes ? GetTempMemory(C.ntypes) : NULL; // zeroed: no type known
-    if (!C.types)
-    {
-        C.ntypes = 0;
-        return;
-    }
     skipspace(p);
     while (1)
     {
@@ -1526,6 +1520,22 @@ static void RBSurvey(void)
         if ((p[0] == 0 && p[1] == 0) || (p[0] == 0xff && p[1] == 0xff))
             break;
     }
+}
+
+// The survey, over the program and the library: their names share canonical
+// entries, and a global either declares is one variable.
+static void RBSurvey(void)
+{
+    C.ntypes = SymCanonOf ? SymCanonCount : 0;
+    C.types = C.ntypes ? GetTempMemory(C.ntypes) : NULL; // zeroed: no type known
+    if (!C.types)
+    {
+        C.ntypes = 0;
+        return;
+    }
+    RBSurveyImage(ProgMemory);
+    if (LibPresent())
+        RBSurveyImage(LibMemory);
 }
 
 // Compile the program (and the library) into the slot.
@@ -1891,7 +1901,7 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
     {
     for (j = 0; j < nb; j++, c += 2)
     {
-        unsigned int id = c[0] & RC_IDMASK, sc;
+        unsigned int id = (c[0] & RC_IDMASK) + ((c[0] & RC_LIB) ? SymCanonLibBase : 0), sc;
         int k, i, suf = (c[0] & RC_SUFNBR) ? T_NBR : (c[0] & RC_SUFINT) ? T_INT : 0;
         struct s_vartbl *v;
         if (id < SymCanonCount && SymCanonOf && (sc = SymCanonOf[id]) != 0)
