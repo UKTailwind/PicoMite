@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 6        // the stream format
+#define RB_VERSION 7        // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -334,6 +334,11 @@ enum
     RC_NOTF,
     RC_NOTI,
     RC_INV,
+    RC_JFF,     // pop a float; if it is 0, skip the number of words in the next word
+    RC_JFI,     // the same for an integer: IF's truth, value <> 0 as getnumber gives it
+    RC_JMP,     // skip the number of words in the next word
+    RC_GOTO,    // the statement ends by going to the text position in the next two words (a key)
+    RC_SHADOWC, // OPTION COMPILE SHADOW: IF's condition at a, of the type in the next word
 };
 #define RC_TARGET 0x8000 // bind: the statement assigns to it
 #define RB_MAXBIND 12
@@ -341,6 +346,7 @@ enum
 #define RB_MAXDEPTH 16 // cells of stack it may use
 
 static CommandToken RBTokLet; // the LET command, looked up once a compile
+static CommandToken RBTokIf, RBTokElse, RBTokEndIf, RBTokEnd_If;
 static CommandToken RBTokDim, RBTokLocal, RBTokStatic, RBTokConst, RBTokOption;
 static CommandToken RBTokEndSub, RBTokEndFun;
 static unsigned char *RBLiteral(unsigned char *p);
@@ -812,46 +818,170 @@ static int RBEvaluate(rbcx_t *x, unsigned char **pp)
     return x->fail ? 0 : t;
 }
 
-// Compile LET g = expression into code[] as [nbind] binds wordcode; returns
-// the words, or 0 to leave the statement to its fallback.
-static int RBCompileLet(unsigned char *entry, unsigned char *p, uint16_t *code)
+// LET's assignment, from its target at p, into x.  Returns the byte after
+// it, or NULL.  stop is a token that may end it besides the element (the
+// ELSE of a single-line IF), or 0.
+static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
 {
-    rbcx_t x;
     unsigned char *q, *rhs;
-    int tsuf, tgt, ttype, t, n = 0, j;
-    memset(&x, 0, sizeof(x));
-    x.entry = entry;
-    if ((q = RBVarRef(p, &tsuf)) == NULL || (tgt = RBBind(&x, p, tsuf, 1)) < 0)
-        return 0;
-    ttype = x.bind[tgt][1];
+    int tsuf, tgt, ttype, t;
+    if ((q = RBVarRef(p, &tsuf)) == NULL || (tgt = RBBind(x, p, tsuf, 1)) < 0)
+        return NULL;
+    ttype = x->bind[tgt][1];
     p = q;
     skipspace(p);
     if (*p != tokenEQUAL)
-        return 0;
+        return NULL;
     p++;
     skipspace(p);
     rhs = p;
-    if (rhs - entry > 255 || (t = RBEvaluate(&x, &p)) == 0)
+    if (rhs - x->entry > 255 || (t = RBEvaluate(x, &p)) == 0)
+        return NULL;
+    skipspace(p);
+    if (*p && *p != '\'' && !(stop && *p == stop))
+        return NULL; // evaluate's and checkend's errors are the text path's
+    if (t != ttype) // as evaluate converts for cmd_let's type, then cmd_let stores it
+        RBOp(x, ttype == T_NBR ? RC_CVIF : RC_CVFI, 0);
+    RBOp(x, RC_SHADOW | ((rhs - x->entry) << 8), 0);
+    RBOp(x, ttype, 0);
+    RBOp(x, RC_STG | (tgt << 8), -1);
+    return p;
+}
+
+// x's binds and code into code[] as [nbind] binds wordcode: the words, or 0
+static int RBFinish(rbcx_t *x, uint16_t *code)
+{
+    int n = 0, j;
+    if (x->fail || x->maxdepth > RB_MAXDEPTH || 1 + 2 * x->nbind + x->n > RB_MAXCODE)
+        return 0;
+    code[n++] = x->nbind;
+    for (j = 0; j < x->nbind; j++)
+    {
+        code[n++] = x->bind[j][0];
+        code[n++] = x->bind[j][1];
+    }
+    memcpy(code + n, x->w, x->n * 2);
+    return n + x->n;
+}
+
+// Compile LET g = expression into code[]: the words, or 0 to leave the
+// statement to its fallback.
+static int RBCompileLet(unsigned char *entry, unsigned char *p, uint16_t *code)
+{
+    rbcx_t x;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    if (RBLetInto(&x, p, 0) == NULL)
+        return 0;
+    RBOp(&x, RC_END, 0);
+    return RBFinish(&x, code);
+}
+
+// a forward jump: its op and a placeholder; returns the placeholder's index
+static int RBJump(rbcx_t *x, int op, int cells)
+{
+    RBOp(x, op, cells);
+    RBOp(x, 0, 0);
+    return x->n - 1;
+}
+
+// point the jump whose placeholder is at w[at] here
+static void RBLand(rbcx_t *x, int at)
+{
+    x->w[at] = x->n - (at + 1);
+}
+
+// end the statement by going to the text at target
+static void RBGoto(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *target)
+{
+    uint32_t key = (uint32_t)(target - base) | libbit;
+    RBOp(x, RC_GOTO, 0);
+    RBOp(x, key & 0xFFFF, 0);
+    RBOp(x, key >> 16, 0);
+}
+
+// the LET command token at p
+static int RBIsLet(unsigned char *p)
+{
+    return p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN && commandtbl_decode(p) == RBTokLet;
+}
+
+/* IF, as cmd_if does it.  The condition is true when its value is not 0, as
+   getnumber gives it.  A multi-line IF (nothing after THEN) compiles when
+   the IF table's next arm is an ELSE or ENDIF: false goes past that arm, as
+   cmd_if's table path does; an ELSEIF arm is left to the text for now.  A
+   single-line IF compiles when the part after THEN, and after ELSE if there
+   is one, is an assignment the compiler takes; false with no ELSE skips the
+   rest of the line, as cmd_if's skipline does.  IF ... GOTO, THEN GOTO and
+   THEN linenumber stay text. */
+static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *tok,
+                       unsigned char *p, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *cond, *target;
+    int t, jf, jmp;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    skipspace(p);
+    cond = p;
+    if (cond - entry > 255 || (t = RBEvaluate(&x, &p)) == 0)
         return 0;
     skipspace(p);
-    if (*p && *p != '\'')
-        return 0; // evaluate's and checkend's errors are the text path's
-    if (t != ttype) // as evaluate converts for cmd_let's type, then cmd_let stores it
-        RBOp(&x, ttype == T_NBR ? RC_CVIF : RC_CVFI, 0);
-    RBOp(&x, RC_SHADOW | ((rhs - entry) << 8), 0);
-    RBOp(&x, ttype, 0);
-    RBOp(&x, RC_STG | (tgt << 8), -1);
-    RBOp(&x, RC_END, 0);
-    if (x.fail || x.maxdepth > RB_MAXDEPTH || 1 + 2 * x.nbind + x.n > RB_MAXCODE)
+    if (*p != tokenTHEN)
         return 0;
-    code[n++] = x.nbind;
-    for (j = 0; j < x.nbind; j++)
-    {
-        code[n++] = x.bind[j][0];
-        code[n++] = x.bind[j][1];
+    p++;
+    RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
+    RBOp(&x, t, 0);
+    jf = RBJump(&x, t == T_NBR ? RC_JFF : RC_JFI, -1);
+    skipspace(p);
+    if (*p == 0 || *p == '\'')
+    { // a multi-line IF
+        struct iftab_entry *e = IfTableLookup(tok);
+        CommandToken ct;
+        if (e == NULL || e->next_arm == NULL)
+            return 0;
+        ct = commandtbl_decode(e->next_arm);
+        if (ct != RBTokElse && ct != RBTokEndIf && ct != RBTokEnd_If)
+            return 0;
+        RBOp(&x, RC_END, 0); // true: on into the IF's body
+        RBLand(&x, jf);
+        target = e->next_arm;
+        skipelement(target); // false: past the ELSE or ENDIF
+        RBGoto(&x, base, libbit, target);
     }
-    memcpy(code + n, x.w, x.n * 2);
-    return n + x.n;
+    else
+    { // a single-line IF
+        if (!RBIsLet(p))
+            return 0;
+        p += sizeof(CommandToken);
+        skipspace(p);
+        if ((p = RBLetInto(&x, p, tokenELSE)) == NULL)
+            return 0;
+        if (*p == tokenELSE)
+        {
+            p++;
+            skipspace(p);
+            if (!RBIsLet(p))
+                return 0;
+            jmp = RBJump(&x, RC_JMP, 0);
+            RBLand(&x, jf);
+            p += sizeof(CommandToken);
+            skipspace(p);
+            if (RBLetInto(&x, p, 0) == NULL)
+                return 0;
+            RBLand(&x, jmp);
+            RBOp(&x, RC_END, 0);
+        }
+        else
+        {
+            RBOp(&x, RC_END, 0);
+            RBLand(&x, jf);
+            target = p;
+            skipline(target); // false: the rest of the line is the THEN part
+            RBGoto(&x, base, libbit, target);
+        }
+    }
+    return RBFinish(&x, code);
 }
 
 static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entry, int linestart,
@@ -881,6 +1011,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         int d;
         if (ct == RBTokLet)
             ncode = RBCompileLet(entry, cmdl, code + 1);
+        else if (ct == RBTokIf)
+            ncode = RBCompileIf(entry, base, libbit, tok, cmdl, code + 1);
         else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
             C.deftype = d;
     }
@@ -1054,6 +1186,10 @@ static void RBCompile(rbheader_t *h)
     RBTokStatic = GetCommandValue((unsigned char *)"Static");
     RBTokConst = GetCommandValue((unsigned char *)"Const");
     RBTokOption = GetCommandValue((unsigned char *)"Option");
+    RBTokIf = GetCommandValue((unsigned char *)"If");
+    RBTokElse = GetCommandValue((unsigned char *)"Else");
+    RBTokEndIf = GetCommandValue((unsigned char *)"EndIf");
+    RBTokEnd_If = GetCommandValue((unsigned char *)"End If");
     RBTokEndSub = GetCommandValue((unsigned char *)"End Sub");
     RBTokEndFun = GetCommandValue((unsigned char *)"End Function");
     RBSurvey();
@@ -1295,7 +1431,7 @@ static void RBShadow(unsigned char *p, int type, const void *v)
         MMFLOAT f;
     } x, c;
     char a[40], b[40];
-    evaluate(p, &f, &i64, &str, &t, false);
+    evaluate(p, &f, &i64, &str, &t, E_NOERROR); // the compiler has checked the end
     if (type == T_NBR)
         x.f = (t & T_NBR) ? f : (MMFLOAT)i64;
     else
@@ -1314,6 +1450,27 @@ static void RBShadow(unsigned char *p, int type, const void *v)
         IntToStr(b, x.i, 10);
     }
     error("SHADOW: compiled $, text $", a, b);
+}
+
+// OPTION COMPILE SHADOW for IF's condition: its truth through the text
+// evaluator, as cmd_if's getnumber gives it, against the compiled value's.
+static void RBShadowCond(unsigned char *p, int type, const void *v)
+{
+    MMFLOAT f;
+    long long i64;
+    unsigned char *str;
+    int t = T_NBR, text, comp;
+    union
+    {
+        long long i;
+        MMFLOAT f;
+    } c;
+    evaluate(p, &f, &i64, &str, &t, E_NOERROR);
+    text = ((t & T_INT) ? (MMFLOAT)i64 : f) != 0;
+    memcpy(&c, v, sizeof(c));
+    comp = type == T_NBR ? c.f != 0 : c.i != 0;
+    if (text != comp)
+        error("SHADOW: IF compiled %, text %", comp, text);
 }
 
 // Bind a compiled statement's variables and run its code.  Returns the end
@@ -1447,6 +1604,31 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
             break;
         case RC_INV:
             sp[-1].i = ~sp[-1].i;
+            break;
+        case RC_JFF:
+            sp--;
+            if (!(sp[0].f != 0))
+                pc += *pc;
+            pc++;
+            break;
+        case RC_JFI:
+            sp--;
+            if (sp[0].i == 0)
+                pc += *pc;
+            pc++;
+            break;
+        case RC_JMP:
+            pc += *pc + 1;
+            break;
+        case RC_GOTO:
+            RBRan++;
+            RBCode++;
+            nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
+            return e + (r[5] >> 8); // the statement's end, which nextstmt is not: the executor looks it up
+        case RC_SHADOWC:
+            if (RBMode == RB_SHADOW)
+                RBShadowCond(e + (w >> 8), *pc, &sp[-1]);
+            pc++;
             break;
         default: // RC_END
             RBRan++;
