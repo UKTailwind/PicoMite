@@ -556,7 +556,7 @@ static const char *const SymAwareNames[] = {
     "Continue", "Select Case", "Case", "Case Else", "End Select",
     "Sub", "Function", "End Sub", "End Function", "CSub", "End CSub",
     "DefineFont", "End DefineFont", "Rem", "/*", "*/", "Data",
-    "Return", "IReturn", "Print", "Inc", "GoTo", "GoSub", "Dim", "Local", "Static",
+    "Return", "IReturn", "Print", "Inc", "GoTo", "GoSub", "Dim", "Local", "Static", "Const",
     // graphics (Draw.c, Blit.c, Sprite.c): arguments read through the evaluator and getargaddress()
     "Pixel", "Line", "Box", "RBox", "Circle", "Triangle", "Arc", "Bezier", "CLS",
     "Colour", "Color", "Text", "Font", "Blit", "Sprite", "Refresh",

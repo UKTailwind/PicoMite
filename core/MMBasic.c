@@ -2354,7 +2354,7 @@ int __not_in_flash_func(FindSubFun)(unsigned char *p, int type)
 // BYVAL (kind 'V') or BYREF (kind 'R') at the start of a parameter in a
 // SUB/FUNCTION definition, written as one word or as BY VAL.  Returns the
 // start of the parameter's name, or NULL if the keyword is not there.
-static unsigned char *CheckByKeyword(unsigned char *p, int kind)
+unsigned char *CheckByKeyword(unsigned char *p, int kind) // (Route B's survey reads parameters with it)
 {
     unsigned char *q;
     const unsigned char *s;

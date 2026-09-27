@@ -497,6 +497,11 @@ END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and 
 <div class="phase"><div class="num">P3<small>calls</small></div><div>
 <h3>Locals and calls</h3>
 <p class="meta">LOCAL, parameters, compiled CALL, FUNCTION calls in expressions, END/EXIT SUB/FUNCTION.</p>
+<p>Steps, each built and run on the PC3 before the next:</p>
+<ol>
+<li><b>P3a, statements on locals and parameters.</b> Done. When the walk reaches a SUB or FUNCTION it lists the unit's locals: its parameters (a suffix or AS gives the type; BYVAL and BYREF are stepped over; an array parameter is listed and never binds as a scalar), a FUNCTION's own name (its result), and every LOCAL, STATIC and CONST in the body. Inside the unit a name on the list compiles with its local type, and any other name as a global; "a local somewhere" no longer stops a statement compiling. A unit the walk cannot list (a header it cannot read, more than 64 locals) compiles globals only, as P2 did. The executor binds a local at this level, else the global when no text local can hide it, which is findvar's fast path; a T_PTR local (a BYREF parameter, a STATIC's alias) binds to the data it points to, as findvar returns it. CONST became a symbol-aware command: its locals had been made from text, so they could not be bound, and while one lived no global binding was trusted inside any SUB, on the text path too. Test: Bas/bench/rbp3a.py (local types, parameters of every kind including a type-mismatched variable argument that becomes a copy, shadowing, recursion, STATIC and CONST, EXIT inside loops, OPTION DEFAULT INTEGER, a BYREF chain through two SUBs, OPTION EXPLICIT). <b>Results on the PC3:</b> compiled against text, Exile -22.7% (12.18 to 9.43 ms a frame), Elite -20.2%, PoP -7.9% (were -4.5%, -3.0% and -0.2%); compiled statements are now 39%, 31% and 26% of what the games execute. The G3 kernels as written in SUBs: K1 7.88x, K3 5.97x.</li>
+<li><b>Found in P3a: the stream costs C stack on every FUNCTION level.</b> RunStream and RBExec add about 80 bytes to each level a FUNCTION call nests (the text path's own chain is ExecuteProgram 216 bytes, the statement, evaluate, doexpr and getvalue 360, DefinedSubFun 192). A recursive FUNCTION that reached a depth of 12 as text stopped at 10 compiled ("Stack overflow"). This has been so since P1. Compiled FUNCTION calls must cost less stack a level than the text path, not more: they can skip ExecuteProgram and the evaluator's frames, but RBRun's own frame (368 bytes, most of it the value stack) must not stay on the stack across the call.</li>
+</ol>
 <ul>
 <li><b>Gate:</b>
 <ul>
@@ -554,6 +559,7 @@ END SUB, EXIT SUB and the end of a FUNCTION do what <code>cmd_return</code> and 
 <li>The fault is in IntToStr (MMBasic.c:6626, LR=10003F2B), reading at 0x20082000, the top of core 0's stack (CFSR 00008200, a precise bus fault), or at PC=2004FF00 with an invalid state: the top of the stack is corrupted.</li>
 <li>This matches the intermittent PC3 fault seen during uploads on 18 September (a zeroed return address near the stack top while idle), which had no recipe. It points at the WS2812/BITSTREAM PIO and DMA path writing near the top of core 0's stack.</li>
 <li>Recipe: LOAD another program, LOAD pioout.bas, RUN, watch for FAULT; repeat (scratchpad faultrep.py).</li>
+<li>Other symptoms in later goldens runs, all right after "pioout done": a FAULT at PC=1000238A (an undefined instruction, CFSR 00010000), "Pin 14/GP10 is reserved on startup", and "Cannot find MM.ENDLINE". Each looks like memory the program never touched being corrupted.</li>
 </ul></li>
 <li><b>Fixed on development, 8740953: a loop whose first line ends in <code>: ' comment</code> ran once.</b>
 <ul>

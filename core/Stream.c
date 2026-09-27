@@ -68,7 +68,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 14       // the stream format
+#define RB_VERSION 15       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -257,6 +257,7 @@ enum
 #define RB_PAGEUP(n) (((n) + RB_PAGE - 1) & ~(RB_PAGE - 1))
 
 #define RB_MAXDO 32 // DOs whose LOOP may compile their condition, per walk
+#define RB_MAXULOCAL 64 // locals one SUB or FUNCTION may list (see RBUnitBegin)
 static struct
 {
     int pass;         // 1: count, 2: write
@@ -276,6 +277,13 @@ static struct
     {
         unsigned char *loop, *cond; // the LOOP's token, the DO's condition (NULL: none)
     } dotab[RB_MAXDO];
+    int unit;    // the walk is inside a SUB or FUNCTION, whose locals are ulocal[]
+    int nulocal; // how many; RB_MAXULOCAL + 1: the unit could not be listed
+    struct
+    {
+        uint16_t k;   // canonical entry
+        uint8_t type; // RB_TTYPE bits as declared (0: none, OPTION DEFAULT's), RB_TMIXED
+    } ulocal[RB_MAXULOCAL];
 } C;
 
 // pass 2: every bucket up to and including b starts at map entry C.stmts
@@ -408,11 +416,43 @@ static int RBSuffix(unsigned char **p);
 #define RB_TMIXED 0x08                   // declared with two types
 #define RB_TLOCAL 0x40                   // a local somewhere
 
+static int RBCollect; // RBUnitBegin is listing a unit's locals: RBTypeName records them there
+
+// a local of the unit being listed, with its declared type
+static void RBUnitAdd(int k, int type)
+{
+    int i;
+    if (C.nulocal > RB_MAXULOCAL)
+        return;
+    type &= RB_TTYPE;
+    for (i = 0; i < C.nulocal; i++)
+        if (C.ulocal[i].k == k)
+        {
+            if ((C.ulocal[i].type & RB_TTYPE) != type)
+                C.ulocal[i].type = RB_TMIXED; // declared twice, two ways (or once untyped)
+            return;
+        }
+    if (C.nulocal == RB_MAXULOCAL)
+    {
+        C.nulocal = RB_MAXULOCAL + 1; // too many to list
+        return;
+    }
+    C.ulocal[C.nulocal].k = k;
+    C.ulocal[C.nulocal].type = type;
+    C.nulocal++;
+}
+
 static void RBTypeName(unsigned char *p, int type, int local)
 {
     int k = SymCanonAt(p), cur;
     if (k < 0 || k >= C.ntypes)
         return;
+    if (RBCollect)
+    { // a unit's declarations: only its locals matter (DIM makes a global)
+        if (local)
+            RBUnitAdd(k, type);
+        return;
+    }
     if (local)
     {
         C.types[k] |= RB_TLOCAL;
@@ -678,9 +718,20 @@ static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
     if (x->nbind >= RB_MAXBIND)
         return -1;
     {
-        int k = SymCanonAt(p), ty = (k >= 0 && k < C.ntypes) ? C.types[k] : 0, t = ty & RB_TTYPE;
-        if (ty & RB_TLOCAL)
-            return -1; // a local somewhere: P2 compiles globals only
+        int k = SymCanonAt(p), ty = (k >= 0 && k < C.ntypes) ? C.types[k] : 0, t, i;
+        if (C.unit && C.nulocal > RB_MAXULOCAL)
+        { // a unit that could not be listed: its locals stay text (as P2 had it)
+            if (ty & RB_TLOCAL)
+                return -1;
+        }
+        else if (C.unit)
+            for (i = 0; i < C.nulocal; i++)
+                if (C.ulocal[i].k == k)
+                {
+                    ty = C.ulocal[i].type; // a local here: its type is the unit's
+                    break;
+                }
+        t = ty & RB_TTYPE;
         if (!suffix)
         { // an unsuffixed name: its declared type, else the OPTION DEFAULT in force,
           // else (DEFAULT NONE with the declaration out of sight, in a library say,
@@ -1392,12 +1443,138 @@ static void RBEmitPart(unsigned char *base, uint32_t libbit, unsigned char *entr
 }
 
 // Walk one image as ExecuteProgram would, recording each statement.
+/* A SUB or FUNCTION's locals.  When the walk reaches its header it lists
+   the unit's parameters (a suffix or AS gives a type; BYVAL and BYREF are
+   stepped over), a FUNCTION's own name (its result), and every LOCAL,
+   STATIC and CONST in its body, so a name compiles inside the unit with the
+   type it has there; any other name is a global.  A statement that meets
+   the name before its LOCAL has run, or a local of another type, finds that
+   out at its bind and runs as text.  A unit that cannot be listed (a header
+   the survey cannot read, or more than RB_MAXULOCAL locals) compiles
+   globals only, as P2 did. */
+unsigned char *CheckByKeyword(unsigned char *p, int kind); // MMBasic.c
+
+// the header's parameters and result: 0 if it could not be read
+static int RBUnitHeader(unsigned char *p, int isfun)
+{
+    unsigned char *q, *name, *b;
+    int suf, t;
+    skipspace(p);
+    if (!issymbol(*p))
+        return 0;
+    name = p;
+    q = p + symbolsize(*p);
+    suf = RBSuffix(&q);
+    skipspace(q);
+    if (*q == '(')
+    {
+        q++;
+        skipspace(q);
+        while (*q != ')')
+        {
+            unsigned char *v;
+            int ps, pt = 0;
+            if ((b = CheckByKeyword(q, 'V')) != NULL || (b = CheckByKeyword(q, 'R')) != NULL)
+                q = b;
+            skipspace(q);
+            if (!issymbol(*q))
+                return 0;
+            v = q;
+            q += symbolsize(*q);
+            ps = RBSuffix(&q);
+            skipspace(q);
+            if (*q == '(')
+            { // an array parameter, a()
+                q++;
+                skipspace(q);
+                if (*q != ')')
+                    return 0;
+                q++;
+                skipspace(q);
+            }
+            if (*q == tokenAS)
+            {
+                q++;
+                skipspace(q);
+                pt = RBTypeWord(&q);
+                skipspace(q);
+            }
+            RBTypeName(v, ps ? ps : pt, 1);
+            if (*q == ',')
+            {
+                q++;
+                skipspace(q);
+            }
+            else if (*q != ')')
+                return 0;
+        }
+        q++;
+        skipspace(q);
+    }
+    if (isfun)
+    {
+        t = 0;
+        if (*q == tokenAS)
+        {
+            q++;
+            skipspace(q);
+            t = RBTypeWord(&q);
+        }
+        RBTypeName(name, suf ? suf : t, 1);
+    }
+    return 1;
+}
+
+// the header at cmdl starts a unit whose body starts at next
+static void RBUnitBegin(unsigned char *cmdl, unsigned char *next, int isfun)
+{
+    unsigned char *p = next, *q;
+    CommandToken ct;
+    C.unit = 1;
+    C.nulocal = 0;
+    RBCollect = 1;
+    if (!RBUnitHeader(cmdl, isfun))
+        C.nulocal = RB_MAXULOCAL + 1;
+    while (C.nulocal <= RB_MAXULOCAL)
+    {
+        if (*p == 0)
+            p++;
+        if (*p == T_NEWLINE)
+            p += T_NEWLINE_HDR;
+        if (*p == T_LINENBR)
+            p += 3;
+        skipspace(p);
+        if (p[0] == T_LABEL)
+        {
+            p += p[1] + 2;
+            skipspace(p);
+        }
+        if (*p && *p != '\'' && p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+        {
+            ct = commandtbl_decode(p);
+            q = p + sizeof(CommandToken);
+            if (ct == RBTokEndSub || ct == RBTokEndFun || ct == cmdSUB || ct == cmdFUN)
+                break;
+            if (ct == RBTokLocal || ct == RBTokStatic)
+                RBSurveyDim(q, 1);
+            else if (ct == RBTokConst)
+                RBSurveyConst(q, 1);
+        }
+        if (*p)
+            skipelement(p);
+        if ((p[0] == 0 && p[1] == 0) || (p[0] == 0xff && p[1] == 0xff))
+            break;
+    }
+    RBCollect = 0;
+}
+
 static void RBWalk(unsigned char *base, uint32_t libbit)
 {
     unsigned char *p = base, *entry, *tok, *cmdl, *next;
     int linestart, cmd;
     uint32_t endkey;
     uint16_t w[3];
+    C.unit = 0;
     skipspace(p);
     while (1)
     {
@@ -1435,9 +1612,13 @@ static void RBWalk(unsigned char *base, uint32_t libbit)
             }
             skipspace(cmdl);
             skipelement(next);
+            if (cmd > 0 && (commandtbl_decode(tok) == cmdSUB || commandtbl_decode(tok) == cmdFUN))
+                RBUnitBegin(cmdl, next, commandtbl_decode(tok) == cmdFUN);
             RBEmitStmt(base, libbit, entry, linestart, tok, cmd, cmdl, next);
             if (cmd > 0 && commandtbl_decode(tok) == RBTokIf)
                 RBEmitIfParts(base, libbit, cmdl, next);
+            if (cmd > 0 && (commandtbl_decode(tok) == RBTokEndSub || commandtbl_decode(tok) == RBTokEndFun))
+                C.unit = 0;
             p = next;
         }
         else if (linestart) // a label or a line number alone
@@ -1909,18 +2090,20 @@ static unsigned char *RBRAM(RBRun)(const uint16_t *r, unsigned char *e)
         else if ((k = SymCanonById(id)) < 0)
             return NULL;
         i = SymL[k];
-        if (i >= 0 && g_vartbl[i].level == g_LocalIndex)
-            return NULL; // a local: P2a compiles globals only
-        i = SymG[k];
-        if (i < 0 || (g_LocalIndex && SymTextLocals))
-            return NULL; // not bound yet, or a text local may hide it: findvar decides
+        if (i < 0 || g_vartbl[i].level != g_LocalIndex)
+        { // not a local at this level: the global, if no text local can hide it
+            i = SymG[k];
+            if (i < 0 || (g_LocalIndex && SymTextLocals))
+                return NULL; // not bound yet, or a text local may hide it: findvar decides
+        }
         v = &g_vartbl[i];
-        if (!DimIsScalar(RAW_DIM(*v, 0)) || (v->type & (T_PTR | T_STRUCT | T_STR)) ||
+        if (!DimIsScalar(RAW_DIM(*v, 0)) || (v->type & (T_STRUCT | T_STR)) ||
             (v->type & (T_INT | T_NBR)) != c[1] ||
             (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
             ((c[0] & RC_TARGET) && (v->type & T_CONST)))
             return NULL;
-        slot[j] = (union cell *)&v->val;
+        // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
+        slot[j] = (v->type & T_PTR) ? (union cell *)v->val.s : (union cell *)&v->val;
     }
     if (RBCacheOK)
     { // keep them, the addresses first and the stamp last
