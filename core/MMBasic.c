@@ -158,6 +158,7 @@ uint32_t g_perf_findvar_calls;         // total findvar() calls
 uint32_t g_perf_findvar_locals;        // findvar() calls that resolved to a local slot
 uint32_t g_perf_findvar_globals;       // findvar() calls that resolved to a global slot
 uint64_t g_perf_start_us;              // time_us_64() sampled at program start
+int g_localpeak = 0;                   // the local stack's high-water mark since then (P6: g_localtop)
 int g_option_profiling = 0;            // OPTION PROFILING - master gate
 #ifdef SUBPROFILE
 // Per-frame call-stack profiling buffers; allocated with ProfilingAlloc().
@@ -194,6 +195,7 @@ void ProfilingAlloc(void)
     g_perf_findvar_calls = 0;
     g_perf_findvar_locals = 0;
     g_perf_findvar_globals = 0;
+    g_localpeak = 0;
     g_perf_start_us = time_us_64();
 }
 
@@ -5775,6 +5777,8 @@ findvar_found:
         g_hashlist[g_hashlistpointer].level = g_LocalIndex;
         g_hashlist[g_hashlistpointer++].hash = ifree;
         g_localtop = ifree + 1; // (the stack's next slot, P6 F2)
+        if (g_localtop > g_localpeak)
+            g_localpeak = g_localtop;
         g_vartbl[ifree].level = g_LocalIndex;
         SymLocalMade(ifree, symk); // the name's newest local (see Symbols.h)
     }
@@ -7062,7 +7066,7 @@ void MIPS16 cmd_localvars(unsigned char *p)
     maxglobalvars = MAXVARS - i;
 }
 
-int GetLocalVarHashSize(void)
+int GetLocalVarHashSize(void) // the local region's size (OPTION LOCAL VARIABLES)
 {
     return maxlocalvars;
 }

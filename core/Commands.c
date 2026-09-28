@@ -4156,6 +4156,7 @@ void cmd_end(void)
 		extern uint32_t g_perf_findvar_locals;
 		extern uint32_t g_perf_findvar_globals;
 		extern uint64_t g_perf_start_us;
+		extern int g_localpeak;
 #define PERF_CMDTOKEN_MAX 1024
 		uint64_t elapsed_us = time_us_64() - g_perf_start_us;
 		uint64_t total_cmds = g_perf_usercmd_count;
@@ -4166,13 +4167,14 @@ void cmd_end(void)
 		unsigned local_pct = resolved ? (unsigned)((uint64_t)g_perf_findvar_locals * 100 / resolved) : 0;
 		unsigned global_pct = resolved ? (unsigned)((uint64_t)g_perf_findvar_globals * 100 / resolved) : 0;
 		snprintf(buf, sizeof(buf),
-				 "\r\n[PERF] elapsed=%llu us  statements=%llu  findvar=%u (locals=%u [%u%%] globals=%u [%u%%])  user_subs=%u\r\n",
+				 "\r\n[PERF] elapsed=%llu us  statements=%llu  findvar=%u (locals=%u [%u%%] globals=%u [%u%%])  user_subs=%u  local_peak=%d/%d\r\n",
 				 (unsigned long long)elapsed_us,
 				 (unsigned long long)total_cmds,
 				 (unsigned)g_perf_findvar_calls,
 				 (unsigned)g_perf_findvar_locals, local_pct,
 				 (unsigned)g_perf_findvar_globals, global_pct,
-				 (unsigned)g_perf_usercmd_count);
+				 (unsigned)g_perf_usercmd_count,
+				 g_localpeak, GetLocalVarHashSize()); // (the local stack's high-water mark, of its size)
 		perf_print(buf, &list_cnt);
 		// Find and print the top-20 most-executed builtin commands.
 		perf_print("[PERF] top commands by dispatch count:\r\n", &list_cnt);
