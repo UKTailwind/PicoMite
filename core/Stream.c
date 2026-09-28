@@ -72,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 25       // the stream format
+#define RB_VERSION 26       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -412,6 +412,7 @@ enum
     RC_LKS,      // push the literal in the next a words (an MMBasic string: its length, then its bytes)
     RC_OPS,      // operator a on two strings, as doexpr calls it: + a string, a comparison an integer
     RC_STS,      // pop a string into string bind a, as cmd_let stores it
+    RC_CONTFOR,  // CONTINUE FOR: the loop's NEXT, run as cmd_next runs it
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -440,7 +441,7 @@ enum
 #define RB_BARRAY 0x100  // bind's type word: an array, bound to its variable (RC_LDEL, RC_ADEL)
 #define RB_MAXLIT 64     // the longest string literal the code keeps
 #define RB_MAXBIND 12
-#define RB_MAXCODE 96  // words of code one statement may compile to
+#define RB_MAXCODE 160 // words of code one statement may compile to
 #define RB_MAXDEPTH 16 // cells of stack it may use
 
 static CommandToken RBTokLet; // the LET command, looked up once a compile
@@ -1488,24 +1489,50 @@ static int RBFcall(rbcx_t *x, unsigned char **pp, int *op)
 
 // P4b: EXIT FOR, EXIT DO, cmd_return and cmd_endfun, which take no operands:
 // only checkend's error (something after the command) is left to the text
-static int RBCompileExit(unsigned char *entry, unsigned char *cmdl, CommandToken ct, uint16_t *code)
-{
-    rbcx_t x;
-    void (*fn)(void) = commandtbl[ct].fptr;
-    int op = fn == cmd_exitfor ? RC_EXITFOR : fn == cmd_exit ? RC_EXITDO : fn == cmd_return ? RC_RETURN : fn == cmd_endfun ? RC_ENDFUN : 0;
-    skipspace(cmdl);
-    if (!op || (*cmdl && *cmdl != '\''))
-        return 0;
-    memset(&x, 0, sizeof(x));
-    x.entry = entry;
-    RBOp(&x, op, 0);
-    return RBFinish(&x, code);
-}
-
 static int RBJump(rbcx_t *x, int op, int cells);
 static void RBLand(rbcx_t *x, int at);
 static void RBGoto(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *target);
 static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *p);
+
+/* P4e: a statement whose handler does nothing (cmd_null: END IF, END SELECT,
+   DATA, RANDOMIZE and the rest) compiles to nothing.  ELSE, ELSEIF and ELSE IF
+   are cmd_else when the block before them runs into them: past the END IF
+   the IF table gives, looked up as cmd_else looks it up (its token taken to
+   be just before cmdline); ELSE checks its end first.  CONTINUE FOR runs its
+   loop's NEXT (RC_CONTFOR); CONTINUE DO and plain CONTINUE stay text. */
+static int RBCompileExit(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *cmdl, CommandToken ct, uint16_t *code)
+{
+    rbcx_t x;
+    void (*fn)(void) = commandtbl[ct].fptr;
+    int op = fn == cmd_exitfor ? RC_EXITFOR : fn == cmd_exit ? RC_EXITDO : fn == cmd_return ? RC_RETURN : fn == cmd_endfun ? RC_ENDFUN : 0;
+    unsigned char *p = cmdl;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    if (fn == cmd_null)
+        RBOp(&x, RC_END, 0);
+    else if (fn == cmd_else)
+    {
+        struct iftab_entry *e = IfTableLookup(cmdl - sizeof(CommandToken));
+        skipspace(p);
+        if (ct == cmdELSE && *p && *p != '\'')
+            return 0; // checkend's error
+        if (e == NULL || e->endif_tok == NULL)
+            return 0; // cmd_else's scan: text
+        p = e->endif_tok;
+        skipelement(p);
+        RBGoto(&x, base, libbit, p);
+    }
+    else if (fn == cmd_continue && *cmdl == tokenFOR)
+        RBOp(&x, RC_CONTFOR, 0);
+    else
+    {
+        skipspace(p);
+        if (!op || (*p && *p != '\''))
+            return 0;
+        RBOp(&x, op, 0);
+    }
+    return RBFinish(&x, code);
+}
 
 /* P4c: SELECT CASE, CASE and END SELECT.  RBNextCmd is GetNextCommand
    without its error: the next command token after the element at p (a SUB
@@ -1752,8 +1779,10 @@ static int RBIsLet(unsigned char *p)
 
 /* IF, as cmd_if does it.  The condition is true when its value is not 0, as
    getnumber gives it.  A multi-line IF (nothing after THEN) compiles when
-   the IF table's next arm is an ELSE or ENDIF: false goes past that arm, as
-   cmd_if's table path does; an ELSEIF arm is left to the text for now.  A
+   the IF table knows its arms: false goes to the next arm, as cmd_if's table
+   path does, and past the ELSE or ENDIF that ends the chain; an ELSEIF arm's
+   condition is tested with CurrentLinePtr at its line, which cmd_if does not
+   put back, and true goes after the arm's element (P4e).  A
    single-line IF compiles when the part after THEN, and after ELSE if there
    is one, is an assignment the compiler takes; false with no ELSE skips the
    rest of the line, as cmd_if's skipline does.  IF ... GOTO, THEN GOTO and
@@ -1789,11 +1818,43 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
         CommandToken ct;
         if (e == NULL || e->next_arm == NULL)
             return 0;
-        ct = commandtbl_decode(e->next_arm);
-        if (ct != RBTokElse && ct != RBTokEndIf && ct != RBTokEnd_If)
-            return 0;
         RBOp(&x, RC_END, 0); // true: on into the IF's body
         RBLand(&x, jf);
+        while ((ct = commandtbl_decode(e->next_arm)) == cmdELSEIF || ct == cmdELSE_IF)
+        { // an ELSEIF: cmd_if's retest of its condition
+            unsigned char *q = e->next_arm + sizeof(CommandToken), *c2, *after;
+            int t2;
+            skipspace(q);
+            if (*q == 0)
+                return 0; // cmd_if's syntax error
+            after = q;
+            skipelement(after);
+            RBOp(&x, RC_CLSET, 0); // CurrentLinePtr at the ELSEIF's line, and left there
+            RBKey(&x, base, libbit, e->line_ptr);
+            c2 = q;
+            if ((t2 = RBEvaluate(&x, &q)) == 0)
+                return 0;
+            skipspace(q);
+            if (*q != tokenTHEN)
+                return 0; // "IF without THEN": the text path's
+            q++;
+            skipspace(q);
+            if (*q && *q != '\'')
+                return 0; // "Unexpected text"
+            if (RBMode == RB_SHADOW && !x.ncall)
+            {
+                RBOp(&x, RC_SHADOWCK, 0);
+                RBOp(&x, t2, 0);
+                RBKey(&x, base, libbit, c2);
+            }
+            jf = RBJump(&x, t2 == T_NBR ? RC_JFF : RC_JFI, -1);
+            RBGoto(&x, base, libbit, after); // true: after the ELSEIF
+            RBLand(&x, jf);
+            if ((e = IfTableLookup(e->next_arm)) == NULL || e->next_arm == NULL)
+                return 0;
+        }
+        if (ct != RBTokElse && ct != RBTokEndIf && ct != RBTokEnd_If)
+            return 0;
         target = e->next_arm;
         skipelement(target); // false: past the ELSE or ENDIF
         RBGoto(&x, base, libbit, target);
@@ -2126,7 +2187,7 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         else if (ct == cmdCASE || ct == cmdCASE_ELSE || ct == cmdEND_SELECT)
             ncode = RBCompileCase(entry, base, libbit, cmdl, next, ct, code + 1);
         else
-            ncode = RBCompileExit(entry, cmdl, ct, code + 1);
+            ncode = RBCompileExit(entry, base, libbit, cmdl, ct, code + 1);
     }
     w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0) | (ncode ? RB_COMPILED : 0) | (C.part ? RB_PART : 0);
     w[n++] = key & 0xFFFF;
@@ -3197,6 +3258,7 @@ static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
     unsigned int nb, j, w;
     int loopi;              // RC_LOOPF's stack entry
     unsigned char *clsave; // RC_CLSET: CurrentLinePtr before a CASE's line took its place
+    unsigned char *nxcl, *nxend; // RC_NEXT, RC_CONTFOR: the NEXT's cmdline, and where it ends
 again:
     clsave = NULL;
     c = r + RB_HDR(r) + 1;
@@ -3311,6 +3373,7 @@ again:
         [RC_LKS] = &&L_LKS,
         [RC_OPS] = &&L_OPS,
         [RC_STS] = &&L_STS,
+        [RC_CONTFOR] = &&L_CONTFOR,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -3497,30 +3560,22 @@ again:
                 goto fail; // "No FOR loop is in effect": the fallback raises it
             nextstmt = g_forstack[--g_forindex].nextptr;
             skipelement(nextstmt);
-            RBRan++;
-            RBCode++;
-            goto done;
+            goto ran;
     L_EXITDO: // cmd_exit
             if (g_doindex == 0)
                 goto fail;
             nextstmt = g_dostack[--g_doindex].loopptr;
             skipelement(nextstmt);
-            RBRan++;
-            RBCode++;
-            goto done;
+            goto ran;
     L_RETURN: // cmd_return (RBReturn)
             if (!RBReturn())
                 goto fail; // "Nothing to return to"
-            RBRan++;
-            RBCode++;
-            goto done;
+            goto ran;
     L_ENDFUN: // cmd_endfun: the end of this run of ExecuteProgram
             if (gosubindex == 0 || gosubstack[gosubindex - 1] != NULL)
                 goto fail;
             nextstmt = (unsigned char *)"\0\0\0";
-            RBRan++;
-            RBCode++;
-            goto done;
+            goto ran;
     L_SEL: // cmd_select's selector
             *sp++ = st[0];
             RBNEXT();
@@ -3546,10 +3601,8 @@ again:
     L_CGOTO: // cmd_select's end: CurrentLinePtr back, and on to the key
             if (clsave != NULL)
                 CurrentLinePtr = clsave;
-            RBRan++;
-            RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-            goto done;
+            goto ran;
     L_LDS: // getvalue: a string variable's data, which it does not copy
             (sp++)->i = (uint32_t)((struct s_vartbl *)slotp[w >> 8])->val.s;
             RBNEXT();
@@ -3600,10 +3653,8 @@ again:
             pc += *pc + 1;
             RBNEXT();
     L_GOTO:
-            RBRan++;
-            RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-            goto done; // the statement's end, which nextstmt is not: the executor looks it up
+            goto ran; // the statement's end, which nextstmt is not: the executor looks it up
     L_FORP: // cmd_for before its values (RBForPush)
             RBForPush(slotp[w >> 8], *pc++);
             RBNEXT();
@@ -3611,9 +3662,7 @@ again:
             sp -= 2;
             if (RBForStart(sp, e + (nw >> 8) + 1, pc))
             { // the loop is done before it starts: on after its NEXT
-                RBRan++;
-                RBCode++;
-                goto done;
+                goto ran;
             }
             pc += 4;
             RBNEXT();
@@ -3630,10 +3679,8 @@ again:
             if (!c)
             {
                 g_doindex--;
-                RBRan++;
-                RBCode++;
                 nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-                goto done;
+                goto ran;
             }
             pc += 2;
             RBNEXT();
@@ -3666,10 +3713,8 @@ again:
             }
             if (tst)
             { // loop again
-                RBRan++;
-                RBCode++;
                 nextstmt = g_dostack[loopi].doptr;
-                goto done;
+                goto ran;
             }
             g_doindex = loopi; // the loop has ended
             RBNEXT();
@@ -3698,9 +3743,20 @@ again:
             if (!RBCallSub(pc, w >> 8, slotp, sp - pc[1], e + (nw >> 8)))
                 goto fail;
             goto done;
+    L_CONTFOR: // cmd_continue sends nextstmt to the loop's NEXT, whose cmd_next runs here
+            if (g_forindex == 0)
+                goto fail; // "No FOR loop is in effect"
+            nxcl = g_forstack[g_forindex - 1].nextptr + sizeof(CommandToken);
+            skipspace(nxcl);
+            nxend = g_forstack[g_forindex - 1].nextptr;
+            skipelement(nxend);
+            goto next;
     L_NEXT: // cmd_next (Commands.c), line for line
+            nxcl = e + (nw & 0xFF);
+            nxend = e + (nw >> 8);
+    next:
         {
-            unsigned char *cl = e + (nw & 0xFF), *q; // its cmdline
+            unsigned char *cl = nxcl, *q; // its cmdline
             int i, test;
             for (i = g_forindex - 1; i >= 0; i--)
             {
@@ -3711,9 +3767,7 @@ again:
             }
             if (i < 0)
                 goto fail; // "Cannot find a matching FOR": the fallback raises it
-            RBRan++;
-            RBCode++;
-            nextstmt = e + (nw >> 8);
+            nextstmt = nxend;
         nextloop:
             if (g_forstack[i].vartype & T_INT)
             {
@@ -3743,12 +3797,13 @@ again:
             }
             else
                 nextstmt = g_forstack[i].forptr; // back to the body
-            goto done;
+            goto ran;
         }
     L_END:
+    nextstmt = e + (nw >> 8);
+ran: // a statement run as compiled code (one copy of the counts, for RAM)
     RBRan++;
     RBCode++;
-    nextstmt = e + (nw >> 8);
 done:
     // the next record: the one after, past any IF parts, or nextstmt's
     end = e + (nw >> 8);
