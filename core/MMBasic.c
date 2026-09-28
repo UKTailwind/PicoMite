@@ -2507,6 +2507,141 @@ static unsigned char MIPS16 *FunArrayReturn(void *base, int count)
     return tmp;
 }
 
+/* P6 F1: a SUB's or FUNCTION's parameter list as DefinedSubFun reads it, read
+   on its first call by the code that read it on every call before, and kept
+   for the run with the symbol bindings (SubLayoutFree and SubLayoutForget are
+   called where they are freed and forgotten). */
+#define SL_BYVAL 1
+#define SL_BYREF 2
+struct s_subparam
+{
+    unsigned char *name; // the parameter's text as findvar is given it (to its AS, terminated)
+    int type;            // its AS type, or T_NOTYPE
+    int structarg;       // g_StructArg as reading that type left it
+    int by;              // SL_BYVAL, SL_BYREF or 0
+};
+struct s_sublayout
+{
+    unsigned char *def;    // subfun[] as it was read (a stale layout is read again)
+    unsigned char *body;   // the body's first statement
+    int argc2;             // makeargs' count for the parameter list
+    struct s_subparam p[]; // each parameter, (argc2 + 1) / 2 of them
+};
+static struct s_sublayout **SubLay; // per subfun[] index, NULL = not read yet
+static int SubLayNone;              // no memory for the table: every call reads its definition
+
+void SubLayoutForget(void)
+{
+    SubLay = NULL;
+    SubLayNone = 0;
+}
+
+void SubLayoutFree(void)
+{
+    if (SubLay != NULL)
+    {
+        for (int i = 0; i < MAXSUBFUN; i++)
+            if (SubLay[i] != NULL)
+                FreeMemorySafe((void **)&SubLay[i]);
+        FreeMemorySafe((void **)&SubLay);
+    }
+    SubLayoutForget();
+}
+
+static void *SubLayoutMemory(int size)
+{
+#ifdef rp2350
+    if (PSRAMsize)
+        return GetPSMemoryNull(size); // (as the bindings' cold block: SRAM is the program's)
+#endif
+    return GetMemoryNull(size);
+}
+
+// The parameter list at p of subfun[index], read as DefinedSubFun read it,
+// errors and all (in the argument buffers it passes); kept if there is
+// memory, else in temporary memory at the caller's level for this call.
+#ifdef rp2350
+static __attribute__((noinline)) struct s_sublayout *SubLayoutBuild(int index, unsigned char *p, unsigned char *argbuf2, unsigned char **argv2)
+#else
+static struct s_sublayout MIPS16 *SubLayoutBuild(int index, unsigned char *p, unsigned char *argbuf2, unsigned char **argv2)
+#endif
+{
+    struct s_sublayout *L;
+    unsigned char *q, *tp, *names;
+    int argc2 = 0, i, n, size, pass, by, type;
+    if (*p)
+        makeargs(&p, MAX_ARG_COUNT, argbuf2, argv2, &argc2, (*p == '(') ? (unsigned char *)"(," : (unsigned char *)",");
+    if (argc2 && (argc2 & 1) == 0)
+        error("Argument list");
+    n = (argc2 + 1) / 2;
+    size = sizeof(struct s_sublayout) + n * sizeof(struct s_subparam);
+    L = NULL;
+    names = NULL;
+    // twice: reading (every error raised) and sizing, then filling
+    for (pass = 0; pass < 2; pass++)
+    {
+        for (i = 0; i < argc2; i += 2)
+        {
+            q = argv2[i];
+            skipspace(q);
+            by = 0;
+            if ((tp = CheckByKeyword(q, 'V')) != NULL)
+                by = SL_BYVAL;
+            else if ((tp = CheckByKeyword(q, 'R')) != NULL)
+                by = SL_BYREF;
+            if (tp != NULL)
+                q = tp; // skip to the variable start
+            type = T_NOTYPE;
+            tp = skipvar(q, false); // point to after the variable
+            skipspace(tp);
+            if (*tp == tokenAS)
+            { // are we using Microsoft syntax (eg, AS INTEGER)?
+                CheckIfTypeSpecified(tp + 1, &type, true); // and get the type
+                if (!(type & T_IMPLIED))
+                    error("Variable type");
+            }
+            else
+                tp = q + strlen((char *)q); // (the text findvar is given ends at AS, or at the end)
+            if (pass == 0)
+                size += tp - q + 1;
+            else
+            {
+                struct s_subparam *sp = &L->p[i >> 1];
+                memcpy(names, q, tp - q);
+                names[tp - q] = 0;
+                sp->name = names;
+                names += tp - q + 1;
+                sp->type = type;
+#ifdef STRUCTENABLED
+                sp->structarg = g_StructArg; // (what the AS type left, as findvar was given it)
+#else
+                sp->structarg = -1;
+#endif
+                sp->by = by;
+            }
+        }
+        if (pass == 0)
+        {
+            if (SubLay == NULL && !SubLayNone && (SubLay = SubLayoutMemory(MAXSUBFUN * sizeof(*SubLay))) == NULL)
+                SubLayNone = 1;
+            if (SubLay != NULL)
+            {
+                if (SubLay[index] != NULL)
+                    FreeMemorySafe((void **)&SubLay[index]); // (stale: subfun[] has changed)
+                L = SubLay[index] = SubLayoutMemory(size);
+            }
+            if (L == NULL)
+                L = GetTempMemory(size); // at the caller's level: gone at the end of its statement
+            L->def = subfun[index];
+            L->argc2 = argc2;
+            names = (unsigned char *)&L->p[n];
+        }
+    }
+    skipelement(p); // point to the body of the sub/fun
+    L->body = p;
+    return L;
+}
+
 #if LOWRAM
 void MIPS16 DefinedSubFun(int isfun, unsigned char *cmd, int index, MMFLOAT *fa, long long int *i64a, unsigned char **sa, int *typ)
 {
@@ -2539,6 +2674,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     int *argtype;
     union u_argval *argval;
     int *argVarIndex;
+    struct s_sublayout *L; // the definition's parameter list, as read on its first call (P6 F1)
 
     // Errors generated after gosubindex is incremented need to restore the original value
     // Any variables created if LocalIndex was incremented also need to be cleared
@@ -2709,15 +2845,12 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     if (*tp)
         makeargs(&tp, MAX_ARG_COUNT, argbuf1, argv1, &argc1, (*tp == '(') ? (unsigned char *)"(," : (unsigned char *)",");
 
-    // split up the arguments in the definition
+    // the arguments in the definition, as read on its first call (P6 F1)
     CurrentLinePtr = SubLinePtr; // any errors must be at the definition
-    argc2 = 0;
-    if (*p)
-        makeargs(&p, MAX_ARG_COUNT, argbuf2, argv2, &argc2, (*p == '(') ? (unsigned char *)"(," : (unsigned char *)",");
+    L = SubLay != NULL && SubLay[index] != NULL && SubLay[index]->def == subfun[index] ? SubLay[index] : SubLayoutBuild(index, p, argbuf2, argv2);
+    argc2 = L->argc2;
 
     // error checking
-    if (argc2 && (argc2 & 1) == 0)
-        error("Argument list");
     CurrentLinePtr = CallersLinePtr; // report errors at the caller
     if (argc1 > argc2 || (argc1 && (argc1 & 1) == 0))
         error("Argument list");
@@ -2758,44 +2891,33 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
                 }
             }
 
-            // check for BYVAL or BYREF in sub/fun definition
+            // BYVAL or BYREF in the sub/fun definition (as read on its first call)
             argbyref[i] = 0;
-            skipspace(argv2[i]);
-            unsigned char *byp;
-            if ((byp = CheckByKeyword(argv2[i], 'V')) != NULL || CheckByKeyword(argv2[i], 'R') != NULL)
-            {
-                if (byp != NULL)
-                { // if BYVAL
-                    // Only if not an array remove any pointer flag in the caller
-                    argtype[i] = 0;
+            if (L->p[i >> 1].by == SL_BYVAL)
+            { // if BYVAL
+                // Only if not an array remove any pointer flag in the caller
+                argtype[i] = 0;
 
-                    // Trap an array but not an array element
-                    if (DimIsRealArray(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
-                    {
-                        /* See if we have an array or an array element */
-                        tp = argv1[i];
-                        do
-                        {
-                            tp++;
-                        } while (*tp != '('); // We should find a '(' because it must be an array or and array element to get here
-                        tp++;
-                        skipspace(tp);
-                        if (*tp == ')')
-                            error("Array as BYVAL not allowed $", argv1[i]);
-                    }
-                    argv2[i] = byp; // skip to the variable start
-                }
-                else
+                // Trap an array but not an array element
+                if (DimIsRealArray(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
                 {
-                    if ((byp = CheckByKeyword(argv2[i], 'R')) != NULL)
-                    { // if BYREF
-                        if ((argtype[i] & T_PTR) == 0)
-                            error("Variable required for BYREF $", argv1[i]);
-
-                        argv2[i] = byp; // skip to the variable start
-                        argbyref[i] = 1;
-                    }
+                    /* See if we have an array or an array element */
+                    tp = argv1[i];
+                    do
+                    {
+                        tp++;
+                    } while (*tp != '('); // We should find a '(' because it must be an array or and array element to get here
+                    tp++;
+                    skipspace(tp);
+                    if (*tp == ')')
+                        error("Array as BYVAL not allowed $", argv1[i]);
                 }
+            }
+            else if (L->p[i >> 1].by == SL_BYREF)
+            { // if BYREF
+                if ((argtype[i] & T_PTR) == 0)
+                    error("Variable required for BYREF $", argv1[i]);
+                argbyref[i] = 1;
             }
 
             // if argument is present and is not a pointer to a variable then evaluate it as an expression
@@ -2824,25 +2946,13 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
     for (i = 0; i < argc2; i += 2)
     { // count through the arguments in the definition of the sub/fun
-        ArgType = T_NOTYPE;
-        // skip BYVAL/BYREF keywords
-        {
-            unsigned char *byp;
-            if ((byp = CheckByKeyword(argv2[i], 'V')) != NULL || (byp = CheckByKeyword(argv2[i], 'R')) != NULL)
-                argv2[i] = byp; // skip to the variable start
-        }
-
-        tp = skipvar(argv2[i], false); // point to after the variable
-        skipspace(tp);
-        if (*tp == tokenAS)
-        {                                                  // are we using Microsoft syntax (eg, AS INTEGER)?
-            *tp++ = 0;                                     // terminate the string and step over the AS token
-            tp = CheckIfTypeSpecified(tp, &ArgType, true); // and get the type
-            if (!(ArgType & T_IMPLIED))
-                error("Variable type");
-        }
+        ArgType = L->p[i >> 1].type; // its AS type, as read on the first call
+#ifdef STRUCTENABLED
+        if (ArgType != T_NOTYPE)
+            g_StructArg = L->p[i >> 1].structarg; // as reading the type left it
+#endif
         ArgType |= (V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK);
-        tp = findvar(argv2[i], ArgType); // declare the local variable
+        tp = findvar(L->p[i >> 1].name, ArgType); // declare the local variable
         if (DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
             error("Argument list"); // if it is an array it must be an empty array
 
@@ -2943,8 +3053,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     // exit from the sub is via cmd_return which will decrement g_LocalIndex
     if (!isfun)
     {
-        skipelement(p);
-        nextstmt = p; // point to the body of the subroutine
+        nextstmt = L->body; // point to the body of the subroutine
         return;
     }
 
@@ -2982,7 +3091,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         // tp already points to the struct data from findvar
     }
 #endif
-    skipelement(p); // point to the body of the function
+    p = L->body; // point to the body of the function
 
     ttp = nextstmt; // save the globals used by commands
     tcmdtoken = cmdtoken;
@@ -4798,6 +4907,23 @@ int MIPS16 FindStructBase(unsigned char *basename, int baselen, int *pvindex)
 }
 #endif
 
+// findvar's "Different type already declared", in flash: the name as findvar
+// reads it (in capitals), from the symbol at symp when the fast path did not
+// read it into name
+static void __attribute__((noinline)) FindvarTypeError(unsigned char *symp, unsigned char *name)
+{
+    unsigned char nm[MAXVARLEN + 1];
+    int n;
+    if (symp != NULL)
+    {
+        CopyName(symp, nm, &n);
+        for (int k = 0; k < n; k++)
+            nm[k] = mytoupper(nm[k]);
+        name = nm;
+    }
+    error("$ Different type already declared", name);
+}
+
 // ---------------------------------------------------------------------------
 // findvar() internal probe helpers (Phase 1 refactor)
 //
@@ -5253,16 +5379,29 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     if (g_LocalIndex)
     {
         // Search this level's locals first: the top of the local stack (P6 F2).
-        if ((LocalhashIndex = find_local_slot(name, namelen)) >= 0)
+        // A symbol's newest local answers it (F3) if that is at this level or
+        // below it; the walk when a local made from text lives (it has no
+        // binding) or the newest is deeper (one left by an error).
+        LocalhashIndex = -1;
+        if (symk >= 0 && !SymTextLocals && ((j = SymL[symk]) < 0 || g_vartbl[j].level <= g_LocalIndex))
+        {
+            if (j >= 0 && g_vartbl[j].level == g_LocalIndex)
+                LocalhashIndex = j;
+        }
+        else
+            LocalhashIndex = find_local_slot(name, namelen);
+        if (LocalhashIndex >= 0)
             localifree = -1;
         else
         {
-            // Not a local here; fall through to the global table.
+            // Not a local here; fall through to the global table, unless a
+            // local is being made, which has no use for it (F3)
             localifree = g_localtop; // where a new local would go
-            probe_global_slot(name, namelen,
-                              GlobalhashIndex, OriginalGlobalHash,
-                              1, // error on wrap (preserves historical behaviour)
-                              &GlobalhashIndex, &globalifree);
+            if (!(action & V_LOCAL))
+                probe_global_slot(name, namelen,
+                                  GlobalhashIndex, OriginalGlobalHash,
+                                  1, // error on wrap (preserves historical behaviour)
+                                  &GlobalhashIndex, &globalifree);
         }
     }
     else
@@ -5359,30 +5498,8 @@ findvar_found:
                 error("Array dimensions");
         }
 
-        if (vtype == 0)
-        {
-            if (!(g_vartbl[vindex].type & (DefaultType | T_IMPLIED)))
-            {
-                if (symp != NULL)
-                { // the fast path did not read the name
-                    FINDVAR_SYMNAME(symp);
-                    *s = 0;
-                }
-                error("$ Different type already declared", name);
-            }
-        }
-        else
-        {
-            if (!(g_vartbl[vindex].type & vtype))
-            {
-                if (symp != NULL)
-                {
-                    FINDVAR_SYMNAME(symp);
-                    *s = 0;
-                }
-                error("$ Different type already declared", name);
-            }
-        }
+        if (!(g_vartbl[vindex].type & (vtype ? vtype : (DefaultType | T_IMPLIED))))
+            FindvarTypeError(symp, name); // (the fast path may not have read the name)
 
         // if it is a non arrayed variable or an empty array it is easy, just calculate and return a pointer to the value
         if (dnbr == -1 || DimIsScalar(RAW_DIM(g_vartbl[vindex], 0)))
@@ -5524,8 +5641,11 @@ findvar_found:
             vtype = DefaultType;
     }
     // now scan the sub/fun table to make sure that there is not a sub/fun with the same name
+    // (once it has passed for a symbol's name it holds for the run: P6 F3)
+    if (symk >= 0 && (SymCold[symk].flags & SYMC_NOSUB))
+        ;
 #ifdef rp2350
-    if (!(action & V_FUNCT) && (funtbl[funhash].name[0]))
+    else if (!(action & V_FUNCT) && (funtbl[funhash].name[0]))
     { // don't do this if we are defining the local variable for a function name
         while (funtbl[funhash].name[0] != 0)
         {
@@ -5550,9 +5670,11 @@ findvar_found:
             if (funhash == MAXSUBFUN)
                 funhash = 0;
         }
+        if (symk >= 0)
+            SymCold[symk].flags |= SYMC_NOSUB;
     }
 #else
-    if (!(action & V_FUNCT))
+    else if (!(action & V_FUNCT))
     { // don't do this if we are defining the local variable for a function name
         for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
         {
@@ -5574,6 +5696,8 @@ findvar_found:
             if (xl == 0)
                 error("A sub/fun has the same name: $", name);
         }
+        if (symk >= 0)
+            SymCold[symk].flags |= SYMC_NOSUB;
     }
 #endif
     // set a default string size

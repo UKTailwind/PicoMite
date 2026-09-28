@@ -461,6 +461,7 @@ void SymBindInit(void)
 // InitHeap has wiped the heap the bindings lived in
 void SymBindForget(void)
 {
+    SubLayoutForget(); // the parameter lists read (MMBasic.c) live with the bindings
     SymBindGlobalsChanged();
     SymHotBlock = SymColdBlock = NULL;
     SymCanonOf = SymCanonHead = SymLCanon = NULL;
@@ -476,6 +477,7 @@ void SymBindFree(void)
         FreeMemorySafe(&SymHotBlock);
     if (SymColdBlock != NULL)
         FreeMemorySafe(&SymColdBlock);
+    SubLayoutFree();
     SymBindForget();
 }
 

@@ -213,9 +213,11 @@ typedef struct
     uint16_t id;           // a symbol id spelling this name
     uint16_t next;         // next entry in the same hash chain + 1, 0 = none
     uint16_t flags;        // SYMC_DOT: the name holds a '.' (it may be a structure member path)
+                           // SYMC_NOSUB: no SUB or FUNCTION has the name (checked once, P6 F3)
 } symcold_t;
 #define SYM_UNBOUND (-2)
 #define SYMC_DOT 1
+#define SYMC_NOSUB 2
 #define SYM_LTEXT 0xFFFF // SymLCanon: a local made from text
 
 extern uint16_t *SymCanonOf; // canonical entry + 1 of each symbol id, 0 = not seen yet

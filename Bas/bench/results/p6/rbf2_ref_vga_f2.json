@@ -1,0 +1,174 @@
+{
+ "recursion/OFF": [
+  [
+   "[2] Local Integer r",
+   "Error : Stack overflow, at depth 8, stack 2003FA68, heap 2003FCE0"
+  ],
+  []
+ ],
+ "hiding and nesting/OFF": [
+  [
+   "O1 1 5o",
+   "I 30 2i3",
+   "O2 1 5o",
+   "I 40 2i4",
+   "O3 7 5o",
+   "M 1 2g",
+   "O1 1 5o",
+   "I 30 2i3",
+   "O2 1 5o",
+   "I 40 2i4",
+   "O3 7 5o"
+  ],
+  []
+ ],
+ "many locals and arrays/OFF": [
+  [
+   " 1 1 2 10 5",
+   " 2 2 4 20 10",
+   " 3 3 6 30 15",
+   " 4 4 8 40 20",
+   " 5 5 10 50 25",
+   " 6 6 12 60 30",
+   " 7 7 14 70 35",
+   " 8 8 16 80 40",
+   " 1 1 2 10 5",
+   " 2 2 4 20 10",
+   " 3 3 6 30 15"
+  ],
+  []
+ ],
+ "strings and constants/OFF": [
+  [
+   "fedcba2 2xy2"
+  ],
+  []
+ ],
+ "constants hide/OFF": [
+  [
+   "O1 10 20",
+   "O2 20 40 loc",
+   "I 10 glob",
+   "O3 20 loc",
+   "M 10 glob 9",
+   "O1 10 20",
+   "O2 20 40 loc",
+   "I 10 glob",
+   "O3 20 loc"
+  ],
+  []
+ ],
+ "sub name clash/OFF": [
+  [
+   "[4] Local Integer foo",
+   "Error : A sub/fun has the same name: FOO"
+  ],
+  []
+ ],
+ "type clash/OFF": [
+  [
+   " 1",
+   "[4] aVal! = 2",
+   "Error : AVAL Different type already declared"
+  ],
+  []
+ ],
+ "parameter forms/OFF": [
+  [
+   " 1.5 3 abc 4 2.5 3 11",
+   " 99 98 zz 4 96.5 7 42",
+   " 100 3 zz! 8 96.5 3 42",
+   " 99 98 zz 4 96.5 7 42",
+   " 1 0 0",
+   " 1 0 3",
+   "x4 y12 9 9604 720",
+   " 1 2 1",
+   " 2 4 4",
+   " 3 6 9"
+  ],
+  []
+ ],
+ "missing first argument/OFF": [
+  [
+   "[4] P2 , 2",
+   "Error : Argument list"
+  ],
+  []
+ ],
+ "byval array/OFF": [
+  [
+   "[5] Q ai()",
+   "Error : Array as BYVAL not allowed ai()"
+  ],
+  []
+ ],
+ "byref expression/OFF": [
+  [
+   "[4] Q 1 + 2",
+   "Error : Variable required for BYREF 1"
+  ],
+  []
+ ],
+ "byref type/OFF": [
+  [
+   "[5] Q f",
+   "Error : BYREF requires same types: f"
+  ],
+  []
+ ],
+ "structures/OFF": [
+  [
+   " 21 5.25"
+  ],
+  []
+ ],
+ "gosub and interrupts/OFF": [
+  [
+   " 800 1"
+  ],
+  []
+ ],
+ "error skip in a loop/OFF": [
+  [
+   " 125250"
+  ],
+  []
+ ],
+ "the limit/OFF": [
+  [
+   " 5 10 15 20",
+   "[2] Local Integer a, b, c, d2, e, f, g, h, k, m",
+   "Error : Not enough Local variable memory"
+  ],
+  []
+ ],
+ "after the limit/OFF": [
+  [
+   " 0 2 4 6 8 10"
+  ],
+  []
+ ],
+ "context/OFF": [
+  [
+   " 109",
+   " 23"
+  ],
+  []
+ ],
+ "forty locals/OFF": [
+  [
+   " 200010000 6667"
+  ],
+  [
+   "TIME  516.145"
+  ]
+ ],
+ "speed/OFF": [
+  [
+   " 400200000"
+  ],
+  [
+   "TIME  2956.807"
+  ]
+ ]
+}

@@ -651,6 +651,8 @@ long long int FloatToInt64(MMFLOAT x);
     void cmd_localvars(unsigned char *p);
     int GetLocalVarHashSize(void);
     void LocalTopRestore(void); // P6 F2: the local stack's height after a context is restored
+    void SubLayoutForget(void); // P6 F1: the parameter lists read (with the symbol bindings)
+    void SubLayoutFree(void);
     int GetGlobalVarHashSize(void);
     uint32_t erase(char *p, bool nofree);
     /* ============================================================================

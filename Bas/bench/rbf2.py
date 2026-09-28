@@ -1,4 +1,4 @@
-"""rbf2.py PORT record|check FILE - P6 F2 (the local region as a stack): local
+"""rbf2.py PORT record|check FILE[,FILE...] - P6 F2 (the local region as a stack): local
 variables in recursion, hiding, nesting, arrays, strings, structures, GOSUB,
 interrupts, errors, the limit and SAVE/RESTORE CONTEXT.  Every program runs
 with OPTION COMPILE OFF and ON; "record" saves what a firmware printed (run it
@@ -96,6 +96,77 @@ End Function
 Outer
 Print "M"; K; " "; N$; F(2)
 Outer
+"""),
+    ("sub name clash", """Sub Foo
+End Sub
+Sub T
+  Local Integer foo
+End Sub
+T
+"""),
+    ("type clash", """Dim Integer aVal = 1
+Sub T
+  Print aVal
+  aVal! = 2
+End Sub
+T
+"""),
+    ("parameter forms", """Type Pt
+  x As Integer
+  y As Float
+End Type
+Dim gp As Pt
+Dim Integer ai(3), ib = 3, idd = 4
+Dim Float fa = 1.5, fe = 2.5
+Dim s$ = "abc"
+Sub P1(a, b As Integer, c$, ByVal d As Integer, ByRef e As Float, f%(), g As Pt)
+  Print a; b; " "; c$; d; e; Bound(f%()); g.x
+  a = 99 : b = 98 : d = 97 : e = 96.5 : c$ = "zz" : f%(1) = 7 : g.x = 42
+End Sub
+gp.x = 11
+P1 fa, ib, s$, idd, fe, ai(), gp
+Print fa; ib; " "; s$; idd; fe; ai(1); gp.x
+P1 fa + 1, 2.7, s$ + "!", 8, fe, ai(), gp
+Print fa; ib; " "; s$; idd; fe; ai(1); gp.x
+Sub P2(a, b, c)
+  Print a; b; c
+End Sub
+P2 1
+P2 1, , 3
+Function Jn$(a$, ByVal n As Integer) As String
+  Jn$ = a$ + Str$(n)
+End Function
+Function Sq(x As Float) As Float
+  Sq = x * x
+End Function
+Function Fct(n As Integer) As Integer
+  If n <= 1 Then Fct = 1 Else Fct = n * Fct(n - 1)
+End Function
+Print Jn$("x", 3.7); " "; Jn$(Jn$("y", 1), 2); Sq(3); Sq(ib); Fct(6)
+Dim Integer k
+For k = 1 To 3 : P2 k, k * 2, Sq(k) : Next
+"""),
+    ("missing first argument", """Sub P2(a, b, c)
+  Print a; b; c
+End Sub
+P2 , 2
+"""),
+    ("byval array", """Dim Integer ai(3)
+Sub Q(ByVal a%())
+  Print Bound(a%())
+End Sub
+Q ai()
+"""),
+    ("byref expression", """Sub Q(ByRef a As Integer)
+  Print a
+End Sub
+Q 1 + 2
+"""),
+    ("byref type", """Dim Float f = 2
+Sub Q(ByRef a As Integer)
+  Print a
+End Sub
+Q f
 """),
     ("structures", """Type Pt
   x As Integer
@@ -216,7 +287,11 @@ def run(src):
 # expected from the manual rather than from a firmware (a constant defined in a
 # sub is local to it and hides a global constant of the same name)
 EXPECT = {"constants hide": ["O1 10 20", "O2 20 40 loc", "I 10 glob", "O3 20 loc", "M 10 glob 9",
-                             "O1 10 20", "O2 20 40 loc", "I 10 glob", "O3 20 loc"]}
+                             "O1 10 20", "O2 20 40 loc", "I 10 glob", "O3 20 loc"],
+          # the old code's error texts: error("A sub/fun has the same name: $") and
+          # error("$ Different type already declared"), the name in capitals
+          "sub name clash": ["[4] Local Integer foo", "Error : A sub/fun has the same name: FOO"],
+          "type clash": [" 1", "[4] aVal! = 2", "Error : AVAL Different type already declared"]}
 
 # Route B is RP2350-only: where OPTION COMPILE is refused, only the text run
 modes = ("OFF",) if "Error" in b.cmd("OPTION COMPILE OFF", 10) else ("OFF", "ON")
@@ -240,13 +315,17 @@ if mode == "record":
         print("%-32s %s %s" % (k, " | ".join(body)[-90:], " ".join(t[5:].strip() for t in times)))
     print("RBF2 RECORDED")
 else:
-    ref = json.load(open(fname))
+    ref = {}
+    for f in reversed(fname.split(",")):  # several references: the first that has a program wins
+        ref.update(json.load(open(f)))
     ok = True
     # a stack overflow's report names the stack and heap addresses, which move
     # from build to build; its depth is what must match
     addr = lambda ls: [re.sub(r"stack [0-9A-F]+, heap [0-9A-F]+", "stack *, heap *", l) for l in (ls or [])]
     for k, (body, times) in got.items():
-        rb, rt = ref.get(k, (EXPECT.get(k.split("/")[0]), []))
+        # a compiled run with no reference of its own (recorded where OPTION
+        # COMPILE is refused) must print what the text run recorded
+        rb, rt = ref.get(k, ref.get(k.split("/")[0] + "/OFF", (EXPECT.get(k.split("/")[0]), [])))
         good = addr(body) == addr(rb)
         ok = ok and good
         print("%-4s %-32s %s" % ("ok" if good else "BAD", k, " | ".join(body)[-80:]))
