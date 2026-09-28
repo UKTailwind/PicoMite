@@ -72,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 27       // the stream format
+#define RB_VERSION 28       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -414,6 +414,7 @@ enum
     RC_STS,      // pop a string into string bind a, as cmd_let stores it
     RC_CONTFOR,  // CONTINUE FOR: the loop's NEXT, run as cmd_next runs it
     RC_FN,       // built-in function a (RF_) on the top, as its fun_ handler computes it (RBFn)
+    RC_LOCAL,    // LOCAL of the a names whose offsets follow, as cmd_dim makes them (RBLocal)
 };
 enum
 { // RC_FN's functions: each its Functions.c helper (FnSin...)
@@ -1580,6 +1581,46 @@ static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char
    the IF table gives, looked up as cmd_else looks it up (its token taken to
    be just before cmdline); ELSE checks its end first.  CONTINUE FOR runs its
    loop's NEXT (RC_CONTFOR); CONTINUE DO and plain CONTINUE stay text. */
+// P4f: LOCAL [AS] [type] name {, name} (see RBLocal): 0 if it is another form
+static int RBCompileLocal(unsigned char *entry, unsigned char *cmdl, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *p = cmdl, *tp;
+    uint16_t off[RB_MAXCODE / 2];
+    int n = 0, i;
+    const unsigned char *sp;
+    if (*p == tokenAS)
+        p++;
+    if ((tp = checkstring(p, (unsigned char *)"INTEGER")) != NULL || (tp = checkstring(p, (unsigned char *)"STRING")) != NULL ||
+        (tp = checkstring(p, (unsigned char *)"FLOAT")) != NULL)
+        p = tp; // (CheckIfTypeSpecified's reading; any other word is a name, or a structure type which RBLocal leaves to cmd_dim)
+    while (1)
+    {
+        skipspace(p);
+        if (!issymbol(*p) || n == RB_MAXCODE / 2 - 2 || p - entry > 0xFFFF)
+            return 0;
+        sp = SymSpelling(p, &i);
+        if (memchr(sp, '.', i))
+            return 0; // a structure member
+        off[n++] = p - entry;
+        p += symbolsize(*p);
+        RBSuffix(&p);
+        skipspace(p);
+        if (*p == 0)
+            break;
+        if (*p != ',')
+            return 0; // AS, brackets, LENGTH, a value, a comment: cmd_dim's
+        p++;
+    }
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    RBOp(&x, RC_LOCAL | (n << 8), 0);
+    for (i = 0; i < n; i++)
+        RBOp(&x, off[i], 0);
+    RBOp(&x, RC_END, 0);
+    return RBFinish(&x, code);
+}
+
 static int RBCompileExit(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *cmdl, CommandToken ct, uint16_t *code)
 {
     rbcx_t x;
@@ -2266,6 +2307,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileSelect(entry, base, libbit, cmdl, next, code + 1);
         else if (ct == cmdCASE || ct == cmdCASE_ELSE || ct == cmdEND_SELECT)
             ncode = RBCompileCase(entry, base, libbit, cmdl, next, ct, code + 1);
+        else if (ct == RBTokLocal)
+            ncode = RBCompileLocal(entry, cmdl, code + 1);
         else
             ncode = RBCompileExit(entry, base, libbit, cmdl, ct, code + 1);
     }
@@ -3245,6 +3288,32 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
     }
 }
 
+// RC_LOCAL: what cmd_dim does for LOCAL name {, name}, in its order, the
+// names read where they are in the program (see RBCompileLocal).  Returns
+// the code after the names' offsets, or NULL before anything has happened
+// if a structure type is in the type's place.
+static __attribute__((noinline)) const uint16_t *RBLocal(unsigned char *e, unsigned int nw, const uint16_t *off, unsigned int w)
+{
+    unsigned char *cmdl = e + (nw & 0xFF);
+    int n = w >> 8, type, i;
+    if (*cmdl == tokenAS)
+        cmdl++;
+    CheckIfTypeSpecified(cmdl, &type, true);
+#ifdef STRUCTENABLED
+    if (type & T_STRUCT)
+        return NULL;
+#endif
+    for (i = 0; i < n; i++)
+    {
+        if (g_LocalIndex == 0)
+            error("Invalid here");
+        findvar(e + off[i], type | V_LOCAL | V_FIND | V_DIM_VAR | V_DIM_NEW);
+        if (DimIsEmptyParam(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+            error("Array dimensions");
+    }
+    return off + n;
+}
+
 // cmd_let's store into a string: its length against the variable's size (a
 // BYREF parameter has its caller's), then the copy
 static __attribute__((noinline)) void RBStoreStr(struct s_vartbl *v, unsigned char *s)
@@ -3268,10 +3337,13 @@ static __attribute__((noinline)) void RBOpStr(int o, union cell *sp)
         sp[-2].i = iret;
 }
 
-// cmd_select's tests on a float selector s: v[0] == s, or v[0] <= s <= v[1]
-static __attribute__((noinline)) int RBSelF(MMFLOAT s, union cell *v, int range)
+// cmd_select's tests (RC_EQSEL, RC_RANGE, the selector's type in w's high
+// byte) on the selector s: v[0] == s, or v[0] <= s <= v[1]
+static __attribute__((noinline)) int RBSel(unsigned int w, const union cell *s, const union cell *v)
 {
-    return range ? (s >= v[0].f && s <= v[1].f) : s == v[0].f;
+    if ((w & 0xFF) == RC_RANGE)
+        return (w >> 8) == T_NBR ? (s->f >= v[0].f && s->f <= v[1].f) : (s->i >= v[0].i && s->i <= v[1].i);
+    return (w >> 8) == T_NBR ? s->f == v[0].f : s->i == v[0].i;
 }
 
 static __attribute__((noinline)) int RBReturn(void)
@@ -3510,6 +3582,7 @@ again:
         [RC_OPS] = &&L_OPS,
         [RC_STS] = &&L_STS,
         [RC_CONTFOR] = &&L_CONTFOR,
+        [RC_LOCAL] = &&L_LOCAL,
         [RC_FN] = &&L_FN,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
@@ -3691,12 +3764,12 @@ again:
             if (g_forindex == 0)
                 goto fail; // "No FOR loop is in effect": the fallback raises it
             nextstmt = g_forstack[--g_forindex].nextptr;
-            skipelement(nextstmt);
-            goto ran;
+            goto exited;
     L_EXITDO: // cmd_exit
             if (g_doindex == 0)
                 goto fail;
             nextstmt = g_dostack[--g_doindex].loopptr;
+    exited: // past the NEXT or LOOP
             skipelement(nextstmt);
             goto ran;
     L_RETURN: // cmd_return (RBReturn)
@@ -3711,18 +3784,10 @@ again:
     L_SEL: // cmd_select's selector
             *sp++ = st[0];
             RBNEXT();
-    L_EQSEL: // cmd_select: f == ft (RBSelF) or i64 == i64t
-            if ((w >> 8) == T_NBR)
-                sp[-1].i = RBSelF(st[0].f, sp - 1, 0);
-            else
-                sp[-1].i = st[0].i == sp[-1].i;
-            RBNEXT();
-    L_RANGE: // cmd_select: f >= ft && f <= ftt (RBSelF), or the same on integers
+    L_RANGE: // cmd_select's range test (RBSel)
             sp--;
-            if ((w >> 8) == T_NBR)
-                sp[-1].i = RBSelF(st[0].f, sp - 1, 1);
-            else
-                sp[-1].i = st[0].i >= sp[-1].i && st[0].i <= sp[0].i;
+    L_EQSEL: // cmd_select: == or the range, on the selector's type (RBSel)
+            sp[-1].i = RBSel(w, st, sp - 1);
             RBNEXT();
     L_CLSET: // cmd_select reports a CASE's errors against its line
             if (clsave == NULL)
@@ -3737,6 +3802,10 @@ again:
             goto ran;
     L_FN: // a built-in function's work (RBFn)
             RBFn(w >> 8, sp - 1);
+            RBNEXT();
+    L_LOCAL: // cmd_dim for LOCAL (RBLocal)
+            if ((pc = RBLocal(e, nw, pc, w)) == NULL)
+                goto fail;
             RBNEXT();
     L_LDS: // getvalue: a string variable's data, which it does not copy
             (sp++)->i = (uint32_t)((struct s_vartbl *)slotp[w >> 8])->val.s;
