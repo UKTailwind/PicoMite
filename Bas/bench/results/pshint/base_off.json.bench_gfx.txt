@@ -1,0 +1,45 @@
+RUN
+BENCHSTART PicoMiteHDMIWEB RP2350B  6.040052  315 MHz
+BENCH ctl.loop.empty 1.549 488
+BENCH ctl.assign 4.884 1538
+BENCH H4.pixel.lit 6.795 2140
+BENCH H4.pixel.var 10.150 3197
+BENCH H4.pixel.var_x 8.348 2630
+BENCH H4.pixel.var_c 7.789 2454
+BENCH H4.pixel.var_float 13.850 4363
+BENCH H4.pixel.lit_2arg 5.596 1763
+BENCH H4.pixel.lit_3digit 7.221 2275
+BENCH H4.pixel.lit_offscreen 7.160 2255
+BENCH H4.line.lit 15.996 5039
+BENCH H4.line.lit_4arg 13.890 4375
+BENCH H4.line.var 22.388 7052
+BENCH H4.box.lit 13.521 4259
+BENCH H4.box.var 20.080 6325
+BENCH H4.circle.lit 17.610 5547
+BENCH H4.circle.var 24.324 7662
+BENCH E8.loop64.empty 1.883 593
+BENCH E8.pixel64.gross 12.163 3831
+BENCH E8.pixel64.net 10.281 3238
+BENCH E8.pixelarray512.stmt 144.199 45423
+BENCH E8.pixelarray512.perpixel 0.282 89
+BENCH E9.cls.320x240 127.069 40027
+BENCH E9.boxfill.8x8 15.040 4738
+BENCH E9.boxfill.320x240 131.507 41425
+BENCH E9.line.8x8 15.995 5038
+BENCH E9.line.320x240 222.432 70066
+BENCH E9.circlefill.r4 24.128 7600
+BENCH E9.circlefill.r100 236.358 74453
+BENCH local.ctl.loop.empty 1.594 502
+BENCH local.H4.pixel.lit 6.686 2106
+BENCH local.H4.pixel.var 9.704 3057
+BENCH local.H4.line.lit 16.006 5042
+BENCH local.H4.line.var 21.419 6747
+BENCH local.H4.box.lit 13.427 4230
+BENCH local.H4.box.var 19.216 6053
+BENCH local.H4.circle.lit 17.592 5541
+BENCH local.H4.circle.var 23.636 7445
+BENCH local.E8.loop64.empty 1.992 628
+BENCH local.E8.pixel64.gross 11.754 3703
+BENCH local.E8.pixel64.net 9.762 3075
+BENCHEND
+> 

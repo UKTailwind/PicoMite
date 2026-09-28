@@ -1,0 +1,9 @@
+RUN
+BENCHSTART PicoMiteHDMIWEB RP2350B  6.040052  315 MHz
+BENCH julia240x180_interp_us_per_render 32838106.000 10344003390
+BENCH julia240x180_interp_us_per_pixel 760.141 239445
+BENCH julia240x180_interp_us_per_escape_iter 69.738 21968
+CHECK julia240x180 1188747455186
+ELAPSED julia240x180_interp 32838.143 ms for 1 render(s)
+BENCHEND
+> 

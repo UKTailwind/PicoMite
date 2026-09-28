@@ -1,0 +1,13 @@
+RUN
+BENCHSTART PicoMiteHDMIWEB RP2350B  6.040052  315 MHz
+BENCH gfx_elite_frame_us_per_frame 32393.160 10203845
+BENCH gfx_elite_move_cls_us_per_frame 694.701 218831
+BENCH gfx_elite_stardust_us_per_frame 5784.720 1822187
+BENCH gfx_elite_planet_us_per_frame 4388.132 1382262
+BENCH gfx_elite_ships_us_per_frame 14286.009 4500093
+BENCH gfx_elite_dash_us_per_frame 7066.113 2225826
+BENCH gfx_elite_fbcopy_us_per_frame 163.846 51611
+CHECK gfx_elite 37966927747
+ELAPSED gfx_elite 32394.784 ms for 1000 frames, FBUF%=1
+BENCHEND
+> 

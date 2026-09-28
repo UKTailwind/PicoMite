@@ -175,6 +175,11 @@ static inline void MBitsSet(unsigned char *addr, int bits);
    The bottom-up search (GetSystemMemory, temporaries) has no hint: the bottom
    of the heap is almost always free, so it finds a page at once, and a hint
    there cost every temporary more than it saved.
+   GetPSMemory's top-down search of the PSRAM heap has one of its own, kept
+   the same way (ps_top_hint): once a program has filled the SRAM heap, every
+   temporary comes from PSRAM, and without it each one walked the page map
+   down from the top past everything allocated there (11% of a PC-sampled
+   Elite).
    On the RP2350, FreeMemory can run in an interrupt (the stepper ISR releases
    arc buffers), so every free bumps heap_frees, and a search that sees it
    change while it ran stores NULL rather than a hint that could hide the pages
@@ -184,13 +189,17 @@ static inline void MBitsSet(unsigned char *addr, int bits);
 static volatile struct
 {
     unsigned char *top;
-    unsigned int frees, spare1, spare2;
-} __attribute__((aligned(16))) heap_hints = {NULL, 0, 0, 0};
+    unsigned int frees;
+    unsigned char *pstop;
+    unsigned int spare2;
+} __attribute__((aligned(16))) heap_hints = {NULL, 0, NULL, 0};
 #define heap_top_hint heap_hints.top
 #define heap_frees heap_hints.frees
+#define ps_top_hint heap_hints.pstop
 void HeapHintsReset(void)
 {
     heap_top_hint = NULL;
+    ps_top_hint = NULL;
 }
 #ifdef rp2350
 /* store a narrowed hint, then drop it if a free happened since the search began */
@@ -217,6 +226,15 @@ static inline __attribute__((always_inline)) void HeapFreed(unsigned char *last)
     if (heap_top_hint != NULL && last > heap_top_hint)
         heap_top_hint = MMHeap + ((unsigned int)(last - MMHeap) & ~(PAGESIZE - 1));
 }
+#ifdef rp2350
+// the same for the PSRAM heap
+static inline __attribute__((always_inline)) void PSFreed(unsigned char *last)
+{
+    heap_frees++;
+    if (ps_top_hint != NULL && last > ps_top_hint)
+        ps_top_hint = (unsigned char *)PSRAMbase + ((unsigned int)(last - (unsigned char *)PSRAMbase) & ~(PAGESIZE - 1));
+}
+#endif
 char *g_StrTmp[MAXTEMPSTRINGS];          // used to track temporary string space on the heap
 char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalIndex for each temporary string space on the heap
 
@@ -1997,6 +2015,7 @@ void MIPS32 __not_in_flash_func(FreeMemory)(void *addr)
                 SBitsSet(addr, 0);
                 addr += PAGESIZE;
             } while (bits != (PUSED | PLAST));
+            PSFreed((unsigned char *)addr - PAGESIZE);
         }
         else
         {
@@ -2131,7 +2150,8 @@ static inline __attribute__((always_inline)) void MBitsSet(unsigned char *addr, 
     *p = (*p & ~(3u << bit_pos)) | ((unsigned int)bits << bit_pos);
 }
 #ifdef rp2350
-void __not_in_flash_func (*GetPSMemory)(int size)
+/* not inlined into GetSystemMemory's specialised copy: its RAM is the stack's */
+void __attribute__((noinline)) __not_in_flash_func (*GetPSMemory)(int size)
 {
     unsigned int j, n;
     unsigned char *addr;
@@ -2142,25 +2162,48 @@ void __not_in_flash_func (*GetPSMemory)(int size)
        0 bytes", which is why the size is in that message: without it the
        reader is sent after exhaustion that never happened.  No guard here
        - it would only save a scan, and PICO has no flash to spare. */
-    j = n = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
-    for (addr = (unsigned char *)(PSRAMbase + PSRAMsize - PAGESIZE); addr >= (unsigned char *)PSRAMbase; addr -= PAGESIZE)
+    /* The search starts at ps_top_hint, every page above which is in use, and
+       finds exactly the block a scan from the top would; it narrows the hint,
+       and a search that fails from the hint scans again from the top before
+       giving up (TopDownFind's rules, in the PSRAM page map, with the whole
+       map rescanned: out of PSRAM is rare, and the RAM is the stack's). */
+    unsigned int k, frees0 = HEAP_FREES_NOW;
+    unsigned char *const bottom = (unsigned char *)PSRAMbase;
+    unsigned char *const top = (unsigned char *)(PSRAMbase + PSRAMsize - PAGESIZE);
+    unsigned char *start = ps_top_hint, *first_free;
+    k = (size + PAGESIZE - 1) / PAGESIZE; // nbr of pages rounded up
+    if (start == NULL || start > top || start < bottom)
+        start = top;
+    for (;;)
     {
-        if (!(SBitsGet(addr) & PUSED))
+        j = n = k;
+        first_free = NULL;
+        for (addr = start; addr >= bottom; addr -= PAGESIZE)
         {
-            if (--n == 0)
-            { // found a free slot
-                j--;
-                SBitsSet(addr + (j * PAGESIZE), PUSED | PLAST); // show that this is used and the last in the chain of pages
-                while (j--)
-                    SBitsSet(addr + (j * PAGESIZE), PUSED); // set the other pages to show that they are used
-                memset(addr, 0, size);                      // zero the memory
-                                                            //               dp("alloc = %p (%d)", addr, size);
-                return (void *)addr;
+            if (!(SBitsGet(addr) & PUSED))
+            {
+                if (first_free == NULL)
+                    first_free = addr;
+                if (--n == 0)
+                { // found a free slot
+                    // every page above first_free is used; so is this block once taken
+                    HEAP_SET_HINT(ps_top_hint, (addr + (k - 1) * PAGESIZE == first_free) ? addr - PAGESIZE : first_free, frees0);
+                    j--;
+                    SBitsSet(addr + (j * PAGESIZE), PUSED | PLAST); // show that this is used and the last in the chain of pages
+                    while (j--)
+                        SBitsSet(addr + (j * PAGESIZE), PUSED); // set the other pages to show that they are used
+                    memset(addr, 0, size);                      // zero the memory
+                    return (void *)addr;
+                }
             }
+            else
+                n = j; // not enough space here so reset our count
         }
-        else
-            n = j; // not enough space here so reset our count
+        if (start == top)
+            break;
+        start = top; // failed from the hint: from the top
     }
+    ps_top_hint = NULL;
     // out of memory
     TempStringClearStart = 0;
     ClearTempMemory(); // hopefully this will give us enough to print the prompt
