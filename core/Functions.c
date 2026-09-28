@@ -565,11 +565,15 @@ void fun_abs(void)
 	if (targ & T_NBR)
 		fret = fabs(f);
 	else
-	{
-		iret = i64;
-		if (iret < 0)
-			iret = -iret;
-	}
+		iret = FnAbsI(i64);
+}
+
+// ABS of an integer (Route B's RC_FN calls it too)
+long long int FnAbsI(long long int i64)
+{
+	if (i64 < 0)
+		i64 = -i64;
+	return i64;
 }
 
 // return the ASCII value of the first character in a string (ie, its number value)
@@ -794,10 +798,15 @@ void fun_tilde(void)
 }
 
 // return the arctangent of a number in radians
+MMFLOAT FnAtn(MMFLOAT x)
+{
+	MMFLOAT f = atan(x);
+	return useoptionangle ? f * optionangle : f;
+}
+
 void fun_atn(void)
 {
-	MMFLOAT f = atan(getnumber(ep));
-	fret = useoptionangle ? f * optionangle : f;
+	fret = FnAtn(getnumber(ep));
 	targ = T_NBR;
 }
 
@@ -923,42 +932,50 @@ void fun_cint(void)
 	targ = T_INT;
 }
 
-void fun_cos(void)
+MMFLOAT FnCos(MMFLOAT t)
 {
 	if (useoptionangle)
 	{
 #ifndef rp2350
-		MMFLOAT t = getnumber(ep);
 		if (t == (int)t)
 		{
 			int integerPart = (int)t;
 			// Modulus 360 and ensure it's in the range [0, 359]
-			fret = sinetab[(integerPart % 360 + 450) % 360];
+			return sinetab[(integerPart % 360 + 450) % 360];
 		}
-		else
-			fret = cos(t / optionangle); // not getnumber(ep) again: a nested function has moved ep
-#else
-		fret = cos(getnumber(ep) / optionangle);
 #endif
+		return cos(t / optionangle);
 	}
-	else
-	{
-		fret = cos(getnumber(ep));
-	}
+	return cos(t);
+}
+
+void fun_cos(void)
+{
+	fret = FnCos(getnumber(ep));
 	targ = T_NBR;
 }
 
 // convert radians to degrees.  Thanks to Alan Williams for the contribution
+MMFLOAT FnDeg(MMFLOAT x)
+{
+	return (MMFLOAT)((MMFLOAT)x * RADCONV);
+}
+
 void fun_deg(void)
 {
-	fret = (MMFLOAT)((MMFLOAT)getnumber(ep) * RADCONV);
+	fret = FnDeg(getnumber(ep));
 	targ = T_NBR;
 }
 
 // Returns the exponential value of a number.
+MMFLOAT FnExp(MMFLOAT x)
+{
+	return exp(x);
+}
+
 void fun_exp(void)
 {
-	fret = exp(getnumber(ep));
+	fret = FnExp(getnumber(ep));
 	targ = T_NBR;
 }
 /*
@@ -1131,17 +1148,27 @@ void fun_instr(void)
 }
 
 // Truncate an expression to the next whole number less than or equal to the argument.
+long long int FnInt(MMFLOAT x)
+{
+	return FloatToInt64(floor(x)); // range-checked: a plain cast turned NaN, INF and 1e30 into 9223372036854775807
+}
+
 void fun_int(void)
 {
-	iret = FloatToInt64(floor(getnumber(ep))); // range-checked: a plain cast turned NaN, INF and 1e30 into 9223372036854775807
+	iret = FnInt(getnumber(ep));
 	targ = T_INT;
 }
 
 // Truncate a number to a whole number by eliminating the decimal point and all characters
 // to the right of the decimal point.
+long long int FnFix(MMFLOAT x)
+{
+	return FloatToInt64(trunc(x)); // range-checked, as INT
+}
+
 void fun_fix(void)
 {
-	iret = FloatToInt64(trunc(getnumber(ep))); // range-checked, as INT
+	iret = FnFix(getnumber(ep));
 	targ = T_INT;
 }
 
@@ -1155,15 +1182,18 @@ void fun_len(void)
 
 // Return the natural logarithm of the argument 'number'.
 // n = LOG( number )
-void fun_log(void)
+MMFLOAT FnLog(MMFLOAT f)
 {
-	MMFLOAT f;
-	f = getnumber(ep);
 	if (f == 0)
 		error("Divide by zero");
 	if (f < 0)
 		error("Negative argument");
-	fret = log(f);
+	return log(f);
+}
+
+void fun_log(void)
+{
+	fret = FnLog(getnumber(ep));
 	targ = T_NBR;
 }
 
@@ -1203,9 +1233,14 @@ void fun_pi(void)
 
 // convert degrees to radians.  Thanks to Alan Williams for the contribution
 // r = RAD( degrees )
+MMFLOAT FnRad(MMFLOAT x)
+{
+	return (MMFLOAT)((MMFLOAT)x / RADCONV);
+}
+
 void fun_rad(void)
 {
-	fret = (MMFLOAT)((MMFLOAT)getnumber(ep) / RADCONV);
+	fret = FnRad(getnumber(ep));
 	targ = T_NBR;
 }
 
@@ -1243,55 +1278,64 @@ void fun_sgn(void)
 	if (t & T_INT)
 		iret = (i64 > 0LL) - (i64 < 0LL);
 	else
-		iret = (f > 0) - (f < 0);
+		iret = FnSgnF(f);
 	targ = T_INT;
+}
+
+// SGN of a float (Route B's RC_FN calls it too; 0 for a NaN)
+long long int FnSgnF(MMFLOAT f)
+{
+	return (f > 0) - (f < 0);
 }
 
 // Return the sine of the argument 'number' in radians.
 // n = SIN( number )
-void fun_sin(void)
+/* The pure numeric functions' work on a value (FnSin and the rest): the
+   fun_ handler reads its argument and calls it, and so does Route B's
+   compiled code (Stream.c RC_FN), so the two cannot give different answers. */
+MMFLOAT FnSin(MMFLOAT t)
 {
 	if (useoptionangle)
 	{
 #ifndef rp2350
-		MMFLOAT t = getnumber(ep);
 		if (t == (int)t)
 		{
 			int integerPart = (int)t;
 			// Modulus 360 and ensure it's in the range [0, 359]
-			fret = sinetab[(integerPart % 360 + 360) % 360];
+			return sinetab[(integerPart % 360 + 360) % 360];
 		}
-		else
-			fret = sin(t / optionangle); // not getnumber(ep) again: a nested function has moved ep
-#else
-		fret = sin(getnumber(ep) / optionangle);
 #endif
+		return sin(t / optionangle);
 	}
-	else
-	{
-		fret = sin(getnumber(ep));
-	}
+	return sin(t);
+}
+
+void fun_sin(void)
+{
+	fret = FnSin(getnumber(ep));
 	targ = T_NBR;
 }
 
 // Return the square root of the argument 'number'.
 // n = SQR( number )
-void fun_sqr(void)
+MMFLOAT FnSqr(MMFLOAT f)
 {
-	MMFLOAT f;
-	f = getnumber(ep);
 	if (f < 0)
 		error("Negative argument");
-	fret = sqrt(f);
+	return sqrt(f);
+}
+
+void fun_sqr(void)
+{
+	fret = FnSqr(getnumber(ep));
 	targ = T_NBR;
 }
 
-void fun_tan(void)
+MMFLOAT FnTan(MMFLOAT t)
 {
 	if (useoptionangle)
 	{
 #ifndef rp2350
-		MMFLOAT t = getnumber(ep);
 		if (t == (int)t)
 		{
 			int integerPart = (int)t;
@@ -1299,18 +1343,17 @@ void fun_tan(void)
 			MMFLOAT cosval = sinetab[(integerPart % 360 + 450) % 360];
 			if (cosval == 0.0)
 				StandardError(15);
-			fret = sinetab[(integerPart % 360 + 360) % 360] / cosval;
+			return sinetab[(integerPart % 360 + 360) % 360] / cosval;
 		}
-		else
-			fret = tan(t / optionangle); // not getnumber(ep) again: a nested function has moved ep
-#else
-		fret = tan(getnumber(ep) / optionangle);
 #endif
+		return tan(t / optionangle);
 	}
-	else
-	{
-		fret = tan(getnumber(ep));
-	}
+	return tan(t);
+}
+
+void fun_tan(void)
+{
+	fret = FnTan(getnumber(ep));
 	targ = T_NBR;
 }
 

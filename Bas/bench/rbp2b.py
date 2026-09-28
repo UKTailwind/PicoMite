@@ -58,10 +58,10 @@ a% = 3
   p5 = 2 ^ -1""" + """Print p1; p2; p3; p4; p5
 """ + STAT, lambda n: n > 0),
     ("text stays", """a% = 3 : x = 0.5 : s$ = "ab"
-""" + LOOP % """  f1 = Sin(x) + a%
+""" + LOOP % """  f1 = Max(x, 1) + a%
   f2 = Len(s$) * 2
   f3 = Asc(s$) * 2""" + """Print f1; f2; f3
-""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c); built-in functions are P5 (arrays compile since P4a)
+""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c); functions P5a does not compile (arrays compile since P4a, SIN since P5a)
     ("div zero", """a% = 5 : b% = 0
 For i% = 1 To 3
   c = a% / b%

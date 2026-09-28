@@ -37,6 +37,20 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 
 #define RADCONV   (MMFLOAT)57.2957795130823229	  // Used when converting degrees -> radians and vice versa
 #define Rad(a)  (((MMFLOAT)a) / RADCONV)
+// the pure numeric functions on a value (Functions.c), shared with Route B
+MMFLOAT FnSin(MMFLOAT t);
+MMFLOAT FnCos(MMFLOAT t);
+MMFLOAT FnTan(MMFLOAT t);
+MMFLOAT FnAtn(MMFLOAT x);
+MMFLOAT FnSqr(MMFLOAT f);
+MMFLOAT FnExp(MMFLOAT x);
+MMFLOAT FnLog(MMFLOAT f);
+MMFLOAT FnDeg(MMFLOAT x);
+MMFLOAT FnRad(MMFLOAT x);
+long long int FnInt(MMFLOAT x);
+long long int FnFix(MMFLOAT x);
+long long int FnAbsI(long long int i64);
+long long int FnSgnF(MMFLOAT f);
 
 
 #endif

@@ -72,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 26       // the stream format
+#define RB_VERSION 27       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -413,6 +413,25 @@ enum
     RC_OPS,      // operator a on two strings, as doexpr calls it: + a string, a comparison an integer
     RC_STS,      // pop a string into string bind a, as cmd_let stores it
     RC_CONTFOR,  // CONTINUE FOR: the loop's NEXT, run as cmd_next runs it
+    RC_FN,       // built-in function a (RF_) on the top, as its fun_ handler computes it (RBFn)
+};
+enum
+{ // RC_FN's functions: each its Functions.c helper (FnSin...)
+    RF_SIN,
+    RF_COS,
+    RF_TAN,
+    RF_ATN,
+    RF_SQR,
+    RF_EXP,
+    RF_LOG,
+    RF_DEG,
+    RF_RAD,
+    RF_INT,  // float in, integer out
+    RF_FIX,
+    RF_ABSF, // ABS and SGN keep the argument's type, as fun_abs and fun_sgn do
+    RF_ABSI,
+    RF_SGNF,
+    RF_SGNI,
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -887,6 +906,64 @@ static int RBElement(rbcx_t *x, unsigned char **pp, int op, int target)
     return x->bind[j][1] & (T_INT | T_NBR);
 }
 
+/* P5a: a pure numeric built-in function at *pp, as getvalue calls it: the
+   argument (between the function's token, whose bracket is part of it, and
+   the closing bracket getclosebracket finds) evaluated as the handler reads
+   it - getnumber, or for ABS and SGN evaluate with no type - then the
+   handler's own work on the value (RC_FN).  PI is its constant.  Returns the
+   type, or 0: another function, or an argument that does not end at the
+   closing bracket (a second argument), stays text. */
+static int RBValue(rbcx_t *x, unsigned char **pp, int *op);
+static void RBCvif(rbcx_t *x);
+static int RBFunction(rbcx_t *x, unsigned char **pp, int *op)
+{
+    unsigned char *p = *pp, c = *p;
+    void (*fn)(void) = tokenfunction(c);
+    int id, t, rt;
+    if (fn == fun_pi && (tokentype(c) & T_FNA))
+    { // fun_pi's M_PI, as a constant
+        union
+        {
+            MMFLOAT f;
+            uint16_t w[4];
+        } k;
+        k.f = M_PI;
+        RBOp(x, RC_LK, 1);
+        x->lk = x->n + 1;
+        for (id = 0; id < 4; id++)
+            RBOp(x, k.w[id], 0);
+        *pp = RBNextOp(p + 1, op);
+        return T_NBR;
+    }
+    if (!(tokentype(c) & T_FUN))
+        return 0;
+    id = fn == fun_sin ? RF_SIN : fn == fun_cos ? RF_COS : fn == fun_tan ? RF_TAN : fn == fun_atn ? RF_ATN : fn == fun_sqr ? RF_SQR : fn == fun_exp ? RF_EXP : fn == fun_log ? RF_LOG : fn == fun_deg ? RF_DEG : fn == fun_rad ? RF_RAD : fn == fun_int ? RF_INT : fn == fun_fix ? RF_FIX : fn == fun_abs ? RF_ABSF : fn == fun_sgn ? RF_SGNF : -1;
+    if (id < 0)
+        return 0;
+    p++;
+    if ((t = RBEvaluate(x, &p)) == 0)
+        return 0;
+    skipspace(p);
+    if (*p != ')')
+        return 0;
+    p++;
+    if (id == RF_ABSF || id == RF_SGNF)
+    { // evaluate with no type: the argument keeps its own
+        if (t == T_INT)
+            id++; // RF_ABSI, RF_SGNI
+        rt = id == RF_ABSF ? T_NBR : T_INT;
+    }
+    else
+    { // getnumber: an integer becomes a float
+        if (t == T_INT)
+            RBCvif(x);
+        rt = (id == RF_INT || id == RF_FIX) ? T_INT : T_NBR;
+    }
+    RBOp(x, RC_FN | (id << 8), 0);
+    *pp = RBNextOp(p, op);
+    return rt;
+}
+
 // getvalue: one value, and the operator after it in *op.  Returns its type,
 // T_INT, T_NBR or T_STR, or 0 if the compiler cannot take it.
 static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
@@ -899,7 +976,10 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
     {
         void (*fn)(void);
         if (c > 131)
-            return 0;
+        { // P5a: a built-in function
+            *pp = p;
+            return RBFunction(x, pp, op);
+        }
         fn = tokenfunction(c);
         if (fn != op_not && fn != op_inv && fn != op_subtract && fn != op_add)
             return 0; // a function, or anything else: P5 and later
@@ -2833,9 +2913,12 @@ static __attribute__((noinline)) unsigned char *RBExecSub(const uint16_t *r, uns
     return end;
 }
 
-// TRACE ON: the line's number, as the text loop prints it
+// TRACE ON: the line's number, as the text loop prints it (a line of the
+// program's: the library's lines have none)
 static __attribute__((noinline)) void RBTraceLine(unsigned char *entry)
 {
+    if (!(entry > ProgMemory && entry < ProgMemory + MAX_PROG_SIZE))
+        return;
     inpbuf[0] = '[';
     IntToStr((char *)inpbuf + 1, CountLines(entry), 10);
     strcat((char *)inpbuf, "]");
@@ -3109,6 +3192,59 @@ static __attribute__((noinline)) union cell *RBElementAt(struct s_vartbl *v, uni
 
 // RC_RETURN: cmd_return, END SUB's and RETURN's; 0, before anything happens,
 // if there is nothing to return to (the fallback raises the error)
+// RC_FN: function id's work on the value v, by the helper its fun_ handler
+// calls (Functions.c)
+static __attribute__((noinline)) void RBFn(int id, union cell *v)
+{
+    switch (id)
+    {
+    case RF_SIN:
+        v->f = FnSin(v->f);
+        break;
+    case RF_COS:
+        v->f = FnCos(v->f);
+        break;
+    case RF_TAN:
+        v->f = FnTan(v->f);
+        break;
+    case RF_ATN:
+        v->f = FnAtn(v->f);
+        break;
+    case RF_SQR:
+        v->f = FnSqr(v->f);
+        break;
+    case RF_EXP:
+        v->f = FnExp(v->f);
+        break;
+    case RF_LOG:
+        v->f = FnLog(v->f);
+        break;
+    case RF_DEG:
+        v->f = FnDeg(v->f);
+        break;
+    case RF_RAD:
+        v->f = FnRad(v->f);
+        break;
+    case RF_INT:
+        v->i = FnInt(v->f);
+        break;
+    case RF_FIX:
+        v->i = FnFix(v->f);
+        break;
+    case RF_ABSF:
+        v->f = fabs(v->f); // fun_abs's float case
+        break;
+    case RF_ABSI:
+        v->i = FnAbsI(v->i);
+        break;
+    case RF_SGNF:
+        v->i = FnSgnF(v->f);
+        break;
+    default: // RF_SGNI: fun_sgn's integer case
+        v->i = (v->i > 0LL) - (v->i < 0LL);
+    }
+}
+
 // cmd_let's store into a string: its length against the variable's size (a
 // BYREF parameter has its caller's), then the copy
 static __attribute__((noinline)) void RBStoreStr(struct s_vartbl *v, unsigned char *s)
@@ -3374,6 +3510,7 @@ again:
         [RC_OPS] = &&L_OPS,
         [RC_STS] = &&L_STS,
         [RC_CONTFOR] = &&L_CONTFOR,
+        [RC_FN] = &&L_FN,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -3442,17 +3579,12 @@ again:
             farg1 = sp[-2].f;
             farg2 = sp[-1].f;
             targ = T_NBR;
-            tokentbl[w >> 8].fptr();
-            sp--;
-            if (targ & T_NBR)
-                sp[-1].f = fret;
-            else
-                sp[-1].i = iret;
-            RBNEXT();
+            goto opcall;
     L_OPI: // and on integers
             iarg1 = sp[-2].i;
             iarg2 = sp[-1].i;
             targ = T_INT;
+    opcall:
             tokentbl[w >> 8].fptr();
             sp--;
             if (targ & T_NBR)
@@ -3603,6 +3735,9 @@ again:
                 CurrentLinePtr = clsave;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
             goto ran;
+    L_FN: // a built-in function's work (RBFn)
+            RBFn(w >> 8, sp - 1);
+            RBNEXT();
     L_LDS: // getvalue: a string variable's data, which it does not copy
             (sp++)->i = (uint32_t)((struct s_vartbl *)slotp[w >> 8])->val.s;
             RBNEXT();
@@ -3672,7 +3807,7 @@ again:
             RBNEXT();
     L_DOT: // the entry test: false goes after the LOOP
         {
-            int c = (w >> 8) == T_NBR ? sp[-1].f != 0 : sp[-1].i != 0;
+            int c = ((w >> 8) == T_NBR ? sp[-1].i & 0x7FFFFFFFFFFFFFFFLL : sp[-1].i) != 0; // (f != 0 on the bits: NaN is not 0)
             sp--;
             if (g_dostack[g_doindex - 1].untiltest)
                 c = !c;
@@ -3696,7 +3831,7 @@ again:
                     break;
             }
             if (loopi == g_doindex)
-                error("LOOP without a matching DO");
+                goto fail; // "LOOP without a matching DO": the fallback raises it
             RBNEXT();
         }
     L_LOOPT:
@@ -3706,7 +3841,7 @@ again:
                 tst = 1;
             else
             {
-                tst = (f & RL_NBR) ? sp[-1].f != 0 : sp[-1].i != 0;
+                tst = ((f & RL_NBR) ? sp[-1].i & 0x7FFFFFFFFFFFFFFFLL : sp[-1].i) != 0; // (as RC_DOT)
                 sp--;
                 if ((f & RL_UNTIL) || ((f & RL_ENTRY) && g_dostack[loopi].untiltest))
                     tst = !tst;
@@ -3907,7 +4042,7 @@ unsigned char *RBRAM(RunStream)(unsigned char *p)
             TraceBuff[TraceBuffIndex] = entry;
             if (++TraceBuffIndex >= TRACE_BUFF_SIZE)
                 TraceBuffIndex = 0;
-            if (TraceOn && entry > ProgMemory && entry < ProgMemory + MAX_PROG_SIZE)
+            if (TraceOn)
                 RBTraceLine(entry);
         }
         if ((r[3] & 0xFF) == RB_OP_NOP)
