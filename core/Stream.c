@@ -72,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 24       // the stream format
+#define RB_VERSION 25       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -408,6 +408,10 @@ enum
     RC_RANGE,    // pop the TO value and then the one before it: 1 if the selector is in the range
     RC_CLSET,    // CurrentLinePtr to a CASE's line (the key in the next two words), as cmd_select
     RC_CGOTO,    // CurrentLinePtr back, then the statement ends by going to the key in the next two words
+    RC_LDS,      // push string bind a's data, as findvar returns it
+    RC_LKS,      // push the literal in the next a words (an MMBasic string: its length, then its bytes)
+    RC_OPS,      // operator a on two strings, as doexpr calls it: + a string, a comparison an integer
+    RC_STS,      // pop a string into string bind a, as cmd_let stores it
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -430,9 +434,11 @@ enum
 #define RC_TARGET 0x8000 // bind: the statement assigns to it
 #define RC_SUFNBR 0x1000 // bind: written with ! (T_NBR)
 #define RC_SUFINT 0x2000 // bind: written with % (T_INT)
+#define RC_SUFSTR 0x3000 // bind: written with $ (T_STR)
 #define RC_LIB 0x4000    // bind: a library symbol (its id follows the program's in SymCanonOf)
 #define RC_IDMASK 0x0FFF // bind: the symbol id
 #define RB_BARRAY 0x100  // bind's type word: an array, bound to its variable (RC_LDEL, RC_ADEL)
+#define RB_MAXLIT 64     // the longest string literal the code keeps
 #define RB_MAXBIND 12
 #define RB_MAXCODE 96  // words of code one statement may compile to
 #define RB_MAXDEPTH 16 // cells of stack it may use
@@ -693,8 +699,8 @@ static unsigned char *RBLiteral(unsigned char *p)
     return p;
 }
 
-// The type suffix written after a name, as findvar reads it: 0, T_INT, T_NBR,
-// or T_STR (which the compiler leaves alone).  Steps *p over it.
+// The type suffix written after a name, as findvar reads it: 0, T_INT, T_NBR
+// or T_STR.  Steps *p over it.
 static int RBSuffix(unsigned char **p)
 {
     int t = **p == '%' ? T_INT : **p == '!' ? T_NBR : **p == '$' ? T_STR : 0;
@@ -705,11 +711,12 @@ static int RBSuffix(unsigned char **p)
 
 // A variable the compiler can bind: a symbol whose spelling has no '.' (a
 // structure member path), with its suffix, not followed by a bracket.
-// Returns the byte after it, or NULL.
-static unsigned char *RBVarRef(unsigned char *p, int *suffix)
+// Returns the byte after it, or NULL.  RBVarRef takes only a number's.
+static unsigned char *RBVarRefS(unsigned char *p, int *suffix)
 {
     const unsigned char *sp;
     int len;
+    *suffix = 0;
     if (!issymbol(*p))
         return NULL;
     sp = SymSpelling(p, &len);
@@ -717,9 +724,15 @@ static unsigned char *RBVarRef(unsigned char *p, int *suffix)
         return NULL;
     p += symbolsize(*p);
     *suffix = RBSuffix(&p);
-    if (*suffix == T_STR || *p == '(' || *p == '.')
+    if (*p == '(' || *p == '.')
         return NULL;
     return p;
+}
+
+static unsigned char *RBVarRef(unsigned char *p, int *suffix)
+{
+    unsigned char *q = RBVarRefS(p, suffix);
+    return *suffix == T_STR ? NULL : q;
 }
 
 // One statement's compilation.
@@ -748,17 +761,18 @@ static void RBOp(rbcx_t *x, int w, int cells)
 }
 
 // The bind of the variable whose symbol is at p, made if it is new; -1 if
-// there is no room.  A symbol with its suffix is one variable.
-static int RBBindK(rbcx_t *x, unsigned char *p, int suffix, int target, int arr)
+// there is no room.  A symbol with its suffix is one variable.  A string
+// scalar binds only where the caller takes one (str): its type word is T_STR.
+static int RBBindK(rbcx_t *x, unsigned char *p, int suffix, int target, int arr, int str)
 {
     unsigned int id = SymIdAt(p), w0, j;
     if (id > RC_IDMASK)
         return -1;
-    w0 = id | ((*p & 2) ? RC_LIB : 0) | (suffix == T_NBR ? RC_SUFNBR : suffix == T_INT ? RC_SUFINT : 0);
+    w0 = id | ((*p & 2) ? RC_LIB : 0) | (suffix == T_NBR ? RC_SUFNBR : suffix == T_INT ? RC_SUFINT : suffix == T_STR ? RC_SUFSTR : 0);
     for (j = 0; j < (unsigned)x->nbind; j++)
         if ((x->bind[j][0] & ~RC_TARGET) == w0)
         {
-            if ((x->bind[j][1] & RB_BARRAY) != arr)
+            if ((x->bind[j][1] & RB_BARRAY) != arr || (!str && (x->bind[j][1] & T_STR)))
                 return -1; // the name as an array and as a scalar: the text path's error
             if (target)
                 x->bind[j][0] |= RC_TARGET;
@@ -785,12 +799,14 @@ static int RBBindK(rbcx_t *x, unsigned char *p, int suffix, int target, int arr)
         { // an unsuffixed name: its declared type, else the OPTION DEFAULT in force,
           // else (DEFAULT NONE with the declaration out of sight, in a library say,
           // or two declarations) a guess of float, which the bind check verifies
-            if (t == T_STR)
+            if ((ty & RB_TMIXED) || (t != T_INT && t != T_NBR && t != T_STR))
+                t = (C.deftype == T_INT || C.deftype == T_NBR || (C.deftype == T_STR && str && !arr)) ? C.deftype : T_NBR;
+            if (t == T_STR && (!str || arr))
                 return -1;
-            if ((ty & RB_TMIXED) || (t != T_INT && t != T_NBR))
-                t = (C.deftype == T_INT || C.deftype == T_NBR) ? C.deftype : T_NBR;
             x->bind[j][1] = t;
         }
+        else if (suffix == T_STR && (!str || arr))
+            return -1;
         else
             x->bind[j][1] = suffix;
         x->bind[j][1] |= arr;
@@ -802,7 +818,7 @@ static int RBBindK(rbcx_t *x, unsigned char *p, int suffix, int target, int arr)
 
 static int RBBind(rbcx_t *x, unsigned char *p, int suffix, int target)
 {
-    return RBBindK(x, p, suffix, target, 0);
+    return RBBindK(x, p, suffix, target, 0, 0);
 }
 
 // the operator after a value, as getvalue reads it
@@ -817,6 +833,7 @@ static unsigned char *RBNextOp(unsigned char *p, int *op)
 }
 
 static int RBEvaluate(rbcx_t *x, unsigned char **pp);
+static int RBEvaluateS(rbcx_t *x, unsigned char **pp);
 static int RBFcall(rbcx_t *x, unsigned char **pp, int *op);
 static unsigned char *RBArgEnd(unsigned char *p, int close);
 
@@ -841,7 +858,7 @@ static int RBElement(rbcx_t *x, unsigned char **pp, int op, int target)
     suf = RBSuffix(&q);
     if (suf == T_STR || *q != '(' || FindSubFun(p, 1) >= 0)
         return 0;
-    if ((j = RBBindK(x, p, suf, target, RB_BARRAY)) < 0)
+    if ((j = RBBindK(x, p, suf, target, RB_BARRAY, 0)) < 0)
         return 0;
     q++;
     while (1)
@@ -870,7 +887,7 @@ static int RBElement(rbcx_t *x, unsigned char **pp, int op, int target)
 }
 
 // getvalue: one value, and the operator after it in *op.  Returns its type,
-// T_INT or T_NBR, or 0 if the compiler cannot take it.
+// T_INT, T_NBR or T_STR, or 0 if the compiler cannot take it.
 static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
 {
     unsigned char *p = *pp, c;
@@ -886,8 +903,8 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
         if (fn != op_not && fn != op_inv && fn != op_subtract && fn != op_add)
             return 0; // a function, or anything else: P5 and later
         p++;
-        if ((t = RBValue(x, &p, op)) == 0)
-            return 0;
+        if ((t = RBValue(x, &p, op)) == 0 || t == T_STR)
+            return 0; // (on a string: getvalue's error)
         if (fn == op_not)
             RBOp(x, t == T_NBR ? RC_NOTF : RC_NOTI, 0);
         else if (fn == op_inv)
@@ -904,7 +921,7 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
     }
     if (isnamestartsym(c))
     {
-        unsigned char *q = RBVarRef(p, &suf);
+        unsigned char *q = RBVarRefS(p, &suf);
         if (q == NULL && issymbol(c) && (t = RBFcall(x, &p, op)) != 0)
         {
             *pp = p;
@@ -915,11 +932,24 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
             *pp = RBNextOp(p, op);
             return t;
         }
-        if (q == NULL || x->ncall || (j = RBBind(x, p, suf, 0)) < 0)
+        if (q == NULL || x->ncall || (j = RBBindK(x, p, suf, 0, 0, 1)) < 0)
             return 0; // (after a call a variable is looked up again: DefinedSubFun's caller does)
-        RBOp(x, RC_LDG | (j << 8), 1);
+        RBOp(x, (x->bind[j][1] == T_STR ? RC_LDS : RC_LDG) | (j << 8), 1);
         *pp = RBNextOp(q, op);
         return x->bind[j][1];
+    }
+    if (c == '"')
+    { // a literal with no backslash, which OPTION ESCAPE cannot change: kept in the
+      // code as the MMBasic string getvalue copies into temporary memory
+        unsigned char *tp = (unsigned char *)strchr((char *)p + 1, '"');
+        int n, k;
+        if (tp == NULL || (n = tp - p - 1) > RB_MAXLIT || memchr(p + 1, '\\', n))
+            return 0;
+        RBOp(x, RC_LKS | (((n + 2) / 2) << 8), 1);
+        for (k = 0; k <= n; k += 2) // byte 0 its length, then p[1] to p[n]
+            RBOp(x, (k ? p[k] : n) | ((k + 1 <= n ? p[k + 1] : 0) << 8), 0);
+        *pp = RBNextOp(tp + 1, op);
+        return T_STR;
     }
     if ((c >= '0' && c <= '9') || c == '.')
     { // a decimal literal, read by getvalue itself (whose number reader raises
@@ -952,7 +982,7 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
     if (c == '(')
     {
         p++;
-        if ((t = RBEvaluate(x, &p)) == 0 || *p != ')')
+        if ((t = RBEvaluateS(x, &p)) == 0 || *p != ')')
             return 0;
         *pp = RBNextOp(p + 1, op);
         return t;
@@ -995,6 +1025,21 @@ static int RBDoExpr(rbcx_t *x, unsigned char **pp, int *t1, int *o1)
     op = &tokentbl[*o1];
     fn = op->fptr;
     ty = op->type;
+    if (a == T_STR || t2 == T_STR)
+    { // doexpr's type check, then the operator's own function on sarg1 and sarg2
+        if (a != t2 || !(ty & T_OPER) || !(ty & T_STR))
+            return 0; // "Incompatible types in expression", "Invalid operator": the text path's
+        if (fn == op_add)
+            a = T_STR;
+        else if (fn == op_ne || fn == op_equal || fn == op_gte || fn == op_lte || fn == op_lt || fn == op_gt)
+            a = T_INT;
+        else
+            return 0;
+        RBOp(x, RC_OPS | (*o1 << 8), -1);
+        *t1 = a;
+        *o1 = o2;
+        return 1;
+    }
     targ = ty & (T_NBR | T_INT);
     if (targ == T_NBR)
     {
@@ -1041,13 +1086,20 @@ static int RBDoExpr(rbcx_t *x, unsigned char **pp, int *t1, int *o1)
 }
 
 // evaluate, without its end check: the expression's type, or 0
-static int RBEvaluate(rbcx_t *x, unsigned char **pp)
+static int RBEvaluateS(rbcx_t *x, unsigned char **pp)
 {
     int o, t = RBValue(x, pp, &o);
     while (t && o != E_END)
         if (!RBDoExpr(x, pp, &t, &o))
             return 0;
     return x->fail ? 0 : t;
+}
+
+// the same for a number: 0 for a string
+static int RBEvaluate(rbcx_t *x, unsigned char **pp)
+{
+    int t = RBEvaluateS(x, pp);
+    return t == T_STR ? 0 : t;
 }
 
 // LET's assignment, from its target at p, into x.  Returns the byte after
@@ -1059,7 +1111,7 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
     int tsuf, tgt, ttype, t;
     if (x->ncall)
         return NULL; // a call before: cmd_let would find its target after it
-    if ((q = RBVarRef(p, &tsuf)) == NULL)
+    if ((q = RBVarRefS(p, &tsuf)) == NULL)
     { // an element: its address first, as cmd_let's findvar makes it before the right-hand side
         q = p;
         if ((ttype = RBElement(x, &q, RC_ADEL, 1)) == 0)
@@ -1068,7 +1120,7 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
     }
     else
     {
-        if ((tgt = RBBind(x, p, tsuf, 1)) < 0)
+        if ((tgt = RBBindK(x, p, tsuf, 1, 0, 1)) < 0)
             return NULL;
         ttype = x->bind[tgt][1];
     }
@@ -1079,8 +1131,8 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
     p++;
     skipspace(p);
     rhs = p;
-    if (rhs - x->entry > 255 || (t = RBEvaluate(x, &p)) == 0)
-        return NULL;
+    if (rhs - x->entry > 255 || (t = RBEvaluateS(x, &p)) == 0 || (t == T_STR) != (ttype == T_STR))
+        return NULL; // (a string for a number or the other way: evaluate's error)
     skipspace(p);
     if (*p && *p != '\'' && !(stop && *p == stop))
         return NULL; // evaluate's and checkend's errors are the text path's
@@ -1100,7 +1152,7 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
     if (tgt < 0)
         RBOp(x, RC_STP, -2);
     else
-        RBOp(x, RC_STG | (tgt << 8), -1);
+        RBOp(x, (ttype == T_STR ? RC_STS : RC_STG) | (tgt << 8), -1);
     return p;
 }
 
@@ -2773,6 +2825,19 @@ static __attribute__((noinline)) void RBShadow(unsigned char *p, int type, const
     } x, c;
     char a[40], b[40];
     evaluate(p, &f, &i64, &str, &t, E_NOERROR); // the compiler has checked the end
+    if (type == T_STR)
+    { // the strings, byte for byte
+        unsigned char *cs;
+        memcpy(&c, v, sizeof(c));
+        cs = (unsigned char *)(uint32_t)c.i;
+        if (*cs == *str && memcmp(cs + 1, str + 1, *cs) == 0)
+            return;
+        memcpy(a, cs + 1, *cs < 38 ? *cs : 38);
+        a[*cs < 38 ? *cs : 38] = 0;
+        memcpy(b, str + 1, *str < 38 ? *str : 38);
+        b[*str < 38 ? *str : 38] = 0;
+        error("SHADOW: compiled \"$\", text \"$\"", a, b);
+    }
     if (type == T_NBR)
         x.f = (t & T_NBR) ? f : (MMFLOAT)i64;
     else
@@ -2983,6 +3048,35 @@ static __attribute__((noinline)) union cell *RBElementAt(struct s_vartbl *v, uni
 
 // RC_RETURN: cmd_return, END SUB's and RETURN's; 0, before anything happens,
 // if there is nothing to return to (the fallback raises the error)
+// cmd_let's store into a string: its length against the variable's size (a
+// BYREF parameter has its caller's), then the copy
+static __attribute__((noinline)) void RBStoreStr(struct s_vartbl *v, unsigned char *s)
+{
+    if (*s > v->size)
+        error("String too long");
+    Mstrcpy(v->val.s, s);
+}
+
+// doexpr's call of operator o on the two strings at the top of the VM's
+// stack: + leaves a string (in temporary memory), a comparison an integer
+static __attribute__((noinline)) void RBOpStr(int o, union cell *sp)
+{
+    sarg1 = (unsigned char *)(uint32_t)sp[-2].i;
+    sarg2 = (unsigned char *)(uint32_t)sp[-1].i;
+    targ = T_STR;
+    tokentbl[o].fptr();
+    if (targ & T_STR)
+        sp[-2].i = (uint32_t)sret;
+    else
+        sp[-2].i = iret;
+}
+
+// cmd_select's tests on a float selector s: v[0] == s, or v[0] <= s <= v[1]
+static __attribute__((noinline)) int RBSelF(MMFLOAT s, union cell *v, int range)
+{
+    return range ? (s >= v[0].f && s <= v[1].f) : s == v[0].f;
+}
+
 static __attribute__((noinline)) int RBReturn(void)
 {
     if (gosubindex == 0 || gosubstack[gosubindex - 1] == NULL)
@@ -3122,7 +3216,7 @@ again:
     for (j = 0; j < nb; j++, c += 2)
     {
         unsigned int id = (c[0] & RC_IDMASK) + ((c[0] & RC_LIB) ? SymCanonLibBase : 0), sc;
-        int k, i, suf = (c[0] & RC_SUFNBR) ? T_NBR : (c[0] & RC_SUFINT) ? T_INT : 0;
+        int k, i, suf = (0x2410 >> ((c[0] >> 10) & 0xC)) & 0xF; // RC_SUF bits: 0, T_NBR, T_INT, T_STR
         struct s_vartbl *v;
         if (id < SymCanonCount && SymCanonOf && (sc = SymCanonOf[id]) != 0)
             k = sc - 1;
@@ -3137,13 +3231,13 @@ again:
         }
         v = &g_vartbl[i];
         if (((c[1] & RB_BARRAY) ? !DimIsRealArray(RAW_DIM(*v, 0)) : !DimIsScalar(RAW_DIM(*v, 0))) ||
-            (v->type & (T_STRUCT | T_STR)) || (v->type & (T_INT | T_NBR)) != (c[1] & (T_INT | T_NBR)) ||
+            (v->type & T_STRUCT) || (v->type & (T_INT | T_NBR | T_STR)) != (c[1] & (T_INT | T_NBR | T_STR)) ||
             (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
             ((c[0] & RC_TARGET) && (v->type & T_CONST)))
             goto fail;
-        if (c[1] & RB_BARRAY)
+        if (c[1] & (RB_BARRAY | T_STR))
         {
-            slot[j] = (union cell *)v; // an array: its variable, for its dimensions and its data
+            slot[j] = (union cell *)v; // an array or a string: its variable, for its dimensions or size and its data
             continue;
         }
         // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
@@ -3213,6 +3307,10 @@ again:
         [RC_RANGE] = &&L_RANGE,
         [RC_CLSET] = &&L_CLSET,
         [RC_CGOTO] = &&L_CGOTO,
+        [RC_LDS] = &&L_LDS,
+        [RC_LKS] = &&L_LKS,
+        [RC_OPS] = &&L_OPS,
+        [RC_STS] = &&L_STS,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -3426,12 +3524,18 @@ again:
     L_SEL: // cmd_select's selector
             *sp++ = st[0];
             RBNEXT();
-    L_EQSEL: // cmd_select: f == ft or i64 == i64t
-            sp[-1].i = (w >> 8) == T_NBR ? st[0].f == sp[-1].f : st[0].i == sp[-1].i;
+    L_EQSEL: // cmd_select: f == ft (RBSelF) or i64 == i64t
+            if ((w >> 8) == T_NBR)
+                sp[-1].i = RBSelF(st[0].f, sp - 1, 0);
+            else
+                sp[-1].i = st[0].i == sp[-1].i;
             RBNEXT();
-    L_RANGE: // cmd_select: f >= ft && f <= ftt, or the same on integers
+    L_RANGE: // cmd_select: f >= ft && f <= ftt (RBSelF), or the same on integers
             sp--;
-            sp[-1].i = (w >> 8) == T_NBR ? (st[0].f >= sp[-1].f && st[0].f <= sp[0].f) : (st[0].i >= sp[-1].i && st[0].i <= sp[0].i);
+            if ((w >> 8) == T_NBR)
+                sp[-1].i = RBSelF(st[0].f, sp - 1, 1);
+            else
+                sp[-1].i = st[0].i >= sp[-1].i && st[0].i <= sp[0].i;
             RBNEXT();
     L_CLSET: // cmd_select reports a CASE's errors against its line
             if (clsave == NULL)
@@ -3446,6 +3550,21 @@ again:
             RBCode++;
             nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
             goto done;
+    L_LDS: // getvalue: a string variable's data, which it does not copy
+            (sp++)->i = (uint32_t)((struct s_vartbl *)slotp[w >> 8])->val.s;
+            RBNEXT();
+    L_LKS:
+            (sp++)->i = (uint32_t)pc;
+            pc += w >> 8;
+            RBNEXT();
+    L_OPS: // doexpr's call on two strings (RBOpStr)
+            RBOpStr(w >> 8, sp);
+            sp--;
+            RBNEXT();
+    L_STS: // cmd_let's string store (RBStoreStr)
+            sp--;
+            RBStoreStr((struct s_vartbl *)slotp[w >> 8], (unsigned char *)(uint32_t)sp[0].i);
+            RBNEXT();
     L_STP:
             sp -= 2;
             *(union cell *)(uint32_t)sp[0].i = sp[1];
