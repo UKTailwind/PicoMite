@@ -233,7 +233,11 @@ extern int SymTextLocals;   // live locals made from text
 // (SymBindInit), every variable gone (SymBindReset), one gone (erase), a local
 // made or freed, and DefaultType changed (OPTION DEFAULT, RUN).  Route B's
 // compiled records reuse what their binds found while it is unchanged.
+// SymBindGenG counts the same except a local made or freed: what can change
+// a global's binding, which is all a record at level 0 depends on.
 extern uint32_t SymBindGen;
+extern uint32_t SymBindGenG;
+#define SymBindGlobalsChanged() (SymBindGen++, SymBindGenG++)
 int SymCanonNew(const unsigned char *p);
 int SymCanonById(unsigned int id);
 void SymBindInit(void);

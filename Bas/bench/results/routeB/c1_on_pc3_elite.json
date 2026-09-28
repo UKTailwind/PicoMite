@@ -1,0 +1,17 @@
+{
+ "board": "pc3",
+ "port": "COM16",
+ "started": "2026-09-28 16:27:31",
+ "metrics": {
+  "elite:gamebench_ms_per_frame": 11.382
+ },
+ "checks": {
+  "elite": "GAMECHECK elite_demo frames 600 shots 32 hits 14 kills 2 energy 255 fuel 70 slots 2 dead 0 witch 0 objs 32"
+ },
+ "errors": [],
+ "cpuspeed": "315000000",
+ "compile": {
+  "elite": "NONE 2 REUSED 0 STMTS 7143 RAN 967029 MISS 124357 CODE 923994"
+ },
+ "finished": "2026-09-28 16:28:11"
+}

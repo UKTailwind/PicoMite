@@ -7131,7 +7131,7 @@ void MIPS16 ClearRuntime(bool all)
     OptionEscape = false;
     OptionConsole = 3;
     DefaultType = T_NBR;
-    SymBindGen++; // what an unsuffixed name may bind to (see Symbols.h)
+    SymBindGlobalsChanged(); // what an unsuffixed name may bind to (see Symbols.h)
     ds18b20Timers = NULL; // InitHeap(true) will recover the memory allocated to this array
     findlabel(NULL);      // clear the label cache
     OptionErrorSkip = 0;

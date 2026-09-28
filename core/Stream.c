@@ -72,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 29       // the stream format
+#define RB_VERSION 30       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -3549,6 +3549,7 @@ static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
     unsigned char *e = *ep, *end;
     unsigned int nw; // cmdl | next << 8
     uint16_t *stamp, *cache;
+    uint32_t gen; // the bind cache's stamp as it stands now
     union cell *slot[RB_MAXBIND], **slotp, st[RB_MAXDEPTH], *sp; // slotp: the binds' addresses
     unsigned int nb, j, w;
     int loopi;              // RC_LOOPF's stack entry
@@ -3566,7 +3567,10 @@ again:
     if ((uint32_t)cache & 2)
         cache++; // the pad
     loopi = 0;
-    if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == SymBindGen && !(g_LocalIndex && SymTextLocals))
+    // at level 0, where no local can hide a global, the globals' generation
+    // (which a call's locals do not move), flagged; in a SUB, the whole one
+    gen = g_LocalIndex ? (SymBindGen & 0x7FFFFFFF) : (SymBindGenG | 0x80000000);
+    if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == gen && !(g_LocalIndex && SymTextLocals))
         slotp = (union cell **)cache; // what the binds found last time, used where it is
     else
     {
@@ -3605,8 +3609,8 @@ again:
     { // keep them, the addresses first and the stamp last
         for (j = 0; j < nb; j++)
             ((union cell **)cache)[j] = slot[j];
-        stamp[0] = SymBindGen & 0xFFFF;
-        stamp[1] = SymBindGen >> 16;
+        stamp[0] = gen & 0xFFFF;
+        stamp[1] = gen >> 16;
     }
     }
     // dispatch by computed goto through a table in RAM (the G3 prototype's

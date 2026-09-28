@@ -5460,7 +5460,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"DEFAULT");
     if (tp)
     {
-        SymBindGen++; // what an unsuffixed name may bind to (see Symbols.h)
+        SymBindGlobalsChanged(); // what an unsuffixed name may bind to (see Symbols.h)
         if (checkstring(tp, (unsigned char *)"INTEGER"))
         {
             DefaultType = T_INT;

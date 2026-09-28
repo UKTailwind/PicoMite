@@ -1,0 +1,14 @@
+{
+ "board": "pc3",
+ "port": "COM16",
+ "started": "2026-09-28 16:26:29",
+ "metrics": {
+  "elite:gamebench_ms_per_frame": 23.456
+ },
+ "checks": {
+  "elite": "GAMECHECK elite_demo frames 600 shots 32 hits 14 kills 2 energy 255 fuel 70 slots 2 dead 0 witch 0 objs 32"
+ },
+ "errors": [],
+ "cpuspeed": "315000000",
+ "finished": "2026-09-28 16:27:14"
+}
