@@ -30,6 +30,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  * Route B: the compiled statement stream.  See Stream.h and
  * docs/Interpreter_RouteB_Design.html.
  */
+// FloatToInt32/64 out of line: MMBasic.c's copies are in RAM already, and
+// every copy MMBasic.h would inline into RBRun would be RAM too, which is the
+// stack's (see RBRun)
+#define MMBASIC_C_INTERNAL
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
 #include "Stream.h"
@@ -68,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 23       // the stream format
+#define RB_VERSION 24       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -261,7 +265,9 @@ enum
 
 #define RB_MAXDO 32 // DOs whose LOOP may compile their condition, per walk
 #define RB_MAXULOCAL 64 // locals one SUB or FUNCTION may list (see RBUnitBegin)
-static struct
+// The compiler's state, in temporary memory while it runs: RAM here would
+// be taken from the stack (see the design's notes on the stack)
+static struct rbcomp
 {
     int pass;         // 1: count, 2: write
     uint32_t stmts;   // records
@@ -287,7 +293,8 @@ static struct
         uint16_t k;   // canonical entry
         uint8_t type; // RB_TTYPE bits as declared (0: none, OPTION DEFAULT's), RB_TMIXED
     } ulocal[RB_MAXULOCAL];
-} C;
+} *RBComp;
+#define C (*RBComp)
 
 // pass 2: every bucket up to and including b starts at map entry C.stmts
 static void RBTabTo(uint32_t b)
@@ -396,6 +403,11 @@ enum
     RC_EXITDO,   // cmd_exit
     RC_RETURN,   // cmd_return: END SUB, EXIT SUB, RETURN
     RC_ENDFUN,   // cmd_endfun: END FUNCTION, EXIT FUNCTION
+    RC_SEL,      // push SELECT CASE's selector (the statement's first cell)
+    RC_EQSEL,    // pop a value of the selector's type (a): 1 if the selector == it, else 0
+    RC_RANGE,    // pop the TO value and then the one before it: 1 if the selector is in the range
+    RC_CLSET,    // CurrentLinePtr to a CASE's line (the key in the next two words), as cmd_select
+    RC_CGOTO,    // CurrentLinePtr back, then the statement ends by going to the key in the next two words
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -1438,6 +1450,200 @@ static int RBCompileExit(unsigned char *entry, unsigned char *cmdl, CommandToken
     return RBFinish(&x, code);
 }
 
+static int RBJump(rbcx_t *x, int op, int cells);
+static void RBLand(rbcx_t *x, int at);
+static void RBGoto(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *target);
+static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *p);
+
+/* P4c: SELECT CASE, CASE and END SELECT.  RBNextCmd is GetNextCommand
+   without its error: the next command token after the element at p (a SUB
+   call, a comment or an empty element is passed over), *line the start of
+   the line it is on when the walk moves to a new one; NULL at the end. */
+static unsigned char *RBNextCmd(unsigned char *p, unsigned char **line)
+{
+    do
+    {
+        if (*p != T_NEWLINE)
+        {
+            while (*p)
+                p++;
+            p++;
+        }
+        if (*p == 0)
+            return NULL;
+        if (*p == T_NEWLINE)
+        {
+            *line = p;
+            p += T_NEWLINE_HDR;
+        }
+        if (*p == T_LINENBR)
+            p += 3;
+        skipspace(p);
+        if (*p == T_LABEL)
+        {
+            p += p[1] + 2;
+            skipspace(p);
+        }
+    } while (*p < C_BASETOKEN);
+    return p;
+}
+
+// after the END SELECT that closes the SELECT or CASE whose element ends at
+// p (cmd_case's scan); NULL if there is none
+static unsigned char *RBEndSelect(unsigned char *p)
+{
+    unsigned char *line = NULL;
+    int level = 1;
+    while ((p = RBNextCmd(p, &line)) != NULL)
+    {
+        CommandToken tkn = commandtbl_decode(p);
+        if (tkn == cmdSELECT_CASE)
+            level++;
+        if (tkn == cmdEND_SELECT && --level == 0)
+        {
+            skipelement(p);
+            return p;
+        }
+        p += sizeof(CommandToken);
+    }
+    return NULL;
+}
+
+// a CASE or CASE ELSE reached from the body before it, or END SELECT
+static int RBCompileCase(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *cmdl, unsigned char *next, CommandToken ct, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *after;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    if (ct == cmdEND_SELECT)
+        RBOp(&x, RC_END, 0); // cmd_null
+    else
+    {
+        if ((after = RBEndSelect(next)) == NULL)
+            return 0; // "No matching END SELECT": cmd_case raises it
+        RBGoto(&x, base, libbit, after);
+    }
+    return RBFinish(&x, code);
+}
+
+// SELECT CASE on a number, as cmd_select: 0 if the compiler cannot take it
+static int RBCompileSelect(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *cmdl, unsigned char *next, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *p = cmdl, *q = next, *line = NULL, *body, *isp;
+    int st, t, o, jf, level = 1;
+    CommandToken tkn;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry;
+    if ((st = RBEvaluate(&x, &p)) == 0)
+        return 0; // a string selector, or one the compiler cannot take
+    skipspace(p);
+    if (*p && *p != '\'')
+        return 0;
+    while ((q = RBNextCmd(q, &line)) != NULL)
+    {
+        tkn = commandtbl_decode(q);
+        if (tkn == cmdSELECT_CASE)
+            level++;
+        if (tkn == cmdCASE && level == 1)
+        {
+            if (line == NULL)
+                return 0; // (cmd_select would report errors against no line)
+            p = q + sizeof(CommandToken);
+            body = p;
+            skipelement(body); // where a match goes: after this CASE's element
+            RBOp(&x, RC_CLSET, 0); // errors against the CASE's line while its items are tested
+            RBKey(&x, base, libbit, line);
+            while (1)
+            {
+                skipspace(p);
+                if ((isp = checkstring(p, (unsigned char *)"IS")) != NULL ||
+                    ((tokentype(*p) & T_OPER) && *p != GetTokenValue((unsigned char *)"+") && *p != GetTokenValue((unsigned char *)"-")))
+                { // CASE IS op value: doexpr with the selector on the left
+                    if (isp)
+                        p = isp;
+                    skipspace(p);
+                    if (!(tokentype(*p) & T_OPER))
+                        return 0; // cmd_select's syntax error
+                    o = *p++ - C_BASETOKEN;
+                    RBOp(&x, RC_SEL, 1);
+                    t = st;
+                    while (o != E_END)
+                        if (!RBDoExpr(&x, &p, &t, &o))
+                            return 0;
+                    if (t != T_INT)
+                        return 0; // cmd_select's syntax error
+                }
+                else
+                { // a value, or a range: each converted to the selector's type, as evaluate does
+                    if ((t = RBEvaluate(&x, &p)) == 0)
+                        return 0;
+                    if (t != st)
+                    {
+                        if (st == T_NBR)
+                            RBCvif(&x);
+                        else
+                            RBOp(&x, RC_CVFI, 0);
+                    }
+                    skipspace(p);
+                    if (*p == tokenTO)
+                    {
+                        p++;
+                        if ((t = RBEvaluate(&x, &p)) == 0)
+                            return 0;
+                        if (t != st)
+                        {
+                            if (st == T_NBR)
+                                RBCvif(&x);
+                            else
+                                RBOp(&x, RC_CVFI, 0);
+                        }
+                        skipspace(p);
+                        if (*p && *p != ',' && *p != '\'')
+                            return 0; // evaluate's end check
+                        RBOp(&x, RC_RANGE | (st << 8), -1);
+                    }
+                    else
+                        RBOp(&x, RC_EQSEL | (st << 8), 0);
+                }
+                jf = RBJump(&x, RC_JFI, -1);
+                RBOp(&x, RC_CGOTO, 0); // a match: after this CASE's element
+                RBKey(&x, base, libbit, body);
+                RBLand(&x, jf);
+                skipspace(p);
+                if (*p != ',')
+                    break;
+                p++;
+            }
+            if (*p && *p != '\'')
+                return 0; // checkend's error
+            q += sizeof(CommandToken);
+            continue;
+        }
+        if (tkn == cmdCASE_ELSE && level == 1)
+        {
+            p = q + sizeof(CommandToken);
+            skipspace(p);
+            if (*p && *p != '\'')
+                return 0; // checkend's error
+            skipelement(p);
+            RBOp(&x, RC_CGOTO, 0);
+            RBKey(&x, base, libbit, p);
+            return RBFinish(&x, code);
+        }
+        if (tkn == cmdEND_SELECT && --level == 0)
+        { // no match: after END SELECT
+            skipelement(q);
+            RBOp(&x, RC_CGOTO, 0);
+            RBKey(&x, base, libbit, q);
+            return RBFinish(&x, code);
+        }
+        q += sizeof(CommandToken);
+    }
+    return 0; // no matching END SELECT: cmd_select raises it
+}
+
 // NEXT: cmd_next finds its loop by the NEXT's position, so the op needs no
 // operands and no binds
 static int RBCompileNext(unsigned char *entry, uint16_t *code)
@@ -1863,6 +2069,10 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileNext(entry, code + 1);
         else if (ct == RBTokOption && (d = RBDefaultOption(cmdl)) >= 0)
             C.deftype = d;
+        else if (ct == cmdSELECT_CASE)
+            ncode = RBCompileSelect(entry, base, libbit, cmdl, next, code + 1);
+        else if (ct == cmdCASE || ct == cmdCASE_ELSE || ct == cmdEND_SELECT)
+            ncode = RBCompileCase(entry, base, libbit, cmdl, next, ct, code + 1);
         else
             ncode = RBCompileExit(entry, cmdl, ct, code + 1);
     }
@@ -2248,6 +2458,7 @@ static void RBSurvey(void)
 static void RBCompile(rbheader_t *h)
 {
     uint32_t codeoff;
+    RBComp = GetTempMemory(sizeof(struct rbcomp)); // (freed with the statement's temporary memory)
     memset(&C, 0, sizeof(C));
     W.full = 0;
     RBTokLet = GetCommandValue((unsigned char *)"Let");
@@ -2481,13 +2692,50 @@ static int RBRAM(RBTail)(unsigned char *here)
     return nextstmt != here;
 }
 
+// RBExec's call to a user SUB, as the text loop makes it.  In flash, as are
+// the other cold parts of RunStream: its RAM is the stack's (see RBRun).
+static __attribute__((noinline)) unsigned char *RBExecSub(const uint16_t *r, unsigned char *e)
+{
+    unsigned char *p = e + (r[3] >> 8), *end;
+    int i;
+    cmdline = e + (r[4] & 0xFF);
+    nextstmt = end = e + (r[4] >> 8);
+    if (!isnamestartsym(*p) && *p == '~')
+        StandardError(36);
+    else if (!isnamestartsym(*p))
+        error("Invalid character: @", (int)(*p));
+    i = FindSubFun(p, false);
+    if (i >= 0)
+    {
+        if (g_option_profiling)
+        {
+            g_perf_usercmd_count++;
+            if (g_perf_subcall_count && i < MAXSUBFUN)
+                g_perf_subcall_count[i]++;
+        }
+        DefinedSubFun(false, p, i, NULL, NULL, NULL, NULL);
+    }
+    else
+        StandardError(36);
+    return end;
+}
+
+// TRACE ON: the line's number, as the text loop prints it
+static __attribute__((noinline)) void RBTraceLine(unsigned char *entry)
+{
+    inpbuf[0] = '[';
+    IntToStr((char *)inpbuf + 1, CountLines(entry), 10);
+    strcat((char *)inpbuf, "]");
+    MMPrintString((char *)inpbuf);
+    uSec(1000);
+}
+
 // Run the statement whose STMT record is r and whose text starts at e, as
 // the text loop would.  Returns where the statement ends, the nextstmt it was
 // given: if the handler leaves nextstmt there, the next record follows.
 static inline __attribute__((always_inline)) unsigned char *RBExec(const uint16_t *r, unsigned char *e)
 {
     unsigned char *p, *end;
-    int i;
     RBRan++;
     if ((r[3] & 0xFF) == RB_OP_CMD)
     {
@@ -2504,35 +2752,15 @@ static inline __attribute__((always_inline)) unsigned char *RBExec(const uint16_
         commandtbl[cmdtoken].fptr();
     }
     else
-    { // a call to a user SUB
-        p = e + (r[3] >> 8);
-        cmdline = e + (r[4] & 0xFF);
-        nextstmt = end = e + (r[4] >> 8);
-        if (!isnamestartsym(*p) && *p == '~')
-            StandardError(36);
-        else if (!isnamestartsym(*p))
-            error("Invalid character: @", (int)(*p));
-        i = FindSubFun(p, false);
-        if (i >= 0)
-        {
-            if (g_option_profiling)
-            {
-                g_perf_usercmd_count++;
-                if (g_perf_subcall_count && i < MAXSUBFUN)
-                    g_perf_subcall_count[i]++;
-            }
-            DefinedSubFun(false, p, i, NULL, NULL, NULL, NULL);
-        }
-        else
-            StandardError(36);
-    }
+        end = RBExecSub(r, e); // a call to a user SUB
     return end;
 }
 
 // OPTION COMPILE SHADOW: evaluate the right-hand side at p through the text
 // evaluator, convert it as cmd_let would for type, and stop if the compiled
-// value v differs from it in any bit.
-static void RBShadow(unsigned char *p, int type, const void *v)
+// value v differs from it in any bit.  Out of line: inlined, it put its
+// buffers in RBRun's frame and its code in RAM.
+static __attribute__((noinline)) void RBShadow(unsigned char *p, int type, const void *v)
 {
     MMFLOAT f;
     long long i64;
@@ -2567,7 +2795,7 @@ static void RBShadow(unsigned char *p, int type, const void *v)
 
 // OPTION COMPILE SHADOW for IF's condition: its truth through the text
 // evaluator, as cmd_if's getnumber gives it, against the compiled value's.
-static void RBShadowCond(unsigned char *p, int type, const void *v)
+static __attribute__((noinline)) void RBShadowCond(unsigned char *p, int type, const void *v)
 {
     MMFLOAT f;
     long long i64;
@@ -2873,8 +3101,10 @@ static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
     uint16_t *stamp, *cache;
     union cell *slot[RB_MAXBIND], **slotp, st[RB_MAXDEPTH], *sp; // slotp: the binds' addresses
     unsigned int nb, j, w;
-    int loopi; // RC_LOOPF's stack entry
+    int loopi;              // RC_LOOPF's stack entry
+    unsigned char *clsave; // RC_CLSET: CurrentLinePtr before a CASE's line took its place
 again:
+    clsave = NULL;
     c = r + RB_HDR(r) + 1;
     nw = r[RB_HDR(r) - 1];
     sp = st;
@@ -2978,6 +3208,11 @@ again:
         [RC_EXITDO] = &&L_EXITDO,
         [RC_RETURN] = &&L_RETURN,
         [RC_ENDFUN] = &&L_ENDFUN,
+        [RC_SEL] = &&L_SEL,
+        [RC_EQSEL] = &&L_EQSEL,
+        [RC_RANGE] = &&L_RANGE,
+        [RC_CLSET] = &&L_CLSET,
+        [RC_CGOTO] = &&L_CGOTO,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
     do                             \
@@ -3187,6 +3422,29 @@ again:
             nextstmt = (unsigned char *)"\0\0\0";
             RBRan++;
             RBCode++;
+            goto done;
+    L_SEL: // cmd_select's selector
+            *sp++ = st[0];
+            RBNEXT();
+    L_EQSEL: // cmd_select: f == ft or i64 == i64t
+            sp[-1].i = (w >> 8) == T_NBR ? st[0].f == sp[-1].f : st[0].i == sp[-1].i;
+            RBNEXT();
+    L_RANGE: // cmd_select: f >= ft && f <= ftt, or the same on integers
+            sp--;
+            sp[-1].i = (w >> 8) == T_NBR ? (st[0].f >= sp[-1].f && st[0].f <= sp[0].f) : (st[0].i >= sp[-1].i && st[0].i <= sp[0].i);
+            RBNEXT();
+    L_CLSET: // cmd_select reports a CASE's errors against its line
+            if (clsave == NULL)
+                clsave = CurrentLinePtr;
+            CurrentLinePtr = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
+            pc += 2;
+            RBNEXT();
+    L_CGOTO: // cmd_select's end: CurrentLinePtr back, and on to the key
+            if (clsave != NULL)
+                CurrentLinePtr = clsave;
+            RBRan++;
+            RBCode++;
+            nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
             goto done;
     L_STP:
             sp -= 2;
@@ -3476,13 +3734,7 @@ unsigned char *RBRAM(RunStream)(unsigned char *p)
             if (++TraceBuffIndex >= TRACE_BUFF_SIZE)
                 TraceBuffIndex = 0;
             if (TraceOn && entry > ProgMemory && entry < ProgMemory + MAX_PROG_SIZE)
-            {
-                inpbuf[0] = '[';
-                IntToStr((char *)inpbuf + 1, CountLines(entry), 10);
-                strcat((char *)inpbuf, "]");
-                MMPrintString((char *)inpbuf);
-                uSec(1000);
-            }
+                RBTraceLine(entry);
         }
         if ((r[3] & 0xFF) == RB_OP_NOP)
         { // no statement, so no tail after it either

@@ -1,0 +1,19 @@
+RUN
+--- Prince of Pico
+  sound on, 1827 Hz footstep
+  artwork 4 sheets in slots 4-7
+  scenes  no room picture - skipped
+start  screen 1 block 0,0  x 72 y 55
+
+frame  input     posn   x    y  blk  act yvel   what
+
+--- scenarios, nothing drawn
+  slicer: shut at 2, back at 6, cycle 15
+GAMESTART pop_scen PicoMiteHDMIWEB RP2350B 6.040052 315 MHz prof=0
+GAMEBENCH pop_scen 2690 32448.0 12.062
+GAMEFRAME pop_scen 2690 23951.7 8.904
+GAMECHECK pop_scen 274 of 274 checks passed
+
+SCENARIOS: 274 of 274 checks passed
+PASS
+> 

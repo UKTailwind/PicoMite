@@ -1,0 +1,8 @@
+RUN
+GAMESTART exile_phys PicoMiteHDMIWEB RP2350B 6.040052 315 MHz prof=0 reps=1
+GAMEBENCH exile_phys 2384 17867.5 7.4947
+GAMENULL exile_phys 2384 150.4 0.0631
+GAMEKERNEL exile_phys 2384 17717.1 7.4317
+GAMECHECK exile_phys 18 of 18 end states match, unread feed 0, faults 0, notes 0
+GAMECHECK PASS
+> 

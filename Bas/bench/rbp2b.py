@@ -57,12 +57,11 @@ a% = 3
   p4 = a% ^ 2
   p5 = 2 ^ -1""" + """Print p1; p2; p3; p4; p5
 """ + STAT, lambda n: n > 0),
-    ("text stays", """a% = 3 : x = 0.5 : s$ = "ab" : Dim ar(3)
+    ("text stays", """a% = 3 : x = 0.5 : s$ = "ab"
 """ + LOOP % """  f1 = Sin(x) + a%
   f2 = Len(s$) * 2
-  ar(1) = a% + 1
-  f3 = ar(1) * 2""" + """Print f1; f2; f3
-""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c)
+  f3 = Asc(s$) * 2""" + """Print f1; f2; f3
+""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c); built-in functions are P5 (arrays compile since P4a)
     ("div zero", """a% = 5 : b% = 0
 For i% = 1 To 3
   c = a% / b%

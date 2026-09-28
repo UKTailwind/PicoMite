@@ -1,0 +1,11 @@
+RUN
+GAMESTART elite_demo PicoMiteHDMIWEB RP2350B 6.040052 315 MHz prof=0 frames=600
+GAMEBENCH elite_demo 600 12865.1 21.442
+GAMECHECK elite_demo frames 600 shots 32 hits 14 kills 2 energy 255 fuel 70 slots 2 dead 0 witch 0 objs 32
+frames 600  average  21.44 ms per frame
+shots 32 hits 14  kills 2  cash 100.5 Cr  rank Harmless
+energy 255 fore shield 255 laser temp 183 fuel 7 LY
+slots in use 2  dead 0  witchspace 0
+missiles left 3  legal status Clean
+docked 0  docking computer 0
+> 
