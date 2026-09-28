@@ -1,0 +1,200 @@
+{
+ "recursion/OFF": [
+  [
+   " 40320 34"
+  ],
+  []
+ ],
+ "recursion/ON": [
+  [
+   " 40320 34"
+  ],
+  []
+ ],
+ "hiding and nesting/OFF": [
+  [
+   "O1 1 5o",
+   "I 30 2i3",
+   "O2 1 5o",
+   "I 40 2i4",
+   "O3 7 5o",
+   "M 1 2g",
+   "O1 1 5o",
+   "I 30 2i3",
+   "O2 1 5o",
+   "I 40 2i4",
+   "O3 7 5o"
+  ],
+  []
+ ],
+ "hiding and nesting/ON": [
+  [
+   "O1 1 5o",
+   "I 30 2i3",
+   "O2 1 5o",
+   "I 40 2i4",
+   "O3 7 5o",
+   "M 1 2g",
+   "O1 1 5o",
+   "I 30 2i3",
+   "O2 1 5o",
+   "I 40 2i4",
+   "O3 7 5o"
+  ],
+  []
+ ],
+ "many locals and arrays/OFF": [
+  [
+   " 1 1 2 10 5",
+   " 2 2 4 20 10",
+   " 3 3 6 30 15",
+   " 4 4 8 40 20",
+   " 5 5 10 50 25",
+   " 6 6 12 60 30",
+   " 7 7 14 70 35",
+   " 8 8 16 80 40",
+   " 1 1 2 10 5",
+   " 2 2 4 20 10",
+   " 3 3 6 30 15"
+  ],
+  []
+ ],
+ "many locals and arrays/ON": [
+  [
+   " 1 1 2 10 5",
+   " 2 2 4 20 10",
+   " 3 3 6 30 15",
+   " 4 4 8 40 20",
+   " 5 5 10 50 25",
+   " 6 6 12 60 30",
+   " 7 7 14 70 35",
+   " 8 8 16 80 40",
+   " 1 1 2 10 5",
+   " 2 2 4 20 10",
+   " 3 3 6 30 15"
+  ],
+  []
+ ],
+ "strings and constants/OFF": [
+  [
+   "fedcba2 2xy2"
+  ],
+  []
+ ],
+ "strings and constants/ON": [
+  [
+   "fedcba2 2xy2"
+  ],
+  []
+ ],
+ "structures/OFF": [
+  [
+   " 21 5.25"
+  ],
+  []
+ ],
+ "structures/ON": [
+  [
+   " 21 5.25"
+  ],
+  []
+ ],
+ "gosub and interrupts/OFF": [
+  [
+   " 800 1"
+  ],
+  []
+ ],
+ "gosub and interrupts/ON": [
+  [
+   " 800 1"
+  ],
+  []
+ ],
+ "error skip in a loop/OFF": [
+  [
+   " 125250"
+  ],
+  []
+ ],
+ "error skip in a loop/ON": [
+  [
+   " 125250"
+  ],
+  []
+ ],
+ "the limit/OFF": [
+  [
+   " 5 10 15 20",
+   "[2] Local Integer a, b, c, d2, e, f, g, h, k, m",
+   "Error : Not enough Local variable memory"
+  ],
+  []
+ ],
+ "the limit/ON": [
+  [
+   " 5 10 15 20",
+   "[2] Local Integer a, b, c, d2, e, f, g, h, k, m",
+   "Error : Not enough Local variable memory"
+  ],
+  []
+ ],
+ "after the limit/OFF": [
+  [
+   " 0 2 4 6 8 10"
+  ],
+  []
+ ],
+ "after the limit/ON": [
+  [
+   " 0 2 4 6 8 10"
+  ],
+  []
+ ],
+ "context/OFF": [
+  [
+   " 109",
+   " 23"
+  ],
+  []
+ ],
+ "context/ON": [
+  [
+   " 109",
+   " 23"
+  ],
+  []
+ ],
+ "forty locals/OFF": [
+  [
+   " 200010000 6667"
+  ],
+  [
+   "TIME  357.619"
+  ]
+ ],
+ "forty locals/ON": [
+  [
+   " 200010000 6667"
+  ],
+  [
+   "TIME  63.827"
+  ]
+ ],
+ "speed/OFF": [
+  [
+   " 400200000"
+  ],
+  [
+   "TIME  1637.867"
+  ]
+ ],
+ "speed/ON": [
+  [
+   " 400200000"
+  ],
+  [
+   "TIME  650.663"
+  ]
+ ]
+}

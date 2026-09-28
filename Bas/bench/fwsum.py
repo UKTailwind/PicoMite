@@ -22,8 +22,8 @@ def image(path):
         magic0, magic1, flags, addr, size, _, _, family = struct.unpack("<IIIIIIII", blk[:32])
         if magic0 != 0x0A324655 or magic1 != 0x9E5D5157 or (flags & 1):
             continue  # not a UF2 block, or "not main flash"
-        if (flags & 0x2000) and family != 0xE48BFF59:
-            continue  # another family's: the RP2350's E10 "absolute" block, say
+        if (flags & 0x2000) and family not in (0xE48BFF59, 0xE48BFF56):
+            continue  # not RP2350 ARM or RP2040 code: the RP2350's E10 "absolute" block, say
         if BASE <= addr < BASE + 0x1000000:
             mem[addr] = blk[32:32 + size]
     lo, hi = min(mem), max(a + len(d) for a, d in mem.items())

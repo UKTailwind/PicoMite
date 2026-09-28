@@ -2767,7 +2767,7 @@ void MIPS16 cmd_list(void)
 			global_slots = MAXVARS - local_slots;
 
 		int groups = 0;
-		groups += PrintCollisionDomain("LOCAL", 0, local_slots, local_slots, 1, &list_cnt);
+		perf_print("LOCAL: none\r\n", &list_cnt); // locals are a stack now, not hashed (P6 F2)
 		groups += PrintCollisionDomain("GLOBAL", local_slots, MAXVARS, global_slots, 0, &list_cnt);
 		if (groups == 0)
 			perf_print("No hash collisions found\r\n", &list_cnt);
@@ -4527,6 +4527,7 @@ void RestoreContext(bool keep)
 #if defined(rp2350)
 	}
 #endif
+	LocalTopRestore(); /* the local stack's height, from the restored list (P6 F2) */
 	/* The heap is the saved one now, so any bindings made since SaveContext
 	   (CHAIN prepared the new program in a fresh heap) point into memory that
 	   belongs to something else: drop them without freeing and start again

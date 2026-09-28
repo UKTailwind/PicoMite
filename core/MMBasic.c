@@ -328,6 +328,11 @@ unsigned char PromptString[MAXPROMPTLEN]; // the prompt for input, an empty stri
 int ProgramChanged;                       // true if the program in memory has been changed and not saved
 struct s_hash g_hashlist[MAXLOCALLIST] = {0};
 int g_hashlistpointer = 0;
+/* P6 F2: the local region (slots 0 to maxlocalvars - 1) is a stack.  Each
+   local is made in the next slot up, and g_hashlist lists the live ones in
+   the order they were made, each with its level: a level's locals are the
+   topmost entries of that level.  g_localtop is the next slot to use. */
+static int g_localtop = 0;
 
 // ---------------------------------------------------------------------------
 // Local-variable frame tracking (used by the trace cache)
@@ -4738,6 +4743,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
  * Searches local and global variables for a struct variable by name.
  * Returns variable index or -1 if not found or not a struct.
  ***********************************************************************************************/
+static inline int find_local_slot(const unsigned char *name, int namelen); // (P6 F2, below)
 #ifdef rp2350
 int FindStructBase(unsigned char *basename, int baselen, int *pvindex)
 #else
@@ -4754,30 +4760,9 @@ int MIPS16 FindStructBase(unsigned char *basename, int baselen, int *pvindex)
         hash *= FNV_prime;
     }
 
-    // Search local variables first
+    // Search local variables first: this level's, on the local stack (P6 F2)
     if (g_LocalIndex)
-    {
-        int LocalhashIndex = hash % maxlocalvars;
-        int OrigLocalHash = LocalhashIndex - 1;
-        if (OrigLocalHash < 0)
-            OrigLocalHash += maxlocalvars;
-
-        while (g_vartbl[LocalhashIndex].type != T_NOTYPE)
-        {
-            if (memcmp(g_vartbl[LocalhashIndex].name, basename, baselen) == 0 &&
-                (baselen == MAXVARLEN || g_vartbl[LocalhashIndex].name[baselen] == 0) &&
-                g_vartbl[LocalhashIndex].level == g_LocalIndex)
-            {
-                vindex = LocalhashIndex;
-                break;
-            }
-            LocalhashIndex++;
-            if (LocalhashIndex >= maxlocalvars)
-                LocalhashIndex = 0;
-            if (LocalhashIndex == OrigLocalHash)
-                break;
-        }
-    }
+        vindex = find_local_slot(basename, baselen);
 
     // Search global variables
     if (vindex < 0)
@@ -4829,71 +4814,39 @@ int MIPS16 FindStructBase(unsigned char *basename, int baselen, int *pvindex)
 // suitable for insertion on "miss".
 // ---------------------------------------------------------------------------
 
+// P6 F2: the local named name (as findvar holds it, in capitals) at the
+// current level: the list walked down from the newest local while the levels
+// are not below the current one, passing over a deeper level's (left by an
+// error).  Its slot, or -1.
 #if defined(rp2350) || defined(PICOMITEMIN)
-static inline void __not_in_flash_func(probe_local_slot)(const unsigned char *name, int namelen,
-                                                         uint32_t hash,
-                                                         int *out_hashIndex, int *out_ifree)
+static inline int __not_in_flash_func(find_local_slot)(const unsigned char *name, int namelen)
 #else
-static inline void probe_local_slot(const unsigned char *name, int namelen,
-                                    uint32_t hash,
-                                    int *out_hashIndex, int *out_ifree)
+static inline int find_local_slot(const unsigned char *name, int namelen)
 #endif
 {
-    int LocalhashIndex = hash % maxlocalvars;
-    int OriginalLocalHash = LocalhashIndex - 1;
-    if (OriginalLocalHash < 0)
-        OriginalLocalHash += maxlocalvars;
-    int localifree = -1;
-    int tmp = -1;
-
-    if (g_vartbl[LocalhashIndex].type == T_NOTYPE)
+    for (int k = g_hashlistpointer - 1; k >= 0; k--)
     {
-        localifree = LocalhashIndex;
-    }
-    else
-    {
-        while (g_vartbl[LocalhashIndex].name[0] != 0)
-        {
-            const char *ip = (const char *)name;
-            char *tp = (char *)g_vartbl[LocalhashIndex].name;
-            if (g_vartbl[LocalhashIndex].type == T_BLOCKED)
-                tmp = LocalhashIndex;
-            if (*ip++ == *tp++)
-            { // preliminary quick check
-                int j = namelen - 1;
-                while (j > 0 && *ip == *tp)
-                { // compare each letter
-                    j--;
-                    ip++;
-                    tp++;
-                }
-                if (j == 0 && (*(char *)tp == 0 || namelen == MAXVARLEN))
-                { // found a matching name
-                    if (g_vartbl[LocalhashIndex].level == g_LocalIndex)
-                        break; // matching local at current scope
-                }
+        int lev = g_hashlist[k].level;
+        if (lev < g_LocalIndex)
+            break; // the frames below this one
+        if (lev != g_LocalIndex)
+            continue;
+        const char *ip = (const char *)name;
+        const char *tp = (const char *)g_vartbl[g_hashlist[k].hash].name;
+        if (*ip++ == *tp++)
+        { // preliminary quick check
+            int j = namelen - 1;
+            while (j > 0 && *ip == *tp)
+            { // compare each letter
+                j--;
+                ip++;
+                tp++;
             }
-            LocalhashIndex++;
-            LocalhashIndex %= maxlocalvars;
-            if (LocalhashIndex == OriginalLocalHash)
-            {
-                ClearVars(0, true);
-                error("Too many local variables");
-            }
-        }
-        if (g_vartbl[LocalhashIndex].name[0] == 0)
-        { // not found
-            localifree = LocalhashIndex;
-            if (tmp != -1)
-            {
-                localifree = tmp;
-                g_vartbl[LocalhashIndex].type = T_NOTYPE;
-                g_vartbl[LocalhashIndex].name[0] = 0;
-            }
+            if (j == 0 && (*tp == 0 || namelen == MAXVARLEN))
+                return g_hashlist[k].hash; // a matching local at the current level
         }
     }
-    *out_hashIndex = LocalhashIndex;
-    *out_ifree = localifree;
+    return -1;
 }
 
 // Probe the global portion of the variable table.
@@ -5299,12 +5252,13 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
 
     if (g_LocalIndex)
     {
-        // Search the local portion of the variable table first.
-        probe_local_slot(name, namelen, hash, &LocalhashIndex, &localifree);
-
-        if (g_vartbl[LocalhashIndex].name[0] == 0)
+        // Search this level's locals first: the top of the local stack (P6 F2).
+        if ((LocalhashIndex = find_local_slot(name, namelen)) >= 0)
+            localifree = -1;
+        else
         {
-            // Not found in the local table; fall through to the global table.
+            // Not a local here; fall through to the global table.
+            localifree = g_localtop; // where a new local would go
             probe_global_slot(name, namelen,
                               GlobalhashIndex, OriginalGlobalHash,
                               1, // error on wrap (preserves historical behaviour)
@@ -5340,6 +5294,11 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // we are not declaring the variable but it may need to be created
     if (action & V_LOCAL)
     {
+        if (localifree >= maxlocalvars)
+        { // the local stack is full (P6 F2), as the hash probe's wrap-round was
+            ClearVars(0, true);
+            error("Too many local variables");
+        }
         ifree = i = localifree;
     }
     else if (localifree == -1)
@@ -5691,6 +5650,7 @@ findvar_found:
     {
         g_hashlist[g_hashlistpointer].level = g_LocalIndex;
         g_hashlist[g_hashlistpointer++].hash = ifree;
+        g_localtop = ifree + 1; // (the stack's next slot, P6 F2)
         g_vartbl[ifree].level = g_LocalIndex;
         SymLocalMade(ifree, symk); // the name's newest local (see Symbols.h)
     }
@@ -6812,6 +6772,18 @@ void MIPS16 FloatToStr(char *p, MMFLOAT f, int m, int n, unsigned char ch)
 Various routines to clear memory or the interpreter's state
 **********************************************************************************************/
 
+// P6 F2: after ClearVars freed a local below one that stays (a deeper level's
+// local, left by an error, under a local of the level that goes on): keep the
+// ones that stay, in order.  The list's length.  (In flash: only after errors.)
+static int __attribute__((noinline)) LocalListCompact(void)
+{
+    int i, top;
+    for (i = 0, top = 0; i < g_hashlistpointer; i++)
+        if (g_hashlist[i].level != -1)
+            g_hashlist[top++] = g_hashlist[i];
+    return top;
+}
+
 /***********************************************************************************************
  * FUNCTION: ClearVars() - Clear or delete variables
  *
@@ -6826,20 +6798,20 @@ void MIPS32 ClearVars(int level, bool all)
 void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
 #endif
 {
-    int i, newhashpointer, hashcurrent, hashnext;
+    int i, top, compact, hashcurrent;
 
-    // first step through the variable table and delete local variables at that level or greater
+    // first delete the local variables at that level or greater: the top of the
+    // local stack, newest first (P6 F2; the order puts SymL's shadows back right)
     if (level)
     {
-        newhashpointer = g_hashlistpointer; // save the current number of stored values
+        top = g_hashlistpointer;
+        compact = 0;
         for (i = g_hashlistpointer - 1; i >= 0; i--)
-        { // delete in reverse order of creation
+        {
             if (g_hashlist[i].level >= level)
             {
-                hashnext = hashcurrent = g_hashlist[i].hash;
-                hashnext++;
-                hashnext %= maxlocalvars; // CHANGED: was MAXVARS/2
-                                          // Free memory for strings, arrays, and structs (but not pointers to caller's data)
+                hashcurrent = g_hashlist[i].hash;
+                // Free memory for strings, arrays, and structs (but not pointers to caller's data)
 #ifdef STRUCTENABLED
                 if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0)) || (g_vartbl[hashcurrent].type & T_STRUCT)) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)MMHeap))
 #else
@@ -6860,35 +6832,19 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 }
 #endif
                 g_hashlist[i].level = -1;
-                newhashpointer = i; // set the new highest index
                 SymLocalFreed(hashcurrent); // its name's binding goes back to the local it hid
                 memset(&g_vartbl[hashcurrent], 0, sizeof(struct s_vartbl));
-                if (g_vartbl[hashnext].type)
-                {
-                    g_vartbl[hashcurrent].type = T_BLOCKED; // block slot
-                    g_vartbl[hashcurrent].name[0] = '~';    // safety precaution
-                }
-                else
-                {
-                    // The slot after this one is empty, so no search can pass through
-                    // this slot, or through a run of markers just before it, to reach a
-                    // live variable: empty those markers too.  Without this every local
-                    // freed newest-first stays a marker for good, and a deep recursion
-                    // leaves the local region full of them, with no empty slot to stop
-                    // a search ("Too many local variables").
-                    int k = hashcurrent;
-                    for (;;)
-                    {
-                        k = (k == 0 ? maxlocalvars : k) - 1;
-                        if (g_vartbl[k].type != T_BLOCKED)
-                            break;
-                        memset(&g_vartbl[k], 0, sizeof(struct s_vartbl));
-                    }
-                }
                 g_Localvarcnt--;
+                if (i == top - 1)
+                    top--; // still the top of the stack
+                else
+                    compact = 1; // below one that stays: a deeper level's local left by an error
             }
         }
-        g_hashlistpointer = newhashpointer;
+        if (compact)
+            top = LocalListCompact(); // (the old walk let them fall off the list)
+        g_hashlistpointer = top;
+        g_localtop = top ? g_hashlist[top - 1].hash + 1 : 0;
     }
     else
     {
@@ -6958,9 +6914,20 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
     g_OptionBase = 0;
     g_DimUsed = false;
     g_hashlistpointer = 0;
+    g_localtop = 0;
 #ifdef SUBPROFILE
     ResetLocalFrames(); // discard all per-frame side-index state
 #endif
+}
+
+// P6 F2: the local stack's next slot, after a context's table and list were
+// copied back (above every listed local, whatever order they were made in)
+void LocalTopRestore(void)
+{
+    g_localtop = 0;
+    for (int k = 0; k < g_hashlistpointer; k++)
+        if (g_hashlist[k].hash + 1 > g_localtop)
+            g_localtop = g_hashlist[k].hash + 1;
 }
 void MIPS16 cmd_localvars(unsigned char *p)
 {

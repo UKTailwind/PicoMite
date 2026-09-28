@@ -650,6 +650,7 @@ long long int FloatToInt64(MMFLOAT x);
     int FunctionType(unsigned char *p);
     void cmd_localvars(unsigned char *p);
     int GetLocalVarHashSize(void);
+    void LocalTopRestore(void); // P6 F2: the local stack's height after a context is restored
     int GetGlobalVarHashSize(void);
     uint32_t erase(char *p, bool nofree);
     /* ============================================================================
