@@ -72,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 28       // the stream format
+#define RB_VERSION 29       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -415,6 +415,8 @@ enum
     RC_CONTFOR,  // CONTINUE FOR: the loop's NEXT, run as cmd_next runs it
     RC_FN,       // built-in function a (RF_) on the top, as its fun_ handler computes it (RBFn)
     RC_LOCAL,    // LOCAL of the a names whose offsets follow, as cmd_dim makes them (RBLocal)
+    RC_GUARD,    // to the fallback before anything happens if OPTION LEGACY (CMM1) is on
+    RC_SPLICE,   // the command, its n values (the next word) on the stack, its spliced text (a words) after (RBSpliceCmd)
 };
 enum
 { // RC_FN's functions: each its Functions.c helper (FnSin...)
@@ -1581,6 +1583,52 @@ static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char
    the IF table gives, looked up as cmd_else looks it up (its token taken to
    be just before cmdline); ELSE checks its end first.  CONTINUE FOR runs its
    loop's NEXT (RC_CONTFOR); CONTINUE DO and plain CONTINUE stay text. */
+/* P5b: BOX, LINE and PIXEL through the value splice (see RBSpliceCmd): 0 if
+   the compiler cannot take every argument, or for another form. */
+static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandToken ct, uint16_t *code)
+{
+    rbcx_t x;
+    void (*fn)(void) = commandtbl[ct].fptr;
+    unsigned char *p = cmdl, *ae, txt[2 * RB_MAXLIT];
+    int n = 0, len = 0, t, i;
+    if (fn != cmd_box && fn != cmd_line && fn != cmd_pixel)
+        return 0;
+    if (fn == cmd_line && (checkstring(p, (unsigned char *)"PLOT") || checkstring(p, (unsigned char *)"GRAPH") || checkstring(p, (unsigned char *)"AA")))
+        return 0; // the forms whose arguments are arrays or keywords
+    memset(&x, 0, sizeof(x));
+    x.entry = entry; // (x.calls 0: no FUNCTION call, which getargaddress would make twice)
+    if (fn != cmd_box)
+        RBOp(&x, RC_GUARD, 0); // LINE and PIXEL read OPTION LEGACY's syntax when it is on
+    while (1)
+    {
+        ae = RBArgEnd(p, 0); // as getcsargs splits them
+        skipspace(p);
+        if (p != ae)
+        { // a value
+            if (n == 26 || len > (int)sizeof(txt) - 6)
+                return 0;
+            if ((t = RBEvaluate(&x, &p)) == 0)
+                return 0;
+            skipspace(p);
+            if (p != ae)
+                return 0;
+            txt[len++] = T_VALUE;
+            txt[len++] = (t == T_NBR ? 'a' : 'A') + n++;
+        }
+        if (*ae != ',')
+            break;
+        txt[len++] = ',';
+        p = ae + 1;
+    }
+    txt[len++] = 0;
+    RBOp(&x, RC_SPLICE | (((len + 1) / 2) << 8), -n);
+    RBOp(&x, n, 0);
+    for (i = 0; i < len; i += 2)
+        RBOp(&x, txt[i] | ((i + 1 < len ? txt[i + 1] : 0) << 8), 0);
+    RBOp(&x, RC_END, 0);
+    return RBFinish(&x, code);
+}
+
 // P4f: LOCAL [AS] [type] name {, name} (see RBLocal): 0 if it is another form
 static int RBCompileLocal(unsigned char *entry, unsigned char *cmdl, uint16_t *code)
 {
@@ -2309,6 +2357,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileCase(entry, base, libbit, cmdl, next, ct, code + 1);
         else if (ct == RBTokLocal)
             ncode = RBCompileLocal(entry, cmdl, code + 1);
+        else if ((ncode = RBCompileSplice(entry, cmdl, ct, code + 1)) != 0)
+            ;
         else
             ncode = RBCompileExit(entry, base, libbit, cmdl, ct, code + 1);
     }
@@ -3288,6 +3338,43 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
     }
 }
 
+/* The value splice (P5b).  RC_SPLICE runs the command whose record is r as
+   RBExec runs a CMD record, but with cmdline at the spliced copy of its
+   arguments in the code, and RBSplice at their values on the VM's stack,
+   which getvalue reads through RBSpliceValue when it meets a T_VALUE. */
+static union cell *RBSplice;
+extern char CMM1; // Draw.c: OPTION LEGACY
+
+unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, int *ta)
+{
+    unsigned char k = p[1];
+    if (RBSplice == NULL)
+        SyntaxError(); // (never met in program text: tokenise makes control characters spaces)
+    if (k >= 'a')
+    {
+        *fa = RBSplice[k - 'a'].f;
+        *ta = T_NBR;
+    }
+    else
+    {
+        *ia = RBSplice[k - 'A'].i;
+        *ta = T_INT;
+    }
+    return p + 2;
+}
+
+static __attribute__((noinline)) void RBSpliceCmd(const uint16_t *r, unsigned char *e, unsigned int nw, const uint16_t *txt, union cell *vals)
+{
+    cmdline = (unsigned char *)txt;
+    nextstmt = e + (nw >> 8);
+    cmdtoken = r[4];
+    targ = T_CMD;
+    CmdTokenPtr = e + (r[3] >> 8);
+    RBSplice = vals;
+    commandtbl[cmdtoken].fptr();
+    RBSplice = NULL;
+}
+
 // RC_LOCAL: what cmd_dim does for LOCAL name {, name}, in its order, the
 // names read where they are in the program (see RBCompileLocal).  Returns
 // the code after the names' offsets, or NULL before anything has happened
@@ -3583,6 +3670,8 @@ again:
         [RC_STS] = &&L_STS,
         [RC_CONTFOR] = &&L_CONTFOR,
         [RC_LOCAL] = &&L_LOCAL,
+        [RC_GUARD] = &&L_GUARD,
+        [RC_SPLICE] = &&L_SPLICE,
         [RC_FN] = &&L_FN,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
@@ -3802,6 +3891,15 @@ again:
             goto ran;
     L_FN: // a built-in function's work (RBFn)
             RBFn(w >> 8, sp - 1);
+            RBNEXT();
+    L_GUARD:
+            if (CMM1)
+                goto fail;
+            RBNEXT();
+    L_SPLICE: // the command's handler, its arguments' values spliced (RBSpliceCmd)
+            sp -= pc[0];
+            RBSpliceCmd(r, e, nw, pc + 1, sp);
+            pc += 1 + (w >> 8);
             RBNEXT();
     L_LOCAL: // cmd_dim for LOCAL (RBLocal)
             if ((pc = RBLocal(e, nw, pc, w)) == NULL)

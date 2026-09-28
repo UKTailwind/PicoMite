@@ -3833,6 +3833,10 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
             CtoM(s);
             t = T_STR;
         }
+#ifdef rp2350
+        else if (c == T_VALUE)
+            p = RBSpliceValue(p, &f, &i64, &t); // a value Route B's compiled code has spliced in (Stream.h)
+#endif
         else
         {
             SyntaxError();

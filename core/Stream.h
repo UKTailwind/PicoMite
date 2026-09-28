@@ -61,6 +61,13 @@ void RBStatus(char *out);      // MM.INFO(COMPILE): what the last RUN did
 // stream holds the statement it is about to run.
 int RBInImage(unsigned char *p);             // p lies in the program or library image
 unsigned char *RunStream(unsigned char *p);  // run from p; returns where the text loop carries on
+
+// P5b: the value splice.  A command's arguments, already computed by compiled
+// code, reach its handler as T_VALUE and a letter each in the text it parses
+// (never program text: tokenise turns control characters into spaces);
+// getvalue reads one with RBSpliceValue.
+#define T_VALUE 0x10
+unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, int *ta);
 #else
 // Route B is RP2350-only (Peter, 27 September 2026).  The RP2040 has no page
 // of RAM below the heap for the executor, and from flash the executor and the
