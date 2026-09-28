@@ -216,7 +216,8 @@ End Sub
 For i = 1 To 500 : E i : Next
 Print n
 """),
-    ("the limit", """Sub Down(n As Integer)
+    ("the limit", """Option Local Variables 128
+Sub Down(n As Integer)
   Local Integer a, b, c, d2, e, f, g, h, k, m
   If n Mod 5 = 0 Then Print n;
   Down n + 1
@@ -291,7 +292,14 @@ EXPECT = {"constants hide": ["O1 10 20", "O2 20 40 loc", "I 10 glob", "O3 20 loc
           # the old code's error texts: error("A sub/fun has the same name: $") and
           # error("$ Different type already declared"), the name in capitals
           "sub name clash": ["[4] Local Integer foo", "Error : A sub/fun has the same name: FOO"],
-          "type clash": [" 1", "[4] aVal! = 2", "Error : AVAL Different type already declared"]}
+          "type clash": [" 1", "[4] aVal! = 2", "Error : AVAL Different type already declared"],
+          # 11 locals a level (the parameter and ten) in 128 slots: the count reaches
+          # the size at level 12, as it did in 256 at level 24 before
+          "the limit": [" 5 10", "[3] Local Integer a, b, c, d2, e, f, g, h, k, m",
+                        "Error : Not enough Local variable memory"]}
+# these are checked against EXPECT even where a reference has them (their
+# programs changed after the reference was recorded)
+EXPECT_FIRST = ("the limit",)
 
 # Route B is RP2350-only: where OPTION COMPILE is refused, only the text run
 modes = ("OFF",) if "Error" in b.cmd("OPTION COMPILE OFF", 10) else ("OFF", "ON")
@@ -326,6 +334,8 @@ else:
         # a compiled run with no reference of its own (recorded where OPTION
         # COMPILE is refused) must print what the text run recorded
         rb, rt = ref.get(k, ref.get(k.split("/")[0] + "/OFF", (EXPECT.get(k.split("/")[0]), [])))
+        if k.split("/")[0] in EXPECT_FIRST:
+            rb = EXPECT[k.split("/")[0]]
         good = addr(body) == addr(rb)
         ok = ok and good
         print("%-4s %-32s %s" % ("ok" if good else "BAD", k, " | ".join(body)[-80:]))

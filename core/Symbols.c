@@ -311,7 +311,7 @@ _Static_assert(SYM_LEVELS > MAXGOSUB + 8, "SYM_LEVELS must exceed the SUB and GO
 #define SymLocalEvent(slot) // (the RP2040 has no compiled records to tell)
 #endif
 static uint16_t *SymCanonHead = NULL; // hash chain heads
-extern struct s_hash g_hashlist[MAXLOCALVARS];
+extern struct s_hash g_hashlist[MAXLOCALLIST]; // (as MMBasic.c defines it)
 extern int g_hashlistpointer;
 int GetLocalVarHashSize(void);
 static unsigned int SymCanonMask, SymNCanon;

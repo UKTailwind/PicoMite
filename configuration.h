@@ -61,7 +61,7 @@ extern "C"
 #ifdef rp2350
 #define MAXSUBFUN 512
 #define MAXGLOBALVARS 480 // Configurable split
-#define MAXLOCALVARS 256
+#define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 
 #ifdef HDMI // RP2350 HDMI
@@ -169,7 +169,7 @@ extern "C"
 #else
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
-#define MAXLOCALVARS 240
+#define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define MAXMODES 2
 #define MAX_CPU 378000
@@ -233,7 +233,7 @@ extern "C"
 #define MagicKey 0x7E23D439
 #define MAXSUBFUN 512
 #define MAXGLOBALVARS 512 // Configurable split
-#define MAXLOCALVARS 256
+#define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 /* TLS (mbedtls) is enabled for ALL WiFi variants (RP2350 and RP2040) — see
    the IS_WEB block in CMakeLists.txt. The handshake working set (~20 KB at
@@ -255,7 +255,7 @@ extern "C"
 #define MagicKey 0x6E75BE94
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
-#define MAXLOCALVARS 240
+#define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define HEAP_MEMORY_SIZE (88 * 1024)
 #define FLASH_TARGET_OFFSET (1296 * 1024)
@@ -275,7 +275,7 @@ extern "C"
 
 #ifdef rp2350
 #define MAXGLOBALVARS 512 // Configurable split
-#define MAXLOCALVARS 240
+#define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define MAX_CPU 420000
 #define MAXSUBFUN 512
@@ -338,7 +338,7 @@ extern "C"
 
 #else                     // RP2040
 #define MAXGLOBALVARS 256 // Configurable split
-#define MAXLOCALVARS 240
+#define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define MAX_CPU 420000
 #define MAXSUBFUN 256
@@ -439,7 +439,7 @@ extern "C"
 #else
 #define MAXIMAGESLOTS MAXFLASHSLOTS
 #endif
-#define MAXVARHASH MAXLOCALVARS // Hash range for local variables
+#define MAXVARHASH MAXLOCALVARS // (unused: the local region is a stack since P6 F2)
 
 /* ============================================================================
  * Static memory allocations
