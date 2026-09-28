@@ -294,8 +294,22 @@ int16_t *SymLShadow = NULL;
 uint16_t *SymLCanon = NULL;
 unsigned int SymLSlots = 0;
 int SymTextLocals = 0;
-uint32_t SymBindGen = 1;  // see Symbols.h
-uint32_t SymBindGenG = 1; // see Symbols.h
+uint32_t SymBindEvent = 1; // see Symbols.h
+uint32_t SymBindGenG = 1;
+#ifdef rp2350
+uint32_t SymLevelGen[SYM_LEVELS];
+_Static_assert(SYM_LEVELS > MAXGOSUB + 8, "SYM_LEVELS must exceed the SUB and GOSUB levels");
+// a local made or freed in slot, at its level (see Symbols.h)
+#define SymLocalEvent(slot)                          \
+    do                                               \
+    {                                                \
+        unsigned int l_ = g_vartbl[slot].level;      \
+        if (l_ < SYM_LEVELS)                         \
+            SymLevelGen[l_] = ++SymBindEvent;        \
+    } while (0)
+#else
+#define SymLocalEvent(slot) // (the RP2040 has no compiled records to tell)
+#endif
 static uint16_t *SymCanonHead = NULL; // hash chain heads
 extern struct s_hash g_hashlist[MAXLOCALVARS];
 extern int g_hashlistpointer;
@@ -497,7 +511,7 @@ void SymBindReset(void)
 // counted as a text local too.
 void SYMRAM(SymLocalMade)(int slot, int k)
 {
-    SymBindGen++;
+    SymLocalEvent(slot);
     if (SymLCanon == NULL)
         return;
     if ((unsigned)slot >= SymLSlots)
@@ -519,7 +533,7 @@ void SYMRAM(SymLocalMade)(int slot, int k)
 void SYMRAM(SymLocalFreed)(int slot)
 {
     unsigned int c;
-    SymBindGen++;
+    SymLocalEvent(slot); // (its level is still set: ClearVars clears the entry after)
     if (SymLCanon == NULL)
         return;
     if ((unsigned)slot >= SymLSlots)

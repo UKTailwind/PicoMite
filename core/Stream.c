@@ -333,12 +333,14 @@ static void RBTabTo(uint32_t b)
 
    The bind cache.  Binding was a quarter of a compiled loop's time.  In a
    stream in PSRAM a record keeps the addresses its binds found, stamped with
-   SymBindGen, and uses them again while the stamp matches: SymBindGen is
-   bumped by everything that can change what a name binds to (Symbols.h),
-   and a text local that may hide a global sends the record to its binds.  A
-   stream in flash cannot be written, so there every record binds each time.
-   A stream used again after a RUN, perhaps after a reboot that restarted
-   SymBindGen, has every stamp cleared first (RBClearCaches).
+   what can change them at the level it runs at (Symbols.h: the globals'
+   generation and that level's locals', so a call a loop makes, whose locals
+   are gone when it returns, does not change them), and uses them again
+   while the stamp matches; a text local that may hide a global sends the
+   record to its binds.  A stream in flash cannot be written, so there every
+   record binds each time.  A stream used again after a RUN, perhaps after a
+   reboot that restarted the count, has every stamp cleared first
+   (RBClearCaches).
 
    LET compiles when its target and every variable on the right are global
    integer or float scalars and the right-hand side is a numeric expression
@@ -2858,7 +2860,7 @@ extern int DefinedSubFunLocalIndex;     // MMBasic.c: g_LocalIndex when it start
 #define PERF_CMDTOKEN_MAX 1024 // as in MMBasic.c
 
 // Clear every compiled record's bind-cache stamp: a stream used again may
-// hold stamps from before a reboot, which restarted SymBindGen.
+// hold stamps from before a reboot, which restarted SymBindEvent.
 static void RBClearCaches(void)
 {
     const rbheader_t *h = (const rbheader_t *)RBSlotBase();
@@ -3567,10 +3569,10 @@ again:
     if ((uint32_t)cache & 2)
         cache++; // the pad
     loopi = 0;
-    // at level 0, where no local can hide a global, the globals' generation
-    // (which a call's locals do not move), flagged; in a SUB, the whole one
-    gen = g_LocalIndex ? (SymBindGen & 0x7FFFFFFF) : (SymBindGenG | 0x80000000);
-    if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == gen && !(g_LocalIndex && SymTextLocals))
+    // what can have changed the binds at this level (Symbols.h): the globals,
+    // and this level's locals; 0, which never matches, past SYM_LEVELS
+    gen = g_LocalIndex < SYM_LEVELS ? SymBindGenG + SymLevelGen[g_LocalIndex] : 0;
+    if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == gen && gen && !(g_LocalIndex && SymTextLocals))
         slotp = (union cell **)cache; // what the binds found last time, used where it is
     else
     {

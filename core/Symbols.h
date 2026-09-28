@@ -231,15 +231,25 @@ extern int16_t *SymLShadow; // per local slot: the local binding its local hid
 extern uint16_t *SymLCanon; // per local slot: canonical entry + 1, SYM_LTEXT, or 0 = not tracked
 extern unsigned int SymLSlots; // slots the two arrays above cover
 extern int SymTextLocals;   // live locals made from text
-// Bumped by everything that can change what a name binds to: new bindings
-// (SymBindInit), every variable gone (SymBindReset), one gone (erase), a local
-// made or freed, and DefaultType changed (OPTION DEFAULT, RUN).  Route B's
-// compiled records reuse what their binds found while it is unchanged.
-// SymBindGenG counts the same except a local made or freed: what can change
-// a global's binding, which is all a record at level 0 depends on.
-extern uint32_t SymBindGen;
+// What a name binds to at a level changes only with an event that can change
+// a global's binding - new bindings (SymBindInit), every variable gone
+// (SymBindReset), one gone (erase), DefaultType changed (OPTION DEFAULT, RUN)
+// - or with a local made or freed at that level: a deeper level's locals (a
+// call's, an interrupt's, a GOSUB's) are gone before the level runs again.
+// Every event takes the next value of SymBindEvent: SymBindGenG holds the
+// last global event's, SymLevelGen[l] the last local event's at level l (P6
+// F4).  Route B's compiled records reuse what their binds found at level l
+// while SymBindGenG + SymLevelGen[l] is unchanged (a sum, which still changes
+// after the count wraps, where the larger of the two would not); at a level
+// from SYM_LEVELS on they bind every time.  (Route B is the RP2350's: the
+// RP2040 keeps no per-level counts, whose RAM would come off its stack.)
+#define SYM_LEVELS 80 // more than MAXGOSUB levels of SUBs and GOSUBs, with interrupts
+extern uint32_t SymBindEvent;
 extern uint32_t SymBindGenG;
-#define SymBindGlobalsChanged() (SymBindGen++, SymBindGenG++)
+#ifdef rp2350
+extern uint32_t SymLevelGen[SYM_LEVELS];
+#endif
+#define SymBindGlobalsChanged() (SymBindGenG = ++SymBindEvent)
 int SymCanonNew(const unsigned char *p);
 int SymCanonById(unsigned int id);
 void SymBindInit(void);

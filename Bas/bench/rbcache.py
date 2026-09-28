@@ -1,7 +1,7 @@
-"""rbcache.py PORT - Route B's bind cache across calls (option C): at level 0 a
-record's cached binds are stamped with SymBindGenG, which a call's locals do
-not move, so the main program keeps them across SUB calls; in a SUB they are
-stamped with the whole SymBindGen.  Every program runs with OPTION COMPILE
+"""rbcache.py PORT - Route B's bind cache across calls (option C, P6 F4): a
+record's cached binds are stamped with the globals' generation and its own
+level's locals' (Symbols.h), which a call's locals do not move, so the main
+program and a loop in a SUB keep them across the calls they make.  Every program runs with OPTION COMPILE
 OFF, ON and SHADOW and must print the same; a line starting TIME is left out
 of the comparison and shown.  Leaves OPTION COMPILE OFF."""
 import sys, os, re
@@ -76,6 +76,94 @@ For i = 1 To 4
 Next
 Print n
 """, True),
+    ("sub loop around calls", """Dim Integer r
+Sub Inner(v As Integer)
+  Local Integer w, x
+  w = v * 2 : x = w + 1
+  r = r + x
+End Sub
+Sub Outer
+  Local Integer i, a, b
+  Timer = 0
+  For i = 1 To 3000
+    Inner i
+    a = a + i : b = b + a Mod 7
+  Next
+  Print a; b; r
+  Print "TIME "; Timer
+End Sub
+Outer
+Outer
+""", True),
+    ("a callee's local hides a caller's global", """Dim Integer g = 5
+Sub C1
+  Local Integer g
+  g = 100
+End Sub
+Sub A
+  Local Integer i, s
+  For i = 1 To 5
+    s = s + g
+    C1
+    s = s + g
+  Next
+  Print s; g
+End Sub
+A
+""", True),
+    ("a local made mid-loop after calls", """Dim Integer a = 100, r, i
+Sub C1
+  Local Integer a
+  a = 1
+End Sub
+Sub S
+  Local Integer j
+  For j = 1 To 3
+    r = r + a
+    C1
+    If j = 2 Then Local Integer a : a = 7
+    r = r + a
+  Next
+End Sub
+For i = 1 To 2 : S : Next
+Print r; a
+""", True),
+    ("interrupt locals during a sub loop", """Dim Integer ticks
+Sub Tk
+  Local Integer i, s
+  i = 5 : s = 9
+  ticks = ticks + 1
+End Sub
+Sub L
+  Local Integer i, s
+  For i = 1 To 20000
+    s = s + i Mod 3
+  Next
+  Print s
+End Sub
+SetTick 1, Tk
+L
+SetTick 0, Tk
+Print ticks > 0
+""", True),
+    ("a gosub's local in a sub", """Dim Integer t, x = 3
+Sub S
+  Local Integer x, k
+  x = 10
+  For k = 1 To 4
+    GoSub Lb
+    t = t + x
+  Next
+End Sub
+S
+Print t; x
+End
+Lb:
+  Local Integer x
+  x = 1000
+  t = t + x
+  Return
+""", None),
     ("speed", """Dim Integer i, x, y, z
 Sub S3
   Local Integer a
