@@ -60,7 +60,10 @@ extern "C"
    /* RP2350 configuration */
 #ifdef rp2350
 #define MAXSUBFUN 512
-#define MAXGLOBALVARS 480 // Configurable split
+   /* 192 local entries since the local region became a stack (P6); the globals
+      keep the total they had (544 + 192 = 480 + 256), so a program that lowers
+      OPTION LOCAL VARIABLES to get more globals gets as many as before. */
+#define MAXGLOBALVARS 544 // Configurable split
 #define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 
@@ -97,7 +100,8 @@ extern "C"
       GetHighestHexAddress.py. Bump MagicKey when Option layout/defaults
       change so stale cached options get rewritten.  1536 KB from Route B's
       P3b (compiled SUB calls) on development. */
-#define FLASH_TARGET_OFFSET (1536 * 1024)
+   /* +16 KB (2026-09-29): Route B's P5c left 832 bytes. */
+#define FLASH_TARGET_OFFSET (1552 * 1024)
    /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
       kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
       pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
@@ -130,21 +134,29 @@ extern "C"
       __end__ down to 0x2007E690 for 6512 bytes: one full page of arena
       growth plus ~2.4 KB.  Keep several KB of C-heap headroom here if
       BSS grows again; see [[heap-bss-overlap-on-rp2350]]. */
-#define FLASH_TARGET_OFFSET (1088 * 1024)
-#define HEAP_MEMORY_SIZE (152 * 1024)
+   /* +32 KB (2026-09-29): Route B (P1-P5) went 19.4 KB over; it had only
+      been sized for HDMIWEB. */
+#define FLASH_TARGET_OFFSET (1120 * 1024)
+   /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
+      C heap 872 bytes past the end of RAM. */
+#define HEAP_MEMORY_SIZE (148 * 1024)
 #define MagicKey 0x41052ADE
 #endif
 #else
 #define MagicKey 0x779012A9
-#define FLASH_TARGET_OFFSET (1040 * 1024)
-#define HEAP_MEMORY_SIZE (160 * 1024)
+   /* +48 KB (2026-09-29): Route B (P1-P5) went 29.4 KB over. */
+#define FLASH_TARGET_OFFSET (1088 * 1024)
+   /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
+      C heap 1144 bytes past the end of RAM. */
+#define HEAP_MEMORY_SIZE (156 * 1024)
 #endif
 #else // rp2350 VGA
 #define MAXMODES 3
 #define MAX_CPU 378000
 #define MIN_CPU 252000
 #ifdef USBKEYBOARD
-#define FLASH_TARGET_OFFSET (1056 * 1024)
+   /* +32 KB (2026-09-29): Route B (P1-P5) went 19.5 KB over. */
+#define FLASH_TARGET_OFFSET (1088 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
@@ -159,7 +171,8 @@ extern "C"
 #define HEAP_MEMORY_SIZE (160 * 1024)
 #define MagicKey 0xD9051EC2
 #else
-#define FLASH_TARGET_OFFSET (1008 * 1024)
+   /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
+#define FLASH_TARGET_OFFSET (1056 * 1024)
 #define HEAP_MEMORY_SIZE (168 * 1024)
 #define MagicKey 0x4530F045
 #endif
@@ -232,7 +245,7 @@ extern "C"
 #ifdef rp2350
 #define MagicKey 0x7E23D439
 #define MAXSUBFUN 512
-#define MAXGLOBALVARS 512 // Configurable split
+#define MAXGLOBALVARS 576 // Configurable split (the total as before 192 locals: see above)
 #define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 /* TLS (mbedtls) is enabled for ALL WiFi variants (RP2350 and RP2040) — see
@@ -245,12 +258,17 @@ extern "C"
    so it's visible to every TU (including lwIP's altcp_tls_mbedtls.c which doesn't
    include configuration.h). Defining it here too would produce a redefine
    warning because -D and #define without a body resolve to different bodies. */
-#define HEAP_MEMORY_SIZE (256 * 1024)
+   /* -4 KB (2026-09-29): with Route B's code the link put the C heap 800 bytes
+      past the end of RAM; -4 KB more for the 64 more global slots
+      (MAXGLOBALVARS 576), 1056 bytes past it. */
+#define HEAP_MEMORY_SIZE (248 * 1024)
+#define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
    /* +16 KB (2026-09-26): the interrupt-pending counter (S1c) took this variant
       636 bytes over 1456 KB; it had been down to 188 bytes.  Peter chose the
       offset alone, so the A: drive is 16 KB smaller.  Moving the offset moves
       the option sector, so the first boot after the upgrade does a full clean. */
-#define FLASH_TARGET_OFFSET (1472 * 1024)
+   /* +48 KB (2026-09-29): Route B (P1-P6) went 37.4 KB over. */
+#define FLASH_TARGET_OFFSET (1520 * 1024)
 #else
 #define MagicKey 0x6E75BE94
 #define MAXSUBFUN 256
@@ -258,7 +276,8 @@ extern "C"
 #define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define HEAP_MEMORY_SIZE (88 * 1024)
-#define FLASH_TARGET_OFFSET (1296 * 1024)
+   /* +16 KB (2026-09-29): 8.0 KB over (on development already, before P6). */
+#define FLASH_TARGET_OFFSET (1312 * 1024)
 #endif
 #endif /* !PICOMITEHDMIWEB */
 
@@ -274,7 +293,7 @@ extern "C"
 #define MIN_CPU 48000
 
 #ifdef rp2350
-#define MAXGLOBALVARS 512 // Configurable split
+#define MAXGLOBALVARS 576 // Configurable split (the total as before 192 locals: see the VGA block)
 #define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define MAX_CPU 420000
@@ -282,7 +301,8 @@ extern "C"
 
 #ifdef USBKEYBOARD
 #define MagicKey 0x678A02E7
-#define FLASH_TARGET_OFFSET (1120 * 1024)
+   /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
+#define FLASH_TARGET_OFFSET (1168 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
       from the cursor module (~650 bytes for user_cursor.pixels +
       state) and the click/cursor ownership tracking. Heap and BSS
@@ -301,6 +321,7 @@ extern "C"
       steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
       and [[project_core0_stack_overflow_fm]]. */
 #define HEAP_MEMORY_SIZE (296 * 1024)
+#define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBT)
    /* PICOMITEBT replaces USB CDC console with BLE Nordic UART Service over
       CYW43439. The CYW43 + btstack stack can't reliably keep up at very
@@ -315,8 +336,10 @@ extern "C"
 #undef MAX_CPU
 #define MAX_CPU 396000
 #define MagicKey 0xFB2B4EA6
-#define FLASH_TARGET_OFFSET (1408 * 1024)
+   /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
+#define FLASH_TARGET_OFFSET (1440 * 1024)
 #define HEAP_MEMORY_SIZE (272 * 1024)
+#define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBTH)
    /* PICOMITEBTH = PicoMite + USB CDC console + BLE HID host. Same CYW43
       + btstack memory pressure as PICOMITEBT, so mirror its CPU floor and
@@ -327,12 +350,16 @@ extern "C"
 #undef MAX_CPU
 #define MAX_CPU 396000
 #define MagicKey 0xB3A99D85
-#define FLASH_TARGET_OFFSET (1440 * 1024)
+   /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
+#define FLASH_TARGET_OFFSET (1472 * 1024)
 #define HEAP_MEMORY_SIZE (256 * 1024)
+#define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #else
-#define FLASH_TARGET_OFFSET (1104 * 1024)
+   /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */
+#define FLASH_TARGET_OFFSET (1136 * 1024)
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
 #define HEAP_MEMORY_SIZE (300 * 1024)
+#define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #define MagicKey 0x5E57936A
 #endif
 
@@ -418,8 +445,8 @@ extern "C"
 #define MAX_PROG_SIZE (116 * 1024) // 4 KB less, for the 16 KB of FLASH_TARGET_OFFSET above
 #elif defined(PICOMITE) && !defined(rp2350)
 #define MAX_PROG_SIZE (120 * 1024) // Maximum program size in bytes (adjust as needed     )
-#else
-#define MAX_PROG_SIZE HEAP_MEMORY_SIZE
+#elif !defined(MAX_PROG_SIZE)
+#define MAX_PROG_SIZE HEAP_MEMORY_SIZE // (unless the variant sets its own above)
 #endif
 #define SAVEDVARS_FLASH_SIZE 16384
 #define FLASH_ERASE_SIZE 4096
@@ -560,9 +587,11 @@ extern "C"
    is 1500 KB at the largest heap any variant has. */
 #define PSRAMblocksize (MAXRAMSLOTS * MAX_PROG_SIZE)
 /* Route B's compiled program (core/Stream.c) takes what the reserve has left
-   above the RAM slots: 944 KB with HDMIWEB's 144 KB slots, 164 KB at the
-   largest heap.  It is nobody's slot, so a program that fills every RAM slot
-   still runs compiled; RAM ERASE ALL (PSRAMblocksize) does not reach it. */
+   above the RAM slots: 944 KB with HDMIWEB's 144 KB slots, and never less than
+   RB_STREAM_SLOTS program sizes (a static assertion in FileIO.c; MAX_PROG_SIZE
+   is 208 KB on the variants with a bigger heap for that).  It is nobody's
+   slot, so a program that fills every RAM slot still runs compiled; RAM ERASE
+   ALL (PSRAMblocksize) does not reach it. */
 #define PSRAMstream (PSRAMblock + PSRAMblocksize)
 #define PSRAMstreamsize (2 * 1024 * 1024 - 0x60000 - PSRAMblocksize)
 
@@ -726,8 +755,23 @@ extern "C"
  * ============================================================================ */
 #define PROGSTART (FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + \
                    ((MAXFLASHSLOTS) * MAX_PROG_SIZE))
+#ifdef rp2350
+/* Route B's compiled program, on a board without PSRAM (core/Stream.c): a
+   hidden area of RB_STREAM_SLOTS program sizes straight after the program's.
+   A compiled program takes 1.4-2.9 times its program's size (Exile, the
+   anchor, PETSCII Robots, Elite, 29 September), so three sizes compile every
+   program the slots can hold.  After the program, not before it, because the
+   flash slots are found from PROGSTART (FileIO.c).  The A: drive starts above
+   it. */
+#define RB_STREAM_SLOTS 3
+#define RB_STREAM_FLASH (FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + \
+                         ((MAXFLASHSLOTS + 1) * MAX_PROG_SIZE))
+#define RB_STREAM_FLASH_SIZE (RB_STREAM_SLOTS * MAX_PROG_SIZE)
+#define TOP_OF_SYSTEM_FLASH (RB_STREAM_FLASH + RB_STREAM_FLASH_SIZE)
+#else
 #define TOP_OF_SYSTEM_FLASH (FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + \
                              ((MAXFLASHSLOTS + 1) * MAX_PROG_SIZE))
+#endif
 
 /* ============================================================================
  * Utility macros

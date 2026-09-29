@@ -718,6 +718,9 @@ static void PrintImageSlotHeader(int *pp); /* defined with cmd_flash below */
    last slot past the end of the part.  Fail the build rather than the board. */
 _Static_assert(0x60000 + MAXRAMSLOTS * MAX_PROG_SIZE <= 2 * 1024 * 1024,
                "the RAM slots no longer fit the 2 MB PSRAM reserve");
+/* and above them Route B's compiled program, RB_STREAM_SLOTS program sizes at least */
+_Static_assert(0x60000 + (MAXRAMSLOTS + RB_STREAM_SLOTS) * MAX_PROG_SIZE <= 2 * 1024 * 1024,
+               "the RAM slots and the compiled program no longer fit the 2 MB PSRAM reserve: lower MAX_PROG_SIZE");
 void MIPS16 cmd_psram(void)
 {
     if (!PSRAMsize)
@@ -1150,7 +1153,6 @@ void MIPS16 cmd_flash(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"ERASE")))
     {
         int i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         uint32_t j = FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + ((i - 1) * MAX_PROG_SIZE);
@@ -1177,8 +1179,6 @@ void MIPS16 cmd_flash(void)
         /* Slots above the flash ones are RAM slots in PSRAM (RP2350 only);
            ImageSlotAddress() errors if there is no PSRAM. */
         bool toram = (i > MAXFLASHSLOTS);
-        if (!toram)
-            RBGuardFlashSlot(i); // not the compiled program's slot (see Stream.h)
         uint32_t *c = (uint32_t *)ImageSlotAddress(i);
 #ifdef rp2350
         if (i == MAXIMAGESLOTS && RamLibMemory)
@@ -1257,7 +1257,6 @@ void MIPS16 cmd_flash(void)
         if (CurrentLinePtr)
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         uint32_t j = FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + ((i - 1) * MAX_PROG_SIZE);
@@ -1418,7 +1417,6 @@ void MIPS16 cmd_flash(void)
             SyntaxError();
         ;
         int i = getint(argv[0], 1, MAXFLASHSLOTS);
-        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (argc == 5)
         {
             if (checkstring(argv[4], (unsigned char *)"O") || checkstring(argv[4], (unsigned char *)"OVERWRITE"))
@@ -1463,7 +1461,6 @@ void MIPS16 cmd_flash(void)
         if (CurrentLinePtr)
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         uint32_t *c = (uint32_t *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
@@ -1499,7 +1496,6 @@ void MIPS16 cmd_flash(void)
         if (CurrentLinePtr)
             StandardError(10);
         int j = (Option.PROG_FLASH_SIZE >> 2), i = getint(p, 1, MAXFLASHSLOTS);
-        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         uint8_t *q = (uint8_t *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
         if (!(*q == T_NEWLINE))
             error("Flash slot empty");
@@ -1543,7 +1539,6 @@ void MIPS16 cmd_flash(void)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXFLASHSLOTS);
-        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         if (i)
@@ -1563,7 +1558,6 @@ void MIPS16 cmd_flash(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
     {
         int i = getint(p, 0, MAXFLASHSLOTS);
-        RBGuardFlashSlot(i); // not the slot that holds the compiled program (see Stream.h)
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
         if (i)

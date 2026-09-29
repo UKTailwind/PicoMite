@@ -45,23 +45,12 @@ int RBMode = RB_OFF;
 
 // A board with PSRAM keeps the stream in a region of its own, what the PSRAM
 // reserve leaves above the RAM slots (PSRAMstream in configuration.h), written
-// at memory speed.  One without keeps it in flash slot 2 (slot 3 holds the
-// library and slot 1 is left for the user) until it has a flash area of its own.
-#define RB_FLASH_SLOT 2
-
+// at memory speed.  One without keeps it in a hidden flash area of
+// RB_STREAM_SLOTS program sizes after the program's (RB_STREAM_FLASH), so every
+// flash slot is the user's.
 static int RBInPsram(void)
 {
     return PSRAMsize != 0;
-}
-
-// While OPTION COMPILE is on, a stream in flash slot 2 makes that slot not the
-// user's: saving, loading, erasing or running it would destroy the stream or
-// run it as a program.
-void RBGuardFlashSlot(int slot)
-{
-    if (RBMode == RB_OFF || RBInPsram() || slot != RB_FLASH_SLOT)
-        return;
-    error("Flash slot % holds the compiled program: OPTION COMPILE OFF first", slot);
 }
 
 /* ---------------------------------------------------------------------------
@@ -101,6 +90,7 @@ static uint32_t RBRan = 0;  // statements run from the stream since RUN
 static uint32_t RBMiss = 0; // map lookups the cache did not answer (a bucket search each)
 static uint32_t RBCode = 0; // statements run as compiled code since RUN
 static const char *RBWhy = NULL; // why the last RUN ran as text
+static uint32_t RBNeed = 0;      // what the last compile needed of the slot, in bytes
 
 // A stream is tied to the firmware that wrote it: a record holds command
 // token numbers, which another build may number differently.  And to the
@@ -115,19 +105,19 @@ static uint8_t *RBSlotBase(void)
 {
     if (RBInPsram())
         return (uint8_t *)PSRAMstream;
-    return (uint8_t *)(flash_target_contents + (RB_FLASH_SLOT - 1) * MAX_PROG_SIZE);
+    return (uint8_t *)(XIP_BASE + RB_STREAM_FLASH);
 }
 
 // the most the stream may take
 static uint32_t RBSlotSize(void)
 {
-    return RBInPsram() ? PSRAMstreamsize : MAX_PROG_SIZE;
+    return RBInPsram() ? PSRAMstreamsize : RB_STREAM_FLASH_SIZE;
 }
 
-// the flash offset of the slot, for safe_flash_range_erase/program
+// the flash offset of the area, for safe_flash_range_erase/program
 static uint32_t RBSlotFlashOffset(void)
 {
-    return FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + (RB_FLASH_SLOT - 1) * MAX_PROG_SIZE;
+    return RB_STREAM_FLASH;
 }
 
 /* The writers.  RBWriteBegin erases the flash the stream will need (in
@@ -2933,6 +2923,7 @@ static void RBCompile(rbheader_t *h)
     codeoff = RB_PAGEUP(h->tabof + C.ntab * 2);
     h->codeoff = codeoff;
     h->codelen = C.codelen;
+    RBNeed = codeoff + C.codelen;
     if (C.toolong || C.stmts > 0xFFFF || codeoff + C.codelen > RBSlotSize())
     {
         W.full = 1;
@@ -4545,6 +4536,14 @@ void RBStatus(char *out)
     {
         strcpy(out, "TEXT: ");
         strcat(out, RBWhy);
+        if (RBNeed > RBSlotSize())
+        { // what it needed, of what there is
+            strcat(out, " (");
+            IntToStr(out + strlen(out), RBNeed, 10);
+            strcat(out, " of ");
+            IntToStr(out + strlen(out), RBSlotSize(), 10);
+            strcat(out, " bytes)");
+        }
     }
     else
     {
@@ -4560,6 +4559,10 @@ void RBStatus(char *out)
         IntToStr(out + strlen(out), RBMiss, 10);
         strcat(out, " CODE ");
         IntToStr(out + strlen(out), RBCode, 10);
+        strcat(out, " SIZE "); // the stream's bytes, of the slot's
+        IntToStr(out + strlen(out), ((const rbheader_t *)RBSlotBase())->codeoff + ((const rbheader_t *)RBSlotBase())->codelen, 10);
+        strcat(out, " OF ");
+        IntToStr(out + strlen(out), RBSlotSize(), 10);
     }
 }
 #endif // rp2350

@@ -47,8 +47,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 extern int RBMode; // OPTION COMPILE ON | OFF | SHADOW: a development switch, not saved
 
 // Where the stream lives: with PSRAM, a region of its own above the RAM slots
-// (PSRAMstream); without, flash slot 2, which the slot commands then refuse.
-void RBGuardFlashSlot(int slot); // refuse a command on the flash slot that holds the stream
+// (PSRAMstream); without, a hidden flash area after the program's
+// (RB_STREAM_FLASH in configuration.h).  Neither is a slot of the user's.
 
 // P1b: the stamp.  PrepareProgram(true) compares a CRC of the program and
 // library with the one the stream was compiled from, and compiles again only
@@ -74,7 +74,6 @@ unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, u
 // handlers it calls (findvar, cmd_next) evict each other from the 16 KB XIP
 // cache: pixart ran 29% slower compiled than as text.  These compile away.
 #define RBLive 0
-static inline void RBGuardFlashSlot(int slot) { (void)slot; }
 static inline void RBPrepare(void) {}
 static inline int RBInImage(unsigned char *p) { (void)p; return 0; }
 static inline unsigned char *RunStream(unsigned char *p) { return p; }
