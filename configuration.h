@@ -182,7 +182,7 @@ extern "C"
 #else
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
-#define MAXLOCALVARS 192
+#define MAXLOCALVARS 240 // RC2's (Peter, 2026-09-29): 2880 bytes, leaving VGA 0.8 KB and VGAUSB 0.5 KB of RAM margin
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define MAXMODES 2
 #define MAX_CPU 378000
@@ -273,7 +273,7 @@ extern "C"
 #define MagicKey 0x6E75BE94
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
-#define MAXLOCALVARS 192
+#define MAXLOCALVARS 192 // (not RC2's 240: this variant's RAM is 1.4 KB short of it)
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define HEAP_MEMORY_SIZE (88 * 1024)
    /* +16 KB (2026-09-29): 8.0 KB over (on development already, before P6). */
@@ -365,11 +365,7 @@ extern "C"
 
 #else                     // RP2040
 #define MAXGLOBALVARS 256 // Configurable split
-#ifdef PICOMITEMIN
-#define MAXLOCALVARS 240 // RC2's: PICOMIN has the RAM for it (Peter, 2026-09-29)
-#else
-#define MAXLOCALVARS 192
-#endif
+#define MAXLOCALVARS 240 // RC2's (Peter, 2026-09-29): 2880 bytes of RAM (48 x 56-byte entries + g_hashlist)
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define MAX_CPU 420000
 #define MAXSUBFUN 256
