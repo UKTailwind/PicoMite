@@ -109,6 +109,25 @@ Next
 r = Twice(m(2, 1 + 1)) + m(2, 2)
 Print m(1, 1); m(2, 2); r
 """, None),
+    # BYVAL's array check looked at g_vartbl[0] for an expression argument: with
+    # an array in slot 0 (a SUB whose first parameter is one) "5" was an array
+    ("byval expression, array in slot 0", """Dim Integer d(3)
+Sub Inner(ByVal n As Integer, a() As Integer)
+  Print "inner"; n; a(1)
+End Sub
+Sub Outer(x() As Integer)
+  Inner 5, x()
+  Inner 2 + 3, x()
+End Sub
+d(1) = 42
+Outer d()
+""", None),
+    ("byval array refused", """Dim Integer d(3)
+Sub T(ByVal a)
+  Print a
+End Sub
+T d()
+""", None),
     # &H, &O and &B literals, read by getvalue itself
     ("based literals", """Dim Integer i, s, t
 For i = 1 To 100

@@ -2647,6 +2647,26 @@ static struct s_sublayout MIPS16 *SubLayoutBuild(int index, unsigned char *p, un
     return L;
 }
 
+// BYVAL refuses an array (an element of one is fine).  Only a variable can be
+// one: DefinedSubFun calls this only for a variable argument, since an
+// expression's argVarIndex is 0, which is some other variable (a SUB whose
+// first parameter was an array got "Array as BYVAL not allowed" for an
+// expression passed BYVAL).  In flash: it runs for BYVAL parameters only.
+static __attribute__((noinline)) void ByValArrayCheck(unsigned char *arg, int vindex)
+{
+    unsigned char *tp = arg;
+    if (!DimIsRealArray(RAW_DIM(g_vartbl[vindex], 0)))
+        return;
+    do
+    {
+        tp++;
+    } while (*tp != '('); // an array or an element: its bracket
+    tp++;
+    skipspace(tp);
+    if (*tp == ')')
+        error("Array as BYVAL not allowed $", arg);
+}
+
 #if LOWRAM
 void MIPS16 DefinedSubFun(int isfun, unsigned char *cmd, int index, MMFLOAT *fa, long long int *i64a, unsigned char **sa, int *typ)
 {
@@ -2900,24 +2920,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
             // BYVAL or BYREF in the sub/fun definition (as read on its first call)
             argbyref[i] = 0;
             if (L->p[i >> 1].by == SL_BYVAL)
-            { // if BYVAL
-                // Only if not an array remove any pointer flag in the caller
-                argtype[i] = 0;
-
-                // Trap an array but not an array element
-                if (DimIsRealArray(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
-                {
-                    /* See if we have an array or an array element */
-                    tp = argv1[i];
-                    do
-                    {
-                        tp++;
-                    } while (*tp != '('); // We should find a '(' because it must be an array or and array element to get here
-                    tp++;
-                    skipspace(tp);
-                    if (*tp == ')')
-                        error("Array as BYVAL not allowed $", argv1[i]);
-                }
+            { // if BYVAL: an array is refused (only a variable argument can be one)
+                if (argtype[i] & T_PTR)
+                    ByValArrayCheck(argv1[i], argVarIndex[i]);
+                argtype[i] = 0; // (and the caller's pointer flag removed)
             }
             else if (L->p[i >> 1].by == SL_BYREF)
             { // if BYREF
