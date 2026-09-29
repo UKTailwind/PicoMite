@@ -23,4 +23,14 @@ while time.time() - t0 < 25 and not d:
 if not d:
     sys.exit("NO BOOT DRIVE after 25 s - check the USB switch / lead")
 print("boot drive", d, "after %.1fs:" % (time.time() - t0), open(d + "INFO_UF2.TXT").read().split("\n")[1:3])
-t1 = time.time(); shutil.copy(uf2, d); print("copied %s in %.1fs" % (os.path.basename(uf2), time.time() - t1))
+t1 = time.time()
+for attempt in range(4):  # the drive can still be mounting when it first appears (OSError 22)
+    try:
+        shutil.copy(uf2, d)
+        break
+    except OSError as ex:
+        print("copy failed (%s), retrying" % ex)
+        time.sleep(3)
+else:
+    sys.exit("COPY FAILED - the board is in its bootloader at " + d)
+print("copied %s in %.1fs" % (os.path.basename(uf2), time.time() - t1))
