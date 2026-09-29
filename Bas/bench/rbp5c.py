@@ -140,6 +140,21 @@ Mode 1
     ("map error", """Dim Integer c
 c = Map(3)
 """, None),
+    ("colour rgb", """Dim Integer i, s
+For i = 0 To 40
+  Colour RGB(i * 6, 255 - i * 6, i), RGB(BLACK)
+  s = s + RGB(i, i * 2, i * 3) Mod 1000
+  Pixel i, 20, RGB(Red)
+  Color RGB(white)
+Next
+Print s; RGB(GREEN); RGB(Beige); RGB(lightgrey)
+""", 180),
+    ("rgb range error", """Print RGB(1, 2, 3)
+Print RGB(1, 2, 256)
+""", None),
+    ("rgb name error", """Dim Integer c
+c = RGB(Purple)
+""", None),
     ("speed", """Dim a$ = "The quick brown fox", i, n, b$
 Timer = 0
 For i = 1 To 5000

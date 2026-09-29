@@ -929,7 +929,7 @@ static void RBCvif(rbcx_t *x);
 static int RBEvaluateS(rbcx_t *x, unsigned char **pp);
 
 /* P5c: a string function at *pp through the value splice (see RBFnSpliceRun),
-   and MAP( (P5d):
+   and MAP( and RGB( (P5d):
    its arguments compiled onto the VM's stack, as getvalue would have them
    evaluated, and in the code a copy of its argument text with each value
    T_VALUE and a letter ('A'+i an integer, 'a'+i a float, '0'+i a string),
@@ -945,7 +945,7 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
     void (*fn)(void) = tokenfunction(c);
     int n = 0, len = 0, t, rt, i, calls = x->calls, types[16];
     if (fn != fun_len && fn != fun_asc && fn != fun_chr && fn != fun_mid && fn != fun_instr && fn != fun_str &&
-        fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base
+        fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base && fn != fun_rgb
 #if defined(PICOMITEVGA) || PICOMITERP2350
         && fn != fun_map // (where the build has MAP(: a colour from getint, and no argument text in its errors)
 #endif
@@ -955,6 +955,31 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
     if (rt != T_NBR && rt != T_INT && rt != T_STR)
         return 0; // (every one of them has one)
     p++; // (the token's bracket is part of it)
+    if (fn == fun_rgb)
+    { // RGB(name): fun_rgb reads its one argument as a colour's name, which getvalue
+      // would spell out for it: the spelling goes in the text, with no values
+        unsigned char *q = p;
+        const unsigned char *sp = NULL;
+        int slen = 0;
+        skipspace(q);
+        if (issymbol(*q))
+        {
+            sp = SymSpelling(q, &slen);
+            q += symbolsize(*q);
+            skipspace(q);
+        }
+        if (sp != NULL && *q == ')' && slen <= (int)sizeof(txt) - 2)
+        { // a name alone (a name with a suffix, or in an expression, goes on below)
+            memcpy(txt, sp, slen);
+            txt[slen] = 0;
+            RBOp(x, RC_FSPLICE | (((slen + 2) / 2) << 8), 1);
+            RBOp(x, 0 | (c << 8), 0);
+            for (i = 0; i < slen + 1; i += 2)
+                RBOp(x, txt[i] | ((i + 1 < slen + 1 ? txt[i + 1] : 0) << 8), 0);
+            *pp = RBNextOp(q + 1, op);
+            return rt;
+        }
+    }
     if (fn == fun_schange)
     { // tokenise's selector: E LEFT$, R RIGHT$, U UCASE$, L LCASE$
         if (!(p[0] == 'E' || p[0] == 'R' || p[0] == 'U' || p[0] == 'L') || p[1] != ',')
@@ -988,6 +1013,8 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
         return 0; // the pattern forms: a variable for the match's length
     if (fn == fun_trim && n > 2)
         return 0; // its third argument can be a keyword
+    if (fn == fun_rgb && n != 3)
+        return 0; // one argument is a name (above), any other count fun_rgb's error
     txt[len++] = 0;
     RBOp(x, RC_FSPLICE | (((len + 1) / 2) << 8), 1 - n);
     RBOp(x, n | (c << 8), 0);
@@ -1700,22 +1727,23 @@ static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char
    the IF table gives, looked up as cmd_else looks it up (its token taken to
    be just before cmdline); ELSE checks its end first.  CONTINUE FOR runs its
    loop's NEXT (RC_CONTFOR); CONTINUE DO and plain CONTINUE stay text. */
-/* P5b: BOX, LINE and PIXEL through the value splice (see RBSpliceCmd): 0 if
-   the compiler cannot take every argument, or for another form. */
+/* P5b: BOX, LINE and PIXEL through the value splice (see RBSpliceCmd), and
+   COLOUR (P5d): 0 if the compiler cannot take every argument, or for another
+   form. */
 static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandToken ct, uint16_t *code)
 {
     rbcx_t x;
     void (*fn)(void) = commandtbl[ct].fptr;
     unsigned char *p = cmdl, *ae, txt[2 * RB_MAXLIT];
     int n = 0, len = 0, t, i;
-    if (fn != cmd_box && fn != cmd_line && fn != cmd_pixel)
+    if (fn != cmd_box && fn != cmd_line && fn != cmd_pixel && fn != cmd_colour)
         return 0;
     if (fn == cmd_line && (checkstring(p, (unsigned char *)"PLOT") || checkstring(p, (unsigned char *)"GRAPH") || checkstring(p, (unsigned char *)"AA")))
         return 0; // the forms whose arguments are arrays or keywords
     memset(&x, 0, sizeof(x));
     x.entry = entry; // (x.calls 0: no FUNCTION call, which getargaddress would make twice)
-    if (fn != cmd_box)
-        RBOp(&x, RC_GUARD, 0); // LINE and PIXEL read OPTION LEGACY's syntax when it is on
+    if (fn == cmd_line || fn == cmd_pixel)
+        RBOp(&x, RC_GUARD, 0); // LINE and PIXEL read OPTION LEGACY's syntax when it is on (COLOUR's getColour maps its colours itself)
     while (1)
     {
         ae = RBArgEnd(p, 0); // as getcsargs splits them
