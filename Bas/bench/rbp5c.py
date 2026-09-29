@@ -126,6 +126,20 @@ End Function
 Dim a$ = "xy"
 Print Len(Two$(a$)); Left$(Two$(a$), 3)
 """, None),
+    ("map", """Mode 2
+Dim Integer i, s, c
+For i = 0 To 15 : s = s + Map(i) : Next
+For i = 0 To 30
+  c = i Mod 16
+  Pixel 10 + i, 10, Map(c)
+  Line 0, i, 20, i + 5, 1, Map(15 - c)
+Next
+Print s; Map(7); Map(7.4)
+Mode 1
+""", 140),
+    ("map error", """Dim Integer c
+c = Map(3)
+""", None),
     ("speed", """Dim a$ = "The quick brown fox", i, n, b$
 Timer = 0
 For i = 1 To 5000

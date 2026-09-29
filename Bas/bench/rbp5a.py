@@ -1,5 +1,6 @@
 """rbp5a.py PORT - Route B P5a: the pure numeric built-in functions (SIN,
-COS, TAN, ATN, SQR, EXP, LOG, DEG, RAD, INT, FIX, ABS, SGN, PI) compiled
+COS, TAN, ATN, SQR, EXP, LOG, DEG, RAD, INT, FIX, ABS, SGN, PI, and RND,
+whose values the programs do not print) compiled
 (docs/Interpreter_RouteB_Design.html).  Every program runs with OPTION
 COMPILE OFF, ON and SHADOW and must print the same, errors included; a line
 starting TIME is left out of the comparison and shown.  Leaves OPTION
@@ -132,6 +133,24 @@ For i = 0 To 20
   deps = (xnut(8, i) + xnut(9, i) * t) * Cos(arg) + xnut(11, i) * Sin(arg) + deps
 Next
 Print dpsi; deps
+""", True),
+    ("rnd", """Dim Float r, lo = 1, hi = 0
+Dim Integer i, n, k
+For i = 1 To 2000
+  r = Rnd
+  If r < lo Then lo = r
+  If r > hi Then hi = r
+  If Rnd >= 0 And Rnd < 1 Then Inc n
+  Inc k, Int(Rnd(7) * 0)
+Next
+Do While Rnd < 2
+  Inc k
+  If k > 20 Then Exit Do
+Loop
+Do
+  Inc k
+Loop Until Rnd >= 0
+Print lo >= 0; hi < 1; lo < 0.05; hi > 0.95; n; k
 """, True),
     ("speed", """Dim Float x, s
 Dim Integer i

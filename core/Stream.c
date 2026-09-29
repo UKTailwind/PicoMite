@@ -61,7 +61,7 @@ static int RBInPsram(void)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 31       // the stream format
+#define RB_VERSION 32       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -93,12 +93,20 @@ static const char *RBWhy = NULL; // why the last RUN ran as text
 static uint32_t RBNeed = 0;      // what the last compile needed of the slot, in bytes
 
 // A stream is tied to the firmware that wrote it: a record holds command
-// token numbers, which another build may number differently.  And to the
-// mode: SHADOW compiles its checks in, ON leaves them out.
+// token numbers, which another build may number differently, and the code
+// the build compiles.  So the id has the build itself in it, when this file
+// was compiled and where the image ends (PSRAM and the flash area keep a
+// stream across a firmware update, and RB_VERSION alone missed that).  And
+// the mode: SHADOW compiles its checks in, ON leaves them out.
+extern char __flash_binary_end;
 static uint32_t RBBuildId(void)
 {
+    const char *s = __DATE__ __TIME__;
+    uint32_t h = 2166136261u; // FNV-1a
+    while (*s)
+        h = (h ^ (unsigned char)*s++) * 16777619u;
     return ((uint32_t)RB_VERSION << 24) ^ ((uint32_t)CommandTableSize << 12) ^ (uint32_t)TokenTableSize ^
-           (uint32_t)MAX_PROG_SIZE ^ (RBMode == RB_SHADOW ? 0x80000000u : 0);
+           (uint32_t)MAX_PROG_SIZE ^ (RBMode == RB_SHADOW ? 0x80000000u : 0) ^ h ^ (uint32_t)&__flash_binary_end;
 }
 
 static uint8_t *RBSlotBase(void)
@@ -407,7 +415,8 @@ enum
     RC_CONTFOR,  // CONTINUE FOR: the loop's NEXT, run as cmd_next runs it
     RC_FN,       // built-in function a (RF_) on the top, as its fun_ handler computes it (RBFn)
     RC_LOCAL,    // LOCAL of the a names whose offsets follow, as cmd_dim makes them (RBLocal)
-    RC_GUARD,    // to the fallback before anything happens if OPTION LEGACY (CMM1) is on
+    RC_GUARD,    // to the fallback before anything happens if OPTION LEGACY (CMM1) is on, or (a) OPTION DEFAULT
+                 // is not what the FUNCTION calls need (bit 0: a number, 1: float, 2: integer)
     RC_SPLICE,   // the command, its n values (the next word) on the stack, its spliced text (a words) after (RBSpliceCmd)
     RC_FSPLICE,  // a built-in function: n | token << 8 (the next word), its n values on the stack, its spliced text (a words) after (RBFnSpliceRun)
     RC_DUPLD,    // push the value at the address on the top, keeping the address (INC of an element)
@@ -431,6 +440,7 @@ enum
     RF_ABSI,
     RF_SGNF,
     RF_SGNI,
+    RF_RND, // no argument: RndVal() replaces the cell pushed for it
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -763,7 +773,9 @@ typedef struct
     uint16_t w[RB_MAXCODE];
     int n, depth, maxdepth, fail;
     int lk; // 1 + where the last RC_LK's constant starts, 0: none (see RBCvif)
-    int calls, ncall; // a FUNCTION call may compile here (LET, IF); how many did (see RBFcall)
+    int calls, ncall; // a FUNCTION call may compile here (LET, IF, INC); how many did (see RBFcall), RND's
+                      // too: no SHADOW check of a statement with one, which the text would make again
+    int gbits;        // what the calls need of OPTION DEFAULT: RBFinish's guard (see RBFcall)
 } rbcx_t;
 
 static void RBOp(rbcx_t *x, int w, int cells)
@@ -916,7 +928,8 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op);
 static void RBCvif(rbcx_t *x);
 static int RBEvaluateS(rbcx_t *x, unsigned char **pp);
 
-/* P5c: a string function at *pp through the value splice (see RBFnSpliceRun):
+/* P5c: a string function at *pp through the value splice (see RBFnSpliceRun),
+   and MAP( (P5d):
    its arguments compiled onto the VM's stack, as getvalue would have them
    evaluated, and in the code a copy of its argument text with each value
    T_VALUE and a letter ('A'+i an integer, 'a'+i a float, '0'+i a string),
@@ -932,7 +945,11 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
     void (*fn)(void) = tokenfunction(c);
     int n = 0, len = 0, t, rt, i, calls = x->calls, types[16];
     if (fn != fun_len && fn != fun_asc && fn != fun_chr && fn != fun_mid && fn != fun_instr && fn != fun_str &&
-        fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base)
+        fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base
+#if defined(PICOMITEVGA) || PICOMITERP2350
+        && fn != fun_map // (where the build has MAP(: a colour from getint, and no argument text in its errors)
+#endif
+    )
         return 0;
     rt = tokentype(c) & (T_NBR | T_INT | T_STR);
     if (rt != T_NBR && rt != T_INT && rt != T_STR)
@@ -997,6 +1014,25 @@ static int RBFunction(rbcx_t *x, unsigned char **pp, int *op)
         x->lk = x->n + 1;
         for (id = 0; id < 4; id++)
             RBOp(x, k.w[id], 0);
+        *pp = RBNextOp(p + 1, op);
+        return T_NBR;
+    }
+    if (fn == fun_rnd)
+    { // fun_rnd's RndVal() into a cell pushed for it.  fun_rnd reads no argument, so
+      // RND( ... )'s is not evaluated.  SHADOW leaves the statement unchecked (ncall):
+      // its text evaluator would draw another number and move the sequence on
+        if (tokentype(c) & T_FUN)
+        {
+            unsigned char *q = RBArgEnd(p + 1, ')');
+            if (*q != ')')
+                return 0;
+            p = q;
+        }
+        RBOp(x, RC_LK, 1);
+        for (id = 0; id < 4; id++)
+            RBOp(x, 0, 0);
+        RBOp(x, RC_FN | (RF_RND << 8), 0);
+        x->ncall++;
         *pp = RBNextOp(p + 1, op);
         return T_NBR;
     }
@@ -1073,13 +1109,13 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
             *pp = p;
             return t;
         }
-        if (q == NULL && issymbol(c) && !x->ncall && (t = RBElement(x, &p, RC_LDEL, 0)) != 0)
+        if (q == NULL && issymbol(c) && (t = RBElement(x, &p, RC_LDEL, 0)) != 0)
         {
             *pp = RBNextOp(p, op);
             return t;
         }
-        if (q == NULL || x->ncall || (j = RBBindK(x, p, suf, 0, 0, 1)) < 0)
-            return 0; // (after a call a variable is looked up again: DefinedSubFun's caller does)
+        if (q == NULL || (j = RBBindK(x, p, suf, 0, 0, 1)) < 0)
+            return 0; // (after a call that moved the bind stamp, L_FCALL binds it again)
         RBOp(x, (x->bind[j][1] == T_STR ? RC_LDS : RC_LDG) | (j << 8), 1);
         *pp = RBNextOp(q, op);
         return x->bind[j][1];
@@ -1255,8 +1291,6 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
 {
     unsigned char *q, *rhs;
     int tsuf, tgt, ttype, t;
-    if (x->ncall)
-        return NULL; // a call before: cmd_let would find its target after it
     if ((q = RBVarRefS(p, &tsuf)) == NULL)
     { // an element: its address first, as cmd_let's findvar makes it before the right-hand side
         q = p;
@@ -1306,6 +1340,15 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
 static int RBFinish(rbcx_t *x, uint16_t *code)
 {
     int n = 0, j;
+    if (x->gbits && !x->fail)
+    { // the statement's FUNCTION calls need OPTION DEFAULT's type: checked first,
+      // before any runs (see RBFcall; the code's jumps are relative)
+        if (x->n >= RB_MAXCODE)
+            return 0;
+        memmove(x->w + 1, x->w, x->n * 2);
+        x->w[0] = RC_GUARD | (x->gbits << 8);
+        x->n++;
+    }
     if (x->fail || x->maxdepth > RB_MAXDEPTH || 1 + 2 * x->nbind + x->n > RB_MAXCODE)
         return 0;
     if (1 + 2 + 4 * x->nbind + x->n > RB_MAXCODE)
@@ -1562,20 +1605,25 @@ static int RBCompileCall(unsigned char *entry, unsigned char *tok, uint16_t *cod
 
 /* P3d: a call to a user FUNCTION in an expression, as getvalue makes it (a
    name with a bracket straight after it).  RC_FCALL does what DefinedSubFun
-   does for a FUNCTION (see RBCallFun).  Once it has run the statement cannot
-   go to its fallback, which would run the call again, so: only where the
-   statement allows it (LET and IF: FOR and DO have done their stack work
-   before their expressions), one call a statement, arguments free of calls,
-   and no variable used after it but a LET's own target, which cmd_let finds
-   before it evaluates (the callee may erase or make variables).  Left to
-   DefinedSubFun: a FUNCTION without a type (OPTION DEFAULT's), a string or
-   array result, and what RBCompileCall leaves. */
+   does for a FUNCTION (see RBCallFun).  Once one has run the statement
+   cannot go to its fallback, which would make the call again, so calls
+   compile only where the statement allows it (LET, IF and INC: FOR and DO
+   have done their stack work before their expressions), and what could send
+   a call to DefinedSubFun is checked before the first: gosubindex, which is
+   the same at every call of a statement, and OPTION DEFAULT, by the guard
+   RBFinish puts at the start (gbits).  A call that erases a variable or
+   changes OPTION DEFAULT moves the bind stamp, and L_FCALL then binds the
+   statement's variables again (RBRebind), as the text evaluator finds them
+   after the call.  A FUNCTION without a type of its own has OPTION DEFAULT's
+   at the call: taken to be the one in force here in text order (float
+   without one).  Left to DefinedSubFun: a string or array result, DEFAULT
+   NONE or STRING for an untyped one, and what RBCompileCall leaves. */
 static int RBFcall(rbcx_t *x, unsigned char **pp, int *op)
 {
     rbparams_t pr;
     unsigned char *p = *pp, *q, *def, *d, *fn;
-    int idx, suf, dsuf, t, ftype, astype = 0, nval;
-    if (!x->calls || x->ncall)
+    int idx, suf, dsuf, t, ftype, astype = 0, nval, fdef = 0;
+    if (!x->calls)
         return 0;
     q = p + symbolsize(*p);
     suf = RBSuffix(&q);
@@ -1610,8 +1658,14 @@ static int RBFcall(rbcx_t *x, unsigned char **pp, int *op)
         ftype = t;
         astype = t | T_IMPLIED;
     }
+    if (!ftype && (C.deftype == T_INT || C.deftype == T_NBR))
+    { // untyped: the result OPTION DEFAULT gives it (bit 1 float, bit 2 integer
+      // beside the parameters' bit 0), which the guard checks
+        ftype = C.deftype;
+        fdef = ftype == T_NBR ? 2 : 4;
+    }
     if (ftype != T_INT && ftype != T_NBR)
-        return 0; // a string, or OPTION DEFAULT's type
+        return 0; // a string, or DEFAULT NONE or STRING
     d = def;
     skipelement(d);
     if (d - def > 255)
@@ -1623,7 +1677,8 @@ static int RBFcall(rbcx_t *x, unsigned char **pp, int *op)
     RBOp(x, RC_FCALL | (pr.np << 8), 1 - nval);
     RBOp(x, idx, 0);
     RBOp(x, nval, 0);
-    RBOp(x, (d - def) | (pr.untyped << 8), 0);
+    RBOp(x, (d - def) | ((pr.untyped | fdef) << 8), 0);
+    x->gbits |= pr.untyped | fdef;
     RBOp(x, (fn + symbolsize(*fn) + (suf ? 1 : 0) - fn) | ((fn - def) << 8), 0); // the result's name, for findvar
     RBOp(x, astype, 0);
     RBParamOps(x, &pr);
@@ -1691,14 +1746,19 @@ static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandTok
     return RBFinish(&x, code);
 }
 
-// P5c: INC var [, value], as cmd_inc does it (see the RC_ ops): 0 if another form
+// P5c: INC var [, value], as cmd_inc does it (see the RC_ ops): 0 if another form.
+// cmd_inc finds the variable and reads it before it evaluates the value (GCC's
+// order for its *p = *p + getnumber(...)), so the code does too, and a FUNCTION
+// in the value that changes the variable does not change what the value is
+// added to.
 static int RBCompileInc(unsigned char *entry, unsigned char *cmdl, uint16_t *code)
 {
     rbcx_t x;
     unsigned char *p = cmdl, *q, *rhs;
     int suf, j, vt, t, i;
     memset(&x, 0, sizeof(x));
-    x.entry = entry; // (x.calls 0: no FUNCTION call in the value)
+    x.entry = entry;
+    x.calls = 1;
     skipspace(p);
     if ((q = RBVarRefS(p, &suf)) != NULL)
     { // a scalar: bound as a target (a CONST sends the record to cmd_inc's error)
@@ -1755,8 +1815,8 @@ static int RBCompileInc(unsigned char *entry, unsigned char *cmdl, uint16_t *cod
             else
                 RBOp(&x, RC_CVFI, 0);
         }
-        if (RBMode == RB_SHADOW && vt != T_STR)
-        {
+        if (RBMode == RB_SHADOW && vt != T_STR && !x.ncall)
+        { // (not with a call, which the text evaluator would make again)
             RBOp(&x, RC_SHADOW | ((rhs - entry) << 8), 0);
             RBOp(&x, vt, 0);
         }
@@ -2252,7 +2312,7 @@ static int RBForPart(rbcx_t *x, unsigned char **pp, int vt)
         else
             RBOp(x, RC_CVFI, 0);
     }
-    if (RBMode == RB_SHADOW)
+    if (RBMode == RB_SHADOW && !x->ncall)
     {
         RBOp(x, RC_SHADOW | ((ex - x->entry) << 8), 0);
         RBOp(x, vt, 0);
@@ -2390,7 +2450,7 @@ static int RBCompileDo(unsigned char *entry, unsigned char *base, uint32_t libbi
         skipspace(p);
         if (*p && *p != '\'')
             return 0;
-        if (RBMode == RB_SHADOW)
+        if (RBMode == RB_SHADOW && !x.ncall)
         {
             RBOp(&x, RC_SHADOWC | ((cond - entry) << 8), 0);
             RBOp(&x, t, 0);
@@ -2440,7 +2500,7 @@ static int RBCompileLoop(unsigned char *entry, unsigned char *base, uint32_t lib
         skipspace(p);
         if (*p && *p != '\'')
             return 0;
-        if (RBMode == RB_SHADOW)
+        if (RBMode == RB_SHADOW && !x.ncall)
         {
             RBOp(&x, RC_SHADOWCK, 0);
             RBOp(&x, t, 0);
@@ -3360,9 +3420,24 @@ static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union
 // runs it.  Returns 0, before anything has happened, if DefinedSubFun must
 // do it.  In flash, as RBCallSub.
 extern uint32_t heapend; // MMBasic.c: the stack's floor
-static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union cell **slot, union cell *val, union cell *res)
+// RC_GUARD's check for a record's FUNCTION calls (see RBFinish), and RBCallFun's:
+// OPTION DEFAULT is not what they need (bit 0: a number, 1: float, 2: integer);
+// with no bits, RC_GUARD's other use: OPTION LEGACY (CMM1) is on.  In flash.
+static __attribute__((noinline)) int RBDefaultBad(int b)
+{
+    if (!b)
+        return CMM1;
+    return ((b & 1) && DefaultType != T_INT && DefaultType != T_NBR) || ((b & 2) && DefaultType != T_NBR) ||
+           ((b & 4) && DefaultType != T_INT);
+}
+
+static void RBRebind(const uint16_t *r, union cell **slot);
+static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union cell **slot, union cell *val, union cell *res,
+                                               const uint16_t *r)
 {
     int idx = pc[0], ftype, savetoken;
+    // what can change the binds at the caller's level (as RBRun's gen)
+    uint32_t g0 = g_LocalIndex < SYM_LEVELS ? SymBindGenG + SymLevelGen[g_LocalIndex] : 0, g1;
     unsigned char *def = subfun[idx], *callers = CurrentLinePtr, nm[MAXVARLEN + 8], *tp, *savecmdline, *savenext;
     uint32_t stack;
     // TestStackOverflow (MMBasic.c), which the text path's evaluator makes at every
@@ -3370,8 +3445,10 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
     __asm volatile("MRS %0, msp" : "=r"(stack));
     if (stack < heapend)
         error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)heapend);
-    if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
-        return 0;
+    if (gosubindex >= MAXGOSUB)
+        return 0; // (the same at every call of the statement: only its first can find it so)
+    if ((pc[2] >> 8) && RBDefaultBad(pc[2] >> 8))
+        error("OPTION DEFAULT changed by a FUNCTION in this statement"); // (the record's guard held at its start)
     g_FunReturnArrayCount = 0;
     DefinedSubFunLocalIndex = g_LocalIndex;
     errorstack[gosubindex] = callers;
@@ -3407,6 +3484,9 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
 #endif
     g_TempMemoryIsChanged = true;
     gosubindex--;
+    g1 = g_LocalIndex < SYM_LEVELS ? SymBindGenG + SymLevelGen[g_LocalIndex] : 0;
+    if (g1 != g0 || !g1)
+        RBRebind(r, slot); // the call erased a variable or changed OPTION DEFAULT
     return 1;
 }
 
@@ -3482,6 +3562,9 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
         break;
     case RF_SGNF:
         v->i = FnSgnF(v->f);
+        break;
+    case RF_RND:
+        v->f = RndVal();
         break;
     default: // RF_SGNI: fun_sgn's integer case
         v->i = (v->i > 0LL) - (v->i < 0LL);
@@ -3715,6 +3798,57 @@ static __attribute__((noinline)) void RBDoPush(unsigned char *doptr, unsigned ch
     g_doindex++;
 }
 
+/* A record's binds: its nb entries at c, into slot, as RBRun makes them at
+   its start.  0 if one does not hold.  Always inlined: RBRun's copy is in
+   RAM, RBRebind's in flash. */
+static inline __attribute__((always_inline)) int RBBindAll(const uint16_t *c, unsigned int nb, union cell **slot)
+{
+    unsigned int j;
+    for (j = 0; j < nb; j++, c += 2)
+    {
+        unsigned int id = (c[0] & RC_IDMASK) + ((c[0] & RC_LIB) ? SymCanonLibBase : 0), sc;
+        int k, i, suf = (0x2410 >> ((c[0] >> 10) & 0xC)) & 0xF; // RC_SUF bits: 0, T_NBR, T_INT, T_STR
+        struct s_vartbl *v;
+        if (id < SymCanonCount && SymCanonOf && (sc = SymCanonOf[id]) != 0)
+            k = sc - 1;
+        else if ((k = SymCanonById(id)) < 0)
+            return 0;
+        i = SymL[k];
+        if (i < 0 || g_vartbl[i].level != g_LocalIndex)
+        { // not a local at this level: the global, if no text local can hide it
+            i = SymG[k];
+            if (i < 0 || (g_LocalIndex && SymTextLocals))
+                return 0; // not bound yet, or a text local may hide it: findvar decides
+        }
+        v = &g_vartbl[i];
+        if (((c[1] & RB_BARRAY) ? !DimIsRealArray(RAW_DIM(*v, 0)) : !DimIsScalar(RAW_DIM(*v, 0))) ||
+            (v->type & T_STRUCT) || (v->type & (T_INT | T_NBR | T_STR)) != (c[1] & (T_INT | T_NBR | T_STR)) ||
+            (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
+            ((c[0] & RC_TARGET) && (v->type & T_CONST)))
+            return 0;
+        if (c[1] & (RB_BARRAY | T_STR))
+        {
+            slot[j] = (union cell *)v; // an array or a string: its variable, for its dimensions or size and its data
+            continue;
+        }
+        // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
+        slot[j] = (v->type & T_PTR) ? (union cell *)v->val.s : (union cell *)&v->val;
+    }
+    return 1;
+}
+
+/* RBCallFun: a FUNCTION call moved the bind stamp (it erased a variable, or
+   changed OPTION DEFAULT), so the statement's variables are bound again, as
+   the text evaluator would find them after the call.  One that no longer
+   holds cannot go to the fallback, which would make the call again. */
+static __attribute__((noinline)) void RBRebind(const uint16_t *r, union cell **slot)
+{ // (slot may be the record's bind cache: its stamp is then already out of date)
+    const uint16_t *c = r + RB_HDR(r) + 1;
+    unsigned int nb = *c++;
+    if (!RBBindAll(c + 2, nb, slot))
+        error("A FUNCTION changed a variable of this statement");
+}
+
 /* Bind a compiled statement's variables and run its code.  *rp and *ep are
    its record and its text.  Returns the end it gave nextstmt, or NULL if a
    bind failed and the fallback must run.
@@ -3762,36 +3896,8 @@ again:
         slotp = (union cell **)cache; // what the binds found last time, used where it is
     else
     {
-    for (j = 0; j < nb; j++, c += 2)
-    {
-        unsigned int id = (c[0] & RC_IDMASK) + ((c[0] & RC_LIB) ? SymCanonLibBase : 0), sc;
-        int k, i, suf = (0x2410 >> ((c[0] >> 10) & 0xC)) & 0xF; // RC_SUF bits: 0, T_NBR, T_INT, T_STR
-        struct s_vartbl *v;
-        if (id < SymCanonCount && SymCanonOf && (sc = SymCanonOf[id]) != 0)
-            k = sc - 1;
-        else if ((k = SymCanonById(id)) < 0)
-            goto fail;
-        i = SymL[k];
-        if (i < 0 || g_vartbl[i].level != g_LocalIndex)
-        { // not a local at this level: the global, if no text local can hide it
-            i = SymG[k];
-            if (i < 0 || (g_LocalIndex && SymTextLocals))
-                goto fail; // not bound yet, or a text local may hide it: findvar decides
-        }
-        v = &g_vartbl[i];
-        if (((c[1] & RB_BARRAY) ? !DimIsRealArray(RAW_DIM(*v, 0)) : !DimIsScalar(RAW_DIM(*v, 0))) ||
-            (v->type & T_STRUCT) || (v->type & (T_INT | T_NBR | T_STR)) != (c[1] & (T_INT | T_NBR | T_STR)) ||
-            (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
-            ((c[0] & RC_TARGET) && (v->type & T_CONST)))
-            goto fail;
-        if (c[1] & (RB_BARRAY | T_STR))
-        {
-            slot[j] = (union cell *)v; // an array or a string: its variable, for its dimensions or size and its data
-            continue;
-        }
-        // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
-        slot[j] = (v->type & T_PTR) ? (union cell *)v->val.s : (union cell *)&v->val;
-    }
+    if (!RBBindAll(c, nb, slot))
+        goto fail;
     slotp = slot;
     if (RBCacheOK)
     { // keep them, the addresses first and the stamp last
@@ -4088,8 +4194,8 @@ again:
     L_FN: // a built-in function's work (RBFn)
             RBFn(w >> 8, sp - 1);
             RBNEXT();
-    L_GUARD:
-            if (CMM1)
+    L_GUARD: // OPTION LEGACY (CMM1) is on, or OPTION DEFAULT is not what the FUNCTION calls need (RBFinish)
+            if (RBDefaultBad(w >> 8))
                 goto fail;
             RBNEXT();
     L_SPLICE: // the command's handler, its arguments' values spliced (RBSpliceCmd)
@@ -4244,7 +4350,7 @@ again:
     L_FCALL: // DefinedSubFun for a FUNCTION (RBCallFun): its value replaces the arguments
         {
             union cell res;
-            if (!RBCallFun(pc, w >> 8, slotp, sp - pc[1], &res))
+            if (!RBCallFun(pc, w >> 8, slotp, sp - pc[1], &res, r))
                 goto fail;
             sp -= pc[1];
             *sp++ = res;
