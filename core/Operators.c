@@ -147,7 +147,11 @@ void __not_in_flash_func(op_add)(void)
 void __not_in_flash_func(op_subtract)(void)
 {
     if (targ & T_NBR)
+    {
         fret = farg1 - farg2;
+        if (fret == INFINITY) // as op_add and op_mul check theirs
+            StandardError(15);
+    }
     else
         iret = iarg1 - iarg2;
 }

@@ -4111,8 +4111,10 @@ again:
             sp--;
             RBNEXT();
     L_SUBF:
-            sp[-2].f = sp[-2].f - sp[-1].f;
             sp--;
+            sp[-1].f = sp[-1].f - sp[0].f;
+            if (sp[-1].i == RB_INF) // as op_subtract checks it
+                StandardError(15);
             RBNEXT();
     L_SUBI:
             sp[-2].i = sp[-2].i - sp[-1].i;
