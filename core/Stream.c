@@ -61,7 +61,7 @@ static int RBInPsram(void)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 32       // the stream format
+#define RB_VERSION 33       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -420,6 +420,7 @@ enum
     RC_SPLICE,   // the command, its n values (the next word) on the stack, its spliced text (a words) after (RBSpliceCmd)
     RC_FSPLICE,  // a built-in function: n | token << 8 (the next word), its n values on the stack, its spliced text (a words) after (RBFnSpliceRun)
     RC_DUPLD,    // push the value at the address on the top, keeping the address (INC of an element)
+    RC_PARTCHK,  // to the fallback if a bind in the mask (the next word) is unbound (RBPartCheck)
     RC_INCF,     // cmd_inc's float add: the two floats on the top, added with no overflow check
     RC_INCS,     // cmd_inc's string: pop a string and add it to string bind a (RBStoreStr)
 };
@@ -467,6 +468,7 @@ enum
 #define RC_LIB 0x4000    // bind: a library symbol (its id follows the program's in SymCanonOf)
 #define RC_IDMASK 0x0FFF // bind: the symbol id
 #define RB_BARRAY 0x100  // bind's type word: an array, bound to its variable (RC_LDEL, RC_ADEL)
+#define RB_BOPT 0x200    // bind's type word: may be unbound at the start (an IF part's: RBPartCheck)
 #define RB_MAXLIT 64     // the longest string literal the code keeps
 #define RB_MAXBIND 12
 #define RB_MAXCODE 160 // words of code one statement may compile to
@@ -776,6 +778,8 @@ typedef struct
     int calls, ncall; // a FUNCTION call may compile here (LET, IF, INC); how many did (see RBFcall), RND's
                       // too: no SHADOW check of a statement with one, which the text would make again
     int gbits;        // what the calls need of OPTION DEFAULT: RBFinish's guard (see RBFcall)
+    unsigned used;    // the binds met since it was cleared (bit j: bind j), and
+    unsigned opt;     // those that may be unbound at the start (RBPartCheck)
 } rbcx_t;
 
 static void RBOp(rbcx_t *x, int w, int cells)
@@ -807,6 +811,7 @@ static int RBBindK(rbcx_t *x, unsigned char *p, int suffix, int target, int arr,
                 return -1; // the name as an array and as a scalar: the text path's error
             if (target)
                 x->bind[j][0] |= RC_TARGET;
+            x->used |= 1u << j;
             return j;
         }
     if (x->nbind >= RB_MAXBIND)
@@ -844,6 +849,7 @@ static int RBBindK(rbcx_t *x, unsigned char *p, int suffix, int target, int arr,
     }
     x->bind[j][0] = w0 | (target ? RC_TARGET : 0);
     x->nbind++;
+    x->used |= 1u << j;
     return j;
 }
 
@@ -1160,9 +1166,12 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
         *pp = RBNextOp(tp + 1, op);
         return T_STR;
     }
-    if ((c >= '0' && c <= '9') || c == '.')
-    { // a decimal literal, read by getvalue itself (whose number reader raises
-      // no error, so compiling cannot fail a RUN; &H and the like stay text)
+    if ((c >= '0' && c <= '9') || c == '.' ||
+        (c == '&' && (toupper(p[1]) == 'H' || toupper(p[1]) == 'O' || toupper(p[1]) == 'B')))
+    { // a decimal literal, or &H, &O or &B (P5d), read by getvalue itself: its
+      // number reader raises no error, and its based reader none once the
+      // letter is one of those (another is its "Type prefix", left to the
+      // text path), so compiling cannot fail a RUN
         MMFLOAT f;
         long long i64;
         unsigned char *str;
@@ -1172,7 +1181,7 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
             MMFLOAT f;
             uint16_t w[4];
         } k;
-        if (RBLiteral(p) == NULL)
+        if (c != '&' && RBLiteral(p) == NULL)
             return 0;
         p = getvalue(p, &f, &i64, &str, op, &t);
         if (t & T_NBR)
@@ -1386,7 +1395,7 @@ static int RBFinish(rbcx_t *x, uint16_t *code)
     for (j = 0; j < x->nbind; j++)
     {
         code[n++] = x->bind[j][0];
-        code[n++] = x->bind[j][1];
+        code[n++] = x->bind[j][1] | (((x->opt >> j) & 1) ? RB_BOPT : 0);
     }
     for (j = 0; j < 2 * x->nbind; j++)
         code[n++] = 0; // the cached addresses
@@ -1548,7 +1557,10 @@ static int RBArgs(rbcx_t *x, unsigned char **qq, int close, rbparams_t *pr, int 
                     RBSuffix(&e);
                     if (*e == '(' && FindSubFun(q, 1) < 0)
                     {
-                        e = RBArgEnd(e + 1, ')');
+                        e++;
+                        while (*(e = RBArgEnd(e, ')')) == ',')
+                            e++; // past every index: m(1, 1) is an element too (it was compiled as a
+                                 // value, a copy, from P4a until V7.0.00b1's goldens caught it)
                         if (*e == ')')
                         {
                             e++;
@@ -1718,6 +1730,7 @@ static int RBFcall(rbcx_t *x, unsigned char **pp, int *op)
 // only checkend's error (something after the command) is left to the text
 static int RBJump(rbcx_t *x, int op, int cells);
 static void RBLand(rbcx_t *x, int at);
+static int RBPartCheck(rbcx_t *x, int at, unsigned m);
 static void RBGoto(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *target);
 static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char *p);
 
@@ -2285,9 +2298,15 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
             RBGoto(&x, base, libbit, target);
             return RBFinish(&x, code);
         }
+        int ncond = x.nbind, pure = !x.ncall, at; // (the binds the condition made; no call or RND in it)
+        unsigned m;
         p += sizeof(CommandToken);
         skipspace(p);
+        at = x.n;
+        x.used = 0;
         if ((p = RBLetInto(&x, p, tokenELSE)) == NULL)
+            return 0;
+        if (pure && (m = x.used & ~((1u << ncond) - 1)) != 0 && !RBPartCheck(&x, at, m))
             return 0;
         if (*p == tokenELSE)
         {
@@ -2299,7 +2318,11 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
             RBLand(&x, jf);
             p += sizeof(CommandToken);
             skipspace(p);
+            at = x.n;
+            x.used = 0;
             if (RBLetInto(&x, p, 0) == NULL)
+                return 0;
+            if (pure && (m = x.used & ~((1u << ncond) - 1)) != 0 && !RBPartCheck(&x, at, m))
                 return 0;
             RBLand(&x, jmp);
             RBOp(&x, RC_END, 0);
@@ -2314,6 +2337,29 @@ static int RBCompileIf(unsigned char *entry, unsigned char *base, uint32_t libbi
         }
     }
     return RBFinish(&x, code);
+}
+
+/* P5d: a single-line IF's THEN or ELSE assignment (its code from w[at]) may
+   use variables its condition does not (mask m: binds the condition did not
+   make).  The IF binds every variable when it starts, and one that is not
+   bound yet - made by nothing so far, or not yet met - sent the whole IF to
+   text on every run, taken branch or not.  Those binds are optional: the
+   record runs with them unbound, and this check before the part sends the
+   IF to its fallback only when the part that needs one is taken, which is
+   safe because its condition made no call and drew no RND (the text path
+   evaluates it again).  The check goes in front of the part's code; the
+   jumps are relative and the only one reaching the part lands at at. */
+static int RBPartCheck(rbcx_t *x, int at, unsigned m)
+{
+    if (x->n + 2 > RB_MAXCODE)
+        return 0;
+    memmove(x->w + at + 2, x->w + at, (x->n - at) * 2);
+    x->w[at] = RC_PARTCHK;
+    x->w[at + 1] = m;
+    x->n += 2;
+    x->opt |= m;
+    x->lk = 0; // (a constant's position, for RBCvif: stale now)
+    return 1;
 }
 
 /* FOR var = start TO limit [STEP step], as cmd_for does it: its stack work
@@ -3827,11 +3873,13 @@ static __attribute__((noinline)) void RBDoPush(unsigned char *doptr, unsigned ch
 }
 
 /* A record's binds: its nb entries at c, into slot, as RBRun makes them at
-   its start.  0 if one does not hold.  Always inlined: RBRun's copy is in
-   RAM, RBRebind's in flash. */
+   its start.  0 if one does not hold, 2 if all do but an optional one
+   (RB_BOPT), whose slot is then NULL, 1 if every one does.  Always inlined:
+   RBRun's copy is in RAM, RBRebind's in flash. */
 static inline __attribute__((always_inline)) int RBBindAll(const uint16_t *c, unsigned int nb, union cell **slot)
 {
     unsigned int j;
+    int res = 1;
     for (j = 0; j < nb; j++, c += 2)
     {
         unsigned int id = (c[0] & RC_IDMASK) + ((c[0] & RC_LIB) ? SymCanonLibBase : 0), sc;
@@ -3840,20 +3888,20 @@ static inline __attribute__((always_inline)) int RBBindAll(const uint16_t *c, un
         if (id < SymCanonCount && SymCanonOf && (sc = SymCanonOf[id]) != 0)
             k = sc - 1;
         else if ((k = SymCanonById(id)) < 0)
-            return 0;
+            goto miss;
         i = SymL[k];
         if (i < 0 || g_vartbl[i].level != g_LocalIndex)
         { // not a local at this level: the global, if no text local can hide it
             i = SymG[k];
             if (i < 0 || (g_LocalIndex && SymTextLocals))
-                return 0; // not bound yet, or a text local may hide it: findvar decides
+                goto miss; // not bound yet, or a text local may hide it: findvar decides
         }
         v = &g_vartbl[i];
         if (((c[1] & RB_BARRAY) ? !DimIsRealArray(RAW_DIM(*v, 0)) : !DimIsScalar(RAW_DIM(*v, 0))) ||
             (v->type & T_STRUCT) || (v->type & (T_INT | T_NBR | T_STR)) != (c[1] & (T_INT | T_NBR | T_STR)) ||
             (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
             ((c[0] & RC_TARGET) && (v->type & T_CONST)))
-            return 0;
+            goto miss;
         if (c[1] & (RB_BARRAY | T_STR))
         {
             slot[j] = (union cell *)v; // an array or a string: its variable, for its dimensions or size and its data
@@ -3861,8 +3909,14 @@ static inline __attribute__((always_inline)) int RBBindAll(const uint16_t *c, un
         }
         // a T_PTR (a BYREF parameter, a STATIC) holds its data's address, as findvar returns it
         slot[j] = (v->type & T_PTR) ? (union cell *)v->val.s : (union cell *)&v->val;
+        continue;
+    miss:
+        if (!(c[1] & RB_BOPT))
+            return 0;
+        slot[j] = NULL; // (RC_PARTCHK sends the record to its fallback if its part is taken)
+        res = 2;
     }
-    return 1;
+    return res;
 }
 
 /* RBCallFun: a FUNCTION call moved the bind stamp (it erased a variable, or
@@ -3872,9 +3926,15 @@ static inline __attribute__((always_inline)) int RBBindAll(const uint16_t *c, un
 static __attribute__((noinline)) void RBRebind(const uint16_t *r, union cell **slot)
 { // (slot may be the record's bind cache: its stamp is then already out of date)
     const uint16_t *c = r + RB_HDR(r) + 1;
-    unsigned int nb = *c++;
+    unsigned int nb = *c++, j, had = 0;
+    for (j = 0; j < nb; j++)
+        if (slot[j] != NULL)
+            had |= 1u << j; // (an optional bind unbound at the start may stay so)
     if (!RBBindAll(c + 2, nb, slot))
         error("A FUNCTION changed a variable of this statement");
+    for (j = 0; j < nb; j++)
+        if (((had >> j) & 1) && slot[j] == NULL)
+            error("A FUNCTION changed a variable of this statement");
 }
 
 /* Bind a compiled statement's variables and run its code.  *rp and *ep are
@@ -3924,10 +3984,10 @@ again:
         slotp = (union cell **)cache; // what the binds found last time, used where it is
     else
     {
-    if (!RBBindAll(c, nb, slot))
+    if ((j = RBBindAll(c, nb, slot)) == 0)
         goto fail;
     slotp = slot;
-    if (RBCacheOK)
+    if (RBCacheOK && j == 1) // (not with an optional bind unbound: the next run binds again)
     { // keep them, the addresses first and the stamp last
         for (j = 0; j < nb; j++)
             ((union cell **)cache)[j] = slot[j];
@@ -4000,6 +4060,7 @@ again:
         [RC_SPLICE] = &&L_SPLICE,
         [RC_FSPLICE] = &&L_FSPLICE,
         [RC_DUPLD] = &&L_DUPLD,
+        [RC_PARTCHK] = &&L_PARTCHK,
         [RC_INCF] = &&L_INCF,
         [RC_INCS] = &&L_STS,
         [RC_FN] = &&L_FN,
@@ -4237,6 +4298,14 @@ again:
             sp++;
             pc += 1 + (w >> 8);
             RBNEXT();
+    L_PARTCHK: // an IF part's optional binds (RBPartCheck): one unbound sends the IF to its fallback
+        {
+            unsigned int m = *pc++;
+            for (j = 0; m; j++, m >>= 1)
+                if ((m & 1) && slotp[j] == NULL)
+                    goto fail;
+            RBNEXT();
+        }
     L_DUPLD:
             *sp = *(union cell *)(uint32_t)sp[-1].i;
             sp++;

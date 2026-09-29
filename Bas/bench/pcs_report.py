@@ -1,4 +1,4 @@
-"""pcs_report.py OUTPUT.txt PicoMite.elf [--top N]
+"""pcs_report.py OUTPUT.txt PicoMite.elf [--top N] [--src FILE.bas] [--old: a recording before V7.0.00b1]
 
 Turn the [PCS] lines that OPTION PROFILING ON, SAMPLE prints at END into a
 time split by function and by interpreter bucket.  PCs are resolved against
@@ -82,10 +82,15 @@ def main():
         src = None
         if "--src" in sys.argv:
             src = open(sys.argv[sys.argv.index("--src") + 1], "rb").read().decode("latin-1").splitlines()
-        print("\n== busiest program lines (CountLines is one less than the file line)")
+        # [PCSLINE] is the editor's line number from V7.0.00b1; a recording from
+        # earlier firmware is one less (--old)
+        adj = 1 if "--old" in sys.argv else 0
+        print("\n== busiest program lines")
         for l, n in lines[:20]:
-            text = src[l].strip()[:90] if src and 0 <= l < len(src) else ""
-            print("  file line %-5d %6.1f%%  %s" % (l + 1, 100.0 * n / max(total, 1), text))
+            if l >= 0:
+                l += adj
+            text = src[l - 1].strip()[:90] if src and 1 <= l <= len(src) else ""
+            print("  file line %-5d %6.1f%%  %s" % (l, 100.0 * n / max(total, 1), text))
 
 
 if __name__ == "__main__":

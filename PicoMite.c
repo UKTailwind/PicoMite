@@ -3988,6 +3988,9 @@ uint32_t testPSRAM(void)
         enable_interrupts_pico();
         mSecTimer = time_us_64() / 1000;
         DISPLAY_TYPE = Option.DISPLAY_TYPE;
+#ifdef rp2350
+        RBMode = Option.Compile <= RB_SHADOW ? Option.Compile : RB_OFF; // OPTION COMPILE, as saved
+#endif
         // negative timeout means exact delay (rather than delay between callbacks)
         OptionErrorSkip = false;
 #ifdef PICOMITEBT

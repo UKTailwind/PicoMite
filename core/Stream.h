@@ -44,7 +44,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #define RB_OFF 0
 #define RB_ON 1
 #define RB_SHADOW 2
-extern int RBMode; // OPTION COMPILE ON | OFF | SHADOW: a development switch, not saved
+extern int RBMode; // OPTION COMPILE ON | OFF | SHADOW, as saved in Option.Compile
 
 // Where the stream lives: with PSRAM, a region of its own above the RAM slots
 // (PSRAMstream); without, a hidden flash area after the program's

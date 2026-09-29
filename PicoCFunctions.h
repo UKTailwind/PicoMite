@@ -697,6 +697,7 @@ struct option_s
 	uint8_t Resolution;
 	uint8_t VRes_reserved;
 	bool Multi;
+	uint8_t Compile; // OPTION COMPILE (RP2350), from the front of extensions[] (V7)
 #ifdef PICOMITEHDMIWEB
 	/* HDMIWEB defines BOTH PICOMITEWEB and PICOMITEVGA, which were
 	   previously mutually exclusive. Two slots near the top of the
@@ -710,9 +711,9 @@ struct option_s
 	   normal extensions[75], so the whole struct stays exactly 896
 	   bytes (== 7 XMODEM blocks). */
 	float mousespeed;
-	unsigned char extensions[67];
+	unsigned char extensions[66];
 #else
-	unsigned char extensions[75]; // 896 bytes == 7 XMODEM blocks
+	unsigned char extensions[74]; // 896 bytes == 7 XMODEM blocks
 #endif
 	// #else
 	//                 unsigned char extensions[79];    // 896 bytes == 7 XMODEM blocks

@@ -2194,8 +2194,11 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
 // searches the subfun[] table to locate a defined sub or fun
 // returns with the index of the sub/function in the table or -1 if not found
 // if type = 0 then look for a sub otherwise a function
+// (In flash: a name read through a symbol reaches it once a run, FindSubFun
+// keeping the answer in SymS, so only text names - EXECUTE, the prompt - use
+// it more; noinline, as GCC would otherwise put it back into FindSubFun.)
 #ifdef rp2350
-static int __not_in_flash_func(FindSubFunText)(unsigned char *p, int type)
+static __attribute__((noinline)) int FindSubFunText(unsigned char *p, int type)
 {
     unsigned char *s;
     unsigned char name[MAXVARLEN + 1];
@@ -2256,7 +2259,7 @@ static int __not_in_flash_func(FindSubFunText)(unsigned char *p, int type)
     return -1;
 }
 #else
-static int MIPS16 __not_in_flash_func(FindSubFunText)(unsigned char *p, int type)
+static __attribute__((noinline)) int MIPS16 FindSubFunText(unsigned char *p, int type)
 {
     int n = 0;
     int low, high, mid, cmp;
@@ -5783,7 +5786,12 @@ findvar_found:
         SymLocalMade(ifree, symk); // the name's newest local (see Symbols.h)
     }
     else
+    {
         g_vartbl[ifree].level = 0;
+        if (symk >= 0)
+            SymG[symk] = ifree; // bound as it is made, as the next lookup would bind it: a compiled
+                                // statement that meets it before any lookup then need not run as text
+    }
     for (j = 0; j < MAXDIM; j++)
         RAW_DIM(g_vartbl[ifree], j) = 0;
 

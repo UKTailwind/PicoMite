@@ -3457,6 +3457,10 @@ void MIPS16 printoptions(void)
         PRet();
     }
 
+#ifdef rp2350
+    if (Option.Compile == RB_ON || Option.Compile == RB_SHADOW)
+        PO2Str("COMPILE", Option.Compile == RB_ON ? "ON" : "SHADOW");
+#endif
     if (Option.modbuff)
     {
         PO("MODBUFF ENABLE ");
@@ -4962,6 +4966,7 @@ static const struct optmap_s OptionMap[] = {
     OPT(MaxCtrls, OPT_U8),
     OPT(Resolution, OPT_U8),
     OPT(Multi, OPT_U8),
+    OPT(Compile, OPT_U8),
 };
 #define OPTIONMAP_COUNT (sizeof(OptionMap) / sizeof(OptionMap[0]))
 
@@ -5273,7 +5278,8 @@ void MIPS16 cmd_option(void)
 #ifdef rp2350
     tp = checkstring(cmdline, (unsigned char *)"COMPILE");
     if (tp)
-    { // development switch, not saved: run programs from a compiled statement stream (see Stream.h)
+    { // run programs from a compiled statement stream (see Stream.h); saved, and
+      // written only when it changes (a program may set it on every run)
         if (checkstring(tp, (unsigned char *)"ON"))
             RBMode = RB_ON;
         else if (checkstring(tp, (unsigned char *)"OFF"))
@@ -5282,6 +5288,11 @@ void MIPS16 cmd_option(void)
             RBMode = RB_SHADOW;
         else
             SyntaxError();
+        if (Option.Compile != RBMode)
+        {
+            Option.Compile = RBMode;
+            SaveOptions();
+        }
         return;
     }
 #endif

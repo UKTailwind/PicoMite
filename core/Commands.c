@@ -4136,7 +4136,7 @@ static void PcsReport(int *cnt)
 		if (bi < 0)
 			break;
 		unsigned char *lp = (unsigned char *)g_pcs_line[bi].key;
-		int ln = (lp >= ProgMemory && lp < ProgMemory + MAX_PROG_SIZE) ? CountLines(lp) : -1;
+		int ln = (lp >= ProgMemory && lp < ProgMemory + MAX_PROG_SIZE) ? CountLines(lp) + 1 : -1; // (the editor's number; -1: the library)
 		snprintf(buf, sizeof(buf), "[PCSLINE] %d %u\r\n", ln, (unsigned)best);
 		perf_print(buf, cnt);
 		g_pcs_line[bi].n = 0;

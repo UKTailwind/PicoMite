@@ -355,6 +355,7 @@ extern "C"
                 uint8_t Resolution;
                 uint8_t VRes_reserved;
                 bool Multi;
+                uint8_t Compile; // OPTION COMPILE (RP2350): 0 OFF, 1 ON, 2 SHADOW; from extensions[] (V7)
 #ifdef PICOMITEHDMIWEB
                 /* HDMIWEB defines BOTH PICOMITEWEB and PICOMITEVGA, which were
                    previously mutually exclusive. Two slots near the top of the
@@ -368,9 +369,9 @@ extern "C"
                    normal extensions[75], so the whole struct stays exactly 896
                    bytes (== 7 XMODEM blocks). */
                 float mousespeed;
-                unsigned char extensions[63];
+                unsigned char extensions[62]; // (63 before Compile)
 #else
-        unsigned char extensions[71]; // 896 bytes == 7 XMODEM blocks
+        unsigned char extensions[70]; // 896 bytes == 7 XMODEM blocks (71 before Compile)
 #endif
                 /* Hash of the source file the library was last loaded from, so
                    LIBRARY LOAD can tell "already have this one" from "about to
