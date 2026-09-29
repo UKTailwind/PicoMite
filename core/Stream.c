@@ -72,7 +72,7 @@ void RBGuardFlashSlot(int slot)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 30       // the stream format
+#define RB_VERSION 31       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -419,6 +419,10 @@ enum
     RC_LOCAL,    // LOCAL of the a names whose offsets follow, as cmd_dim makes them (RBLocal)
     RC_GUARD,    // to the fallback before anything happens if OPTION LEGACY (CMM1) is on
     RC_SPLICE,   // the command, its n values (the next word) on the stack, its spliced text (a words) after (RBSpliceCmd)
+    RC_FSPLICE,  // a built-in function: n | token << 8 (the next word), its n values on the stack, its spliced text (a words) after (RBFnSpliceRun)
+    RC_DUPLD,    // push the value at the address on the top, keeping the address (INC of an element)
+    RC_INCF,     // cmd_inc's float add: the two floats on the top, added with no overflow check
+    RC_INCS,     // cmd_inc's string: pop a string and add it to string bind a (RBStoreStr)
 };
 enum
 { // RC_FN's functions: each its Functions.c helper (FnSin...)
@@ -471,7 +475,7 @@ enum
 static CommandToken RBTokLet; // the LET command, looked up once a compile
 static CommandToken RBTokIf, RBTokElse, RBTokEndIf, RBTokEnd_If;
 static CommandToken RBTokFor;
-static CommandToken RBTokDim, RBTokLocal, RBTokStatic, RBTokConst, RBTokOption;
+static CommandToken RBTokDim, RBTokLocal, RBTokStatic, RBTokConst, RBTokOption, RBTokInc;
 static CommandToken RBTokEndSub, RBTokEndFun;
 static unsigned char *RBLiteral(unsigned char *p);
 static int RBSuffix(unsigned char **p);
@@ -920,6 +924,72 @@ static int RBElement(rbcx_t *x, unsigned char **pp, int op, int target)
    closing bracket (a second argument), stays text. */
 static int RBValue(rbcx_t *x, unsigned char **pp, int *op);
 static void RBCvif(rbcx_t *x);
+static int RBEvaluateS(rbcx_t *x, unsigned char **pp);
+
+/* P5c: a string function at *pp through the value splice (see RBFnSpliceRun):
+   its arguments compiled onto the VM's stack, as getvalue would have them
+   evaluated, and in the code a copy of its argument text with each value
+   T_VALUE and a letter ('A'+i an integer, 'a'+i a float, '0'+i a string),
+   which its handler reads as it reads getvalue's copy.  Only the functions
+   below, whose handlers read every argument as a value and whose result has
+   one type; LEFT$, RIGHT$, UCASE$ and LCASE$ are tokenise's SChange$ with its
+   selector letter first, HEX$, OCT$ and BIN$ its base$ with the base.  No
+   FUNCTION call in the arguments (the handler reads them in its own order),
+   no empty argument.  Returns the type, or 0. */
+static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
+{
+    unsigned char *p = *pp, c = *p, *ae, txt[2 * RB_MAXLIT];
+    void (*fn)(void) = tokenfunction(c);
+    int n = 0, len = 0, t, rt, i, calls = x->calls, types[16];
+    if (fn != fun_len && fn != fun_asc && fn != fun_chr && fn != fun_mid && fn != fun_instr && fn != fun_str &&
+        fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base)
+        return 0;
+    rt = tokentype(c) & (T_NBR | T_INT | T_STR);
+    if (rt != T_NBR && rt != T_INT && rt != T_STR)
+        return 0; // (every one of them has one)
+    p++; // (the token's bracket is part of it)
+    if (fn == fun_schange)
+    { // tokenise's selector: E LEFT$, R RIGHT$, U UCASE$, L LCASE$
+        if (!(p[0] == 'E' || p[0] == 'R' || p[0] == 'U' || p[0] == 'L') || p[1] != ',')
+            return 0;
+        txt[len++] = p[0];
+        txt[len++] = ',';
+        p += 2;
+    }
+    x->calls = 0;
+    while (1)
+    {
+        ae = RBArgEnd(p, ')'); // as getcsargs splits them
+        skipspace(p);
+        if (p == ae || n == 16 || len > (int)sizeof(txt) - 6 || (t = RBEvaluateS(x, &p)) == 0)
+            return 0;
+        skipspace(p);
+        if (p != ae)
+            return 0;
+        types[n] = t;
+        txt[len++] = T_VALUE;
+        txt[len++] = (t == T_NBR ? 'a' : t == T_INT ? 'A' : '0') + n++;
+        if (*ae != ',')
+            break;
+        txt[len++] = ',';
+        p = ae + 1;
+    }
+    x->calls = calls;
+    if (*ae != ')')
+        return 0;
+    if (fn == fun_instr && !(n == 2 || (n == 3 && types[0] != T_STR)))
+        return 0; // the pattern forms: a variable for the match's length
+    if (fn == fun_trim && n > 2)
+        return 0; // its third argument can be a keyword
+    txt[len++] = 0;
+    RBOp(x, RC_FSPLICE | (((len + 1) / 2) << 8), 1 - n);
+    RBOp(x, n | (c << 8), 0);
+    for (i = 0; i < len; i += 2)
+        RBOp(x, txt[i] | ((i + 1 < len ? txt[i + 1] : 0) << 8), 0);
+    *pp = RBNextOp(ae + 1, op);
+    return rt;
+}
+
 static int RBFunction(rbcx_t *x, unsigned char **pp, int *op)
 {
     unsigned char *p = *pp, c = *p;
@@ -944,7 +1014,7 @@ static int RBFunction(rbcx_t *x, unsigned char **pp, int *op)
         return 0;
     id = fn == fun_sin ? RF_SIN : fn == fun_cos ? RF_COS : fn == fun_tan ? RF_TAN : fn == fun_atn ? RF_ATN : fn == fun_sqr ? RF_SQR : fn == fun_exp ? RF_EXP : fn == fun_log ? RF_LOG : fn == fun_deg ? RF_DEG : fn == fun_rad ? RF_RAD : fn == fun_int ? RF_INT : fn == fun_fix ? RF_FIX : fn == fun_abs ? RF_ABSF : fn == fun_sgn ? RF_SGNF : -1;
     if (id < 0)
-        return 0;
+        return RBFnSplice(x, pp, op); // P5c: through the value splice, if it is one of those
     p++;
     if ((t = RBEvaluate(x, &p)) == 0)
         return 0;
@@ -1627,6 +1697,90 @@ static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandTok
     RBOp(&x, n, 0);
     for (i = 0; i < len; i += 2)
         RBOp(&x, txt[i] | ((i + 1 < len ? txt[i + 1] : 0) << 8), 0);
+    RBOp(&x, RC_END, 0);
+    return RBFinish(&x, code);
+}
+
+// P5c: INC var [, value], as cmd_inc does it (see the RC_ ops): 0 if another form
+static int RBCompileInc(unsigned char *entry, unsigned char *cmdl, uint16_t *code)
+{
+    rbcx_t x;
+    unsigned char *p = cmdl, *q, *rhs;
+    int suf, j, vt, t, i;
+    memset(&x, 0, sizeof(x));
+    x.entry = entry; // (x.calls 0: no FUNCTION call in the value)
+    skipspace(p);
+    if ((q = RBVarRefS(p, &suf)) != NULL)
+    { // a scalar: bound as a target (a CONST sends the record to cmd_inc's error)
+        if ((j = RBBindK(&x, p, suf, 1, 0, 1)) < 0)
+            return 0;
+        vt = x.bind[j][1];
+        if (vt != T_STR)
+            RBOp(&x, RC_LDG | (j << 8), 1);
+    }
+    else
+    { // an element: findvar's address, then the value there
+        q = p;
+        if ((vt = RBElement(&x, &q, RC_ADEL, 1)) == 0)
+            return 0;
+        RBOp(&x, RC_DUPLD, 1);
+        j = -1;
+    }
+    p = q;
+    skipspace(p);
+    if (*p == 0 || *p == '\'')
+    { // INC var: 1 (a string's is cmd_inc's error)
+        union
+        {
+            long long i;
+            MMFLOAT f;
+            uint16_t w[4];
+        } k;
+        if (vt == T_STR)
+            return 0;
+        if (vt == T_NBR)
+            k.f = 1.0;
+        else
+            k.i = 1;
+        RBOp(&x, RC_LK, 1);
+        for (i = 0; i < 4; i++)
+            RBOp(&x, k.w[i], 0);
+    }
+    else
+    {
+        if (*p != ',')
+            return 0;
+        p++;
+        skipspace(p);
+        rhs = p;
+        if (rhs - entry > 255 || (t = RBEvaluateS(&x, &p)) == 0 || (t == T_STR) != (vt == T_STR))
+            return 0; // (getstring's and getnumber's errors are the text path's)
+        skipspace(p);
+        if (*p && *p != '\'')
+            return 0; // getcsargs' and checkend's errors
+        if (t != vt) // as getnumber and getinteger convert it
+        {
+            if (vt == T_NBR)
+                RBCvif(&x);
+            else
+                RBOp(&x, RC_CVFI, 0);
+        }
+        if (RBMode == RB_SHADOW && vt != T_STR)
+        {
+            RBOp(&x, RC_SHADOW | ((rhs - entry) << 8), 0);
+            RBOp(&x, vt, 0);
+        }
+    }
+    if (vt == T_STR)
+        RBOp(&x, RC_INCS | (j << 8), -1); // (a string scalar: RBElement takes no string array)
+    else
+    {
+        RBOp(&x, vt == T_NBR ? RC_INCF : RC_ADDI, -1); // (RC_ADDI is a plain add, as cmd_inc's)
+        if (j >= 0)
+            RBOp(&x, RC_STG | (j << 8), -1);
+        else
+            RBOp(&x, RC_STP, -2);
+    }
     RBOp(&x, RC_END, 0);
     return RBFinish(&x, code);
 }
@@ -2359,6 +2513,8 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
             ncode = RBCompileCase(entry, base, libbit, cmdl, next, ct, code + 1);
         else if (ct == RBTokLocal)
             ncode = RBCompileLocal(entry, cmdl, code + 1);
+        else if (ct == RBTokInc)
+            ncode = RBCompileInc(entry, cmdl, code + 1);
         else if ((ncode = RBCompileSplice(entry, cmdl, ct, code + 1)) != 0)
             ;
         else
@@ -2755,6 +2911,7 @@ static void RBCompile(rbheader_t *h)
     RBTokStatic = GetCommandValue((unsigned char *)"Static");
     RBTokConst = GetCommandValue((unsigned char *)"Const");
     RBTokOption = GetCommandValue((unsigned char *)"Option");
+    RBTokInc = GetCommandValue((unsigned char *)"Inc");
     RBTokIf = GetCommandValue((unsigned char *)"If");
     RBTokFor = GetCommandValue((unsigned char *)"For");
     RBTokElse = GetCommandValue((unsigned char *)"Else");
@@ -3347,7 +3504,7 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
 static union cell *RBSplice;
 extern char CMM1; // Draw.c: OPTION LEGACY
 
-unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, int *ta)
+unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *ta)
 {
     unsigned char k = p[1];
     if (RBSplice == NULL)
@@ -3357,13 +3514,45 @@ unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, i
         *fa = RBSplice[k - 'a'].f;
         *ta = T_NBR;
     }
-    else
+    else if (k >= 'A')
     {
         *ia = RBSplice[k - 'A'].i;
         *ta = T_INT;
     }
+    else
+    { // P5c: a string, as getvalue has one (it copies none)
+        *sa = (unsigned char *)(uint32_t)RBSplice[k - '0'].i;
+        *ta = T_STR;
+    }
     return p + 2;
 }
+
+/* P5c: RC_FSPLICE, a built-in function called as getvalue calls it (ep at a
+   copy of its argument text, targ at its types, its answer in fret, iret or
+   sret), with its arguments' values spliced; the answer replaces them on
+   the VM's stack.  pc is at [n | token << 8], the text after it. */
+static unsigned char RBFnText[2 * RB_MAXLIT + 2]; // (the copy: a handler may write into its argument text)
+static __attribute__((noinline)) void RBFnSpliceRun(const uint16_t *pc, unsigned int words, union cell *vals)
+{
+    unsigned char tkn = pc[0] >> 8;
+    union cell *save = RBSplice;
+    int tmp;
+    memcpy(RBFnText, pc + 1, 2 * words);
+    ep = RBFnText;
+    RBSplice = vals;
+    tmp = targ = TypeMask(tokentype(tkn));
+    tokenfunction(tkn)();
+    RBSplice = save;
+    if ((tmp & targ) == 0)
+        error("Internal fault 2(sorry)");
+    if (targ & T_STR)
+        vals[0].i = (uint32_t)sret;
+    else if (targ & T_INT)
+        vals[0].i = iret;
+    else
+        vals[0].f = fret;
+}
+
 
 static __attribute__((noinline)) void RBSpliceCmd(const uint16_t *r, unsigned char *e, unsigned int nw, const uint16_t *txt, union cell *vals)
 {
@@ -3404,12 +3593,18 @@ static __attribute__((noinline)) const uint16_t *RBLocal(unsigned char *e, unsig
 }
 
 // cmd_let's store into a string: its length against the variable's size (a
-// BYREF parameter has its caller's), then the copy
-static __attribute__((noinline)) void RBStoreStr(struct s_vartbl *v, unsigned char *s)
+// BYREF parameter has its caller's), then the copy; for RC_INCS (P5c)
+// cmd_inc's string case, the same check of the two together, then the
+// concatenation
+static __attribute__((noinline)) void RBStoreStr(unsigned int w, struct s_vartbl *v, unsigned char *s)
 {
-    if (*s > v->size)
+    int inc = (w & 0xFF) == RC_INCS;
+    if ((inc ? *v->val.s : 0) + *s > v->size)
         error("String too long");
-    Mstrcpy(v->val.s, s);
+    if (inc)
+        Mstrcat(v->val.s, s);
+    else
+        Mstrcpy(v->val.s, s);
 }
 
 // doexpr's call of operator o on the two strings at the top of the VM's
@@ -3678,6 +3873,10 @@ again:
         [RC_LOCAL] = &&L_LOCAL,
         [RC_GUARD] = &&L_GUARD,
         [RC_SPLICE] = &&L_SPLICE,
+        [RC_FSPLICE] = &&L_FSPLICE,
+        [RC_DUPLD] = &&L_DUPLD,
+        [RC_INCF] = &&L_INCF,
+        [RC_INCS] = &&L_STS,
         [RC_FN] = &&L_FN,
         [RC_SHADOWC] = &&L_SHADOWC};
 #define RBNEXT()                   \
@@ -3907,6 +4106,20 @@ again:
             RBSpliceCmd(r, e, nw, pc + 1, sp);
             pc += 1 + (w >> 8);
             RBNEXT();
+    L_FSPLICE: // a built-in function's handler, its arguments' values spliced (RBFnSpliceRun)
+            sp -= pc[0] & 0xFF;
+            RBFnSpliceRun(pc, w >> 8, sp);
+            sp++;
+            pc += 1 + (w >> 8);
+            RBNEXT();
+    L_DUPLD:
+            *sp = *(union cell *)(uint32_t)sp[-1].i;
+            sp++;
+            RBNEXT();
+    L_INCF:
+            sp[-2].f = sp[-2].f + sp[-1].f;
+            sp--;
+            RBNEXT();
     L_LOCAL: // cmd_dim for LOCAL (RBLocal)
             if ((pc = RBLocal(e, nw, pc, w)) == NULL)
                 goto fail;
@@ -3922,9 +4135,9 @@ again:
             RBOpStr(w >> 8, sp);
             sp--;
             RBNEXT();
-    L_STS: // cmd_let's string store (RBStoreStr)
+    L_STS: // cmd_let's string store, and cmd_inc's (RBStoreStr)
             sp--;
-            RBStoreStr((struct s_vartbl *)slotp[w >> 8], (unsigned char *)(uint32_t)sp[0].i);
+            RBStoreStr(w, (struct s_vartbl *)slotp[w >> 8], (unsigned char *)(uint32_t)sp[0].i);
             RBNEXT();
     L_STP:
             sp -= 2;

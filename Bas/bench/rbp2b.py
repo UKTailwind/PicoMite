@@ -59,9 +59,9 @@ a% = 3
 """ + STAT, lambda n: n > 0),
     ("text stays", """a% = 3 : x = 0.5 : s$ = "ab"
 """ + LOOP % """  f1 = Max(x, 1) + a%
-  f2 = Len(s$) * 2
-  f3 = Asc(s$) * 2""" + """Print f1; f2; f3
-""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c); functions P5a does not compile (arrays compile since P4a, SIN since P5a)
+  f2 = Val(s$) * 2
+  f3 = Cint(x + 1) * 2""" + """Print f1; f2; f3
+""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c); functions still not compiled (arrays compile since P4a, SIN since P5a, LEN and ASC since P5c)
     ("div zero", """a% = 5 : b% = 0
 For i% = 1 To 3
   c = a% / b%
