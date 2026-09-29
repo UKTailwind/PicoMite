@@ -365,7 +365,11 @@ extern "C"
 
 #else                     // RP2040
 #define MAXGLOBALVARS 256 // Configurable split
+#ifdef PICOMITEMIN
+#define MAXLOCALVARS 240 // RC2's: PICOMIN has the RAM for it (Peter, 2026-09-29)
+#else
 #define MAXLOCALVARS 192
+#endif
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 #define MAX_CPU 420000
 #define MAXSUBFUN 256
@@ -400,7 +404,10 @@ extern "C"
       slots are each one program size, so the A: drive still starts at the
       same address and keeps its size.  The option sector moves, though, so
       the first boot after the upgrade does a full clean. */
-#define FLASH_TARGET_OFFSET (704 * 1024)
+   /* +16 KB more (2026-09-29, Peter "A"): P6 took it 1208 bytes over 704 KB.
+      The same trade again: 4 KB less program size (MAX_PROG_SIZE 112 KB), so
+      the A: drive starts where RC2's did, 1188 KB, and keeps its size. */
+#define FLASH_TARGET_OFFSET (720 * 1024)
 #define MagicKey 0x40287BEA
 #define HEAP_MEMORY_SIZE (128 * 1024)
 #else
@@ -442,7 +449,7 @@ extern "C"
  * Memory configuration
  * ============================================================================ */
 #if defined(PICOMITEMIN)
-#define MAX_PROG_SIZE (116 * 1024) // 4 KB less, for the 16 KB of FLASH_TARGET_OFFSET above
+#define MAX_PROG_SIZE (112 * 1024) // 4 KB less for each 16 KB step of FLASH_TARGET_OFFSET above (A: keeps RC2's start)
 #elif defined(PICOMITE) && !defined(rp2350)
 #define MAX_PROG_SIZE (120 * 1024) // Maximum program size in bytes (adjust as needed     )
 #elif !defined(MAX_PROG_SIZE)
