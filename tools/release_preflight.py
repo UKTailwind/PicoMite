@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 """Pre-flight checks for a PicoMite release.
 
-Run from anywhere:  python tools/release_preflight.py
+Run from anywhere:  python tools/release_preflight.py [version] [--branch name]
 Exits non-zero on the first failure, so it can gate the publish:
 
     python tools/release_preflight.py && gh release create ...
+
+--branch names the branch the release is tagged on (gh release create
+--target), main by default: HEAD must be pushed to origin/<branch>.  V7's
+betas are released from development.
 
 NEVER gate binary freshness on source-file mtimes in this repo: Dropbox
 rewrites mtimes on sync without a byte changing, which condemns good
@@ -90,9 +94,15 @@ if not m:
     sys.exit("Version.h has no #define VERSION")
 version = m.group(1)
 print("Version.h declares V%s\n" % version)
-if len(sys.argv) > 1:
-    check("requested version matches Version.h", sys.argv[1].lstrip("Vv") == version,
-          "asked for %s" % sys.argv[1])
+args = sys.argv[1:]
+branch = "main"
+if "--branch" in args:
+    i = args.index("--branch")
+    branch = args[i + 1]
+    del args[i:i + 2]
+if args:
+    check("requested version matches Version.h", args[0].lstrip("Vv") == version,
+          "asked for %s" % args[0])
 
 # 2. all 16 uf2 present, correctly named, and no leftovers from another version
 uf2dir = os.path.join(REPO, "uf2")
@@ -235,8 +245,10 @@ release_dirty = git("status", "--porcelain", "--",
                     *[":(exclude)" + p for p in WIP_PATHS])
 check("everything the release ships is committed", not release_dirty,
       release_dirty.replace(chr(10), "; "))
-ahead = git("rev-list", "--count", "origin/main..HEAD")
-check("HEAD pushed to origin/main", ahead == "0", "%s commit(s) unpushed" % ahead)
+on = git("rev-parse", "--abbrev-ref", "HEAD")
+check("HEAD is on %s" % branch, on == branch, "checked out: %s" % on)
+ahead = git("rev-list", "--count", "origin/%s..HEAD" % branch)
+check("HEAD pushed to origin/%s" % branch, ahead == "0", "%s commit(s) unpushed" % ahead)
 
 other = git("status", "--porcelain", "--", *WIP_PATHS)
 if other:
