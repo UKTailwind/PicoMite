@@ -607,7 +607,7 @@ So Route B must run from RAM. The options: accept the lost depth; or give the st
 <ol>
 <li><b>Route B is RP2350-only.</b> The RP2040 has no 4 KB page of RAM below the heap for the executor, and from flash it runs slower than text. Removing Stream.c from the RP2040 build also returned its flash margin (8.4 to 12.4 KB) and RAM margin (212 to 820 bytes).</li>
 <li><b>The stream gets a PSRAM region of its own</b> instead of RAM slot 4: agreed. For boards without PSRAM Peter asked whether a new flash area is the equivalent. It is; it would sit after the program area, cost the A: drive MAX_PROG_SIZE on every RP2350 variant (the layout is fixed at build time, while PSRAM is a run-time option), and reformat A: once on upgrade. <b>Agreed:</b> flash slot 2 for the moment; a hidden flash slot of its own is added later, with the release that makes Route B a user feature.</li>
-<li><b>OPTION LOCAL VARIABLES is reset at RUN, NEW and LOAD</b> (ClearRuntime(true)), not on CHAIN, whose saved variables were placed with the split in force: agreed and done on development (e670e0a); main gets it later.</li>
+<li><b>OPTION LOCAL VARIABLES is reset at RUN, NEW and LOAD</b> (ClearRuntime(true)), not on CHAIN, whose saved variables were placed with the split in force: agreed and done on development (e670e0a) and on main (336a17d).</li>
 </ol>
 </div>
 </section>
@@ -615,22 +615,22 @@ So Route B must run from RAM. The options: accept the lost depth; or give the st
 <section id="bugs">
 <h2>Found on the way</h2>
 <ul>
-<li><b>Fixed on development, bc4756f: DefinedSubFun kept cmdtoken in an unsigned char across a FUNCTION's body.</b>
+<li><b>Fixed on development, bc4756f, and main, df575f3: DefinedSubFun kept cmdtoken in an unsigned char across a FUNCTION's body.</b>
 <ul>
 <li><code>cmdtoken</code> is an int holding a 14-bit command token; DefinedSubFun saved it as <code>unsigned char tcmdtoken</code> before <code>ExecuteProgram</code> ran the body and put it back after, so any command whose token is over 255 got it back truncated once a user FUNCTION had been called in its arguments.</li>
 <li>Nothing was found that failed because of it; <code>tcmdtoken</code> is now an int. Route B's compiled FUNCTION call (P3d) always kept the whole value.</li>
 </ul></li>
-<li><b>Fixed on development (c8a1d56), open on main: LIBRARY LOAD's "Library too big" check for a flash library could never fire.</b>
+<li><b>Fixed on development (c8a1d56) and main (3eb3f4e): LIBRARY LOAD's "Library too big" check for a flash library could never fire.</b>
 <ul>
 <li>SaveLibraryImage compared <code>realflashpointer</code>, an offset in flash, with <code>LibMemory</code>, an XIP address, so the difference was always negative.</li>
 <li>The binary records are bounded when the file is read, but the tokenised text is not, so a library whose text outgrew its slot would be written past the slot's end, into program flash, instead of being refused. It needs about 144 KB of library text, so it is unlikely to happen in practice.</li>
-<li>On development the check measures from <code>realflashpointer</code>'s value when writing starts; main needs the same one-line change.</li>
+<li>On development the check measures from <code>realflashpointer</code>'s value when writing starts; main has the same change.</li>
 </ul></li>
-<li><b>Fixed on development, df30e65, open on main: a reproducible PC3 hard fault after WS2812/BITSTREAM was the RP2350's XIP cache erratum E11.</b>
+<li><b>Fixed on development, df30e65 and fac5aa2, and main, 9754f64: a reproducible PC3 hard fault after WS2812/BITSTREAM was the RP2350's XIP cache erratum E11.</b>
 <ul>
 <li><b>Cause.</b> <code>save_psram_settings()</code> (misc/FileIO.c), which <code>disable_interrupts_pico()</code> calls for WS2812, BITSTREAM, software serial, Onewire, audio and every flash write, cleaned the XIP cache by set/way at maintenance offsets 0 to 16K. RP2350-E11: a clean by set/way rewrites the cleaned line's tag with the maintenance address. So every PSRAM line holding unwritten data came back as a valid line for flash 0x10000000-0x10003FFF, where <code>main</code>, <code>MMgetline</code>, <code>EditInputLine</code>, <code>MMPrintString</code>, the start of <code>IntToStr</code> and <code>SubLayoutFree</code> are linked. The prompt then ran PSRAM data as code. The SDK's <code>xip_cache_clean_all()</code> cleans at the top of the XIP window to avoid exactly this. The code is in the repository's first commit, so every RP2350 release with PSRAM has it.</li>
 <li><b>Proof.</b> Bas/bench/stackfault/e11probe.py is BASIC only. It POKEs 64 bytes of PSRAM, cleans, then PEEKs two flash locations that are never run after boot. With the firmware's offsets, and with a real WS2812, 5 to 10 of 16 flash words read back wrong in every trial; with the SDK's offsets, and with no clean, none did. The PSRAM data always read back right. Bas/bench/stackfault/stfault.py (the program in parts, round robin) had WS2812 faulting 3 in 25 with PSRAM on and 0 in 120 runs with OPTION PSRAM PIN DISABLE, since flash lines never hold unwritten data.</li>
-<li><b>Fix.</b> The same clean at the SDK's offsets (XIP_END - XIP_BASE - 16 KB), then a DSB. With it the probe's WS2812 row is 0 in every trial, and stfault.py ran 120 times with PSRAM on (WS2812, the whole program and the control, 40 each) without a fault. The clean itself is only needed before flash writes, and the SDK's <code>flash_range_erase</code>/<code>flash_range_program</code> already do a safe one and save and restore the PSRAM chip select's QMI registers. Dropping it for the timing-only commands is a possible later step. main needs the same fix.</li>
+<li><b>Fix.</b> The same clean at the SDK's offsets (XIP_END - XIP_BASE - 16 KB), then a DSB. With it the probe's WS2812 row is 0 in every trial, and stfault.py ran 120 times with PSRAM on (WS2812, the whole program and the control, 40 each) without a fault. The clean itself is only needed before flash writes, and the SDK's <code>flash_range_erase</code>/<code>flash_range_program</code> already do a safe one and save and restore the PSRAM chip select's QMI registers. So fac5aa2 dropped the clean altogether (the QMI register save and restore stays), and stopped littlefs's sync hook calling the ROM flush, which invalidates without cleaning and so lost PSRAM writes still in the cache. Bas/bench/stackfault/psramflash.py checks that dirty PSRAM survives file writes, KILL, flash_do_cmd, WS2812 and BITSTREAM; its control step (an invalidate with no clean) loses 402 of 512 words. stfault.py again ran 120 times without a fault. Main has both changes (9754f64).</li>
 <li>What was recorded before the cause was known:</li>
 <li>The goldens' pioout.bas (WS2812 B, O, S and W on gp7, BITSTREAM on gp2, from Integer and Float arrays) faults about 30% of the time just after it ends, at the prompt: 6 in 20 runs with OPTION COMPILE OFF, so not Route B.</li>
 <li>The fault is in IntToStr (MMBasic.c:6626, LR=10003F2B), reading at 0x20082000, the top of core 0's stack (CFSR 00008200, a precise bus fault), or at PC=2004FF00 with an invalid state: the top of the stack is corrupted.</li>
@@ -663,8 +663,8 @@ So Route B must run from RAM. The options: accept the lost depth; or give the st
 <li><b>Found by reading, all now fixed:</b>
 <ul>
 <li><code>FloatToInt64</code> let NaN and exactly 2<sup>63</sup> through to an undefined C conversion. Fixed on main and development, a40112b.</li>
-<li><code>op_subtract</code> had no infinity check, unlike add and multiply. Fixed on development, adb769f.</li>
-<li>The BYVAL check read <code>g_vartbl[0]</code> for an expression argument, so "5" passed BYVAL was refused as an array when slot 0 held one. It is now checked only for a variable argument, in a flash helper. Fixed on development, 0887ad9; test: Bas/bench/rbp5d.py.</li>
+<li><code>op_subtract</code> had no infinity check, unlike add and multiply. Fixed on development, adb769f, and main, b9530d9.</li>
+<li>The BYVAL check read <code>g_vartbl[0]</code> for an expression argument, so "5" passed BYVAL was refused as an array when slot 0 held one. It is now checked only for a variable argument, in a flash helper. Fixed on development, 0887ad9 (test: Bas/bench/rbp5d.py), and main, 80f39be, where the check stays inline. On main, slot 0 is the local whose name hashes to it: with 34 local arrays under OPTION LOCAL VARIABLES 40, RC2 refuses <code>Inner 5, x()</code> and main accepts it.</li>
 </ul></li>
 </ul>
 <p>Route B reproduces each of these exactly, because it calls the same helpers. Fixing one changes both paths at once.</p>
