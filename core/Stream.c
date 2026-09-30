@@ -4705,6 +4705,11 @@ void RBPrepare(void)
         RBWhy = "saved without symbols";
         return;
     }
+    if (SymOffLine != NULL)
+    { // OPTION SYMBOLS OFF: there are no bindings for the stream's binds
+        RBWhy = "OPTION SYMBOLS OFF";
+        return;
+    }
     memset(&h, 0, sizeof(h));
     h.magic = RB_MAGIC;
     h.version = RB_VERSION;

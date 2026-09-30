@@ -91,6 +91,10 @@ extern const unsigned char symdigit[128];
 extern int SymMode;     // SYM_OFF: names stay text
 extern int SymRawBlock; // inside a CSUB or DefineFont block: names stay text
 extern int SymEnabled;  // OPTION SYMBOLS: 0 = save programs as text
+extern int SymBindHeap; // the bytes of heap the bindings hold (Memory.c's out-of-memory hint)
+extern unsigned char *SymOffLine; // the program's OPTION SYMBOLS OFF line (no bindings), or NULL
+int SymIsOffStatement(const unsigned char *p);
+unsigned char *SymFindOff(unsigned char *q);
 extern int SymLongest;  // the longest spelling in the program's and the library's tables
 extern int SymLibSave;  // a library is being saved: its names become library symbols
 

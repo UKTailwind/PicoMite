@@ -907,6 +907,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
     // the symbol tables of the library and the program (NULL if they are text)
     SymSetLibrary(LibPresent() ? LibMemory : NULL);
     SymSetProgram(ProgMemory);
+    SymOffLine = SymFindOff(ProgMemory);
     SymBindInit();
     if (LibPresent())
     {

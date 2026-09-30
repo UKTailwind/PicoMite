@@ -294,6 +294,8 @@ int16_t *SymLShadow = NULL;
 uint16_t *SymLCanon = NULL;
 unsigned int SymLSlots = 0;
 int SymTextLocals = 0;
+int SymBindHeap = 0;
+unsigned char *SymOffLine = NULL;
 uint32_t SymBindEvent = 1; // see Symbols.h
 uint32_t SymBindGenG = 1;
 #ifdef rp2350
@@ -411,6 +413,66 @@ int SymCanonById(unsigned int id)
     return SymCanonNew(b);
 }
 
+// the index in commandtbl of the command called name, or -1
+static int SymCommandIndex(const char *name)
+{
+    for (int j = 0; j < CommandTableSize - 1; j++)
+        if (str_equal((const unsigned char *)name, commandtbl[j].name))
+            return j;
+    return -1;
+}
+
+// Is the statement at p OPTION SYMBOLS OFF?
+int SymIsOffStatement(const unsigned char *p)
+{
+    static int opt = -2;
+    unsigned char *q;
+    if (opt == -2)
+        opt = SymCommandIndex("Option");
+    if (opt < 0 || commandtbl_at(p) != opt)
+        return false;
+    q = (unsigned char *)p + sizeof(CommandToken);
+    skipspace(q);
+    if ((q = checkstring(q, (unsigned char *)"SYMBOLS")) == NULL)
+        return false;
+    return checkstring(q, (unsigned char *)"OFF") != NULL;
+}
+
+// Called by PrepareProgram with the program's first line.  OPTION SYMBOLS OFF
+// on a line of its own at the top of the program - after nothing but blank and
+// comment lines and a LIBRARY LOAD, in either order - runs the program without
+// the bindings: they take 3-5 KB of heap that a program written for an older
+// MMBasic may need.  Returns that line, or NULL.  (LIBRARY LOAD's own "first
+// statement" test steps over the line in the same way.)
+unsigned char *SymFindOff(unsigned char *q)
+{
+    static int lib = -2;
+    if (lib == -2)
+        lib = SymCommandIndex("Library");
+    while (*q == T_NEWLINE)
+    {
+        unsigned char *line = q, *body = q + T_NEWLINE_HDR;
+        if (*body == T_LINENBR)
+            body += 3;
+        while (*body == ' ')
+            body++;
+        if (*body != 0 && *body != 39) // (39: a comment)
+        {
+            if (SymIsOffStatement(body))
+                return line;
+            unsigned char *a = body + sizeof(CommandToken);
+            skipspace(a);
+            if (!(lib >= 0 && commandtbl_at(body) == lib && checkstring(a, (unsigned char *)"LOAD")))
+                return NULL; // real code first
+        }
+        q = body;
+        while (*q)
+            q++;
+        q++;
+    }
+    return NULL;
+}
+
 // Called by PrepareProgram: start the program's bindings afresh.  They are
 // sized to the program's and the library's symbols and live in the BASIC
 // heap; the part every lookup reads is in SRAM, the rest in PSRAM when there
@@ -421,8 +483,8 @@ void SymBindInit(void)
     SymBindFree();
     SymCanonLibBase = SymTabProg != NULL ? SymTabProg->count : 0;
     count = SymCanonLibBase + (SymTabLib != NULL ? SymTabLib->count : 0);
-    if (count == 0)
-        return;
+    if (count == 0 || SymOffLine != NULL)
+        return; // (OPTION SYMBOLS OFF: see SymFindOff)
     while (hsize < count)
         hsize <<= 1;
     slots = GetLocalVarHashSize() > MAXLOCALVARS ? GetLocalVarHashSize() : MAXLOCALVARS;
@@ -459,6 +521,7 @@ void SymBindInit(void)
     SymCold = (symcold_t *)SymColdBlock;
     SymCanonHead = (uint16_t *)(SymCold + count);
     SymCanonCount = count;
+    SymBindHeap = hot + cold;
     SymCanonMask = hsize - 1;
     SymNCanon = 0;
     // locals alive now (left by an error, or made before these bindings)
@@ -483,6 +546,7 @@ void SymBindForget(void)
     SymCold = NULL;
     SymCanonCount = SymNCanon = SymLSlots = SymCanonLibBase = 0;
     SymTextLocals = 0;
+    SymBindHeap = 0;
 }
 
 void SymBindFree(void)

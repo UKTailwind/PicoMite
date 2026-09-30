@@ -2324,7 +2324,8 @@ void MIPS16 cmd_library(void)
            because the restart below would run those declarations a second
            time.  So test the position instead, stepping over leading comment
            and blank lines - the '#filename header a loaded program carries is
-           one of them, and neither kind declares anything. */
+           one of them, and neither kind declares anything - and an OPTION
+           SYMBOLS OFF line, which may come before or after this one. */
         if (savedline)
         {
             const unsigned char *q = ProgMemory;
@@ -2338,8 +2339,8 @@ void MIPS16 cmd_library(void)
                     body += 3;
                 while (*body == ' ')
                     body++;
-                if (*body != 0 && *body != 39) /* 39 is a quote: a comment */
-                    break;                     /* real code - this is the first statement */
+                if (*body != 0 && *body != 39 && !SymIsOffStatement(body)) /* 39 is a quote: a comment */
+                    break; /* real code - this is the first statement (OPTION SYMBOLS OFF may come first) */
                 q = body;
                 while (*q)
                     q++;
@@ -5265,13 +5266,27 @@ void MIPS16 cmd_option(void)
 
     tp = checkstring(cmdline, (unsigned char *)"SYMBOLS");
     if (tp)
-    { // development switch, not saved: store the names in programs saved from now on as symbols (see Symbols.h) or as text
-        if (checkstring(tp, (unsigned char *)"ON"))
-            SymEnabled = true;
-        else if (checkstring(tp, (unsigned char *)"OFF"))
-            SymEnabled = false;
-        else
+    { // OPTION SYMBOLS OFF at the top of a program: PrepareProgram found it and
+      // the program runs without the symbol bindings (SymFindOff in Symbols.c);
+      // here it is only checked for where it is
+#ifdef SYMBOLS_TEST_SWITCH
+        if (CurrentLinePtr == NULL)
+        { // the testing switch (configuration.h): programs saved from now on as symbols or as text
+            if (checkstring(tp, (unsigned char *)"ON"))
+                SymEnabled = true;
+            else if (checkstring(tp, (unsigned char *)"OFF"))
+                SymEnabled = false;
+            else
+                SyntaxError();
+            return;
+        }
+#endif
+        if (!checkstring(tp, (unsigned char *)"OFF"))
             SyntaxError();
+        if (CurrentLinePtr == NULL)
+            error("Invalid at command prompt");
+        if (CurrentLinePtr != SymOffLine)
+            error("Must be at the top of the program");
         return;
     }
 

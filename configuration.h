@@ -528,6 +528,13 @@ extern "C"
 #endif
 #define CONSOLE_TX_BUF_SIZE 256
 
+/* OPTION SYMBOLS ON|OFF typed at the command prompt: a testing switch (not
+   saved) that stores the programs saved from then on with or without symbols,
+   for A/B comparisons (Bas/bench stdset.py, symab.py, rtlist.py, rbstamp.py).
+   Left out of a release, where OPTION SYMBOLS OFF is only the line at the top
+   of a program that runs it without the symbol bindings (Symbols.c). */
+// #define SYMBOLS_TEST_SWITCH
+
 /* ============================================================================
  * Operating characteristics - Limits and maximums
  * ============================================================================ */

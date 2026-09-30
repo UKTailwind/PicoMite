@@ -2156,6 +2156,18 @@ static inline __attribute__((always_inline)) void MBitsSet(unsigned char *addr, 
     unsigned int bit_pos = (page_idx & 15) << 1;                                  // (mod 16) * 2, combined operation
     *p = (*p & ~(3u << bit_pos)) | ((unsigned int)bits << bit_pos);
 }
+// Not enough memory for size bytes.  When the program's symbol bindings
+// (Symbols.h) hold at least that much heap, OPTION SYMBOLS OFF at the top of
+// the program would have given it back, and the message says so (a program
+// tuned to 6.03's heap can fall a few KB short under V7).
+static void __attribute__((noinline)) OutOfMemory(int size)
+{
+    TempStringClearStart = 0;
+    ClearTempMemory(); // hopefully this will give us enough to print the prompt
+    if (size <= SymBindHeap)
+        error("Not enough memory for % bytes: put OPTION SYMBOLS OFF first", size);
+    StandardErrorParam(48, size);
+}
 #ifdef rp2350
 /* not inlined into GetSystemMemory's specialised copy: its RAM is the stack's */
 void __attribute__((noinline)) __not_in_flash_func (*GetPSMemory)(int size)
@@ -2212,9 +2224,7 @@ void __attribute__((noinline)) __not_in_flash_func (*GetPSMemory)(int size)
     }
     ps_top_hint = NULL;
     // out of memory
-    TempStringClearStart = 0;
-    ClearTempMemory(); // hopefully this will give us enough to print the prompt
-    StandardErrorParam(48, size);
+    OutOfMemory(size);
     return NULL; // keep the compiler happy
 }
 #endif
@@ -2310,9 +2320,7 @@ void MIPS32 __not_in_flash_func (*GetSystemMemory)(int size)
     if (PSRAMsize)
         return GetPSMemory(size);
 #endif
-    TempStringClearStart = 0;
-    ClearTempMemory(); // hopefully this will give us enough to print the prompt
-    StandardErrorParam(48, size);
+    OutOfMemory(size);
     return NULL; // keep the compiler happy
 }
 #ifdef rp2350
@@ -2333,9 +2341,7 @@ void MIPS32 __not_in_flash_func (*GetMemory)(int size)
     if (PSRAMsize)
         return GetPSMemory(size);
 #endif
-    TempStringClearStart = 0;
-    ClearTempMemory(); // hopefully this will give us enough to print the prompt
-    StandardErrorParam(48, size);
+    OutOfMemory(size);
     return NULL; // keep the compiler happy
 }
 
