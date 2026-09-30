@@ -215,7 +215,15 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went ~1.1 KB over 816 KB. */
 #define FLASH_TARGET_OFFSET (832 * 1024)
-#define HEAP_MEMORY_SIZE (100 * 1024)
+   /* +768 bytes (2026-09-30): the heap need only be a whole number of 256-byte pages
+      (MMAPWORDS rounds its map up), so the RAM the heap's 4 KB alignment used to
+      waste (0775783) goes to it.  V7's symbol bindings take 3-5 KB of this heap at
+      RUN; Bad Apple (badtweaked.bas) plays again with these 3 pages and dr_wav's
+      smaller conversion buffer, with 11 pages to spare for its SUB calls.  The
+      program slot in flash stays whole 4 KB sectors, so MAX_PROG_SIZE is set on
+      its own. */
+#define HEAP_MEMORY_SIZE (100 * 1024 + 768)
+#define MAX_PROG_SIZE (100 * 1024)
 #define MagicKey 0x741677C8
 #endif
 

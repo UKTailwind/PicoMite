@@ -4303,7 +4303,7 @@ void cmd_end(void)
 #endif
 	longjmp(mark, 1); // jump back to the input prompt
 }
-extern unsigned int mmap[HEAP_MEMORY_SIZE / PAGESIZE / PAGESPERWORD];
+extern unsigned int mmap[MMAPWORDS];
 extern unsigned int psmap[PSMAPWORDS];
 extern struct s_hash g_hashlist[MAXLOCALLIST];
 extern int g_hashlistpointer;
