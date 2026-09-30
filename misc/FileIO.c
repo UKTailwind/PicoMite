@@ -4204,6 +4204,7 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
     int i, prevchar = 0;
     unsigned char *w = base;
     unsigned char *lib = base ? base : LibMemory;
+    uint32_t libstart = 0; /* flash: realflashpointer (an offset in flash, not an address) at the slot's start */
 
     memcpy(buf, tknbuf, STRINGSIZE); /* tokenise() writes through tknbuf */
     initFonts();
@@ -4213,6 +4214,7 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
     else
     {
         FlashWriteInit(LIBRARY_FLASH);
+        libstart = realflashpointer;
         safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
         int j = MAX_PROG_SIZE / 4;
         int *pp = (int *)LibMemory;
@@ -4248,7 +4250,7 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
         while (!(p[0] == 0 && p[1] == 0))
         {
             LIBPUT(*p++);
-            if (w ? (w - base) >= MAX_PROG_SIZE - 16 - 512 : (int)((char *)realflashpointer - (char *)LibMemory) >= MAX_PROG_SIZE - 5)
+            if (w ? (w - base) >= MAX_PROG_SIZE - 16 - 512 : (int)(realflashpointer - libstart) >= MAX_PROG_SIZE - 5)
                 error("Library too big");
         }
         LIBPUT(0);
