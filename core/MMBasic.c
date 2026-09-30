@@ -1388,7 +1388,8 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
     // Bit 7 on the last address byte is used to identify a font.
     {
         unsigned int *const cfplimit = (unsigned int *)plimit;
-        cfp = *(unsigned int **)CFunPtr;
+        cfp = (unsigned int *)*CFunPtr; // read as the unsigned char * it is: through an unsigned int ** the
+                                        // compiler may reuse the value from before the symbol table was skipped
         while (cfp < cfplimit && *cfp != 0xffffffff)
         {
             unsigned int words;
