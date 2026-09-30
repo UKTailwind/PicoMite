@@ -713,7 +713,7 @@ void MIPS16 cmd_drive(void)
     SyntaxError();
 }
 #if defined(rp2350)
-extern unsigned int mmap[MMAPWORDS];
+extern unsigned int mmap[HEAP_MEMORY_SIZE / PAGESIZE / PAGESPERWORD];
 extern unsigned int psmap[PSMAPWORDS];
 static void PrintImageSlotHeader(int *pp); /* defined with cmd_flash below */
 /* The slots and the 384 KB context-save area below them share a fixed 2 MB

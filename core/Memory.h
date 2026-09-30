@@ -75,8 +75,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
    RAM FILE LOAD, which is how a launcher loads an overlay. */
 #define PSRAMHEAPMAX (6 * 1024 * 1024)
 #define PSMAPWORDS (PSRAMHEAPMAX / PAGESIZE / PAGESPERWORD)
-// the SRAM heap's page map, rounded up: the heap need only be a whole number of pages
-#define MMAPWORDS ((HEAP_MEMORY_SIZE / PAGESIZE + PAGESPERWORD - 1) / PAGESPERWORD)
 
 /* ============================================================================
  * Macros - Memory alignment

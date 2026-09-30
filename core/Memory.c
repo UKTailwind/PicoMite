@@ -160,7 +160,7 @@ unsigned char *LayerBuf = NULL;
 unsigned char *FrameBuf = NULL;
 #endif
 
-unsigned int mmap[MMAPWORDS] = {0};
+unsigned int mmap[HEAP_MEMORY_SIZE / PAGESIZE / PAGESPERWORD] = {0};
 #ifdef rp2350
 unsigned int psmap[PSMAPWORDS] = {0};
 unsigned int SBitsGet(unsigned char *addr);
