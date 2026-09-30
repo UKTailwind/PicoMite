@@ -81,14 +81,16 @@ unsigned char *FRAMEBUFFER = NULL;
 #endif
 #else
 #ifdef PICOMITEVGA
-// Keep heap 4KB aligned, but place it in a .bss.* subsection so it remains
-// RAM-only (NOBITS) and does not inflate the flash image size.  The alignment matters to
-// PIO MAKE RING BUFFER: a ring of n bytes needs n free bytes on an n boundary, and a
-// program that has filled the top of the heap first (la_24_2.bas: 38 KB framebuffer, a
-// 32 KB array, then a 16 KB ring) only has room at the bottom - so how far the heap's base
-// is from the next boundary decides whether it fits.  At 256 the linker put the base
-// 0x900 past a 16 KB boundary and that ring no longer fitted.
-unsigned char __attribute__((section(".bss.zheap"), aligned(4096))) AllMemory[HEAP_MEMORY_SIZE + 256];
+// Page (256 byte) aligned, in a .bss.* subsection so it remains RAM-only (NOBITS) and does
+// not inflate the flash image size.  The SDK's linker script orders .bss by alignment and
+// then by name, so ".bss.0heap" puts the heap first among the 256-aligned variables, at the
+// start of .bss as the old 4 KB alignment did - without the padding below it (up to 3.75 KB,
+// and a 4 KB jump whenever RAM code crossed a boundary).  Where the base falls matters to
+// PIO MAKE RING BUFFER: a ring of n bytes needs n free bytes on an n boundary, and a program
+// that has filled the top of the heap first (la_24_2.bas: 38 KB framebuffer, a 32 KB array,
+// then a 16 KB ring) only has room at the bottom.  Named .bss.zheap it sorted after the
+// screen buffer, 0x900 past a 16 KB boundary, and that ring no longer fitted.
+unsigned char __attribute__((section(".bss.0heap"), aligned(256))) AllMemory[HEAP_MEMORY_SIZE + 256];
 unsigned char __attribute__((aligned(256))) video[640 * 480 / 8];
 unsigned char *FRAMEBUFFER = video;
 uint32_t framebuffersize = 640 * 480 / 8;
