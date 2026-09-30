@@ -1991,7 +1991,7 @@ static unsigned char *RBEndSelect(unsigned char *p)
     int level = 1;
     while ((p = RBNextCmd(p, &line)) != NULL)
     {
-        CommandToken tkn = commandtbl_decode(p);
+        CommandToken tkn = commandtbl_at(p);
         if (tkn == cmdSELECT_CASE)
             level++;
         if (tkn == cmdEND_SELECT && --level == 0)
@@ -2038,7 +2038,7 @@ static int RBCompileSelect(unsigned char *entry, unsigned char *base, uint32_t l
         return 0;
     while ((q = RBNextCmd(q, &line)) != NULL)
     {
-        tkn = commandtbl_decode(q);
+        tkn = commandtbl_at(q);
         if (tkn == cmdSELECT_CASE)
             level++;
         if (tkn == cmdCASE && level == 1)

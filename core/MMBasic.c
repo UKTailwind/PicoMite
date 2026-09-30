@@ -1120,7 +1120,7 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
         p = GetNextCommand(p, &CurrentLinePtr, NULL);
         if (*p == 0)
             break; // end of the program or module
-        CommandToken tkn = commandtbl_decode(p);
+        CommandToken tkn = commandtbl_at(p);
         if (tkn == cmdSUB || tkn == cmdFUN /*|| tkn == cmdCFUN*/ || tkn == cmdCSUB)
         { // found a SUB, FUN, CFUNCTION or CSUB token
             if (i >= MAXSUBFUN)

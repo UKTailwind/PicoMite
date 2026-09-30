@@ -3369,7 +3369,7 @@ static void iftab_build_region(unsigned char *prog)
 		p = GetNextCommand(p, &line_ptr, NULL);
 		if (*p == 0)
 			break;
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 
 		if (tkn == cmdIF)
 		{
@@ -3781,7 +3781,7 @@ retest_an_if:
 				while (1)
 				{
 					p = GetNextCommand(p, &rp, (unsigned char *)"No matching ENDIF");
-					CommandToken tkn = commandtbl_decode(p);
+					CommandToken tkn = commandtbl_at(p);
 					if (tkn == cmdtoken)
 					{
 						// found a nested IF command, we now need to determine if it is a single or multiline IF
@@ -3917,7 +3917,7 @@ void __not_in_flash_func(cmd_else)(void)
 	while (1)
 	{
 		p = GetNextCommand(p, NULL, (unsigned char *)"No matching ENDIF");
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 		if (tkn == cmdIF)
 		{
 			// found a nested IF command, we now need to determine if it is a single or multiline IF
@@ -4654,7 +4654,7 @@ void cmd_select(void)
 	while (1)
 	{
 		p = GetNextCommand(p, &rp, (unsigned char *)"No matching END SELECT");
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 
 		if (tkn == cmdSELECT_CASE)
 			i++; // found a nested SELECT CASE command, increase the nested count and carry on searching
@@ -4805,7 +4805,7 @@ void cmd_case(void)
 	while (1)
 	{
 		p = GetNextCommand(p, NULL, (unsigned char *)"No matching END SELECT");
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 		if (tkn == cmdSELECT_CASE)
 			i++; // found a nested SELECT CASE command, we now need to search for its END CASE
 		if (tkn == cmdEND_SELECT)
@@ -5052,7 +5052,7 @@ unsigned char *ForFindNext(unsigned char *p, unsigned char *vname, int vlen, uns
 		p = GetNextCommand(p, &tp, errmsg);
 		if (*p == 0)
 			return NULL; // the end of the program (only when errmsg is NULL)
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 
 		if (tkn == cmdFOR)
 			t++; // count the FOR
@@ -5595,7 +5595,7 @@ unsigned char *DoFindLoop(unsigned char *p, CommandToken dotoken, unsigned char 
 		p = GetNextCommand(p, &tp, errmsg);
 		if (*p == 0)
 			return NULL; // the end of the program (only when errmsg is NULL)
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 		if (tkn == dotoken)
 			i++; // entered a nested DO or WHILE loop
 		if (tkn == cmdLOOP)
@@ -5752,7 +5752,7 @@ void cmd_subfun(void)
 	while (1)
 	{
 		p = GetNextCommand(p, NULL, (unsigned char *)"No matching END declaration");
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 		if (tkn == cmdSUB || tkn == cmdFUN || tkn == errtoken)
 			error("No matching END declaration");
 		if (tkn == returntoken)
@@ -5776,7 +5776,7 @@ void cmd_comment(void)
 	while (1)
 	{
 		p = GetNextCommand(p, NULL, (unsigned char *)"No matching END declaration");
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 		if (tkn == cmdComment)
 			error("No matching END declaration");
 		if (tkn == returntoken)
@@ -8145,7 +8145,7 @@ search_again:
 			p += p[1] + 2; // skip over the label
 			skipspace(p);  // and any following spaces
 		}
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 		if (tkn == datatoken)
 			break; // found a DATA statement
 		while (*p)
@@ -8994,7 +8994,7 @@ void MIPS16 cmd_type(void)
 	while (1)
 	{
 		p = GetNextCommand(p, NULL, (unsigned char *)"No matching END TYPE");
-		CommandToken tkn = commandtbl_decode(p);
+		CommandToken tkn = commandtbl_at(p);
 		if (tkn == cmdTYPE)
 			error("Nested TYPE not allowed");
 		if (tkn == cmdEND_TYPE)
