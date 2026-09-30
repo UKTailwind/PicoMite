@@ -82,7 +82,12 @@ unsigned char *FRAMEBUFFER = NULL;
 #else
 #ifdef PICOMITEVGA
 // Keep heap 4KB aligned, but place it in a .bss.* subsection so it remains
-// RAM-only (NOBITS) and does not inflate the flash image size.
+// RAM-only (NOBITS) and does not inflate the flash image size.  The alignment matters to
+// PIO MAKE RING BUFFER: a ring of n bytes needs n free bytes on an n boundary, and a
+// program that has filled the top of the heap first (la_24_2.bas: 38 KB framebuffer, a
+// 32 KB array, then a 16 KB ring) only has room at the bottom - so how far the heap's base
+// is from the next boundary decides whether it fits.  At 256 the linker put the base
+// 0x900 past a 16 KB boundary and that ring no longer fitted.
 unsigned char __attribute__((section(".bss.zheap"), aligned(4096))) AllMemory[HEAP_MEMORY_SIZE + 256];
 unsigned char __attribute__((aligned(256))) video[640 * 480 / 8];
 unsigned char *FRAMEBUFFER = video;
@@ -2397,26 +2402,29 @@ void __not_in_flash_func (*CallocMemoryNull)(size_t num, size_t size)
     return GetMemoryNull((int)(num * size));
 }
 
+// A block of size bytes (a power of two from PAGESIZE up) on a size boundary, as a DMA
+// ring buffer needs: the lowest such block whose pages are all free.  Every boundary in
+// the heap is tried, so the heap itself need only be page aligned.  (It used to try the
+// first boundary only, and fail if anything there was in use - a temporary, say.)
 void *GetAlignedMemory(int size)
 {
-    unsigned char *addr = MMHeap;
-    while (((uint32_t)addr & (size - 1)) && (!((MBitsGet(addr) & PUSED))) && ((uint32_t)addr < (uint32_t)MMHeap + heap_memory_size))
-        addr += PAGESIZE;
-    if ((uint32_t)addr == (uint32_t)MMHeap + heap_memory_size)
-        StandardError(29);
-    unsigned char *retaddr = addr;
-    for (; size > 0; addr += PAGESIZE, size -= PAGESIZE)
+    unsigned char *const top = MMHeap + heap_memory_size;
+    unsigned char *addr = (unsigned char *)(((uint32_t)MMHeap + size - 1) & ~(uint32_t)(size - 1));
+    for (; addr + size <= top; addr += size)
     {
-        if (!(MBitsGet(addr) & PUSED))
-        {
-            MBitsSet(addr, PUSED);
+        unsigned char *p = addr;
+        while (p < addr + size && !(MBitsGet(p) & PUSED))
+            p += PAGESIZE;
+        if (p == addr + size)
+        { // all free: take them
+            for (p = addr; p < addr + size - PAGESIZE; p += PAGESIZE)
+                MBitsSet(p, PUSED);
+            MBitsSet(p, PUSED | PLAST);
+            return addr;
         }
-        else
-            error("Not enough aligned memory");
     }
-    addr -= PAGESIZE;
-    MBitsSet(addr, PUSED | PLAST);
-    return (retaddr);
+    error("Not enough aligned memory");
+    return NULL;
 }
 
 int FreeSpaceOnHeap(void)

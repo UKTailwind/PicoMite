@@ -2212,6 +2212,10 @@ void MIPS16 cmd_pio(void)
                 findvar(argv[0], V_FIND | V_NOFIND_ERR);
                 if ((g_vartbl[g_VarIndex].type & T_INT) && DimIsScalar(RAW_DIM(g_vartbl[g_VarIndex], 0)) && g_vartbl[g_VarIndex].level == 0)
                 {
+                        // In a program this statement was spelt out into a temporary (SymExpandStatement),
+                        // taken from the bottom of the heap - the first place GetAlignedMemory tries, and
+                        // for a big ring often the only one.  Nothing reads it again: let it go first.
+                        ClearSpecificTempMemory(cmdline);
                         g_vartbl[g_VarIndex].val.s = (unsigned char *)GetAlignedMemory(size);
                         g_vartbl[g_VarIndex].size = 255;
                         RAW_DIM(g_vartbl[g_VarIndex], 0) = size / 8 - 1 + g_OptionBase;
