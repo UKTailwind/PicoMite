@@ -371,6 +371,7 @@ volatile BYTE USBDriveStat = STA_NOINIT | STA_NODISK;
 #endif
 int OptionFileErrorAbort = true;
 volatile uint32_t irqs;
+volatile bool irqs_off_pico = false; // interrupts are off for a flash write (error() turns them back on)
 #ifdef rp2350
 static void __not_in_flash_func(save_psram_settings)(void)
 {
@@ -429,6 +430,7 @@ void __not_in_flash_func(disable_interrupts_pico)(void)
     save_psram_settings();
 #endif
     irqs = save_and_disable_interrupts();
+    irqs_off_pico = true;
 }
 void __not_in_flash_func(enable_interrupts_pico)(void)
 {
@@ -439,6 +441,7 @@ void __not_in_flash_func(enable_interrupts_pico)(void)
     SecondsTimer += (time_us_64() / 1000 - mSecTimer);
     mSecTimer = time_us_64() / 1000;
     irqs = 0;
+    irqs_off_pico = false;
 }
 void ErrorThrow(int e, int type)
 {

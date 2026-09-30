@@ -620,6 +620,7 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
          * ============================================================================ */
         void disable_interrupts_pico(void);
         void enable_interrupts_pico(void);
+        extern volatile bool irqs_off_pico;
 
         /* ============================================================================
          * Function declarations - File system utilities
