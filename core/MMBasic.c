@@ -2276,7 +2276,8 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
 #endif
 
-    unsigned char *p, *s, *tp, *ttp, tcmdtoken;
+    unsigned char *p, *s, *tp, *ttp;
+    int tcmdtoken; // cmdtoken across a FUNCTION's body (an unsigned char lost the token's high bits)
     unsigned char *CallersLinePtr, *SubLinePtr = NULL;
     unsigned char *argbuf1;
     unsigned char **argv1;
