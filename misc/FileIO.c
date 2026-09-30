@@ -374,12 +374,16 @@ volatile uint32_t irqs;
 #ifdef rp2350
 static void __not_in_flash_func(save_psram_settings)(void)
 {
-    // We're about to invalidate the XIP cache, clean it first to commit any dirty writes to PSRAM
-    uint8_t *maintenance_ptr = (uint8_t *)XIP_MAINTENANCE_BASE;
+    // We're about to invalidate the XIP cache, clean it first to commit any dirty writes to PSRAM.
+    // Clean at the top of the XIP window, as the SDK's xip_cache_clean_all() does: RP2350-E11
+    // rewrites a cleaned line's tag with the maintenance address, so offsets 0..16K made dirty
+    // PSRAM lines read back as flash 0x10000000-0x10003FFF
+    uint8_t *maintenance_ptr = (uint8_t *)XIP_MAINTENANCE_BASE + (XIP_END - XIP_BASE - 16 * 1024);
     for (int i = 1; i < 16 * 1024; i += 8)
     {
         maintenance_ptr[i] = 0;
     }
+    __dsb();
 
     m1_timing = qmi_hw->m[1].timing;
     m1_rfmt = qmi_hw->m[1].rfmt;

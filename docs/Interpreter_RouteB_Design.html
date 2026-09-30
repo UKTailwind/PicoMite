@@ -615,10 +615,10 @@ So Route B must run from RAM. The options: accept the lost depth; or give the st
 <section id="bugs">
 <h2>Found on the way</h2>
 <ul>
-<li><b>Open, for triage: DefinedSubFun keeps cmdtoken in an unsigned char across a FUNCTION's body.</b>
+<li><b>Fixed on development, bc4756f: DefinedSubFun kept cmdtoken in an unsigned char across a FUNCTION's body.</b>
 <ul>
-<li><code>cmdtoken</code> is an int holding a 14-bit command token; DefinedSubFun saves it as <code>unsigned char tcmdtoken</code> before <code>ExecuteProgram</code> runs the body and puts it back after, so any command whose token is over 255 gets it back truncated once a user FUNCTION has been called in its arguments.</li>
-<li>Whether it matters depends on what reads cmdtoken after the call in each command; nothing found yet fails because of it. Route B's compiled FUNCTION call (P3d) keeps the whole value.</li>
+<li><code>cmdtoken</code> is an int holding a 14-bit command token; DefinedSubFun saved it as <code>unsigned char tcmdtoken</code> before <code>ExecuteProgram</code> ran the body and put it back after, so any command whose token is over 255 got it back truncated once a user FUNCTION had been called in its arguments.</li>
+<li>Nothing was found that failed because of it; <code>tcmdtoken</code> is now an int. Route B's compiled FUNCTION call (P3d) always kept the whole value.</li>
 </ul></li>
 <li><b>Fixed on development (c8a1d56), open on main: LIBRARY LOAD's "Library too big" check for a flash library could never fire.</b>
 <ul>
@@ -626,8 +626,12 @@ So Route B must run from RAM. The options: accept the lost depth; or give the st
 <li>The binary records are bounded when the file is read, but the tokenised text is not, so a library whose text outgrew its slot would be written past the slot's end, into program flash, instead of being refused. It needs about 144 KB of library text, so it is unlikely to happen in practice.</li>
 <li>On development the check measures from <code>realflashpointer</code>'s value when writing starts; main needs the same one-line change.</li>
 </ul></li>
-<li><b>Open, to be tackled later (Peter, 27 September): a reproducible PC3 hard fault after WS2812/BITSTREAM.</b>
+<li><b>Root cause found 30 September: a reproducible PC3 hard fault after WS2812/BITSTREAM was the RP2350's XIP cache erratum E11.</b>
 <ul>
+<li><b>Cause.</b> <code>save_psram_settings()</code> (misc/FileIO.c), which <code>disable_interrupts_pico()</code> calls for WS2812, BITSTREAM, software serial, Onewire, audio and every flash write, cleaned the XIP cache by set/way at maintenance offsets 0 to 16K. RP2350-E11: a clean by set/way rewrites the cleaned line's tag with the maintenance address. So every PSRAM line holding unwritten data came back as a valid line for flash 0x10000000-0x10003FFF, where <code>main</code>, <code>MMgetline</code>, <code>EditInputLine</code>, <code>MMPrintString</code>, the start of <code>IntToStr</code> and <code>SubLayoutFree</code> are linked. The prompt then ran PSRAM data as code. The SDK's <code>xip_cache_clean_all()</code> cleans at the top of the XIP window to avoid exactly this. The code is in the repository's first commit, so every RP2350 release with PSRAM has it.</li>
+<li><b>Proof.</b> Bas/bench/stackfault/e11probe.py is BASIC only. It POKEs 64 bytes of PSRAM, cleans, then PEEKs two flash locations that are never run after boot. With the firmware's offsets, and with a real WS2812, 5 to 10 of 16 flash words read back wrong in every trial; with the SDK's offsets, and with no clean, none did. The PSRAM data always read back right. Bas/bench/stackfault/stfault.py (the program in parts, round robin) had WS2812 faulting 3 in 25 with PSRAM on and 0 in 120 runs with OPTION PSRAM PIN DISABLE, since flash lines never hold unwritten data.</li>
+<li><b>Fix.</b> The same clean at the SDK's offsets (XIP_END - XIP_BASE - 16 KB), then a DSB. With it the probe's WS2812 row is 0 in every trial. The clean itself is only needed before flash writes, and the SDK's <code>flash_range_erase</code>/<code>flash_range_program</code> already do a safe one and save and restore the PSRAM chip select's QMI registers. Dropping it for the timing-only commands is a possible later step. main needs the same fix.</li>
+<li>What was recorded before the cause was known:</li>
 <li>The goldens' pioout.bas (WS2812 B, O, S and W on gp7, BITSTREAM on gp2, from Integer and Float arrays) faults about 30% of the time just after it ends, at the prompt: 6 in 20 runs with OPTION COMPILE OFF, so not Route B.</li>
 <li>The fault is in IntToStr (MMBasic.c:6626, LR=10003F2B), reading at 0x20082000, the top of core 0's stack (CFSR 00008200, a precise bus fault), or at PC=2004FF00 with an invalid state: the top of the stack is corrupted.</li>
 <li>This matches the intermittent PC3 fault seen during uploads on 18 September (a zeroed return address near the stack top while idle), which had no recipe. It points at the WS2812/BITSTREAM PIO and DMA path writing near the top of core 0's stack.</li>
@@ -647,20 +651,20 @@ So Route B must run from RAM. The options: accept the lost depth; or give the st
 <li>Result: <code>DIM z = x * 10 + y</code> printed 0 in the chained program.</li>
 <li>The bindings are now rebuilt in <code>SaveContext</code>/<code>RestoreContext</code>. Test: Bas/bench/symchain.py, which covers CHAIN and SAVE/LOAD CONTEXT.</li>
 </ul></li>
-<li><b>Not fixed, confirmed on the PC3: MAX and MIN clamp at the single-precision limit.</b>
+<li><b>Fixed on main and development, 50c9aa0: MAX and MIN clamped at the single-precision limit.</b>
 <ul>
 <li><code>MAX(-1e300, -2e300)</code> gives -3.402823466e+38, and <code>MIN(1e300, 2e300)</code> gives 3.402823466e+38.</li>
 <li>Cause: <code>fun_max_min</code> starts from -FLT_MAX or +FLT_MAX (Functions.c:1855).</li>
 </ul></li>
-<li><b>Not fixed, confirmed: <code>ABS(1e19)</code> raises "Number too large".</b>
+<li><b>Fixed on main and development, 16d0413: <code>ABS(1e19)</code> raised "Number too large".</b>
 <ul>
 <li><code>fun_abs</code> and <code>fun_sgn</code> evaluate their argument with an integer target, so a float beyond 2<sup>63</sup> goes through <code>FloatToInt64</code> (Functions.c:555, 1232).</li>
 </ul></li>
-<li><b>By reading only, not tested:</b>
+<li><b>Found by reading, all now fixed:</b>
 <ul>
-<li><code>FloatToInt64</code> lets NaN and exactly 2<sup>63</sup> through to an undefined C conversion (MMBasic.c:7174-7183).</li>
-<li><code>op_subtract</code> has no infinity check, unlike add and multiply.</li>
-<li>The BYVAL check reads <code>g_vartbl[0]</code> for an expression argument (MMBasic.c:2702-2723).</li>
+<li><code>FloatToInt64</code> let NaN and exactly 2<sup>63</sup> through to an undefined C conversion. Fixed on main and development, a40112b.</li>
+<li><code>op_subtract</code> had no infinity check, unlike add and multiply. Fixed on development, adb769f.</li>
+<li>The BYVAL check read <code>g_vartbl[0]</code> for an expression argument, so "5" passed BYVAL was refused as an array when slot 0 held one. It is now checked only for a variable argument, in a flash helper. Fixed on development, 0887ad9; test: Bas/bench/rbp5d.py.</li>
 </ul></li>
 </ul>
 <p>Route B reproduces each of these exactly, because it calls the same helpers. Fixing one changes both paths at once.</p>
