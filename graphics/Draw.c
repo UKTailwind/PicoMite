@@ -2159,6 +2159,31 @@ int GetJustification(char *p, int *jh, int *jv, int *jo)
     return *p == 0;
 }
 
+// The justification as written in the command (TEXT x, y, s$, CM): a bare word
+// is stored as a symbol in a saved program (see Symbols.h), so its letters come
+// from the spelling.  Anything else - an expression, a name with a suffix, a
+// word too long to be a justification - is left to the caller's getCstring().
+int GetJustificationArg(unsigned char *p, int *jh, int *jv, int *jo)
+{
+    char spelling[4];
+    const unsigned char *s;
+    unsigned char *e;
+    int len;
+    skipspace(p);
+    if (!issymbol(*p))
+        return GetJustification((char *)p, jh, jv, jo);
+    e = p + symbolsize(*p);
+    skipspace(e);
+    if (*e)
+        return false;
+    s = SymSpelling(p, &len);
+    if (len > 3)
+        return false;
+    memcpy(spelling, s, len);
+    spelling[len] = 0;
+    return GetJustification(spelling, jh, jv, jo);
+}
+
 /*  @endcond */
 void cmd_text(void)
 {
@@ -2175,7 +2200,7 @@ void cmd_text(void)
     s = (char *)getCstring(argv[4]);
 
     if (argc > 5 && *argv[6])
-        if (!GetJustification((char *)argv[6], &jh, &jv, &jo))
+        if (!GetJustificationArg(argv[6], &jh, &jv, &jo))
             if (!GetJustification((char *)getCstring(argv[6]), &jh, &jv, &jo))
                 error("Justification");
     ;

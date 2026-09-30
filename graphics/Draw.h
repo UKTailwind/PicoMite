@@ -463,6 +463,7 @@ void initFonts(void);
  * ============================================================================ */
 void GUIPrintString(int x, int y, int fnt, int jh, int jv, int jo, int fc, int bc, char *str);
 int GetJustification(char *p, int *jh, int *jv, int *jo);
+int GetJustificationArg(unsigned char *p, int *jh, int *jv, int *jo);
 
 /* ============================================================================
  * Function declarations - Color operations

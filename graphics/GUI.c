@@ -389,7 +389,7 @@ int GetCtrlParams(int type, unsigned char *p)
         if (!(argc < a || *argv[a] == 0))
         { // if justification is specified
             int jh = 0, jv = 0, jo = 0;
-            if (!GetJustification((char *)argv[a], &jh, &jv, &jo))
+            if (!GetJustificationArg(argv[a], &jh, &jv, &jo))
                 if (!GetJustification((char *)getCstring(argv[a]), &jh, &jv, &jo))
                     error("Justification");
             Ctrl[r].x2 = jh | jv << 2 | jo << 4; // stuff the justification parameters into the short int
