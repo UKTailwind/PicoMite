@@ -374,13 +374,11 @@ volatile uint32_t irqs;
 #ifdef rp2350
 static void __not_in_flash_func(save_psram_settings)(void)
 {
-    // We're about to invalidate the XIP cache, clean it first to commit any dirty writes to PSRAM
-    uint8_t *maintenance_ptr = (uint8_t *)XIP_MAINTENANCE_BASE;
-    for (int i = 1; i < 16 * 1024; i += 8)
-    {
-        maintenance_ptr[i] = 0;
-    }
-
+    // No XIP cache clean here: the SDK's flash_range_erase, flash_range_program and
+    // flash_do_cmd clean it themselves (at safe offsets, RP2350-E11) before they flush it,
+    // and the other callers (WS2812, BITSTREAM, serial, Onewire) never flush it.  The
+    // clean that was here used offsets 0..16K, which E11 turns into dirty PSRAM lines
+    // reading back as flash 0x10000000-0x10003FFF.
     m1_timing = qmi_hw->m[1].timing;
     m1_rfmt = qmi_hw->m[1].rfmt;
     m0_timing = qmi_hw->m[0].timing;
@@ -553,7 +551,12 @@ int __not_in_flash_func(fs_flash_erase)(const struct lfs_config *cfg, lfs_block_
 }
 int __not_in_flash_func(fs_flash_sync)(const struct lfs_config *c)
 {
+#ifndef rp2350
     flash_flush_cache();
+#endif
+    // not on the RP2350: the ROM flush invalidates the XIP cache without cleaning it, so
+    // PSRAM writes still in the cache would be lost, and the SDK's flash_range_erase and
+    // flash_range_program have already cleaned and flushed it after each operation
     return 0;
 }
 /*  @endcond */
