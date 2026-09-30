@@ -2489,11 +2489,15 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
             {
                 if ((checkstring(argv2[i] + 2, (unsigned char *)"VAL")) != NULL)
                 { // if BYVAL
+                    // Trap an array but not an array element.  Only a variable argument
+                    // (T_PTR) can be one: an expression's argVarIndex is 0, which is some
+                    // other variable, and with no '(' in it the scan below read past its text
+                    int isvar = argtype[i] & T_PTR;
+
                     // Only if not an array remove any pointer flag in the caller
                     argtype[i] = 0;
 
-                    // Trap an array but not an array element
-                    if (DimIsRealArray(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
+                    if (isvar && DimIsRealArray(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
                     {
                         /* See if we have an array or an array element */
                         tp = argv1[i];
