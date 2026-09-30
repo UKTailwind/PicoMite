@@ -489,34 +489,34 @@ PEEK(BYTE)
 ~OPTIONS
 OPTION settings
 
-OPTION                         OPTION LCDPANEL USER
-OPTION ANGLE                   OPTION LEGACY ON
-OPTION AUDIO                   OPTION LIST
-OPTION AUDIO I2S               OPTION LOCAL KEYBOARD ON
-OPTION AUDIO SPI               OPTION LOCAL VARIABLES
-OPTION AUDIO VS1053            OPTION LOGGING ON
-OPTION AUTOREFRESH             OPTION MILLISECONDS
-OPTION AUTORUN ON              OPTION MODBUFF
-OPTION BACKLIGHT KBD           OPTION MOUSE
-OPTION BASE                    OPTION MOUSE DISABLE
-OPTION BAUDRATE                OPTION MOUSE SENSITIVITY
-OPTION BREAK                   OPTION NOCHECK
-OPTION CASE                    OPTION PICO
-OPTION CDC POLL RATE           OPTION PICO PLUS
-OPTION COLOURCODE ON           OPTION PIN
-OPTION COMPILE ON              OPTION PLATFORM
-OPTION CONSOLE                 OPTION POWER
-OPTION CONTINUATION LINES      OPTION PROFILING ON
-OPTION COUNT                   OPTION PS2 PINS
-OPTION CPUSPEED                OPTION PSRAM PIN
-OPTION DEFAULT                 OPTION RESET
-OPTION DEFAULT COLOURS         OPTION RESOLUTION
-OPTION DEFAULT MODE            OPTION RTC AUTO
-OPTION DISK SAVE               OPTION SCREEN KEYBOARD
-OPTION DISPLAY                 OPTION SDCARD
-OPTION ESCAPE                  OPTION SDCARD COMBINED CS
-OPTION EXPLICIT                OPTION SERIAL CONSOLE
-OPTION FAST AUDIO              OPTION SERIAL CONSOLE DISABLE
+OPTION                         OPTION LEGACY ON
+OPTION ANGLE                   OPTION LIST
+OPTION AUDIO                   OPTION LOCAL KEYBOARD ON
+OPTION AUDIO I2S               OPTION LOCAL VARIABLES
+OPTION AUDIO SPI               OPTION LOGGING ON
+OPTION AUDIO VS1053            OPTION MILLISECONDS
+OPTION AUTOREFRESH             OPTION MODBUFF
+OPTION AUTORUN ON              OPTION MOUSE
+OPTION BACKLIGHT KBD           OPTION MOUSE DISABLE
+OPTION BASE                    OPTION MOUSE SENSITIVITY
+OPTION BAUDRATE                OPTION NOCHECK
+OPTION BREAK                   OPTION PICO
+OPTION CASE                    OPTION PICO PLUS
+OPTION CDC POLL RATE           OPTION PIN
+OPTION COLOURCODE ON           OPTION PLATFORM
+OPTION COMPILE ON              OPTION POWER
+OPTION CONSOLE                 OPTION PROFILING ON
+OPTION CONTINUATION LINES      OPTION PS2 PINS
+OPTION COUNT                   OPTION PSRAM PIN
+OPTION CPUSPEED                OPTION RESET
+OPTION DEFAULT                 OPTION RESOLUTION
+OPTION DEFAULT COLOURS         OPTION RTC AUTO
+OPTION DEFAULT MODE            OPTION SCREEN KEYBOARD
+OPTION DISK SAVE               OPTION SDCARD
+OPTION DISPLAY                 OPTION SDCARD COMBINED CS
+OPTION ESCAPE                  OPTION SERIAL CONSOLE
+OPTION EXPLICIT                OPTION SERIAL CONSOLE DISABLE
+OPTION FAST AUDIO              OPTION SYMBOLS OFF
 OPTION GPS                     OPTION SYSTEM I2C
 OPTION GUI CONTROLS            OPTION SYSTEM SPI
 OPTION HDMI PINS               OPTION TAB
@@ -530,6 +530,7 @@ OPTION LCD320                  OPTION VCC
 OPTION LCDPANEL                OPTION VGA PINS
 OPTION LCDPANEL CONSOLE        OPTION WEB MESSAGES
 OPTION LCDPANEL NOCONSOLE      OPTION WIFI
+OPTION LCDPANEL USER
 
 ~VARIABLES
 Predefined read-only variables
@@ -10115,6 +10116,19 @@ These commands must be run at the command prompt (not in a program).
 OPTION SERIAL CONSOLE DISABLE
 
 Described with the rest of its family:  HELP OPTION SERIAL CONSOLE
+
+~OPTION SYMBOLS OFF
+OPTION SYMBOLS OFF
+
+Placing this command at the start of a program will cause it to run without
+the symbol tables that MMBasic normally builds when a program is run.  These
+tables speed up access to variables, subroutines and functions but they use
+some memory (typically 3KB to 5KB) and a large program written for an earlier
+version of MMBasic may need that memory.  If such a program runs out of memory
+the error message will suggest this option.
+It must be on a line by itself before any other command except for comment
+lines and a LIBRARY LOAD command (which can come before or after it).  It
+cannot be used at the command prompt.
 
 ~OPTION SYSTEM I2C
 OPTION SYSTEM I2C sdapin, sclpin [,SLOW/FAST]
