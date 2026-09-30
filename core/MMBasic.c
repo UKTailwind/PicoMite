@@ -6319,6 +6319,10 @@ void MIPS16 error(char *msg, ...)
        path, which matters on the RP2350 builds where stack is tight. */
     char *p, *tp, tstr[STRINGSIZE];
     va_list ap;
+    // an error part way through a flash write (tokenise() in SaveProgramToFlash,
+    // say) would print with the interrupts off: USB stops and core 0 hangs
+    if (irqs_off_pico)
+        enable_interrupts_pico();
     ScrewUpTimer = 0;
     // first build the error message in the global string MMErrMsg
     if (MMerrno == 0)
