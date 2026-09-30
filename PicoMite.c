@@ -4856,8 +4856,7 @@ uint32_t testPSRAM(void)
                 p += p[1] + 2; // skip over the label
                 skipspace(p);  // and any following spaces
             }
-            tkn = p[0] & 0x7f;
-            tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
+            tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
             if (tkn == cmdCSUB || tkn == GetCommandValue((unsigned char *)"DefineFont"))
             { // found a CFUNCTION, CSUB or DEFINEFONT token
                 if (tkn == GetCommandValue((unsigned char *)"DefineFont"))
@@ -4966,8 +4965,7 @@ uint32_t testPSRAM(void)
                     if (*p == T_LINENBR)
                         p += 3; // skip over the line number
                     skipspace(p);
-                    tkn = p[0] & 0x7f;
-                    tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
+                    tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
                 storedupdates[updatecount++] = realflashpointer - SaveSizeAddr - 4;
             }
@@ -4998,8 +4996,7 @@ uint32_t testPSRAM(void)
                 p += p[1] + 2; // skip over the label
                 skipspace(p);  // and any following spaces
             }
-            tkn = p[0] & 0x7f;
-            tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
+            tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
             if (tkn == cmdCSUB || tkn == GetCommandValue((unsigned char *)"DefineFont"))
             { // found a CFUNCTION, CSUB or DEFINEFONT token
                 if (tkn == GetCommandValue((unsigned char *)"DefineFont"))
@@ -5106,8 +5103,7 @@ uint32_t testPSRAM(void)
                     if (*p == T_LINENBR)
                         p += 3; // skip over a line number
                     skipspace(p);
-                    tkn = p[0] & 0x7f;
-                    tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
+                    tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
             }
             while (*p)

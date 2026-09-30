@@ -2005,7 +2005,7 @@ void MIPS16 cmd_library(void)
                                  //                TempPtr = m;
                 skipspace(p);
             }
-            tkn = commandtbl_decode(p);
+            tkn = commandtbl_at(p);
             // if(CmdExpected && ( *p == GetCommandValue("End CFunction") || *p == GetCommandValue("End CSub") || *p == GetCommandValue("End DefineFont"))) {
             if (CmdExpected && (tkn == GetCommandValue((unsigned char *)"End CSub") || tkn == GetCommandValue((unsigned char *)"End DefineFont")))
             {
@@ -2018,7 +2018,7 @@ void MIPS16 cmd_library(void)
                 continue;
             }
 
-            tkn = commandtbl_decode(p);
+            tkn = commandtbl_at(p);
             if (CmdExpected && (tkn == cmdCSUB || tkn == GetCommandValue((unsigned char *)"DefineFont")))
             {                                       // found a  CSUB or DEFINEFONT token
                 CFunDefAddr[++j] = (unsigned int)m; // save its address so that the binary copy in the library can point to it
@@ -2027,7 +2027,7 @@ void MIPS16 cmd_library(void)
                 InCFun = true;
             }
 
-            tkn = commandtbl_decode(p);
+            tkn = commandtbl_at(p);
             if (CmdExpected && tkn == rem)
             { // found a REM token
                 skipline(p);
@@ -9462,7 +9462,7 @@ void cmd_cfunction(void)
             p += p[1] + 2; // skip over the label
             skipspace(p);  // and any following spaces
         }
-        tkn = commandtbl_decode(p);
+        tkn = commandtbl_at(p);
         if (tkn == EndToken)
         { // found an END token
             nextstmt = (unsigned char *)p;
@@ -10554,7 +10554,7 @@ GotAnInterrupt:
     MMerrline = 0;
     InterruptReturn = nextstmt; // for when IRETURN is executed
     // if the interrupt is pointing to a SUB token we need to call a subroutine
-    CommandToken tkn = commandtbl_decode((const unsigned char *)intaddr);
+    CommandToken tkn = commandtbl_at((const unsigned char *)intaddr);
     if (tkn == cmdSUB)
     {
         rti[0] = (cmdIRET & 0x7f) + C_BASETOKEN;

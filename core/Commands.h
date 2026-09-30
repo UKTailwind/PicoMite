@@ -149,5 +149,16 @@ static inline CommandToken commandtbl_decode(const unsigned char *p)
     return ((CommandToken)(p[0] & 0x7f)) | ((CommandToken)(p[1] & 0x7f) << 7);
 }
 
+// The command token that p starts with, or CMD_NOTOKEN when p starts a name
+// instead (a SUB call).  A one-letter name is followed by a zero, which
+// commandtbl_decode reads as the token numbered by the letter: on RP2040 VGA a
+// line "t" was DefineFont to the save and "a" a CSUB.  Scans that walk
+// statements test with this, as the executor does before it decodes.
+#define CMD_NOTOKEN ((CommandToken)0xFFFF)
+static inline CommandToken commandtbl_at(const unsigned char *p)
+{
+    return (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN) ? commandtbl_decode(p) : CMD_NOTOKEN;
+}
+
 #endif
 /*  @endcond */
