@@ -4530,6 +4530,19 @@ uint32_t testPSRAM(void)
             CurrentLinePtr = NULL; // do not use the line number in error reporting
             if (MMCharPos > 1)
                 MMPrintString("\r\n"); // prompt should be on a new line
+            {
+                /* the stack reached its last 1K above the limit since the last prompt
+                   (StackNearLimit, MMBasic.c) */
+                extern uint32_t StackLow;
+                extern int StackLowDepth;
+                if (StackLow)
+                {
+                    char sbuf[96];
+                    sprintf(sbuf, "Warning: the stack came within %d bytes of its limit, at depth %d\r\n", (int)(StackLow - heapend), StackLowDepth);
+                    MMPrintString(sbuf);
+                    StackLow = 0;
+                }
+            }
             while (Option.PIN && !IgnorePIN)
             {
                 if (Option.PIN == 99999999) // 99999999 is permanent lockdown

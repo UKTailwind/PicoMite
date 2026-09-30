@@ -727,6 +727,9 @@ unsigned short cmdSUB, cmdFUN, cmdCFUN, cmdCSUB, cmdIRET, cmdComment, cmdEndComm
 unsigned short cmdTYPE, cmdEND_TYPE; // Structure type definition commands
 #endif
 uint32_t heapend;
+uint32_t stackwarn;  // heapend + 1K: a stack below this is noted by StackNearLimit
+uint32_t StackLow;   // the lowest stack noted since the last prompt, 0 for none (warned at the prompt)
+int StackLowDepth;   // g_LocalIndex when it was noted
 
 #ifdef STRUCTENABLED
 // Calculate the natural alignment needed for a structure (used to pad arrays of structs)
@@ -824,17 +827,34 @@ void MIPS16 InitBasic(void)
 #endif
     SymInit();
     heapend = (uint32_t)&__heap_start + PICO_HEAP_SIZE;
+    stackwarn = heapend + 1024;
     //  SInt(CommandTableSize);
     //   SIntComma(TokenTableSize);
     //    SSPrintString("\r\n");
+}
+// the stack is in its last 1K above heapend: below heapend it has overflowed, otherwise
+// the lowest is kept for a warning at the prompt (a check comes once per value or argument
+// list, and the stack goes some hundreds of bytes deeper between two of them)
+void __attribute__((noinline)) StackNearLimit(uint32_t stack)
+{
+    if (stack < heapend)
+    {
+        StackLow = 0;
+        error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)heapend);
+    }
+    if (StackLow == 0 || stack < StackLow)
+    {
+        StackLow = stack;
+        StackLowDepth = g_LocalIndex;
+    }
 }
 // test the stack for overflow - this is a NULL function in the DOS version
 static inline void TestStackOverflow(void)
 {
     uint32_t stack;
     __asm volatile("MRS %0, msp" : "=r"(stack));
-    if (stack < heapend)
-        error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)heapend);
+    if (stack < stackwarn)
+        StackNearLimit(stack);
 }
 /********************************************************************************************************************************************
  Code associated with processing user defined subroutines and functions
