@@ -6781,6 +6781,12 @@ void MIPS16 ClearRuntime(bool all)
     MMerrno = 0; // clear the error flags
     MMerrline = 0;
     *MMErrMsg = 0;
+    if (all)
+    { // OPTION LOCAL VARIABLES belongs to the program that set it, as OPTION EXPLICIT does
+      // (not on CHAIN, whose saved variables were placed with the split in force)
+        maxlocalvars = MAXLOCALVARS;
+        maxglobalvars = MAXGLOBALVARS;
+    }
     ClearVars(0, true);
 #if !(defined(PICOMITEWEB) || defined(PICOMITEMIN))
     turtle_free(); // Free turtle state before heap is wiped
