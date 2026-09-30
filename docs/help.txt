@@ -488,21 +488,22 @@ PEEK(BYTE)
 ~OPTIONS
 OPTION settings
 
-OPTION                         OPTION LEGACY ON
-OPTION ANGLE                   OPTION LIST
-OPTION AUDIO                   OPTION LOCAL KEYBOARD ON
-OPTION AUDIO I2S               OPTION LOCAL VARIABLES
-OPTION AUDIO SPI               OPTION LOGGING ON
-OPTION AUDIO VS1053            OPTION MILLISECONDS
-OPTION AUTOREFRESH             OPTION MODBUFF
-OPTION AUTORUN ON              OPTION MOUSE
-OPTION BACKLIGHT KBD           OPTION MOUSE DISABLE
-OPTION BASE                    OPTION MOUSE SENSITIVITY
-OPTION BAUDRATE                OPTION NOCHECK
-OPTION BREAK                   OPTION PICO
-OPTION CASE                    OPTION PICO PLUS
-OPTION CDC POLL RATE           OPTION PIN
-OPTION COLOURCODE ON           OPTION PLATFORM
+OPTION                         OPTION LCDPANEL USER
+OPTION ANGLE                   OPTION LEGACY ON
+OPTION AUDIO                   OPTION LIST
+OPTION AUDIO I2S               OPTION LOCAL KEYBOARD ON
+OPTION AUDIO SPI               OPTION LOCAL VARIABLES
+OPTION AUDIO VS1053            OPTION LOGGING ON
+OPTION AUTOREFRESH             OPTION MILLISECONDS
+OPTION AUTORUN ON              OPTION MODBUFF
+OPTION BACKLIGHT KBD           OPTION MOUSE
+OPTION BASE                    OPTION MOUSE DISABLE
+OPTION BAUDRATE                OPTION MOUSE SENSITIVITY
+OPTION BREAK                   OPTION NOCHECK
+OPTION CASE                    OPTION PICO
+OPTION CDC POLL RATE           OPTION PICO PLUS
+OPTION COLOURCODE ON           OPTION PIN
+OPTION COMPILE ON              OPTION PLATFORM
 OPTION CONSOLE                 OPTION POWER
 OPTION CONTINUATION LINES      OPTION PROFILING ON
 OPTION COUNT                   OPTION PS2 PINS
@@ -528,7 +529,6 @@ OPTION LCD320                  OPTION VCC
 OPTION LCDPANEL                OPTION VGA PINS
 OPTION LCDPANEL CONSOLE        OPTION WEB MESSAGES
 OPTION LCDPANEL NOCONSOLE      OPTION WIFI
-OPTION LCDPANEL USER
 
 ~VARIABLES
 Predefined read-only variables
@@ -546,17 +546,18 @@ MM.HPOS                    MM.INFO(BOOT COUNT)
 MM.HRES                    MM.INFO(BOOT)
 MM.I2C                     MM.INFO(CALLTABLE)
 MM.INFO                    MM.INFO(CHARGING)
-MM.INFO$(ADC DMA)          MM.INFO(CPUSPEED)
-MM.INFO$(ADC)              MM.INFO(CURRENT)
-MM.INFO$(AUTORUN)          MM.INFO(DISK SIZE)
-MM.INFO$(BATTERY)          MM.INFO(DRIVE)
-MM.INFO$(BBC BUFFER)       MM.INFO(EXISTS DIR)
-MM.INFO$(BCOLOUR)          MM.INFO(EXISTS FILE)
-MM.INFO$(BIOS)             MM.INFO(FCOLOUR)
-MM.INFO$(BOOT COUNT)       MM.INFO(FILESIZE)
-MM.INFO$(BOOT)             MM.INFO(FLASH ADDRESS)
-MM.INFO$(CALLTABLE)        MM.INFO(FLASH)
-MM.INFO$(CHARGING)         MM.INFO(FLASHTOP)
+MM.INFO$(ADC DMA)          MM.INFO(COMPILE)
+MM.INFO$(ADC)              MM.INFO(CPUSPEED)
+MM.INFO$(AUTORUN)          MM.INFO(CURRENT)
+MM.INFO$(BATTERY)          MM.INFO(DISK SIZE)
+MM.INFO$(BBC BUFFER)       MM.INFO(DRIVE)
+MM.INFO$(BCOLOUR)          MM.INFO(EXISTS DIR)
+MM.INFO$(BIOS)             MM.INFO(EXISTS FILE)
+MM.INFO$(BOOT COUNT)       MM.INFO(FCOLOUR)
+MM.INFO$(BOOT)             MM.INFO(FILESIZE)
+MM.INFO$(CALLTABLE)        MM.INFO(FLASH ADDRESS)
+MM.INFO$(CHARGING)         MM.INFO(FLASH)
+MM.INFO$(COMPILE)          MM.INFO(FLASHTOP)
 MM.INFO$(CPUSPEED)         MM.INFO(FONT ADDRESS)
 MM.INFO$(CURRENT)          MM.INFO(FONT POINTER)
 MM.INFO$(DISK SIZE)        MM.INFO(FONT)
@@ -7749,6 +7750,20 @@ MM.INFO$(CHARGING)
 
 Described with the rest of its family:  HELP MM.INFO(CHARGING)
 
+~MM.INFO$(COMPILE)
+MM.INFO$(COMPILE)
+
+RP2350 VERSIONS ONLY
+Returns what the last RUN did with the compiler (see OPTION COMPILE), for
+example COMPILED 3 REUSED 1 STMTS 3227 RAN 714382 MISS 25707 CODE 680945 SIZE
+132348 OF 966656.  COMPILED (NONE at the command prompt) and REUSED count the
+compiles, and the runs that found the program already compiled, since power
+on.  STMTS is the number of statements compiled, RAN the number of statements
+the last run executed and CODE how many of those ran as compiled code, so CODE
+divided by RAN is the share that ran compiled.  SIZE gives the space used, of
+the space available.  MISS is internal.  Returns OFF when the compiler is off,
+or TEXT: and the reason when the program ran entirely on the interpreter.
+
 ~MM.INFO$(CPUSPEED)
 MM.INFO$(CPUSPEED)
 
@@ -8171,6 +8186,11 @@ Described with the rest of its family:  HELP MM.INFO$(CALLTABLE)
 MM.INFO(CHARGING)
 
 PicoCalc only: Returns the charging status
+
+~MM.INFO(COMPILE)
+MM.INFO(COMPILE)
+
+Described with the rest of its family:  HELP MM.INFO$(COMPILE)
 
 ~MM.INFO(CPUSPEED)
 MM.INFO(CPUSPEED)
@@ -9374,6 +9394,31 @@ This will work on VGA/HDMI video and the serial console using a terminal
 emulator with VT100 emulation (eg, Tera Term).  This command must be run at
 the command prompt (not in a program).
 
+~OPTION COMPILE ON
+OPTION COMPILE ON
+or
+OPTION COMPILE SHADOW
+or
+OPTION COMPILE OFF
+
+RP2350 VERSIONS ONLY Controls the compiler.  With ON, RUN compiles the program
+(and its library, if there is one) into a stream of native operations and runs
+that.  Statements that the compiler cannot take run on the interpreter as
+before, interleaved with the compiled ones, so a program does not need to be
+changed and gives exactly the same results.
+SHADOW compiles in the same way but also works out every compiled value again
+with the interpreter, and stops at the first statement where the two disagree.
+It is slower than ON and is meant for checking a program.  OFF (the default)
+interprets the program only.
+The setting takes effect at the next RUN and is saved with the other options.
+A program is compiled again only when it, or its library, has changed since
+the last compile, so the first RUN after an edit takes a little longer.
+MM.INFO$(COMPILE) reports what the last RUN compiled and how much of the
+program ran compiled, and OPTION PROFILING ON lists the statements that ran on
+the interpreter.
+With PSRAM the compiled program is kept in PSRAM reserved by the firmware;
+without PSRAM it is kept in flash after the program memory.
+
 ~OPTION CONSOLE
 OPTION CONSOLE output
 
@@ -9738,9 +9783,10 @@ OPTION LOCAL VARIABLES n
 This command sets the number of the total variables (MM.INFO(MAX VARS) to
 assign as local variables. In general, this should not be needed but, for
 example, if you want to assign a lot of global constants and don't  need many
-local variables then it could be used to change the balance. This is a
-temporary option that endures until the processor is reset. It can not be
-called if any variables have already been defined.
+local variables then it could be used to change the balance. It applies to the
+program that sets it: RUN, NEW and LOAD return to the default split, while
+CHAIN keeps it for the chained program.  It can not be called if any variables
+have already been defined.
 
 ~OPTION LOGGING ON
 OPTION LOGGING ON
@@ -9906,6 +9952,8 @@ Full details: option-profiling-cache.pdf
 OPTION PROFILING ON
 or
 OPTION PROFILING OFF
+or
+OPTION PROFILING ON, SAMPLE [, entries]
 
 Enables or disables the execution profiler.  When enabled, counters record how
 often each statement executes and a [PERF] report listing the most executed
@@ -9915,6 +9963,18 @@ If the report shows that most of the time goes in a few subroutines or
 functions, the mmb2csub tool can convert them into CSUBs, which run many times
 faster (typically 10 to 35 times for loops and arithmetic).  See the separate
 manual mmb2csub.pdf.
+The option must be in the program, as RUN turns profiling off, and the report
+is printed by END: not when a program runs off its last line or is stopped
+with CTRL-C.  The report also gives local_peak, the most local variables alive
+at once, of the number available.
+OPTION PROFILING ON, SAMPLE also samples where the processor is about 10,000
+times a second, and the report adds the program lines that took the most
+samples, as [PCSLINE] line samples (a line of -1 is in the library).
+'entries' sets the size of the sample tables, from 256 to 65536 (default
+4096).
+With OPTION COMPILE ON the statement count and the list of commands cover only
+the statements that ran on the interpreter, so the list shows exactly what was
+not compiled, busiest first.
 See the separate manual option-profiling-cache.pdf for the details.
 
 ~OPTION PS2 PINS

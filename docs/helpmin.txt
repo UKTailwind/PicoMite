@@ -488,21 +488,22 @@ PEEK(BYTE)
 ~OPTIONS
 OPTION settings
 
-OPTION                         OPTION LEGACY ON
-OPTION ANGLE                   OPTION LIST
-OPTION AUDIO                   OPTION LOCAL KEYBOARD ON
-OPTION AUDIO I2S               OPTION LOCAL VARIABLES
-OPTION AUDIO SPI               OPTION LOGGING ON
-OPTION AUDIO VS1053            OPTION MILLISECONDS
-OPTION AUTOREFRESH             OPTION MODBUFF
-OPTION AUTORUN ON              OPTION MOUSE
-OPTION BACKLIGHT KBD           OPTION MOUSE DISABLE
-OPTION BASE                    OPTION MOUSE SENSITIVITY
-OPTION BAUDRATE                OPTION NOCHECK
-OPTION BREAK                   OPTION PICO
-OPTION CASE                    OPTION PICO PLUS
-OPTION CDC POLL RATE           OPTION PIN
-OPTION COLOURCODE ON           OPTION PLATFORM
+OPTION                         OPTION LCDPANEL USER
+OPTION ANGLE                   OPTION LEGACY ON
+OPTION AUDIO                   OPTION LIST
+OPTION AUDIO I2S               OPTION LOCAL KEYBOARD ON
+OPTION AUDIO SPI               OPTION LOCAL VARIABLES
+OPTION AUDIO VS1053            OPTION LOGGING ON
+OPTION AUTOREFRESH             OPTION MILLISECONDS
+OPTION AUTORUN ON              OPTION MODBUFF
+OPTION BACKLIGHT KBD           OPTION MOUSE
+OPTION BASE                    OPTION MOUSE DISABLE
+OPTION BAUDRATE                OPTION MOUSE SENSITIVITY
+OPTION BREAK                   OPTION NOCHECK
+OPTION CASE                    OPTION PICO
+OPTION CDC POLL RATE           OPTION PICO PLUS
+OPTION COLOURCODE ON           OPTION PIN
+OPTION COMPILE ON              OPTION PLATFORM
 OPTION CONSOLE                 OPTION POWER
 OPTION CONTINUATION LINES      OPTION PROFILING ON
 OPTION COUNT                   OPTION PS2 PINS
@@ -528,7 +529,6 @@ OPTION LCD320                  OPTION VCC
 OPTION LCDPANEL                OPTION VGA PINS
 OPTION LCDPANEL CONSOLE        OPTION WEB MESSAGES
 OPTION LCDPANEL NOCONSOLE      OPTION WIFI
-OPTION LCDPANEL USER
 
 ~VARIABLES
 Predefined read-only variables
@@ -546,17 +546,18 @@ MM.HPOS                    MM.INFO(BOOT COUNT)
 MM.HRES                    MM.INFO(BOOT)
 MM.I2C                     MM.INFO(CALLTABLE)
 MM.INFO                    MM.INFO(CHARGING)
-MM.INFO$(ADC DMA)          MM.INFO(CPUSPEED)
-MM.INFO$(ADC)              MM.INFO(CURRENT)
-MM.INFO$(AUTORUN)          MM.INFO(DISK SIZE)
-MM.INFO$(BATTERY)          MM.INFO(DRIVE)
-MM.INFO$(BBC BUFFER)       MM.INFO(EXISTS DIR)
-MM.INFO$(BCOLOUR)          MM.INFO(EXISTS FILE)
-MM.INFO$(BIOS)             MM.INFO(FCOLOUR)
-MM.INFO$(BOOT COUNT)       MM.INFO(FILESIZE)
-MM.INFO$(BOOT)             MM.INFO(FLASH ADDRESS)
-MM.INFO$(CALLTABLE)        MM.INFO(FLASH)
-MM.INFO$(CHARGING)         MM.INFO(FLASHTOP)
+MM.INFO$(ADC DMA)          MM.INFO(COMPILE)
+MM.INFO$(ADC)              MM.INFO(CPUSPEED)
+MM.INFO$(AUTORUN)          MM.INFO(CURRENT)
+MM.INFO$(BATTERY)          MM.INFO(DISK SIZE)
+MM.INFO$(BBC BUFFER)       MM.INFO(DRIVE)
+MM.INFO$(BCOLOUR)          MM.INFO(EXISTS DIR)
+MM.INFO$(BIOS)             MM.INFO(EXISTS FILE)
+MM.INFO$(BOOT COUNT)       MM.INFO(FCOLOUR)
+MM.INFO$(BOOT)             MM.INFO(FILESIZE)
+MM.INFO$(CALLTABLE)        MM.INFO(FLASH ADDRESS)
+MM.INFO$(CHARGING)         MM.INFO(FLASH)
+MM.INFO$(COMPILE)          MM.INFO(FLASHTOP)
 MM.INFO$(CPUSPEED)         MM.INFO(FONT ADDRESS)
 MM.INFO$(CURRENT)          MM.INFO(FONT POINTER)
 MM.INFO$(DISK SIZE)        MM.INFO(FONT)
@@ -4509,6 +4510,15 @@ MM.INFO$(CHARGING)
 
 Described with the rest of its family:  HELP MM.INFO(CHARGING)
 
+~MM.INFO$(COMPILE)
+MM.INFO$(COMPILE)
+
+RP2350 VERSIONS ONLY Returns what the last RUN did with the compiler (see
+OPTION COMPILE), for example COMPILED 3 REUSED 1 STMTS 3227 RAN 714382 MISS
+25707 CODE 680945 SIZE 132348 OF 966656. COMPILED (NONE at the command prompt)
+and REUSED count the compiles, and the runs that found the program already
+compiled, since power on.
+
 ~MM.INFO$(CPUSPEED)
 MM.INFO$(CPUSPEED)
 
@@ -4918,6 +4928,11 @@ Described with the rest of its family:  HELP MM.INFO$(CALLTABLE)
 MM.INFO(CHARGING)
 
 PicoCalc only: Returns the charging status
+
+~MM.INFO(COMPILE)
+MM.INFO(COMPILE)
+
+Described with the rest of its family:  HELP MM.INFO$(COMPILE)
 
 ~MM.INFO(CPUSPEED)
 MM.INFO(CPUSPEED)
@@ -5657,6 +5672,17 @@ OPTION COLOURCODE OFF
 Turn on or off colour coding for the editor's output. Keywords will be in
 cyan, comments in yellow, etc.
 
+~OPTION COMPILE ON
+OPTION COMPILE ON
+or
+OPTION COMPILE SHADOW
+or
+OPTION COMPILE OFF
+
+RP2350 VERSIONS ONLY Controls the compiler. With ON, RUN compiles the program
+(and its library, if there is one) into a stream of native operations and runs
+that.
+
 ~OPTION CONSOLE
 OPTION CONSOLE output
 
@@ -6004,6 +6030,8 @@ for itself and could make programs slower.
 OPTION PROFILING ON
 or
 OPTION PROFILING OFF
+or
+OPTION PROFILING ON, SAMPLE [, entries]
 
 Enables or disables the execution profiler. When enabled, counters record how
 often each statement executes and a [PERF] report listing the most executed
