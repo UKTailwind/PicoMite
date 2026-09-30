@@ -10,7 +10,9 @@ and 27).
     and FIX (plain casts) now go through FloatToInt64 too.
 27  An integer power ran one multiplication per unit of the exponent, with no
     CTRL-C; exponentiation by squaring gives the same wrapped results.
-(Before the fix, the -INF line hangs an RP2040: do not run this on an old build.)"""
+(Before the fix, the -INF line hangs an RP2040: do not run this on an old build.)
+Since adb769f a subtraction that overflows to +INF stops with Overflow, as + and
+* do, so the NaN here is made from -INF, which all three let through."""
 import sys, os, re, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "elite_tools"))
 import pc3
@@ -19,9 +21,12 @@ CASES = [
     ("?ABS(-1e19); ABS(-1.5); ABS(-7)", " 1e+19 1.5 7"),
     ("?SGN(1e300); SGN(-1e300); SGN(0); SGN(-3)", " 1-1 0-1"),
     ('?ABS("x")', "Error : Expected a number"),
-    ("?1e308-(-1e308)", " INF"),
-    ("?-1e308-1e308", "-INF"),
-    ("x=1e308-(-1e308) : y=x-x : ?y", ("NAN", " INF")),   # the RP2040's soft float gives INF for INF-INF
+    ("?1e308-(-1e308)", "Error : Overflow"),   # as + and * (adb769f; it printed INF before)
+    ("?-1e308-1e308", "-INF"),                 # -INF passes, on all three
+    # NaN on the RP2350; the RP2040's soft float gives +INF for -INF-(-INF) (and for
+    # INF/INF, and -INF for INF*0), which the Overflow check refuses: ON ERROR SKIP
+    # leaves y = -INF there, and the next two must refuse that just the same
+    ("x=-1e308-1e308 : y=x : On Error Skip : y=x-x : ?y", ("NAN", "-INF")),
     ("z%=y", "Error : Number too large"),
     ("?INT(y)", "Error : Number too large"),
     ("?FIX(-1e30)", "Error : Number too large"),
