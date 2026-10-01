@@ -118,7 +118,11 @@ void *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsigned ch
 int FindStructBase(unsigned char *basename, int baselen, int *pvindex);
 #endif
 
-struct s_vartbl __attribute__((aligned(64))) g_vartbl[MAXVARS] = {0}; // this table stores all variables
+struct s_vartbl __attribute__((aligned(64))) g_vartbl[MAXLOCALVARS] = {0}; // the locals' records
+struct s_vartbl *g_slotrec[MAXVARS];                                      // the record of each variable number (VREC)
+struct s_varmem g_varmem;                                                 // the globals' record chunks (MMBasic.h)
+static struct s_vartbl g_emptyrec;                                        // every free global slot's record
+static struct s_vartbl g_blockedrec = {.name = "~", .type = T_BLOCKED};   // every blocked one's (see erase)
 int g_varcnt = 0;                                                     // number of variables
 int g_VarIndex;                                                       // Global set by findvar after a variable has been created or found
 int g_Localvarcnt;                                                    // number of LOCAL variables
@@ -765,6 +769,100 @@ static int GetStructAlignment(struct s_structdef *sd)
  Program management
  Includes the routines to initialise MMBasic, start running the interpreter, and to run a program in memory
 *********************************************************************************************************************************************/
+
+// every variable number's record with no global made: a local's in g_vartbl,
+// a global slot free (at boot, and whenever the globals go or the split moves)
+void InitVarSlots(void)
+{
+    for (int i = 0; i < MAXVARS; i++)
+        g_slotrec[i] = i < maxlocalvars ? &g_vartbl[i] : &g_emptyrec;
+}
+
+// a record of its own, not one of the placeholders shared by free and blocked slots
+static inline bool VarRecordReal(struct s_vartbl *r)
+{
+    return r != &g_emptyrec && r != &g_blockedrec;
+}
+
+// the heap has been wiped: the chunks went with it, and so did every global
+void VarChunksForget(void)
+{
+    memset(&g_varmem, 0, sizeof(g_varmem));
+    InitVarSlots();
+}
+
+// the globals have gone (CLEAR, RUN...; their data already freed): every slot
+// free, and the chunks' records handed out again from the first.  The chunks
+// stay until the heap is wiped: IR, KEYPAD, PLAY STREAM and TCP STREAM can
+// still be writing to a global's value, and CLEAR does not stop them, so that
+// memory must not become something else's.
+static void VarRecordsReset(void)
+{
+    g_varmem.free = NULL;
+    g_varmem.cur = 0;
+    g_varmem.next = g_varmem.chunks ? g_varmem.chunk[0] : NULL;
+    g_varmem.end = g_varmem.chunks ? g_varmem.chunk[0] + VARCHUNK : NULL;
+    InitVarSlots();
+}
+
+// one chunk of globals' records at RUN, at the top of the empty heap, so a
+// program with up to VARCHUNK globals cannot run out of heap making one
+void VarChunkSeed(void)
+{
+    if (g_varmem.chunks == 0)
+    {
+        struct s_vartbl *r = (struct s_vartbl *)GetSRAMMemory(VARCHUNK * sizeof(struct s_vartbl));
+        g_varmem.chunk[g_varmem.chunks++] = r;
+        g_varmem.cur = 0;
+        g_varmem.next = r;
+        g_varmem.end = r + VARCHUNK;
+    }
+}
+
+// a zeroed record for the global about to be made in slot: an erased global's,
+// else the next unused one in the chunks, else one of a new chunk.  Called
+// before anything else is allocated for the variable, so "not enough memory"
+// leaves nothing behind; a record already in the slot (a failed DIM's) is used
+// again.
+static void VarRecordTake(int slot)
+{
+    struct s_vartbl *r = g_slotrec[slot];
+    if (!VarRecordReal(r))
+    {
+        if ((r = g_varmem.free) != NULL)
+            memcpy(&g_varmem.free, r->name, sizeof(g_varmem.free));
+        else
+        {
+            if (g_varmem.next == g_varmem.end)
+            {
+                if (g_varmem.cur + 1 < g_varmem.chunks)
+                    r = g_varmem.chunk[++g_varmem.cur]; // one CLEAR left
+                else
+                {
+                    r = (struct s_vartbl *)GetSRAMMemory(VARCHUNK * sizeof(struct s_vartbl));
+                    g_varmem.chunk[g_varmem.chunks] = r;
+                    g_varmem.cur = g_varmem.chunks++;
+                }
+                g_varmem.next = r;
+                g_varmem.end = r + VARCHUNK;
+            }
+            r = g_varmem.next++;
+        }
+        g_slotrec[slot] = r;
+    }
+    memset(r, 0, sizeof(struct s_vartbl));
+}
+
+// ERASE: the global in slot has gone, its data freed; its record goes on the
+// free list and the slot is left free, or blocked when a probe must pass it.
+// The link is kept in the name, which no background writer touches.
+static void VarRecordRelease(int slot, bool blocked)
+{
+    struct s_vartbl *r = g_slotrec[slot];
+    memcpy(r->name, &g_varmem.free, sizeof(g_varmem.free));
+    g_varmem.free = r;
+    g_slotrec[slot] = blocked ? &g_blockedrec : &g_emptyrec;
+}
 
 // Initialise MMBasic
 void MIPS16 InitBasic(void)
@@ -5540,6 +5638,7 @@ findvar_found:
     if (ifree == -1 && VREC(i)->name[0] != 0)
     {
         g_VarIndex = vindex = i;
+        struct s_vartbl *vr = VREC(i); // its record, read once
         if (symk >= 0 && vindex >= maxlocalvars)
             SymG[symk] = vindex; // bind the symbol to this global (see Symbols.h)
         if (g_option_profiling)
@@ -5558,34 +5657,34 @@ findvar_found:
         if (dnbr == 0)
         {
             // scalar reference: declared variable must also be scalar
-            if (DimIsAllocated(RAW_DIM((*VREC(vindex)), 0)))
+            if (DimIsAllocated(RAW_DIM((*vr), 0)))
                 error("Array dimensions");
             i = 0;
         }
         else if (dnbr == -1)
         {
             // empty-array reference (e.g. arr()): variable must be an array
-            if (DimIsScalar(RAW_DIM((*VREC(vindex)), 0)))
+            if (DimIsScalar(RAW_DIM((*vr), 0)))
                 error("Array dimensions");
         }
         else
         {
             // array reference with explicit indices: count declared dims
-            for (i = 0; i < MAXDIM && !DimIsEnd(RAW_DIM((*VREC(vindex)), i)); i++)
+            for (i = 0; i < MAXDIM && !DimIsEnd(RAW_DIM((*vr), i)); i++)
                 ;
             if (i != dnbr)
                 error("Array dimensions");
         }
 
-        if (!(VREC(vindex)->type & (vtype ? vtype : (DefaultType | T_IMPLIED))))
+        if (!(vr->type & (vtype ? vtype : (DefaultType | T_IMPLIED))))
             FindvarTypeError(symp, name); // (the fast path may not have read the name)
 
         // if it is a non arrayed variable or an empty array it is easy, just calculate and return a pointer to the value
-        if (dnbr == -1 || DimIsScalar(RAW_DIM((*VREC(vindex)), 0)))
+        if (dnbr == -1 || DimIsScalar(RAW_DIM((*vr), 0)))
         {
 #ifdef STRUCTENABLED
             // For empty array struct access like sortArr().x, skip past () first
-            if (dnbr == -1 && (VREC(vindex)->type & T_STRUCT) && *p == '(')
+            if (dnbr == -1 && (vr->type & T_STRUCT) && *p == '(')
             {
                 p++; // skip (
                 skipspace(p);
@@ -5594,10 +5693,10 @@ findvar_found:
                 skipspace(p);
             }
             // Check for struct member access on simple (non-array) struct: pt.x or sortArr().x
-            if ((VREC(vindex)->type & T_STRUCT) && *p == '.')
+            if ((vr->type & T_STRUCT) && *p == '.')
             {
-                unsigned char *struct_ptr = VREC(vindex)->val.s;
-                int struct_idx = (int)VREC(vindex)->size;
+                unsigned char *struct_ptr = vr->val.s;
+                int struct_idx = (int)vr->size;
 
                 p++; // skip the dot
 
@@ -5615,24 +5714,24 @@ findvar_found:
                 return result;
             }
             // For whole struct access (no member), return pointer to struct data
-            if (VREC(vindex)->type & T_STRUCT)
+            if (vr->type & T_STRUCT)
             {
-                return VREC(vindex)->val.s;
+                return vr->val.s;
             }
 #endif
-            if (dnbr == -1 || VREC(vindex)->type & (T_PTR | T_STR))
+            if (dnbr == -1 || vr->type & (T_PTR | T_STR))
             {
-                void *r = VREC(vindex)->val.s; // if it is a string or pointer just return the pointer to the data
+                void *r = vr->val.s; // if it is a string or pointer just return the pointer to the data
                 return r;
             }
-            else if (VREC(vindex)->type & (T_INT))
+            else if (vr->type & (T_INT))
             {
-                void *r = &(VREC(vindex)->val.i); // must be an integer, point to its value
+                void *r = &(vr->val.i); // must be an integer, point to its value
                 return r;
             }
             else
             {
-                void *r = &(VREC(vindex)->val.f); // must be a straight number (float), point to its value
+                void *r = &(vr->val.f); // must be a straight number (float), point to its value
                 return r;
             }
         }
@@ -5645,7 +5744,7 @@ findvar_found:
             error("Cannot re dimension array");
         for (i = 0; i < dnbr; i++)
         {
-            if (dim[i] > DimUpper(RAW_DIM((*VREC(vindex)), i)) || dim[i] < g_OptionBase)
+            if (dim[i] > DimUpper(RAW_DIM((*vr), i)) || dim[i] < g_OptionBase)
                 error("Index out of bounds");
         }
 
@@ -5654,19 +5753,19 @@ findvar_found:
         j = 1;
         for (i = 1; i < dnbr; i++)
         {
-            j *= DimElements(RAW_DIM((*VREC(vindex)), i - 1));
+            j *= DimElements(RAW_DIM((*vr), i - 1));
             nbr += (dim[i] - g_OptionBase) * j;
         }
 
 #ifdef STRUCTENABLED
         // Check for struct member access after array index: points(0).x or points(0).nested.member
-        if (VREC(vindex)->type & T_STRUCT)
+        if (vr->type & T_STRUCT)
         {
-            int current_struct_idx = (int)VREC(vindex)->size;
+            int current_struct_idx = (int)vr->size;
             if (current_struct_idx < 0 || current_struct_idx >= g_structcnt)
                 error("Invalid structure type index");
             int struct_size = g_structtbl[current_struct_idx]->total_size;
-            unsigned char *struct_ptr = VREC(vindex)->val.s + (nbr * struct_size);
+            unsigned char *struct_ptr = vr->val.s + (nbr * struct_size);
 
             skipspace(p);
             if (*p == '.')
@@ -5693,12 +5792,12 @@ findvar_found:
 #endif
 
         // finally return a pointer to the value
-        if (VREC(vindex)->type & T_NBR)
-            return VREC(vindex)->val.s + (nbr * sizeof(MMFLOAT));
-        else if (VREC(vindex)->type & T_INT)
-            return VREC(vindex)->val.s + (nbr * sizeof(long long int));
+        if (vr->type & T_NBR)
+            return vr->val.s + (nbr * sizeof(MMFLOAT));
+        else if (vr->type & T_INT)
+            return vr->val.s + (nbr * sizeof(long long int));
         else
-            return VREC(vindex)->val.s + (nbr * (VREC(vindex)->size + 1));
+            return vr->val.s + (nbr * (vr->size + 1));
     }
 
     // we reached this point if no existing variable has been found
@@ -5836,6 +5935,8 @@ findvar_found:
         if (dim[i] <= g_OptionBase)
 #endif
             error("Dimensions");
+    if (ifree >= maxlocalvars)
+        VarRecordTake(ifree); // a global's record (see MMBasic.h)
 #ifdef STRUCTENABLED
     unsigned char *structmem = NULL;
     if ((vtype & T_STRUCT) && dnbr != -1)
@@ -7086,6 +7187,8 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
     {
         for (i = 0; i < MAXVARS; i++) // CHANGED: still scans entire table (locals + globals)
         {
+            if (!VarRecordReal(VREC(i)))
+                continue; // a free or blocked global slot: a placeholder, nothing of its own
             // Free memory for strings, arrays, and structs (but not pointers)
 #ifdef STRUCTENABLED
             if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0)) || (VREC(i)->type & T_STRUCT)) && !(VREC(i)->type & T_PTR))
@@ -7114,9 +7217,11 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 }
             }
 #endif
-            memset(VREC(i), 0, sizeof(struct s_vartbl));
+            if (i < maxlocalvars)
+                memset(VREC(i), 0, sizeof(struct s_vartbl)); // (a global's record goes with its chunk)
         }
-        SymBindReset(); // every global binding has gone with its variable (see Symbols.h)
+        VarRecordsReset(); // every global slot free again, the records to be used again
+        SymBindReset();     // every global binding has gone with its variable (see Symbols.h)
     }
     // then step through the for...next table and remove any loops at the level or greater
     for (i = 0; i < g_forindex; i++)
@@ -7170,9 +7275,10 @@ void MIPS16 cmd_localvars(unsigned char *p)
 {
     if (g_Globalvarcnt || g_Localvarcnt)
         error("Variables already declared");
-    int i = getint(p, 32, MAXLOCALLIST);
+    int i = getint(p, 32, MAXLOCALVARS); // (g_vartbl holds the locals' records, for now)
     maxlocalvars = i;
     maxglobalvars = MAXVARS - i;
+    InitVarSlots(); // the slots each side of the new split
 }
 
 int GetLocalVarHashSize(void) // the local region's size (OPTION LOCAL VARIABLES)
@@ -7193,8 +7299,9 @@ int IsGlobalData(void *data)
     if (VREC(g_VarIndex)->type & T_PTR)
     {
         unsigned char *d = (unsigned char *)data;
-        if (d >= (unsigned char *)VREC(maxlocalvars) && d < (unsigned char *)VREC(MAXVARS))
-            return true; // a global scalar's value
+        for (int k = 0; k < g_varmem.chunks; k++)
+            if (d >= (unsigned char *)g_varmem.chunk[k] && d < (unsigned char *)(g_varmem.chunk[k] + VARCHUNK))
+                return true; // inside a global's record: a scalar's value, or a short string
         for (int i = maxlocalvars; i < MAXVARS; i++)
             if (VREC(i)->name[0] != 0 && VREC(i)->type != T_BLOCKED && VREC(i)->val.s == d)
                 return true; // a global array's or string's data, passed whole
@@ -7282,18 +7389,7 @@ uint32_t erase(char *p, bool nofree)
         k = j + 1;
         if (k == MAXVARS)
             k = maxlocalvars; // CHANGED: was MAXVARS/2
-        if (VREC(k)->type)
-        {
-            VREC(j)->name[0] = '~';
-            VREC(j)->type = T_BLOCKED;
-        }
-        else
-        {
-            VREC(j)->name[0] = 0;
-            VREC(j)->type = T_NOTYPE;
-        }
-        RAW_DIM((*VREC(j)), 0) = 0;
-        VREC(j)->level = 0;
+        VarRecordRelease(j, VREC(k)->type != T_NOTYPE); // blocked if a probe may have passed it
         g_Globalvarcnt--;
         g_varcnt = g_Globalvarcnt + g_Localvarcnt; // (CSUBs read it)
         DoFastForget(j);       // a DO condition that pointed at this variable must evaluate again
@@ -7449,6 +7545,7 @@ void MIPS16 ClearRuntime(bool all)
     g_structcnt = 0;
 #endif
     m_alloc(all ? M_VAR : M_LIMITED);
+    VarChunkSeed(); // the first chunk of globals' records (see MMBasic.h)
     memset(cmdlinebuff, 0, sizeof(cmdlinebuff));
     memset(datastore, 0, sizeof(struct sa_data) * MAXRESTORE);
     restorepointer = 0;

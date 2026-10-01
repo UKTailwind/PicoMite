@@ -319,13 +319,18 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <p class="meta">Gate: goldens identical on the RP2040 VGA and the PC3; solar_eclipse and bench_micro within noise; flash size noted.</p>
 <p class="meta">Result: goldens unchanged on both boards apart from timings (and webudp, now fixed). solar_eclipse 26.683 s on the VGA (b2 26.684 s) and 16.219 s on the PC3 (b2 16.207 s). Flash +72 bytes (VGA), +176 bytes (HDMIWEB).</p></div></div>
 <div class="phase"><div class="num">2<small>globals</small></div><div>
-<h3>Global slots and record chunks</h3>
-<p>The slot table, SRAM-only chunks of 32, the free list, the seeded chunk, the <code>PEEK</code>/<code>POKE VARTBL</code> emulation, MEMORY and LIST, and the chosen meaning of call-table 0x60.</p>
-<p class="meta">Gate: goldens; varcnt14, locvars6, symchain, rbf2, rbp5d; ERASE and REDIM, PIO MAKE RING BUFFER, STATIC, CONST short strings, VAR SAVE/RESTORE; solar_eclipse and bench_micro.</p></div></div>
+<h3>Global records in heap chunks</h3>
+<p><code>VREC(i)</code> reads <code>g_slotrec[i]</code>, one record pointer per variable number, so a record is one load away whether it is a local's or a global's. Measured on solar_eclipse before anything moved: the RP2040 about 1% slower (one more cycle per record access; accepted for the memory), the RP2350 no slower. A global's record comes from an SRAM-only chunk of 32, the first seeded at RUN. An erased global's record goes on a free list, linked through its name, which no background writer touches. A free or blocked slot points at a shared placeholder record, so every probe and walker reads a slot as before. CLEAR keeps the chunks and hands their records out again, as IR, KEYPAD, PLAY STREAM and TCP STREAM may still be writing to a global's value; the chunks go when the heap is wiped. <code>g_vartbl</code> holds only the locals, so <code>OPTION LOCAL VARIABLES</code> is capped at <code>MAXLOCALVARS</code> until phase 3. <code>PEEK</code>/<code>POKE VARTBL</code> stop with an error naming <code>PEEK(VARHEADER)</code>; call-table 0x60 is <code>g_slotrec</code>. SAVE CONTEXT keeps <code>g_vartbl</code>, <code>g_slotrec</code> and the chunk state; the magic numbers change once, in the commit that finishes the redesign, as each phase changes the format again and every change wipes a board's options and A:.</p>
+<p class="meta">Gate: goldens; varcnt14, symchain, static5, rbf2, rbp5d; ERASE and REDIM, CLEAR, STATIC, CONST short strings, SAVE/LOAD CONTEXT; solar_eclipse. (locvars6 waits for phase 3.)</p>
+<p class="meta">Result: goldens unchanged on the RP2040 VGA and the PC3; varcnt14, symchain, static5 and rbp5d pass; rbf2 matches every recorded item, and the VGA's deep recursion, which stopped at depth 8, now completes. solar_eclipse 26.816 s on the VGA (phase 1 26.683) and 16.032 s on the PC3 (16.219). RAM margin 12.4 KB on the VGA (was 1.5) and 33.6 KB on HDMIWEB (was 2.9), for phase 4.</p></div></div>
+<div class="phase"><div class="num">2b<small>probe</small></div><div>
+<h3>Probe on length and hash16</h3>
+<p>A 4-byte entry per global slot (state, length, hash16), so a probe reads a 32-byte name only to confirm a match.</p>
+<p class="meta">Gate: as phase 2, and solar_eclipse no slower.</p></div></div>
 <div class="phase"><div class="num">3<small>locals</small></div><div>
-<h3>The local record stack</h3>
-<p>Chunk pointers, the seeded chunk, chunks kept for the run, <code>OPTION LOCAL VARIABLES</code> as a cap.</p>
-<p class="meta">Gate: as phase 2, plus deep recursion (rbdepth), by-reference parameters and interrupts during SUBs.</p></div></div>
+<h3>Locals' records in chunks</h3>
+<p>Each chunk of 32 local slots takes its records from the heap the first time the local stack reaches it, fills those 32 pointers, and is kept for the run. <code>g_vartbl</code> goes, and the cap on <code>OPTION LOCAL VARIABLES</code> with it.</p>
+<p class="meta">Gate: as phase 2, plus locvars6, deep recursion (rbdepth), by-reference parameters and interrupts during SUBs.</p></div></div>
 <div class="phase"><div class="num">4<small>heap</small></div><div>
 <h3>Give the RAM to the heap</h3>
 <p>Per build, in whole 4 KB steps, with <code>MAX_PROG_SIZE</code> pinned so the flash layout and A: are unchanged.</p>
@@ -346,6 +351,9 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <li><b>Names stay 32 bytes in the record</b>; 8-byte names are not pursued now.</li>
 <li><b>SAVE CONTEXT:</b> the phase that changes its format also regenerates every build's magic number, so A: (and an old <code>/.vars</code>) is wiped on the first boot, as for any layout change.</li>
 <li><b>No <code>g_VarRec</code> in phase 1</b>: it cost 0.8% on solar_eclipse (VGA). It is reconsidered in phase 2.</li>
+<li><b>One record pointer per variable number</b> (<code>g_slotrec</code>) rather than the slot's own pointer: <code>VREC</code> without a branch. The RP2040's 1% is accepted for the memory.</li>
+<li><b>Order:</b> globals' records first (phase 2), the hash16 probe after it (2b), then the locals (3); until phase 3 <code>OPTION LOCAL VARIABLES</code> is capped at its default on this branch.</li>
+<li><b>Magic numbers</b> change once, in the commit that finishes the redesign.</li>
 </ol></div>
 </section>
 

@@ -4328,7 +4328,7 @@ _Static_assert(sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) +
                        sizeof(g_doindex) +
                        sizeof(struct s_forstack) * MAXFORLOOPS +
                        sizeof(struct s_dostack) * MAXDOLOOPS +
-                       sizeof(struct s_vartbl) * MAXVARS +
+                       sizeof(g_vartbl) + sizeof(g_slotrec) + sizeof(g_varmem) +
                        sizeof(g_hashlist) +
                        (HEAP_MEMORY_SIZE + 256) + sizeof(mmap) + sizeof(psmap) <=
                    0x60000,
@@ -4381,8 +4381,12 @@ void SaveContext(void)
 		p += sizeof(struct s_forstack) * MAXFORLOOPS;
 		memcpy(p, g_dostack, sizeof(struct s_dostack) * MAXDOLOOPS);
 		p += sizeof(struct s_dostack) * MAXDOLOOPS;
-		memcpy(p, g_vartbl, sizeof(struct s_vartbl) * MAXVARS);
-		p += sizeof(struct s_vartbl) * MAXVARS;
+		memcpy(p, g_vartbl, sizeof(g_vartbl)); // the locals' records (the globals' are in the heap)
+		p += sizeof(g_vartbl);
+		memcpy(p, g_slotrec, sizeof(g_slotrec));
+		p += sizeof(g_slotrec);
+		memcpy(p, &g_varmem, sizeof(g_varmem));
+		p += sizeof(g_varmem);
 		memcpy(p, g_hashlist, sizeof(g_hashlist));
 		p += sizeof(g_hashlist);
 		memcpy(p, MMHeap, heap_memory_size + 256);
@@ -4403,7 +4407,7 @@ void SaveContext(void)
 		int sizeneeded = sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) + sizeof(g_StrTmp) + sizeof(g_StrTmpLocalIndex) +
 						 sizeof(g_LocalIndex) + sizeof(g_OptionBase) + sizeof(g_DimUsed) + sizeof(g_varcnt) + sizeof(g_Globalvarcnt) + sizeof(g_Localvarcnt) +
 						 sizeof(g_hashlistpointer) + sizeof(g_forindex) + sizeof(g_doindex) + sizeof(struct s_forstack) * MAXFORLOOPS + sizeof(struct s_dostack) * MAXDOLOOPS +
-						 sizeof(struct s_vartbl) * MAXVARS + sizeof(g_hashlist) + heap_memory_size + 256 + sizeof(mmap);
+						 sizeof(g_vartbl) + sizeof(g_slotrec) + sizeof(g_varmem) + sizeof(g_hashlist) + heap_memory_size + 256 + sizeof(mmap);
 		if (sizeneeded >= Option.FlashSize - (Option.modbuff ? 1024 * Option.modbuffsize : 0) - RoundUpK4(TOP_OF_SYSTEM_FLASH) - lfs_fs_size(&lfs) * 4096)
 			error("Not enough free space on A: drive: % needed", sizeneeded);
 		lfs_file_open(&lfs, &lfs_file, ".vars", LFS_O_RDWR | LFS_O_CREAT);
@@ -4426,7 +4430,9 @@ void SaveContext(void)
 		lfs_file_write(&lfs, &lfs_file, &g_doindex, sizeof(g_doindex));
 		lfs_file_write(&lfs, &lfs_file, g_forstack, sizeof(struct s_forstack) * MAXFORLOOPS);
 		lfs_file_write(&lfs, &lfs_file, g_dostack, sizeof(struct s_dostack) * MAXDOLOOPS);
-		lfs_file_write(&lfs, &lfs_file, g_vartbl, sizeof(struct s_vartbl) * MAXVARS);
+		lfs_file_write(&lfs, &lfs_file, g_vartbl, sizeof(g_vartbl));
+		lfs_file_write(&lfs, &lfs_file, g_slotrec, sizeof(g_slotrec));
+		lfs_file_write(&lfs, &lfs_file, &g_varmem, sizeof(g_varmem));
 		lfs_file_write(&lfs, &lfs_file, g_hashlist, sizeof(g_hashlist));
 		lfs_file_write(&lfs, &lfs_file, MMHeap, heap_memory_size + 256);
 		lfs_file_write(&lfs, &lfs_file, mmap, sizeof(mmap));
@@ -4473,8 +4479,12 @@ void RestoreContext(bool keep)
 		p += sizeof(struct s_forstack) * MAXFORLOOPS;
 		memcpy(g_dostack, p, sizeof(struct s_dostack) * MAXDOLOOPS);
 		p += sizeof(struct s_dostack) * MAXDOLOOPS;
-		memcpy(g_vartbl, p, sizeof(struct s_vartbl) * MAXVARS);
-		p += sizeof(struct s_vartbl) * MAXVARS;
+		memcpy(g_vartbl, p, sizeof(g_vartbl));
+		p += sizeof(g_vartbl);
+		memcpy(g_slotrec, p, sizeof(g_slotrec));
+		p += sizeof(g_slotrec);
+		memcpy(&g_varmem, p, sizeof(g_varmem));
+		p += sizeof(g_varmem);
 		memcpy(g_hashlist, p, sizeof(g_hashlist));
 		p += sizeof(g_hashlist);
 		memcpy(MMHeap, p, heap_memory_size + 256);
@@ -4512,7 +4522,9 @@ void RestoreContext(bool keep)
 		lfs_file_read(&lfs, &lfs_file, &g_doindex, sizeof(g_doindex));
 		lfs_file_read(&lfs, &lfs_file, g_forstack, sizeof(struct s_forstack) * MAXFORLOOPS);
 		lfs_file_read(&lfs, &lfs_file, g_dostack, sizeof(struct s_dostack) * MAXDOLOOPS);
-		lfs_file_read(&lfs, &lfs_file, g_vartbl, sizeof(struct s_vartbl) * MAXVARS);
+		lfs_file_read(&lfs, &lfs_file, g_vartbl, sizeof(g_vartbl));
+		lfs_file_read(&lfs, &lfs_file, g_slotrec, sizeof(g_slotrec));
+		lfs_file_read(&lfs, &lfs_file, &g_varmem, sizeof(g_varmem));
 		lfs_file_read(&lfs, &lfs_file, g_hashlist, sizeof(g_hashlist));
 		lfs_file_read(&lfs, &lfs_file, MMHeap, heap_memory_size + 256);
 		lfs_file_read(&lfs, &lfs_file, mmap, sizeof(mmap));

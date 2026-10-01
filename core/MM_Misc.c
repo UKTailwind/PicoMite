@@ -9699,10 +9699,7 @@ void cmd_poke(void)
             StandardError(2);
 
         if (checkstring(argv[0], (unsigned char *)"VARTBL"))
-        {
-            *((char *)g_vartbl + (unsigned int)getinteger(argv[2])) = getinteger(argv[4]);
-            return;
-        }
+            error("VARTBL has been removed: use PEEK(VARHEADER var) and POKE VAR"); // (there is no one table now)
         if ((p = checkstring(argv[0], (unsigned char *)"VAR")))
         {
             pp = findvar(p, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
@@ -9976,11 +9973,7 @@ void fun_peek(void)
     }
 
     if ((checkstring(argv[0], (unsigned char *)"VARTBL")))
-    {
-        iret = *((char *)g_vartbl + (int)getinteger(argv[2]));
-        targ = T_INT;
-        return;
-    }
+        error("VARTBL has been removed: use PEEK(VARHEADER var)"); // (there is no one table now)
 
     // default action is the old syntax of  b = PEEK(hiaddr, loaddr)
     iret = *(char *)(((int)getinteger(argv[0]) << 16) + (int)getinteger(argv[2]));

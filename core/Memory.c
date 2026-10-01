@@ -1561,17 +1561,18 @@ void MIPS16 cmd_memory(void)
     int CFunctSize, CFunctSizeK, CFunctNbr, CFunctPercent, FontSize, FontSizeK, FontNbr, FontPercent, LibrarySizeK, LibraryPercent, LibraryMaxK;
     unsigned int CurrentRAM, *pint;
 
-    CurrentRAM = heap_memory_size + MAXVARS * sizeof(struct s_vartbl);
+    CurrentRAM = heap_memory_size + sizeof(g_vartbl) + sizeof(g_slotrec);
 #ifdef rp2350
     CurrentRAM += PSRAMsize;
 #endif
     // calculate the space allocated to variables on the heap
     for (i = VarCnt = vsize = var = 0; var < MAXVARS; var++)
     {
-        if (VREC(var)->type == T_NOTYPE)
-            continue;
+        if (VREC(var)->type == T_NOTYPE || VREC(var)->type == T_BLOCKED)
+            continue; // a free slot, or one an ERASE left blocked
         VarCnt++;
-        vsize += sizeof(struct s_vartbl);
+        if (VREC(var) >= g_vartbl && VREC(var) < g_vartbl + MAXLOCALVARS)
+            vsize += sizeof(struct s_vartbl); // a local's record (a global's is in its chunk, below)
         if (VREC(var)->val.s == NULL)
             continue;
         if (VREC(var)->type & T_PTR)
@@ -1594,11 +1595,13 @@ void MIPS16 cmd_memory(void)
                 i += STRINGSIZE;
         }
     }
+    j = g_varmem.chunks * VARCHUNK * sizeof(struct s_vartbl); // the globals' records, in the heap
+    vsize += j;
     VarSize = (vsize + i + 512) / 1024; // this is the memory allocated to variables
     VarPercent = ((vsize + i) * 100) / CurrentRAM;
     if (VarCnt && VarSize == 0)
         VarPercent = VarSize = 1; // adjust if it is zero and we have some variables
-    i = UsedHeap() - i;
+    i = UsedHeap() - i - j;
     if (i < 0)
         i = 0;
     GeneralSize = (i + 512) / 1024;
@@ -1909,7 +1912,7 @@ void m_alloc(int type)
 
     case M_VAR: // this must be called to initialises the variable memory pointer
         // everytime the variable table is increased this must be called to verify that enough memory is free
-        memset(g_vartbl, 0, MAXVARS * sizeof(struct s_vartbl));
+        memset(g_vartbl, 0, sizeof(g_vartbl)); // the locals' records (the globals' are in the heap)
         break;
     }
 }
@@ -2095,6 +2098,7 @@ void InitHeap(bool all)
        else - see IfTableForget() in Commands.c. */
     IfTableForget();
     SymBindForget(); /* and the symbol bindings (see Symbols.h) */
+    VarChunksForget(); /* and the globals' records (see MMBasic.h) */
 #ifdef STRUCTENABLED
     /* Same for the TYPE definitions, which are GetMemory blocks too. */
     StructTableForget();
@@ -2344,6 +2348,18 @@ void MIPS32 __not_in_flash_func (*GetMemory)(int size)
     OutOfMemory(size);
     return NULL; // keep the compiler happy
 }
+
+#ifdef rp2350
+/* The globals' records: always the SRAM heap.  A record in PSRAM would slow
+   every access to the variable, and SAVE CONTEXT does not keep PSRAM. */
+void *GetSRAMMemory(int size)
+{
+    unsigned char *addr = TopDownFind(size);
+    if (addr == NULL)
+        OutOfMemory(size);
+    return (void *)addr;
+}
+#endif
 
 void __not_in_flash_func (*CallocMemory)(size_t num, size_t size)
 {

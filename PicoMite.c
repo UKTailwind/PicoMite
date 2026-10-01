@@ -489,7 +489,7 @@ uint8_t PSRAMpin;
         (void *)SoftReset,          // 0x54
         (void *)error,              // 0x58
         (void *)&ProgMemory,        // 0x5c
-        (void *)&g_vartbl,          // 0x60
+        (void *)g_slotrec,          // 0x60 the record of each variable number (PicoCFunctions.h)
         (void *)&g_varcnt,          // 0x64
         (void *)&DrawBuffer,        // 0x68
         (void *)&ReadBuffer,        // 0x6c
@@ -3982,6 +3982,7 @@ uint32_t testPSRAM(void)
         ConsoleTxBufTail = 0;
         PromptFC = gui_fcolour = Option.DefaultFC;
         PromptBC = gui_bcolour = Option.DefaultBC;
+        InitVarSlots(); // before anything reaches a variable
         InitHeap(true); // initilise memory allocation
         uSecFunc(1000);
         disable_interrupts_pico();

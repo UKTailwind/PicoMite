@@ -163,6 +163,11 @@ unsigned char *HeapBottom(void);
  * ============================================================================ */
 void m_alloc(int type);
 void *GetMemory(int msize);
+#ifdef rp2350
+void *GetSRAMMemory(int msize); /* GetMemory that never falls back to PSRAM (variable records) */
+#else
+#define GetSRAMMemory GetMemory
+#endif
 void *CallocMemory(size_t num, size_t size); /* GetMemory wrapper for code that calls calloc() */
 /* NULL-returning variants (no error()/longjmp) for lwIP's pbuf alloc — see Memory.c */
 void *GetMemoryNull(int msize);

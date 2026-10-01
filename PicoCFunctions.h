@@ -53,7 +53,7 @@
 /***  PICO2/RP2350 chip select - define it for every RP2350 build (PicoMite, VGA, HDMI,
  ***  WEB...) and comment it out for every RP2040 build.  It sets MAXDIM and the type of
  ***  s_vartbl.dims[] to match the firmware (RP2350: 5 x int, RP2040: 6 x short), so a
- ***  CSUB that reads g_vartbl works only on the chip it was compiled for.  It no longer
+ ***  CSUB that reads a variable's record works only on the chip it was compiled for.  It no longer
  ***  affects the CallTable address, which is found at runtime via VTOR (see below) ***/
 #define PICORP2350
 
@@ -111,7 +111,7 @@
 #define Vector_SoftReset (*(unsigned int *)(BaseAddress + 0x54))		   // void SoftReset(void)
 #define Vector_error (*(unsigned int *)(BaseAddress + 0x58))			   // void error(char *msg)
 #define Vector_ProgFlash (*(unsigned int *)(BaseAddress + 0x5C))		   // ProgFlash
-#define Vector_vartbl (*(unsigned int *)(BaseAddress + 0x60))			   // g_vartbl
+#define Vector_slotrec (*(unsigned int *)(BaseAddress + 0x60))			   // g_slotrec: the record of each variable number
 #define Vector_varcnt (*(unsigned int *)(BaseAddress + 0x64))			   // g_varcnt
 #define Vector_DrawBuffer *(unsigned int *)(BaseAddress + 0x68)			   // void DrawRectangle(int x1, int y1, int x2, int y2, int C))
 #define Vector_ReadBuffer *(unsigned int *)(BaseAddress + 0x6c)			   // void DrawRectangle(int x1, int y1, int x2, int y2, int C))
@@ -259,7 +259,7 @@
 #define SoftReset(SOFT_RESET) ((void (*)(void))Vector_SoftReset)()
 #define error(a) ((void (*)(char *))Vector_error)(a)
 #define ProgFlash ((int *)Vector_ProgFlash)
-#define g_vartbl (*(struct s_vartbl *)Vector_vartbl)
+#define g_slotrec ((struct s_vartbl **)Vector_slotrec)
 #define g_varcnt (*(unsigned int *)Vector_varcnt)
 #define DrawBuffer(a, b, c, d, e) ((void (*)(int, int, int, int, char *))(*(unsigned int *)Vector_DrawBuffer))(a, b, c, d, e)
 #define DrawBufferVector (*(unsigned int *)Vector_DrawBuffer)
@@ -392,7 +392,9 @@ void *memset(void *d, int c, size_t n) { return ((void *(*)(void *, int, size_t)
 void *memmove(void *d, const void *s, size_t n) { return ((void *(*)(void *, const void *, size_t))Vector_memmove)(d, s, n); }
 #endif
 
-// the structure of the variable table, passed to the CFunction as a pointer Vector_vartbl which is #defined as g_vartbl
+// a variable's record.  g_slotrec[i] points at variable i's (MAXVARS of them: the locals first, then
+// the globals, hashed); a free or erased global's slot points at a record whose type is 0 or T_BLOCKED.
+// A global's record is in the heap and stays where it is while the variable exists.
 struct s_vartbl
 {						  // structure of the variable table
 	char name[MAXVARLEN]; // variable's name
@@ -417,7 +419,7 @@ struct s_vartbl
 
 //  Useful macros
 
-// Types used to define a variable in the variable table (g_vartbl).   Often they are ORed together.
+// Types used to define a variable in its record (the type field).   Often they are ORed together.
 // Also used in tokens and arguments to functions
 #define T_NOTYPE 0	   // type not set or discovered
 #define T_NBR 0x01	   // number (or float) type
