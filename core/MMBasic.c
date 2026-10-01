@@ -5009,6 +5009,16 @@ static inline int find_local_slot(const unsigned char *name, int namelen)
     return -1;
 }
 
+// A variable is complete: count a global now (a local was counted as it was
+// pushed, since ClearVars drops every pushed one), and keep g_varcnt, which CSUBs
+// read, equal to the two counts.
+static inline void VarCounted(int slot)
+{
+    if (slot >= maxlocalvars)
+        g_Globalvarcnt++;
+    g_varcnt = g_Globalvarcnt + g_Localvarcnt;
+}
+
 // Probe the global portion of the variable table.
 // `error_on_wrap` controls whether running the probe all the way around the
 // global range raises "Too many global variables".  The two historical call
@@ -5781,20 +5791,43 @@ findvar_found:
     // at this point we need to create the variable
     // as a result of the previous search ifree is the index to the entry that we should use
 
-    // if we are adding to the top, increment the number of vars
+    // The counts must match the variables that exist.  So the limits are tested
+    // before anything is counted, and everything that can fail is done before
+    // the entry is written: a local is counted as it is pushed (ClearVars drops
+    // every pushed one), a global once it is complete (VarCounted).
     if (ifree >= maxlocalvars) // CHANGED: was MAXVARS/2
     {
-        g_Globalvarcnt++;
-        if (g_Globalvarcnt >= maxglobalvars) // CHANGED: was MAXVARS/2
+        if (g_Globalvarcnt + 1 >= maxglobalvars) // CHANGED: was MAXVARS/2
             error("Not enough Global variable memory");
     }
     else
     {
-        g_Localvarcnt++;
-        if (g_Localvarcnt >= maxlocalvars) // CHANGED: was MAXVARS/2
+        if (g_Localvarcnt + 1 >= maxlocalvars) // CHANGED: was MAXVARS/2
             error("Not enough Local variable memory");
     }
-    g_varcnt = g_Globalvarcnt + g_Localvarcnt;
+    for (i = 0; i < dnbr; i++)
+#if DIM_DECODE_ENABLED
+        // an upper bound equal to OPTION BASE is a single element dimension
+        if (dim[i] < g_OptionBase)
+#else
+        if (dim[i] <= g_OptionBase)
+#endif
+            error("Dimensions");
+#ifdef STRUCTENABLED
+    unsigned char *structmem = NULL;
+    if ((vtype & T_STRUCT) && dnbr != -1)
+    {
+        if (g_StructArg < 0 || g_StructArg >= g_structcnt)
+            error("Invalid structure type");
+        if (dnbr == 0)
+            structmem = GetMemory(g_structtbl[g_StructArg]->total_size); // a simple structure's data
+    }
+#endif
+    if (ifree < maxlocalvars)
+    {
+        g_Localvarcnt++;
+        g_varcnt = g_Globalvarcnt + g_Localvarcnt;
+    }
     g_VarIndex = vindex = ifree;
     if (g_option_profiling)
     {
@@ -5843,23 +5876,23 @@ findvar_found:
         if (vtype & T_NBR)
         {
             g_vartbl[ifree].val.f = 0;
+            VarCounted(ifree);
             return &(g_vartbl[ifree].val.f);
         }
         else if (vtype & T_INT)
         {
             g_vartbl[ifree].val.i = 0;
+            VarCounted(ifree);
             return &(g_vartbl[ifree].val.i);
         }
 #ifdef STRUCTENABLED
         else if (vtype & T_STRUCT)
         {
-            // Simple (non-array) structure variable
-            // g_StructArg contains the structure definition index
-            if (g_StructArg < 0 || g_StructArg >= g_structcnt)
-                error("Invalid structure type");
-            int structsize = g_structtbl[g_StructArg]->total_size;
+            // Simple (non-array) structure variable: its type was checked and its
+            // data allocated before the entry was written (structmem)
             g_vartbl[ifree].size = g_StructArg; // Store struct index in size field
-            g_vartbl[ifree].val.s = GetMemory(structsize);
+            g_vartbl[ifree].val.s = structmem;
+            VarCounted(ifree);
             return g_vartbl[ifree].val.s;
         }
 #endif
@@ -5876,20 +5909,14 @@ findvar_found:
             g_vartbl[vindex].size = g_StructArg;
         }
 #endif
+        VarCounted(ifree);
         return g_vartbl[vindex].val.s; // just return a pointer to the data element as it will be replaced in the sub/fun with a pointer
     }
 
     // if this is an array copy the array dimensions and calculate the overall size
     // for a non array string this will leave nbr = 1 which is just what we want
     for (nbr = 1, i = 0; i < dnbr; i++)
-    {
-#if DIM_DECODE_ENABLED
-        // an upper bound equal to OPTION BASE is a single element dimension
-        if (dim[i] < g_OptionBase)
-#else
-        if (dim[i] <= g_OptionBase)
-#endif
-            error("Dimensions");
+    { // (the bounds were checked before the entry was written)
         RAW_DIM(g_vartbl[vindex], i) = DimEncode(dim[i]);
         nbr *= (dim[i] + 1 - g_OptionBase);
     }
@@ -5899,11 +5926,14 @@ findvar_found:
 
     // First, set the important characteristics of the variable to indicate that the
     // variable is not allocated.  Thus, if GetMemory() fails with "not enough memory",
-    // the variable will remain not allocated
+    // the variable will remain not allocated: a blocked slot, '~' like one ERASE
+    // leaves, so a lookup still walks past it to a variable that probed through it
+    // (a name of 0 would end the walk there and that variable would be made twice).
+    // A global is not counted until it is complete, so a failure leaves the count right.
     g_vartbl[ifree].val.s = NULL;
     g_vartbl[ifree].type = T_BLOCKED;
     i = *g_vartbl[ifree].name;
-    *g_vartbl[ifree].name = 0;
+    *g_vartbl[ifree].name = '~';
     j = RAW_DIM(g_vartbl[ifree], 0);
     RAW_DIM(g_vartbl[ifree], 0) = 0;
 
@@ -5949,6 +5979,7 @@ findvar_found:
     RAW_DIM(g_vartbl[ifree], 0) = j;
     g_vartbl[ifree].size = size;
     g_vartbl[ifree].val.s = mptr;
+    VarCounted(ifree);
     return mptr;
 }
 
@@ -7016,6 +7047,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 SymLocalFreed(hashcurrent); // its name's binding goes back to the local it hid
                 memset(&g_vartbl[hashcurrent], 0, sizeof(struct s_vartbl));
                 g_Localvarcnt--;
+                g_varcnt = g_Globalvarcnt + g_Localvarcnt; // (CSUBs read it)
                 if (i == top - 1)
                     top--; // still the top of the stack
                 else
@@ -7092,6 +7124,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
     // we can now delete all variables by zeroing the counters
     g_Localvarcnt = 0;
     g_Globalvarcnt = 0;
+    g_varcnt = 0;
     g_OptionBase = 0;
     g_DimUsed = false;
     g_hashlistpointer = 0;
@@ -7212,6 +7245,7 @@ uint32_t erase(char *p, bool nofree)
         RAW_DIM(g_vartbl[j], 0) = 0;
         g_vartbl[j].level = 0;
         g_Globalvarcnt--;
+        g_varcnt = g_Globalvarcnt + g_Localvarcnt; // (CSUBs read it)
         DoFastForget(j);       // a DO condition that pointed at this variable must evaluate again
         SymBindForgetSlot(j); // and so must a binding to it (see Symbols.h)
         break;
