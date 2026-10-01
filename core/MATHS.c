@@ -3293,67 +3293,67 @@ void fun_math(void)
 			targ = T_NBR;
 			return;
 		}
-tp = checkstring(ep, (unsigned char *)"CROSSING");
-if (tp)
-{
-    MMFLOAT *a1float = NULL;
-    int64_t *a1int = NULL;
-    int arraylength = 0;
-    MMFLOAT crossing = 0.0;
-    int direction = 1;
-    int confirm = 1;
-    int found = -1;
-    getcsargs(&tp, 7);
-    if (argc < 1)
-        SyntaxError();
+		tp = checkstring(ep, (unsigned char *)"CROSSING");
+		if (tp)
+		{
+			MMFLOAT *a1float = NULL;
+			int64_t *a1int = NULL;
+			int arraylength = 0;
+			MMFLOAT crossing = 0.0;
+			int direction = 1;
+			int confirm = 1;
+			int found = -1;
+			getcsargs(&tp, 7);
+			if (argc < 1)
+				SyntaxError();
 
-    if (argc >= 3 && *argv[2])
-        crossing = getnumber(argv[2]);
-    if (argc >= 5 && *argv[4])
-        direction = getint(argv[4], -1, 1);
-    if (direction == 0)
-        error("Valid are -1 and 1");
-    arraylength = parsenumberarray(argv[0], &a1float, &a1int, 1, 1, dims, false, NULL);
-    if (argc == 7 && *argv[6])
-        confirm = getint(argv[6], 1, arraylength);
+			if (argc >= 3 && *argv[2])
+				crossing = getnumber(argv[2]);
+			if (argc >= 5 && *argv[4])
+				direction = getint(argv[4], -1, 1);
+			if (direction == 0)
+				error("Valid are -1 and 1");
+			arraylength = parsenumberarray(argv[0], &a1float, &a1int, 1, 1, dims, false, NULL);
+			if (argc == 7 && *argv[6])
+				confirm = getint(argv[6], 1, arraylength);
 
-    // Find the first index where the signal crosses 'crossing' in the requested
-    // 'direction' AND stays on the far side for 'confirm' consecutive samples.
-    // The confirm window (default 1) rejects single-sample noise spikes: a brief
-    // excursion past the level that falls back before 'confirm' samples have
-    // elapsed is not reported. The value returned is the first far-side sample.
-    for (int i = 1; i < arraylength && found == -1; i++)
-    {
-        int crossed;
-        if (a1float)
-            crossed = (direction == 1)
-                        ? (a1float[i - 1] <  crossing && a1float[i] >= crossing)
-                        : (a1float[i - 1] >  crossing && a1float[i] <= crossing);
-        else
-            crossed = (direction == 1)
-                        ? (a1int[i - 1] <  crossing && a1int[i] >= crossing)
-                        : (a1int[i - 1] >  crossing && a1int[i] <= crossing);
-        if (!crossed)
-            continue;
-        if (i + confirm > arraylength)   // not enough samples left to confirm
-            break;
-        int held = 1;
-        for (int k = i; k < i + confirm; k++)
-        {
-            MMFLOAT v = a1float ? a1float[k] : (MMFLOAT)a1int[k];
-            if ((direction == 1 && v < crossing) || (direction == -1 && v > crossing))
-            {
-                held = 0;
-                break;
-            }
-        }
-        if (held)
-            found = i;
-    }
-    targ = T_INT;
-    iret = found;
-    return;
-}
+			// Find the first index where the signal crosses 'crossing' in the requested
+			// 'direction' AND stays on the far side for 'confirm' consecutive samples.
+			// The confirm window (default 1) rejects single-sample noise spikes: a brief
+			// excursion past the level that falls back before 'confirm' samples have
+			// elapsed is not reported. The value returned is the first far-side sample.
+			for (int i = 1; i < arraylength && found == -1; i++)
+			{
+				int crossed;
+				if (a1float)
+					crossed = (direction == 1)
+								  ? (a1float[i - 1] < crossing && a1float[i] >= crossing)
+								  : (a1float[i - 1] > crossing && a1float[i] <= crossing);
+				else
+					crossed = (direction == 1)
+								  ? (a1int[i - 1] < crossing && a1int[i] >= crossing)
+								  : (a1int[i - 1] > crossing && a1int[i] <= crossing);
+				if (!crossed)
+					continue;
+				if (i + confirm > arraylength) // not enough samples left to confirm
+					break;
+				int held = 1;
+				for (int k = i; k < i + confirm; k++)
+				{
+					MMFLOAT v = a1float ? a1float[k] : (MMFLOAT)a1int[k];
+					if ((direction == 1 && v < crossing) || (direction == -1 && v > crossing))
+					{
+						held = 0;
+						break;
+					}
+				}
+				if (held)
+					found = i + g_OptionBase;
+			}
+			targ = T_INT;
+			iret = found;
+			return;
+		}
 		tp = checkstring(ep, (unsigned char *)"CORREL");
 		if (tp)
 		{
@@ -4152,15 +4152,21 @@ void cmd_SensorFusion(char *passcmdline)
 		ax = getnumber(argv[0]);
 		ay = getnumber(argv[2]);
 		az = getnumber(argv[4]);
-		gx = getnumber(argv[6]) / optionangle;  // convert gyro to radians/sec, respecting OPTION ANGLE
+		gx = getnumber(argv[6]) / optionangle; // convert gyro to radians/sec, respecting OPTION ANGLE
 		gy = getnumber(argv[8]) / optionangle;
 		gz = getnumber(argv[10]) / optionangle;
 		// magnetometer values are optional - if omitted, fall back to a 6-axis (IMU-only) update
 		int usemag = 0;
 		mx = my = mz = 0.0;
-		if (*argv[12]) { mx = getnumber(argv[12]); usemag = 1; }
-		if (*argv[14]) my = getnumber(argv[14]);
-		if (*argv[16]) mz = getnumber(argv[16]);
+		if (*argv[12])
+		{
+			mx = getnumber(argv[12]);
+			usemag = 1;
+		}
+		if (*argv[14])
+			my = getnumber(argv[14]);
+		if (*argv[16])
+			mz = getnumber(argv[16]);
 		pitch = findvar(argv[18], V_FIND);
 		if (!(g_vartbl[g_VarIndex].type & T_NBR))
 			StandardError(6);
@@ -4203,15 +4209,21 @@ void cmd_SensorFusion(char *passcmdline)
 		ax = getnumber(argv[0]);
 		ay = getnumber(argv[2]);
 		az = getnumber(argv[4]);
-		gx = getnumber(argv[6]) / optionangle;  // convert gyro to radians/sec, respecting OPTION ANGLE
+		gx = getnumber(argv[6]) / optionangle; // convert gyro to radians/sec, respecting OPTION ANGLE
 		gy = getnumber(argv[8]) / optionangle;
 		gz = getnumber(argv[10]) / optionangle;
 		// magnetometer values are optional - if omitted, fall back to a 6-axis (IMU-only) update
 		int usemag = 0;
 		mx = my = mz = 0.0;
-		if (*argv[12]) { mx = getnumber(argv[12]); usemag = 1; }
-		if (*argv[14]) my = getnumber(argv[14]);
-		if (*argv[16]) mz = getnumber(argv[16]);
+		if (*argv[12])
+		{
+			mx = getnumber(argv[12]);
+			usemag = 1;
+		}
+		if (*argv[14])
+			my = getnumber(argv[14]);
+		if (*argv[16])
+			mz = getnumber(argv[16]);
 		pitch = findvar(argv[18], V_FIND);
 		if (!(g_vartbl[g_VarIndex].type & T_NBR))
 			StandardError(6);
