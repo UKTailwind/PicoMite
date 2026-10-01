@@ -113,7 +113,7 @@ extern "C"
       [[heap-bss-overlap-on-rp2350]]. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (184 * 1024)
-#define MAX_PROG_SIZE (144 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
+#define MAX_PROG_SIZE (152 * 1024) // (144 KB until 2026-10-01: the larger heap takes 152 KB programs; this moved the flash layout and A:)
    /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
       changed from 1024x600 to 640x480@315000 so existing devices pick up
       the new default via ResetOptions on first boot. */
