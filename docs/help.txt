@@ -724,6 +724,8 @@ specified in the ADC OPEN command the data are interleaved. The data is
 returned as packed 8-bit values (Use MEMORY UNPACK to convert to a normal
 array). MM.INFO(ADC) will return the number of the buffer currently available
 for reading (1 or 2).
+The arrays must be global (or STATIC), not LOCAL, as they are filled in the
+background.
 
 ~ADC START
 ADC START array1!() [,array2!()] [,array3!()] [,array4!()] [,C1min] [,C1max]
@@ -736,6 +738,8 @@ conversions.   Start can be called repeatedly once the ADC is OPEN
 C1max=100 will create values ranging from 200 to 100 for equivalent voltages
 of 0 - 3.3.  If the scaling is not used the results are returned as a voltage
 between 0 and OPTION VCC (defaults to 3.3V).
+If ADC OPEN specified an interrupt the arrays must be global (or STATIC), not
+LOCAL, as they are filled after the command has returned.
 
 ~AND
 AND
@@ -5860,6 +5864,8 @@ example, in 'key' bit 0 should be bit 7, bit 1 should be bit 6, etc.  This
 does not affect normal use but if you are looking for a specific numerical
 code provided by a manufacturer you should reverse the bits.  This describes
 how to do it:
+'dev' and 'key' must be global (or STATIC), not LOCAL, as they are set in the
+background.
 See the chapter Special Hardware Devices for more details.
 
 ~IR SEND
@@ -6009,6 +6015,7 @@ On a key press the value assigned to 'var' is the number of a numeric key (eg,
 the number 20 will be returned for A, 21 for B, 22 for C and 23 for D.
 The KEYPAD CLOSE command will terminate the keypad function and return the I/O
 pin to a not configured state.
+'var' must be global (or STATIC), not LOCAL, as it is set in the background.
 See the section Special Hardware Devices for more details.
 
 KEYPAD keymap!(), var!,int, startcolpin, nocols, startrowpin, norows
@@ -6021,6 +6028,8 @@ supplied mapping for every key.  The array dimensions must match the number of
 columns and rows specified.
 'var!' is the float variable that will contain the value returned. 'int' is
 the interrupt routine called when a key is pressed.
+'keymap!()' and 'var!' must be global (or STATIC), not LOCAL, as they are used
+in the background.
 'startcolpin' is the pin that begins the range of contiguous GP pins used for
 the column scan while 'nocols' is the number of pins in the range.
 'startrowpin' is the pin that begins 'norows' of contiguous GP pins used for
@@ -7146,6 +7155,8 @@ included in the subroutine.
 The pid_params!() array must be dimensioned for all the listed elements,
 including the controller memory parameters (DIM pid_params!(13)) and  be
 initialised with the required settings.
+'pid_params!()' must be global (or STATIC), not LOCAL, as it is used and
+updated in the background.
   PID configuration
   Element 0 =  Kp
   Element 1 =  Ki
@@ -10756,6 +10767,8 @@ If loopbackcount is set then "nbr" can be set to 0. In this case the transfer
 will run continuously repeatedly filling the buffer until explicitly stopped.
 If 'nbr' and 'loopbackcount; are both specified and identical the DMA will
 auto restart on completion (TX only)
+The array must be global (or STATIC), not LOCAL, as the DMA uses it after the
+command has returned.
 
 ~PIO DMA RX OFF
 PIO DMA RX OFF
@@ -11016,6 +11029,8 @@ Sends data to the VS1053 CODEC from the circular buffer "buffer%". This
 command initiates a background output stream where the VS1053 is sent anything
 in the buffer between the readpointer and the write pointer, updating the
 readpointer as it goes. Can be used for arbitrary waveform output.
+'buffer%()', 'readpointer%' and 'writepointer%' must be global (or STATIC),
+not LOCAL, as they are used in the background.
 
 See also: OPTION AUDIO
 
@@ -11036,6 +11051,8 @@ element is output.   So for example, if the array contained 10 cycles of a
 sine wave with 18000 total samples then setting the frequency to 1800 would
 output a 1Hz sine wave for 10 seconds. Setting the frequency to 18000 would
 output a 10Hz sine wave for 1 second.
+The arrays must be global (or STATIC), not LOCAL, as they are read while the
+sound plays.
 
 ~PLAY BBC ENVELOPE
 PLAY BBC ENVELOPE n, T, PI1, PI2, PI3, PN1, PN2, PN3, AA, AD, AS, AR, ALA, ALD
@@ -11125,6 +11142,8 @@ Loads a 1024 element array comprising 4096 16-bit values between 0 and 4095.
 This provides the data for any arbitrary waveform that can be played by the
 PLAY SOUND command. You can use the MEMORY PACK command to create the arrays
 from a normal 4096 element integer array.
+The array must be global (or STATIC), not LOCAL, as it is read while sounds
+play.
 
 ~PLAY MIDI
 PLAY MIDI
@@ -11225,6 +11244,8 @@ Plays a looped single-cycle waveform from integer arrays with an ADSR
 envelope. The optional right-channel parameter set allows independent stereo
 frequency and ADSR control.
 Use PLAY RELEASE to enter the release phase and finish playback.
+The arrays must be global (or STATIC), not LOCAL, as they are read while the
+sound plays.
 
 ~PLAY SOUND
 PLAY SOUND soundno, channelno, type [,frequency] [,volume]
@@ -15191,6 +15212,8 @@ If 'writepointer%' catches up with 'readpointer%' then 'readpointer%' will be
 incremented to stay one byte ahead and incoming data will be lost.
 This command is designed to be compatible with the PLAY STREAM command to
 allow the implementation of streaming internet audio.
+'buffer%()', 'readpointer%' and 'writepointer%' must be global (or STATIC),
+not LOCAL, as they are used in the background.
 
 ~WEB TCP CLIENT WRITE
 WEB TCP CLIENT WRITE data%() [,timeout]

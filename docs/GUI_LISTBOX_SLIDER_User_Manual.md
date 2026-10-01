@@ -65,8 +65,9 @@ No copy is made.
 Because the binding is live, **the array must remain in scope for the entire
 life of the control**. Declare it at the program (module) level, or as a
 `STATIC` array inside a subroutine — never as an ordinary local array that is
-destroyed when a subroutine returns. If the bound array goes out of scope while
-the control still exists, the behaviour is undefined.
+destroyed when a subroutine returns. `GUI LISTBOX` refuses an ordinary `LOCAL`
+array with `Must be a global variable`; a global passed into the subroutine as a
+parameter is accepted.
 
 The array may be of any length. The number of items is taken from the array's
 dimensions (respecting `OPTION BASE`). Item text longer than the control or
