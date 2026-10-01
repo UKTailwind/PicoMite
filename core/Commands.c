@@ -2635,7 +2635,7 @@ void MIPS16 cmd_list(void)
 					int struct_idx = (int)g_vartbl[i].size;
 					if (struct_idx >= 0 && struct_idx < g_structcnt)
 					{
-						strcat(out, (char *)g_vartbl[i].name);
+						strncat(out, (char *)g_vartbl[i].name, MAXVARLEN); // (a 32-character STATIC name has no zero)
 						// Array dimensions for structs
 						if (DimIsRealArray(RAW_DIM(g_vartbl[i], 0)))
 						{
@@ -2658,7 +2658,7 @@ void MIPS16 cmd_list(void)
 					}
 					else
 					{
-						strcat(out, (char *)g_vartbl[i].name);
+						strncat(out, (char *)g_vartbl[i].name, MAXVARLEN); // (a 32-character STATIC name has no zero)
 						strcat(out, " AS <invalid>");
 					}
 					// Skip to c[j] assignment for struct types
@@ -2686,7 +2686,7 @@ void MIPS16 cmd_list(void)
 							strcat(out, "FLOAT ");
 					}
 				}
-				strcat(out, (char *)g_vartbl[i].name);
+				strncat(out, (char *)g_vartbl[i].name, MAXVARLEN); // (a 32-character STATIC name has no zero)
 				if (g_vartbl[i].type & T_INT)
 				{
 					if (g_vartbl[i].namelen & NAMELEN_EXPLICIT)

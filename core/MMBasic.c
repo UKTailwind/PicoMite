@@ -998,7 +998,7 @@ int MIPS16 PrepareProgram(int ErrAbort)
             hash ^= u;
             hash *= FNV_prime;
             *p2++ = u;
-            if (++namelen > MAXVARLEN)
+            if (++namelen >= MAXVARLEN) // at most 31 characters, as for a variable
             {
                 if (ErrAbort)
                 {
@@ -1145,6 +1145,23 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
                 }
                 i--;
                 continue;
+            }
+            {
+                // at most 31 characters, as for a variable: on both chips (the
+                // RP2350's check is in its funtbl build, which the RP2040 has not)
+                const unsigned char *nv;
+                int nl;
+                NameView(p, &nv, &nl);
+                if (nl >= MAXVARLEN)
+                {
+                    if (ErrAbort)
+                    {
+                        SetPreprogramError("Function name too long", CurrentLinePtr);
+                        return -1;
+                    }
+                    i--;
+                    continue;
+                }
             }
         }
 #ifdef STRUCTENABLED
@@ -1765,7 +1782,7 @@ int MIPS16 tokenise(int console)
             // next test if it is a label
             if (labelvalid && isnamestart(*p))
             {
-                for (i = 0, tp = p + 1; i < MAXVARLEN - 1; i++, tp++)
+                for (i = 0, tp = p + 1; i < MAXVARLEN - 2; i++, tp++) // at most 31 characters
                     if (!isnamechar(*tp))
                         break; // search for the first invalid char
                 if (*tp == ':')
@@ -2242,7 +2259,7 @@ static __attribute__((noinline)) int FindSubFunText(unsigned char *p, int type)
         hash ^= u;
         hash *= FNV_prime;
         *s++ = u;
-        if (++namelen > MAXVARLEN)
+        if (++namelen >= MAXVARLEN) // at most 31 characters, as for a variable
             error("Variable name too long");
     } while (--nl);
     //    PRet();
@@ -4234,7 +4251,7 @@ static unsigned char *findlabel_text(unsigned char *labelptr)
             lv = labelptr;
             ll = 1;
         }
-        if (ll > MAXVARLEN)
+        if (ll >= MAXVARLEN) // a label is at most 31 characters (the manual)
             error("Label too long"); // too long, not a correctly formed label
         for (i = 1; i <= ll; i++)
         {
@@ -4300,7 +4317,7 @@ static unsigned char MIPS16 *findlabel_text(unsigned char *labelptr)
             lv = labelptr;
             ll = 1;
         }
-        if (ll > MAXVARLEN)
+        if (ll >= MAXVARLEN) // a label is at most 31 characters (the manual)
             error("Label too long"); // too long, not a correctly formed label
         for (i = 1; i <= ll; i++)
             label[i] = lv[i - 1];
@@ -5194,7 +5211,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         const unsigned char *nv;                                            \
         int nl;                                                             \
         NameView(sp, &nv, &nl);                                             \
-        if (nl > MAXVARLEN)                                                 \
+        if (nl >= MAXVARLEN)                                                 \
             error("Variable name too long");                                \
         while (nl--)                                                        \
         {                                                                   \
@@ -5241,6 +5258,11 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                 if (++namelen > MAXVARLEN)
                     error("Variable name too long");
             } while (isnamechar(*p));
+            // a name is at most MAXVARLEN-1 (31) characters, as the manual says, so it
+            // always ends in a zero in the entry; only STATIC's hidden global, the
+            // SUB's name, 0x1E and the variable's (the two up to 31 together), is 32
+            if (namelen == MAXVARLEN && memchr(name, 0x1e, MAXVARLEN) == NULL)
+                error("Variable name too long");
         }
         FINDVAR_HASHES();
     }
