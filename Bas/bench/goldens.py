@@ -152,6 +152,8 @@ def main():
     b = pc3.PC3(port)
     b.attention()
     device = b.cmd('PRINT MM.DEVICE$; " "; MM.VER; " "; MM.INFO(CPUSPEED)', 10).strip()
+    if gdir[1:2] == ":":
+        b.cmd('DRIVE "%s"' % gdir[:2], 10)   # CHDIR does not change the drive, and LOAD takes plain names
     b.cmd('MKDIR "%s"' % gdir, 10)
     b.cmd('CHDIR "%s"' % gdir, 10)
     # The corpus stays on A:/g between runs. Send a file only if the board lacks
@@ -179,6 +181,8 @@ def main():
         inp = os.path.join(corpus, n + ".in")
         inputs = open(inp, encoding="latin-1").read().splitlines() if os.path.exists(inp) else []
         b.attention()
+        if gdir[1:2] == ":":
+            b.cmd('DRIVE "%s"' % gdir[:2], 10)
         b.cmd('CHDIR "%s"' % gdir, 10)
         load = b.cmd('LOAD "%s.bas"' % n, 60)
         if "rror" in load:
