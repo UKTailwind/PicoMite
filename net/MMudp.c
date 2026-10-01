@@ -114,8 +114,13 @@ void cmd_udp(unsigned char *p)
         if (argc != 1)
             SyntaxError();
         ;
-        UDPinterrupt = (char *)GetIntAddress(argv[0]);
-        IntSignal();
+        if (checkstring(argv[0], (unsigned char *)"0"))
+            UDPinterrupt = NULL; // 0: no interrupt (GetIntAddress would take it for line number 0)
+        else
+        {
+            UDPinterrupt = (char *)GetIntAddress(argv[0]);
+            IntSignal();
+        }
         UDPreceive = 0;
         return;
     }
