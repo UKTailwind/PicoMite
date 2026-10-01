@@ -1873,11 +1873,8 @@ void MIPS16 cmd_memory(void)
           |                    |
           |--------------------|   <<<   MMHeap
 
-
-          |--------------------|
-          |   Variable Table   |
-          |     (grows up)     |
-          |--------------------|   <<<   g_vartbl and DOS_vartbl
+  The variables' records are in the heap too, in chunks of VARCHUNK, reached
+  through g_slotrec (MMBasic.h); there is no separate variable table.
 
 
           |--------------------|
@@ -1890,7 +1887,7 @@ void MIPS16 cmd_memory(void)
   Calls are made to m_alloc() to assign the various pointers (ProgMemory, etc)
   These calls must be made in this sequence:
         m_alloc(M_PROG, size)       Called whenever program memory size changes
-        m_alloc(M_VAR, size)        Called when the program is running and whenever the variable table needs to be expanded
+        m_alloc(M_VAR, size)        Called when the program is running (the variables need nothing of it now)
 
    Separately calls are made to getmemory() and FreeHeap() to allocate or free space on the heap (which grows downward).
 

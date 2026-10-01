@@ -111,7 +111,9 @@ extern "C"
       it. Do NOT shrink this to "fix" TLS; instead route mbedtls to PSRAM and/or
       make malloc-fail graceful (see [[hdmiweb-build]]). Watch
       [[heap-bss-overlap-on-rp2350]]. */
-#define HEAP_MEMORY_SIZE (144 * 1024)
+   /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (184 * 1024)
+#define MAX_PROG_SIZE (144 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
    /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
       changed from 1024x600 to 640x480@315000 so existing devices pick up
       the new default via ResetOptions on first boot. */
@@ -139,7 +141,9 @@ extern "C"
 #define FLASH_TARGET_OFFSET (1120 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
-#define HEAP_MEMORY_SIZE (148 * 1024)
+   /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (188 * 1024)
+#define MAX_PROG_SIZE (148 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
 #define MagicKey 0x41052ADE
 #endif
 #else
@@ -148,7 +152,9 @@ extern "C"
 #define FLASH_TARGET_OFFSET (1088 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 1144 bytes past the end of RAM. */
-#define HEAP_MEMORY_SIZE (156 * 1024)
+   /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (196 * 1024)
+#define MAX_PROG_SIZE (156 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
 #endif
 #else // rp2350 VGA
 #define MAXMODES 3
@@ -168,12 +174,16 @@ extern "C"
       HFSR=80000000 (DEBUGEVT = the BKPT in _exit).  Heap moves only in 4 KB
       steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
       and [[project_core0_stack_overflow_fm]]. */
-#define HEAP_MEMORY_SIZE (160 * 1024)
+   /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (200 * 1024)
+#define MAX_PROG_SIZE (160 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
 #define MagicKey 0xD9051EC2
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
 #define FLASH_TARGET_OFFSET (1056 * 1024)
-#define HEAP_MEMORY_SIZE (168 * 1024)
+   /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (208 * 1024)
+#define MAX_PROG_SIZE (168 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
 #define MagicKey 0x4530F045
 #endif
 #endif
@@ -199,7 +209,9 @@ extern "C"
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
       __end__) was 4732 bytes, only ~640 bytes clear of the 4096 page
       cliff below which dlmalloc can never grow the arena. */
-#define HEAP_MEMORY_SIZE (96 * 1024)
+   /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (116 * 1024)
+#define MAX_PROG_SIZE (96 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
 #else
    /* +16 KB (2026-09-14): PLAY BBC SOUND / PLAY BBC ENVELOPE (AudioBBC.c)
       overran the 800 KB limit by ~0.5 KB.
@@ -215,7 +227,9 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went ~1.1 KB over 816 KB. */
 #define FLASH_TARGET_OFFSET (832 * 1024)
-#define HEAP_MEMORY_SIZE (100 * 1024)
+   /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (120 * 1024)
+#define MAX_PROG_SIZE (100 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
 #define MagicKey 0x741677C8
 #endif
 
@@ -261,7 +275,8 @@ extern "C"
    /* -4 KB (2026-09-29): with Route B's code the link put the C heap 800 bytes
       past the end of RAM; -4 KB more for the 64 more global slots
       (MAXGLOBALVARS 576), 1056 bytes past it. */
-#define HEAP_MEMORY_SIZE (248 * 1024)
+   /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (292 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
    /* +16 KB (2026-09-26): the interrupt-pending counter (S1c) took this variant
       636 bytes over 1456 KB; it had been down to 188 bytes.  Peter chose the
@@ -275,7 +290,9 @@ extern "C"
 #define MAXGLOBALVARS 240 // Configurable split
 #define MAXLOCALVARS 192 // (not RC2's 240: this variant's RAM is 1.4 KB short of it)
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
-#define HEAP_MEMORY_SIZE (88 * 1024)
+   /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (108 * 1024)
+#define MAX_PROG_SIZE (88 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
    /* +16 KB (2026-09-29): 8.0 KB over (on development already, before P6). */
 #define FLASH_TARGET_OFFSET (1312 * 1024)
 #endif
@@ -320,7 +337,8 @@ extern "C"
       HFSR=80000000 (DEBUGEVT = the BKPT in _exit).  Heap moves only in 4 KB
       steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
       and [[project_core0_stack_overflow_fm]]. */
-#define HEAP_MEMORY_SIZE (296 * 1024)
+   /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (336 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBT)
    /* PICOMITEBT replaces USB CDC console with BLE Nordic UART Service over
@@ -338,7 +356,8 @@ extern "C"
 #define MagicKey 0xFB2B4EA6
    /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
 #define FLASH_TARGET_OFFSET (1440 * 1024)
-#define HEAP_MEMORY_SIZE (272 * 1024)
+   /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (312 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBTH)
    /* PICOMITEBTH = PicoMite + USB CDC console + BLE HID host. Same CYW43
@@ -352,13 +371,15 @@ extern "C"
 #define MagicKey 0xB3A99D85
    /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
 #define FLASH_TARGET_OFFSET (1472 * 1024)
-#define HEAP_MEMORY_SIZE (256 * 1024)
+   /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (312 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #else
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */
 #define FLASH_TARGET_OFFSET (1136 * 1024)
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
-#define HEAP_MEMORY_SIZE (300 * 1024)
+   /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (344 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #define MagicKey 0x5E57936A
 #endif
@@ -391,7 +412,8 @@ extern "C"
       HFSR=80000000 (DEBUGEVT = the BKPT in _exit).  Heap moves only in 4 KB
       steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
       and [[project_core0_stack_overflow_fm]]. */
-#define HEAP_MEMORY_SIZE (124 * 1024)
+   /* +24 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (148 * 1024)
 #else
 #ifdef PICOMITEMIN
    /* +16 KB (2026-09-26): the DO loop fast path (DoFastCompile in Commands.c)
@@ -405,12 +427,14 @@ extern "C"
       the A: drive starts where RC2's did, 1188 KB, and keeps its size. */
 #define FLASH_TARGET_OFFSET (720 * 1024)
 #define MagicKey 0x40287BEA
-#define HEAP_MEMORY_SIZE (128 * 1024)
+   /* +24 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (152 * 1024)
 #else
    /* +8 KB (2026-09-26): removing the trace cache left 13 KB of RAM spare.
       The program area here is a fixed 120 KB (MAX_PROG_SIZE below), so the
       heap grows without moving anything in flash; about 5 KB stays spare. */
-#define HEAP_MEMORY_SIZE (128 * 1024)
+   /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (148 * 1024)
    /* -16 KB (2026-09-26): back to 912 KB.  Removing the trace cache left 34 KB
       of flash spare, so the step taken on 2026-09-22 (below) returns to the
       A: drive with about 18 KB still spare.  Moving the offset again means

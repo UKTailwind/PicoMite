@@ -335,7 +335,8 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <div class="phase"><div class="num">4<small>heap</small></div><div>
 <h3>Give the RAM to the heap</h3>
 <p>Per build, in whole 4 KB steps, with <code>MAX_PROG_SIZE</code> pinned so the flash layout and A: are unchanged.</p>
-<p class="meta">Gate: every build's fit check; la_24_2 and Bad Apple with symbols on and no <code>OPTION SYMBOLS OFF</code>; the games on the PC3.</p></div></div>
+<p class="meta">Gate: every build's fit check; la_24_2 and Bad Apple with symbols on and no <code>OPTION SYMBOLS OFF</code>; the games on the PC3.</p>
+<p class="meta">Result: heaps +20-24 KB on the RP2040 builds and +40-56 KB on the RP2350, leaving 3.4-6.6 KB of RAM for the stack (Peter: about 4 KB); <code>MAX_PROG_SIZE</code> pinned where it followed the heap, so options and A: survived on both boards. All 16 variants build; goldens unchanged on both boards; solar_eclipse 27.140 s on the VGA, 16.031 s on the PC3. la_24_2 on the VGA runs with its symbols: loop 81 ms, where b2 took 110.8 ms with <code>OPTION SYMBOLS OFF</code> (and the new firmware 111.8 ms without symbols). Bad Apple decode and draw per frame, symbols on/off: b2 83.2/90.9 ms, phase 1 90.7/103.2 ms, phase 4 85.9/97.0 ms.</p></div></div>
 <div class="phase"><div class="num">5<small>optional</small></div><div>
 <h3>Afterwards, if wanted</h3>
 <p>Raise <code>MAXGLOBALVARS</code> where useful, since a slot costs 8 bytes; bind globals to record pointers rather than slot numbers.</p></div></div>
