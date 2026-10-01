@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Compact Variable Table</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+
+</head>
+<body>
+<header class="hero"><div class="wrap">
+<div class="eyebrow">Variable table &middot; design for review</div>
+<h1>A compact variable table</h1>
+<p>Today every possible variable has a full 56- or 64-byte entry in a static table, used or not. That is 26.9 KB of the RP2040 VGA's RAM, more than a quarter of its 100 KB heap, and 47-49 KB on the RP2350 builds. This document reviews Peter's proposal to keep only a small slot per variable in the table and to give each variable its full record from the heap when it is created. It recommends doing it, with four changes, and sets out the design, what it costs, what it would break, and how to build it in stages.</p>
+<p class="ref">Branch development at 0b7528f (V7.0.00b2) &middot; evidence: two read-only code surveys for this review (the table's internals; everything outside the interpreter that depends on its layout), an offline count of the names in six real programs and the 112-program test corpus, and the 2026-09-30 heap investigations of la_24_2.bas and Bad Apple on the RP2040 VGA. No code has been changed.</p>
+</div></header>
+<div class="wrap">
+<nav class="toc">
+<a href="#summary">Summary</a><a href="#today">How it works today</a><a href="#usage">What programs use</a><a href="#review">The proposal, point by point</a><a href="#design">Recommended design</a><a href="#memory">Memory</a><a href="#compat">Compatibility</a><a href="#speed">Speed</a><a href="#risks">Risks</a><a href="#phases">Phases</a><a href="#decide">Decisions</a><a href="#found">Found on the way</a>
+</nav>
+
+<section id="summary">
+<h2>Summary</h2>
+<ul>
+<li><b>The idea is sound and the gain is large.</b> Replacing the static table with an 8-byte slot per global, and allocating full records only for variables that exist, frees 22-26 KB of static RAM on the RP2040 builds and 42-44 KB on the RP2350 builds. In whole 4 KB steps that is <b>+24 KB of heap on the RP2040 VGA</b> and <b>+40 KB on the RP2350 VGA and HDMI builds</b>.</li>
+<li><b>Typical programs keep most of it.</b> la_24_2.bas has about 61 globals and Bad Apple about 39, against the RP2040 VGA's 240 global slots. Each would need three chunks of records (5.25 KB), leaving <b>about 19 KB more heap than today</b>: far more than the 3-5 KB the symbol tables took, so neither would need <code>OPTION SYMBOLS OFF</code>.</li>
+<li><b>Programs that fill the table roughly break even.</b> Elite and Prince of Persia, which come close to the RP2350's 544 global slots, would gain 2-4 KB. Only a program that fills both the global table and the local stack at the same moment comes out a few KB worse than today.</li>
+<li><b>Four changes to the proposal:</b>
+<ol>
+<li>Tell names apart with a 16-bit hash and the length, not the first three letters. In the six programs measured, a third to two thirds of all names share their first three letters with another name; length plus hash16 separated every one.</li>
+<li>Keep the record layout exactly as it is, with the 32-byte name. Shortening names to 8 bytes would move every field, which breaks <code>PEEK(VARHEADER)</code> offsets (Bad Apple uses <code>Peek(varheader y1())+36</code>) and the layout CSUBs are given, to save 24 bytes per variable.</li>
+<li>Chunks of 32 records on both chips: 7 pages on the RP2040 (as proposed), 8 on the RP2350 (not 7), so a local's record is found with a shift rather than a division.</li>
+<li>Locals need no hash slots at all. They are already a stack, so their records can be a stack of chunks indexed by slot number.</li>
+</ol></li>
+<li><b>One new failure mode</b> needs care: creating a variable can now fail for lack of heap. Allocating one chunk of globals and one of locals at RUN, before the program's own allocations, means a program with up to 32 of each never meets it.</li>
+<li><b>Three things break and need a decision</b>: the CSUB call table's pointer to the table (offset 0x60), <code>PEEK</code>/<code>POKE VARTBL</code>, and SAVE CONTEXT images written by older firmware. See <a href="#decide">Decisions</a>.</li>
+<li><b>Five phases</b>, the first a pure refactor that must change nothing, each tested on the RP2040 VGA and the PC3 before the next.</li>
+</ul>
+</section>
+
+<section id="today">
+<h2>How it works today</h2>
+<p><code>g_vartbl</code> is a static array of <code>MAXVARS</code> entries in BSS (MMBasic.c:121), separate from the heap. Each entry is a <code>struct s_vartbl</code> (MMBasic.h:279-299):</p>
+<div class="tablewrap"><table>
+<tr><th>Bytes</th><th>Field</th><th>Notes</th></tr>
+<tr><td>0-31</td><td>name[32]</td><td>Upper case, no suffix, not NUL-terminated at 32 characters</td></tr>
+<tr><td>32-35</td><td>type, level, size, namelen</td><td>type uses all 8 bits (T_NBR ... T_STRUCT); namelen now holds flags only</td></tr>
+<tr><td>36-47 / 36-55</td><td>dimtbl</td><td>6 shorts on the RP2040, 5 ints on the RP2350. A short string (up to 9 / 15 characters) is stored here, in dimtbl[1..]</td></tr>
+<tr><td>48-55 / 56-63</td><td>val</td><td>8 bytes, 8-aligned: the number, or a pointer to string, array or struct data</td></tr>
+</table></div>
+<div class="tablewrap"><table>
+<tr><th>Build</th><th class="num">Globals + locals</th><th class="num">Entry</th><th class="num">Table</th><th class="num">g_hashlist</th></tr>
+<tr><td>RP2040 PICO, PICOUSB, PICOMIN</td><td class="num">256 + 240</td><td class="num">56</td><td class="num">27,776</td><td class="num">1,856</td></tr>
+<tr><td>RP2040 VGA, VGAUSB</td><td class="num">240 + 240</td><td class="num">56</td><td class="num">26,880</td><td class="num">1,792</td></tr>
+<tr><td>WebMite RP2040</td><td class="num">240 + 192</td><td class="num">56</td><td class="num">24,192</td><td class="num">1,600</td></tr>
+<tr><td>RP2350 VGA, VGAUSB, HDMI, HDMIUSB, HDMIBTH, HDMIWEB</td><td class="num">544 + 192</td><td class="num">64</td><td class="num">47,104</td><td class="num">2,816</td></tr>
+<tr><td>RP2350 PICO, PICOUSB, BT, BTH, WebMite RP2350</td><td class="num">576 + 192</td><td class="num">64</td><td class="num">49,152</td><td class="num">2,944</td></tr>
+</table></div>
+<ul>
+<li><b>Globals</b> occupy slots [maxlocalvars, MAXVARS) and are found by open addressing with linear probing on a 32-bit FNV-1a hash of the name (<code>probe_global_slot</code>, MMBasic.c:5017-5080). ERASE frees a global's slot outright if the next slot is empty. If the next slot is in use, a later variable may have probed through this one to reach its own, so the slot is marked <code>T_BLOCKED</code> (<code>name[0]='~'</code>) instead. A lookup walks on past a blocked slot, so the chain stays intact; if the name is not found further along, the new variable takes the blocked slot it passed (MMBasic.c:5038-5075, 7187-7199). A blocked slot is therefore both a link in a chain and free for reuse.</li>
+<li><b>Locals</b> occupy slots [0, maxlocalvars) and since P6 are a <b>stack</b>, not hashed: a new local goes at <code>g_localtop</code>, <code>g_hashlist</code> records its slot and level, and a SUB's exit drops its locals (MMBasic.c:5433, 5807-5815, 6974-7016).</li>
+<li><b>V7's symbol bindings</b> (<code>SymG</code>, <code>SymL</code>, int16) hold slot numbers, so after the first lookup a name goes straight to its slot.</li>
+<li><b>Much code keeps pointers into entries</b> across statements, which is safe only because entries never move: the FOR stack, the DO fast path, by-reference parameters, STATIC, a FUNCTION's result, Route B's bind cache, and the IR, KEYPAD, PLAY STREAM and TCP STREAM writers, some of them in interrupts.</li>
+<li><b>Short strings live inside the entry</b> (<code>val.s = &amp;dimtbl[1]</code>). The free paths skip them only because the table is outside the heap's address range: <code>FreeMemorySafe</code> ignores addresses it does not own.</li>
+</ul>
+</section>
+
+<section id="usage">
+<h2>What programs use</h2>
+<p>Distinct names in each program, counted offline: everything that is not a keyword (the command and function tables plus every sub-keyword the firmware checks for). "Globals" is an upper bound, since it includes CONSTs, which also take an entry, and anything the counter could not prove local. For Prince of Persia it must really be under 544, its build's limit.</p>
+<div class="tablewrap"><table>
+<tr><th>Program</th><th class="num">Names</th><th class="num">SUB/FUNCTION</th><th class="num">Only local</th><th class="num">Globals &le;</th><th class="num">Most locals in one SUB</th><th class="num">Names &gt; 8 chars</th><th class="num">Share first 3 chars</th><th class="num">Share length + hash16</th></tr>
+<tr><td>la_24_2 (logic analyser, RP2040 VGA)</td><td class="num">110</td><td class="num">23</td><td class="num">39</td><td class="num">61</td><td class="num">13</td><td class="num">10 of 88</td><td class="num">32%</td><td class="num">0</td></tr>
+<tr><td>Bad Apple (RP2040 VGA)</td><td class="num">43</td><td class="num">2</td><td class="num">3</td><td class="num">39</td><td class="num">2</td><td class="num">14 of 41</td><td class="num">35%</td><td class="num">0</td></tr>
+<tr><td>Exile</td><td class="num">347</td><td class="num">59</td><td class="num">66</td><td class="num">175</td><td class="num">8</td><td class="num">10 of 232</td><td class="num">49%</td><td class="num">0</td></tr>
+<tr><td>Arkanoid</td><td class="num">419</td><td class="num">60</td><td class="num">74</td><td class="num">281</td><td class="num">12</td><td class="num">114 of 347</td><td class="num">58%</td><td class="num">0</td></tr>
+<tr><td>Elite</td><td class="num">878</td><td class="num">260</td><td class="num">147</td><td class="num">496</td><td class="num">15</td><td class="num">106 of 618</td><td class="num">58%</td><td class="num">0</td></tr>
+<tr><td>Prince of Persia</td><td class="num">984</td><td class="num">252</td><td class="num">111</td><td class="num">640</td><td class="num">11</td><td class="num">223 of 732</td><td class="num">64%</td><td class="num">0</td></tr>
+<tr><td>Test corpus, 112 programs</td><td colspan="4">globals: median 2, 90th percentile 9, largest 290</td><td></td><td class="num">156 of 850</td><td></td><td></td></tr>
+</table></div>
+<p>Two conclusions shape the design. Programs written for the RP2040 use a small fraction of its table, which is where the gain is. And the large games come close to the RP2350's limit, so the design must not cost them memory.</p>
+<p class="ref">Scripts: scratchpad varcount.py and prefix.py (2026-10-01). Sources: B:/la_24_2.bas, b:/badapple/badtweaked.bas, Bas/arkanoid.bas, Bas/bench/phase1/games/{exile/gbxphys, elite/gbelite, pop/gbpop}.bas, and the mmb2c test corpus.</p>
+</section>
+
+<section id="review">
+<h2>The proposal, point by point</h2>
+<div class="grid2">
+<div class="card"><h3>1. A small slot per variable <span class="pill ok">yes</span></h3>
+<p>The slot table replaces the entries for globals. 8 bytes per slot: a state byte, the name's length, a 16-bit hash, and the record's address. 240 global slots take 1,920 bytes instead of 13,440.</p>
+<p>The proposal puts the type in the slot. The design keeps it in the record only: the type and its flags are changed after creation (T_PTR on parameters and STATICs, the marker DIM sets while it allocates, ERASE), and read in many places, so a copy in the slot would have to follow every change. The slot needs only free, in use or blocked.</p></div>
+<div class="card"><h3>2. Records on demand, in 7-page chunks <span class="pill ok">yes, adjusted</span></h3>
+<p>Seven pages hold exactly 32 RP2040 records, as proposed. On the RP2350 seven pages hold 28; eight hold 32. Using 32 on both chips makes a local's record a shift and a mask from its slot number.</p>
+<p>Chunks must come from the SRAM heap only. <code>GetMemory</code> can fall back to PSRAM, which would slow every variable access, and SAVE CONTEXT does not capture PSRAM contents.</p></div>
+<div class="card"><h3>3. First three letters in the slot <span class="pill warn">change</span></h3>
+<p>The aim, settling a probe without touching the record, is right. Three letters do not do it: 32-64% of names share their first three letters with another, and every STATIC's hidden global starts with its SUB's name. The FNV hash findvar already computes supplies a 16-bit check for free, and with the length it separated every name in all six programs. The record is still read once to confirm a match.</p></div>
+<div class="card"><h3>4. ERASE: waste, or reuse via a LIFO <span class="pill ok">LIFO</span></h3>
+<p>A free list costs almost nothing: an erased record's first word links to the next free one, and creation takes from the list before the chunk. The slot itself is freed or marked blocked exactly as today, so chains stay intact and the slot is reused by the next new variable that probes through it.</p></div>
+<div class="card"><h3>5. 8-byte names, pointer for longer <span class="pill bad">not now</span></h3>
+<p>It would save 24 bytes per variable (records of 32 / 40 bytes). But 4-34% of names in the programs measured, and 18% in the test corpus, are longer than 8 characters and would need a second allocation; every name comparison and print would need a helper; and the fields after the name would move, which breaks <code>PEEK(VARHEADER)</code> offsets (Bad Apple's <code>+36</code>), the layout CSUBs are given, and the Structures manual. With items 1-4 even full tables break even, so the saving is not needed. Revisit only as a deliberate compatibility break.</p></div>
+</div>
+</section>
+
+<section id="design">
+<h2>Recommended design</h2>
+<h3>Data</h3>
+<pre>struct s_gslot {                // one per global slot (MAXGLOBALVARS of them)
+    uint8_t  state;             // GS_FREE 0, GS_USED 1, GS_BLOCKED 2 (T_BLOCKED today)
+    uint8_t  namelen;           // 1..32
+    uint16_t hash16;            // top 16 bits of the FNV-1a hash
+    struct s_vartbl *rec;       // the record; NULL when free
+};
+struct s_vartbl                 // unchanged: 56 bytes on the RP2040, 64 on the RP2350
+#define VREC_PER_CHUNK 32       // 7 pages on the RP2040, 8 on the RP2350
+
+static struct s_gslot   g_gslot[MAXGLOBALVARS];
+static struct s_vartbl *g_lchunk[(MAXLOCALLIST + 31) / 32];   // local record chunks, kept for the run
+static struct s_vartbl *g_gfree;                               // erased global records (LIFO)
+static struct s_vartbl *g_gnext, *g_gend;                      // next unused record in the current chunk</pre>
+<p>The index space stays as it is: slots below <code>maxlocalvars</code> are locals, the rest globals. So <code>g_VarIndex</code>, <code>SymG</code>, <code>SymL</code>, <code>SymLShadow</code>, <code>SymLCanon</code>, <code>g_hashlist</code> and the FOR/DO stacks keep their meaning. One accessor maps an index to its record:</p>
+<pre>#define VREC(i) ((i) &lt; maxlocalvars ? &amp;g_lchunk[(i) &gt;&gt; 5][(i) &amp; 31] \
+                                     : g_gslot[(i) - maxlocalvars].rec)</pre>
+<p>findvar also sets <code>g_VarRec</code>, the record it found or made. Most of the ~300 uses of <code>g_vartbl[g_VarIndex]</code> become <code>g_VarRec-&gt;</code>, so the accessor is only needed by the code that walks the table by index.</p>
+
+<h3>Creating, finding and erasing a global</h3>
+<ul>
+<li><b>Find:</b> hash the name as today, take <code>hash % maxglobalvars</code>, and probe. A free slot ends the search; a blocked slot is passed but remembered, and a new variable takes it if the name is not found further along, as today; a used slot whose <code>namelen</code> and <code>hash16</code> match is confirmed against <code>rec-&gt;name</code>. The probe reads 8-byte slots instead of 32-byte names.</li>
+<li><b>Create:</b> take a record from the free list, else from the current chunk, else allocate a new chunk of 32 from the SRAM heap (top-down, like any persistent allocation). Clear it, fill it as today, then fill the slot.</li>
+<li><b>Erase:</b> free the variable's data as today, put the record on the free list, and free the slot or mark it blocked exactly as today (blocked if the next slot is in use).</li>
+<li><b>Clear (RUN, NEW, CLEAR):</b> the heap is reset anyway, so clearing the slot table and the chunk pointers is enough.</li>
+</ul>
+
+<h3>Locals</h3>
+<p>A local's record is <code>g_lchunk[slot &gt;&gt; 5][slot &amp; 31]</code>. When the stack first reaches a new multiple of 32, a chunk is allocated; chunks are kept until the run ends, so a program allocates them only the first time its call depth reaches a new high. Making and dropping locals is otherwise unchanged. <code>OPTION LOCAL VARIABLES n</code> becomes a cap on the local stack alone: raising it no longer takes slots from the globals.</p>
+
+<h3>Seeding at RUN</h3>
+<p>RUN allocates the first chunk of globals and the first chunk of locals before the program runs (3.5 KB on the RP2040, 4 KB on the RP2350). A program with up to 32 globals and 32 live locals then never allocates for variables during the run, and so can never fail to make one for lack of heap. Larger programs allocate further chunks mostly while declaring their globals, near the top of the program, before their large buffers.</p>
+
+<h3>Things that must change with it</h3>
+<ul>
+<li><b>Short strings stored inside the record.</b> Once records are in the heap, every free site would treat <code>&amp;dimtbl[1]</code> as heap memory: ClearVars (MMBasic.c:6985-7001, 7024-7046), erase (7172-7181), and MMBasic.c:3042-3045, 3114 and 4495-4498. Each needs <code>val.s != (void *)&amp;rec-&gt;dimtbl[1]</code>, as MEMORY already checks (Memory.c:1593). This must land before records move.</li>
+<li><b>SAVE CONTEXT</b> copies the slot table and chunk pointers instead of the table. The records are in the heap, which it already copies to the same address. Add a header (version, the global/local split) so an image left by older firmware is refused instead of restored blindly. That hazard exists today.</li>
+<li><b>Route B</b> (RBBindAll, Stream.c:3880-3921) takes <code>VREC(i)</code> instead of <code>&amp;g_vartbl[i]</code>. Its cache of record pointers stays valid because records never move.</li>
+<li><b>MEMORY</b> reports the slot table plus the records, which are now in the heap. "General" must not count them twice.</li>
+<li><b>The heap and the flash layout.</b> The freed RAM goes to <code>HEAP_MEMORY_SIZE</code> in whole 4 KB steps. Where a build has <code>MAX_PROG_SIZE == HEAP_MEMORY_SIZE</code>, <code>MAX_PROG_SIZE</code> must first be set to its current value, or the flash layout moves and A: is wiped on the update.</li>
+</ul>
+</section>
+
+<section id="memory">
+<h2>Memory</h2>
+<h3>Static RAM freed, and heap gained</h3>
+<div class="tablewrap"><table>
+<tr><th>Build</th><th class="num">Table today</th><th class="num">Slots + chunk pointers</th><th class="num">Freed</th><th class="num">Heap, 4 KB steps</th><th class="num">Left to margin</th></tr>
+<tr><td>RP2040 PICO, PICOUSB, PICOMIN</td><td class="num">27,776</td><td class="num">2,108</td><td class="num">25,668</td><td class="num">+24 KB</td><td class="num">1,092</td></tr>
+<tr class="rec"><td>RP2040 VGA, VGAUSB</td><td class="num">26,880</td><td class="num">1,976</td><td class="num">24,904</td><td class="num">+24 KB</td><td class="num">328</td></tr>
+<tr><td>WebMite RP2040</td><td class="num">24,192</td><td class="num">1,972</td><td class="num">22,220</td><td class="num">+20 KB</td><td class="num">1,740</td></tr>
+<tr><td>RP2350 VGA and HDMI builds</td><td class="num">47,104</td><td class="num">4,440</td><td class="num">42,664</td><td class="num">+40 KB</td><td class="num">1,704</td></tr>
+<tr><td>RP2350 PICO builds, WebMite RP2350</td><td class="num">49,152</td><td class="num">4,700</td><td class="num">44,452</td><td class="num">+40 KB</td><td class="num">3,492</td></tr>
+</table></div>
+<p class="ref">The builds' fit checks have the final word, including the newlib C-heap rule on the USB builds (at least 4 KB between the end of BSS and the stack).</p>
+
+<h3>What a program has left, compared with today</h3>
+<div class="tablewrap"><table>
+<tr><th>Program and build</th><th class="num">Chunks (globals + locals)</th><th class="num">Records</th><th class="num">Heap compared with today</th></tr>
+<tr class="rec"><td>la_24_2, RP2040 VGA</td><td class="num">2 + 1</td><td class="num">5,376</td><td class="num">+18.8 KB</td></tr>
+<tr class="rec"><td>Bad Apple, RP2040 VGA</td><td class="num">2 + 1</td><td class="num">5,376</td><td class="num">+18.8 KB</td></tr>
+<tr><td>Any program with &le; 32 globals and &le; 32 live locals, RP2040 VGA</td><td class="num">1 + 1</td><td class="num">3,584</td><td class="num">+20.5 KB</td></tr>
+<tr><td>A full RP2040 VGA table: 239 globals, 32 live locals</td><td class="num">8 + 1</td><td class="num">16,128</td><td class="num">+8.3 KB</td></tr>
+<tr><td>Worst case, RP2040 VGA: 239 globals and 239 live locals at once</td><td class="num">8 + 8</td><td class="num">28,672</td><td class="num">&minus;4.0 KB</td></tr>
+<tr><td>Exile, RP2350</td><td class="num">6 + 2</td><td class="num">16,384</td><td class="num">+24.0 KB</td></tr>
+<tr><td>Elite, RP2350</td><td class="num">16 + 2</td><td class="num">36,864</td><td class="num">+4.0 KB</td></tr>
+<tr><td>Prince of Persia, RP2350</td><td class="num">17 + 2</td><td class="num">38,912</td><td class="num">+2.0 KB</td></tr>
+<tr><td>Worst case, RP2350 HDMI: 543 globals and 191 live locals at once</td><td class="num">17 + 6</td><td class="num">47,104</td><td class="num">&minus;6.0 KB</td></tr>
+</table></div>
+<p>The games' counts are upper bounds, so their real gains are a little larger. The two worst cases need every local slot live at the same moment, which no measured program comes near: the largest single SUB declares 15.</p>
+<p>The symbol tables (3-5 KB) and the per-SUB parameter layouts (1 KB plus a page per SUB called) are unaffected. With 19 KB more heap, la_24_2 and Bad Apple would run with them, and <code>OPTION SYMBOLS OFF</code> would become a rarity.</p>
+</section>
+
+<section id="compat">
+<h2>Compatibility</h2>
+<div class="tablewrap"><table>
+<tr><th>What</th><th>Effect</th><th></th></tr>
+<tr><td><code>PEEK(VARADDR v)</code>, <code>PEEK(VAR v, off)</code>, <code>POKE VAR</code></td><td>Unchanged. The value stays inside its record, 8-aligned, and never moves while the variable exists.</td><td><span class="pill ok">same</span></td></tr>
+<tr><td><code>PEEK(VARHEADER v)</code> and offsets from it</td><td>Unchanged: it returns the record, whose layout is identical. Bad Apple's <code>+36</code> keeps working.</td><td><span class="pill ok">same</span></td></tr>
+<tr><td>VAR SAVE / VAR RESTORE</td><td>Unchanged: the flash format is keyed by name and type, not by entry.</td><td><span class="pill ok">same</span></td></tr>
+<tr><td>Pointers held by drivers (IR, KEYPAD, PLAY STREAM, TCP STREAM), the FOR and DO stacks, Route B</td><td>Unchanged: records never move.</td><td><span class="pill ok">same</span></td></tr>
+<tr><td><code>MM.INFO(VARCNT)</code>, LIST VARIABLES, LIST COLLISIONS</td><td>Same output. Collisions are still those of the global slots.</td><td><span class="pill ok">same</span></td></tr>
+<tr><td><code>OPTION LOCAL VARIABLES n</code></td><td>Caps the local stack without taking slots from the globals.</td><td><span class="pill acc">better</span></td></tr>
+<tr><td><code>MEMORY</code>, <code>MM.INFO(HEAP)</code></td><td>The heap is larger, and falls as variables are created. Figures differ from today.</td><td><span class="pill warn">differs</span></td></tr>
+<tr><td>Creating a variable</td><td>Can fail with "Not enough memory" once the heap is full, beyond the seeded chunks. Today only the slot limits apply.</td><td><span class="pill warn">new</span></td></tr>
+<tr><td><code>PEEK(VARTBL, off)</code>, <code>POKE VARTBL</code></td><td>There is no longer one array. Can be emulated: <code>off / sizeof(entry)</code> is the index, the remainder the byte in its record. A free slot reads as zeros.</td><td><span class="pill warn">emulate</span></td></tr>
+<tr><td>CSUB call table 0x60 (<code>&amp;g_vartbl</code>) and 0x64 (<code>&amp;g_varcnt</code>), the layout in <code>PicoCFunctions.h</code></td><td>A CSUB that walks <code>g_vartbl</code> breaks. None is known: mmb2csub reaches globals through VARADDR, which is unaffected. The offsets are an append-only ABI, so 0x60 must keep some meaning.</td><td><span class="pill bad">breaks</span></td></tr>
+<tr><td>SAVE CONTEXT images (<code>/.vars</code> on A:, the PSRAM reserve) from older firmware</td><td>Refused, once the header is added. Today they would be restored blindly into the wrong layout.</td><td><span class="pill warn">refused</span></td></tr>
+</table></div>
+<p class="ref">Documentation to update: help.txt and the manual (MEMORY, OPTION LOCAL VARIABLES, PEEK/POKE VARTBL, VARHEADER), MMBasic_Structures_Manual.md:2589-2610, armcfgen.md section 1.5 and its 0x60/0x64 table, PicoCFunctions.h:395-416, and the planned mmb2csub phase 3 (MMBasic_To_CSUB_Plan.md:296-298), which assumed it could walk the table.</p>
+</section>
+
+<section id="speed">
+<h2>Speed</h2>
+<ul>
+<li><b>Bound lookups</b>, the normal V7 path, gain one load for a global (slot to record) and swap a multiply for a shift and a load for a local. Against statements that take 5-150 &micro;s this should not show; bench_micro will say.</li>
+<li><b>Text lookups</b> (the first lookup of each name, programs with <code>OPTION SYMBOLS OFF</code>, the command prompt) get faster. A probe reads 8-byte slots and touches a record only when the length and hash16 match, where today it compares names in 56- or 64-byte entries.</li>
+<li><b>Route B</b> is unchanged: compiled code uses the pointers it cached.</li>
+<li><b>Creating</b> a variable costs one chunk allocation per 32 variables.</li>
+</ul>
+</section>
+
+<section id="risks">
+<h2>Risks</h2>
+<div class="warnbox"><div class="eyebrow">Hazards to design for</div>
+<ul>
+<li><b>Short strings inside records</b> would be freed into the heap as if they were allocations. Guard every free site first (phase 1).</li>
+<li><b>Running out of heap while making a variable</b>: mitigated by seeding a chunk of each kind at RUN, and by keeping local chunks for the run.</li>
+<li><b>Width of the change</b>: about 615 lines in 27 files mention <code>g_vartbl</code>, and about 155 call findvar. Most uses follow findvar and become <code>g_VarRec</code>; the walkers (ClearVars, erase, LIST, MEMORY, SAVE CONTEXT, Route B binds, the symbol layer) need care. This is why phase 1 changes no behaviour.</li>
+<li><b>A record in PSRAM</b> would be slow and invisible to SAVE CONTEXT: the chunk allocator must use the SRAM heap only.</li>
+<li><b>Interrupt writers pointing at a LOCAL</b> already write into reused memory after the SUB returns. Heap records would make that worse, not new. See <a href="#found">Found on the way</a>.</li>
+</ul></div>
+</section>
+
+<section id="phases">
+<h2>Phases</h2>
+<div class="phase"><div class="num">1<small>refactor</small></div><div>
+<h3>Accessors, no change in behaviour</h3>
+<p>findvar sets <code>g_VarRec</code>; sites use it; walkers use <code>VREC(i)</code>, defined for now as <code>&amp;g_vartbl[i]</code>. Add the short-string guard at every free site and the SAVE CONTEXT header.</p>
+<p class="meta">Gate: goldens identical on the RP2040 VGA and the PC3; bench_micro within noise; flash size noted.</p></div></div>
+<div class="phase"><div class="num">2<small>globals</small></div><div>
+<h3>Global slots and record chunks</h3>
+<p>The slot table, SRAM-only chunks of 32, the free list, the seeded chunk, the <code>PEEK</code>/<code>POKE VARTBL</code> emulation, MEMORY and LIST, and the chosen meaning of call-table 0x60.</p>
+<p class="meta">Gate: goldens; varcnt14, locvars6, symchain, rbf2, rbp5d; ERASE and REDIM, PIO MAKE RING BUFFER, STATIC, CONST short strings, VAR SAVE/RESTORE; bench_micro.</p></div></div>
+<div class="phase"><div class="num">3<small>locals</small></div><div>
+<h3>The local record stack</h3>
+<p>Chunk pointers, the seeded chunk, chunks kept for the run, <code>OPTION LOCAL VARIABLES</code> as a cap.</p>
+<p class="meta">Gate: as phase 2, plus deep recursion (rbdepth), by-reference parameters and interrupts during SUBs.</p></div></div>
+<div class="phase"><div class="num">4<small>heap</small></div><div>
+<h3>Give the RAM to the heap</h3>
+<p>Per build, in whole 4 KB steps, with <code>MAX_PROG_SIZE</code> pinned so the flash layout and A: are unchanged.</p>
+<p class="meta">Gate: every build's fit check; la_24_2 and Bad Apple with symbols on and no <code>OPTION SYMBOLS OFF</code>; the games on the PC3.</p></div></div>
+<div class="phase"><div class="num">5<small>optional</small></div><div>
+<h3>Afterwards, if wanted</h3>
+<p>Raise <code>MAXGLOBALVARS</code> where useful, since a slot costs 8 bytes; bind globals to record pointers rather than slot numbers.</p></div></div>
+</section>
+
+<section id="decide">
+<h2>Decisions</h2>
+<div class="decide"><div class="eyebrow">For Peter</div>
+<ol>
+<li><b>Go ahead with phase 1?</b> It is worth doing on its own: it changes nothing visible, and it is where the effort is.</li>
+<li><b>CSUB call table 0x60.</b> Point it at the new slot table and publish that layout; or point it at a function that returns a record by index; or keep the old meaning documented as withdrawn. 0x64 (<code>g_varcnt</code>) can stay.</li>
+<li><b><code>PEEK</code>/<code>POKE VARTBL</code>:</b> emulate by entry index (recommended), or withdraw.</li>
+<li><b>Seeding at RUN</b>: one chunk of globals and one of locals (recommended), or none.</li>
+<li><b>8-byte names:</b> not now (recommended).</li>
+</ol></div>
+</section>
+
+<section id="found">
+<h2>Found on the way</h2>
+<p>From the two surveys, all read from the code and none yet tested:</p>
+<ul>
+<li><b>Possible hang at level 0.</b> The global probe's wrap check runs only when <code>g_LocalIndex != 0</code> (MMBasic.c:5435-5447). The probe walks until it reaches a slot whose name is empty, and a blocked slot does not count. If no global slot is empty, so that every one is in use or blocked, looking up a name that is not there at level 0 never ends. That can happen after an ERASE: up to <code>maxglobalvars-1</code> globals may be live, and a new variable can take the last empty slot while a blocked one remains elsewhere.</li>
+<li><b>Counter drift.</b> If DIM fails in GetMemory, <code>g_Globalvarcnt</code> has already been incremented and is never decremented (MMBasic.c:5775-5777, 5891-5905).</li>
+<li><b>LIST VARIABLES with a 32-character name</b> uses <code>strcat</code> on a name with no terminator and reads on into the type byte (Commands.c:2638, 2661, 2689).</li>
+<li><b>Interrupt writers and LOCALs.</b> IR, KEYPAD, PLAY STREAM and TCP CLIENT STREAM keep a pointer to the variable they were given. If it was a LOCAL, they write into a reused slot after the SUB returns.</li>
+<li><b>SAVE CONTEXT has no version check</b>: a <code>/.vars</code> written by another firmware is restored blindly.</li>
+<li><b><code>g_varcnt</code></b>, exported to CSUBs at 0x64, is never decremented, so it goes stale after ERASE or a SUB return.</li>
+<li><b>Documentation</b>: the manual gives the longest name as 31 characters, while the code allows 32. <code>PicoCFunctions.h</code> calls byte 35 <code>dummy</code> and omits T_STRUCT. Memory.c's memory-map comment (1860-1892) still describes a growing variable table.</li>
+</ul>
+</section>
+
+<footer>Written for Peter's review, 2026-10-01. Branch development at 0b7528f (V7.0.00b2). No code was changed for this review.</footer>
+</div>
+</body>
+</html>
