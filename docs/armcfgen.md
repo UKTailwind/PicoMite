@@ -47,7 +47,7 @@ everything else in this manual:
   including read‑only data (see §1.4).
 * **It targets Cortex‑M0+.** Code built for the M0+ instruction set runs
   unchanged on both the RP2040 (M0+) and the RP2350 (M33), so one blob works on
-  every PicoMite board, unless it reads the BASIC variable table (`g_vartbl`)
+  every PicoMite board, unless it reads a BASIC variable's record (`g_slotrec`)
   or the `Option` structure, whose layouts differ between the chips and
   variants (see §1.5).
 
@@ -279,7 +279,7 @@ These are not style preferences — break them and the blob crashes or won't bui
 4. **At most 10 arguments.** Bundle extras (and any state that must persist
    between calls) into a parameter array.
 5. **Target stays Cortex‑M0+** so the blob runs on both chips (but see §1.5
-   if it reads `g_vartbl` or `Option`).
+   if it reads `g_slotrec` or `Option`).
 
 ## 1.5 Calling firmware routines (the CallTable)
 
@@ -299,13 +299,13 @@ Cortex‑M `VTOR` register), so there is **no CallTable argument to pass** and t
 **same blob runs on every variant and both chips**. Compile with `-I` pointing at
 the firmware tree so the header is found (Part 2).
 
-**The exception: the variable table and `Option`.** The CallTable's routines
+**The exception: variable records and `Option`.** The CallTable's routines
 behave the same everywhere, but two of the data structures it points to do not:
 
-* An entry in the variable table (`g_vartbl`) holds an array's dimensions
-  (`dims[]`) as five `int`s on the RP2350 and six `short`s on the RP2040, so
-  the size of an entry, and the offset of `dims` and every field after it,
-  differ between the chips.
+* A variable's record (`g_slotrec[i]` points at variable number `i`'s) holds
+  an array's dimensions (`dims[]`) as five `int`s on the RP2350 and six
+  `short`s on the RP2040, so the size of a record, and the offset of `dims`
+  and every field after it, differ between the chips.
 * The fields of the `Option` structure sit at different offsets on different
   variants (PicoMite, VGA, WEB, HDMI, …) and chips.
 
@@ -817,8 +817,8 @@ the arguments yourself if you need MMBasic's error.
 | Name | Offset | Prototype / use |
 |---|---|---|
 | `Option` | 0x8C | `struct option_s *` — the firmware option/settings structure; its layout depends on the variant and chip (§1.5) |
-| `g_vartbl` | 0x60 | the BASIC variable table; its entry layout differs between RP2040 and RP2350 (§1.5) |
-| `g_varcnt` | 0x64 | number of variables in the table |
+| `g_slotrec` | 0x60 | the record of each variable number (`struct s_vartbl *[MAXVARS]`: locals first, then the globals, hashed; a free or erased slot's record has type 0 or `T_BLOCKED`); the record layout differs between RP2040 and RP2350 (§1.5). Before V7.00.00 this was the table itself (`g_vartbl`). |
+| `g_varcnt` | 0x64 | number of variables in use |
 | `Timer` | 0x9C | `unsigned long long Timer(void)` — microsecond timer |
 | `CFuncmSec` | 0x78 | vector slot for a millisecond‑tick CFunction |
 | `CFuncInt1`…`CFuncInt4` | 0xB8,0xBC,0xD0,0xD4 | vector slots for interrupt CFunctions |

@@ -10545,8 +10545,9 @@ byte of the variable name.
 PEEK( VARTBL, +/-offset)
 or
 
-VARTBL, will return a byte in the memory allocated to the variable table
-maintained by MMBasic.  Note that there is a comma after the keyword VARTBL.
+VARTBL was removed in V7.00.00: the variables are no longer kept in one table.
+Use PEEK(VARHEADER var) for the address of a variable's header and PEEK(VAR
+var, +/-offset) to read its bytes.
 
 ~PEEK(WORD)
 PEEK(WORD addr%)
@@ -11331,9 +11332,9 @@ name of a subroutine which will be called when the file has finished playing.
 ~POKE
 POKE VARTBL, offset, byte
 
-POKE VARTBL will set a byte in MMBasic's variable table.  'offset' is the
-+/-offset from the start of the variable table.  Note that a comma is required
-after the keyword VARTBL.
+POKE VARTBL was removed in V7.00.00: the variables are no longer kept in one
+table, so an offset into it means nothing.  Use POKE VAR to change a
+variable's value, and PEEK(VARHEADER var) for the address of its header.
 
 ~POKE BYTE
 POKE BYTE addr%, byte

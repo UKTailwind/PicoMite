@@ -2557,7 +2557,7 @@ This appendix provides technical details about how structures are implemented in
 
 ## Overview
 
-MMBasic structures (user-defined types) are implemented using a **single vartbl entry per structure variable**, regardless of how many members the structure contains. Structure members do NOT create individual entries in `g_vartbl`. Instead, member metadata is stored in a separate **structure type definition table** (`g_structtbl`), and member access is resolved at runtime by calculating byte offsets into a contiguous memory block.
+MMBasic structures (user-defined types) are implemented using a **single variable record per structure variable**, regardless of how many members the structure contains. Structure members do NOT create variable records of their own. Instead, member metadata is stored in a separate **structure type definition table** (`g_structtbl`), and member access is resolved at runtime by calculating byte offsets into a contiguous memory block.
 
 ## Architecture
 
@@ -2586,9 +2586,9 @@ typedef struct s_structmember {
 } structmember_val;
 ```
 
-#### 3. Variable Table Entry (`s_vartbl`)
+#### 3. Variable Record (`s_vartbl`)
 
-Structure variables use the standard variable table entry:
+Structure variables use the standard variable record (variable number `idx`'s is `VREC(idx)`, a pointer into a chunk of records in the heap):
 
 ```c
 typedef struct s_vartbl {
@@ -2614,7 +2614,7 @@ typedef struct s_vartbl {
 |-------|---------|------|
 | `g_structtbl[MAX_STRUCT_TYPES]` | Array of pointers to structure type definitions | 32 pointers |
 | `g_structcnt` | Count of defined structure types | int |
-| `g_vartbl[]` | Variable table (structures use ONE entry each) | MAXVARS entries |
+| `g_slotrec[]` | The record of each variable number (structures use ONE record each) | MAXVARS pointers; the records are in heap chunks of 32 |
 
 ### Configuration Constants
 
@@ -2638,8 +2638,8 @@ DIM pt AS point
 
 Creates:
 1. **One entry in `g_structtbl`** (type definition, allocated once)
-2. **One entry in `g_vartbl`** for variable `pt`
-3. **One contiguous memory block** (16 bytes) pointed to by `g_vartbl[idx].val.s`
+2. **One variable record** for variable `pt`
+3. **One contiguous memory block** (16 bytes) pointed to by `VREC(idx)->val.s`
 
 Memory layout for `pt`:
 ```
@@ -2656,7 +2656,7 @@ DIM points(100) AS point
 ```
 
 Creates:
-1. **One entry in `g_vartbl`** for array `points`
+1. **One variable record** for array `points`
 2. **One contiguous memory block** (16 × 101 = 1616 bytes, accounting for OPTION BASE)
 
 Memory layout for `points(0)` through `points(100)`:
@@ -2685,7 +2685,7 @@ Offset    Content
 
 For regular variables, `size` holds string length. For structures:
 - `size` holds the **index into `g_structtbl`** that defines this struct's type
-- Retrieved via: `int struct_type = (int)g_vartbl[idx].size;`
+- Retrieved via: `int struct_type = (int)VREC(idx)->size;`
 - Then access type definition: `g_structtbl[struct_type]`
 
 ## Structure Member Access Resolution
@@ -2714,7 +2714,7 @@ When code accesses `pt.x` or `points(5).y`:
 
 ## STATIC Structure Variables
 
-STATIC structures create TWO vartbl entries:
+STATIC structures create TWO variable records:
 
 1. **Global entry** with mangled name (`"funcname\x1evarname"`)
    - Holds actual struct data
@@ -2755,7 +2755,7 @@ members[1] = { name="NAME", type=T_STR, offset=8, size=20 }
 total_size = 32 (8 + 21, rounded up for alignment)
 ```
 
-#### g_vartbl entries when function runs:
+#### Variable records when function runs:
 
 | Index | Name | Type | Size | val.s |
 |-------|------|------|------|-------|
@@ -2766,7 +2766,7 @@ total_size = 32 (8 + 21, rounded up for alignment)
 
 ## Summary: Key Design Decisions
 
-1. **One vartbl entry per variable** - Members are NOT individual variables
+1. **One variable record per variable** - Members are NOT individual variables
 2. **Type definitions separate from instances** - `g_structtbl` holds metadata
 3. **Contiguous memory blocks** - Efficient for arrays and memory operations
 4. **Offset-based member access** - Calculated at runtime, no pointer chasing

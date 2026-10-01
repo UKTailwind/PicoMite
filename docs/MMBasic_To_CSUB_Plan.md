@@ -293,9 +293,10 @@ work); MMBasic strings, which need a length-prefixed string runtime in
 `mmcsub.h` using `GetTempMemory` — the largest single item in this phase.
 
 **Phase 3 — globals and completeness.**
-Globals resolved at runtime by walking `g_vartbl` (CallTable `0x60`/`0x64`,
-`struct s_vartbl` published in `PicoCFunctions.h`), with the pointer cached once
-per CSUB call. A libm subset compiled into the blob, or more CallTable slots for
+Globals resolved at runtime by walking `g_slotrec`, the record of each variable
+number (CallTable `0x60`/`0x64`, `struct s_vartbl` published in
+`PicoCFunctions.h`), with the record's pointer cached once per CSUB call: a
+global's record stays where it is while the variable exists. A libm subset compiled into the blob, or more CallTable slots for
 `TAN`/`LOG`/`EXP`/`ASIN`/`ACOS` — the slot route is cheaper in blob space and
 costs one table word each. `PRINT` via `MMPrintString`/`FloatToStr`/`IntToStr`.
 
