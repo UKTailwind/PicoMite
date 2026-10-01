@@ -127,9 +127,9 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
         return;
     }
     ptr = findvar((unsigned char *)pp, V_FIND | V_EMPTY_OK | V_NOFIND_NULL);
-    if (ptr && g_vartbl[g_VarIndex].type & (T_NBR | T_INT))
+    if (ptr && VREC(g_VarIndex)->type & (T_NBR | T_INT))
     {
-        if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+        if (!DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
         { // simple variable
             *n = 1;
             return;
@@ -137,9 +137,9 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
         else
         { // array or array element
             if (*n == 0)
-                *n = DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0));
+                *n = DimElements(RAW_DIM((*VREC(g_VarIndex)), 0));
             else
-                *n = (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) < *n ? (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) : *n;
+                *n = (DimElements(RAW_DIM((*VREC(g_VarIndex)), 0))) < *n ? (DimElements(RAW_DIM((*VREC(g_VarIndex)), 0))) : *n;
             skipspace(p);
             if (issymbol(*p))
                 p += symbolsize(*p); // a name stored as a symbol (see Symbols.h)
@@ -161,16 +161,16 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
                 }
             }
         }
-        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
+        if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
             StandardError(6);
-        if (g_vartbl[g_VarIndex].type & T_NBR)
+        if (VREC(g_VarIndex)->type & T_NBR)
             *fp = (MMFLOAT *)ptr;
         else
             *ip = (long long int *)ptr;
     }
 #ifdef STRUCTENABLED
     // Check if this is a struct member access (g_StructMemberType set by findvar)
-    else if (ptr && (g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
+    else if (ptr && (VREC(g_VarIndex)->type & T_STRUCT) && g_StructMemberType != 0)
     {
         // Caller must handle stride for struct member arrays
         if (stride == NULL)
@@ -202,7 +202,7 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
         }
 
         // This is a struct array with member access like points().x
-        int struct_type = (int)g_vartbl[g_VarIndex].size;
+        int struct_type = (int)VREC(g_VarIndex)->size;
         int struct_size = g_structtbl[struct_type]->total_size;
 
         // Get member type from g_StructMemberType (set by findvar/ResolveStructMember)
@@ -217,12 +217,12 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
 
         // Calculate number of elements from array dimensions
         if (*n == 0)
-            *n = DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0));
+            *n = DimElements(RAW_DIM((*VREC(g_VarIndex)), 0));
         else
-            *n = (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) < *n ? (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))) : *n;
+            *n = (DimElements(RAW_DIM((*VREC(g_VarIndex)), 0))) < *n ? (DimElements(RAW_DIM((*VREC(g_VarIndex)), 0))) : *n;
 
         // Check for 2D arrays (not supported)
-        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
+        if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
             StandardError(6);
 
         // Set stride to structure size

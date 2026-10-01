@@ -2731,9 +2731,9 @@ void MIPS16 cmd_ir(void)
             RequireGlobal(v); // the timer interrupt writes through IrDev
             IrDev = v;
         }
-        if (g_vartbl[g_VarIndex].type & T_CONST)
+        if (VREC(g_VarIndex)->type & T_CONST)
             StandardError(22);
-        ir_vtype = g_vartbl[g_VarIndex].type;
+        ir_vtype = VREC(g_VarIndex)->type;
 #ifdef STRUCTENABLED
         if (g_StructMemberType != 0)
             ir_vtype = g_StructMemberType;
@@ -2747,9 +2747,9 @@ void MIPS16 cmd_ir(void)
             RequireGlobal(v); // the timer interrupt writes through IrCmd
             IrCmd = v;
         }
-        if (g_vartbl[g_VarIndex].type & T_CONST)
+        if (VREC(g_VarIndex)->type & T_CONST)
             StandardError(22);
-        ir_vtype = g_vartbl[g_VarIndex].type;
+        ir_vtype = VREC(g_VarIndex)->type;
 #ifdef STRUCTENABLED
         if (g_StructMemberType != 0)
             ir_vtype = g_StructMemberType;
@@ -3411,12 +3411,12 @@ void cmd_keypad(void)
                 keypadcols = keypadrows = 0;
                 RequireGlobal(KeypadVar);
             }
-            if (g_vartbl[g_VarIndex].type & T_CONST)
+            if (VREC(g_VarIndex)->type & T_CONST)
             {
                 keypadcols = keypadrows = 0;
                 StandardError(22);
             }
-            if (!(g_vartbl[g_VarIndex].type & T_NBR))
+            if (!(VREC(g_VarIndex)->type & T_NBR))
             {
                 keypadcols = keypadrows = 0;
                 error("Integer variable required");
@@ -3458,9 +3458,9 @@ void cmd_keypad(void)
                 StandardError(31);
             KeypadVar = findvar(argv[0], V_FIND);
             RequireGlobal(KeypadVar); // written on every key
-            if (g_vartbl[g_VarIndex].type & T_CONST)
+            if (VREC(g_VarIndex)->type & T_CONST)
                 StandardError(22);
-            if (!(g_vartbl[g_VarIndex].type & T_NBR))
+            if (!(VREC(g_VarIndex)->type & T_NBR))
                 error("Floating point variable required");
             IntReady.poll |= INT_POLL_SCAN;
             KeypadInterrupt = GetIntAddress(argv[2]); // get the interrupt location
@@ -4191,10 +4191,10 @@ void MIPS16 cmd_DHT22(void)
 
     // get the two variables
     temp = findvar(argv[2], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
     humid = findvar(argv[4], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
 
     // get the pin number and set it up
@@ -5269,11 +5269,11 @@ void MIPS16 cmd_device(void)
         int baudrate = getint(argv[2], 110, 230400);
         unsigned char *string = NULL;
         string = findvar(argv[4], V_FIND);
-        if (!(g_vartbl[g_VarIndex].type & T_STR))
+        if (!(VREC(g_VarIndex)->type & T_STR))
             StandardError(6);
         int timeout = getint(argv[6], 1, 100000) * 1000;
         void *status = findvar(argv[8], V_FIND);
-        int type = g_vartbl[g_VarIndex].type;
+        int type = VREC(g_VarIndex)->type;
         if (!(type & (T_NBR | T_INT)))
             StandardError(6);
         if (argc > 9 && *argv[10])

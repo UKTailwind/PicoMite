@@ -203,11 +203,11 @@ void fun_bound(void)
 		// A single element dimension has an upper bound of 0 under OPTION BASE 0,
 		// so 0 can no longer double as "no such dimension" - asking for one the
 		// variable does not have has to be an error rather than a silent 0.
-		if (DimIsScalar(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+		if (DimIsScalar(RAW_DIM((*VREC(g_VarIndex)), 0)))
 			error("Expected an array");
-		if (DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], which - 1)))
+		if (DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), which - 1)))
 			error("Dimensions");
-		iret = DimUpper(RAW_DIM(g_vartbl[g_VarIndex], which - 1));
+		iret = DimUpper(RAW_DIM((*VREC(g_VarIndex)), which - 1));
 		if (iret == -1)
 			iret = 0; // unbound empty array parameter
 	}
@@ -595,7 +595,7 @@ void fun_bit(void)
 	uint64_t spos;
 	getcsargs(&ep, 3);
 	s = (uint64_t *)findvar(argv[0], V_NOFIND_ERR);
-	if (!(g_vartbl[g_VarIndex].type & T_INT))
+	if (!(VREC(g_VarIndex)->type & T_INT))
 		error("Not an integer");
 	spos = getint(argv[2], 0, 63); // the mid position
 	iret = ((int64_t)(*s & (1ll << spos)) >> spos) & 1ll;
@@ -616,9 +616,9 @@ void fun_byte(void)
 	unsigned char *s;
 	getcsargs(&ep, 3);
 	s = (unsigned char *)findvar(argv[0], V_NOFIND_ERR);
-	if (!(g_vartbl[g_VarIndex].type & T_STR))
+	if (!(VREC(g_VarIndex)->type & T_STR))
 		error("Not a string");
-	iret = s[getint(argv[2], 1, g_vartbl[g_VarIndex].size)]; // the mid position
+	iret = s[getint(argv[2], 1, VREC(g_VarIndex)->size)]; // the mid position
 	targ = T_INT;
 }
 extern int USBcode;
@@ -1100,7 +1100,7 @@ void fun_instr(void)
 		{ // This is the passed variable to return the match length
 			int regex_vtype;
 			temp = findvar(argv[4 + n], V_FIND);
-			regex_vtype = g_vartbl[g_VarIndex].type;
+			regex_vtype = VREC(g_VarIndex)->type;
 #ifdef STRUCTENABLED
 			if (g_StructMemberType != 0)
 				regex_vtype = g_StructMemberType;

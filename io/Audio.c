@@ -2591,9 +2591,9 @@ void MIPS16 cmd_play(void)
 		streambuffer = (char *)aint;
 		ptr1 = findvar(argv[2], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
 		RequireGlobal(ptr1); // written by the audio interrupt
-		if (g_vartbl[g_VarIndex].type & T_INT)
+		if (VREC(g_VarIndex)->type & T_INT)
 		{
-			if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+			if (DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0)))
 				error("Argument 2 must be an integer");
 			streamreadpointer = (int *)ptr1;
 		}
@@ -2601,9 +2601,9 @@ void MIPS16 cmd_play(void)
 			error("Argument 2 must be an integer");
 		ptr1 = findvar(argv[4], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
 		RequireGlobal(ptr1); // read by the audio interrupt
-		if (g_vartbl[g_VarIndex].type & T_INT)
+		if (VREC(g_VarIndex)->type & T_INT)
 		{
-			if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+			if (DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0)))
 				error("Argument 3 must be an integer");
 			streamwritepointer = (int *)ptr1;
 		}

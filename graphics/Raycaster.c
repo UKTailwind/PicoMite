@@ -728,7 +728,7 @@ static void ray_cmd_map(unsigned char *p)
 
     /* Probe the variable type to decide integer vs string array */
     findvar(argv[4], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-    int var_type = g_vartbl[g_VarIndex].type;
+    int var_type = VREC(g_VarIndex)->type;
 
     if (var_type & T_STR)
     {

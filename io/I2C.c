@@ -1185,9 +1185,9 @@ void MIPS16 cmd_rtc(void)
       StandardError(2);
 
     ptr = findvar(argv[2], V_FIND);
-    if (g_vartbl[g_VarIndex].type & T_CONST)
+    if (VREC(g_VarIndex)->type & T_CONST)
       StandardError(22);
-    if (g_vartbl[g_VarIndex].type & T_STR)
+    if (VREC(g_VarIndex)->type & T_STR)
       StandardError(6);
 
     // Detect RTC
@@ -1200,7 +1200,7 @@ void MIPS16 cmd_rtc(void)
     if (!RtcReadRegister(reg, &value))
       StandardError(30);
 
-    if (g_vartbl[g_VarIndex].type & T_NBR)
+    if (VREC(g_VarIndex)->type & T_NBR)
       *(MMFLOAT *)ptr = value;
     else
       *(long long int *)ptr = value;
@@ -1473,11 +1473,11 @@ void i2cReceiveSlave(unsigned char *p, int channel)
   // single destination (the trailing rcvdlen output at argv[4] is resolved separately below).
   GetCommsRxDest(argv, 3, 2, rcvlen, &dest);
   ptr = findvar(argv[4], V_FIND);
-  if (g_vartbl[g_VarIndex].type & T_CONST)
+  if (VREC(g_VarIndex)->type & T_CONST)
     StandardError(22);
-  if (g_vartbl[g_VarIndex].type & T_NBR)
+  if (VREC(g_VarIndex)->type & T_NBR)
     rcvdlenFloat = (MMFLOAT *)ptr;
-  else if (g_vartbl[g_VarIndex].type & T_INT)
+  else if (VREC(g_VarIndex)->type & T_INT)
     rcvdlenInt = (long long int *)ptr;
   else
     StandardError(6);
@@ -3451,7 +3451,7 @@ void MIPS16 cmd_camera(void)
     cp = (unsigned char *)aint;
     // get the two variables
     MMFLOAT *outdiff = findvar(argv[2], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
       StandardError(6);
     if (size < CameraWidth * CameraHeight / 8)
       error("Array too small");

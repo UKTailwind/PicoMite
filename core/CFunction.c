@@ -123,7 +123,7 @@ long long int MIPS16 CallCFunction(unsigned char *CmdPtr, unsigned char *ArgList
             if (isnamestartsym((uint8_t)*argv[i]) && (*skipvar(argv[i], false) == 0 || *skipvar(argv[i], false) == ')') && !(FindSubFun(argv[i], 1) >= 0 && strchr((const char *)argv[i], '(') != NULL))
             {
                 arg[i / 2] = findvar(argv[i], V_FIND | V_EMPTY_OK /* | V_NOFIND_ERR */); // if the argument
-                if (typ[i / 2] != 0 && !(TypeMask(g_vartbl[g_VarIndex].type) & typ[i / 2]))
+                if (typ[i / 2] != 0 && !(TypeMask(VREC(g_VarIndex)->type) & typ[i / 2]))
                     error("Incompatible type");
             }
             else

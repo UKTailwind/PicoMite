@@ -129,7 +129,7 @@ void cmd_ping(unsigned char *tp)
     if (argc == 7)
     {
         outavg = findvar(argv[6], V_FIND);
-        if (!(g_vartbl[g_VarIndex].type & T_NBR))
+        if (!(VREC(g_VarIndex)->type & T_NBR))
             StandardError(6);
     }
     PING_T *state = &pingst;

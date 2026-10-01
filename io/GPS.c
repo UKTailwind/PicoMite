@@ -1390,9 +1390,9 @@ static void assignOptionalRaDec(struct s_RADec star, int argc, unsigned char **a
 {
   if (argc != 7) return;
   MMFLOAT *bodyRA = findvar(argv[4], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
   MMFLOAT *bodyDec = findvar(argv[6], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
   *bodyRA = star.RA;
   *bodyDec = star.Dec;
 }
@@ -1454,7 +1454,7 @@ static int tryGetStringArg(unsigned char *cmd, char *nameBuf, int nameBufLen, un
   {
     // Declared string variable without '$' suffix (DIM s AS STRING).
     // V_NOFIND_NULL is safe on plain keywords — returns NULL without auto-creating.
-    if (findvar(p, V_NOFIND_NULL) != NULL && (g_vartbl[g_VarIndex].type & T_STR))
+    if (findvar(p, V_NOFIND_NULL) != NULL && (VREC(g_VarIndex)->type & T_STR))
       isStrExpr = 1;
   }
 
@@ -1554,10 +1554,10 @@ void cmd_exec_star(int day, int month, int year, int hour, int minute, int secon
       if (!(argc == 3 || argc == 7))
         StandardError(2);
       altitude = findvar(argv[0], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
       azimuth = findvar(argv[2], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
 
       int planetBody = -1;
@@ -1608,10 +1608,10 @@ void cmd_exec_star(int day, int month, int year, int hour, int minute, int secon
     if (!(argc == 3 || argc == 7))
       StandardError(2);
     altitude = findvar(argv[0], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
       StandardError(6);
     azimuth = findvar(argv[2], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
       StandardError(6);
     if (checkstring(cmd, (unsigned char *)"MOON"))
       star = getCelestialPosition(BODY_MOON, T, latitude, sidereal);
@@ -1635,10 +1635,10 @@ void cmd_exec_star(int day, int month, int year, int hour, int minute, int secon
     if (argc == 7)
     {
       MMFLOAT *bodyRA = findvar(argv[4], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
       MMFLOAT *bodyDec = findvar(argv[6], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
       *bodyRA = star.RA;
       *bodyDec = star.Dec;
@@ -1712,10 +1712,10 @@ void cmd_exec_star(int day, int month, int year, int hour, int minute, int secon
       if (!(argc == 3 || argc == 7))
         StandardError(2);
       altitude = findvar(argv[0], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
       azimuth = findvar(argv[2], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
 
       // Get star data and apply corrections
@@ -1728,10 +1728,10 @@ void cmd_exec_star(int day, int month, int year, int hour, int minute, int secon
       if (argc == 7)
       {
         MMFLOAT *bodyRA = findvar(argv[4], V_FIND);
-        if (!(g_vartbl[g_VarIndex].type & T_NBR))
+        if (!(VREC(g_VarIndex)->type & T_NBR))
           StandardError(6);
         MMFLOAT *bodyDec = findvar(argv[6], V_FIND);
-        if (!(g_vartbl[g_VarIndex].type & T_NBR))
+        if (!(VREC(g_VarIndex)->type & T_NBR))
           StandardError(6);
         *bodyRA = star.RA;
         *bodyDec = star.Dec;
@@ -1767,10 +1767,10 @@ manual_entry:
       StandardError(2);
     // get the two variables
     altitude = findvar(argv[0], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
       StandardError(6);
     azimuth = findvar(argv[2], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
       StandardError(6);
 
     // Get J2000.0 catalog coordinates
@@ -1788,10 +1788,10 @@ manual_entry:
     if (argc == 15)
     {
       MMFLOAT *bodyRA = findvar(argv[12], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
       MMFLOAT *bodyDec = findvar(argv[14], V_FIND);
-      if (!(g_vartbl[g_VarIndex].type & T_NBR))
+      if (!(VREC(g_VarIndex)->type & T_NBR))
         StandardError(6);
       *bodyRA = star.RA;
       *bodyDec = star.Dec;
@@ -1848,17 +1848,17 @@ void cmd_slew(void)
     SyntaxError();
 
   MMFLOAT *dRA1    = findvar(argv[0], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
   MMFLOAT *dDec1   = findvar(argv[2], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
   MMFLOAT *flipRA  = findvar(argv[4], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
   MMFLOAT *flipDec = findvar(argv[6], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
   MMFLOAT *dRA2    = findvar(argv[8], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
   MMFLOAT *dDec2   = findvar(argv[10], V_FIND);
-  if (!(g_vartbl[g_VarIndex].type & T_NBR)) StandardError(6);
+  if (!(VREC(g_VarIndex)->type & T_NBR)) StandardError(6);
 
   MMFLOAT mountRA  = getnumber(argv[12]);
   MMFLOAT mountDec = getnumber(argv[14]);
@@ -1938,7 +1938,7 @@ void cmd_locate(void)
   if (argc == 7)
   {
     sidereal = findvar(argv[6], V_FIND);
-    if (!(g_vartbl[g_VarIndex].type & T_NBR))
+    if (!(VREC(g_VarIndex)->type & T_NBR))
       StandardError(6);
   }
   {

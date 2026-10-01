@@ -557,17 +557,17 @@ void cmd_web(void)
                 {
                         ptr1 = findvar(tp, V_FIND | V_EMPTY_OK);
                         CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
-                        if (g_vartbl[g_VarIndex].type & T_INT)
+                        if (VREC(g_VarIndex)->type & T_INT)
                         {
-                                if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
+                                if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
                                         StandardError(6);
-                                if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+                                if (!DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
                                 { // Not an array
                                         StandardError(35);
                                 }
-                                if (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)) < 2)
+                                if (DimElements(RAW_DIM((*VREC(g_VarIndex)), 0)) < 2)
                                         error("Array too small"); // element 0 holds the length, the text starts at element 1
-                                scan_size = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase) * 8;
+                                scan_size = (DimUpper(RAW_DIM((*VREC(g_VarIndex)), 0)) - g_OptionBase) * 8;
                                 scan_dest = (char *)ptr1;
                                 scan_dest[8] = 0;
                         }

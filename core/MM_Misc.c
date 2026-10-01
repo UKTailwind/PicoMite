@@ -1495,9 +1495,9 @@ void fun_LInstr(void)
         int64_t *tempi = NULL;
         MtoC((unsigned char *)srch);
         temp = findvar(argv[6], V_FIND);
-        if (!(g_vartbl[g_VarIndex].type & (T_NBR | T_INT)))
+        if (!(VREC(g_VarIndex)->type & (T_NBR | T_INT)))
             error("Invalid variable");
-        if (g_vartbl[g_VarIndex].type & T_INT)
+        if (VREC(g_VarIndex)->type & T_INT)
             tempi = temp;
         else
             tempf = temp;
@@ -9706,7 +9706,7 @@ void cmd_poke(void)
         if ((p = checkstring(argv[0], (unsigned char *)"VAR")))
         {
             pp = findvar(p, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-            if (g_vartbl[g_VarIndex].type & T_CONST)
+            if (VREC(g_VarIndex)->type & T_CONST)
                 StandardError(22);
             *((char *)pp + (unsigned int)getinteger(argv[2])) = getinteger(argv[4]);
             return;
@@ -9787,10 +9787,10 @@ void fun_peek(void)
             SyntaxError();
         ;
         findvar(p, V_FIND | V_NOFIND_ERR);
-        if (!(g_vartbl[g_VarIndex].type & T_INT))
+        if (!(VREC(g_VarIndex)->type & T_INT))
             error("Not integer variable");
-        iret = *(unsigned char *)(uint32_t)g_vartbl[g_VarIndex].val.i;
-        g_vartbl[g_VarIndex].val.i++;
+        iret = *(unsigned char *)(uint32_t)VREC(g_VarIndex)->val.i;
+        VREC(g_VarIndex)->val.i++;
         targ = T_INT;
         return;
     }
@@ -9800,12 +9800,12 @@ void fun_peek(void)
             SyntaxError();
         ;
         findvar(p, V_FIND | V_NOFIND_ERR);
-        if (!(g_vartbl[g_VarIndex].type & T_INT))
+        if (!(VREC(g_VarIndex)->type & T_INT))
             error("Not integer variable");
-        if (g_vartbl[g_VarIndex].val.i & 3)
+        if (VREC(g_VarIndex)->val.i & 3)
             error("Not on word boundary");
-        iret = *(unsigned int *)(uint32_t)g_vartbl[g_VarIndex].val.i;
-        g_vartbl[g_VarIndex].val.i += 4;
+        iret = *(unsigned int *)(uint32_t)VREC(g_VarIndex)->val.i;
+        VREC(g_VarIndex)->val.i += 4;
         targ = T_INT;
         return;
     }
@@ -9815,12 +9815,12 @@ void fun_peek(void)
             SyntaxError();
         ;
         findvar(p, V_FIND | V_NOFIND_ERR);
-        if (!(g_vartbl[g_VarIndex].type & T_INT))
+        if (!(VREC(g_VarIndex)->type & T_INT))
             error("Not integer variable");
-        if (g_vartbl[g_VarIndex].val.i & 1)
+        if (VREC(g_VarIndex)->val.i & 1)
             error("Not on short boundary");
-        iret = *(unsigned short *)(uint32_t)g_vartbl[g_VarIndex].val.i;
-        g_vartbl[g_VarIndex].val.i += 2;
+        iret = *(unsigned short *)(uint32_t)VREC(g_VarIndex)->val.i;
+        VREC(g_VarIndex)->val.i += 2;
         targ = T_INT;
         return;
     }
@@ -9838,7 +9838,7 @@ void fun_peek(void)
             SyntaxError();
         ;
         pp = findvar(p, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-        iret = (unsigned int)&g_vartbl[g_VarIndex].name[0];
+        iret = (unsigned int)&VREC(g_VarIndex)->name[0];
         targ = T_INT;
         return;
     }

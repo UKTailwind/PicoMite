@@ -3430,7 +3430,7 @@ static void RBMakeParams(unsigned char *def, const uint16_t *pp, int np, union c
         memcpy(nm, def + (pp[1] >> 8), pp[1] & 0xFF);
         nm[pp[1] & 0xFF] = 0;
         findvar(nm, pp[2] | V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK); // the parameter
-        v = &g_vartbl[g_VarIndex];
+        v = VREC(g_VarIndex);
         CurrentLinePtr = callers; // errors at the caller
         src = (pp[0] & RP_VAR) ? slot[pp[0] >> 8] : val++;
         at = (pp[0] & RP_INT) ? T_INT : T_NBR;
@@ -3540,7 +3540,7 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
     memcpy(nm, def + (pc[3] >> 8), pc[3] & 0xFF);
     nm[pc[3] & 0xFF] = 0;
     tp = findvar(nm, pc[4] | V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK | V_FUNCT); // the result
-    ftype = g_vartbl[g_VarIndex].type;
+    ftype = VREC(g_VarIndex)->type;
     savenext = nextstmt; // the globals the command that made the call uses
     savetoken = cmdtoken;
     savecmdline = cmdline;
@@ -3735,7 +3735,7 @@ static __attribute__((noinline)) const uint16_t *RBLocal(unsigned char *e, unsig
         if (g_LocalIndex == 0)
             error("Invalid here");
         findvar(e + off[i], type | V_LOCAL | V_FIND | V_DIM_VAR | V_DIM_NEW);
-        if (DimIsEmptyParam(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+        if (DimIsEmptyParam(RAW_DIM((*VREC(g_VarIndex)), 0)))
             error("Array dimensions");
     }
     return off + n;
@@ -3891,13 +3891,13 @@ static inline __attribute__((always_inline)) int RBBindAll(const uint16_t *c, un
         else if ((k = SymCanonById(id)) < 0)
             goto miss;
         i = SymL[k];
-        if (i < 0 || g_vartbl[i].level != g_LocalIndex)
+        if (i < 0 || VREC(i)->level != g_LocalIndex)
         { // not a local at this level: the global, if no text local can hide it
             i = SymG[k];
             if (i < 0 || (g_LocalIndex && SymTextLocals))
                 goto miss; // not bound yet, or a text local may hide it: findvar decides
         }
-        v = &g_vartbl[i];
+        v = VREC(i);
         if (((c[1] & RB_BARRAY) ? !DimIsRealArray(RAW_DIM(*v, 0)) : !DimIsScalar(RAW_DIM(*v, 0))) ||
             (v->type & T_STRUCT) || (v->type & (T_INT | T_NBR | T_STR)) != (c[1] & (T_INT | T_NBR | T_STR)) ||
             (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||

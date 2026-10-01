@@ -837,15 +837,15 @@ int cmd_tcpserver(void)
                 ;
                 int pcb = getint(argv[0], 1, MaxPcb) - 1;
                 ptr1 = findvar(argv[2], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-                if (g_vartbl[g_VarIndex].type & T_INT)
+                if (VREC(g_VarIndex)->type & T_INT)
                 {
-                        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
+                        if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
                                 StandardError(6);
-                        if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+                        if (!DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
                         { // Not an array
                                 error("Argument 2 must be integer array");
                         }
-                        size = (DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase + 1) * 8;
+                        size = (DimUpper(RAW_DIM((*VREC(g_VarIndex)), 0)) - g_OptionBase + 1) * 8;
                         dest = (long long int *)ptr1;
                         dest[0] = 0;
                         q = (uint8_t *)&dest[1];
@@ -878,7 +878,7 @@ int cmd_tcpserver(void)
                 int pcb = getint(argv[0], 1, MaxPcb) - 1;
                 parseintegerarray(argv[2], &dest, 2, 1, NULL, false, NULL);
                 q = (uint8_t *)&dest[1];
-                //                int j=(DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase);
+                //                int j=(DimUpper(RAW_DIM((*VREC(g_VarIndex)), 0)) - g_OptionBase);
                 state->buffer_sent[pcb] = q;
                 int bufflen = dest[0];
                 state->to_send[pcb] = state->total_sent[pcb] = state->sent_len[pcb] = 0;

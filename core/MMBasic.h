@@ -130,8 +130,8 @@ extern "C"
 #define CHECK_STRUCT_MEMBER_ARRAY()                                              \
     do                                                                           \
     {                                                                            \
-        if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0 && \
-            DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))                    \
+        if ((VREC(g_VarIndex)->type & T_STRUCT) && g_StructMemberType != 0 && \
+            DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))                    \
             StandardError(47);                                                   \
     } while (0)
 #else
@@ -399,6 +399,7 @@ extern "C"
     extern struct s_vartbl s_vartbl_val;
     extern struct s_funtbl funtbl[MAXSUBFUN];
     extern struct s_vartbl g_vartbl[];
+    #define VREC(i) (&g_vartbl[(i)]) // the record of variable i
 
 #ifdef STRUCTENABLED
     extern struct s_structdef *g_structtbl[MAX_STRUCT_TYPES]; // Array of pointers, allocated per-type

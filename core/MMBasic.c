@@ -2497,9 +2497,9 @@ static void MIPS16 *FunArrayCreate(unsigned char *fun_name, unsigned char *dims,
     nbuf[nl] = 0;
     findvar(nbuf, FunType | V_FUNCT); // create the local array
     *count = 1;
-    for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], d)); d++)
-        *count *= DimElements(RAW_DIM(g_vartbl[g_VarIndex], d));
-    return g_vartbl[g_VarIndex].val.s; // the base of the data block
+    for (d = 0; d < MAXDIM && !DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), d)); d++)
+        *count *= DimElements(RAW_DIM((*VREC(g_VarIndex)), d));
+    return VREC(g_VarIndex)->val.s; // the base of the data block
 }
 
 // Check for an array return type (eg AS INTEGER(6)) following the AS <type>
@@ -2694,7 +2694,7 @@ static struct s_sublayout MIPS16 *SubLayoutBuild(int index, unsigned char *p, un
 static __attribute__((noinline)) void ByValArrayCheck(unsigned char *arg, int vindex)
 {
     unsigned char *tp = arg;
-    if (!DimIsRealArray(RAW_DIM(g_vartbl[vindex], 0)))
+    if (!DimIsRealArray(RAW_DIM((*VREC(vindex)), 0)))
         return;
     do
     {
@@ -2939,11 +2939,11 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
                     argval[i].s = findvar(argv1[i], V_FIND | V_EMPTY_OK); // get a pointer to the variable's data
 #ifdef STRUCTENABLED
                     // For struct member access, use the member's type instead of the struct's type
-                    if ((g_vartbl[g_VarIndex].type & T_STRUCT) && g_StructMemberType != 0)
+                    if ((VREC(g_VarIndex)->type & T_STRUCT) && g_StructMemberType != 0)
                         argtype[i] = g_StructMemberType;
                     else
 #endif
-                        argtype[i] = g_vartbl[g_VarIndex].type; // and the variable's type
+                        argtype[i] = VREC(g_VarIndex)->type; // and the variable's type
                     argVarIndex[i] = g_VarIndex;
                     if (argtype[i] & T_CONST)
                     {
@@ -3004,32 +3004,32 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
         ArgType |= (V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK);
         tp = findvar(L->p[i >> 1].name, ArgType); // declare the local variable
-        if (DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+        if (DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
             error("Argument list"); // if it is an array it must be an empty array
 
         CurrentLinePtr = CallersLinePtr; // report errors at the caller
 
         // if the definition called for an array, special processing and checking will be required
-        if (DimIsEmptyParam(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+        if (DimIsEmptyParam(RAW_DIM((*VREC(g_VarIndex)), 0)))
         {
             int j;
-            if (DimIsScalar(RAW_DIM(g_vartbl[argVarIndex[i]], 0)))
+            if (DimIsScalar(RAW_DIM((*VREC(argVarIndex[i])), 0)))
                 error("Expected an array");
-            if (TypeMask(g_vartbl[g_VarIndex].type) != TypeMask(argtype[i]))
+            if (TypeMask(VREC(g_VarIndex)->type) != TypeMask(argtype[i]))
                 error("Incompatible type: $", argv1[i]);
 #ifdef STRUCTENABLED
             // For struct arrays, verify the struct types match
-            if ((g_vartbl[g_VarIndex].type & T_STRUCT) && (argtype[i] & T_STRUCT))
+            if ((VREC(g_VarIndex)->type & T_STRUCT) && (argtype[i] & T_STRUCT))
             {
-                if (g_vartbl[g_VarIndex].size != g_vartbl[argVarIndex[i]].size)
+                if (VREC(g_VarIndex)->size != VREC(argVarIndex[i])->size)
                     error("Structure type mismatch: $", argv1[i]);
             }
 #endif
-            g_vartbl[g_VarIndex].val.s = argval[i].s; // Point to caller's array data (uses element offset if specified, e.g. array(3) -> &array[3])
-            g_vartbl[g_VarIndex].type |= T_PTR;       // Mark as pointer so we don't free caller's memory
+            VREC(g_VarIndex)->val.s = argval[i].s; // Point to caller's array data (uses element offset if specified, e.g. array(3) -> &array[3])
+            VREC(g_VarIndex)->type |= T_PTR;       // Mark as pointer so we don't free caller's memory
             for (j = 0; j < MAXDIM; j++)              // copy the dimensions of the supplied variable into our local variable
-                RAW_DIM(g_vartbl[g_VarIndex], j) = RAW_DIM(g_vartbl[argVarIndex[i]], j);
-            g_vartbl[g_VarIndex].size = g_vartbl[argVarIndex[i]].size; // copy string length for string arrays
+                RAW_DIM((*VREC(g_VarIndex)), j) = RAW_DIM((*VREC(argVarIndex[i])), j);
+            VREC(g_VarIndex)->size = VREC(argVarIndex[i])->size; // copy string length for string arrays
             continue;                                                  // Skip the rest of parameter handling
         }
 
@@ -3040,11 +3040,11 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
 
         // if this is a pointer check and the type is NOT the same as that requested in the sub/fun definition
-        if ((argtype[i] & T_PTR) && TypeMask(g_vartbl[g_VarIndex].type) != TypeMask(argtype[i]))
+        if ((argtype[i] & T_PTR) && TypeMask(VREC(g_VarIndex)->type) != TypeMask(argtype[i]))
         {
             if (argbyref[i])
                 error("BYREF requires same types: $", argv1[i]);
-            if ((TypeMask(g_vartbl[g_VarIndex].type) & T_STR) || (TypeMask(argtype[i]) & T_STR))
+            if ((TypeMask(VREC(g_VarIndex)->type) & T_STR) || (TypeMask(argtype[i]) & T_STR))
                 error("Incompatible type: $", argv1[i]);
             // make this into an ordinary argument - use argval[i].s which already points to the correct data
             // (for struct members, findvar resolved the member offset; for pointer variables, it's the target)
@@ -3056,31 +3056,31 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         if (argtype[i] & T_PTR)
         {
             // the argument supplied was a variable so we must setup the local variable as a pointer
-            if ((g_vartbl[g_VarIndex].type & T_STR) && g_vartbl[g_VarIndex].val.s != NULL)
+            if ((VREC(g_VarIndex)->type & T_STR) && VREC(g_VarIndex)->val.s != NULL)
             {
-                FreeMemorySafe((void **)&g_vartbl[g_VarIndex].val.s); // free up the local variable's memory if it is a pointer to a string
+                FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s); // free up the local variable's memory if it is a pointer to a string
             }
-            g_vartbl[g_VarIndex].val.s = argval[i].s;                  // point to the data of the variable supplied as an argument
-            g_vartbl[g_VarIndex].type |= T_PTR;                        // set the type to a pointer
-            g_vartbl[g_VarIndex].size = g_vartbl[argVarIndex[i]].size; // just in case it is a string copy the size
+            VREC(g_VarIndex)->val.s = argval[i].s;                  // point to the data of the variable supplied as an argument
+            VREC(g_VarIndex)->type |= T_PTR;                        // set the type to a pointer
+            VREC(g_VarIndex)->size = VREC(argVarIndex[i])->size; // just in case it is a string copy the size
             // this is not a pointer
         }
         else if (argtype[i] != 0)
         { // in getting the memory argtype[] is initialised to zero
             // the parameter was an expression or a just straight variables with different types (therefore not a pointer))
-            if ((g_vartbl[g_VarIndex].type & T_STR) && (argtype[i] & T_STR))
+            if ((VREC(g_VarIndex)->type & T_STR) && (argtype[i] & T_STR))
             { // both are a string
-                Mstrcpy(g_vartbl[g_VarIndex].val.s, argval[i].s);
+                Mstrcpy(VREC(g_VarIndex)->val.s, argval[i].s);
                 FreeMemorySafe((void **)&argval[i].s);
             }
-            else if ((g_vartbl[g_VarIndex].type & T_NBR) && (argtype[i] & T_NBR)) // both are a float
-                g_vartbl[g_VarIndex].val.f = argval[i].f;
-            else if ((g_vartbl[g_VarIndex].type & T_NBR) && (argtype[i] & T_INT)) // need a float but supplied an integer
-                g_vartbl[g_VarIndex].val.f = argval[i].i;
-            else if ((g_vartbl[g_VarIndex].type & T_INT) && (argtype[i] & T_INT)) // both are integers
-                g_vartbl[g_VarIndex].val.i = argval[i].i;
-            else if ((g_vartbl[g_VarIndex].type & T_INT) && (argtype[i] & T_NBR)) // need an integer but was supplied with a float
-                g_vartbl[g_VarIndex].val.i = FloatToInt64(argval[i].f);
+            else if ((VREC(g_VarIndex)->type & T_NBR) && (argtype[i] & T_NBR)) // both are a float
+                VREC(g_VarIndex)->val.f = argval[i].f;
+            else if ((VREC(g_VarIndex)->type & T_NBR) && (argtype[i] & T_INT)) // need a float but supplied an integer
+                VREC(g_VarIndex)->val.f = argval[i].i;
+            else if ((VREC(g_VarIndex)->type & T_INT) && (argtype[i] & T_INT)) // both are integers
+                VREC(g_VarIndex)->val.i = argval[i].i;
+            else if ((VREC(g_VarIndex)->type & T_INT) && (argtype[i] & T_NBR)) // need an integer but was supplied with a float
+                VREC(g_VarIndex)->val.i = FloatToInt64(argval[i].f);
             else
                 error("Incompatible type: $", argv1[i]);
         }
@@ -3122,23 +3122,23 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         tp = FunArrayCreate(funvar, FunArrayDims, FunType, &FunArrayCount); // declare the local result array
     else
         tp = findvar(funvar, FunType | V_FUNCT); // declare the local variable
-    FunType = g_vartbl[g_VarIndex].type;
+    FunType = VREC(g_VarIndex)->type;
 #ifdef STRUCTENABLED
     int FunStructType = -1; // struct type index if returning a struct
 #endif
     if (FunType & T_STR)
     {
-        FreeMemorySafe((void **)&g_vartbl[g_VarIndex].val.s); // free the memory if it is a string
-        g_vartbl[g_VarIndex].type |= T_PTR;
+        FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s); // free the memory if it is a string
+        VREC(g_VarIndex)->type |= T_PTR;
         g_LocalIndex--;                                       // allocate the memory at the previous level
-        g_vartbl[g_VarIndex].val.s = tp = GetTempStrMemory(); // and use our own memory
+        VREC(g_VarIndex)->val.s = tp = GetTempStrMemory(); // and use our own memory
         g_LocalIndex++;
     }
 #ifdef STRUCTENABLED
     else if (FunType & T_STRUCT)
     {
         // Function returns a struct - save info for later copy to temp memory
-        FunStructType = (int)g_vartbl[g_VarIndex].size;
+        FunStructType = (int)VREC(g_VarIndex)->size;
         // tp already points to the struct data from findvar
     }
 #endif
@@ -3779,20 +3779,20 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
                     t = TypeMask(g_StructMemberType);
                     g_ExprStructType = -1; // Not a whole struct
                 }
-                else if (g_vartbl[g_VarIndex].type & T_STRUCT)
+                else if (VREC(g_VarIndex)->type & T_STRUCT)
                 {
                     // Whole struct variable - return struct type for assignment
                     t = T_STRUCT;
-                    g_ExprStructType = (int)g_vartbl[g_VarIndex].size; // Store struct type index
+                    g_ExprStructType = (int)VREC(g_VarIndex)->size; // Store struct type index
                     // s already points to struct data from findvar
                 }
                 else
                 {
-                    t = TypeMask(g_vartbl[g_VarIndex].type);
+                    t = TypeMask(VREC(g_VarIndex)->type);
                     g_ExprStructType = -1;
                 }
 #else
-                t = TypeMask(g_vartbl[g_VarIndex].type);
+                t = TypeMask(VREC(g_VarIndex)->type);
 #endif
                 if (t & T_NBR)
                     f = (*(MMFLOAT *)s);
@@ -4491,7 +4491,7 @@ int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, in
 #endif
 {
     // Check if definition expects a struct
-    if (!(g_vartbl[varIndex].type & T_STRUCT))
+    if (!(VREC(varIndex)->type & T_STRUCT))
         return 0; // Not a struct parameter
 
     // Structs are always passed by reference (like arrays)
@@ -4501,27 +4501,27 @@ int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, in
     }
 
     // Verify caller provided a struct
-    if (!(g_vartbl[argVarIndex].type & T_STRUCT))
+    if (!(VREC(argVarIndex)->type & T_STRUCT))
         error("Expected a structure variable: $", argname);
 
     // Check struct types match (stored in size field)
-    if (g_vartbl[varIndex].size != g_vartbl[argVarIndex].size)
+    if (VREC(varIndex)->size != VREC(argVarIndex)->size)
         error("Structure type mismatch: $", argname);
 
     // Free any memory allocated for local struct (findvar allocates memory)
-    if (g_vartbl[varIndex].val.s != NULL)
+    if (VREC(varIndex)->val.s != NULL)
     {
-        FreeMemorySafe((void **)&g_vartbl[varIndex].val.s);
+        FreeMemorySafe((void **)&VREC(varIndex)->val.s);
     }
 
     // Set up pointer to caller's struct data
-    g_vartbl[varIndex].val.s = argval_s;
-    g_vartbl[varIndex].type |= T_PTR; // Mark as pointer so ClearVars won't free it
+    VREC(varIndex)->val.s = argval_s;
+    VREC(varIndex)->type |= T_PTR; // Mark as pointer so ClearVars won't free it
 
     // Only copy dimensions if this is a whole array being passed (e.g., "arr()")
     // NOT when passing a single array element (e.g., "arr(1)")
     // Detect by checking if the argument has empty parentheses or an index
-    if (DimIsAllocated(RAW_DIM(g_vartbl[argVarIndex], 0)))
+    if (DimIsAllocated(RAW_DIM((*VREC(argVarIndex)), 0)))
     {
         unsigned char *paren = (unsigned char *)strchr((char *)argname, '(');
         int is_whole_array = 0;
@@ -4537,7 +4537,7 @@ int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, in
         if (is_whole_array)
         {
             for (int j = 0; j < MAXDIM; j++)
-                RAW_DIM(g_vartbl[varIndex], j) = RAW_DIM(g_vartbl[argVarIndex], j);
+                RAW_DIM((*VREC(varIndex)), j) = RAW_DIM((*VREC(argVarIndex)), j);
         }
         // If not whole array, dims stay at 0 (single element)
     }
@@ -4932,10 +4932,10 @@ int MIPS16 FindStructBase(unsigned char *basename, int baselen, int *pvindex)
         if (OrigGlobalHash < maxlocalvars)
             OrigGlobalHash += maxglobalvars;
 
-        while (g_vartbl[GlobalhashIndex].type != T_NOTYPE)
+        while (VREC(GlobalhashIndex)->type != T_NOTYPE)
         {
-            if (memcmp(g_vartbl[GlobalhashIndex].name, basename, baselen) == 0 &&
-                (baselen == MAXVARLEN || g_vartbl[GlobalhashIndex].name[baselen] == 0))
+            if (memcmp(VREC(GlobalhashIndex)->name, basename, baselen) == 0 &&
+                (baselen == MAXVARLEN || VREC(GlobalhashIndex)->name[baselen] == 0))
             {
                 vindex = GlobalhashIndex;
                 break;
@@ -4951,8 +4951,8 @@ int MIPS16 FindStructBase(unsigned char *basename, int baselen, int *pvindex)
     if (vindex >= 0)
     {
         *pvindex = vindex;
-        if (g_vartbl[vindex].type & T_STRUCT)
-            return (int)g_vartbl[vindex].size; // Return struct type index
+        if (VREC(vindex)->type & T_STRUCT)
+            return (int)VREC(vindex)->size; // Return struct type index
     }
     return -1; // Not found or not a struct
 }
@@ -5009,7 +5009,7 @@ static inline int find_local_slot(const unsigned char *name, int namelen)
         if (lev != g_LocalIndex)
             continue;
         const char *ip = (const char *)name;
-        const char *tp = (const char *)g_vartbl[g_hashlist[k].hash].name;
+        const char *tp = (const char *)VREC(g_hashlist[k].hash)->name;
         if (*ip++ == *tp++)
         { // preliminary quick check
             int j = namelen - 1;
@@ -5056,7 +5056,7 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
     int globalifree = -1;
     int tmp = -1;
 
-    if (g_vartbl[GlobalhashIndex].type == T_NOTYPE)
+    if (VREC(GlobalhashIndex)->type == T_NOTYPE)
     {
         globalifree = GlobalhashIndex;
     }
@@ -5069,11 +5069,11 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
         // way round means it is not there, and it takes the blocked slot it passed.
         int left = maxglobalvars;
         (void)OriginalGlobalHash;
-        while (g_vartbl[GlobalhashIndex].name[0] != 0)
+        while (VREC(GlobalhashIndex)->name[0] != 0)
         {
             const char *ip = (const char *)name;
-            char *tp = (char *)g_vartbl[GlobalhashIndex].name;
-            if (g_vartbl[GlobalhashIndex].type == T_BLOCKED)
+            char *tp = (char *)VREC(GlobalhashIndex)->name;
+            if (VREC(GlobalhashIndex)->type == T_BLOCKED)
                 tmp = GlobalhashIndex;
             if (*ip++ == *tp++)
             { // preliminary quick check
@@ -5103,14 +5103,14 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
         }
         if (left == 0)
             globalifree = tmp; // not found, and no slot without a name
-        else if (g_vartbl[GlobalhashIndex].name[0] == 0)
+        else if (VREC(GlobalhashIndex)->name[0] == 0)
         { // not found
             globalifree = GlobalhashIndex;
             if (tmp != -1)
             {
                 globalifree = tmp;
-                g_vartbl[GlobalhashIndex].type = T_NOTYPE;
-                g_vartbl[GlobalhashIndex].name[0] = 0;
+                VREC(GlobalhashIndex)->type = T_NOTYPE;
+                VREC(GlobalhashIndex)->name[0] = 0;
             }
         }
     }
@@ -5334,7 +5334,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
             {
                 // Found a valid struct - resolve the member path using helper (NOT in RAM)
                 void *result = ResolveStructMember(
-                    g_vartbl[vindex].val.s, // struct data pointer
+                    VREC(vindex)->val.s, // struct data pointer
                     struct_idx,             // struct type index
                     membername,             // member path
                     &p,                     // parse position (updated)
@@ -5435,7 +5435,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         if (!(action & (V_LOCAL | V_DIM_VAR | V_DIM_NEW | V_FUNCT)))
         {
             i = SymL[symk];
-            if (i >= 0 && g_vartbl[i].level == g_LocalIndex)
+            if (i >= 0 && VREC(i)->level == g_LocalIndex)
             {
                 ifree = -1;
                 goto findvar_found;
@@ -5461,9 +5461,9 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
         // below it; the walk when a local made from text lives (it has no
         // binding) or the newest is deeper (one left by an error).
         LocalhashIndex = -1;
-        if (symk >= 0 && !SymTextLocals && ((j = SymL[symk]) < 0 || g_vartbl[j].level <= g_LocalIndex))
+        if (symk >= 0 && !SymTextLocals && ((j = SymL[symk]) < 0 || VREC(j)->level <= g_LocalIndex))
         {
-            if (j >= 0 && g_vartbl[j].level == g_LocalIndex)
+            if (j >= 0 && VREC(j)->level == g_LocalIndex)
                 LocalhashIndex = j;
         }
         else
@@ -5536,7 +5536,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // if we found an existing and matching variable
     // set the global g_VarIndex indicating the index in the table
 findvar_found:
-    if (ifree == -1 && g_vartbl[i].name[0] != 0)
+    if (ifree == -1 && VREC(i)->name[0] != 0)
     {
         g_VarIndex = vindex = i;
         if (symk >= 0 && vindex >= maxlocalvars)
@@ -5557,34 +5557,34 @@ findvar_found:
         if (dnbr == 0)
         {
             // scalar reference: declared variable must also be scalar
-            if (DimIsAllocated(RAW_DIM(g_vartbl[vindex], 0)))
+            if (DimIsAllocated(RAW_DIM((*VREC(vindex)), 0)))
                 error("Array dimensions");
             i = 0;
         }
         else if (dnbr == -1)
         {
             // empty-array reference (e.g. arr()): variable must be an array
-            if (DimIsScalar(RAW_DIM(g_vartbl[vindex], 0)))
+            if (DimIsScalar(RAW_DIM((*VREC(vindex)), 0)))
                 error("Array dimensions");
         }
         else
         {
             // array reference with explicit indices: count declared dims
-            for (i = 0; i < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[vindex], i)); i++)
+            for (i = 0; i < MAXDIM && !DimIsEnd(RAW_DIM((*VREC(vindex)), i)); i++)
                 ;
             if (i != dnbr)
                 error("Array dimensions");
         }
 
-        if (!(g_vartbl[vindex].type & (vtype ? vtype : (DefaultType | T_IMPLIED))))
+        if (!(VREC(vindex)->type & (vtype ? vtype : (DefaultType | T_IMPLIED))))
             FindvarTypeError(symp, name); // (the fast path may not have read the name)
 
         // if it is a non arrayed variable or an empty array it is easy, just calculate and return a pointer to the value
-        if (dnbr == -1 || DimIsScalar(RAW_DIM(g_vartbl[vindex], 0)))
+        if (dnbr == -1 || DimIsScalar(RAW_DIM((*VREC(vindex)), 0)))
         {
 #ifdef STRUCTENABLED
             // For empty array struct access like sortArr().x, skip past () first
-            if (dnbr == -1 && (g_vartbl[vindex].type & T_STRUCT) && *p == '(')
+            if (dnbr == -1 && (VREC(vindex)->type & T_STRUCT) && *p == '(')
             {
                 p++; // skip (
                 skipspace(p);
@@ -5593,10 +5593,10 @@ findvar_found:
                 skipspace(p);
             }
             // Check for struct member access on simple (non-array) struct: pt.x or sortArr().x
-            if ((g_vartbl[vindex].type & T_STRUCT) && *p == '.')
+            if ((VREC(vindex)->type & T_STRUCT) && *p == '.')
             {
-                unsigned char *struct_ptr = g_vartbl[vindex].val.s;
-                int struct_idx = (int)g_vartbl[vindex].size;
+                unsigned char *struct_ptr = VREC(vindex)->val.s;
+                int struct_idx = (int)VREC(vindex)->size;
 
                 p++; // skip the dot
 
@@ -5614,24 +5614,24 @@ findvar_found:
                 return result;
             }
             // For whole struct access (no member), return pointer to struct data
-            if (g_vartbl[vindex].type & T_STRUCT)
+            if (VREC(vindex)->type & T_STRUCT)
             {
-                return g_vartbl[vindex].val.s;
+                return VREC(vindex)->val.s;
             }
 #endif
-            if (dnbr == -1 || g_vartbl[vindex].type & (T_PTR | T_STR))
+            if (dnbr == -1 || VREC(vindex)->type & (T_PTR | T_STR))
             {
-                void *r = g_vartbl[vindex].val.s; // if it is a string or pointer just return the pointer to the data
+                void *r = VREC(vindex)->val.s; // if it is a string or pointer just return the pointer to the data
                 return r;
             }
-            else if (g_vartbl[vindex].type & (T_INT))
+            else if (VREC(vindex)->type & (T_INT))
             {
-                void *r = &(g_vartbl[vindex].val.i); // must be an integer, point to its value
+                void *r = &(VREC(vindex)->val.i); // must be an integer, point to its value
                 return r;
             }
             else
             {
-                void *r = &(g_vartbl[vindex].val.f); // must be a straight number (float), point to its value
+                void *r = &(VREC(vindex)->val.f); // must be a straight number (float), point to its value
                 return r;
             }
         }
@@ -5644,7 +5644,7 @@ findvar_found:
             error("Cannot re dimension array");
         for (i = 0; i < dnbr; i++)
         {
-            if (dim[i] > DimUpper(RAW_DIM(g_vartbl[vindex], i)) || dim[i] < g_OptionBase)
+            if (dim[i] > DimUpper(RAW_DIM((*VREC(vindex)), i)) || dim[i] < g_OptionBase)
                 error("Index out of bounds");
         }
 
@@ -5653,19 +5653,19 @@ findvar_found:
         j = 1;
         for (i = 1; i < dnbr; i++)
         {
-            j *= DimElements(RAW_DIM(g_vartbl[vindex], i - 1));
+            j *= DimElements(RAW_DIM((*VREC(vindex)), i - 1));
             nbr += (dim[i] - g_OptionBase) * j;
         }
 
 #ifdef STRUCTENABLED
         // Check for struct member access after array index: points(0).x or points(0).nested.member
-        if (g_vartbl[vindex].type & T_STRUCT)
+        if (VREC(vindex)->type & T_STRUCT)
         {
-            int current_struct_idx = (int)g_vartbl[vindex].size;
+            int current_struct_idx = (int)VREC(vindex)->size;
             if (current_struct_idx < 0 || current_struct_idx >= g_structcnt)
                 error("Invalid structure type index");
             int struct_size = g_structtbl[current_struct_idx]->total_size;
-            unsigned char *struct_ptr = g_vartbl[vindex].val.s + (nbr * struct_size);
+            unsigned char *struct_ptr = VREC(vindex)->val.s + (nbr * struct_size);
 
             skipspace(p);
             if (*p == '.')
@@ -5692,12 +5692,12 @@ findvar_found:
 #endif
 
         // finally return a pointer to the value
-        if (g_vartbl[vindex].type & T_NBR)
-            return g_vartbl[vindex].val.s + (nbr * sizeof(MMFLOAT));
-        else if (g_vartbl[vindex].type & T_INT)
-            return g_vartbl[vindex].val.s + (nbr * sizeof(long long int));
+        if (VREC(vindex)->type & T_NBR)
+            return VREC(vindex)->val.s + (nbr * sizeof(MMFLOAT));
+        else if (VREC(vindex)->type & T_INT)
+            return VREC(vindex)->val.s + (nbr * sizeof(long long int));
         else
-            return g_vartbl[vindex].val.s + (nbr * (g_vartbl[vindex].size + 1));
+            return VREC(vindex)->val.s + (nbr * (VREC(vindex)->size + 1));
     }
 
     // we reached this point if no existing variable has been found
@@ -5861,16 +5861,16 @@ findvar_found:
 
     // initialise it: save the name, set the initial value to zero and set the type
     s = name;
-    x = g_vartbl[ifree].name;
+    x = VREC(ifree)->name;
     j = namelen;
     while (j--)
         *x++ = *s++;
     if (namelen < MAXVARLEN)
         *x++ = 0;
-    g_vartbl[ifree].namelen = 0; // Initialize flags field (no longer stores length)
-    g_vartbl[ifree].type = vtype | (action & (T_IMPLIED | T_CONST));
+    VREC(ifree)->namelen = 0; // Initialize flags field (no longer stores length)
+    VREC(ifree)->type = vtype | (action & (T_IMPLIED | T_CONST));
     if (suffix)
-        g_vartbl[ifree].namelen |= NAMELEN_EXPLICIT;
+        VREC(ifree)->namelen |= NAMELEN_EXPLICIT;
     if (ifree < maxlocalvars) // CHANGED: was MAXVARS/2
     {
         g_hashlist[g_hashlistpointer].level = g_LocalIndex;
@@ -5878,18 +5878,18 @@ findvar_found:
         g_localtop = ifree + 1; // (the stack's next slot, P6 F2)
         if (g_localtop > g_localpeak)
             g_localpeak = g_localtop;
-        g_vartbl[ifree].level = g_LocalIndex;
+        VREC(ifree)->level = g_LocalIndex;
         SymLocalMade(ifree, symk); // the name's newest local (see Symbols.h)
     }
     else
     {
-        g_vartbl[ifree].level = 0;
+        VREC(ifree)->level = 0;
         if (symk >= 0)
             SymG[symk] = ifree; // bound as it is made, as the next lookup would bind it: a compiled
                                 // statement that meets it before any lookup then need not run as text
     }
     for (j = 0; j < MAXDIM; j++)
-        RAW_DIM(g_vartbl[ifree], j) = 0;
+        RAW_DIM((*VREC(ifree)), j) = 0;
 
     // the easy request is for is a non array numeric variable, so just initialise to
     // zero and return the pointer
@@ -5897,25 +5897,25 @@ findvar_found:
     {
         if (vtype & T_NBR)
         {
-            g_vartbl[ifree].val.f = 0;
+            VREC(ifree)->val.f = 0;
             VarCounted(ifree);
-            return &(g_vartbl[ifree].val.f);
+            return &(VREC(ifree)->val.f);
         }
         else if (vtype & T_INT)
         {
-            g_vartbl[ifree].val.i = 0;
+            VREC(ifree)->val.i = 0;
             VarCounted(ifree);
-            return &(g_vartbl[ifree].val.i);
+            return &(VREC(ifree)->val.i);
         }
 #ifdef STRUCTENABLED
         else if (vtype & T_STRUCT)
         {
             // Simple (non-array) structure variable: its type was checked and its
             // data allocated before the entry was written (structmem)
-            g_vartbl[ifree].size = g_StructArg; // Store struct index in size field
-            g_vartbl[ifree].val.s = structmem;
+            VREC(ifree)->size = g_StructArg; // Store struct index in size field
+            VREC(ifree)->val.s = structmem;
             VarCounted(ifree);
-            return g_vartbl[ifree].val.s;
+            return VREC(ifree)->val.s;
         }
 #endif
     }
@@ -5923,23 +5923,23 @@ findvar_found:
     // if this is a definition of an empty array (only used in the parameter list for a sub/function)
     if (dnbr == -1)
     {
-        RAW_DIM(g_vartbl[vindex], 0) = -1; // let the caller know that this is an empty array and needs more work
+        RAW_DIM((*VREC(vindex)), 0) = -1; // let the caller know that this is an empty array and needs more work
 #ifdef STRUCTENABLED
         // For struct array parameters, store the struct type index from g_StructArg
         if ((vtype & T_STRUCT) && g_StructArg >= 0 && g_StructArg < g_structcnt)
         {
-            g_vartbl[vindex].size = g_StructArg;
+            VREC(vindex)->size = g_StructArg;
         }
 #endif
         VarCounted(ifree);
-        return g_vartbl[vindex].val.s; // just return a pointer to the data element as it will be replaced in the sub/fun with a pointer
+        return VREC(vindex)->val.s; // just return a pointer to the data element as it will be replaced in the sub/fun with a pointer
     }
 
     // if this is an array copy the array dimensions and calculate the overall size
     // for a non array string this will leave nbr = 1 which is just what we want
     for (nbr = 1, i = 0; i < dnbr; i++)
     { // (the bounds were checked before the entry was written)
-        RAW_DIM(g_vartbl[vindex], i) = DimEncode(dim[i]);
+        RAW_DIM((*VREC(vindex)), i) = DimEncode(dim[i]);
         nbr *= (dim[i] + 1 - g_OptionBase);
     }
 
@@ -5952,12 +5952,12 @@ findvar_found:
     // leaves, so a lookup still walks past it to a variable that probed through it
     // (a name of 0 would end the walk there and that variable would be made twice).
     // A global is not counted until it is complete, so a failure leaves the count right.
-    g_vartbl[ifree].val.s = NULL;
-    g_vartbl[ifree].type = T_BLOCKED;
-    i = *g_vartbl[ifree].name;
-    *g_vartbl[ifree].name = '~';
-    j = RAW_DIM(g_vartbl[ifree], 0);
-    RAW_DIM(g_vartbl[ifree], 0) = 0;
+    VREC(ifree)->val.s = NULL;
+    VREC(ifree)->type = T_BLOCKED;
+    i = *VREC(ifree)->name;
+    *VREC(ifree)->name = '~';
+    j = RAW_DIM((*VREC(ifree)), 0);
+    RAW_DIM((*VREC(ifree)), 0) = 0;
 
     // Now, grab the memory
     if (vtype & (T_NBR | T_INT))
@@ -5983,8 +5983,8 @@ findvar_found:
     else
     {
         tmp = (nbr * (size + 1));
-        if (tmp <= (MAXDIM - 1) * sizeof(RAW_DIM(g_vartbl[ifree], 1)) && j == 0)
-            mptr = (void *)&RAW_DIM(g_vartbl[ifree], 1);
+        if (tmp <= (MAXDIM - 1) * sizeof(RAW_DIM((*VREC(ifree)), 1)) && j == 0)
+            mptr = (void *)&RAW_DIM((*VREC(ifree)), 1);
         else if (tmp <= 256)
             mptr = GetMemory(STRINGSIZE);
         else
@@ -5994,13 +5994,13 @@ findvar_found:
     // If we reached here the memory request was successful, so restore the details of
     // the variable that were saved previously and set the variables pointer to the
     // allocated memory
-    g_vartbl[ifree].type = vtype | (action & (T_IMPLIED | T_CONST));
+    VREC(ifree)->type = vtype | (action & (T_IMPLIED | T_CONST));
     if (suffix)
-        g_vartbl[ifree].namelen |= NAMELEN_EXPLICIT;
-    *g_vartbl[ifree].name = i;
-    RAW_DIM(g_vartbl[ifree], 0) = j;
-    g_vartbl[ifree].size = size;
-    g_vartbl[ifree].val.s = mptr;
+        VREC(ifree)->namelen |= NAMELEN_EXPLICIT;
+    *VREC(ifree)->name = i;
+    RAW_DIM((*VREC(ifree)), 0) = j;
+    VREC(ifree)->size = size;
+    VREC(ifree)->val.s = mptr;
     VarCounted(ifree);
     return mptr;
 }
@@ -7047,27 +7047,27 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 hashcurrent = g_hashlist[i].hash;
                 // Free memory for strings, arrays, and structs (but not pointers to caller's data)
 #ifdef STRUCTENABLED
-                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0)) || (g_vartbl[hashcurrent].type & T_STRUCT)) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)MMHeap))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap))
 #else
-                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0))) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)MMHeap))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap))
 #endif
                 {
-                    FreeMemorySafe((void **)&g_vartbl[hashcurrent].val.s);
+                    FreeMemorySafe((void **)&VREC(hashcurrent)->val.s);
                     // free any memory (if allocated)
                 }
 #ifdef rp2350
 #ifdef STRUCTENABLED
-                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0)) || (g_vartbl[hashcurrent].type & T_STRUCT)) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)PSRAMbase + PSRAMsize))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)PSRAMbase && (uint32_t)VREC(hashcurrent)->val.s < (uint32_t)PSRAMbase + PSRAMsize))
 #else
-                if (((g_vartbl[hashcurrent].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[hashcurrent], 0))) && !(g_vartbl[hashcurrent].type & T_PTR) && ((uint32_t)g_vartbl[hashcurrent].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[hashcurrent].val.s < (uint32_t)PSRAMbase + PSRAMsize))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)PSRAMbase && (uint32_t)VREC(hashcurrent)->val.s < (uint32_t)PSRAMbase + PSRAMsize))
 #endif
                 {
-                    FreeMemorySafe((void **)&g_vartbl[hashcurrent].val.s); // free any memory (if allocated)
+                    FreeMemorySafe((void **)&VREC(hashcurrent)->val.s); // free any memory (if allocated)
                 }
 #endif
                 g_hashlist[i].level = -1;
                 SymLocalFreed(hashcurrent); // its name's binding goes back to the local it hid
-                memset(&g_vartbl[hashcurrent], 0, sizeof(struct s_vartbl));
+                memset(VREC(hashcurrent), 0, sizeof(struct s_vartbl));
                 g_Localvarcnt--;
                 g_varcnt = g_Globalvarcnt + g_Localvarcnt; // (CSUBs read it)
                 if (i == top - 1)
@@ -7087,33 +7087,33 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
         {
             // Free memory for strings, arrays, and structs (but not pointers)
 #ifdef STRUCTENABLED
-            if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0)) || (g_vartbl[i].type & T_STRUCT)) && !(g_vartbl[i].type & T_PTR))
+            if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0)) || (VREC(i)->type & T_STRUCT)) && !(VREC(i)->type & T_PTR))
 #else
-            if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0))) && !(g_vartbl[i].type & T_PTR))
+            if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0))) && !(VREC(i)->type & T_PTR))
 #endif
             {
-                if ((uint32_t)g_vartbl[i].val.s > (uint32_t)MMHeap && (uint32_t)g_vartbl[i].val.s < (uint32_t)MMHeap + heap_memory_size)
+                if ((uint32_t)VREC(i)->val.s > (uint32_t)MMHeap && (uint32_t)VREC(i)->val.s < (uint32_t)MMHeap + heap_memory_size)
                 {
-                    FreeMemorySafe((void **)&g_vartbl[i].val.s); // free any memory (if allocated)
+                    FreeMemorySafe((void **)&VREC(i)->val.s); // free any memory (if allocated)
                 }
             }
 #ifdef rp2350
             if (all)
             {
 #ifdef STRUCTENABLED
-                if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0)) || (g_vartbl[i].type & T_STRUCT)) && !(g_vartbl[i].type & T_PTR))
+                if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0)) || (VREC(i)->type & T_STRUCT)) && !(VREC(i)->type & T_PTR))
 #else
-                if (((g_vartbl[i].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[i], 0))) && !(g_vartbl[i].type & T_PTR))
+                if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0))) && !(VREC(i)->type & T_PTR))
 #endif
                 {
-                    if ((uint32_t)g_vartbl[i].val.s > (uint32_t)PSRAMbase && (uint32_t)g_vartbl[i].val.s < (uint32_t)PSRAMbase + PSRAMsize)
+                    if ((uint32_t)VREC(i)->val.s > (uint32_t)PSRAMbase && (uint32_t)VREC(i)->val.s < (uint32_t)PSRAMbase + PSRAMsize)
                     {
-                        FreeMemorySafe((void **)&g_vartbl[i].val.s); // free any memory (if allocated)
+                        FreeMemorySafe((void **)&VREC(i)->val.s); // free any memory (if allocated)
                     }
                 }
             }
 #endif
-            memset(&g_vartbl[i], 0, sizeof(struct s_vartbl));
+            memset(VREC(i), 0, sizeof(struct s_vartbl));
         }
         SymBindReset(); // every global binding has gone with its variable (see Symbols.h)
     }
@@ -7189,13 +7189,13 @@ int IsGlobalData(void *data)
 {
     if (g_VarIndex >= maxlocalvars)
         return true; // a global
-    if (g_vartbl[g_VarIndex].type & T_PTR)
+    if (VREC(g_VarIndex)->type & T_PTR)
     {
         unsigned char *d = (unsigned char *)data;
-        if (d >= (unsigned char *)&g_vartbl[maxlocalvars] && d < (unsigned char *)&g_vartbl[MAXVARS])
+        if (d >= (unsigned char *)VREC(maxlocalvars) && d < (unsigned char *)VREC(MAXVARS))
             return true; // a global scalar's value
         for (int i = maxlocalvars; i < MAXVARS; i++)
-            if (g_vartbl[i].name[0] != 0 && g_vartbl[i].type != T_BLOCKED && g_vartbl[i].val.s == d)
+            if (VREC(i)->name[0] != 0 && VREC(i)->type != T_BLOCKED && VREC(i)->val.s == d)
                 return true; // a global array's or string's data, passed whole
     }
     return false;
@@ -7238,7 +7238,7 @@ uint32_t erase(char *p, bool nofree)
     for (j = maxlocalvars; j < MAXVARS; j++) // CHANGED: was MAXVARS/2
     {
         s = p;
-        x = (char *)g_vartbl[j].name;
+        x = (char *)VREC(j)->name;
         len = strlen(p);
         while (len > 0 && *s == *x)
         { // compare the variable to the name that we have
@@ -7253,46 +7253,46 @@ uint32_t erase(char *p, bool nofree)
         // BUG FIX: Add bounds checking before freeing memory
         // Handle strings, arrays, and struct variables (but not pointers)
 #ifdef STRUCTENABLED
-        if (((g_vartbl[j].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[j], 0)) || (g_vartbl[j].type & T_STRUCT)) && !(g_vartbl[j].type & T_PTR))
+        if (((VREC(j)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(j)), 0)) || (VREC(j)->type & T_STRUCT)) && !(VREC(j)->type & T_PTR))
 #else
-        if (((g_vartbl[j].type & T_STR) || DimIsAllocated(RAW_DIM(g_vartbl[j], 0))) && !(g_vartbl[j].type & T_PTR))
+        if (((VREC(j)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(j)), 0))) && !(VREC(j)->type & T_PTR))
 #endif
         {
-            addr = (uint32_t)g_vartbl[j].val.s; // ADDED: get address once
+            addr = (uint32_t)VREC(j)->val.s; // ADDED: get address once
 
             if (!nofree)
             {
                 // Check if in heap
                 if (addr > (uint32_t)MMHeap && addr < (uint32_t)MMHeap + heap_memory_size)
                 {
-                    FreeMemorySafe((void **)&g_vartbl[j].val.s);
+                    FreeMemorySafe((void **)&VREC(j)->val.s);
                 }
 #ifdef rp2350
                 // BUG FIX: Add PSRAM support for RP2350
                 else if (addr > (uint32_t)PSRAMbase && addr < (uint32_t)PSRAMbase + PSRAMsize)
                 {
-                    FreeMemorySafe((void **)&g_vartbl[j].val.s);
+                    FreeMemorySafe((void **)&VREC(j)->val.s);
                 }
 #endif
             }
-            g_vartbl[j].val.s = NULL;
+            VREC(j)->val.s = NULL;
         }
 
         k = j + 1;
         if (k == MAXVARS)
             k = maxlocalvars; // CHANGED: was MAXVARS/2
-        if (g_vartbl[k].type)
+        if (VREC(k)->type)
         {
-            g_vartbl[j].name[0] = '~';
-            g_vartbl[j].type = T_BLOCKED;
+            VREC(j)->name[0] = '~';
+            VREC(j)->type = T_BLOCKED;
         }
         else
         {
-            g_vartbl[j].name[0] = 0;
-            g_vartbl[j].type = T_NOTYPE;
+            VREC(j)->name[0] = 0;
+            VREC(j)->type = T_NOTYPE;
         }
-        RAW_DIM(g_vartbl[j], 0) = 0;
-        g_vartbl[j].level = 0;
+        RAW_DIM((*VREC(j)), 0) = 0;
+        VREC(j)->level = 0;
         g_Globalvarcnt--;
         g_varcnt = g_Globalvarcnt + g_Localvarcnt; // (CSUBs read it)
         DoFastForget(j);       // a DO condition that pointed at this variable must evaluate again
@@ -7553,9 +7553,9 @@ void GetCommsTxData(unsigned char *argv[], int argc, int dataidx, int len, unsig
         ptr = findvar(argv[dataidx], V_NOFIND_NULL | V_EMPTY_OK);
         if (ptr != NULL)
         {
-            int t = g_vartbl[g_VarIndex].type;
-            if (((t & T_STR) && DimIsScalar(RAW_DIM(g_vartbl[g_VarIndex], 0))) ||
-                (emptyarray && (t & (T_NBR | T_INT)) && DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)) && DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1))))
+            int t = VREC(g_VarIndex)->type;
+            if (((t & T_STR) && DimIsScalar(RAW_DIM((*VREC(g_VarIndex)), 0))) ||
+                (emptyarray && (t & (T_NBR | T_INT)) && DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)) && DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1))))
                 useVar = 1;
             else
                 ptr = NULL;
@@ -7572,7 +7572,7 @@ void GetCommsTxData(unsigned char *argv[], int argc, int dataidx, int len, unsig
     }
 
     CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
-    if (g_vartbl[g_VarIndex].type & T_STR)
+    if (VREC(g_VarIndex)->type & T_STR)
     { // string variable
         unsigned char *cptr = (unsigned char *)ptr;
         if (*cptr < len)
@@ -7581,16 +7581,16 @@ void GetCommsTxData(unsigned char *argv[], int argc, int dataidx, int len, unsig
         for (i = 0; i < len; i++)
             buf[i] = cptr[i];
     }
-    else if (g_vartbl[g_VarIndex].type & T_NBR)
+    else if (VREC(g_VarIndex)->type & T_NBR)
     { // float array
-        if ((((MMFLOAT *)ptr - g_vartbl[g_VarIndex].val.fa) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+        if ((((MMFLOAT *)ptr - VREC(g_VarIndex)->val.fa) + len) > DimElements(RAW_DIM((*VREC(g_VarIndex)), 0)))
             StandardError(28);
         for (i = 0; i < len; i++)
             buf[i] = FloatToInt32(*((MMFLOAT *)ptr + i));
     }
     else
     { // integer array
-        if ((((long long int *)ptr - g_vartbl[g_VarIndex].val.ia) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+        if ((((long long int *)ptr - VREC(g_VarIndex)->val.ia) + len) > DimElements(RAW_DIM((*VREC(g_VarIndex)), 0)))
             StandardError(28);
         for (i = 0; i < len; i++)
             buf[i] = (unsigned int)(*((long long int *)ptr + i));
@@ -7613,14 +7613,14 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
         for (int i = 0; i < len; i++)
         {
             void *vp = findvar(argv[dataidx + i + i], V_FIND | V_EMPTY_OK);
-            if (g_vartbl[g_VarIndex].type & T_CONST)
+            if (VREC(g_VarIndex)->type & T_CONST)
                 StandardError(22);
             if (emptyarray) // a whole array is not a valid single list item
                 StandardError(6);
-            if (!(g_vartbl[g_VarIndex].type & (T_NBR | T_INT)))
+            if (!(VREC(g_VarIndex)->type & (T_NBR | T_INT)))
                 StandardError(6);
             dest->list[i].ptr = vp;
-            dest->list[i].isint = (g_vartbl[g_VarIndex].type & T_INT) ? 1 : 0;
+            dest->list[i].isint = (VREC(g_VarIndex)->type & T_INT) ? 1 : 0;
         }
         dest->kind = COMMS_RXD_LIST;
         return;
@@ -7628,29 +7628,29 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
 
     // a single argument: a string, a whole array (empty brackets) or a single scalar / element
     ptr = findvar(argv[dataidx], V_FIND | V_EMPTY_OK);
-    if (g_vartbl[g_VarIndex].type & T_CONST)
+    if (VREC(g_VarIndex)->type & T_CONST)
         StandardError(22);
     if (ptr == NULL)
         StandardError(6);
     CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
 
-    if (g_vartbl[g_VarIndex].type & T_STR)
+    if (VREC(g_VarIndex)->type & T_STR)
     {
         if (len < 1 || len > 255)
             StandardError(21);
-        if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+        if (DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0)))
             StandardError(6);
         *(char *)ptr = len;
         dest->kind = COMMS_RXD_STRING;
         dest->ptr = (char *)ptr + 1; // skip the length byte
     }
-    else if (g_vartbl[g_VarIndex].type & T_NBR)
+    else if (VREC(g_VarIndex)->type & T_NBR)
     {
-        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
+        if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
             StandardError(6);
         if (emptyarray)
         { // a whole array
-            if ((((MMFLOAT *)ptr - g_vartbl[g_VarIndex].val.fa) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+            if ((((MMFLOAT *)ptr - VREC(g_VarIndex)->val.fa) + len) > DimElements(RAW_DIM((*VREC(g_VarIndex)), 0)))
                 StandardError(32);
         }
         else
@@ -7661,13 +7661,13 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
         dest->kind = COMMS_RXD_FLOAT;
         dest->ptr = ptr;
     }
-    else if (g_vartbl[g_VarIndex].type & T_INT)
+    else if (VREC(g_VarIndex)->type & T_INT)
     {
-        if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
+        if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
             StandardError(6);
         if (emptyarray)
         {
-            if ((((long long int *)ptr - g_vartbl[g_VarIndex].val.ia) + len) > DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+            if ((((long long int *)ptr - VREC(g_VarIndex)->val.ia) + len) > DimElements(RAW_DIM((*VREC(g_VarIndex)), 0)))
                 StandardError(32);
         }
         else

@@ -822,9 +822,9 @@ int cmd_tcpclient(void)
         q = (uint8_t *)&dest[1];
         ptr1 = findvar(argv[4], V_FIND | V_NOFIND_ERR);
         RequireGlobal(ptr1);
-        if (g_vartbl[g_VarIndex].type & T_INT)
+        if (VREC(g_VarIndex)->type & T_INT)
         {
-            if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+            if (DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0)))
                 error("Argument 3 must be an integer");
             state->buffer_read = (int *)ptr1;
         }
@@ -832,9 +832,9 @@ int cmd_tcpclient(void)
             error("Argument 3 must be an integer");
         ptr1 = findvar(argv[6], V_FIND | V_NOFIND_ERR);
         RequireGlobal(ptr1);
-        if (g_vartbl[g_VarIndex].type & T_INT)
+        if (VREC(g_VarIndex)->type & T_INT)
         {
-            if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+            if (DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0)))
                 error("Argument 4 must be an integer");
             state->buffer_write = (int *)ptr1;
         }

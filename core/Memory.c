@@ -1568,29 +1568,29 @@ void MIPS16 cmd_memory(void)
     // calculate the space allocated to variables on the heap
     for (i = VarCnt = vsize = var = 0; var < MAXVARS; var++)
     {
-        if (g_vartbl[var].type == T_NOTYPE)
+        if (VREC(var)->type == T_NOTYPE)
             continue;
         VarCnt++;
         vsize += sizeof(struct s_vartbl);
-        if (g_vartbl[var].val.s == NULL)
+        if (VREC(var)->val.s == NULL)
             continue;
-        if (g_vartbl[var].type & T_PTR)
+        if (VREC(var)->type & T_PTR)
             continue;
-        nbr = DimElements(RAW_DIM(g_vartbl[var], 0));
-        if (DimIsAllocated(RAW_DIM(g_vartbl[var], 0)))
+        nbr = DimElements(RAW_DIM((*VREC(var)), 0));
+        if (DimIsAllocated(RAW_DIM((*VREC(var)), 0)))
         {
-            for (j = 1; j < MAXDIM && !DimIsEnd(RAW_DIM(g_vartbl[var], j)); j++)
-                nbr *= DimElements(RAW_DIM(g_vartbl[var], j));
-            if (g_vartbl[var].type & T_NBR)
+            for (j = 1; j < MAXDIM && !DimIsEnd(RAW_DIM((*VREC(var)), j)); j++)
+                nbr *= DimElements(RAW_DIM((*VREC(var)), j));
+            if (VREC(var)->type & T_NBR)
                 i += MRoundUp(nbr * sizeof(MMFLOAT));
-            else if (g_vartbl[var].type & T_INT)
+            else if (VREC(var)->type & T_INT)
                 i += MRoundUp(nbr * sizeof(long long int));
             else
-                i += MRoundUp(nbr * (g_vartbl[var].size + 1));
+                i += MRoundUp(nbr * (VREC(var)->size + 1));
         }
-        else if (g_vartbl[var].type & T_STR)
+        else if (VREC(var)->type & T_STR)
         {
-            if (g_vartbl[var].val.s != (void *)&RAW_DIM(g_vartbl[var], 1))
+            if (VREC(var)->val.s != (void *)&RAW_DIM((*VREC(var)), 1))
                 i += STRINGSIZE;
         }
     }

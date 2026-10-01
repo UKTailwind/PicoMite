@@ -7997,9 +7997,9 @@ void MIPS16 cmd_var(void)
             }
             else
                 vdata = findvar(bufp, type | V_FIND); // find or create a non arrayed variable
-            if (TypeMask(g_vartbl[g_VarIndex].type) != TypeMask(type))
+            if (TypeMask(VREC(g_VarIndex)->type) != TypeMask(type))
                 error("$ type conflict", bufp);
-            if (g_vartbl[g_VarIndex].type & T_CONST)
+            if (VREC(g_VarIndex)->type & T_CONST)
                 error("$ is a constant", bufp);
             bufp += strlen((char *)bufp) + 1; // step over the name and the terminating zero byte
             if (array)
@@ -8009,10 +8009,10 @@ void MIPS16 cmd_var(void)
                 nbr |= (*bufp++) << 16;
                 nbr |= (*bufp++) << 24;
                 nbr2 = 1;
-                for (j = 0; !DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], j)) && j < MAXDIM; j++)
-                    nbr2 *= DimElements(RAW_DIM(g_vartbl[g_VarIndex], j));
+                for (j = 0; !DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), j)) && j < MAXDIM; j++)
+                    nbr2 *= DimElements(RAW_DIM((*VREC(g_VarIndex)), j));
                 if (type & T_STR)
-                    nbr2 *= g_vartbl[g_VarIndex].size + 1;
+                    nbr2 *= VREC(g_VarIndex)->size + 1;
                 if (type & T_NBR)
                     nbr2 *= sizeof(MMFLOAT);
                 if (type & T_INT)
@@ -8049,7 +8049,7 @@ void MIPS16 cmd_var(void)
             checkend(skipvar(argv[i], false));
             VarDataList[i / 2] = findvar(argv[i], V_NOFIND_ERR | V_EMPTY_OK);
             VarList[i / 2] = g_VarIndex;
-            if ((g_vartbl[g_VarIndex].type & (T_CONST | T_PTR)) || g_vartbl[g_VarIndex].level != 0)
+            if ((VREC(g_VarIndex)->type & (T_CONST | T_PTR)) || VREC(g_VarIndex)->level != 0)
                 StandardError(6);
             p = &argv[i][strlen((char *)argv[i]) - 1]; // pointer to the last char
             if (*p == ')')
@@ -8130,22 +8130,22 @@ void MIPS16 cmd_var(void)
         {
             g_VarIndex = VarList[i / 2];                     // previously saved index to the variable
             vdata = VarDataList[i / 2];                      // pointer to the variable's data
-            type = TypeMask(g_vartbl[g_VarIndex].type);      // get the variable's type
-            type |= (g_vartbl[g_VarIndex].type & T_IMPLIED); // set the implied flag
-            array = DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0));
+            type = TypeMask(VREC(g_VarIndex)->type);      // get the variable's type
+            type |= (VREC(g_VarIndex)->type & T_IMPLIED); // set the implied flag
+            array = DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0));
 
             nbr = 1; // number of elements to save
             if (array)
             { // if this is an array calculate the number of elements
-                for (j = 0; !DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], j)) && j < MAXDIM; j++)
-                    nbr *= DimElements(RAW_DIM(g_vartbl[g_VarIndex], j));
+                for (j = 0; !DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), j)) && j < MAXDIM; j++)
+                    nbr *= DimElements(RAW_DIM((*VREC(g_VarIndex)), j));
                 type |= 0x80; // an array has the top bit set
             }
 
             if (type & T_STR)
             {
                 if (array)
-                    nbr *= (g_vartbl[g_VarIndex].size + 1);
+                    nbr *= (VREC(g_VarIndex)->size + 1);
                 else
                     nbr = *vdata + 1; // for a simple string variable just save the string
             }
@@ -8159,7 +8159,7 @@ void MIPS16 cmd_var(void)
                 StandardError(29);
             }
             FlashWriteByte(type); // save its type
-            for (j = 0, p = g_vartbl[g_VarIndex].name; *p && j < MAXVARLEN; p++, j++)
+            for (j = 0, p = VREC(g_VarIndex)->name; *p && j < MAXVARLEN; p++, j++)
                 FlashWriteByte(*p); // save the name
             FlashWriteByte(0);      // terminate the name
             if (array)

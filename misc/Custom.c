@@ -1183,12 +1183,12 @@ void MIPS16 cmd_pio(void)
                 nbr = getinteger(argv[4]);
                 dd = findvar(argv[6], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
                 CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
-                if (((g_vartbl[g_VarIndex].type & T_INT) && DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)) && DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1))))
+                if (((VREC(g_VarIndex)->type & T_INT) && DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)) && DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1))))
                 { // integer array
-                        if ((((long long int *)dd - g_vartbl[g_VarIndex].val.ia) + nbr) > (DimElements(RAW_DIM(g_vartbl[g_VarIndex], 0))))
+                        if ((((long long int *)dd - VREC(g_VarIndex)->val.ia) + nbr) > (DimElements(RAW_DIM((*VREC(g_VarIndex)), 0))))
                                 error("Insufficient array size");
                 }
-                else if ((g_vartbl[g_VarIndex].type & T_INT) && DimIsScalar(RAW_DIM(g_vartbl[g_VarIndex], 0)) && nbr == 1)
+                else if ((VREC(g_VarIndex)->type & T_INT) && DimIsScalar(RAW_DIM((*VREC(g_VarIndex)), 0)) && nbr == 1)
                 {
                         // single variable
                 }
@@ -2212,15 +2212,15 @@ void MIPS16 cmd_pio(void)
                 if (!(size == 256 || size == 512 || size == 1024 || size == 2048 || size == 4096 || size == 8192 || size == 16384 || size == 32768))
                         error("Not power of 2");
                 findvar(argv[0], V_FIND | V_NOFIND_ERR);
-                if ((g_vartbl[g_VarIndex].type & T_INT) && DimIsScalar(RAW_DIM(g_vartbl[g_VarIndex], 0)) && g_vartbl[g_VarIndex].level == 0)
+                if ((VREC(g_VarIndex)->type & T_INT) && DimIsScalar(RAW_DIM((*VREC(g_VarIndex)), 0)) && VREC(g_VarIndex)->level == 0)
                 {
                         // In a program this statement was spelt out into a temporary (SymExpandStatement),
                         // taken from the bottom of the heap - the first place GetAlignedMemory tries, and
                         // for a big ring often the only one.  Nothing reads it again: let it go first.
                         ClearSpecificTempMemory(cmdline);
-                        g_vartbl[g_VarIndex].val.s = (unsigned char *)GetAlignedMemory(size);
-                        g_vartbl[g_VarIndex].size = 255;
-                        RAW_DIM(g_vartbl[g_VarIndex], 0) = size / 8 - 1 + g_OptionBase;
+                        VREC(g_VarIndex)->val.s = (unsigned char *)GetAlignedMemory(size);
+                        VREC(g_VarIndex)->size = 255;
+                        RAW_DIM((*VREC(g_VarIndex)), 0) = size / 8 - 1 + g_OptionBase;
                 }
                 else
                         StandardError(6);
@@ -3023,11 +3023,11 @@ void fun_json(void)
         char *a = GetTempStrMemory();
         ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK);
         CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
-        if (g_vartbl[g_VarIndex].type & T_INT)
+        if (VREC(g_VarIndex)->type & T_INT)
         {
-                if (!DimIsEnd(RAW_DIM(g_vartbl[g_VarIndex], 1)))
+                if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
                         StandardError(6);
-                if (!DimIsRealArray(RAW_DIM(g_vartbl[g_VarIndex], 0)))
+                if (!DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
                 { // Not an array
                         StandardError(35);
                 }
@@ -3041,7 +3041,7 @@ void fun_json(void)
                 // when the following RAM happens to hold a zero, but a hard-fault /
                 // reboot once the buffer lives in PSRAM (unmapped region follows).
                 int64_t slen = dest[0];
-                int64_t cap = (int64_t)(DimUpper(RAW_DIM(g_vartbl[g_VarIndex], 0)) - g_OptionBase) * 8; // bytes after dest[0]
+                int64_t cap = (int64_t)(DimUpper(RAW_DIM((*VREC(g_VarIndex)), 0)) - g_OptionBase) * 8; // bytes after dest[0]
                 if (slen < 0)
                         slen = 0;
                 if (slen > cap)
