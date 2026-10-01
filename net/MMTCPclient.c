@@ -802,6 +802,14 @@ int cmd_tcpclient(void)
             SyntaxError();
         ;
         char *request = (char *)getstring(argv[0]);
+        if (isnamestartsym((uint8_t)*argv[0]) && *skipvar(argv[0], true) == 0)
+        { /* a string variable: request points at its own data, which lwIP sends
+             without copying and keeps until the server acknowledges it, after
+             STREAM has returned (an expression's is temporary memory) */
+            void *rv = findvar(argv[0], V_FIND | V_NOFIND_NULL);
+            if (rv != NULL)
+                RequireGlobal(rv);
+        }
         /* BUF_SIZE is the capacity of the PAYLOAD, which starts at element 1 -
            element 0 carries the length.  Sizing it from the whole array let the
            receive callback write 8 bytes past the end of the array, and in
