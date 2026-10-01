@@ -355,7 +355,7 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <li><b>No <code>g_VarRec</code> in phase 1</b>: it cost 0.8% on solar_eclipse (VGA). It is reconsidered in phase 2.</li>
 <li><b>One record pointer per variable number</b> (<code>g_slotrec</code>) rather than the slot's own pointer: <code>VREC</code> without a branch. The RP2040's 1% is accepted for the memory.</li>
 <li><b>Order:</b> globals' records first (phase 2), the hash16 probe after it (2b), then the locals (3); until phase 3 <code>OPTION LOCAL VARIABLES</code> is capped at its default on this branch.</li>
-<li><b>Magic numbers</b> change once, in the commit that finishes the redesign.</li>
+<li><b>Magic numbers</b> change once, in the commit that finishes the redesign (done for V7.0.00b3). Phase 2b (the hash16 probe) is not done: with symbols almost no lookup reaches the probe.</li>
 </ol></div>
 </section>
 

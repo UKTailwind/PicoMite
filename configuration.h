@@ -85,7 +85,7 @@ extern "C"
       layout or defaults change. */
 #define FLASH_TARGET_OFFSET (1392 * 1024)
 #define HEAP_MEMORY_SIZE (180 * 1024)
-#define MagicKey 0x2678E9D9
+#define MagicKey 0x25822226
 #elif defined(PICOMITEHDMIWEB)
    /* HDMIWEB: HDMIUSB-style display stack + USB host + WebMite WiFi /
       lwIP / mbedtls TLS (no Bluetooth). The cyw43 WiFi firmware blob plus
@@ -117,7 +117,7 @@ extern "C"
    /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
       changed from 1024x600 to 640x480@315000 so existing devices pick up
       the new default via ResetOptions on first boot. */
-#define MagicKey 0xBCA41BCD
+#define MagicKey 0x48C06F49
 #else
    /* HDMIUSB: full 153600-byte framebuffer pool (unlike HDMIBTH/HDMIWEB,
       which use the shrunk 96000-byte one) plus the TinyUSB host stack's
@@ -144,10 +144,10 @@ extern "C"
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (188 * 1024)
 #define MAX_PROG_SIZE (148 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0x41052ADE
+#define MagicKey 0x84F673CF
 #endif
 #else
-#define MagicKey 0x779012A9
+#define MagicKey 0xC0FC00A6
    /* +48 KB (2026-09-29): Route B (P1-P5) went 29.4 KB over. */
 #define FLASH_TARGET_OFFSET (1088 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
@@ -177,14 +177,14 @@ extern "C"
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (200 * 1024)
 #define MAX_PROG_SIZE (160 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0xD9051EC2
+#define MagicKey 0xE1489348
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
 #define FLASH_TARGET_OFFSET (1056 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (208 * 1024)
 #define MAX_PROG_SIZE (168 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0x4530F045
+#define MagicKey 0x0AA687CF
 #endif
 #endif
 
@@ -204,7 +204,7 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 1.4 KB over 848 KB. */
 #define FLASH_TARGET_OFFSET (864 * 1024)
-#define MagicKey 0x6DE27504
+#define MagicKey 0x4FCB0A49
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
       __end__) was 4732 bytes, only ~640 bytes clear of the 4096 page
@@ -230,7 +230,7 @@ extern "C"
    /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (120 * 1024)
 #define MAX_PROG_SIZE (100 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0x741677C8
+#define MagicKey 0x84A1D69C
 #endif
 
 #endif
@@ -257,7 +257,7 @@ extern "C"
 #define MIN_CPU 126000
 
 #ifdef rp2350
-#define MagicKey 0x7E23D439
+#define MagicKey 0x5AF54064
 #define MAXSUBFUN 512
 #define MAXGLOBALVARS 576 // Configurable split (the total as before 192 locals: see above)
 #define MAXLOCALVARS 192
@@ -285,7 +285,7 @@ extern "C"
    /* +48 KB (2026-09-29): Route B (P1-P6) went 37.4 KB over. */
 #define FLASH_TARGET_OFFSET (1520 * 1024)
 #else
-#define MagicKey 0x6E75BE94
+#define MagicKey 0x47AD014E
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
 #define MAXLOCALVARS 192 // (not RC2's 240: this variant's RAM is 1.4 KB short of it)
@@ -317,7 +317,7 @@ extern "C"
 #define MAXSUBFUN 512
 
 #ifdef USBKEYBOARD
-#define MagicKey 0x678A02E7
+#define MagicKey 0x87E00299
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
 #define FLASH_TARGET_OFFSET (1168 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
@@ -353,7 +353,7 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0xFB2B4EA6
+#define MagicKey 0xE69C2515
    /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
 #define FLASH_TARGET_OFFSET (1440 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -368,7 +368,7 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0xB3A99D85
+#define MagicKey 0xBB90C93A
    /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
 #define FLASH_TARGET_OFFSET (1472 * 1024)
    /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -381,7 +381,7 @@ extern "C"
    /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (344 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
-#define MagicKey 0x5E57936A
+#define MagicKey 0xBEE0C703
 #endif
 
 #else                     // RP2040
@@ -392,7 +392,7 @@ extern "C"
 #define MAXSUBFUN 256
 
 #ifdef USBKEYBOARD
-#define MagicKey 0x2B7462F5
+#define MagicKey 0x3B8B03B0
    /* -16 KB (2026-09-16): compiling misc/FileIO.c at -Os freed ~4.5 KB, so
       912 KB fits again and the 16 KB goes back to the A: drive. */
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c)
@@ -426,7 +426,7 @@ extern "C"
       The same trade again: 4 KB less program size (MAX_PROG_SIZE 112 KB), so
       the A: drive starts where RC2's did, 1188 KB, and keeps its size. */
 #define FLASH_TARGET_OFFSET (720 * 1024)
-#define MagicKey 0x40287BEA
+#define MagicKey 0x560B52CF
    /* +24 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (152 * 1024)
 #else
@@ -449,7 +449,7 @@ extern "C"
       board does a full clean - existing A: drives and options do not
       survive.  See [[project_flash_target_offset_alignment]]. */
 #define FLASH_TARGET_OFFSET (912 * 1024)
-#define MagicKey 0xA17DE2A2
+#define MagicKey 0x3A078277
 #endif
 #endif
 #endif
