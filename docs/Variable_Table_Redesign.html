@@ -336,27 +336,31 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 
 <section id="decide">
 <h2>Decisions</h2>
-<div class="decide"><div class="eyebrow">For Peter</div>
+<div class="decide"><div class="eyebrow">Decided, 2026-10-01</div>
 <ol>
-<li><b>Go ahead with phase 1?</b> It is worth doing on its own: it changes nothing visible, and it is where the effort is.</li>
-<li><b>CSUB call table 0x60.</b> Point it at the new slot table and publish that layout; or point it at a function that returns a record by index; or keep the old meaning documented as withdrawn. 0x64 (<code>g_varcnt</code>) can stay.</li>
-<li><b><code>PEEK</code>/<code>POKE VARTBL</code>:</b> emulate by entry index (recommended), or withdraw.</li>
-<li><b>Seeding at RUN</b>: one chunk of globals and one of locals (recommended), or none.</li>
-<li><b>8-byte names:</b> not now (recommended).</li>
+<li><b>Phase 1 goes ahead</b>, on the branch <code>compact-vars</code> from development.</li>
+<li><b>CSUB call table 0x60</b> will point at the new slot table, with its layout published in <code>PicoCFunctions.h</code>. 0x64 (<code>g_varcnt</code>) stays.</li>
+<li><b><code>PEEK</code>/<code>POKE VARTBL</code> are removed</b>: they were unusable with the hashed table anyway.</li>
+<li><b>One chunk of globals and one of locals is seeded at RUN.</b></li>
+<li><b>Names stay 32 bytes in the record</b>; 8-byte names are not pursued now.</li>
+<li><b>SAVE CONTEXT:</b> the phase that changes its format also regenerates every build's magic number, so A: (and an old <code>/.vars</code>) is wiped on the first boot, as for any layout change.</li>
 </ol></div>
 </section>
 
 <section id="found">
 <h2>Found on the way</h2>
-<p>From the two surveys, all read from the code and none yet tested:</p>
+<p>From the two surveys. Fixed on development before this branch was made:</p>
 <ul>
-<li><b>Possible hang at level 0.</b> The global probe's wrap check runs only when <code>g_LocalIndex != 0</code> (MMBasic.c:5435-5447). The probe walks until it reaches a slot whose name is empty, and a blocked slot does not count. If no global slot is empty, so that every one is in use or blocked, looking up a name that is not there at level 0 never ends. That can happen after an ERASE: up to <code>maxglobalvars-1</code> globals may be live, and a new variable can take the last empty slot while a blocked one remains elsewhere.</li>
-<li><b>Counter drift.</b> If DIM fails in GetMemory, <code>g_Globalvarcnt</code> has already been incremented and is never decremented (MMBasic.c:5775-5777, 5891-5905).</li>
-<li><b>LIST VARIABLES with a 32-character name</b> uses <code>strcat</code> on a name with no terminator and reads on into the type byte (Commands.c:2638, 2661, 2689).</li>
-<li><b>Interrupt writers and LOCALs.</b> IR, KEYPAD, PLAY STREAM and TCP CLIENT STREAM keep a pointer to the variable they were given. If it was a LOCAL, they write into a reused slot after the SUB returns.</li>
-<li><b>SAVE CONTEXT has no version check</b>: a <code>/.vars</code> written by another firmware is restored blindly.</li>
-<li><b><code>g_varcnt</code></b>, exported to CSUBs at 0x64, is never decremented, so it goes stale after ERASE or a SUB return.</li>
-<li><b>Documentation</b>: the manual gives the longest name as 31 characters, while the code allows 32. <code>PicoCFunctions.h</code> calls byte 35 <code>dummy</code> and omits T_STRUCT. Memory.c's memory-map comment (1860-1892) still describes a growing variable table.</li>
+<li><b>Possible hang at level 0</b>: fixed in 213f35b, tested with names chosen by simulating the hash.</li>
+<li><b>Counter drift</b> and <b><code>g_varcnt</code></b>: fixed in ee1abbf.</li>
+<li><b>32-character names and LIST VARIABLES</b>: names are now at most 31 characters, as the manual says (2c747af).</li>
+<li><b>Interrupt writers and LOCALs</b>: 16 commands keep a variable past the statement; those that can refuse a LOCAL now do (57b74f8, 3bcbf49), WEB TCP CLIENT REQUEST/READ let their buffer go before returning, and the manual says so (c3d2103).</li>
+<li><b>WEB UDP INTERRUPT 0</b>, found by the goldens: fixed in 526331c.</li>
+</ul>
+<p>Still as found:</p>
+<ul>
+<li><b>SAVE CONTEXT has no version check</b>: a <code>/.vars</code> written by another firmware is restored blindly. Handled for this work by regenerating the magic numbers (see Decisions).</li>
+<li><b>Documentation</b>: <code>PicoCFunctions.h</code> calls byte 35 <code>dummy</code> and omits T_STRUCT. Memory.c's memory-map comment (1860-1892) still describes a growing variable table.</li>
 </ul>
 </section>
 
