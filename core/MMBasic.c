@@ -5035,6 +5035,13 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
     }
     else
     {
+        // Every slot at most once.  The walk ends at a slot with no name, and a
+        // T_BLOCKED one ('~') is not that, so when every global slot is in use or
+        // blocked (possible after ERASE) a name that is not there would be looked
+        // for for ever: at level 0 there was no wrap check at all.  Going all the
+        // way round means it is not there, and it takes the blocked slot it passed.
+        int left = maxglobalvars;
+        (void)OriginalGlobalHash;
         while (g_vartbl[GlobalhashIndex].name[0] != 0)
         {
             const char *ip = (const char *)name;
@@ -5058,13 +5065,18 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
             GlobalhashIndex++;
             if (GlobalhashIndex == MAXVARS)
                 GlobalhashIndex = maxlocalvars;
-            if (error_on_wrap && GlobalhashIndex == OriginalGlobalHash)
-            {
-                ClearVars(0, true);
+            if (--left == 0)
+            { // all the way round: not there
+                if (tmp != -1)
+                    break; // the blocked slot it passed is free for it
+                if (error_on_wrap)
+                    ClearVars(0, true);
                 error("Too many global variables");
             }
         }
-        if (g_vartbl[GlobalhashIndex].name[0] == 0)
+        if (left == 0)
+            globalifree = tmp; // not found, and no slot without a name
+        else if (g_vartbl[GlobalhashIndex].name[0] == 0)
         { // not found
             globalifree = GlobalhashIndex;
             if (tmp != -1)
