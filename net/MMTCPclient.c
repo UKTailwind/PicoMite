@@ -644,6 +644,7 @@ int cmd_tcpclient(void)
             Timer4 = 500;
         while (Timer4)
             ProcessWeb(0);
+        tcp_client_disarm(state); /* the command is over: data after it must not land in the array, which may be a LOCAL */
         return 1;
     }
     /* WEB TCP CLIENT READ array%() [, timeout]
@@ -693,6 +694,7 @@ int cmd_tcpclient(void)
             Timer4 = 500;
         while (Timer4)
             ProcessWeb(0);
+        tcp_client_disarm(state); /* the command is over: data after it must not land in the array, which may be a LOCAL */
         return 1;
     }
     /* WEB TCP CLIENT WRITE longstring%() [, timeout]
@@ -807,9 +809,11 @@ int cmd_tcpclient(void)
         size = (parseintegerarray(argv[2], &dest, 2, 1, NULL, true, NULL) - 1) * 8;
         if (size < 8)
             error("Array too small");
+        RequireGlobal(dest); /* written by the receive callback in the background */
         dest[0] = 0;
         q = (uint8_t *)&dest[1];
         ptr1 = findvar(argv[4], V_FIND | V_NOFIND_ERR);
+        RequireGlobal(ptr1);
         if (g_vartbl[g_VarIndex].type & T_INT)
         {
             if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
@@ -819,6 +823,7 @@ int cmd_tcpclient(void)
         else
             error("Argument 3 must be an integer");
         ptr1 = findvar(argv[6], V_FIND | V_NOFIND_ERR);
+        RequireGlobal(ptr1);
         if (g_vartbl[g_VarIndex].type & T_INT)
         {
             if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))

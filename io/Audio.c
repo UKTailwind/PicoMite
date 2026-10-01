@@ -1467,6 +1467,7 @@ void MIPS16 cmd_play(void)
 		int64_t *aint;
 		skipspace(tp);
 		int size = parseintegerarray(tp, &aint, 1, 1, NULL, false, NULL);
+		RequireGlobal(aint); // read by PLAY SOUND while it plays
 		dd = (uint16_t *)aint;
 		if (size != 1024)
 			StandardError(17);
@@ -1769,7 +1770,10 @@ void MIPS16 cmd_play(void)
 		if (!(argc == 11 || argc == 9 || argc == 7 || argc == 5))
 			StandardError(2);
 		arraysize = parseintegerarray(argv[0], (int64_t **)&leftarray, 1, 1, NULL, false, NULL);
-		if (parseintegerarray(argv[2], (int64_t **)&rightarray, 2, 1, NULL, false, NULL) != arraysize)
+		RequireGlobal(leftarray); // read while it plays
+		int rightsize = parseintegerarray(argv[2], (int64_t **)&rightarray, 2, 1, NULL, false, NULL);
+		RequireGlobal(rightarray);
+		if (rightsize != arraysize)
 			StandardError(16);
 		arraysize *= 4;
 		freq = getnumber(argv[4]);
@@ -1835,7 +1839,10 @@ void MIPS16 cmd_play(void)
 		if (!(CurrentlyPlaying == P_NOTHING || CurrentlyPlaying == P_STOP || CurrentlyPlaying == P_WAVOPEN || CurrentlyPlaying == P_SAMPLE || CurrentlyPlaying == P_PAUSE_SAMPLE))
 			error("Sound output in use for $", PlayingStr[CurrentlyPlaying]);
 		arraysize = parseintegerarray(argv[0], (int64_t **)&leftarray, 1, 1, NULL, false, NULL);
-		if (parseintegerarray(argv[2], (int64_t **)&rightarray, 2, 1, NULL, false, NULL) != arraysize)
+		RequireGlobal(leftarray); // read while it plays
+		int rightsize = parseintegerarray(argv[2], (int64_t **)&rightarray, 2, 1, NULL, false, NULL);
+		RequireGlobal(rightarray);
+		if (rightsize != arraysize)
 			StandardError(16);
 		arraysize *= 4;
 		// Left channel (or both) parameters
@@ -2580,8 +2587,10 @@ void MIPS16 cmd_play(void)
 		void *ptr1 = NULL;
 		int64_t *aint;
 		streamsize = parseintegerarray(argv[0], &aint, 1, 1, NULL, true, NULL) * 8;
+		RequireGlobal(aint); // read by the audio interrupt
 		streambuffer = (char *)aint;
 		ptr1 = findvar(argv[2], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+		RequireGlobal(ptr1); // written by the audio interrupt
 		if (g_vartbl[g_VarIndex].type & T_INT)
 		{
 			if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))
@@ -2591,6 +2600,7 @@ void MIPS16 cmd_play(void)
 		else
 			error("Argument 2 must be an integer");
 		ptr1 = findvar(argv[4], V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+		RequireGlobal(ptr1); // read by the audio interrupt
 		if (g_vartbl[g_VarIndex].type & T_INT)
 		{
 			if (DimIsAllocated(RAW_DIM(g_vartbl[g_VarIndex], 0)))

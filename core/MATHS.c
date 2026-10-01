@@ -2555,6 +2555,7 @@ void cmd_math(void)
 				MMFLOAT *q1 = NULL;
 				int channel = getint(argv[0], 1, MAXPID);
 				int card = parsefloatarray(argv[2], &q1, 2, 1, NULL, true, NULL);
+				RequireGlobal(q1); // used and updated on every PID tick
 				PIDchannels[channel].PIDparams = (PIDController *)q1;
 				if (card != 14)
 					error("Argument 2 must be a 14 element floating point array");

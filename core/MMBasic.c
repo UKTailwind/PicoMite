@@ -7179,6 +7179,33 @@ int GetLocalVarHashSize(void) // the local region's size (OPTION LOCAL VARIABLES
     return maxlocalvars;
 }
 
+// For a command that keeps a pointer to the variable it was given, for an
+// interrupt, a callback, DMA or a later statement to use: call it straight after
+// the findvar or parse*array that found the variable (g_VarIndex), with what that
+// returned.  A LOCAL's entry is cleared and its data freed when its SUB returns,
+// while the pointer would still be used.  A parameter or a STATIC is a local that
+// points at another variable's data: it is allowed when that is a global's.
+int IsGlobalData(void *data)
+{
+    if (g_VarIndex >= maxlocalvars)
+        return true; // a global
+    if (g_vartbl[g_VarIndex].type & T_PTR)
+    {
+        unsigned char *d = (unsigned char *)data;
+        if (d >= (unsigned char *)&g_vartbl[maxlocalvars] && d < (unsigned char *)&g_vartbl[MAXVARS])
+            return true; // a global scalar's value
+        for (int i = maxlocalvars; i < MAXVARS; i++)
+            if (g_vartbl[i].name[0] != 0 && g_vartbl[i].type != T_BLOCKED && g_vartbl[i].val.s == d)
+                return true; // a global array's or string's data, passed whole
+    }
+    return false;
+}
+void RequireGlobal(void *data)
+{
+    if (!IsGlobalData(data))
+        error("Must be a global variable");
+}
+
 int GetGlobalVarHashSize(void)
 {
     return maxglobalvars;

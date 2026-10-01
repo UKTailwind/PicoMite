@@ -2726,7 +2726,11 @@ void MIPS16 cmd_ir(void)
             SyntaxError();
         IrVarType = 0;
         int ir_vtype;
-        IrDev = findvar(argv[0], V_FIND);
+        {
+            void *v = findvar(argv[0], V_FIND);
+            RequireGlobal(v); // the timer interrupt writes through IrDev
+            IrDev = v;
+        }
         if (g_vartbl[g_VarIndex].type & T_CONST)
             StandardError(22);
         ir_vtype = g_vartbl[g_VarIndex].type;
@@ -2738,7 +2742,11 @@ void MIPS16 cmd_ir(void)
             StandardError(6);
         if (ir_vtype & T_NBR)
             IrVarType |= 0b01;
-        IrCmd = findvar(argv[2], V_FIND);
+        {
+            void *v = findvar(argv[2], V_FIND);
+            RequireGlobal(v); // the timer interrupt writes through IrCmd
+            IrCmd = v;
+        }
         if (g_vartbl[g_VarIndex].type & T_CONST)
             StandardError(22);
         ir_vtype = g_vartbl[g_VarIndex].type;
@@ -3382,6 +3390,11 @@ void cmd_keypad(void)
             keypadrows = getint(argv[8], 1, 31);
             keypadcols = getint(argv[12], 1, 31);
             parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
+            if (!IsGlobalData(a1float))
+            { // read on every scan
+                keypadcols = keypadrows = 0;
+                RequireGlobal(a1float);
+            }
             if (DimUpper(dims[0]) - g_OptionBase + 1 != keypadrows)
             {
                 keypadcols = keypadrows = 0;
@@ -3393,6 +3406,11 @@ void cmd_keypad(void)
                 error("Array column count mismatch");
             }
             KeypadVar = findvar(argv[2], V_FIND);
+            if (!IsGlobalData(KeypadVar))
+            { // written on every key
+                keypadcols = keypadrows = 0;
+                RequireGlobal(KeypadVar);
+            }
             if (g_vartbl[g_VarIndex].type & T_CONST)
             {
                 keypadcols = keypadrows = 0;
@@ -3439,6 +3457,7 @@ void cmd_keypad(void)
             if (KeypadInterrupt != NULL)
                 StandardError(31);
             KeypadVar = findvar(argv[0], V_FIND);
+            RequireGlobal(KeypadVar); // written on every key
             if (g_vartbl[g_VarIndex].type & T_CONST)
                 StandardError(22);
             if (!(g_vartbl[g_VarIndex].type & T_NBR))
@@ -5466,9 +5485,11 @@ void MIPS16 cmd_adc(void)
         short dims[MAXDIM] = {0};
 #endif
         int card1 = parseintegerarray(argv[0], &adcval, 1, 1, dims, true, NULL);
+        RequireGlobal(adcval); // filled by DMA in the background
         adcint1 = (uint8_t *)adcval;
         adcval = NULL;
         ADCmax = parseintegerarray(argv[2], &adcval, 2, 1, dims, true, NULL);
+        RequireGlobal(adcval);
         adcint2 = (uint8_t *)adcval;
         if (card1 != ADCmax)
             error("Array size mismatch %,%", card1, ADCmax);
@@ -5563,11 +5584,15 @@ void MIPS16 cmd_adc(void)
             ADCbottom[i] = 0;
         }
         ADCmax = parsefloatarray(argv[0], (MMFLOAT **)&a1float, 1, 1, NULL, true, NULL);
+        if (ADCInterrupt)
+            RequireGlobal((void *)a1float); // filled after the command returns
         if (argc >= 3 && *argv[2])
         {
             if (ADCopen < 2)
                 error("Second channel not open");
             card = parsefloatarray(argv[2], (MMFLOAT **)&a2float, 2, 1, NULL, true, NULL);
+            if (ADCInterrupt)
+                RequireGlobal((void *)a2float);
             if (card != ADCmax)
                 StandardError(16);
         }
@@ -5576,6 +5601,8 @@ void MIPS16 cmd_adc(void)
             if (ADCopen < 3)
                 error("Third channel not open");
             card = parsefloatarray(argv[4], (MMFLOAT **)&a3float, 3, 1, NULL, true, NULL);
+            if (ADCInterrupt)
+                RequireGlobal((void *)a3float);
             if (card != ADCmax)
                 StandardError(16);
         }
@@ -5584,6 +5611,8 @@ void MIPS16 cmd_adc(void)
             if (ADCopen < 4)
                 error("Fourth channel not open");
             card = parsefloatarray(argv[6], (MMFLOAT **)&a4float, 4, 1, NULL, true, NULL);
+            if (ADCInterrupt)
+                RequireGlobal((void *)a4float);
             if (card != ADCmax)
                 StandardError(16);
         }

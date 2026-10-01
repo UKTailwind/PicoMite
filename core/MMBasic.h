@@ -650,6 +650,8 @@ long long int FloatToInt64(MMFLOAT x);
     int FunctionType(unsigned char *p);
     void cmd_localvars(unsigned char *p);
     int GetLocalVarHashSize(void);
+    int IsGlobalData(void *data);   // a pointer kept past the statement must be to a global's data
+    void RequireGlobal(void *data); // (the error when it is not)
     void LocalTopRestore(void); // P6 F2: the local stack's height after a context is restored
     void SubLayoutForget(void); // P6 F1: the parameter lists read (with the symbol bindings)
     void SubLayoutFree(void);

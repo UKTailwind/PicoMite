@@ -371,6 +371,7 @@ int GetCtrlParams(int type, unsigned char *p)
         a += 2;
         memset(lb, 0, sizeof(struct s_ListBoxS));
         lb->count = parsestringarray(argv[a], &lb->items, 2, 1, dims, false, &str_size);
+        RequireGlobal(lb->items); // read whenever the control is drawn or touched
         lb->stride = (int)str_size + 1;
         lb->top = 0;
         lb->maxrows = 0;

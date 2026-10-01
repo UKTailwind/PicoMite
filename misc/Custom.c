@@ -775,6 +775,7 @@ void MIPS16 cmd_pio(void)
                 static uint32_t *a1int = NULL;
                 int64_t *aint = NULL;
                 int toarraysize = parseintegerarray(argv[6], &aint, 4, 1, dims, true, NULL);
+                RequireGlobal(aint); // DMA uses it after the command returns
                 a1int = (uint32_t *)aint;
                 if (argc >= 9 && *argv[8])
                 {
@@ -906,6 +907,7 @@ void MIPS16 cmd_pio(void)
                 static uint32_t *a1int = NULL;
                 int64_t *aint = NULL;
                 int toarraysize = parseintegerarray(argv[6], &aint, 4, 1, dims, true, NULL);
+                RequireGlobal(aint); // DMA uses it after the command returns
                 a1int = (uint32_t *)aint;
 
                 // Get optional size parameter (argc == 13)
