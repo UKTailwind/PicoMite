@@ -330,7 +330,8 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <div class="phase"><div class="num">3<small>locals</small></div><div>
 <h3>Locals' records in chunks</h3>
 <p>Each chunk of 32 local slots takes its records from the heap the first time the local stack reaches it, fills those 32 pointers, and is kept for the run. <code>g_vartbl</code> goes, and the cap on <code>OPTION LOCAL VARIABLES</code> with it.</p>
-<p class="meta">Gate: as phase 2, plus locvars6, deep recursion (rbdepth), by-reference parameters and interrupts during SUBs.</p></div></div>
+<p class="meta">Gate: as phase 2, plus locvars6, deep recursion (rbdepth), by-reference parameters and interrupts during SUBs.</p>
+<p class="meta">Result: goldens unchanged on both boards; locvars6 (390 live locals), varcnt14, static5, symchain, rbdepth and rbp5d pass; rbf2 as in phase 2. solar_eclipse 27.155 s on the VGA (phase 1 26.683, +1.8%) and 16.047 s on the PC3 (16.219). RAM margin 25.4 KB on the VGA and 45.5 KB on HDMIWEB, until phase 4 gives it to the heap; meanwhile the stack uses it (rbdepth on the VGA: FUNCTION depth 35).</p></div></div>
 <div class="phase"><div class="num">4<small>heap</small></div><div>
 <h3>Give the RAM to the heap</h3>
 <p>Per build, in whole 4 KB steps, with <code>MAX_PROG_SIZE</code> pinned so the flash layout and A: are unchanged.</p>

@@ -1561,7 +1561,7 @@ void MIPS16 cmd_memory(void)
     int CFunctSize, CFunctSizeK, CFunctNbr, CFunctPercent, FontSize, FontSizeK, FontNbr, FontPercent, LibrarySizeK, LibraryPercent, LibraryMaxK;
     unsigned int CurrentRAM, *pint;
 
-    CurrentRAM = heap_memory_size + sizeof(g_vartbl) + sizeof(g_slotrec);
+    CurrentRAM = heap_memory_size + sizeof(g_slotrec);
 #ifdef rp2350
     CurrentRAM += PSRAMsize;
 #endif
@@ -1571,8 +1571,6 @@ void MIPS16 cmd_memory(void)
         if (VREC(var)->type == T_NOTYPE || VREC(var)->type == T_BLOCKED)
             continue; // a free slot, or one an ERASE left blocked
         VarCnt++;
-        if (VREC(var) >= g_vartbl && VREC(var) < g_vartbl + MAXLOCALVARS)
-            vsize += sizeof(struct s_vartbl); // a local's record (a global's is in its chunk, below)
         if (VREC(var)->val.s == NULL)
             continue;
         if (VREC(var)->type & T_PTR)
@@ -1595,7 +1593,11 @@ void MIPS16 cmd_memory(void)
                 i += STRINGSIZE;
         }
     }
-    j = g_varmem.chunks * VARCHUNK * sizeof(struct s_vartbl); // the globals' records, in the heap
+    j = g_varmem.chunks; // the variables' records, in chunks in the heap
+    for (nbr = 0; nbr < (int)(sizeof(g_varmem.lchunk) / sizeof(g_varmem.lchunk[0])); nbr++)
+        if (g_varmem.lchunk[nbr] != NULL)
+            j++;
+    j *= VARCHUNK * sizeof(struct s_vartbl);
     vsize += j;
     VarSize = (vsize + i + 512) / 1024; // this is the memory allocated to variables
     VarPercent = ((vsize + i) * 100) / CurrentRAM;
@@ -1912,7 +1914,7 @@ void m_alloc(int type)
 
     case M_VAR: // this must be called to initialises the variable memory pointer
         // everytime the variable table is increased this must be called to verify that enough memory is free
-        memset(g_vartbl, 0, sizeof(g_vartbl)); // the locals' records (the globals' are in the heap)
+        // (the variables' records are in the heap: InitHeap has already let them go)
         break;
     }
 }

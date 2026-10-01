@@ -398,25 +398,27 @@ extern "C"
      * ============================================================================ */
     extern struct s_vartbl s_vartbl_val;
     extern struct s_funtbl funtbl[MAXSUBFUN];
-    /* A variable's record is reached through its number: VREC(i).  The locals'
-       records are g_vartbl (OPTION LOCAL VARIABLES cannot go above MAXLOCALVARS
-       while they are).  A global's record is in the heap, in a chunk of
-       VARCHUNK records taken from the SRAM heap as globals are made, and never
-       moves while the variable exists; a free or blocked global slot points at
-       a shared placeholder record, so a probe reads every slot the same way. */
-    extern struct s_vartbl g_vartbl[MAXLOCALVARS];
+    /* A variable's record is reached through its number: VREC(i).  Every
+       record is in the SRAM heap, in a chunk of VARCHUNK records, and never
+       moves while the variable exists.  A global's comes from a chunk as the
+       global is made; a chunk of local slots (32 numbers on the local stack)
+       gets its records the first time the stack reaches it, and keeps them for
+       the run.  A slot with no record of its own (a free or blocked global, or
+       local numbers the stack has not reached) points at a shared placeholder
+       record, so a probe or a walker reads every slot the same way. */
     extern struct s_vartbl *g_slotrec[MAXVARS];
     #define VREC(i) (g_slotrec[(i)]) // the record of variable i
     #define VARCHUNK 32              // records per chunk: 7 pages on the RP2040, 8 on the RP2350
     struct s_varmem
     {
         struct s_vartbl *chunk[MAXVARS / VARCHUNK + 1]; // the chunks of globals' records, in the heap
+        struct s_vartbl *lchunk[MAXLOCALLIST / VARCHUNK + 1]; // local slots 32k.. 32k+31's records, or NULL
         int chunks;
         int cur;                     // the chunk records are being handed out from
         struct s_vartbl *next, *end; // its records not yet used
         struct s_vartbl *free;       // erased globals' records (newest first, linked through the name)
     };
-    extern struct s_varmem g_varmem; // (SAVE CONTEXT keeps it with g_vartbl and g_slotrec)
+    extern struct s_varmem g_varmem; // (SAVE CONTEXT keeps it with g_slotrec)
     void InitVarSlots(void);
     void VarChunksForget(void);
     void VarChunkSeed(void);

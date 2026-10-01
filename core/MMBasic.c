@@ -118,7 +118,6 @@ void *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsigned ch
 int FindStructBase(unsigned char *basename, int baselen, int *pvindex);
 #endif
 
-struct s_vartbl __attribute__((aligned(64))) g_vartbl[MAXLOCALVARS] = {0}; // the locals' records
 struct s_vartbl *g_slotrec[MAXVARS];                                      // the record of each variable number (VREC)
 struct s_varmem g_varmem;                                                 // the globals' record chunks (MMBasic.h)
 static struct s_vartbl g_emptyrec;                                        // every free global slot's record
@@ -770,12 +769,26 @@ static int GetStructAlignment(struct s_structdef *sd)
  Includes the routines to initialise MMBasic, start running the interpreter, and to run a program in memory
 *********************************************************************************************************************************************/
 
-// every variable number's record with no global made: a local's in g_vartbl,
-// a global slot free (at boot, and whenever the globals go or the split moves)
+// every variable number's record with no global made: a local slot's in its
+// chunk if the stack has reached it, else (and every global slot) free; at
+// boot, and whenever the globals go or the split moves
 void InitVarSlots(void)
 {
     for (int i = 0; i < MAXVARS; i++)
-        g_slotrec[i] = i < maxlocalvars ? &g_vartbl[i] : &g_emptyrec;
+    {
+        struct s_vartbl *c = i < maxlocalvars ? g_varmem.lchunk[i / VARCHUNK] : NULL;
+        g_slotrec[i] = c != NULL ? &c[i % VARCHUNK] : &g_emptyrec;
+    }
+}
+
+// the local stack has reached chunk c of the local slots: its records, kept
+// for the run (they are cleared as their locals go)
+static void VarLocalChunk(int c)
+{
+    struct s_vartbl *r = (struct s_vartbl *)GetSRAMMemory(VARCHUNK * sizeof(struct s_vartbl));
+    g_varmem.lchunk[c] = r;
+    for (int k = 0; k < VARCHUNK && c * VARCHUNK + k < maxlocalvars; k++)
+        g_slotrec[c * VARCHUNK + k] = &r[k];
 }
 
 // a record of its own, not one of the placeholders shared by free and blocked slots
@@ -805,10 +818,13 @@ static void VarRecordsReset(void)
     InitVarSlots();
 }
 
-// one chunk of globals' records at RUN, at the top of the empty heap, so a
-// program with up to VARCHUNK globals cannot run out of heap making one
+// one chunk of globals' records and one of locals' at RUN, at the top of the
+// empty heap, so a program with up to VARCHUNK of each cannot run out of heap
+// making one
 void VarChunkSeed(void)
 {
+    if (g_varmem.lchunk[0] == NULL)
+        VarLocalChunk(0);
     if (g_varmem.chunks == 0)
     {
         struct s_vartbl *r = (struct s_vartbl *)GetSRAMMemory(VARCHUNK * sizeof(struct s_vartbl));
@@ -5937,6 +5953,8 @@ findvar_found:
             error("Dimensions");
     if (ifree >= maxlocalvars)
         VarRecordTake(ifree); // a global's record (see MMBasic.h)
+    else if (g_slotrec[ifree] == &g_emptyrec)
+        VarLocalChunk(ifree / VARCHUNK); // the local stack's first time this high
 #ifdef STRUCTENABLED
     unsigned char *structmem = NULL;
     if ((vtype & T_STRUCT) && dnbr != -1)
@@ -7275,7 +7293,7 @@ void MIPS16 cmd_localvars(unsigned char *p)
 {
     if (g_Globalvarcnt || g_Localvarcnt)
         error("Variables already declared");
-    int i = getint(p, 32, MAXLOCALVARS); // (g_vartbl holds the locals' records, for now)
+    int i = getint(p, 32, MAXLOCALLIST);
     maxlocalvars = i;
     maxglobalvars = MAXVARS - i;
     InitVarSlots(); // the slots each side of the new split
