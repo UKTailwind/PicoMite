@@ -130,8 +130,8 @@ extern "C"
 #define CHECK_STRUCT_MEMBER_ARRAY()                                              \
     do                                                                           \
     {                                                                            \
-        if ((VREC(g_VarIndex)->type & T_STRUCT) && g_StructMemberType != 0 && \
-            DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))                    \
+        if ((VREC(g_VarIndex)->type & T_STRUCT) && g_StructMemberType != 0 &&            \
+            DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))                             \
             StandardError(47);                                                   \
     } while (0)
 #else
@@ -400,6 +400,8 @@ extern "C"
     extern struct s_funtbl funtbl[MAXSUBFUN];
     extern struct s_vartbl g_vartbl[];
     #define VREC(i) (&g_vartbl[(i)]) // the record of variable i
+    // a short string is kept in its own record (val.s == &dimtbl[1]), not in the heap: never free it
+    #define VAR_INLINE_STR(r) ((void *)(r)->val.s == (void *)&(r)->dimtbl[1])
 
 #ifdef STRUCTENABLED
     extern struct s_structdef *g_structtbl[MAX_STRUCT_TYPES]; // Array of pointers, allocated per-type

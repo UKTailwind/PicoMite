@@ -305,7 +305,7 @@ _Static_assert(SYM_LEVELS > MAXGOSUB + 8, "SYM_LEVELS must exceed the SUB and GO
 #define SymLocalEvent(slot)                          \
     do                                               \
     {                                                \
-        unsigned int l_ = VREC(slot)->level;      \
+        unsigned int l_ = VREC(slot)->level;         \
         if (l_ < SYM_LEVELS)                         \
             SymLevelGen[l_] = ++SymBindEvent;        \
     } while (0)

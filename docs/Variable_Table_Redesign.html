@@ -214,7 +214,7 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <p>The index space stays as it is: slots below <code>maxlocalvars</code> are locals, the rest globals. So <code>g_VarIndex</code>, <code>SymG</code>, <code>SymL</code>, <code>SymLShadow</code>, <code>SymLCanon</code>, <code>g_hashlist</code> and the FOR/DO stacks keep their meaning. One accessor maps an index to its record:</p>
 <pre>#define VREC(i) ((i) &lt; maxlocalvars ? &amp;g_lchunk[(i) &gt;&gt; 5][(i) &amp; 31] \
                                      : g_gslot[(i) - maxlocalvars].rec)</pre>
-<p>findvar also sets <code>g_VarRec</code>, the record it found or made. Most of the ~300 uses of <code>g_vartbl[g_VarIndex]</code> become <code>g_VarRec-&gt;</code>, so the accessor is only needed by the code that walks the table by index.</p>
+<p>The ~350 uses of the variable findvar has just found take <code>VREC(g_VarIndex)</code>. A cached <code>g_VarRec</code>, set by findvar, was tried in phase 1 and dropped: solar_eclipse ran 0.8% slower on the RP2040 VGA and 1.6% slower on the PC3. Whether to cache the record is decided in phase 2, measured against the real <code>VREC</code>.</p>
 
 <h3>Creating, finding and erasing a global</h3>
 <ul>
@@ -232,7 +232,7 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 
 <h3>Things that must change with it</h3>
 <ul>
-<li><b>Short strings stored inside the record.</b> Once records are in the heap, every free site would treat <code>&amp;dimtbl[1]</code> as heap memory: ClearVars (MMBasic.c:6985-7001, 7024-7046), erase (7172-7181), and MMBasic.c:3042-3045, 3114 and 4495-4498. Each needs <code>val.s != (void *)&amp;rec-&gt;dimtbl[1]</code>, as MEMORY already checks (Memory.c:1593). This must land before records move.</li>
+<li><b>Short strings stored inside the record.</b> Once records are in the heap, every free site would treat <code>&amp;dimtbl[1]</code> as heap memory. Done in phase 1: <code>VAR_INLINE_STR(rec)</code> (<code>val.s == &amp;rec-&gt;dimtbl[1]</code>) guards ClearVars (locals, and the whole table), erase, a SUB's string argument and a FUNCTION's string result in MMBasic.c, and STATIC and CONST in Commands.c. The first survey missed STATIC and CONST. MEMORY already made the same check and now uses the macro. A struct parameter needs no guard: its data is always heap memory.</li>
 <li><b>SAVE CONTEXT</b> copies the slot table and chunk pointers instead of the table. The records are in the heap, which it already copies to the same address. Add a header (version, the global/local split) so an image left by older firmware is refused instead of restored blindly. That hazard exists today.</li>
 <li><b>Route B</b> (RBBindAll, Stream.c:3880-3921) takes <code>VREC(i)</code> instead of <code>&amp;g_vartbl[i]</code>. Its cache of record pointers stays valid because records never move.</li>
 <li><b>MEMORY</b> reports the slot table plus the records, which are now in the heap. "General" must not count them twice.</li>
@@ -303,9 +303,9 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <h2>Risks</h2>
 <div class="warnbox"><div class="eyebrow">Hazards to design for</div>
 <ul>
-<li><b>Short strings inside records</b> would be freed into the heap as if they were allocations. Guard every free site first (phase 1).</li>
+<li><b>Short strings inside records</b> would be freed into the heap as if they were allocations. Every free site is guarded (phase 1).</li>
 <li><b>Running out of heap while making a variable</b>: mitigated by seeding a chunk of each kind at RUN, and by keeping local chunks for the run.</li>
-<li><b>Width of the change</b>: about 615 lines in 27 files mention <code>g_vartbl</code>, and about 155 call findvar. Most uses follow findvar and become <code>g_VarRec</code>; the walkers (ClearVars, erase, LIST, MEMORY, SAVE CONTEXT, Route B binds, the symbol layer) need care. This is why phase 1 changes no behaviour.</li>
+<li><b>Width of the change</b>: about 615 lines in 27 files mention <code>g_vartbl</code>, and about 155 call findvar. Most uses follow findvar and take <code>VREC(g_VarIndex)</code>; the walkers (ClearVars, erase, LIST, MEMORY, SAVE CONTEXT, Route B binds, the symbol layer) need care. This is why phase 1 changes no behaviour.</li>
 <li><b>A record in PSRAM</b> would be slow and invisible to SAVE CONTEXT: the chunk allocator must use the SRAM heap only.</li>
 <li><b>Interrupt writers pointing at a LOCAL</b> already write into reused memory after the SUB returns. Heap records would make that worse, not new. See <a href="#found">Found on the way</a>.</li>
 </ul></div>
@@ -315,12 +315,13 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <h2>Phases</h2>
 <div class="phase"><div class="num">1<small>refactor</small></div><div>
 <h3>Accessors, no change in behaviour</h3>
-<p>findvar sets <code>g_VarRec</code>; sites use it; walkers use <code>VREC(i)</code>, defined for now as <code>&amp;g_vartbl[i]</code>. Add the short-string guard at every free site and the SAVE CONTEXT header.</p>
-<p class="meta">Gate: goldens identical on the RP2040 VGA and the PC3; bench_micro within noise; flash size noted.</p></div></div>
+<p>Every indexed use of <code>g_vartbl</code> goes through <code>VREC(i)</code>, defined for now as <code>&amp;g_vartbl[i]</code>: 664 sites in 22 files, and every object the same size as before on both builds. The short-string guard at every free site. The SAVE CONTEXT header is covered by the magic-number decision. A cached <code>g_VarRec</code> was tried and moved to phase 2 (see <a href="#design">Recommended design</a>).</p>
+<p class="meta">Gate: goldens identical on the RP2040 VGA and the PC3; solar_eclipse and bench_micro within noise; flash size noted.</p>
+<p class="meta">Result: goldens unchanged on both boards apart from timings (and webudp, now fixed). solar_eclipse 26.683 s on the VGA (b2 26.684 s) and 16.219 s on the PC3 (b2 16.207 s). Flash +72 bytes (VGA), +176 bytes (HDMIWEB).</p></div></div>
 <div class="phase"><div class="num">2<small>globals</small></div><div>
 <h3>Global slots and record chunks</h3>
 <p>The slot table, SRAM-only chunks of 32, the free list, the seeded chunk, the <code>PEEK</code>/<code>POKE VARTBL</code> emulation, MEMORY and LIST, and the chosen meaning of call-table 0x60.</p>
-<p class="meta">Gate: goldens; varcnt14, locvars6, symchain, rbf2, rbp5d; ERASE and REDIM, PIO MAKE RING BUFFER, STATIC, CONST short strings, VAR SAVE/RESTORE; bench_micro.</p></div></div>
+<p class="meta">Gate: goldens; varcnt14, locvars6, symchain, rbf2, rbp5d; ERASE and REDIM, PIO MAKE RING BUFFER, STATIC, CONST short strings, VAR SAVE/RESTORE; solar_eclipse and bench_micro.</p></div></div>
 <div class="phase"><div class="num">3<small>locals</small></div><div>
 <h3>The local record stack</h3>
 <p>Chunk pointers, the seeded chunk, chunks kept for the run, <code>OPTION LOCAL VARIABLES</code> as a cap.</p>
@@ -344,6 +345,7 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 <li><b>One chunk of globals and one of locals is seeded at RUN.</b></li>
 <li><b>Names stay 32 bytes in the record</b>; 8-byte names are not pursued now.</li>
 <li><b>SAVE CONTEXT:</b> the phase that changes its format also regenerates every build's magic number, so A: (and an old <code>/.vars</code>) is wiped on the first boot, as for any layout change.</li>
+<li><b>No <code>g_VarRec</code> in phase 1</b>: it cost 0.8% on solar_eclipse (VGA). It is reconsidered in phase 2.</li>
 </ol></div>
 </section>
 
@@ -364,7 +366,7 @@ static struct s_vartbl *g_gnext, *g_gend;                      // next unused re
 </ul>
 </section>
 
-<footer>Written for Peter's review, 2026-10-01. Branch development at 0b7528f (V7.0.00b2). No code was changed for this review.</footer>
+<footer>Written for Peter's review, 2026-10-01. Branch development at 0b7528f (V7.0.00b2). No code was changed for this review. Updated the same day after phase 1 on <code>compact-vars</code>.</footer>
 </div>
 </body>
 </html>

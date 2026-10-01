@@ -3056,7 +3056,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         if (argtype[i] & T_PTR)
         {
             // the argument supplied was a variable so we must setup the local variable as a pointer
-            if ((VREC(g_VarIndex)->type & T_STR) && VREC(g_VarIndex)->val.s != NULL)
+            if ((VREC(g_VarIndex)->type & T_STR) && VREC(g_VarIndex)->val.s != NULL && !VAR_INLINE_STR(VREC(g_VarIndex)))
             {
                 FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s); // free up the local variable's memory if it is a pointer to a string
             }
@@ -3128,7 +3128,8 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
     if (FunType & T_STR)
     {
-        FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s); // free the memory if it is a string
+        if (!VAR_INLINE_STR(VREC(g_VarIndex)))
+            FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s); // free the memory if it is a string
         VREC(g_VarIndex)->type |= T_PTR;
         g_LocalIndex--;                                       // allocate the memory at the previous level
         VREC(g_VarIndex)->val.s = tp = GetTempStrMemory(); // and use our own memory
@@ -7047,9 +7048,9 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 hashcurrent = g_hashlist[i].hash;
                 // Free memory for strings, arrays, and structs (but not pointers to caller's data)
 #ifdef STRUCTENABLED
-                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap) && !VAR_INLINE_STR(VREC(hashcurrent)))
 #else
-                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap) && !VAR_INLINE_STR(VREC(hashcurrent)))
 #endif
                 {
                     FreeMemorySafe((void **)&VREC(hashcurrent)->val.s);
@@ -7092,7 +7093,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
             if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0))) && !(VREC(i)->type & T_PTR))
 #endif
             {
-                if ((uint32_t)VREC(i)->val.s > (uint32_t)MMHeap && (uint32_t)VREC(i)->val.s < (uint32_t)MMHeap + heap_memory_size)
+                if ((uint32_t)VREC(i)->val.s > (uint32_t)MMHeap && (uint32_t)VREC(i)->val.s < (uint32_t)MMHeap + heap_memory_size && !VAR_INLINE_STR(VREC(i)))
                 {
                     FreeMemorySafe((void **)&VREC(i)->val.s); // free any memory (if allocated)
                 }
@@ -7263,7 +7264,7 @@ uint32_t erase(char *p, bool nofree)
             if (!nofree)
             {
                 // Check if in heap
-                if (addr > (uint32_t)MMHeap && addr < (uint32_t)MMHeap + heap_memory_size)
+                if (addr > (uint32_t)MMHeap && addr < (uint32_t)MMHeap + heap_memory_size && !VAR_INLINE_STR(VREC(j)))
                 {
                     FreeMemorySafe((void **)&VREC(j)->val.s);
                 }

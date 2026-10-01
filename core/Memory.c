@@ -1590,7 +1590,7 @@ void MIPS16 cmd_memory(void)
         }
         else if (VREC(var)->type & T_STR)
         {
-            if (VREC(var)->val.s != (void *)&RAW_DIM((*VREC(var)), 1))
+            if (!VAR_INLINE_STR(VREC(var)))
                 i += STRINGSIZE;
         }
     }

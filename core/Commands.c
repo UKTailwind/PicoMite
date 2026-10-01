@@ -8914,7 +8914,8 @@ void MIPS16 cmd_dim(void)
 				if (DimIsRealArray(RAW_DIM((*VREC(VIndexSave)), 0)) || (VREC(VIndexSave)->type & T_STR))
 #endif
 				{
-					FreeMemorySafe((void **)&tv);							 // we don't need the memory allocated to the local
+					if (!VAR_INLINE_STR(VREC(g_VarIndex)))
+						FreeMemorySafe((void **)&tv);						 // we don't need the memory allocated to the local
 					VREC(g_VarIndex)->val.s = VREC(VIndexSave)->val.s; // point to the memory of the global variable
 				}
 				else
@@ -8968,7 +8969,8 @@ void cmd_const(void)
 			{
 				if ((unsigned char)*(unsigned char *)v < (MAXDIM - 1) * sizeof(RAW_DIM((*VREC(g_VarIndex)), 1)))
 				{
-					FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s);
+					if (!VAR_INLINE_STR(VREC(g_VarIndex)))
+						FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s);
 					VREC(g_VarIndex)->val.s = (void *)&RAW_DIM((*VREC(g_VarIndex)), 1);
 				}
 				Mstrcpy((unsigned char *)VREC(g_VarIndex)->val.s, (unsigned char *)v);
