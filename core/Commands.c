@@ -3642,7 +3642,7 @@ int MIPS16 VerifyLineSkipBytes(unsigned char *start)
 }
 */
 #if LOWRAM
-void cmd_if(void)
+void MIPS16 __not_in_flash_func(cmd_if)(void) // (in RAM on LOWRAM too since the RAM review of 2026-10-02)
 {
 #else
 #ifdef rp2350
@@ -5205,7 +5205,7 @@ void __not_in_flash_func(cmd_for)(void)
 }
 
 #if LOWRAM
-void cmd_next(void)
+void cmd_next(void) // (tried in RAM 2026-10-02: la_24_2 1.8% slower, 6% with cmd_if also in RAM)
 {
 #else
 #ifdef rp2350
