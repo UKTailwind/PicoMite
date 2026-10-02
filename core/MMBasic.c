@@ -4345,13 +4345,12 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
 }
 // search through program memory looking for a line number. Stops when it has a matching or larger number
 // returns a pointer to the T_NEWLINE token or a pointer to the two zero characters representing the end of the program
-unsigned char MIPS16 *findline(int nbr, int mustfind)
+// (the walk, for a line the index does not have: in flash, and not inlined into findline in RAM)
+static __attribute__((noinline)) unsigned char MIPS16 *findline_walk(int nbr, int mustfind)
 {
     unsigned char *p;
     unsigned char *next;
     int i, j = 0;
-    if (mustfind && NameIndex != NULL && (p = LineFind(nbr)) != NULL)
-        return p; // (a target the index has: see LineTargets)
     p = ProgMemory;
     next = LibMemory;
     if (LibPresent())
@@ -4452,6 +4451,16 @@ unsigned char MIPS16 *findline(int nbr, int mustfind)
     if (mustfind && i != nbr)
         error("Line number");
     return p;
+}
+
+// a line by its number: a target the index has (see LineTargets) is found in
+// RAM straight away, anything else by the walk
+unsigned char __not_in_flash_func (*findline)(int nbr, int mustfind)
+{
+    unsigned char *p;
+    if (mustfind && NameIndex != NULL && (p = LineFind(nbr)) != NULL)
+        return p;
+    return findline_walk(nbr, mustfind);
 }
 // The line (its T_NEWLINE) of the label at labelptr (a symbol or text), from the
 // name index; an error if there is none.  A label is global: one name, one line,
