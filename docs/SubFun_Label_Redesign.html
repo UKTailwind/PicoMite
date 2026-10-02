@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>One Name Index</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+</head>
+<body>
+<header class="hero"><div class="wrap">
+<div class="eyebrow">SUBs, FUNCTIONs and labels &middot; design for review</div>
+<h1>One name index for both chips</h1>
+<p>The RP2350 finds a SUB, FUNCTION or label through an 18 KB static hash table that stores a copy of every name. The RP2040 cannot afford that table, so it sorts its SUB list and binary-searches it, and finds a label by reading the program line by line. This review proposes one structure for both chips, built the way the variable table now is: a small index sized to the program, made in the heap, holding no copies of names. It frees about 20 KB of static RAM on every RP2350 build, makes the RP2040's text lookups as fast as the RP2350's, and fixes a heap cost found on the way that can take 10-60 KB of an RP2040's heap.</p>
+<p class="ref">Branch development at 0036a7e (V7.0.00b3) &middot; evidence: three read-only code surveys (SUB/FUNCTION lookup, labels and line numbers, the symbol layer and Route B), a count of the names in the 83 programs over 8 KB in Bas/, and timings on the RP2040 VGA (COM20, 315 MHz) and the PC3 (HDMIWEB, 315 MHz) on 2026-10-02. No code has been changed.</p>
+</div></header>
+<div class="wrap">
+<nav class="toc">
+<a href="#summary">Summary</a><a href="#today">How it works today</a><a href="#cost">What it costs</a><a href="#usage">What programs use</a><a href="#design">Recommended design</a><a href="#memory">Memory</a><a href="#speed">Speed</a><a href="#compat">Behaviour</a><a href="#risks">Risks</a><a href="#phases">Phases</a><a href="#decide">Decisions</a><a href="#found">Found on the way</a>
+</nav>
+
+<section id="summary">
+<div class="eyebrow">Summary</div>
+<h2>What to do, and why</h2>
+<p class="lede">Replace the RP2350's <code>funtbl</code> and the RP2040's sorted list and label scan with one index of 8-byte slots, built in the heap when a program is prepared, sized to its names. A slot holds a 16-bit hash, the name's length, its kind and its target; the name itself is read from the program when a hash matches. The symbol layer's per-name caches stay as the fast path in front of it.</p>
+<div class="grid2">
+<div class="card"><h3>RP2350: about 20 KB of RAM back</h3>
+<p><code>funtbl</code> (18,432 bytes) and <code>subfun[]</code> (2,048 bytes) are static on every RP2350 build whether a program has two SUBs or five hundred. The index costs 128 bytes for a small program and 4 KB for Elite, from the heap. The 20 KB goes to the heap as the variable table's did.</p></div>
+<div class="card"><h3>RP2040: fast text lookups</h3>
+<p>Without symbols, a SUB call costs 6-15 &micro;s more on the RP2040 than with them, growing with the number of SUBs, and a label 300 lines away costs 57 &micro;s against 4 &micro;s. A hash makes both constant: the RP2350 shows the text path within about 1 &micro;s of the symbol path at any size.</p></div>
+<div class="card"><h3>One code path</h3>
+<p>Two versions of <code>FindSubFunText</code>, two of <code>findlabel_text</code>, a bubble sort and a first-letter index on the RP2040, <code>hashlabels</code> on the RP2350: all go, and both chips find names, order <code>subfun[]</code> and resolve clashes the same way.</p></div>
+<div class="card"><h3>Found on the way: SUB layouts</h3>
+<p>Each SUB's parameter layout, read on its first call, takes at least a 256-byte heap page. 40 SUBs called once took 11 KB of the RP2040 VGA's heap; an Elite-sized program would take 66 KB. Packing the layouts into chunks cuts that to a few KB.</p></div>
+</div>
+<p>Five phases, each tested on the RP2040 VGA and the PC3. Seven decisions are needed (see <a href="#decide">Decisions</a>), and the review found nine other problems along the way (see <a href="#found">Found on the way</a>), two of which matter for speed today.</p>
+</section>
+
+<section id="today">
+<div class="eyebrow">How it works today</div>
+<h2>Two chips, two designs</h2>
+<h3>The parts both chips share</h3>
+<ul>
+<li><code>subfun[MAXSUBFUN]</code> (MMBasic.c:136): a pointer to each SUB, FUNCTION and CSUB definition, library first then program, built by <code>PrepareProgramExt</code>. MAXSUBFUN is 512 on the RP2350 and 256 on the RP2040. Route B, the parameter layouts, the profiler and interrupt dispatch all use its index or its pointers.</li>
+<li><b>The symbol layer's caches</b> (Symbols.h:188-237), made lazily in the heap at each <code>PrepareProgram</code>:
+<ul><li><code>SymS[k]</code>: the <code>subfun[]</code> index for name k (or -1, cached too). Every SUB call, FUNCTION call and array reference whose name is a symbol goes through it (<code>FindSubFun</code>, MMBasic.c:2494-2515).</li>
+<li><code>SymCold[k].labind</code>: the line of label k, used by GOTO, GOSUB and IF ... GOTO when the operand is a symbol (<code>findlabel</code>, MMBasic.c:4526-4536).</li></ul>
+With symbols, then, the table behind them is used once per name per run. Without symbols it is used on every execution.</li>
+<li><b>Parameter layouts</b> (<code>SubLay</code>, MMBasic.c:2668-2801): a SUB's parameter list, read on its first call and kept, one heap allocation per SUB.</li>
+</ul>
+
+<h3>Where names are still looked up as text</h3>
+<p>The text path is not rare. It is taken by:</p>
+<ul>
+<li>every program run with <code>OPTION SYMBOLS OFF</code>, saved by older firmware, or saved as text because its names did not fit the symbol collector (see <a href="#found">Found on the way</a>: on the RP2040 this happens to an AUTOSAVEd program at about 500 names);</li>
+<li>commands that are not symbol-aware: <code>ON x GOTO/GOSUB</code>, <code>RESTORE label</code>, <code>CALL "name"</code> and <code>CALL()</code>, on every execution;</li>
+<li>the command prompt, <code>EXECUTE</code>, <code>MM.PROMPT</code> (every prompt line), <code>MM.END</code>, <code>MM.STARTUP</code>, and the user display driver's <code>MM.USER_RECTANGLE</code> and <code>MM.USER_BITMAP</code> (on every drawing call);</li>
+<li>interrupt setup (<code>SETTICK</code>, <code>SETPIN</code>, <code>ON KEY</code> and about thirty others), once per setup.</li>
+</ul>
+
+<div class="tablewrap"><table>
+<tr><th>&nbsp;</th><th>RP2350</th><th>RP2040</th></tr>
+<tr><td>SUB/FUNCTION text lookup</td><td>FNV-1a hash of the upper-cased name, <code>% 512</code>, linear probe in <code>funtbl</code>, comparing against the name stored there (MMBasic.c:2353-2413)</td><td>count <code>subfun[]</code> to its NULL on every call, then a binary search within the first letter's range, comparing against the name in the program (2415-2490)</td></tr>
+<tr><td>Label text lookup</td><td>the same <code>funtbl</code>: labels share it with SUBs, told apart by <code>index &ge; MAXSUBFUN</code> (4346-4410)</td><td>read the program line by line from the start of the current module, comparing every <code>T_LABEL</code> (4413-4522)</td></tr>
+<tr><td>Line numbers (<code>findline</code>)</td><td colspan="2">a walk from the start of the module on every call, on both chips, with no cache (4149-4254)</td></tr>
+<tr><td>Built</td><td><code>memset</code> of 18 KB and a rehash of every name and label at every <code>PrepareProgram</code> (1092-1151, <code>hashlabels</code> 4257-4340)</td><td>a bubble sort of <code>subfun[]</code> and a first-letter index at every <code>PrepareProgram</code> (1042-1088)</td></tr>
+<tr><td>How often built</td><td colspan="2"><code>PrepareProgram</code> runs at RUN, CHAIN, LOAD, LIBRARY, EDIT and <b>before every line typed at the prompt</b> (PicoMite.c:4571)</td></tr>
+<tr><td>Limits</td><td>511 SUBs, FUNCTIONs, CSUBs <i>and labels</i> together</td><td>256 SUBs, FUNCTIONs and CSUBs; labels unlimited</td></tr>
+<tr><td>Static RAM</td><td>20,480 bytes (<code>funtbl</code> + <code>subfun</code>)</td><td>1,128 bytes (<code>subfun</code> + the letter index)</td></tr>
+</table></div>
+<p class="ref">FindSubFun is in RAM on every build except the RP2040 WebMite, whose RAM is too short; the code is the same.</p>
+</section>
+
+<section id="cost">
+<div class="eyebrow">What it costs</div>
+<h2>Measured on both boards</h2>
+<p>A test program timed GOSUB to a label just after the loops ("near") and to one 300 lines further on ("far"), and calls to the first and last of 100 SUBs and 100 FUNCTIONs whose names begin with the same letter. A second version had 10 of each. Microseconds per call, empty loop subtracted, both boards at 315 MHz.</p>
+<div class="tablewrap"><table>
+<tr><th>&nbsp;</th><th class="num">RP2040, symbols</th><th class="num">RP2040, text</th><th class="num">RP2350, symbols</th><th class="num">RP2350, text</th></tr>
+<tr><td>GOSUB, near label</td><td class="num">4.4</td><td class="num">7.8</td><td class="num">4.4</td><td class="num">4.9</td></tr>
+<tr class="rec"><td>GOSUB, far label</td><td class="num">4.4</td><td class="num">57-61</td><td class="num">4.4</td><td class="num">5.2</td></tr>
+<tr><td>SUB call, 20 SUBs and FUNCTIONs in the program</td><td class="num">13.7</td><td class="num">19.3</td><td class="num">6.7</td><td class="num">7.7</td></tr>
+<tr class="rec"><td>SUB call, 200 in the program</td><td class="num">&mdash;</td><td class="num">28.3</td><td class="num">7.0</td><td class="num">7.7</td></tr>
+<tr><td>FUNCTION call, 20 in the program</td><td class="num">33.4</td><td class="num">&mdash;</td><td class="num">18.1</td><td class="num">20.4</td></tr>
+<tr class="rec"><td>FUNCTION call, 200 in the program</td><td class="num">&mdash;</td><td class="num">55-56</td><td class="num">18.4</td><td class="num">20.8</td></tr>
+</table></div>
+<p>The first and the hundredth SUB cost the same on both chips: the RP2040's cost grows with the <i>number</i> of SUBs (the count of <code>subfun[]</code> on every call), not with a SUB's place in the list. The RP2040 cannot give a symbols figure for the 200-SUB program: it saved that program as text (3 symbol bytes in its image against 307 in the 20-SUB one), which is itself a finding (<a href="#found">Found on the way</a>, item 1). On the RP2350 the hash keeps the text path within about a microsecond of the symbol path at any size.</p>
+
+<h3>The parameter layouts</h3>
+<p>A program calling 40 different SUBs of two parameters, once each:</p>
+<div class="tablewrap"><table>
+<tr><th>Board</th><th class="num">Heap before</th><th class="num">After</th><th class="num">Taken</th><th class="num">Per SUB</th></tr>
+<tr class="rec"><td>RP2040 VGA</td><td class="num">116,480</td><td class="num">105,216</td><td class="num">11,264</td><td class="num">282</td></tr>
+<tr><td>PC3 (PSRAM)</td><td class="num">6,473,216</td><td class="num">6,460,928</td><td class="num">12,288</td><td class="num">307</td></tr>
+</table></div>
+<p>A layout is 12 bytes, 16 per parameter and the parameter names, typically 40-100 bytes, but each is its own allocation and the heap gives whole 256-byte pages; the table of layouts adds 1 KB (RP2040) or 2 KB (RP2350) on the first call. On the PC3 it comes from PSRAM and does not matter. On an RP2040 it comes out of the program's own heap: a program calling 100 SUBs loses about 27 KB of the VGA's 120 KB, and Elite or the Prince of Persia port, called in full, about 66 KB. This arrived with V7 (P6 F1), so it can stop a 6.04 program that fitted.</p>
+</section>
+
+<section id="usage">
+<div class="eyebrow">What programs use</div>
+<h2>Names in real programs</h2>
+<p>The 83 programs over 8 KB in Bas/ (games, ports, tests, libraries), counted from their source:</p>
+<div class="tablewrap"><table>
+<tr><th>Program</th><th class="num">Lines</th><th class="num">SUB</th><th class="num">FUNCTION</th><th class="num">Labels</th><th class="num">Longest name</th></tr>
+<tr><td>Elite port</td><td class="num">4,732</td><td class="num">201</td><td class="num">59</td><td class="num">4</td><td class="num">18</td></tr>
+<tr><td>Prince of Persia port (player)</td><td class="num">6,190</td><td class="num">171</td><td class="num">81</td><td class="num">2</td><td class="num">17</td></tr>
+<tr><td>Arkanoid</td><td class="num">2,149</td><td class="num">57</td><td class="num">3</td><td class="num">12</td><td class="num">13</td></tr>
+<tr><td>Thrust</td><td class="num">2,378</td><td class="num">51</td><td class="num">6</td><td class="num">9</td><td class="num">18</td></tr>
+<tr><td>Exile physics</td><td class="num">1,587</td><td class="num">42</td><td class="num">17</td><td class="num">56</td><td class="num">25</td></tr>
+<tr><td>Chuckie Egg</td><td class="num">1,771</td><td class="num">33</td><td class="num">8</td><td class="num">8</td><td class="num">12</td></tr>
+</table></div>
+<ul>
+<li>The largest needs 264 entries (Elite, with its labels): <b>more than the RP2040's 256</b>. The Prince of Persia port needs 254.</li>
+<li>Most programs have a few dozen SUBs and FUNCTIONs and a handful of labels; a few use many labels (Exile physics 56, a data table 53).</li>
+<li>Names average 9 characters; the longest is 25. <code>funtbl</code> keeps 32 bytes for each.</li>
+<li>Names are fixed for a run: unlike variables they are never created or erased, so the index can be sized exactly when the program is prepared.</li>
+</ul>
+</section>
+
+<section id="design">
+<div class="eyebrow">Recommended design</div>
+<h2>A name index sized to the program</h2>
+<h3>The index</h3>
+<pre><code>struct s_nameslot {          // 8 bytes; no name stored
+    uint16_t hash16;         // the top 16 bits of the FNV-1a hash of the upper-cased name
+    uint8_t  len;            // its length (1-31)
+    uint8_t  kind;           // 0 empty, SUB (and CSUB), FUNCTION, LABEL; a library bit
+    uint32_t target;         // a subfun[] index, or the T_NEWLINE of the label's line
+};
+static struct s_nameslot *NameIndex;   // in the heap, a power of two of slots
+static int NameMask;                   // slots - 1</code></pre>
+<ul>
+<li><b>Built</b> in <code>PrepareProgram</code>, after <code>PrepareProgramExt</code> has made <code>subfun[]</code>: one pass over <code>subfun[]</code> and one over the line headers for <code>T_LABEL</code>, library first, as today.</li>
+<li><b>Sized</b> to the next power of two at least twice the entries (minimum 16), so the table is at most half full and a probe rarely takes more than two slots. Slot = hash &amp; mask: no division.</li>
+<li><b>Found</b> by hashing the name as <code>findvar</code> already does, probing while slots are full, and accepting a slot whose hash16, length and kind match <i>and</i> whose name, read through <code>NameView</code> at the definition (after the SUB token, or the <code>T_LABEL</code> text), is the same ignoring case. The comparison runs only on a hash match: the variable-table review found length plus hash16 separated every name in six programs.</li>
+<li><b>Kinds</b> replace the <code>index &lt; MAXSUBFUN</code> trick that tells a SUB from a label today, so a label and a SUB of the same name stay possible, as now.</li>
+<li><b>Duplicates</b> are found while building, in one pass, replacing the RP2350's O(n&sup2;) pairwise check and the RP2040's sort-and-compare.</li>
+<li><b>Memory</b>: the SRAM heap (<code>GetSRAMMemory</code>), 128 bytes to 4 KB. At RUN it is made just after the heap is wiped, so it sits at the top with the variables' first chunks.</li>
+</ul>
+
+<h3>Around it</h3>
+<ul>
+<li><b>One <code>FindSubFunText</code> and one <code>findlabel_text</code></b>, on both chips, both a probe of the index. The RP2040's sort, letter index, binary search and line scan go, and with them its per-call count of <code>subfun[]</code>.</li>
+<li><b><code>subfun[]</code> keeps program order on both chips</b> (library, then program). The RP2040 sorted it only for the binary search. Route B already depends on this order on the RP2350.</li>
+<li><b>The symbol caches stay</b>: <code>SymS</code> and <code>labind</code> remain the fast path, filled from the index on first use instead of from <code>funtbl</code> or a scan.</li>
+<li><b>Lifetime</b>: forgotten when the heap is wiped (a hook in <code>InitHeap</code>, beside <code>SymBindForget</code> and <code>VarChunksForget</code>) and rebuilt by the next <code>PrepareProgram</code>. At the prompt, where <code>PrepareProgram(false)</code> runs before every line, it is rebuilt only when the program or library image has changed (a stamp of the two image pointers and their save counts), so typing commands does not churn the heap.</li>
+<li><b>SAVE CONTEXT and CHAIN</b>: the index is not part of a context. After <code>RestoreContext</code> puts back the old heap, the index is forgotten and rebuilt for the current program, as the symbol bindings are (Commands.c:4543-4544). See <a href="#found">Found on the way</a>, item 2, for the IF table, which needs the same.</li>
+<li><b>If the heap is full</b> when the index is needed (possible only at the prompt, after a program has filled it): <code>PrepareProgram(false)</code> leaves it absent and the text lookups say so with "Not enough memory", like any allocation. A program being RUN always has an empty heap to make it in.</li>
+</ul>
+
+<h3>The parameter layouts, packed</h3>
+<p>The layouts move into the same kind of chunk the variables use: a few 1 KB blocks taken from the heap (the PSRAM on the RP2350, as now) and filled from the bottom, all freed together where the layouts are freed today (<code>SymBindFree</code>). The table of layout pointers is sized to the number of SUBs rather than MAXSUBFUN. 40 two-parameter SUBs then take about 2.5 KB rather than 11 KB on the RP2040.</p>
+
+<h3><code>subfun[]</code> in the heap</h3>
+<p>Once nothing static is sized by it, <code>subfun[]</code> itself can be made in the heap with the index, exactly as long as the program needs, and <code>MAXSUBFUN</code> becomes a cap rather than a reservation. Its other users (the profiler's three arrays and the layout table) can be sized by the count; the width of the index field in Route B's call records must be checked against the new cap. The cap can then be the same on both chips, high enough for Elite's 260.</p>
+
+<h3>Optional: line numbers</h3>
+<p><code>findline</code> walks the program on both chips for every <code>GOTO 100</code>, <code>GOSUB</code>, <code>RESTORE</code> and <code>IF ... THEN 100</code>. A program that uses line numbers could have them indexed the same way (a slot per numbered line, made only when the program has numbered lines). Old-style programs would gain most; few V7 programs use them. Left as an option.</p>
+</section>
+
+<section id="memory">
+<div class="eyebrow">Memory</div>
+<h2>What moves</h2>
+<div class="tablewrap"><table>
+<tr><th>&nbsp;</th><th class="num">RP2350 today</th><th class="num">RP2350 proposed</th><th class="num">RP2040 today</th><th class="num">RP2040 proposed</th></tr>
+<tr><td>Static RAM</td><td class="num">20,480</td><td class="num">0</td><td class="num">1,128</td><td class="num">0</td></tr>
+<tr><td>Index, 30 names (typical)</td><td class="num">&mdash;</td><td class="num">512</td><td class="num">&mdash;</td><td class="num">512</td></tr>
+<tr><td>Index, 264 names (Elite)</td><td class="num">&mdash;</td><td class="num">4,096</td><td class="num">&mdash;</td><td class="num">4,096</td></tr>
+<tr><td><code>subfun[]</code> in the heap</td><td class="num">&mdash;</td><td class="num">4 per SUB</td><td class="num">&mdash;</td><td class="num">4 per SUB</td></tr>
+<tr class="rec"><td>Layouts, 40 SUBs called</td><td class="num">12,288 (PSRAM)</td><td class="num">~2,500 (PSRAM)</td><td class="num">11,264</td><td class="num">~2,500</td></tr>
+<tr class="rec"><td>Layouts, Elite-sized</td><td class="num">~66,000 (PSRAM)</td><td class="num">~16,000 (PSRAM)</td><td class="num">~66,000</td><td class="num">~16,000</td></tr>
+</table></div>
+<ul>
+<li><b>RP2350</b>: the 20 KB of static RAM can go to the heap in whole 4 KB steps, leaving about 4 KB for the stack as before: +16 or +20 KB per build. A program pays 0.1-4 KB of it back for its index.</li>
+<li><b>RP2040</b>: 1.1 KB of static RAM is less than a 4 KB step, so the RP2040's gain is the layouts: 9 KB for a program calling 40 SUBs, tens of KB for a large one. The index costs about what <code>subfun[]</code> did.</li>
+<li>A heap-size change changes the SAVE CONTEXT image, so the release that makes it needs new magic numbers, as b3 did.</li>
+</ul>
+</section>
+
+<section id="speed">
+<div class="eyebrow">Speed</div>
+<h2>What gets faster</h2>
+<ul>
+<li><b>RP2040, text lookups</b>: a SUB call without symbols should drop from 19-28 &micro;s to about the symbol figure plus a microsecond or two, independent of the number of SUBs; a FUNCTION call likewise; a label from 57-61 &micro;s to about 5-7 &micro;s. The RP2350's own figures show what a hash costs on the text path. This covers every program without symbols, and in every program <code>ON x GOTO</code>, <code>RESTORE label</code>, <code>CALL</code>, <code>MM.PROMPT</code> and the user display driver's calls.</li>
+<li><b>RP2040, with symbols</b>: unchanged once a name is cached; its first lookup gets cheaper.</li>
+<li><b>RP2350</b>: unchanged on lookups. <code>PrepareProgram</code> no longer clears 18 KB and rehashes every name before each line typed at the prompt.</li>
+<li><b>Both</b>: building the index is one pass over the SUBs and the line headers, cheaper than the RP2040's bubble sort and the RP2350's memset and pairwise duplicate check.</li>
+</ul>
+</section>
+
+<section id="compat">
+<div class="eyebrow">Behaviour</div>
+<h2>What a program could notice</h2>
+<div class="tablewrap"><table>
+<tr><th>Case</th><th>Today</th><th>Proposed</th></tr>
+<tr><td>A label in both the library and the program</td><td>RP2350: the library's always; RP2040: the current module's first. A symbol's cache then keeps whichever was found first, for both modules.</td><td>One rule on both chips (decision 2)</td></tr>
+<tr><td>Two labels of the same name</td><td>no error; the first found wins, which differs by chip</td><td>an error at RUN, or first wins (decision 3)</td></tr>
+<tr><td>A SUB and a label of the same name</td><td>allowed; interrupts take the SUB</td><td>unchanged</td></tr>
+<tr><td>Order of <code>subfun[]</code></td><td>RP2350 program order; RP2040 alphabetical</td><td>program order on both: only the profiler's report order changes on the RP2040</td></tr>
+<tr><td>Too many names</td><td>RP2350: 511 SUBs, FUNCTIONs and labels; RP2040: 256 SUBs and FUNCTIONs</td><td>one cap for SUBs and FUNCTIONs on both chips (decision 5); labels uncapped</td></tr>
+<tr><td>A name of 32 or more characters</td><td>refused when the program is saved, on both chips</td><td>unchanged</td></tr>
+</table></div>
+<p>Nothing outside <code>MMBasic.c</code> reads <code>funtbl</code>: it is not in the CSUB call table, <code>PicoCFunctions.h</code>, MEMORY, LIST or a saved context.</p>
+</section>
+
+<section id="risks">
+<div class="eyebrow">Risks</div>
+<h2>Hazards to design for</h2>
+<ul>
+<li><b>A heap table across SAVE/RESTORE CONTEXT.</b> CHAIN prepares the new program in a fresh heap, then <code>RestoreContext</code> puts the old heap back over it. Anything <code>PrepareProgram</code> made in the heap must be forgotten and remade after the restore. The symbol bindings do this; the IF table appears not to (Found on the way, 2).</li>
+<li><b>RAM FILE LOAD</b> nulls <code>subfun[]</code> while the program keeps running (FileIO.c:861-879 documents it). Today the RP2350's stale <code>funtbl</code> would point the lookup at a NULL definition; the fix there (<code>PrepareProgram(true)</code>) must stay.</li>
+<li><b>Interrupt vectors</b> hold the address of the definition or label line in the program image, copied from <code>subfun[i]</code> when the interrupt is set up, not a pointer into <code>subfun[]</code>; moving <code>subfun[]</code> into the heap does not affect them.</li>
+<li><b>Route B</b> stores <code>subfun[]</code> indices in persisted streams and reuses a stream when the images' CRCs match; the order must stay library-then-program, which it already is on the RP2350.</li>
+<li><b>The prompt</b>: a heap filled by a program that has ENDed may have no room for an index; the design gives an error rather than a second, slower search, so there is only one path to maintain.</li>
+<li><b>Width of the change</b>: <code>FindSubFunText</code>, <code>findlabel_text</code>, <code>hashlabels</code>, the <code>funtbl</code> build in <code>PrepareProgram</code>, <code>findvar</code>'s SUB-name clash check (which probes <code>funtbl</code> on the RP2350 and scans <code>subfun[]</code> on the RP2040: both become an index probe), and <code>GetIntAddress</code>. All in <code>MMBasic.c</code> except <code>GetIntAddress</code>.</li>
+</ul>
+</section>
+
+<section id="phases">
+<div class="eyebrow">Phases</div>
+<h2>Five steps, each tested on both boards</h2>
+<div class="phase"><div class="num">1<small>index</small></div><div>
+<h3>One name index for SUBs, FUNCTIONs, CSUBs and labels</h3>
+<p>The index in the heap; one <code>FindSubFunText</code> and one <code>findlabel_text</code>; <code>findvar</code>'s clash check on the index; <code>subfun[]</code> in program order on both chips; <code>funtbl</code>, <code>hashlabels</code>, the RP2040 sort, letter index and label scan removed; rebuilt after <code>RestoreContext</code>.</p>
+<p class="meta">Gate: goldens on both boards; the lookup timings above with and without symbols; a library with SUBs and labels; CHAIN and SAVE/LOAD CONTEXT; SETTICK and SETPIN to a SUB and to a label; ON GOTO, RESTORE label, CALL, EXECUTE, MM.PROMPT and MM.END; "Duplicate name" and the too-many error; solar_eclipse.</p></div></div>
+<div class="phase"><div class="num">2<small>layouts</small></div><div>
+<h3>Packed parameter layouts</h3>
+<p>Layouts in chunks, the layout table sized to the SUBs.</p>
+<p class="meta">Gate: the 40-SUB heap test; rbf2, rbp5d, static5; deep recursion; Elite and the Prince of Persia port on the PC3.</p></div></div>
+<div class="phase"><div class="num">3<small>subfun</small></div><div>
+<h3><code>subfun[]</code> in the heap, one cap</h3>
+<p><code>subfun[]</code> and the profiler's arrays sized to the program; one MAXSUBFUN cap on both chips.</p>
+<p class="meta">Gate: as phase 1, plus OPTION PROFILING ON and a program with more SUBs than the RP2040's 256.</p></div></div>
+<div class="phase"><div class="num">4<small>heap</small></div><div>
+<h3>The RP2350's 20 KB to the heap</h3>
+<p>Whole 4 KB steps, about 4 KB left for the stack, <code>MAX_PROG_SIZE</code> unchanged; new magic numbers in that release.</p>
+<p class="meta">Gate: every build's fit check; goldens; the games on the PC3.</p></div></div>
+<div class="phase"><div class="num">5<small>optional</small></div><div>
+<h3>Afterwards, if wanted</h3>
+<p>A line-number index for <code>findline</code>; making <code>ON</code>, <code>RESTORE</code> and <code>CALL</code> symbol-aware so they use the caches.</p></div></div>
+</section>
+
+<section id="decide">
+<div class="eyebrow">Decisions</div>
+<h2>For Peter</h2>
+<div class="decide"><div class="eyebrow">Decided, 2026-10-02</div>
+<ol>
+<li><b>One index</b> for SUBs, FUNCTIONs, CSUBs and labels, with a kind byte.</li>
+<li><b>The current module's label wins</b> when the library and the program both have it, on both chips.</li>
+<li><b>A duplicate label is an error</b> when the program is prepared, like a duplicate SUB name. (A label in the library and one of the same name in the program are not duplicates: decision 2 chooses between them.)</li>
+<li><b>No fallback search</b>: if there is no room for the index, the lookup says "Not enough memory".</li>
+<li><b>The caps stay</b>: 512 SUBs, FUNCTIONs and CSUBs on the RP2350, 256 on the RP2040. Labels are not capped.</li>
+<li><b>The RP2350's freed RAM goes to the heap</b> in phase 4, with new magic numbers in that release.</li>
+<li><b>The AUTOSAVE symbol collector and the parameter layouts are fixed as part of this work</b>, which is for the b4 release.</li>
+</ol></div>
+</section>
+
+<section id="found">
+<div class="eyebrow">Found on the way</div>
+<h2>From the surveys and the measurements</h2>
+<ol>
+<li><b>AUTOSAVE saves a program of about 500 names as text on the RP2040, silently.</b> AUTOSAVE takes all but about 11 KB of the heap for its buffer (FileIO.c:7074), so the symbol collector gets only its smallest block, 8 KB (<code>SymBegin</code>, Symbols.c:731-760). At about 500 names that block overflows and the save falls back to text, without trying the borrowed space after the source that LOAD uses. Such a program then runs every name lookup as text: the 821-line test program above did. Fix: on overflow of an owned block, retry with the borrowed space, or let AUTOSAVE leave the collector room.</li>
+<li><b>CHAIN may leave the IF table pointing into the restored heap.</b> CHAIN's <code>PrepareProgram(true)</code> builds the IF/ENDIF table in the fresh heap, then <code>RestoreContext</code> restores the old heap over it, and nothing rebuilds it (inferred from the code, not reproduced).</li>
+<li><b>Parameter layouts take a 256-byte page each</b> (above): 11 KB of the RP2040 VGA's heap for 40 SUBs, up to about 66 KB for a large program.</li>
+<li><b>A label's cache is shared by the library and the program</b>: the first image searched wins, and later GOTOs from the other module get that answer.</li>
+<li><b>Duplicate labels are never reported</b>, and the chips pick different ones.</li>
+<li><b><code>GetIntAddress</code> accepts a CSUB</b> as an interrupt target (<code>FindSubFun(p, 0)</code> takes SUB or CSUB); interrupt dispatch then treats it as a label.</li>
+<li><b><code>findlabel(NULL)</code> in ClearRuntime does nothing</b>: the comment "clear the label cache" is left from older code.</li>
+<li><b>Dead and misleading code</b>: an unreachable length check and <code>return</code> in the RP2350 funtbl build and <code>findlabel_text</code>; a suffix test in the RP2040 <code>FindSubFunText</code> that is always true; <code>findline</code>'s header says it returns the line start but it returns the line-number byte.</li>
+<li><b>Two comments disagree with the code</b>: Symbols.h:210-213 says the bindings' hot block is always in SRAM (it moves to PSRAM over 4 KB), and Symbols.c:443-445 says the bindings take "3-5 KB" (Elite's take about 33 KB).</li>
+</ol>
+</section>
+
+<footer>Written for Peter's review, 2026-10-02. Branch development at 0036a7e (V7.0.00b3). Timings: Bas test programs <code>lkup</code> (200 SUBs and FUNCTIONs) and <code>lkup10</code> (20), with and without <code>OPTION SYMBOLS OFF</code>, and <code>subheap</code> (40 SUBs). No code was changed for this review.</footer>
+</div>
+</body>
+</html>
