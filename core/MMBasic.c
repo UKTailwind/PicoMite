@@ -5228,7 +5228,7 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
    reference to an existing variable through a bound symbol - nearly every
    variable a program saved with symbols reads or writes - is answered here,
    in RAM.  Anything else (a name in text, a declaration, a variable to be
-   made, a TYPE, profiling, a suffix that does not match) goes to
+   made, a TYPE, a suffix that does not match) goes to
    findvar_slow, in flash, which is findvar as it was.  It is handed over
    before an index is evaluated, so nothing is evaluated twice, and the
    errors are the ones findvar_slow gives. */
@@ -5240,7 +5240,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     int symk, i, n, vtype = 0, dnbr = 0, deferred = 0;
     int dim[MAXDIM];
     skipspace(q);
-    if (!issymbol(*q) || (action & (V_LOCAL | V_DIM_VAR | V_DIM_NEW | V_FUNCT | T_IMPLIED)) || g_option_profiling)
+    if (!issymbol(*q) || (action & (V_LOCAL | V_DIM_VAR | V_DIM_NEW | V_FUNCT | T_IMPLIED)))
         return findvar_slow(p, action);
     if ((symk = SymCanonAt(q)) < 0)
         return findvar_slow(p, action);
@@ -5282,6 +5282,14 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     g_StructMemberOffset = 0;
     g_StructMemberSize = 0;
 #endif
+    if (g_option_profiling)
+    { // (counted as findvar_slow counts them, so that profiling does not change the path)
+        g_perf_findvar_calls++;
+        if (i < maxlocalvars)
+            g_perf_findvar_locals++;
+        else
+            g_perf_findvar_globals++;
+    }
     emptyarray = 0;
     if (*q == '(')
     {
