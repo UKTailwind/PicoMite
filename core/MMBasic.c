@@ -3020,7 +3020,9 @@ static __attribute__((noinline)) void ByValArrayCheck(unsigned char *arg, int vi
 }
 
 #if LOWRAM
-void MIPS16 DefinedSubFun(int isfun, unsigned char *cmd, int index, MMFLOAT *fa, long long int *i64a, unsigned char **sa, int *typ)
+/* (in RAM on the LOWRAM builds too since the RAM review of 2026-10-02 freed
+   the room: every SUB and FUNCTION call runs it) */
+void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, int index, MMFLOAT *fa, long long int *i64a, unsigned char **sa, int *typ)
 {
 #else
 #if defined(rp2350)
