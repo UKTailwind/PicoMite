@@ -2594,24 +2594,38 @@ struct s_sublayout
     int argc2;             // makeargs' count for the parameter list
     struct s_subparam p[]; // each parameter, (argc2 + 1) / 2 of them
 };
-static struct s_sublayout **SubLay; // per subfun[] index, NULL = not read yet
+static struct s_sublayout **SubLay; // per subfun[] index (SubLayN of them), NULL = not read yet
+static int SubLayN;                 // the table's entries: the program's SUBs when it was made
 static int SubLayNone;              // no memory for the table: every call reads its definition
+/* The layouts are packed into blocks of SL_BLOCK bytes, taken as they are
+   needed and linked through their first word (a block of the heap is a whole
+   number of pages: a layout in a block of its own left most of a 256-byte
+   page unused on the RP2040). */
+#define SL_BLOCK 1024
+static unsigned char *SubLayBlock; // the newest block, or NULL
+static unsigned char *SubLayNext;  // where in it the next layout goes
+static int SubLayRoom;             // and the bytes left after that
 
 void SubLayoutForget(void)
 {
     SubLay = NULL;
+    SubLayN = 0;
     SubLayNone = 0;
+    SubLayBlock = NULL;
+    SubLayRoom = 0;
 }
 
 void SubLayoutFree(void)
 {
-    if (SubLay != NULL)
+    unsigned char *b = SubLayBlock, *older;
+    while (b != NULL)
     {
-        for (int i = 0; i < MAXSUBFUN; i++)
-            if (SubLay[i] != NULL)
-                FreeMemorySafe((void **)&SubLay[i]);
-        FreeMemorySafe((void **)&SubLay);
+        older = *(unsigned char **)b;
+        FreeMemorySafe((void **)&b);
+        b = older;
     }
+    if (SubLay != NULL)
+        FreeMemorySafe((void **)&SubLay);
     SubLayoutForget();
 }
 
@@ -2622,6 +2636,27 @@ static void *SubLayoutMemory(int size)
         return GetPSMemoryNull(size); // (as the bindings' cold block: SRAM is the program's)
 #endif
     return GetMemoryNull(size);
+}
+
+// room for a layout of size bytes in the blocks (a new block if the newest has
+// too little left), or NULL if there is no memory for one
+static struct s_sublayout *SubLayoutPlace(int size)
+{
+    size = (size + 3) & ~3;
+    if (size > SubLayRoom)
+    {
+        int n = size + (int)sizeof(void *) > SL_BLOCK ? size + (int)sizeof(void *) : SL_BLOCK;
+        unsigned char *b = SubLayoutMemory(n);
+        if (b == NULL)
+            return NULL;
+        *(unsigned char **)b = SubLayBlock;
+        SubLayBlock = b;
+        SubLayNext = b + sizeof(void *);
+        SubLayRoom = n - sizeof(void *);
+    }
+    SubLayNext += size;
+    SubLayRoom -= size;
+    return (struct s_sublayout *)(SubLayNext - size);
 }
 
 // The parameter list at p of subfun[index], read as DefinedSubFun read it,
@@ -2689,14 +2724,16 @@ static struct s_sublayout MIPS16 *SubLayoutBuild(int index, unsigned char *p, un
         }
         if (pass == 0)
         {
-            if (SubLay == NULL && !SubLayNone && (SubLay = SubLayoutMemory(MAXSUBFUN * sizeof(*SubLay))) == NULL)
-                SubLayNone = 1;
-            if (SubLay != NULL)
+            if (SubLay == NULL && !SubLayNone)
             {
-                if (SubLay[index] != NULL)
-                    FreeMemorySafe((void **)&SubLay[index]); // (stale: subfun[] has changed)
-                L = SubLay[index] = SubLayoutMemory(size);
+                SubLayN = NameSubs; // (index is one of them)
+                if ((SubLay = SubLayoutMemory(SubLayN * sizeof(*SubLay))) == NULL)
+                    SubLayNone = 1;
             }
+            // a stale layout (subfun[] has changed) is replaced, its space
+            // left until the blocks are freed with the bindings
+            if (SubLay != NULL && index < SubLayN)
+                L = SubLay[index] = SubLayoutPlace(size);
             if (L == NULL)
                 L = GetTempMemory(size); // at the caller's level: gone at the end of its statement
             L->def = subfun[index];
@@ -2935,7 +2972,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 
     // the arguments in the definition, as read on its first call (P6 F1)
     CurrentLinePtr = SubLinePtr; // any errors must be at the definition
-    L = SubLay != NULL && SubLay[index] != NULL && SubLay[index]->def == subfun[index] ? SubLay[index] : SubLayoutBuild(index, p, argbuf2, argv2);
+    L = SubLay != NULL && index < SubLayN && SubLay[index] != NULL && SubLay[index]->def == subfun[index] ? SubLay[index] : SubLayoutBuild(index, p, argbuf2, argv2);
     argc2 = L->argc2;
 
     // error checking
