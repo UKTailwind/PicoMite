@@ -4455,6 +4455,7 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
     FatFSFileSystem = FatFSFileSystemSave;
     if (!BasicFileOpen(p, fnbr, FA_READ))
         return false;
+    HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     p = buf = GetTempMemory(EDIT_BUFFER_SIZE - 2048); // get all the memory while leaving space for the couple of buffers defined and the file handle
     *p++ = '\'';
     *p++ = '#';
@@ -4960,6 +4961,7 @@ int MemLoadProgram(unsigned char *fname, unsigned char *ram)
     FatFSFileSystem = FatFSFileSystemSave;
     if (!BasicFileOpen(p, fnbr, FA_READ))
         return false;
+    HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     p = buf = GetTempMemory(EDIT_BUFFER_SIZE - 2048); // get all the memory while leaving space for the couple of buffers defined and the file handle
     *p++ = '\'';
     *p++ = '#';
@@ -7048,6 +7050,7 @@ void cmd_autosave(void)
                 FreeMemory(TCPstate->buffer_recv[i]);
         }
 #endif
+        HeapReleaseForBuffer(); // (the variables are cleared and ClearExternalIO has stopped the interrupts)
         p = buf = GetTempMemory(EDIT_BUFFER_SIZE);
         char *fromp = (char *)ProgMemory;
         p = buf;

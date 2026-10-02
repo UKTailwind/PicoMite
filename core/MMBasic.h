@@ -417,6 +417,7 @@ extern "C"
     void InitVarSlots(void);
     void VarChunksForget(void);
     void VarChunkSeed(void);
+    void HeapReleaseForBuffer(void); // before a buffer of nearly the whole heap (see MMBasic.c)
     // a short string is kept in its own record (val.s == &dimtbl[1]), not in the heap: never free it
     #define VAR_INLINE_STR(r) ((void *)(r)->val.s == (void *)&(r)->dimtbl[1])
 

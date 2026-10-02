@@ -5777,6 +5777,28 @@ void SetADCFreq(float frequency)
  * @cond
  * The following section will be excluded from the documentation.
  */
+// The user's interrupts that write straight into a variable, IR (from the
+// timer callback) and KEYPAD, closed as IR CLOSE and KEYPAD CLOSE close them:
+// for EDIT of a file, which keeps the program's variables in its snapshot
+// (SaveContext) and gives their memory to the editor.  The interrupts that
+// run BASIC code are not taken while the editor runs.
+void UserInterruptsOff(void)
+{
+    if (IrInterrupt != NULL)
+    {
+        if (CallBackEnabled == 1)
+            gpio_set_irq_enabled_with_callback(PinDef[IRpin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false, &gpio_callback);
+        else
+            gpio_set_irq_enabled(PinDef[IRpin].GPno, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, false);
+        CallBackEnabled &= (~1);
+        ExtCfg(IRpin, EXT_NOT_CONFIG, 0);
+        IrState = IR_CLOSED;
+        IrInterrupt = NULL;
+        IrGotMsg = false;
+    }
+    KeypadClose();
+}
+
 void MIPS16 ClearExternalIO(void)
 {
     int i;

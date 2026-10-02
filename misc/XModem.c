@@ -160,6 +160,7 @@ void MIPS16 cmd_xmodem(void)
             g_structcnt = 0;
 #endif
         }
+        HeapReleaseForBuffer(); // (the variables are cleared and ClearExternalIO has stopped the interrupts)
         buf = GetTempMemory(XMODEMBUFFERSIZE);
         if (rcv)
         {

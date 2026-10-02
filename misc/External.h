@@ -397,6 +397,7 @@ extern MMFLOAT ADCscale[4], ADCbottom[4];
  * Function declarations - External I/O management
  * ============================================================================ */
 void ClearExternalIO(void);
+void UserInterruptsOff(void);
 void initExtIO(void);
 void ExtCfg(int pin, int cfg, int option);
 void ExtSet(int pin, int val);

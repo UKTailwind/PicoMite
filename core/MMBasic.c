@@ -984,6 +984,26 @@ void VarChunksForget(void)
     InitVarSlots();
 }
 
+// A command about to take nearly the whole heap as one buffer (EDIT, LIBRARY
+// SAVE, LOAD, AUTOSAVE APPEND, XMODEM) gives back first what is made again
+// before it is next needed: the index of names and the symbol bindings with
+// the parameter layouts (PrepareProgram makes them, RestoreContext too), and
+// the chunks of variables' records (RUN seeds them; until then a variable
+// takes a chunk as it needs one).  Every variable must have been cleared and
+// the user's interrupts stopped, so that nothing is left to write to a record.
+void HeapReleaseForBuffer(void)
+{
+    int c;
+    NameIndexFree();
+    SymBindFree();
+    for (c = 0; c < g_varmem.chunks; c++)
+        FreeMemorySafe((void **)&g_varmem.chunk[c]);
+    for (c = 0; c < (int)(sizeof(g_varmem.lchunk) / sizeof(g_varmem.lchunk[0])); c++)
+        if (g_varmem.lchunk[c] != NULL)
+            FreeMemorySafe((void **)&g_varmem.lchunk[c]);
+    VarChunksForget();
+}
+
 // the globals have gone (CLEAR, RUN...; their data already freed): every slot
 // free, and the chunks' records handed out again from the first.  The chunks
 // stay until the heap is wiped: IR, KEYPAD, PLAY STREAM and TCP STREAM can

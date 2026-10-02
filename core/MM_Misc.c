@@ -1941,6 +1941,7 @@ void MIPS16 cmd_library(void)
            library's own CSUBs are copied below through it, so rebuild it first */
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && CFunctionLibrary == NULL)
             PrepareProgram(false);
+        HeapReleaseForBuffer(); // (ClearRuntime above has cleared the variables and stopped the interrupts)
         TempPtr = m = MemBuff = GetTempMainMemory(EDIT_BUFFER_SIZE);
 
         rem = GetCommandValue((unsigned char *)"Rem");

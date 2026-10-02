@@ -520,6 +520,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
         g_structcnt = 0;
 #endif
         ProfilingFree();
+        UserInterruptsOff();
     }
 #ifdef PICOMITEVGA
     modmode = false;
@@ -644,6 +645,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
        (cmdfile true) is only reachable from the command prompt, where nothing
        else holds the heap, so it keeps the full buffer. */
     edit_buff_size = EDIT_BUFFER_SIZE - (cmdfile ? 0 : FM_HEAP_RESERVE);
+    HeapReleaseForBuffer(); // (the variables are cleared and IR and KEYPAD are off)
     EdBuff = GetTempMemory(edit_buff_size);
     char buff[STRINGSIZE * 2] = {0};
     *EdBuff = 0;
@@ -4455,6 +4457,19 @@ fm_relaunch:
         StandardError(10);
     if (*cmdline)
         SyntaxError();
+    /* FM does not depend on the program that ran last: its variables and the
+       rest of its runtime are cleared, as EDIT does, so the panels and the
+       editor have the heap whatever was loaded (the colours and the font are
+       kept: ClearRuntime's ResetDisplay overwrites them). */
+    {
+        int tf = gui_fcolour, tb = gui_bcolour, tpf = PromptFont;
+        ClearVars(0, true);
+        ClearRuntime(true);
+        gui_fcolour = tf;
+        gui_bcolour = tb;
+        SetFont(tpf);
+        PromptFont = tpf;
+    }
 
 #if defined(PICOMITEVGA)
     {
