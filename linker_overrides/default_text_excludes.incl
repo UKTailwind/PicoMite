@@ -4,4 +4,23 @@
    so libm .text stays in FLASH instead of being copied into RAM by the
    .data catch-all (saves ~4 KB of RAM; complex math funcs are the bulk).
    Keep in sync with the SDK original when updating the SDK. */
-*(EXCLUDE_FILE(*libgcc.a: *libc.a: *lib*_a-mem*.o) .text*)
+/* libgcc's complex arithmetic (__divdc3, __muldc3, __divsc3, __mulsc3: 5.5 KB
+   on the RP2040) runs only for MMBasic's complex maths and was never seen in a
+   profile, so it goes in FLASH too; the rest of libgcc (shifts, the switch
+   helpers) is small and hot and stays in RAM.  Placed here, ahead of the line
+   that keeps libgcc out of FLASH, so this rule claims those sections first. */
+*libgcc.a:_divdc3.o(.text*)
+*libgcc.a:_muldc3.o(.text*)
+*libgcc.a:_divsc3.o(.text*)
+*libgcc.a:_mulsc3.o(.text*)
+/* The RP2040's double-precision wrappers (add, subtract, multiply, divide,
+   compare, convert) and the 64-bit multiply run in nearly every BASIC
+   expression and were the hottest code left in FLASH in a PC-sample profile
+   (2026-10-02, Peter): they are left out of FLASH so the .data catch-all puts
+   them in RAM (1 KB), where unused functions are still dropped.  Measured on
+   the RP2040 VGA at 378 MHz: solar_eclipse and PETSCII Robots ~1% faster.
+   The hardware-divider wrappers were tried in RAM too and made things slower
+   (benchmark.bas up to 16%), so they stay in FLASH.  (The SDK's
+   PICO_DOUBLE_IN_RAM would also have put 3.3 KB of the V1 ROM shim in RAM.)
+   The RP2350 does not link these objects. */
+*(EXCLUDE_FILE(*libgcc.a: *libc.a: *lib*_a-mem*.o *double_aeabi_rp2040.S.obj *pico_int64_ops_aeabi.S.obj) .text*)
