@@ -82,10 +82,18 @@ extern "C"
       ~11 KB RAM margin after BSS + PICO_HEAP_SIZE (0x4000) + stack
       (0x4000); shrink if a future BSS bump narrows it further
       (see [[heap-bss-overlap-on-rp2350]]). Bump MagicKey when Option
-      layout or defaults change. */
-#define FLASH_TARGET_OFFSET (1392 * 1024)
-#define HEAP_MEMORY_SIZE (180 * 1024)
-#define MagicKey 0x25822226
+      layout or defaults change.
+      2026-10-02, back in the build to tune before Peter decides on it:
+      FLASH_TARGET_OFFSET +48 KB (the firmware had grown 38 KB past 1392 KB);
+      heap +56 KB (the variable table's records and the SUB/FUNCTION table
+      moved into the heap: compact-vars and the name index), ~4.5 KB of RAM
+      margin left for the stack; MAX_PROG_SIZE pinned at the old heap size
+      (a bigger one would not leave RB_STREAM_SLOTS of it in the PSRAM
+      reserve); new MagicKey for the new layout. */
+#define FLASH_TARGET_OFFSET (1440 * 1024)
+#define HEAP_MEMORY_SIZE (236 * 1024)
+#define MAX_PROG_SIZE (180 * 1024)
+#define MagicKey 0xAFB036A5
 #elif defined(PICOMITEHDMIWEB)
    /* HDMIWEB: HDMIUSB-style display stack + USB host + WebMite WiFi /
       lwIP / mbedtls TLS (no Bluetooth). The cyw43 WiFi firmware blob plus
