@@ -2098,6 +2098,7 @@ void InitHeap(bool all)
     IfTableForget();
     SymBindForget(); /* and the symbol bindings (see Symbols.h) */
     VarChunksForget(); /* and the globals' records (see MMBasic.h) */
+    NameIndexForget(); /* and the index of SUBs, FUNCTIONs and labels */
 #ifdef STRUCTENABLED
     /* Same for the TYPE definitions, which are GetMemory blocks too. */
     StructTableForget();

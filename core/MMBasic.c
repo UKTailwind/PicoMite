@@ -74,11 +74,6 @@ static int maxglobalvars = MAXGLOBALVARS;
 // these are initialised at startup
 int CommandTableSize, TokenTableSize;
 #ifdef rp2350
-struct s_funtbl funtbl[MAXSUBFUN];
-// entries in funtbl (SUBs, FUNCTIONs and labels): at most MAXSUBFUN - 1, so that
-// there is always an empty slot and every search of the table ends
-static int funtbl_used;
-int hashlabels(unsigned char *p, int ErrAbort);
 // Character classification - single memory access vs function calls
 __not_in_flash("data") const unsigned char name_start_tbl[256] = {
     ['A' ... 'Z'] = 1, ['a' ... 'z'] = 1, ['_'] = 1};
@@ -450,50 +445,235 @@ int PrepareProgramExt(unsigned char *, int, unsigned char **, int);
 char PreprogramErrMsg[MAXERRMSG];        // Error message from PrepareProgram if it fails
 unsigned char *PreprogramErrLine = NULL; // Line pointer where PrepareProgram error occurred
 
-#ifndef rp2350
-static int subfun_letter_start[26];
-
-// Compare two names (symbol or text) ignoring case and any type suffix, like strcmp().
-static int CompareNames(unsigned char *p1, unsigned char *p2)
+/* ---------------------------------------------------------------------------
+   The name index (both chips): every SUB, FUNCTION, CSUB and label of the
+   library and the program, by name, for the lookups that have only a name's
+   spelling to go on (FindSubFunText, findlabel_text, and findvar's check that
+   a new variable is not named like a SUB).  A name read through a symbol
+   reaches it once a run (SymS, labind); a name in text (the prompt, EXECUTE,
+   CALL, ON, RESTORE, OPTION SYMBOLS OFF, a program saved as text) every time.
+   Made in the heap by PrepareProgram, a power of two of 8-byte slots at most
+   half full.  A slot keeps the top half of the name's FNV-1a hash (as findvar
+   hashes a name: capitals, no suffix), its length, its kind and where it is;
+   not the name, which is read from the definition when the rest matches.
+   --------------------------------------------------------------------------- */
+static void SetPreprogramError(const char *msg, unsigned char *linePtr);
+#define NK_SUB 1    // a SUB or CSUB: target is its subfun[] index
+#define NK_FUN 2    // a FUNCTION: likewise
+#define NK_LABEL 3  // a label: target is its line's T_NEWLINE
+struct s_nameslot
 {
-    const unsigned char *s1, *s2;
-    int l1, l2;
-    NameView(p1, &s1, &l1);
-    NameView(p2, &s2, &l2);
-    while (l1 && l2)
+    uint16_t hash16;
+    uint8_t len;
+    uint8_t kind; // 0: empty
+    uint32_t target;
+};
+static struct s_nameslot NameNone[1];           // the index of a program with no names: one empty slot
+static struct s_nameslot *NameIndex = NameNone; // in the heap, or NameNone, or NULL (no memory for it)
+static uint32_t NameMask;                       // its slots - 1
+static int NameSubs;                            // the SUBs, FUNCTIONs and CSUBs in subfun[]
+
+// the heap has been wiped: the index went with it
+void NameIndexForget(void)
+{
+    NameIndex = NameNone;
+    NameMask = 0;
+}
+
+void NameIndexFree(void)
+{
+    if (NameIndex != NameNone && NameIndex != NULL)
+        FreeMemorySafe((void **)&NameIndex);
+    NameIndexForget();
+}
+
+static inline uint32_t NameHash(const unsigned char *nm, int nl)
+{
+    uint32_t hash = FNV_offset_basis;
+    while (nl--)
     {
-        int c1 = mytoupper(*s1++);
-        int c2 = mytoupper(*s2++);
-        if (c1 != c2)
-            return c1 - c2;
-        l1--;
-        l2--;
+        hash ^= *nm++;
+        hash *= FNV_prime;
     }
-    if (l1)
+    return hash;
+}
+
+// a label's name, from its line's T_NEWLINE (tokenise puts a label first on its
+// line, after any line number)
+static const unsigned char *NameOfLabel(unsigned char *line, int *len)
+{
+    unsigned char *q = line + T_NEWLINE_HDR;
+    while (*q == ' ')
+        q++;
+    if (*q == T_LINENBR)
+    {
+        q += 3;
+        while (*q == ' ')
+            q++;
+    }
+    *len = q[1]; // (q[0] is T_LABEL)
+    return q + 2;
+}
+
+// the spelling of slot s
+static const unsigned char *NameOfSlot(const struct s_nameslot *s, int *len)
+{
+    const unsigned char *nv;
+    if (s->kind == NK_LABEL)
+        return NameOfLabel((unsigned char *)s->target, len);
+    unsigned char *p = subfun[s->target] + sizeof(CommandToken);
+    skipspace(p);
+    NameView(p, &nv, len);
+    return nv;
+}
+
+// is slot s the name nm (nl characters, in capitals)?
+static inline int NameIs(const struct s_nameslot *s, const unsigned char *nm, int nl, uint32_t hash)
+{
+    int l;
+    const unsigned char *sv;
+    if (s->hash16 != (hash >> 16) || s->len != nl)
+        return 0;
+    sv = NameOfSlot(s, &l);
+    while (nl--)
+        if (mytoupper(*sv++) != *nm++)
+            return 0;
+    return 1;
+}
+
+// put a name in the index: returns the slot of the same name already there (a
+// duplicate, left as it was), or NULL when it was added.  SUBs, FUNCTIONs and
+// CSUBs share one set of names; labels have their own, global to the library
+// and the program together.
+static struct s_nameslot *NameAdd(const unsigned char *nv, int nl, int kind, uint32_t target)
+{
+    unsigned char nm[MAXVARLEN];
+    uint32_t i;
+    if (nl <= 0 || nl >= MAXVARLEN)
+        return NULL; // (the save refuses such a name: only a damaged image has one)
+    for (i = 0; i < (uint32_t)nl; i++)
+        nm[i] = mytoupper(nv[i]);
+    uint32_t hash = NameHash(nm, nl);
+    for (i = hash & NameMask; NameIndex[i].kind; i = (i + 1) & NameMask)
+    {
+        if ((NameIndex[i].kind == NK_LABEL) == (kind == NK_LABEL) && NameIs(&NameIndex[i], nm, nl, hash))
+            return &NameIndex[i]; // (a SUB and a FUNCTION may not share a name either)
+    }
+    NameIndex[i].hash16 = hash >> 16;
+    NameIndex[i].len = nl;
+    NameIndex[i].kind = kind;
+    NameIndex[i].target = target;
+    return NULL;
+}
+
+// the labels in one module (from its start p): counted (add == 0) or added;
+// returns how many, or -1 for a duplicate label (the error set)
+static int NameLabels(unsigned char *p, int add, int ErrAbort)
+{
+    unsigned char *const plimit = p + MAX_PROG_SIZE;
+    unsigned char *lastp = p;
+    int n = 0;
+    while (p < plimit && !(p[0] == 0 && p[1] == 0))
+    {
+        if (p[0] == T_NEWLINE)
+        {
+            unsigned char skip = p[1];
+            unsigned char *q = p + T_NEWLINE_HDR;
+            while (*q == ' ')
+                q++;
+            if (q[0] == T_LINENBR)
+            {
+                q += 3;
+                while (*q == ' ')
+                    q++;
+            }
+            if (q[0] != T_LABEL && skip >= 3 && skip != T_NEWLINE_SKIP_NONE && skip != 0xFF)
+            {
+                p += skip; // (a line without a label)
+                continue;
+            }
+            lastp = p;
+            p += T_NEWLINE_HDR;
+            continue;
+        }
+        if (p[0] == T_LINENBR)
+        {
+            p += 3;
+            continue;
+        }
+        if (p[0] == T_LABEL)
+        {
+            n++;
+            if (add && NameAdd(p + 2, p[1], NK_LABEL, (uint32_t)lastp) != NULL && ErrAbort)
+            {
+                SetPreprogramError("Duplicate label", lastp);
+                return -1;
+            }
+            p += p[1] + 2;
+            continue;
+        }
+        p++;
+    }
+    return n;
+}
+
+// make the index for the nsubs entries of subfun[] and the labels of the library
+// and the program; returns 1 for an error (set) if ErrAbort, else 0.  With no
+// memory for it (only possible at the command prompt: RUN starts with an empty
+// heap) the index is left absent, and a name lookup reports that.
+static int NameIndexBuild(int nsubs, int ErrAbort)
+{
+    int n, size, i;
+    NameIndexFree();
+    NameSubs = nsubs;
+    n = nsubs + (LibPresent() ? NameLabels(LibMemory, 0, 0) : 0) + NameLabels(ProgMemory, 0, 0);
+    if (n == 0)
+        return 0; // (NameNone)
+    for (size = 16; size < 2 * n; size <<= 1)
+        ;
+    if ((NameIndex = (struct s_nameslot *)GetMemoryNull(size * sizeof(struct s_nameslot))) == NULL)
+    {
+        if (ErrAbort)
+            error("Not enough memory");
+        NameMask = 0;
+        return 0;
+    }
+    NameMask = size - 1;
+    for (i = 0; i < nsubs; i++)
+    {
+        const unsigned char *nv;
+        int nl;
+        unsigned char *p = subfun[i] + sizeof(CommandToken);
+        skipspace(p);
+        NameView(p, &nv, &nl);
+        if (NameAdd(nv, nl, commandtbl_decode(subfun[i]) == cmdFUN ? NK_FUN : NK_SUB, i) != NULL && ErrAbort)
+        {
+            SetPreprogramError("Duplicate name", subfun[i]);
+            return 1;
+        }
+    }
+    if ((LibPresent() && NameLabels(LibMemory, 1, ErrAbort) < 0) || NameLabels(ProgMemory, 1, ErrAbort) < 0)
         return 1;
-    if (l2)
-        return -1;
     return 0;
 }
 
-// Compare two SUB/FUNCTION identifiers by base name (case-insensitive), ignoring type suffixes.
-static int CompareSubFunBaseName(unsigned char *a, unsigned char *b)
+// after RestoreContext has put back a heap: the index in it is not this program's
+void NameIndexRebuild(void)
 {
-    unsigned char *p1 = a + sizeof(CommandToken);
-    unsigned char *p2 = b + sizeof(CommandToken);
-    skipspace(p1);
-    skipspace(p2);
-    return CompareNames(p1, p2);
+    NameIndexForget();
+    NameIndexBuild(NameSubs, 0);
 }
 
-// Compare a caller identifier to a subfun entry by base name only.
-static int CompareNameToSubFunBase(unsigned char *name, unsigned char *sub)
+// the first slot of a name of the kinds in kinds (a bit per kind), or NULL
+static struct s_nameslot *NameFind(const unsigned char *nm, int nl, uint32_t hash, int kinds)
 {
-    unsigned char *p2 = sub + sizeof(CommandToken);
-    skipspace(p2);
-    return CompareNames(name, p2);
+    if (NameIndex == NULL)
+        error("Not enough memory for the index of names");
+    for (uint32_t i = hash & NameMask; NameIndex[i].kind; i = (i + 1) & NameMask)
+        if (((kinds >> NameIndex[i].kind) & 1) && NameIs(&NameIndex[i], nm, nl, hash))
+            return &NameIndex[i];
+    return NULL;
 }
-#endif
 
 // Helper function to find the T_NEWLINE that starts a line containing the given pointer
 // Returns the original pointer if it already points to T_NEWLINE or if not found
@@ -980,13 +1160,7 @@ static inline void TestStackOverflow(void)
 // Returns: 0 = success, 1 = error (error message in PreprogramErrMsg)
 int MIPS16 PrepareProgram(int ErrAbort)
 {
-    int i, j, NbrFuncts;
-#ifdef rp2350
-    int u, namelen;
-    uint32_t hash = FNV_offset_basis;
-    char printvar[MAXVARLEN + 1];
-    unsigned char *p1, *p2;
-#endif
+    int i, NbrFuncts;
 
 #ifdef rp2350
     RBLive = 0; // a compiled stream is trusted only after RUN checks its stamp (see Stream.h)
@@ -1039,118 +1213,13 @@ int MIPS16 PrepareProgram(int ErrAbort)
         return 1; // Error occurred
     }
 
-#ifndef rp2350
-    // RP2040: sort subfun table in-place by base name to enable binary search in FindSubFun.
-    for (i = 0; i < NbrFuncts - 1; i++)
+    // the index of every SUB, FUNCTION, CSUB and label by name (both chips), which
+    // also finds a name defined twice
+    if (NameIndexBuild(NbrFuncts, ErrAbort))
     {
-        for (j = 0; j < NbrFuncts - i - 1; j++)
-        {
-            if (CompareSubFunBaseName(subfun[j], subfun[j + 1]) > 0)
-            {
-                unsigned char *tmp = subfun[j];
-                subfun[j] = subfun[j + 1];
-                subfun[j + 1] = tmp;
-            }
-        }
-    }
-
-    // Build first-letter index (A..Z) for faster bounded lookup.
-    for (i = 0; i < 26; i++)
-        subfun_letter_start[i] = -1;
-    for (i = 0; i < NbrFuncts; i++)
-    {
-        unsigned char *sp = subfun[i] + sizeof(CommandToken);
-        const unsigned char *spn;
-        int spl;
-        skipspace(sp);
-        NameView(sp, &spn, &spl);
-        int first = spl ? mytoupper(*spn) : 0;
-        if (first >= 'A' && first <= 'Z')
-        {
-            int idx = first - 'A';
-            if (subfun_letter_start[idx] == -1)
-                subfun_letter_start[idx] = i;
-        }
-    }
-
-    // Duplicate-name check (same behavior as before: compares base names only).
-    if (ErrAbort)
-    {
-        for (i = 1; i < NbrFuncts; i++)
-        {
-            if (CompareSubFunBaseName(subfun[i - 1], subfun[i]) == 0)
-            {
-                SetPreprogramError("Duplicate name", subfun[i]);
-                ProgramValid = 0;
-                return 1;
-            }
-        }
-    }
-#endif
-
-    // check the sub/fun table for duplicates
-#ifdef rp2350
-    memset(funtbl, 0, sizeof(struct s_funtbl) * MAXSUBFUN);
-    funtbl_used = 0;
-    for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
-    {
-        // First we will hash the function name and add it to the function table
-        // This allows for a fast check of a variable name being the same as a function name
-        // It also allows a hash look up for function name matching
-        const unsigned char *fn;
-        int fnlen;
-        p1 = subfun[i];
-        p1 += sizeof(CommandToken);
-        skipspace(p1);
-        NameView(p1, &fn, &fnlen);
-        p2 = (unsigned char *)printvar;
-        namelen = 0;
-        hash = FNV_offset_basis;
-        for (int k = 0; k < fnlen && namelen <= MAXVARLEN; k++)
-        {
-            u = mytoupper(fn[k]);
-            hash ^= u;
-            hash *= FNV_prime;
-            *p2++ = u;
-            if (++namelen >= MAXVARLEN) // at most 31 characters, as for a variable
-            {
-                if (ErrAbort)
-                {
-                    SetPreprogramError("Function name too long", CurrentLinePtr);
-                    ProgramValid = 0;
-                    return 1;
-                }
-            }
-        }
-        if (namelen != MAXVARLEN)
-            *p2 = 0;
-        if (funtbl_used >= MAXSUBFUN - 1)
-        {
-            if (ErrAbort)
-            {
-                SetPreprogramError("Too many subroutines, functions and labels", subfun[i]);
-                ProgramValid = 0;
-                return 1;
-            }
-            break; // (at the prompt: RUN will report it)
-        }
-        funtbl_used++;
-        hash %= MAXSUBFUN; // scale to size of table
-        while (funtbl[hash].name[0] != 0)
-        {
-            hash++;
-            if (hash == MAXSUBFUN)
-                hash = 0;
-        }
-        funtbl[hash].index = i;
-        memcpy(funtbl[hash].name, printvar, (namelen == MAXVARLEN ? namelen : namelen + 1));
-    }
-    if (LibPresent() && hashlabels(LibMemory, ErrAbort))
+        ProgramValid = 0;
         return 1;
-    if (hashlabels(ProgMemory, ErrAbort))
-        return 1;
-
-#endif
+    }
     /* Build the IF/ELSEIF/ELSE/ENDIF jump table.  Done unconditionally
      * (regardless of ErrAbort) so the runtime fast-path is available
      * whenever a valid program is prepared for execution.              */
@@ -1170,49 +1239,6 @@ int MIPS16 PrepareProgram(int ErrAbort)
     if (!ErrAbort)
         return 0;
 
-#ifdef rp2350
-    for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
-    {
-        for (j = i + 1; j < MAXSUBFUN && subfun[j] != NULL; j++)
-        {
-            const unsigned char *n1, *n2;
-            int l1, l2;
-            p1 = subfun[i];
-            p1 += sizeof(CommandToken);
-            skipspace(p1);
-            p2 = subfun[j];
-            p2 += sizeof(CommandToken);
-            skipspace(p2);
-            NameView(p1, &n1, &l1);
-            NameView(p2, &n2, &l2);
-            if (l1 == l2)
-            {
-                while (l1 && mytoupper(*n1) == mytoupper(*n2))
-                {
-                    n1++;
-                    n2++;
-                    l1--;
-                }
-                if (l1 == 0)
-                {
-                    if (ErrAbort)
-                    {
-                        // Point to the duplicate (second) function, not the original
-                        SetPreprogramError("Duplicate name", subfun[j]);
-                        ProgramValid = 0;
-                        return 1;
-                    }
-                    return 0;
-                }
-            }
-        }
-    }
-#endif
-    //    for(i=0;i<MAXSUBFUN;i++){
-    //    	if(funtbl[i].name[0]!=0){
-    //    		MMPrintString(funtbl[i].name);PIntHC(funtbl[i].index);PIntComma(i);PRet();
-    //    	}
-    //    }
     RBPrepare(); // OPTION COMPILE: check the stream's stamp, and compile if the program changed
     return 0;
 }
@@ -1261,8 +1287,7 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
                 continue;
             }
             {
-                // at most 31 characters, as for a variable: on both chips (the
-                // RP2350's check is in its funtbl build, which the RP2040 has not)
+                // at most 31 characters, as for a variable
                 const unsigned char *nv;
                 int nl;
                 NameView(p, &nv, &nl);
@@ -2350,145 +2375,29 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
 // (In flash: a name read through a symbol reaches it once a run, FindSubFun
 // keeping the answer in SymS, so only text names - EXECUTE, the prompt - use
 // it more; noinline, as GCC would otherwise put it back into FindSubFun.)
-#ifdef rp2350
 static __attribute__((noinline)) int FindSubFunText(unsigned char *p, int type)
 {
-    unsigned char *s;
-    unsigned char name[MAXVARLEN + 1];
-    int j, u, namelen;
-    unsigned int hash = FNV_offset_basis;
-    unsigned char *tp, *ip;
-
-    // copy the variable name into name
+    unsigned char name[MAXVARLEN];
     const unsigned char *nv;
-    int nl;
+    struct s_nameslot *s;
+    int nl, i;
     NameView(p, &nv, &nl);
     if (nl == 0)
         return -1;
-    s = name;
-    namelen = 0;
-    do
-    {
-        u = mytoupper(*nv++);
-        hash ^= u;
-        hash *= FNV_prime;
-        *s++ = u;
-        if (++namelen >= MAXVARLEN) // at most 31 characters, as for a variable
-            error("Variable name too long");
-    } while (--nl);
-    //    PRet();
-    *s = 0;
-    hash %= MAXSUBFUN; // scale 0-512
-    //	MMPrintString("Searching for function: ");MMPrintString((char *)name);PIntComma(hash);PRet();
-    while (funtbl[hash].name[0] != 0)
-    {
-        ip = name;
-        tp = (unsigned char *)funtbl[hash].name;
-        //		MMPrintString("Testing : ");MMPrintString((char *)tp);PRet();
-        if (*ip++ == *tp++)
-        { // preliminary quick check
-            j = namelen - 1;
-            while (j > 0 && *ip == *tp)
-            { // compare each letter
-                j--;
-                ip++;
-                tp++;
-            }
-            if (j == 0 && (*(char *)tp == 0 || namelen == MAXVARLEN) && funtbl[hash].index < MAXSUBFUN)
-            { // found a matching name
-                // it must also be the kind asked for, as on the RP2040: a SUB or CSUB for
-                // a statement (type 0), a FUNCTION for an expression (type 1), or
-                // either (type < 0, for FindSubFun's binding of a symbol)
-                CommandToken tkn = commandtbl_decode(subfun[funtbl[hash].index]);
-                if (type < 0 || (type ? tkn == cmdFUN : (tkn == cmdSUB || tkn == cmdCSUB)))
-                    return funtbl[hash].index;
-                return -1;
-            }
-        }
-        hash++;
-        if (hash == MAXSUBFUN)
-            hash = 0;
-    }
-    return -1;
+    if (nl >= MAXVARLEN) // at most 31 characters, as for a variable
+        error("Variable name too long");
+    for (i = 0; i < nl; i++)
+        name[i] = mytoupper(nv[i]);
+    s = NameFind(name, nl, NameHash(name, nl), (1 << NK_SUB) | (1 << NK_FUN));
+    if (s == NULL)
+        return -1;
+    // it must also be the kind asked for: a SUB or CSUB for a statement (type 0),
+    // a FUNCTION for an expression (type 1), or either (type < 0, for FindSubFun's
+    // binding of a symbol).  A name is never both.
+    if (type >= 0 && s->kind != (type ? NK_FUN : NK_SUB))
+        return -1;
+    return s->target;
 }
-#else
-static __attribute__((noinline)) int MIPS16 FindSubFunText(unsigned char *p, int type)
-{
-    int n = 0;
-    int low, high, mid, cmp;
-    int first;
-    unsigned char *p2, *p1;
-
-    while (n < MAXSUBFUN && subfun[n] != NULL)
-        n++;
-    if (n == 0)
-        return -1;
-
-    // subfun[] is pre-sorted by PrepareProgram() using base-name ordering.
-    low = 0;
-    high = n - 1;
-    const unsigned char *nv;
-    int nl;
-    unsigned char *pend = NameView(p, &nv, &nl);
-    if (nl == 0)
-        return -1;
-    first = mytoupper(*nv);
-    if (first >= 'A' && first <= 'Z')
-    {
-        int li = first - 'A';
-        if (subfun_letter_start[li] == -1)
-            return -1;
-        low = subfun_letter_start[li];
-        for (int ni = li + 1; ni < 26; ni++)
-        {
-            if (subfun_letter_start[ni] != -1)
-            {
-                high = subfun_letter_start[ni] - 1;
-                break;
-            }
-        }
-    }
-
-    if (low > high)
-        return -1;
-
-    while (low <= high)
-    {
-        mid = low + ((high - low) >> 1);
-        cmp = CompareNameToSubFunBase(p, subfun[mid]);
-        if (cmp == 0)
-        {
-            p2 = subfun[mid];
-            CommandToken tkn = commandtbl_decode(p2);
-
-            if (type == 0)
-            {
-                if (!(tkn == cmdSUB || tkn == cmdCSUB))
-                    return -1;
-            }
-            else if (type > 0) // (type < 0: any kind, for FindSubFun's binding)
-            {
-                if (!(tkn == cmdFUN /*|| tkn == cmdCFUN*/))
-                    return -1;
-            }
-
-            // Preserve existing suffix matching behavior.
-            p2 += sizeof(CommandToken);
-            skipspace(p2);
-            p1 = pend;
-            p2 = NameView(p2, &nv, &nl);
-            if ((*p1 == '$' && *p2 == '$') || (*p1 == '%' && *p2 == '%') || (*p1 == '!' && *p2 == '!') || (!isnamechar(*p1) && !isnamechar(*p2)))
-                return mid;
-            return -1;
-        }
-        if (cmp < 0)
-            high = mid - 1;
-        else
-            low = mid + 1;
-    }
-    return -1;
-}
-#endif
 
 // A symbol remembers the SUB/FUNCTION of its name (see Symbols.h)
 #if defined(PICOMITEWEB) && !defined(rp2350)
@@ -4252,275 +4161,31 @@ unsigned char MIPS16 *findline(int nbr, int mustfind)
         error("Line number");
     return p;
 }
-#ifdef rp2350
-// returns 1 if the table is full and ErrAbort (the error has been set), else 0
-int hashlabels(unsigned char *p, int ErrAbort)
-{
-    // unsigned char *p = (unsigned char *)ProgMemory;
-    int j, u, namelen;
-    uint32_t hash = FNV_offset_basis;
-    // char *lastp = (char *)ProgMemory + 1;
-    char *lastp = (char *)p + 1;
-    // now do the search
-    while (1)
-    {
-        if (p[0] == 0 && p[1] == 0) // end of the program
-            break;
-
-        if (p[0] == T_NEWLINE)
-        {
-            // Phase B (B3): only T_LABEL ever needs hashing.  Peek the byte
-            // immediately after the newline header (or past T_LINENBR) to
-            // see if this line carries a label; if not, jump straight to
-            // the next line via the skip byte.
-            unsigned char skip = p[1];
-            unsigned char *q = p + T_NEWLINE_HDR;
-            while (*q == ' ')
-                q++;
-            if (q[0] == T_LINENBR)
-            {
-                q += 3;
-                while (*q == ' ')
-                    q++;
-            }
-            if (q[0] != T_LABEL && skip >= 3 && skip != T_NEWLINE_SKIP_NONE && skip != 0xFF)
-            {
-                p += skip;
-                continue;
-            }
-            lastp = (char *)p;  // save in case this is the right line
-            p += T_NEWLINE_HDR; // step over T_NEWLINE + skip byte
-            continue;
-        }
-
-        if (p[0] == T_LINENBR)
-        {
-            p += 3; // and step over the line number
-            continue;
-        }
-
-        if (p[0] == T_LABEL)
-        {
-            p++; // point to the length of the label
-            hash = FNV_offset_basis;
-            namelen = 0;
-            for (j = 1; j <= p[0]; j++)
-            {
-                u = mytoupper(p[j]);
-                hash ^= u;
-                hash *= FNV_prime;
-                namelen++;
-            }
-            if (funtbl_used >= MAXSUBFUN - 1)
-            {
-                if (ErrAbort)
-                {
-                    SetPreprogramError("Too many subroutines, functions and labels", (unsigned char *)lastp);
-                    ProgramValid = 0;
-                    return 1;
-                }
-                return 0; // (at the prompt: RUN will report it)
-            }
-            funtbl_used++;
-            hash %= MAXSUBFUN; // scale to size of table
-            while (funtbl[hash].name[0] != 0)
-            {
-                hash++;
-                hash %= MAXSUBFUN;
-            }
-            funtbl[hash].index = (uint32_t)lastp;
-            for (j = 0; j < p[0]; j++)
-                funtbl[hash].name[j] = mytoupper(p[j + 1]);
-            p += p[0] + 1; // still looking! skip over the label
-            continue;
-        }
-        p++;
-    }
-    return 0;
-}
-
-// search through program memory looking for a label.
-// returns a pointer to the T_NEWLINE token or throws an error if not found
-// non cached version
-
+// The line (its T_NEWLINE) of the label at labelptr (a symbol or text), from the
+// name index; an error if there is none.  A label is global: one name, one line,
+// in the library or the program.
 static unsigned char *findlabel_text(unsigned char *labelptr)
 {
-    //    char *p, *lastp = (char *)ProgMemory + 1;
-    unsigned char *tp, *ip;
-    int i;
-    uint32_t hash = FNV_offset_basis;
-    char label[MAXVARLEN + 1];
-
-    // first, just exit we have a NULL argument
+    unsigned char name[MAXVARLEN];
+    const unsigned char *lv;
+    struct s_nameslot *s;
+    int ll, i;
     if (labelptr == NULL)
         return NULL;
-
-    // convert the label to the token format and load into label[]
-    // this assumes that the first character has already been verified as a valid label character
+    NameView(labelptr, &lv, &ll);
+    if (ll == 0)
     {
-        const unsigned char *lv;
-        int ll;
-        NameView(labelptr, &lv, &ll);
-        if (ll == 0)
-        {
-            lv = labelptr;
-            ll = 1;
-        }
-        if (ll >= MAXVARLEN) // a label is at most 31 characters (the manual)
-            error("Label too long"); // too long, not a correctly formed label
-        for (i = 1; i <= ll; i++)
-        {
-            label[i] = mytoupper(lv[i - 1]);
-            hash ^= label[i];
-            hash *= FNV_prime;
-        }
+        lv = labelptr;
+        ll = 1;
     }
-    label[0] = i - 1;  // the length byte
-    hash %= MAXSUBFUN; // scale to size of table
-    if (funtbl[hash].name[0] == 0)
+    if (ll >= MAXVARLEN) // a label is at most 31 characters (the manual)
+        error("Label too long");
+    for (i = 0; i < ll; i++)
+        name[i] = mytoupper(lv[i]);
+    if ((s = NameFind(name, ll, NameHash(name, ll), 1 << NK_LABEL)) == NULL)
         error("Cannot find label");
-    while (funtbl[hash].name[0] != 0)
-    {
-        // if(funtbl[hash].index>=(uint32_t)ProgMemory){  //Is there a need to test this? Without this we can find labels in the Library
-        tp = (unsigned char *)funtbl[hash].name;
-        ip = (unsigned char *)&label[1];
-        if (*ip++ == *tp++)
-        { // preliminary quick check
-            i = label[0] - 1;
-            while (i > 0 && *ip == *tp)
-            { // compare each letter
-                i--;
-                ip++;
-                tp++;
-            }
-            // a label's entry holds its line's address; a SUB/FUNCTION of the same
-            // name shares the table with an index below MAXSUBFUN: skip it
-            if (i == 0 && (*(char *)tp == 0) && funtbl[hash].index >= MAXSUBFUN)
-            { // found a matching name
-                return (unsigned char *)funtbl[hash].index;
-            }
-        }
-        //}
-        hash++;
-        hash %= MAXSUBFUN;
-    }
-    if (funtbl[hash].name[0] == 0)
-        error("Cannot find label");
-    return 0;
+    return (unsigned char *)s->target;
 }
-#else
-
-static unsigned char MIPS16 *findlabel_text(unsigned char *labelptr)
-{
-    char *p, *lastp = (char *)ProgMemory + 1;
-    char *next;
-    int i, j = 0;
-    char label[MAXVARLEN + 1];
-
-    // first, just exit we have a NULL argument
-    if (labelptr == NULL)
-        return NULL;
-
-    // convert the label to the token format and load into label[]
-    // this assumes that the first character has already been verified as a valid label character
-    {
-        const unsigned char *lv;
-        int ll;
-        NameView(labelptr, &lv, &ll);
-        if (ll == 0)
-        {
-            lv = labelptr;
-            ll = 1;
-        }
-        if (ll >= MAXVARLEN) // a label is at most 31 characters (the manual)
-            error("Label too long"); // too long, not a correctly formed label
-        for (i = 1; i <= ll; i++)
-            label[i] = lv[i - 1];
-    }
-    label[0] = i - 1; // the length byte
-
-    p = (char *)ProgMemory;
-    next = (char *)LibMemory;
-    if (LibPresent())
-    {
-        if (CurrentLinePtr >= LibMemory && CurrentLinePtr <= LibMemory + MAX_PROG_SIZE)
-        {
-            p = (char *)LibMemory;
-            next = (char *)ProgMemory;
-        }
-    }
-
-    // now do the search
-    while (1)
-    {
-        if (p[0] == 0 && p[1] == 0)
-        { // end of the program
-            if (LibPresent())
-            {
-                if (j == 0)
-                {
-                    j = 1;
-                    p = next;
-                }
-                else
-                {
-                    error("Cannot find label");
-                }
-            }
-            else
-            {
-                error("Cannot find label");
-            }
-        }
-        if (p[0] == T_NEWLINE)
-        {
-            // Phase B: peek for T_LABEL immediately after the newline
-            // header (optionally past T_LINENBR).  Compare; if no match,
-            // jump to the next line via the skip byte when valid.
-            unsigned char skip = (unsigned char)p[1];
-            char *q = p + T_NEWLINE_HDR;
-            while (*q == ' ')
-                q++;
-            if (q[0] == T_LINENBR)
-            {
-                q += 3;
-                while (*q == ' ')
-                    q++;
-            }
-            if (q[0] == T_LABEL)
-            {
-                if (mem_equal((unsigned char *)q + 1, (unsigned char *)label, label[0] + 1))
-                    return (unsigned char *)p; // pointer to T_NEWLINE of matched line
-            }
-            if (skip >= 3 && skip != T_NEWLINE_SKIP_NONE && skip != 0xFF)
-            {
-                p += skip;
-                continue;
-            }
-            lastp = p;          // save in case this is the right line
-            p += T_NEWLINE_HDR; // step over T_NEWLINE + skip byte
-            continue;
-        }
-
-        if (p[0] == T_LINENBR)
-        {
-            p += 3; // and step over the line number
-            continue;
-        }
-
-        if (p[0] == T_LABEL)
-        {
-            p++;                                                                     // point to the length of the label
-            if (mem_equal((unsigned char *)p, (unsigned char *)label, label[0] + 1)) // compare the strings including the length byte
-                return (unsigned char *)lastp;                                       // and if successful return pointing to the beginning of the line
-            p += p[0] + 1;                                                           // still looking! skip over the label
-            continue;
-        }
-
-        p++;
-    }
-}
-#endif
 
 // A symbol remembers the label of its name (see Symbols.h)
 unsigned char *findlabel(unsigned char *labelptr)
@@ -5287,10 +4952,6 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     int dim_error_deferred = 0; // set if V_NOFIND_NULL deferred a "Dimensions" error
     int symk = -1;              // the name's canonical entry, if it is a bound symbol (see Symbols.h)
     unsigned char *symp = NULL; // that symbol, while its name is still unread
-#ifdef rp2350
-    char *tp, *ip;
-    uint32_t funhash = 0;
-#endif
 #ifdef STRUCTENABLED
     g_StructMemberType = 0;   // Reset struct member type flag
     g_StructMemberOffset = 0; // Reset struct member offset
@@ -5302,16 +4963,10 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
 
     globalifree = -1;
     tmp = -1;
-#ifdef rp2350
-#define FINDVAR_FUNHASH() funhash = hash % MAXSUBFUN
-#else
-#define FINDVAR_FUNHASH()
-#endif
     // what the name's hash gives the search below
 #define FINDVAR_HASHES()                                                    \
     do                                                                      \
     {                                                                       \
-        FINDVAR_FUNHASH();                                                  \
         GlobalhashIndex = (hash % maxglobalvars) + maxlocalvars;            \
         OriginalGlobalHash = GlobalhashIndex - 1;                           \
         if (OriginalGlobalHash < maxlocalvars)                              \
@@ -5838,62 +5493,13 @@ findvar_found:
     // (once it has passed for a symbol's name it holds for the run: P6 F3)
     if (symk >= 0 && (SymCold[symk].flags & SYMC_NOSUB))
         ;
-#ifdef rp2350
-    else if (!(action & V_FUNCT) && (funtbl[funhash].name[0]))
-    { // don't do this if we are defining the local variable for a function name
-        while (funtbl[funhash].name[0] != 0)
-        {
-            ip = (char *)name;
-            tp = funtbl[funhash].name;
-            if (*ip++ == *tp++)
-            { // preliminary quick check
-                j = namelen - 1;
-                while (j > 0 && *ip == *tp)
-                { // compare each letter
-                    j--;
-                    ip++;
-                    tp++;
-                }
-                if (j == 0 && (*(char *)tp == 0 || namelen == MAXVARLEN))
-                { // found a matching name
-                    if (funtbl[funhash].index < MAXSUBFUN)
-                        error("A sub/fun has the same name: $", name);
-                }
-            }
-            funhash++;
-            if (funhash == MAXSUBFUN)
-                funhash = 0;
-        }
-        if (symk >= 0)
-            SymCold[symk].flags |= SYMC_NOSUB;
-    }
-#else
     else if (!(action & V_FUNCT))
     { // don't do this if we are defining the local variable for a function name
-        for (i = 0; i < MAXSUBFUN && subfun[i] != NULL; i++)
-        {
-            const unsigned char *xv;
-            int xl;
-            x = subfun[i]; // point to the command token
-            x += sizeof(CommandToken);
-            skipspace(x); // point to the identifier
-            NameView(x, &xv, &xl);
-            s = name; // point to the new variable
-            if (xl != namelen || *s != toupper(*xv))
-                continue; // quick first test
-            while (xl && *s == toupper(*xv))
-            {
-                s++;
-                xv++;
-                xl--;
-            }
-            if (xl == 0)
-                error("A sub/fun has the same name: $", name);
-        }
+        if (NameFind(name, namelen, hash, (1 << NK_SUB) | (1 << NK_FUN)) != NULL)
+            error("A sub/fun has the same name: $", name);
         if (symk >= 0)
             SymCold[symk].flags |= SYMC_NOSUB;
     }
-#endif
     // set a default string size
     size = MAXSTRLEN;
 

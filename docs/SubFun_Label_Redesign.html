@@ -335,8 +335,8 @@ static int NameMask;                   // slots - 1</code></pre>
 <div class="decide"><div class="eyebrow">Decided, 2026-10-02</div>
 <ol>
 <li><b>One index</b> for SUBs, FUNCTIONs, CSUBs and labels, with a kind byte.</li>
-<li><b>The current module's label wins</b> when the library and the program both have it, on both chips.</li>
-<li><b>A duplicate label is an error</b> when the program is prepared, like a duplicate SUB name. (A label in the library and one of the same name in the program are not duplicates: decision 2 chooses between them.)</li>
+<li><b>Labels are global</b>: one in the library and one of the same name in the program is a duplicate, an error like any other (Peter, 2026-10-02, replacing "the current module's wins").</li>
+<li><b>A duplicate label is an error</b> when the program is prepared, like a duplicate SUB name, wherever the two are.</li>
 <li><b>No fallback search</b>: if there is no room for the index, the lookup says "Not enough memory".</li>
 <li><b>The caps stay</b>: 512 SUBs, FUNCTIONs and CSUBs on the RP2350, 256 on the RP2040. Labels are not capped.</li>
 <li><b>The RP2350's freed RAM goes to the heap</b> in phase 4, with new magic numbers in that release.</li>

@@ -4340,6 +4340,7 @@ void SaveContext(void)
 	/* the symbol bindings live in the heap and belong to this program: keep
 	   them out of the snapshot (see the end of RestoreContext) */
 	SymBindFree();
+	NameIndexFree(); // (so is the index of names: rebuilt below)
 #if defined(rp2350)
 	/* free the stepper ISR's finished arc buffers before the heap is
 	   snapshotted, so the snapshot holds no pending links */
@@ -4438,6 +4439,7 @@ void SaveContext(void)
 	}
 #endif
 	SymBindInit(); // (the program carries on: SAVE CONTEXT)
+	NameIndexRebuild();
 }
 void RestoreContext(bool keep)
 {
@@ -4542,6 +4544,7 @@ void RestoreContext(bool keep)
 	   in the restored heap, for whichever program is now current. */
 	SymBindForget();
 	SymBindInit();
+	NameIndexRebuild(); // (so is the index of names)
 }
 extern void chdir(char *p);
 void MIPS16 do_chain(unsigned char *cmdline)

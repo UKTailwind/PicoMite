@@ -268,13 +268,6 @@ extern "C"
      * ============================================================================ */
     typedef uint16_t CommandToken;
 
-    /* Function table structure */
-    struct s_funtbl
-    {
-        char name[MAXVARLEN];
-        uint32_t index;
-    };
-
     /* Variable table structure */
     typedef struct s_vartbl
     {
@@ -397,7 +390,9 @@ extern "C"
      * External variables - Variable management
      * ============================================================================ */
     extern struct s_vartbl s_vartbl_val;
-    extern struct s_funtbl funtbl[MAXSUBFUN];
+    void NameIndexForget(void);  // the heap has been wiped (InitHeap)
+    void NameIndexFree(void);    // SaveContext: kept out of the snapshot
+    void NameIndexRebuild(void); // RestoreContext has put back another heap
     /* A variable's record is reached through its number: VREC(i).  Every
        record is in the SRAM heap, in a chunk of VARCHUNK records, and never
        moves while the variable exists.  A global's comes from a chunk as the
