@@ -121,12 +121,13 @@ extern "C"
       [[heap-bss-overlap-on-rp2350]]. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.4 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (204 * 1024)
-#define MAX_PROG_SIZE (152 * 1024) // (144 KB until 2026-10-01: the larger heap takes 152 KB programs; this moved the flash layout and A:)
+   /* +4 KB heap and +4 KB program (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4 KB of RAM margin left for the stack.  The larger program size moves the flash layout and A:. */
+#define HEAP_MEMORY_SIZE (208 * 1024)
+#define MAX_PROG_SIZE (156 * 1024) // (144 KB until 2026-10-01, 152 KB until 2026-10-02: each larger heap took 4 KB more of program; each move moved the flash layout and A:)
    /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
       changed from 1024x600 to 640x480@315000 so existing devices pick up
       the new default via ResetOptions on first boot. */
-#define MagicKey 0xD08D67EE
+#define MagicKey 0x59213D2A
 #else
    /* HDMIUSB: full 153600-byte framebuffer pool (unlike HDMIBTH/HDMIWEB,
       which use the shrunk 96000-byte one) plus the TinyUSB host stack's
@@ -152,20 +153,22 @@ extern "C"
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.7 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (208 * 1024)
-#define MAX_PROG_SIZE (148 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0x870091F6
+   /* +4 KB heap and +4 KB program (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4 KB of RAM margin left for the stack.  The larger program size moves the flash layout and A:. */
+#define HEAP_MEMORY_SIZE (212 * 1024)
+#define MAX_PROG_SIZE (152 * 1024) // (148 KB until 2026-10-02; moving it moves the flash layout and A:)
+#define MagicKey 0xDD897EB9
 #endif
 #else
-#define MagicKey 0xC2E17CB1
+#define MagicKey 0xDDE229A1
    /* +48 KB (2026-09-29): Route B (P1-P5) went 29.4 KB over. */
 #define FLASH_TARGET_OFFSET (1088 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 1144 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.4 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (216 * 1024)
-#define MAX_PROG_SIZE (156 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
+   /* +4 KB heap and +4 KB program (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4 KB of RAM margin left for the stack.  The larger program size moves the flash layout and A:. */
+#define HEAP_MEMORY_SIZE (220 * 1024)
+#define MAX_PROG_SIZE (160 * 1024) // (156 KB until 2026-10-02; moving it moves the flash layout and A:)
 #endif
 #else // rp2350 VGA
 #define MAXMODES 3
