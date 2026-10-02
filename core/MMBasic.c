@@ -449,7 +449,8 @@ unsigned char *PreprogramErrLine = NULL; // Line pointer where PrepareProgram er
    The name index (both chips): every SUB, FUNCTION, CSUB and label of the
    library and the program, by name, for the lookups that have only a name's
    spelling to go on (FindSubFunText, findlabel_text, and findvar's check that
-   a new variable is not named like a SUB).  A name read through a symbol
+   a new variable is not named like a SUB), and the numbered lines that a
+   GOTO, GOSUB, RESTORE, IF or ON names (findline: see LineTargets).  A name read through a symbol
    reaches it once a run (SymS, labind); a name in text (the prompt, EXECUTE,
    CALL, ON, RESTORE, OPTION SYMBOLS OFF, a program saved as text) every time.
    Made in the heap by PrepareProgram, a power of two of 8-byte slots at most
@@ -461,6 +462,8 @@ static void SetPreprogramError(const char *msg, unsigned char *linePtr);
 #define NK_SUB 1    // a SUB or CSUB: target is its subfun[] index
 #define NK_FUN 2    // a FUNCTION: likewise
 #define NK_LABEL 3  // a label: target is its line's T_NEWLINE
+#define NK_LINE 4   // a line number used as a target: hash16 is the number, len 1 in the
+                    // library, target its T_LINENBR (0 when both modules have the number)
 struct s_nameslot
 {
     uint16_t hash16;
@@ -556,7 +559,7 @@ static struct s_nameslot *NameAdd(const unsigned char *nv, int nl, int kind, uin
     uint32_t hash = NameHash(nm, nl);
     for (i = hash & NameMask; NameIndex[i].kind; i = (i + 1) & NameMask)
     {
-        if ((NameIndex[i].kind == NK_LABEL) == (kind == NK_LABEL) && NameIs(&NameIndex[i], nm, nl, hash))
+        if (NameIndex[i].kind != NK_LINE && (NameIndex[i].kind == NK_LABEL) == (kind == NK_LABEL) && NameIs(&NameIndex[i], nm, nl, hash))
             return &NameIndex[i]; // (a SUB and a FUNCTION may not share a name either)
     }
     NameIndex[i].hash16 = hash >> 16;
@@ -567,8 +570,9 @@ static struct s_nameslot *NameAdd(const unsigned char *nv, int nl, int kind, uin
 }
 
 // the labels in one module (from its start p): counted (add == 0) or added;
-// returns how many, or -1 for a duplicate label (the error set)
-static int NameLabels(unsigned char *p, int add, int ErrAbort)
+// returns how many, or -1 for a duplicate label (the error set).  *numbered
+// (if not NULL) counts its numbered lines.
+static int NameLabels(unsigned char *p, int add, int ErrAbort, int *numbered)
 {
     unsigned char *const plimit = p + MAX_PROG_SIZE;
     unsigned char *lastp = p;
@@ -583,6 +587,8 @@ static int NameLabels(unsigned char *p, int add, int ErrAbort)
                 q++;
             if (q[0] == T_LINENBR)
             {
+                if (numbered != NULL)
+                    (*numbered)++;
                 q += 3;
                 while (*q == ' ')
                     q++;
@@ -617,22 +623,238 @@ static int NameLabels(unsigned char *p, int add, int ErrAbort)
     return n;
 }
 
-// make the index for the nsubs entries of subfun[] and the labels of the library
-// and the program; returns 1 for an error (set) if ErrAbort, else 0.  With no
-// memory for it (only possible at the command prompt: RUN starts with an empty
-// heap) the index is left absent, and a name lookup reports that.
+/* Line numbers used as targets (Peter, 2026-10-02): only the lines that GOTO,
+   GOSUB, RESTORE, IF ... THEN n / ELSE n / GOTO n and ON ... GOTO/GOSUB lists
+   name by a number go in the index, so a long numbered program does not fill
+   it.  A target written as an expression is not seen, and findline walks for
+   it as before; a number seen that is not a line takes no slot. */
+static unsigned short LnGOTO, LnGOSUB, LnRESTORE, LnON;
+
+static inline uint32_t LineHash(int nbr)
+{
+    uint32_t hash = (FNV_offset_basis ^ (nbr & 0xff)) * FNV_prime;
+    return (hash ^ ((nbr >> 8) & 0xff)) * FNV_prime;
+}
+
+// the line number at *pp (after spaces), or -1; *pp is left after it
+static int LineTargetAt(unsigned char **pp)
+{
+    unsigned char *p = *pp;
+    int n = 0;
+    skipspace(p);
+    if (!isdigit(*p))
+    {
+        *pp = p;
+        return -1;
+    }
+    while (isdigit(*p))
+    {
+        if (n <= MAXLINENBR)
+            n = n * 10 + (*p - '0');
+        p++;
+    }
+    *pp = p;
+    return n <= MAXLINENBR ? n : -1;
+}
+
+// the line-number targets of one module's statements, from n on: stored in
+// list, or only counted if it is NULL; returns n plus how many
+static int LineTargets(unsigned char *p, uint16_t *list, int n)
+{
+    unsigned char *const plimit = p + MAX_PROG_SIZE;
+    while (*p != 0xff && p < plimit)
+    {
+        p = GetNextCommand(p, NULL, NULL); // (the rest of the statement before is stepped over)
+        if (*p == 0)
+            break;
+        CommandToken tkn = commandtbl_at(p);
+        unsigned char *q = p + sizeof(CommandToken);
+        int t;
+        if (tkn == LnGOTO || tkn == LnGOSUB || tkn == LnRESTORE)
+        {
+            if ((t = LineTargetAt(&q)) >= 0)
+            {
+                if (list != NULL)
+                    list[n] = t;
+                n++;
+            }
+        }
+        else if (tkn == cmdIF || tkn == LnON)
+        {
+            while (*q)
+            {
+                if (*q == '"')
+                { // (a string: nothing in it is a target)
+                    q++;
+                    while (*q && *q != '"')
+                        q++;
+                    if (*q)
+                        q++;
+                    continue;
+                }
+                if (*q == tokenTHEN || *q == tokenELSE || *q == tokenGOTO || *q == tokenGOSUB)
+                {
+                    int onlist = (tkn == LnON && (*q == tokenGOTO || *q == tokenGOSUB));
+                    q++;
+                    skipspace(q);
+                    CommandToken c = commandtbl_at(q); // THEN GOTO n, ELSE GOSUB n ...
+                    if (c == LnGOTO || c == LnGOSUB || c == LnRESTORE)
+                        q += sizeof(CommandToken);
+                    while (1)
+                    {
+                        if ((t = LineTargetAt(&q)) >= 0)
+                        {
+                            if (list != NULL)
+                                list[n] = t;
+                            n++;
+                        }
+                        else if (onlist)
+                            while (*q && *q != ',') // (a label in the list)
+                                q++;
+                        skipspace(q);
+                        if (!onlist || *q != ',')
+                            break;
+                        q++;
+                    }
+                    continue;
+                }
+                q++;
+            }
+        }
+    }
+    return n;
+}
+
+static int LineCmp(const void *a, const void *b)
+{
+    return (int)*(const uint16_t *)a - (int)*(const uint16_t *)b;
+}
+
+// the distinct line-number targets of the library and the program, sorted,
+// in a block of the heap (*out, for the caller to free); 0 if there are none
+// or there is not the memory to list them (findline then walks for every one)
+static int LineTargetsGather(uint16_t **out)
+{
+    int n, i, j;
+    uint16_t *t;
+    LnGOTO = GetCommandValue((unsigned char *)"GoTo");
+    LnGOSUB = GetCommandValue((unsigned char *)"GoSub");
+    LnRESTORE = GetCommandValue((unsigned char *)"Restore");
+    LnON = GetCommandValue((unsigned char *)"On");
+    n = LineTargets(ProgMemory, NULL, LibPresent() ? LineTargets(LibMemory, NULL, 0) : 0);
+    if (n == 0 || (t = (uint16_t *)GetMemoryNull(n * sizeof(uint16_t))) == NULL)
+        return 0;
+    LineTargets(ProgMemory, t, LibPresent() ? LineTargets(LibMemory, t, 0) : 0);
+    qsort(t, n, sizeof(uint16_t), LineCmp);
+    for (i = j = 0; i < n; i++)
+        if (j == 0 || t[j - 1] != t[i])
+            t[j++] = t[i];
+    *out = t;
+    return j;
+}
+
+// line nbr (its T_LINENBR at target) in the index: the first of a module's
+// lines of that number; one in each module leaves neither, as findline
+// prefers the module that is running
+static void LineAdd(int nbr, unsigned char *target, int lib)
+{
+    uint32_t i;
+    for (i = LineHash(nbr) & NameMask; NameIndex[i].kind; i = (i + 1) & NameMask)
+        if (NameIndex[i].kind == NK_LINE && NameIndex[i].hash16 == nbr)
+        {
+            if (NameIndex[i].len != lib)
+                NameIndex[i].target = 0;
+            return;
+        }
+    NameIndex[i].hash16 = nbr;
+    NameIndex[i].len = lib;
+    NameIndex[i].kind = NK_LINE;
+    NameIndex[i].target = (uint32_t)target;
+}
+
+// is nbr in the sorted list of n targets?
+static int LineListed(const uint16_t *list, int n, int nbr)
+{
+    int lo = 0, hi = n;
+    while (lo < hi)
+    {
+        int mid = (lo + hi) >> 1;
+        if (list[mid] == nbr)
+            return 1;
+        if (list[mid] < nbr)
+            lo = mid + 1;
+        else
+            hi = mid;
+    }
+    return 0;
+}
+
+// the numbered lines of one module that are targets, into the index (walked
+// as findline walks: by the skip bytes, or byte by byte where there is none)
+static void NameLines(unsigned char *p, const uint16_t *list, int n, int lib)
+{
+    unsigned char *const plimit = p + MAX_PROG_SIZE;
+    while (p < plimit && !(p[0] == 0 && p[1] == 0) && p[0] != 0xff)
+    {
+        if (p[0] == T_NEWLINE)
+        {
+            unsigned char skip = p[1];
+            if (p[T_NEWLINE_HDR] == T_LINENBR)
+            {
+                int nbr = (p[T_NEWLINE_HDR + 1] << 8) | p[T_NEWLINE_HDR + 2];
+                if (LineListed(list, n, nbr))
+                    LineAdd(nbr, p + T_NEWLINE_HDR, lib);
+            }
+            if (skip >= 3 && skip != T_NEWLINE_SKIP_NONE && skip != 0xFF)
+                p += skip;
+            else
+                p += T_NEWLINE_HDR;
+            continue;
+        }
+        if (p[0] == T_LINENBR)
+        {
+            int nbr = (p[1] << 8) | p[2];
+            if (LineListed(list, n, nbr))
+                LineAdd(nbr, p, lib);
+            p += 3;
+            continue;
+        }
+        p++;
+    }
+}
+
+// the line numbered nbr from the index, or NULL if it is not there (findline
+// then walks for it)
+static inline unsigned char *LineFind(int nbr)
+{
+    for (uint32_t i = LineHash(nbr) & NameMask; NameIndex[i].kind; i = (i + 1) & NameMask)
+        if (NameIndex[i].kind == NK_LINE && NameIndex[i].hash16 == nbr)
+            return (unsigned char *)NameIndex[i].target;
+    return NULL;
+}
+
+// make the index for the nsubs entries of subfun[], the labels of the library
+// and the program, and the numbered lines that are targets; returns 1 for an
+// error (set) if ErrAbort, else 0.  With no memory for it (only possible at
+// the command prompt: RUN starts with an empty heap) the index is left
+// absent, and a name lookup reports that.
 static int NameIndexBuild(int nsubs, int ErrAbort)
 {
-    int n, size, i;
+    int n, size, i, numbered = 0, nt = 0;
+    uint16_t *targets = NULL;
     NameIndexFree();
     NameSubs = nsubs;
-    n = nsubs + (LibPresent() ? NameLabels(LibMemory, 0, 0) : 0) + NameLabels(ProgMemory, 0, 0);
+    n = nsubs + (LibPresent() ? NameLabels(LibMemory, 0, 0, &numbered) : 0) + NameLabels(ProgMemory, 0, 0, &numbered);
+    if (numbered)
+        nt = LineTargetsGather(&targets);
+    n += nt;
     if (n == 0)
         return 0; // (NameNone)
     for (size = 16; size < 2 * n; size <<= 1)
         ;
     if ((NameIndex = (struct s_nameslot *)GetMemoryNull(size * sizeof(struct s_nameslot))) == NULL)
     {
+        FreeMemorySafe((void **)&targets);
         if (ErrAbort)
             error("Not enough memory");
         NameMask = 0;
@@ -648,12 +870,23 @@ static int NameIndexBuild(int nsubs, int ErrAbort)
         NameView(p, &nv, &nl);
         if (NameAdd(nv, nl, commandtbl_decode(subfun[i]) == cmdFUN ? NK_FUN : NK_SUB, i) != NULL && ErrAbort)
         {
+            FreeMemorySafe((void **)&targets);
             SetPreprogramError("Duplicate name", subfun[i]);
             return 1;
         }
     }
-    if ((LibPresent() && NameLabels(LibMemory, 1, ErrAbort) < 0) || NameLabels(ProgMemory, 1, ErrAbort) < 0)
+    if ((LibPresent() && NameLabels(LibMemory, 1, ErrAbort, NULL) < 0) || NameLabels(ProgMemory, 1, ErrAbort, NULL) < 0)
+    {
+        FreeMemorySafe((void **)&targets);
         return 1;
+    }
+    if (nt)
+    {
+        if (LibPresent())
+            NameLines(LibMemory, targets, nt, 1);
+        NameLines(ProgMemory, targets, nt, 0);
+        FreeMemorySafe((void **)&targets);
+    }
     return 0;
 }
 
@@ -4117,6 +4350,8 @@ unsigned char MIPS16 *findline(int nbr, int mustfind)
     unsigned char *p;
     unsigned char *next;
     int i, j = 0;
+    if (mustfind && NameIndex != NULL && (p = LineFind(nbr)) != NULL)
+        return p; // (a target the index has: see LineTargets)
     p = ProgMemory;
     next = LibMemory;
     if (LibPresent())
