@@ -5782,7 +5782,7 @@ void SetADCFreq(float frequency)
 // for EDIT of a file, which keeps the program's variables in its snapshot
 // (SaveContext) and gives their memory to the editor.  The interrupts that
 // run BASIC code are not taken while the editor runs.
-void UserInterruptsOff(void)
+void MIPS16 UserInterruptsOff(void)
 {
     if (IrInterrupt != NULL)
     {

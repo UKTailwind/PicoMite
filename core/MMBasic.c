@@ -477,13 +477,13 @@ static uint32_t NameMask;                       // its slots - 1
 static int NameSubs;                            // the SUBs, FUNCTIONs and CSUBs in subfun[]
 
 // the heap has been wiped: the index went with it
-void NameIndexForget(void)
+void MIPS16 NameIndexForget(void)
 {
     NameIndex = NameNone;
     NameMask = 0;
 }
 
-void NameIndexFree(void)
+void MIPS16 NameIndexFree(void)
 {
     if (NameIndex != NameNone && NameIndex != NULL)
         FreeMemorySafe((void **)&NameIndex);
@@ -548,7 +548,7 @@ static inline int NameIs(const struct s_nameslot *s, const unsigned char *nm, in
 // duplicate, left as it was), or NULL when it was added.  SUBs, FUNCTIONs and
 // CSUBs share one set of names; labels have their own, global to the library
 // and the program together.
-static struct s_nameslot *NameAdd(const unsigned char *nv, int nl, int kind, uint32_t target)
+static struct s_nameslot MIPS16 *NameAdd(const unsigned char *nv, int nl, int kind, uint32_t target)
 {
     unsigned char nm[MAXVARLEN];
     uint32_t i;
@@ -572,7 +572,7 @@ static struct s_nameslot *NameAdd(const unsigned char *nv, int nl, int kind, uin
 // the labels in one module (from its start p): counted (add == 0) or added;
 // returns how many, or -1 for a duplicate label (the error set).  *numbered
 // (if not NULL) counts its numbered lines.
-static int NameLabels(unsigned char *p, int add, int ErrAbort, int *numbered)
+static int MIPS16 NameLabels(unsigned char *p, int add, int ErrAbort, int *numbered)
 {
     unsigned char *const plimit = p + MAX_PROG_SIZE;
     unsigned char *lastp = p;
@@ -637,7 +637,7 @@ static inline uint32_t LineHash(int nbr)
 }
 
 // the line number at *pp (after spaces), or -1; *pp is left after it
-static int LineTargetAt(unsigned char **pp)
+static int MIPS16 LineTargetAt(unsigned char **pp)
 {
     unsigned char *p = *pp;
     int n = 0;
@@ -659,7 +659,7 @@ static int LineTargetAt(unsigned char **pp)
 
 // the line-number targets of one module's statements, from n on: stored in
 // list, or only counted if it is NULL; returns n plus how many
-static int LineTargets(unsigned char *p, uint16_t *list, int n)
+static int MIPS16 LineTargets(unsigned char *p, uint16_t *list, int n)
 {
     unsigned char *const plimit = p + MAX_PROG_SIZE;
     while (*p != 0xff && p < plimit)
@@ -733,7 +733,7 @@ static int LineCmp(const void *a, const void *b)
 // the distinct line-number targets of the library and the program, sorted,
 // in a block of the heap (*out, for the caller to free); 0 if there are none
 // or there is not the memory to list them (findline then walks for every one)
-static int LineTargetsGather(uint16_t **out)
+static int MIPS16 LineTargetsGather(uint16_t **out)
 {
     int n, i, j;
     uint16_t *t;
@@ -756,7 +756,7 @@ static int LineTargetsGather(uint16_t **out)
 // line nbr (its T_LINENBR at target) in the index: the first of a module's
 // lines of that number; one in each module leaves neither, as findline
 // prefers the module that is running
-static void LineAdd(int nbr, unsigned char *target, int lib)
+static void MIPS16 LineAdd(int nbr, unsigned char *target, int lib)
 {
     uint32_t i;
     for (i = LineHash(nbr) & NameMask; NameIndex[i].kind; i = (i + 1) & NameMask)
@@ -773,7 +773,7 @@ static void LineAdd(int nbr, unsigned char *target, int lib)
 }
 
 // is nbr in the sorted list of n targets?
-static int LineListed(const uint16_t *list, int n, int nbr)
+static int MIPS16 LineListed(const uint16_t *list, int n, int nbr)
 {
     int lo = 0, hi = n;
     while (lo < hi)
@@ -791,7 +791,7 @@ static int LineListed(const uint16_t *list, int n, int nbr)
 
 // the numbered lines of one module that are targets, into the index (walked
 // as findline walks: by the skip bytes, or byte by byte where there is none)
-static void NameLines(unsigned char *p, const uint16_t *list, int n, int lib)
+static void MIPS16 NameLines(unsigned char *p, const uint16_t *list, int n, int lib)
 {
     unsigned char *const plimit = p + MAX_PROG_SIZE;
     while (p < plimit && !(p[0] == 0 && p[1] == 0) && p[0] != 0xff)
@@ -838,7 +838,7 @@ static inline unsigned char *LineFind(int nbr)
 // error (set) if ErrAbort, else 0.  With no memory for it (only possible at
 // the command prompt: RUN starts with an empty heap) the index is left
 // absent, and a name lookup reports that.
-static int NameIndexBuild(int nsubs, int ErrAbort)
+static int MIPS16 NameIndexBuild(int nsubs, int ErrAbort)
 {
     int n, size, i, numbered = 0, nt = 0;
     uint16_t *targets = NULL;
@@ -891,7 +891,7 @@ static int NameIndexBuild(int nsubs, int ErrAbort)
 }
 
 // after RestoreContext has put back a heap: the index in it is not this program's
-void NameIndexRebuild(void)
+void MIPS16 NameIndexRebuild(void)
 {
     NameIndexForget();
     NameIndexBuild(NameSubs, 0);
@@ -1224,7 +1224,7 @@ void VarChunksForget(void)
 // the chunks of variables' records (RUN seeds them; until then a variable
 // takes a chunk as it needs one).  Every variable must have been cleared and
 // the user's interrupts stopped, so that nothing is left to write to a record.
-void HeapReleaseForBuffer(void)
+void MIPS16 HeapReleaseForBuffer(void)
 {
     int c;
     NameIndexFree();
@@ -5223,7 +5223,153 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
 //      if it is type T_NBR or T_INT the value is held in the variable slot
 //      for T_STR a block of memory of MAXSTRLEN size (or size determined by the LENGTH keyword) will be malloc'ed and the pointer stored in the variable slot.
 #if LOWRAM
-void MIPS16 *findvar(unsigned char *p, int action)
+/* findvar in two parts on the LOWRAM builds (RP2040 VGA, VGAUSB and WebMite),
+   which keep findvar in flash for want of RAM (Peter, 2026-10-02).  A
+   reference to an existing variable through a bound symbol - nearly every
+   variable a program saved with symbols reads or writes - is answered here,
+   in RAM.  Anything else (a name in text, a declaration, a variable to be
+   made, a TYPE, profiling, a suffix that does not match) goes to
+   findvar_slow, in flash, which is findvar as it was.  It is handed over
+   before an index is evaluated, so nothing is evaluated twice, and the
+   errors are the ones findvar_slow gives. */
+static __attribute__((noinline)) void MIPS16 *findvar_slow(unsigned char *p, int action);
+void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
+{
+    unsigned char *q = p;
+    struct s_vartbl *vr;
+    int symk, i, n, vtype = 0, dnbr = 0, deferred = 0;
+    int dim[MAXDIM];
+    skipspace(q);
+    if (!issymbol(*q) || (action & (V_LOCAL | V_DIM_VAR | V_DIM_NEW | V_FUNCT | T_IMPLIED)) || g_option_profiling)
+        return findvar_slow(p, action);
+    if ((symk = SymCanonAt(q)) < 0)
+        return findvar_slow(p, action);
+#ifdef STRUCTENABLED
+    if (g_structcnt > 0 && (SymCold[symk].flags & SYMC_DOT))
+        return findvar_slow(p, action);
+#endif
+    // its binding: its local at this level, or else its global if no local can hide it
+    i = SymL[symk];
+    if (i < 0 || VREC(i)->level != g_LocalIndex)
+    {
+        i = SymG[symk];
+        if (i < 0 || (g_LocalIndex && SymTextLocals))
+            return findvar_slow(p, action);
+    }
+    vr = VREC(i);
+    q += symbolsize(*q);
+    if (*q == '$')
+    {
+        vtype = T_STR;
+        q++;
+    }
+    else if (*q == '%')
+    {
+        vtype = T_INT;
+        q++;
+    }
+    else if (*q == '!')
+    {
+        vtype = T_NBR;
+        q++;
+    }
+    if (vr->name[0] == 0 || !(vr->type & (vtype ? vtype : (DefaultType | T_IMPLIED))))
+        return findvar_slow(p, action);
+#ifdef STRUCTENABLED
+    if (vr->type & T_STRUCT)
+        return findvar_slow(p, action);
+    g_StructMemberType = 0;
+    g_StructMemberOffset = 0;
+    g_StructMemberSize = 0;
+#endif
+    emptyarray = 0;
+    if (*q == '(')
+    {
+        unsigned char *pp = q + 1;
+        skipspace(pp);
+        if ((action & V_EMPTY_OK) && *pp == ')')
+        { // an empty array, eg  ()
+            emptyarray = 1;
+            dnbr = -1;
+        }
+        else
+        { // the indices, as findvar_slow reads them
+            getargs(&q, MAXDIM * 2, (unsigned char *)"(,");
+            if ((argc & 0x01) == 0)
+                error("Dimensions");
+            dnbr = argc / 2 + 1;
+            if (dnbr > MAXDIM)
+                error("Dimensions");
+            memset(dim, 0, sizeof(dim));
+            for (n = 0; n < argc; n += 2)
+            {
+                MMFLOAT f;
+                long long int in;
+                char *sv;
+                int targ = T_NOTYPE;
+                evaluate(argv[n], &f, &in, (unsigned char **)&sv, &targ, false);
+                if (targ == T_STR)
+                    dnbr = MAXDIM; // (an error below, with the right message)
+                if (targ == T_NBR)
+                    in = FloatToInt32(f);
+                else if (targ == T_INT && in != (int)in)
+                    error("Index out of bounds");
+                dim[n / 2] = in;
+                if (dim[n / 2] < g_OptionBase)
+                {
+                    if (action & V_NOFIND_NULL)
+                        deferred = 1;
+                    else
+                        error("Dimensions");
+                }
+            }
+        }
+    }
+    g_VarIndex = i;
+    if (dnbr == 0)
+    {
+        if (DimIsAllocated(RAW_DIM((*vr), 0)))
+            error("Array dimensions");
+    }
+    else if (dnbr == -1)
+    {
+        if (DimIsScalar(RAW_DIM((*vr), 0)))
+            error("Array dimensions");
+    }
+    else
+    {
+        for (n = 0; n < MAXDIM && !DimIsEnd(RAW_DIM((*vr), n)); n++)
+            ;
+        if (n != dnbr)
+            error("Array dimensions");
+    }
+    if (dnbr == -1 || DimIsScalar(RAW_DIM((*vr), 0)))
+    {
+        if (dnbr == -1 || vr->type & (T_PTR | T_STR))
+            return vr->val.s;
+        if (vr->type & T_INT)
+            return &(vr->val.i);
+        return &(vr->val.f);
+    }
+    if (deferred)
+        error("Dimensions");
+    for (n = 0; n < dnbr; n++)
+        if (dim[n] > DimUpper(RAW_DIM((*vr), n)) || dim[n] < g_OptionBase)
+            error("Index out of bounds");
+    int nbr = dim[0] - g_OptionBase, m = 1;
+    for (n = 1; n < dnbr; n++)
+    {
+        m *= DimElements(RAW_DIM((*vr), n - 1));
+        nbr += (dim[n] - g_OptionBase) * m;
+    }
+    if (vr->type & T_NBR)
+        return vr->val.s + (nbr * sizeof(MMFLOAT));
+    if (vr->type & T_INT)
+        return vr->val.s + (nbr * sizeof(long long int));
+    return vr->val.s + (nbr * (vr->size + 1));
+}
+
+static __attribute__((noinline)) void MIPS16 *findvar_slow(unsigned char *p, int action)
 {
 #else
 /***********************************************************************************************

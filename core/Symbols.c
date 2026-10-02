@@ -788,7 +788,7 @@ int SymBegin(unsigned char *src)
 // return true for the count to be made again (once: the second count is in
 // the borrowed space).  On an RP2040 a large program's text can leave only the
 // 8 KB block in the heap beside it, too small for 500 names.
-int SymRetry(void)
+int MIPS16 SymRetry(void)
 {
     unsigned char *start;
     int size;
