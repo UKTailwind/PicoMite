@@ -4783,6 +4783,8 @@ uint32_t testPSRAM(void)
         if (SymBegin(pm))
         {
             SymCount(pm);
+            if (SymRetry())
+                SymCount(pm);
             SymRank();
         }
         multi = false;

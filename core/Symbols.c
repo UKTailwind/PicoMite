@@ -714,7 +714,8 @@ typedef struct
 } symentry_t;
 
 static unsigned char *symblk = NULL;
-static int symblkowned; // symblk is temporary memory of our own (not borrowed from the source's buffer)
+static int symblkowned;        // symblk is temporary memory of our own (not borrowed from the source's buffer)
+static unsigned char *symsrc;  // the source being saved (SymBegin's src), for SymRetry
 static int symblksize, symentries, symnametop, symoverflow, symshort, symnamebytes;
 static uint16_t symtop[SYM_NSHORT]; // the entries that get short symbols, most used first
 
@@ -724,6 +725,17 @@ extern int g_StrTmpIndex;
 
 #define SYMHEADS ((uint16_t *)symblk)
 #define SYMENTRY ((symentry_t *)(symblk + SYMHASH * sizeof(uint16_t)))
+
+// The space in src's heap block after its text (LOAD, EDIT and the like take
+// nearly the whole heap for the source text and fill only part of it): where
+// it starts, and *size, at most 32 KB, or 0 if there is less than 4 KB.
+static unsigned char *SymAfterSource(unsigned char *src, int *size)
+{
+    unsigned char *start = (unsigned char *)(((uint32_t)(src + strlen((char *)src) + 1) + 3) & ~3);
+    int n = MemRemaining(src) - (start - src);
+    *size = n < 4096 ? 0 : (n > 32768 ? 32768 : n);
+    return start;
+}
 
 // Start collecting for the program source at src.  Returns false if symbols
 // are switched off or there is not the memory to collect them, in which case
@@ -736,6 +748,7 @@ int SymBegin(unsigned char *src)
     SymLibSave = 0;
     symblk = NULL;
     symblkowned = false;
+    symsrc = src;
     if (!SymEnabled)
         return false;
     for (int i = 0; i < 3 && symblk == NULL && g_StrTmpIndex < MAXTEMPSTRINGS; i++)
@@ -753,13 +766,10 @@ int SymBegin(unsigned char *src)
     }
     else if (src != NULL)
     {
-        // LOAD, EDIT and the like take nearly the whole heap for the source
-        // text and fill only part of it: borrow what is left after the text
-        unsigned char *start = (unsigned char *)(((uint32_t)(src + strlen((char *)src) + 1) + 3) & ~3);
-        int size = MemRemaining(src) - (start - src);
-        if (size > 32768)
-            size = 32768;
-        if (size < 4096)
+        // no block of the heap: borrow what is left after the source text
+        int size;
+        unsigned char *start = SymAfterSource(src, &size);
+        if (size == 0)
             return false;
         symblk = start;
         symblksize = size;
@@ -770,6 +780,30 @@ int SymBegin(unsigned char *src)
     symentries = symoverflow = symshort = symnamebytes = 0;
     symnametop = symblksize;
     SymMode = SYM_COUNT;
+    return true;
+}
+
+// After the counting pass: if the names did not fit in the block taken from
+// the heap but there is more room after the source text, change to that and
+// return true for the count to be made again (once: the second count is in
+// the borrowed space).  On an RP2040 a large program's text can leave only the
+// 8 KB block in the heap beside it, too small for 500 names.
+int SymRetry(void)
+{
+    unsigned char *start;
+    int size;
+    if (SymMode != SYM_COUNT || !symoverflow || !symblkowned || symsrc == NULL)
+        return false;
+    start = SymAfterSource(symsrc, &size);
+    if (size <= symblksize)
+        return false;
+    ClearSpecificTempMemory(symblk);
+    symblkowned = false;
+    symblk = start;
+    symblksize = size;
+    memset(symblk, 0, SYMHASH * sizeof(uint16_t));
+    symentries = symoverflow = symshort = symnamebytes = 0;
+    symnametop = symblksize;
     return true;
 }
 

@@ -113,6 +113,7 @@ int SymAny(const unsigned char *p, int n);
 
 // saving
 int SymBegin(unsigned char *src);
+int SymRetry(void);
 void SymEnd(void);
 void SymCount(unsigned char *pm);
 void SymRank(void);

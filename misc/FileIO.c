@@ -4282,9 +4282,13 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
     if (SymBegin(pm))
     {
         SymLibSave = 1;
-        multi = false;
-        for (src = pm; LibSourceLine(&src, &prevchar);)
-            tokenise(false); /* (a line too long is reported when it is written) */
+        do
+        {
+            multi = false;
+            prevchar = 0;
+            for (src = pm; LibSourceLine(&src, &prevchar);)
+                tokenise(false); /* (a line too long is reported when it is written) */
+        } while (SymRetry());
         multi = false;
         SymRank();
         prevchar = 0;
@@ -4556,6 +4560,8 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     if (SymBegin(pm))
     {
         SymCount(pm);
+        if (SymRetry())
+            SymCount(pm);
         SymRank();
     }
     multi = false;
