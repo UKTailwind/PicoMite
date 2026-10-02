@@ -91,9 +91,10 @@ extern "C"
       (a bigger one would not leave RB_STREAM_SLOTS of it in the PSRAM
       reserve); new MagicKey for the new layout. */
 #define FLASH_TARGET_OFFSET (1440 * 1024)
-#define HEAP_MEMORY_SIZE (236 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (240 * 1024)
 #define MAX_PROG_SIZE (180 * 1024)
-#define MagicKey 0xAFB036A5
+#define MagicKey 0x8DECA3E8
 #elif defined(PICOMITEHDMIWEB)
    /* HDMIWEB: HDMIUSB-style display stack + USB host + WebMite WiFi /
       lwIP / mbedtls TLS (no Bluetooth). The cyw43 WiFi firmware blob plus
@@ -190,17 +191,19 @@ extern "C"
       and [[project_core0_stack_overflow_fm]]. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.8 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (216 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.8 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (220 * 1024)
 #define MAX_PROG_SIZE (160 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0xDDCC379A
+#define MagicKey 0xAD01562A
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
 #define FLASH_TARGET_OFFSET (1056 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.5 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (224 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.5 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (228 * 1024)
 #define MAX_PROG_SIZE (168 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0x34B8FAE0
+#define MagicKey 0x5B915FE2
 #endif
 #endif
 
@@ -220,7 +223,7 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 1.4 KB over 848 KB. */
 #define FLASH_TARGET_OFFSET (864 * 1024)
-#define MagicKey 0x4FCB0A49
+#define MagicKey 0x561D3FB6
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
       __end__) was 4732 bytes, only ~640 bytes clear of the 4096 page
@@ -246,7 +249,7 @@ extern "C"
    /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (120 * 1024)
 #define MAX_PROG_SIZE (100 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0x84A1D69C
+#define MagicKey 0x7E8B7645
 #endif
 
 #endif
@@ -273,7 +276,7 @@ extern "C"
 #define MIN_CPU 126000
 
 #ifdef rp2350
-#define MagicKey 0x4D9C7837
+#define MagicKey 0x0D2D7BBF
 #define MAXSUBFUN 512
 #define MAXGLOBALVARS 576 // Configurable split (the total as before 192 locals: see above)
 #define MAXLOCALVARS 192
@@ -293,7 +296,8 @@ extern "C"
       (MAXGLOBALVARS 576), 1056 bytes past it. */
    /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.3 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (308 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.1 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (312 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
    /* +16 KB (2026-09-26): the interrupt-pending counter (S1c) took this variant
       636 bytes over 1456 KB; it had been down to 188 bytes.  Peter chose the
@@ -302,7 +306,7 @@ extern "C"
    /* +48 KB (2026-09-29): Route B (P1-P6) went 37.4 KB over. */
 #define FLASH_TARGET_OFFSET (1520 * 1024)
 #else
-#define MagicKey 0x47AD014E
+#define MagicKey 0x060B6881
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
 #define MAXLOCALVARS 192 // (not RC2's 240: this variant's RAM is 1.4 KB short of it)
@@ -334,7 +338,7 @@ extern "C"
 #define MAXSUBFUN 512
 
 #ifdef USBKEYBOARD
-#define MagicKey 0x7D538E82
+#define MagicKey 0x3F42F5D6
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
 #define FLASH_TARGET_OFFSET (1168 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
@@ -356,7 +360,8 @@ extern "C"
       and [[project_core0_stack_overflow_fm]]. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~2.9 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (356 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~3.6 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (360 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBT)
    /* PICOMITEBT replaces USB CDC console with BLE Nordic UART Service over
@@ -371,12 +376,13 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0x0073AFDD
+#define MagicKey 0xEA895E8B
    /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
 #define FLASH_TARGET_OFFSET (1440 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~4.1 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (332 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.9 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (336 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBTH)
    /* PICOMITEBTH = PicoMite + USB CDC console + BLE HID host. Same CYW43
@@ -387,12 +393,13 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0x25F263E0
+#define MagicKey 0x8D8186E6
    /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
 #define FLASH_TARGET_OFFSET (1472 * 1024)
    /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.9 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (332 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.6 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (336 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #else
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */
@@ -400,9 +407,10 @@ extern "C"
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
    /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~6.0 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (360 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~7.0 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (364 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
-#define MagicKey 0x9D42E021
+#define MagicKey 0x196DA0F9
 #endif
 
 #else                     // RP2040
@@ -413,7 +421,7 @@ extern "C"
 #define MAXSUBFUN 256
 
 #ifdef USBKEYBOARD
-#define MagicKey 0x3B8B03B0
+#define MagicKey 0xFEBA6747
    /* -16 KB (2026-09-16): compiling misc/FileIO.c at -Os freed ~4.5 KB, so
       912 KB fits again and the 16 KB goes back to the A: drive. */
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c)
@@ -434,7 +442,8 @@ extern "C"
       steps, so this is one full step.  See [[project_newlib_heap_page_cliff]]
       and [[project_core0_stack_overflow_fm]]. */
    /* +24 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (148 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~3.9 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (152 * 1024)
 #else
 #ifdef PICOMITEMIN
    /* +16 KB (2026-09-26): the DO loop fast path (DoFastCompile in Commands.c)
@@ -447,15 +456,17 @@ extern "C"
       The same trade again: 4 KB less program size (MAX_PROG_SIZE 112 KB), so
       the A: drive starts where RC2's did, 1188 KB, and keeps its size. */
 #define FLASH_TARGET_OFFSET (720 * 1024)
-#define MagicKey 0x560B52CF
+#define MagicKey 0xAA13BB70
    /* +24 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (152 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.0 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (156 * 1024)
 #else
    /* +8 KB (2026-09-26): removing the trace cache left 13 KB of RAM spare.
       The program area here is a fixed 120 KB (MAX_PROG_SIZE below), so the
       heap grows without moving anything in flash; about 5 KB stays spare. */
    /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (148 * 1024)
+   /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~7.0 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (152 * 1024)
    /* -16 KB (2026-09-26): back to 912 KB.  Removing the trace cache left 34 KB
       of flash spare, so the step taken on 2026-09-22 (below) returns to the
       A: drive with about 18 KB still spare.  Moving the offset again means
@@ -470,7 +481,7 @@ extern "C"
       board does a full clean - existing A: drives and options do not
       survive.  See [[project_flash_target_offset_alignment]]. */
 #define FLASH_TARGET_OFFSET (912 * 1024)
-#define MagicKey 0x3A078277
+#define MagicKey 0x956AD03D
 #endif
 #endif
 #endif
