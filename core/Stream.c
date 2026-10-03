@@ -1470,11 +1470,12 @@ static int RBFinish(rbcx_t *x, uint16_t *code)
    as a target so that a CONST, which DefinedSubFun passes by value, goes to
    the fallback.  RC_CALL then does what DefinedSubFun does for a SUB (see
    L_CALL).  An array element alone as an argument goes by its address, as
-   DefinedSubFun passes it (RP_ELEM).  Left to DefinedSubFun: a CSUB, a
-   FUNCTION called as a SUB, arguments in brackets, a missing argument, a call
-   as an argument, an element for a BYVAL parameter, strings, arrays and
-   structures, BYREF with an expression or an untyped parameter, and a header
-   longer than 255 bytes. */
+   DefinedSubFun passes it (RP_ELEM), and a CONST by its value.  Arguments may
+   be in brackets, Foo(a, b), with nothing after them.  Left to DefinedSubFun:
+   a CSUB, a FUNCTION called as a SUB, a missing argument, a call as an
+   argument, an element for a BYVAL parameter, strings, arrays and
+   structures, BYREF with an expression or an untyped parameter, text after a
+   bracketed list, and a header longer than 255 bytes. */
 #define RB_MAXPARAM 16
 unsigned char *CheckByKeyword(unsigned char *p, int kind); // MMBasic.c
 
@@ -1724,7 +1725,19 @@ static int RBCompileCall(unsigned char *entry, unsigned char *tok, uint16_t *cod
     memset(&x, 0, sizeof(x));
     x.entry = entry;
     skipspace(q);
-    if (*q == '(' || !RBArgs(&x, &q, 0, &pr, &nval))
+    if (*q == '(')
+    { // Foo(a, b): DefinedSubFun's makeargs takes the bracket for the list's own and
+      // ends the list at its close, ignoring anything after it; compiled only when
+      // nothing but a comment follows the bracket
+        q++;
+        if (!RBArgs(&x, &q, ')', &pr, &nval))
+            return 0;
+        q++;
+        skipspace(q);
+        if (*q && *q != '\'')
+            return 0; // text after the list: the text path's
+    }
+    else if (!RBArgs(&x, &q, 0, &pr, &nval))
         return 0;
     RBOp(&x, RC_CALL | (pr.np << 8), -nval);
     RBOp(&x, idx, 0);
