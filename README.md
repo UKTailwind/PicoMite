@@ -35,7 +35,7 @@ toolchain and the Raspberry Pi Pico SDK.
 
 ### Prerequisites
 
-- **Raspberry Pi Pico SDK v2.3.0** — used **unmodified**. The build relocates
+- **Raspberry Pi Pico SDK v2.3.1** — used **unmodified**. The build relocates
   the SDK's GPIO interrupt dispatcher (`gpio_default_irq_handler`) into RAM
   automatically at link time (see below); no edit to the SDK's `gpio.c` is
   required.
