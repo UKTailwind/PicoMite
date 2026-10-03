@@ -4851,6 +4851,12 @@ uint32_t testPSRAM(void)
             nbr++; // terminate that line in flash
         }
         FlashWriteByte(0);
+        FlashWriteWord(0); // a word of zeros after the end marker: a statement that steps to the start
+                           // of the next line (skipline: a false single-line IF) lands on the marker's
+                           // second zero on the last line, and the executor needs a zero after that.
+                           // The padding below gave one only when the marker did not end a page.
+                           // Readers skip any run of zeros before the 0xffffffff, so the CSUB/font
+                           // records and the symbol table are found where they are put.
         FlashWriteAlign(); // this will flush the buffer and step the flash write pointer to the next word boundary
         // the symbol table follows the program text, ahead of the CFunction records
         if (SymTableSize())

@@ -4334,6 +4334,8 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
         LIBPUT(0);
     }
     LIBPUT(0);
+    for (int z = 0; z < 4; z++)
+        LIBPUT(0); /* a word of zeros after the end marker, as SaveProgramToFlash writes */
     if (w)
     { /* pad the block and write the 0xffffffff that marks the binaries */
         while ((w - base) & 0xFF)
@@ -4617,6 +4619,8 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
         nbr++; // terminate that line in flash
     }
     MemWriteByte(0);
+    MemWriteWord(0); // a word of zeros after the end marker, as SaveProgramToFlash writes (the padding
+                     // below gives none when the marker ends a 32-byte block)
     MemWriteAlign(); // this will flush the buffer and step the flash write pointer to the next word boundary
     // the symbol table follows the program text, ahead of the CFunction records
     if (SymTableSize())

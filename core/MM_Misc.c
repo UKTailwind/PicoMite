@@ -2088,6 +2088,9 @@ void MIPS16 cmd_library(void)
         // At the end of the program so get the two 0x00 bytes
         *m++ = *p++;
         *m++ = *p++;
+        for (int z = 0; z < 4; z++)
+            *m++ = 0; // and a word of zeros after them, as SaveProgramToFlash writes (the
+                      // word alignment below gives none when the two end on a word boundary)
 
         // Recompute every skip byte in the output buffer.  Compression (stripping
         // comments and collapsing spaces) shortened some lines, so the skip bytes
