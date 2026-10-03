@@ -61,7 +61,7 @@ static int RBInPsram(void)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 33       // the stream format
+#define RB_VERSION 34       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -455,6 +455,7 @@ enum
 #define RP_VAR 1   // RC_CALL: the argument is a variable, bind (bits 8-15); else the next value
 #define RP_BYVAL 2 // RC_CALL: the parameter is BYVAL
 #define RP_INT 4   // RC_CALL: the argument is an integer, else a float
+#define RP_ELEM 8  // RC_CALL: the argument is an array element, its address the next value (RC_ADEL)
 #define RD_UNTIL 1  // RC_DOP: DO UNTIL
 #define RD_COND 2   // RC_DOP: DO WHILE or UNTIL: the condition is the DO's
 #define RL_ALWAYS 1 // RC_LOOPT: a plain LOOP
@@ -1408,10 +1409,12 @@ static int RBFinish(rbcx_t *x, uint16_t *code)
    call's arguments: an expression compiles to its value; a variable binds,
    as a target so that a CONST, which DefinedSubFun passes by value, goes to
    the fallback.  RC_CALL then does what DefinedSubFun does for a SUB (see
-   L_CALL).  Left to DefinedSubFun: a CSUB, a FUNCTION called as a SUB,
-   arguments in brackets, a missing argument, an array element or a call as
-   an argument, strings, arrays and structures, BYREF with an expression or
-   an untyped parameter, and a header longer than 255 bytes. */
+   L_CALL).  An array element alone as an argument goes by its address, as
+   DefinedSubFun passes it (RP_ELEM).  Left to DefinedSubFun: a CSUB, a
+   FUNCTION called as a SUB, arguments in brackets, a missing argument, a call
+   as an argument, an element for a BYVAL parameter, strings, arrays and
+   structures, BYREF with an expression or an untyped parameter, and a header
+   longer than 255 bytes. */
 #define RB_MAXPARAM 16
 unsigned char *CheckByKeyword(unsigned char *p, int kind); // MMBasic.c
 
@@ -1519,10 +1522,34 @@ static unsigned char *RBArgEnd(unsigned char *p, int close)
     return p;
 }
 
+// An argument that is an array element alone, name(i [, j]) and not a
+// FUNCTION's call, which DefinedSubFun takes for a variable: the byte after it
+// and its spaces, or NULL.  m(1, 1) is one element (it was compiled as a
+// value, a copy, from P4a until V7.0.00b1's goldens caught it).
+static unsigned char *RBLoneElement(unsigned char *q)
+{
+    unsigned char *e;
+    if (!issymbol(*q))
+        return NULL;
+    e = q + symbolsize(*q);
+    RBSuffix(&e);
+    if (*e != '(' || FindSubFun(q, 1) >= 0)
+        return NULL;
+    e++;
+    while (*(e = RBArgEnd(e, ')')) == ',')
+        e++; // past every index
+    if (*e != ')')
+        return NULL;
+    e++;
+    skipspace(e);
+    return e;
+}
+
 // The call's arguments at *qq, up to the statement's end or (close) the
 // bracket that closes them: an expression compiles to its value, a variable
 // binds (as a target, so a CONST, which DefinedSubFun passes by value, goes
-// to the fallback).  0 if the compiler cannot take them.
+// to the fallback), an element alone goes by its address.  0 if the compiler
+// cannot take them.
 static int RBArgs(rbcx_t *x, unsigned char **qq, int close, rbparams_t *pr, int *nval)
 {
     unsigned char *q = *qq, *ae, *vq;
@@ -1547,29 +1574,23 @@ static int RBArgs(rbcx_t *x, unsigned char **qq, int close, rbparams_t *pr, int 
                     return 0; // BYREF of another type: DefinedSubFun's error
                 pr->flags[na] = (pr->by[na] > 0 ? RP_BYVAL : 0) | RP_VAR | (j << 8) | (x->bind[j][1] == T_INT ? RP_INT : 0);
             }
+            else if (RBLoneElement(q) == ae)
+            { // name(i [, j]) alone and not a FUNCTION: DefinedSubFun passes the element by
+              // reference (findvar's pointer to it), so its address goes on the stack (RC_ADEL),
+              // indices evaluated and bounds checked where findvar would do them
+                if (pr->by[na] > 0)
+                    return 0; // BYVAL: DefinedSubFun evaluates the element again for its value
+                if ((t = RBElement(x, &q, RC_ADEL, 1)) == 0)
+                    return 0; // a string or structure element, or an index the compiler cannot take
+                if (pr->by[na] < 0 && t != pr->ptype[na])
+                    return 0; // BYREF of another type: DefinedSubFun's error
+                pr->flags[na] = RP_ELEM | (t == T_INT ? RP_INT : 0);
+                (*nval)++;
+            }
             else
             { // an expression: its value
                 if (pr->by[na] < 0)
                     return 0; // BYREF: "Variable required", which the fallback reports
-                if (issymbol(*q))
-                { // name(...) alone and not a FUNCTION: DefinedSubFun passes the element by reference
-                    unsigned char *e = q + symbolsize(*q);
-                    RBSuffix(&e);
-                    if (*e == '(' && FindSubFun(q, 1) < 0)
-                    {
-                        e++;
-                        while (*(e = RBArgEnd(e, ')')) == ',')
-                            e++; // past every index: m(1, 1) is an element too (it was compiled as a
-                                 // value, a copy, from P4a until V7.0.00b1's goldens caught it)
-                        if (*e == ')')
-                        {
-                            e++;
-                            skipspace(e);
-                            if (e == ae)
-                                return 0;
-                        }
-                    }
-                }
                 if ((t = RBEvaluate(x, &q)) == 0)
                     return 0;
                 skipspace(q);
@@ -3432,10 +3453,15 @@ static void RBMakeParams(unsigned char *def, const uint16_t *pp, int np, union c
         findvar(nm, pp[2] | V_FIND | V_DIM_VAR | V_LOCAL | V_EMPTY_OK); // the parameter
         v = VREC(g_VarIndex);
         CurrentLinePtr = callers; // errors at the caller
-        src = (pp[0] & RP_VAR) ? slot[pp[0] >> 8] : val++;
+        if (pp[0] & RP_VAR)
+            src = slot[pp[0] >> 8];
+        else if (pp[0] & RP_ELEM)
+            src = (union cell *)(uint32_t)(val++)->i; // the element's address, as findvar gave it to DefinedSubFun
+        else
+            src = val++;
         at = (pp[0] & RP_INT) ? T_INT : T_NBR;
-        if ((pp[0] & (RP_VAR | RP_BYVAL)) == RP_VAR && TypeMask(v->type) == at)
-        { // a variable of the parameter's type: by reference
+        if ((pp[0] & (RP_VAR | RP_ELEM)) && !(pp[0] & RP_BYVAL) && TypeMask(v->type) == at)
+        { // a variable or an element of the parameter's type: by reference
             v->val.s = (unsigned char *)src;
             v->type |= T_PTR;
         }
