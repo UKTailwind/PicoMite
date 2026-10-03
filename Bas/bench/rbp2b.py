@@ -61,7 +61,7 @@ a% = 3
 """ + LOOP % """  f1 = Max(x, 1) + a%
   f2 = Val(s$) * 2
   f3 = Cint(x + 1) * 2""" + """Print f1; f2; f3
-""" + STAT, lambda n: n == 5),  # only the five NEXTs (P3c); functions still not compiled (arrays compile since P4a, SIN since P5a, LEN and ASC since P5c)
+""" + STAT, lambda n: n == 13),  # the five NEXTs (P3c) and f1 and f3 four times each: MAX and CINT compile since P5e (arrays since P4a, SIN since P5a, LEN and ASC since P5c); VAL stays text, its result's type depending on the string
     ("div zero", """a% = 5 : b% = 0
 For i% = 1 To 3
   c = a% / b%

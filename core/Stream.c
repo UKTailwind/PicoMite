@@ -1007,23 +1007,159 @@ static int RBEvaluateS(rbcx_t *x, unsigned char **pp);
    one type; LEFT$, RIGHT$, UCASE$ and LCASE$ are tokenise's SChange$ with its
    selector letter first, HEX$, OCT$ and BIN$ its base$ with the base.  No
    FUNCTION call in the arguments (the handler reads them in its own order),
-   no empty argument.  Returns the type, or 0. */
+   no empty argument.  Returns the type, or 0.
+   P5e: ASIN, ACOS, ATAN2, CINT, PIXEL(, KEYDOWN( and MAX and MIN (tokenise's
+   TopBottom( with its selector letter) the same way; a function with no
+   argument (TIMER, INKEY$, DATE$ and the rest getvalue calls with no text);
+   MM.HRES, MM.ERRNO and the others tokenise makes ~(letter), for the letters
+   whose case gives an integer; PEEK(INT8|WORD|SHORT|INTEGER|FLOAT address)
+   and PEEK(VAR name, offset), and MATH(RAND), with the keyword (and VAR's
+   name, which fun_peek finds with findvar) spelled out as getvalue spells
+   them.  VAL( is not among them: its result's type depends on the string.
+   What TIMER, INKEY$, KEYDOWN( (which empties the console's input) and
+   MATH(RAND) give changes from one call to the next, so SHADOW leaves their
+   statements unchecked and an IF whose condition has one is not pure
+   (ncall), as for RND. */
+static void RBFnEmit(rbcx_t *x, unsigned char c, const unsigned char *txt, int len, int n)
+{ // RC_FSPLICE for token c, its n values on the stack, its text txt[0..len) (with the zero)
+    int i;
+    RBOp(x, RC_FSPLICE | (((len + 1) / 2) << 8), 1 - n);
+    RBOp(x, n | (c << 8), 0);
+    for (i = 0; i < len; i += 2)
+        RBOp(x, txt[i] | ((i + 1 < len ? txt[i + 1] : 0) << 8), 0);
+}
+
+static int RBKeyword(unsigned char *p, const char *kw)
+{ // the bare word at p is kw, whatever its case
+    const unsigned char *sp;
+    int len, i;
+    if (!issymbol(*p))
+        return 0;
+    sp = SymSpelling(p, &len);
+    if (len != (int)strlen(kw))
+        return 0;
+    for (i = 0; i < len; i++)
+        if (toupper(sp[i]) != kw[i])
+            return 0;
+    return 1;
+}
+
 static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
 {
     unsigned char *p = *pp, c = *p, *ae, txt[2 * RB_MAXLIT];
     void (*fn)(void) = tokenfunction(c);
     int n = 0, len = 0, t, rt, i, calls = x->calls, types[16];
+    rt = tokentype(c) & (T_NBR | T_INT | T_STR);
+    if (!(tokentype(c) & T_FUN))
+    { // a function with no argument
+        if (rt != T_NBR && rt != T_INT && rt != T_STR)
+            return 0;
+        txt[0] = 0;
+        RBFnEmit(x, c, txt, 1, 0);
+        x->ncall++;
+        *pp = RBNextOp(p + 1, op);
+        return rt;
+    }
+    if (fn == fun_tilde)
+    { // ~(letter): fun_tilde's case for it gives an integer
+        int k = p[1] - 'A';
+        if (p[2] != ')' || !(k == MMHRES || k == MMVRES || k == MMI2C || k == MMFONTHEIGHT || k == MMFONTWIDTH ||
+#ifndef USBKEYBOARD
+                             k == MMPS2 ||
+#else
+                             k == MMUSB ||
+#endif
+                             k == MMHPOS || k == MMVPOS || k == MMONEWIRE || k == MMERRNO || k == MMERRLINE ||
+                             k == MMWATCHDOG || k == MMFLAG || k == MMDISPLAY || k == MMWIDTH || k == MMHEIGHT))
+            return 0;
+        txt[0] = p[1];
+        txt[1] = 0;
+        RBFnEmit(x, c, txt, 2, 0);
+        *pp = RBNextOp(p + 3, op);
+        return T_INT;
+    }
+    if (fn == fun_math)
+    { // MATH(RAND) alone
+        unsigned char *q = p + 1;
+        skipspace(q);
+        if (!RBKeyword(q, "RAND"))
+            return 0;
+        q += symbolsize(*q);
+        skipspace(q);
+        if (*q != ')')
+            return 0;
+        memcpy(txt, "RAND", 5);
+        RBFnEmit(x, c, txt, 5, 0);
+        x->ncall++;
+        *pp = RBNextOp(q + 1, op);
+        return T_NBR;
+    }
     if (fn != fun_len && fn != fun_asc && fn != fun_chr && fn != fun_mid && fn != fun_instr && fn != fun_str &&
-        fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base && fn != fun_rgb
+        fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base && fn != fun_rgb &&
+        fn != fun_asin && fn != fun_acos && fn != fun_atan2 && fn != fun_cint && fn != fun_pixel && fn != fun_keydown &&
+        fn != fun_max_min && fn != fun_peek
 #if defined(PICOMITEVGA) || PICOMITERP2350
         && fn != fun_map // (where the build has MAP(: a colour from getint, and no argument text in its errors)
 #endif
     )
         return 0;
-    rt = tokentype(c) & (T_NBR | T_INT | T_STR);
-    if (rt != T_NBR && rt != T_INT && rt != T_STR)
-        return 0; // (every one of them has one)
+    if (fn != fun_peek && rt != T_NBR && rt != T_INT && rt != T_STR)
+        return 0; // (every one of them has one; PEEK's is its keyword's, below)
     p++; // (the token's bracket is part of it)
+    if (fn == fun_peek)
+    { // the keyword, then VAR's name: their spellings, a space after the keyword
+        static const char *const kw[] = {"INT8", "WORD", "SHORT", "INTEGER", "FLOAT", "VAR"};
+        const unsigned char *sp;
+        int k, sl;
+        skipspace(p);
+        for (k = 0; k < 6 && !RBKeyword(p, kw[k]); k++)
+            ;
+        if (k == 6)
+            return 0;
+        memcpy(txt, kw[k], strlen(kw[k]));
+        len = strlen(kw[k]);
+        txt[len++] = ' ';
+        p += symbolsize(*p);
+        skipspace(p);
+        rt = k == 4 ? T_NBR : T_INT;
+        if (k == 5)
+        { // VAR name [suffix] [()], a comma
+            if (!issymbol(*p))
+                return 0;
+            sp = SymSpelling(p, &sl);
+            if (len + sl + 4 > (int)sizeof(txt) - 8)
+                return 0;
+            memcpy(txt + len, sp, sl);
+            len += sl;
+            p += symbolsize(*p);
+            if (*p == '$' || *p == '%' || *p == '!')
+                txt[len++] = *p++;
+            skipspace(p);
+            if (*p == '(')
+            {
+                p++;
+                skipspace(p);
+                if (*p != ')')
+                    return 0; // an element: its index would be text
+                p++;
+                txt[len++] = '(';
+                txt[len++] = ')';
+                skipspace(p);
+            }
+            if (*p != ',')
+                return 0;
+            txt[len++] = ',';
+            p++;
+        }
+    }
+    if (fn == fun_max_min)
+    { // tokenise's selector: A MAX, I MIN
+        if (!(p[0] == 'A' || p[0] == 'I') || p[1] != ',')
+            return 0;
+        txt[len++] = p[0];
+        txt[len++] = ',';
+        p += 2;
+    }
     if (fn == fun_rgb)
     { // RGB(name): fun_rgb reads its one argument as a colour's name, which getvalue
       // would spell out for it: the spelling goes in the text, with no values
@@ -1084,6 +1220,12 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
         return 0; // its third argument can be a keyword
     if (fn == fun_rgb && n != 3)
         return 0; // one argument is a name (above), any other count fun_rgb's error
+    if ((fn == fun_atan2 || fn == fun_pixel) && n != 2)
+        return 0; // (any other count: the handler's error)
+    if ((fn == fun_asin || fn == fun_acos || fn == fun_cint || fn == fun_keydown || fn == fun_peek) && n != 1)
+        return 0;
+    if (fn == fun_keydown)
+        x->ncall++;
     txt[len++] = 0;
     RBOp(x, RC_FSPLICE | (((len + 1) / 2) << 8), 1 - n);
     RBOp(x, n | (c << 8), 0);
@@ -1133,7 +1275,7 @@ static int RBFunction(rbcx_t *x, unsigned char **pp, int *op)
         return T_NBR;
     }
     if (!(tokentype(c) & T_FUN))
-        return 0;
+        return (tokentype(c) & T_FNA) ? RBFnSplice(x, pp, op) : 0; // P5e: one with no argument
     id = fn == fun_sin ? RF_SIN : fn == fun_cos ? RF_COS : fn == fun_tan ? RF_TAN : fn == fun_atn ? RF_ATN : fn == fun_sqr ? RF_SQR : fn == fun_exp ? RF_EXP : fn == fun_log ? RF_LOG : fn == fun_deg ? RF_DEG : fn == fun_rad ? RF_RAD : fn == fun_int ? RF_INT : fn == fun_fix ? RF_FIX : fn == fun_abs ? RF_ABSF : fn == fun_sgn ? RF_SGNF : -1;
     if (id < 0)
         return RBFnSplice(x, pp, op); // P5c: through the value splice, if it is one of those
