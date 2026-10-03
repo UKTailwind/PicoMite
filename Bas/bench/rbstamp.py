@@ -9,11 +9,11 @@ the slot commands refuse while OPTION COMPILE is on, and only then.
 P1b: RUN compiles when the program (or library) has changed since the stream
 was written, and reuses the stream when it has not; a program saved without
 symbols runs as text.  MM.INFO(COMPILE) says which happened.
-P1c: one record per statement; a comment line or a label alone gets a NOP
-(its line's head only).
+P1c: one record per statement; a comment, empty or label-only line gets none,
+only a map entry pointing at the next statement.
 P1d: the statements run from the stream - MM.INFO(COMPILE) counts them (RAN) -
 and TRACE and ON ERROR SKIP print what the text loop prints.
-Leaves OPTION COMPILE OFF and OPTION SYMBOLS ON."""
+Leaves OPTION COMPILE OFF."""
 import sys, os, re, time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "elite_tools"))
 import pc3
@@ -70,7 +70,6 @@ else:
 cmd("OPTION COMPILE OFF")
 
 # P1b
-cmd("OPTION SYMBOLS ON")
 cmd("OPTION COMPILE ON")
 prog1 = 'a = 1\nPrint "STAT "; MM.Info(COMPILE)\n'
 prog2 = 'a = 2\nPrint "STAT "; MM.Info(COMPILE)\n'
@@ -138,8 +137,10 @@ End Function
 s7 = run_status(prog5)
 m = re.search(r"^(\d+) .*RAN (\d+)", s7)
 check("jumps and calls", s7, bool(m) and m.group(1) == "33" and int(m.group(2)) == 25)
-# TRACE prints a comment line's number too; ON ERROR SKIP resumes after the
-# failing statement.  The output must match the text loop's exactly.
+# TRACE: the text loop prints a comment line's number too; a compiled run has
+# no record for a comment, empty or label-only line (its map entry points at
+# the next statement), so it prints the same without those lines' numbers.
+# ON ERROR SKIP resumes after the failing statement.
 prog6 = """' header
 Trace On
 For i = 1 To 2
@@ -161,14 +162,21 @@ for mode in ("OFF", "ON"):
     o = pc3.ANSI.sub("", b.run(60))
     outs.append(o[:o.find("STAT")].strip() if "STAT" in o else o.strip())
     last = o
-check("TRACE, ON ERROR SKIP as text", outs[1].replace("\r\n", " | ")[-60:], outs[0] == outs[1] and "RAN" in last and "[" in outs[0])
-if outs[0] != outs[1]:
+# (TRACE prints CountLines' number, which here is the file line + off: the
+# first line traced is the FOR on file line 3)
+first = re.search(r"\[(\d+)\]", outs[0])
+off = int(first.group(1)) - 3 if first else 0
+nolines = [str(i + 1 + off) for i, l in enumerate(prog6.split("\n"))
+           if not l.strip() or l.strip().startswith("'") or re.match(r"^\w+:$", l.strip())]
+want = re.sub(r"\[(%s)\]" % "|".join(nolines), "", outs[0])
+check("TRACE, ON ERROR SKIP as text", outs[1].replace("\r\n", " | ")[-60:], want == outs[1] and "RAN" in last and "[" in outs[0])
+if want != outs[1]:
     print("  text:  ", repr(outs[0]))
     print("  stream:", repr(outs[1]))
-cmd("OPTION SYMBOLS OFF")
-s4 = run_status(prog1)
-check("saved as text: runs as text", s4, s4 == "TEXT: saved without symbols")
-cmd("OPTION SYMBOLS ON")
+# OPTION SYMBOLS OFF is a line at the top of a program (since 50ada44; at the
+# prompt it is refused): no bindings, so the program runs as text
+s4 = run_status("OPTION SYMBOLS OFF\n" + prog1)
+check("OPTION SYMBOLS OFF: runs as text", s4, s4 == "TEXT: OPTION SYMBOLS OFF")
 cmd("OPTION COMPILE OFF")
 s5 = run_status(prog1)
 check("COMPILE OFF", s5, s5 == "OFF")

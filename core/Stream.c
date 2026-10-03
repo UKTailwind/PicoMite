@@ -61,7 +61,7 @@ static int RBInPsram(void)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 34       // the stream format
+#define RB_VERSION 35       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -222,9 +222,11 @@ static void RBWriteEnd(rbheader_t *h)
    does, and writes a record for each: STMT (where the statement is in the
    text) followed by CMD or SUBCALL, the fallbacks that call the statement's
    own handler.  A comment, and a line with nothing to run (a label alone),
-   gets a NOP: the text loop runs its line's head and nothing else, not even
-   a tail, and a GOTO or LOOP that lands on it must find it in the map.  END
-   closes each image.  All offsets in a record are from the
+   gets no record, only a map entry pointing at the next record: the text
+   loop runs such a line's head and nothing else, not even a tail, so a GOTO,
+   NEXT or LOOP that lands on it starts at the next statement, and the chain
+   of compiled statements runs straight past it.  (TRACE in a compiled run
+   lists no comment or empty lines.)  END closes each image.  All offsets in a record are from the
    statement's entry, which is inside one tokenised line, so a byte holds them.
 
    The map takes a text position back to its record.  Its key is where the
@@ -249,7 +251,7 @@ enum
     RB_OP_CMD,      // high byte: token offset; cmdtoken; cmdline | nextstmt offsets
     RB_OP_SUBCALL,  // high byte: name offset; cmdline | nextstmt offsets
     RB_OP_END,      // key (2 words) of the image's end
-    RB_OP_NOP       // a comment, or a line with nothing to run: the head only
+    RB_OP_NOP       // (no longer written: a comment or empty line has only its map entry)
 };
 #define RB_LINESTART 0x100    // STMT: this statement starts a line (a T_NEWLINE at the entry)
 #define RB_COMPILED 0x200     // STMT: its CMD record is followed by compiled code (P2a)
@@ -2715,6 +2717,15 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         m[0] = key;
         m[1] = C.code.pos; // the record's offset in the slot
         RBPut(&C.map, m, sizeof(m));
+    }
+    if (cmd < 0)
+    { // a comment, or a line with nothing to run: no record.  Its map entry points
+      // where the next record goes, so a jump that lands on the line starts at the
+      // next statement, which is all the text loop does there (the line's head and
+      // nothing else, not even a tail), and the chain of compiled statements never
+      // stops at it (a comment line in a loop cost +18% on a two-statement loop)
+        C.stmts++;
+        return;
     }
     if (cmd == 0)
         ncode = RBCompileCall(entry, tok, code + 1);
