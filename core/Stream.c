@@ -470,6 +470,7 @@ enum
 #define RC_IDMASK 0x0FFF // bind: the symbol id
 #define RB_BARRAY 0x100  // bind's type word: an array, bound to its variable (RC_LDEL, RC_ADEL)
 #define RB_BOPT 0x200    // bind's type word: may be unbound at the start (an IF part's: RBPartCheck)
+#define RB_BCONST 0x400  // bind's type word: must be a CONST (an argument passed by value: RBArgs)
 #define RB_MAXLIT 64     // the longest string literal the code keeps
 #define RB_MAXBIND 12
 #define RB_MAXCODE 160 // words of code one statement may compile to
@@ -498,6 +499,7 @@ static int RBSuffix(unsigned char **p);
 #define RB_TTYPE (T_INT | T_NBR | T_STR) // the declared type's bits
 #define RB_TMIXED 0x08                   // declared with two types
 #define RB_TLOCAL 0x40                   // a local somewhere
+#define RB_TCONST 0x80                   // a CONST (a unit's own in ulocal[], else a global)
 
 static int RBCollect; // RBUnitBegin is listing a unit's locals: RBTypeName records them there
 
@@ -642,6 +644,46 @@ static void RBSurveyDim(unsigned char *p, int local)
     }
 }
 
+// A CONST's name marked as one, so that an argument naming it can go by value
+// as DefinedSubFun passes it (RBArgs): a unit's own CONST in its local list,
+// any other in the survey
+static void RBConstName(unsigned char *p, int local)
+{
+    int k = SymCanonAt(p), i;
+    if (k < 0 || k >= C.ntypes)
+        return;
+    if (RBCollect)
+    {
+        if (local && C.nulocal <= RB_MAXULOCAL)
+            for (i = 0; i < C.nulocal; i++)
+                if (C.ulocal[i].k == k)
+                    C.ulocal[i].type |= RB_TCONST;
+        return;
+    }
+    if (!local)
+        C.types[k] |= RB_TCONST;
+}
+
+// The name at p is a CONST where the statement being compiled is: its unit's
+// own, or a global one that no local of the unit hides.  Only a guess: the
+// bind checks it (RB_BCONST), and a name that is not one sends the statement
+// to its fallback.
+static int RBIsConst(unsigned char *p)
+{
+    int k = SymCanonAt(p), i;
+    if (k < 0 || k >= C.ntypes)
+        return 0;
+    if (C.unit)
+    {
+        if (C.nulocal > RB_MAXULOCAL)
+            return 0;
+        for (i = 0; i < C.nulocal; i++)
+            if (C.ulocal[i].k == k)
+                return (C.ulocal[i].type & RB_TCONST) != 0;
+    }
+    return (C.types[k] & RB_TCONST) != 0;
+}
+
 // CONST name = literal, ...: the literal's type, as getvalue reads it
 static void RBSurveyConst(unsigned char *p, int local)
 {
@@ -675,6 +717,7 @@ static void RBSurveyConst(unsigned char *p, int local)
             }
         }
         RBTypeName(p, t, local);
+        RBConstName(p, local);
         p = RBNextItem(v);
         if (*p != ',')
             return;
@@ -797,6 +840,7 @@ typedef struct
     int gbits;        // what the calls need of OPTION DEFAULT: RBFinish's guard (see RBFcall)
     unsigned used;    // the binds met since it was cleared (bit j: bind j), and
     unsigned opt;     // those that may be unbound at the start (RBPartCheck)
+    unsigned cmask;   // those that must be CONSTs (RB_BCONST, added by RBFinish)
 } rbcx_t;
 
 static void RBOp(rbcx_t *x, int w, int cells)
@@ -1412,7 +1456,7 @@ static int RBFinish(rbcx_t *x, uint16_t *code)
     for (j = 0; j < x->nbind; j++)
     {
         code[n++] = x->bind[j][0];
-        code[n++] = x->bind[j][1] | (((x->opt >> j) & 1) ? RB_BOPT : 0);
+        code[n++] = x->bind[j][1] | (((x->opt >> j) & 1) ? RB_BOPT : 0) | (((x->cmask >> j) & 1) ? RB_BCONST : 0);
     }
     for (j = 0; j < 2 * x->nbind; j++)
         code[n++] = 0; // the cached addresses
@@ -1582,7 +1626,18 @@ static int RBArgs(rbcx_t *x, unsigned char **qq, int close, rbparams_t *pr, int 
             vq = RBVarRef(q, &suf);
             if (vq != NULL)
                 skipspace(vq);
-            if (vq == ae)
+            if (vq == ae && RBIsConst(q))
+            { // a CONST: DefinedSubFun passes its value (the bind checks it is one, RB_BCONST)
+                if (pr->by[na] < 0)
+                    return 0; // BYREF: "Variable required", which the fallback reports
+                if ((j = RBBind(x, q, suf, 0)) < 0)
+                    return 0;
+                x->cmask |= 1u << j; // (not in bind[j][1], which is the type RBValue reads)
+                RBOp(x, RC_LDG | (j << 8), 1);
+                pr->flags[na] = x->bind[j][1] == T_INT ? RP_INT : 0;
+                (*nval)++;
+            }
+            else if (vq == ae)
             { // a variable: by reference, as DefinedSubFun passes it
                 if ((j = RBBind(x, q, suf, 1)) < 0)
                     return 0;
@@ -3943,7 +3998,7 @@ static inline __attribute__((always_inline)) int RBBindAll(const uint16_t *c, un
         if (((c[1] & RB_BARRAY) ? !DimIsRealArray(RAW_DIM(*v, 0)) : !DimIsScalar(RAW_DIM(*v, 0))) ||
             (v->type & T_STRUCT) || (v->type & (T_INT | T_NBR | T_STR)) != (c[1] & (T_INT | T_NBR | T_STR)) ||
             (suf ? !(v->type & suf) : !(v->type & (DefaultType | T_IMPLIED))) ||
-            ((c[0] & RC_TARGET) && (v->type & T_CONST)))
+            ((c[0] & RC_TARGET) && (v->type & T_CONST)) || ((c[1] & RB_BCONST) && !(v->type & T_CONST)))
             goto miss;
         if (c[1] & (RB_BARRAY | T_STR))
         {
