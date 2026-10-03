@@ -1848,42 +1848,75 @@ static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char
    the token are kept); ELSE checks its end first.  CONTINUE FOR runs its
    loop's NEXT (RC_CONTFOR); CONTINUE DO and plain CONTINUE stay text. */
 /* P5b: BOX, LINE and PIXEL through the value splice (see RBSpliceCmd), and
-   COLOUR (P5d): 0 if the compiler cannot take every argument, or for another
-   form. */
+   COLOUR (P5d), TEXT, CIRCLE, TRIANGLE, ARC and RBOX: 0 if the compiler cannot
+   take every argument, or for another form.  Each handler reads its arguments
+   with getcsargs and getinteger, getint, getnumber, getargaddress (whose
+   literal path a spliced value takes) or, for TEXT, getCstring, so a string
+   value goes in only for TEXT; its justification as a bare word (LT) stays in
+   the text as its symbol, which GetJustificationArg reads, and its font may
+   start with cmd_text's '#'. */
+static int RBBareJustify(unsigned char *p, unsigned char *ae)
+{ // TEXT's justification at p is a lone symbol GetJustificationArg takes as letters
+    unsigned char sym[8], *e = p + symbolsize(*p);
+    int jh = 0, jv = 0, jo = 0;
+    skipspace(e);
+    if (e != ae || symbolsize(*p) > (int)sizeof(sym) - 1)
+        return 0;
+    memcpy(sym, p, symbolsize(*p));
+    sym[symbolsize(*p)] = 0;
+    return GetJustificationArg(sym, &jh, &jv, &jo);
+}
+
 static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandToken ct, uint16_t *code)
 {
     rbcx_t x;
     void (*fn)(void) = commandtbl[ct].fptr;
     unsigned char *p = cmdl, *ae, txt[2 * RB_MAXLIT];
-    int n = 0, len = 0, t, i;
-    if (fn != cmd_box && fn != cmd_line && fn != cmd_pixel && fn != cmd_colour)
+    int n = 0, len = 0, t, i, a = 0;
+    if (fn != cmd_box && fn != cmd_line && fn != cmd_pixel && fn != cmd_colour && fn != cmd_text && fn != cmd_circle &&
+        fn != cmd_triangle && fn != cmd_arc && fn != cmd_rbox)
         return 0;
     if (fn == cmd_line && (checkstring(p, (unsigned char *)"PLOT") || checkstring(p, (unsigned char *)"GRAPH") || checkstring(p, (unsigned char *)"AA")))
         return 0; // the forms whose arguments are arrays or keywords
+    if (fn == cmd_triangle && (checkstring(p, (unsigned char *)"SAVE") || checkstring(p, (unsigned char *)"RESTORE")))
+        return 0;
     memset(&x, 0, sizeof(x));
     x.entry = entry; // (x.calls 0: no FUNCTION call, which getargaddress would make twice)
-    if (fn == cmd_line || fn == cmd_pixel)
-        RBOp(&x, RC_GUARD, 0); // LINE and PIXEL read OPTION LEGACY's syntax when it is on (COLOUR's getColour maps its colours itself)
+    if (fn == cmd_line || fn == cmd_pixel || fn == cmd_circle)
+        RBOp(&x, RC_GUARD, 0); // LINE, PIXEL and CIRCLE read OPTION LEGACY's syntax when it is on (COLOUR's getColour maps its colours itself)
     while (1)
     {
         ae = RBArgEnd(p, 0); // as getcsargs splits them
         skipspace(p);
-        if (p != ae)
+        if (p != ae && fn == cmd_text && a == 3 && issymbol(*p) && RBBareJustify(p, ae))
+        { // TEXT's justification as a bare word: its symbol
+            if (len + (ae - p) > (int)sizeof(txt) - 6)
+                return 0;
+            memcpy(txt + len, p, ae - p);
+            len += ae - p;
+        }
+        else if (p != ae)
         { // a value
-            if (n == 26 || len > (int)sizeof(txt) - 6)
+            if (n == 26 || len > (int)sizeof(txt) - 7)
                 return 0;
-            if ((t = RBEvaluate(&x, &p)) == 0)
-                return 0;
+            if (fn == cmd_text && a == 4 && *p == '#')
+            { // TEXT's font as #n
+                txt[len++] = '#';
+                p++;
+            }
+            if ((t = RBEvaluateS(&x, &p)) == 0 || (t == T_STR && (fn != cmd_text || n > 16)))
+                return 0; // (a string's letter is '0' + n, below 'A')
             skipspace(p);
             if (p != ae)
                 return 0;
             txt[len++] = T_VALUE;
-            txt[len++] = (t == T_NBR ? 'a' : 'A') + n++;
+            txt[len++] = (t == T_NBR ? 'a' : t == T_INT ? 'A' : '0') + n++;
         }
         if (*ae != ',')
             break;
         txt[len++] = ',';
         p = ae + 1;
+        a++;
     }
     txt[len++] = 0;
     RBOp(&x, RC_SPLICE | (((len + 1) / 2) << 8), -n);
