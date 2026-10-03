@@ -1737,8 +1737,8 @@ static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char
 /* P4e: a statement whose handler does nothing (cmd_null: END IF, END SELECT,
    DATA, RANDOMIZE and the rest) compiles to nothing.  ELSE, ELSEIF and ELSE IF
    are cmd_else when the block before them runs into them: past the END IF
-   the IF table gives, looked up as cmd_else looks it up (its token taken to
-   be just before cmdline); ELSE checks its end first.  CONTINUE FOR runs its
+   the IF table gives for the statement's token (not cmdl - 2: spaces after
+   the token are kept); ELSE checks its end first.  CONTINUE FOR runs its
    loop's NEXT (RC_CONTFOR); CONTINUE DO and plain CONTINUE stay text. */
 /* P5b: BOX, LINE and PIXEL through the value splice (see RBSpliceCmd), and
    COLOUR (P5d): 0 if the compiler cannot take every argument, or for another
@@ -1916,7 +1916,7 @@ static int RBCompileLocal(unsigned char *entry, unsigned char *cmdl, uint16_t *c
     return RBFinish(&x, code);
 }
 
-static int RBCompileExit(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *cmdl, CommandToken ct, uint16_t *code)
+static int RBCompileExit(unsigned char *entry, unsigned char *base, uint32_t libbit, unsigned char *tok, unsigned char *cmdl, CommandToken ct, uint16_t *code)
 {
     rbcx_t x;
     void (*fn)(void) = commandtbl[ct].fptr;
@@ -1928,7 +1928,7 @@ static int RBCompileExit(unsigned char *entry, unsigned char *base, uint32_t lib
         RBOp(&x, RC_END, 0);
     else if (fn == cmd_else)
     {
-        struct iftab_entry *e = IfTableLookup(cmdl - sizeof(CommandToken));
+        struct iftab_entry *e = IfTableLookup(tok);
         skipspace(p);
         if (ct == cmdELSE && *p && *p != '\'')
             return 0; // checkend's error
@@ -2642,7 +2642,7 @@ static void RBEmitStmt(unsigned char *base, uint32_t libbit, unsigned char *entr
         else if ((ncode = RBCompileSplice(entry, cmdl, ct, code + 1)) != 0)
             ;
         else
-            ncode = RBCompileExit(entry, base, libbit, cmdl, ct, code + 1);
+            ncode = RBCompileExit(entry, base, libbit, tok, cmdl, ct, code + 1);
     }
     w[n++] = RB_OP_STMT | (linestart ? RB_LINESTART : 0) | (ncode ? RB_COMPILED : 0) | (C.part ? RB_PART : 0);
     w[n++] = key & 0xFFFF;

@@ -3641,6 +3641,18 @@ int MIPS16 VerifyLineSkipBytes(unsigned char *start)
 	return mismatches;
 }
 */
+/* The command token in front of p, which is the statement's cmdline.  tokenise
+ * drops one space after a command and keeps any others, which skipspace then
+ * stepped over, so p - sizeof(CommandToken) is the token only when there were
+ * none (`ELSE   ' comment` missed the IF table, and cmd_else scanned for its
+ * ENDIF).  The token's bytes are never spaces. */
+static inline unsigned char *CmdTokenBefore(unsigned char *p)
+{
+	while (p[-1] == ' ')
+		p--;
+	return p - sizeof(CommandToken);
+}
+
 #if LOWRAM
 void MIPS16 __not_in_flash_func(cmd_if)(void) // (in RAM on LOWRAM too since the RAM review of 2026-10-02)
 {
@@ -3660,7 +3672,7 @@ void MIPS16 __not_in_flash_func(cmd_if)(void)
 	 * Used as the key into the IF jump table built by PrepareProgram so the
 	 * false-branch can skip directly to the matching ELSEIF / ELSE / ENDIF
 	 * without scanning.  Updated when re-entering for an ELSEIF.            */
-	unsigned char *if_token_addr = cmdline - sizeof(CommandToken);
+	unsigned char *if_token_addr = CmdTokenBefore(cmdline);
 
 	ss[0] = tokenTHEN;
 	ss[1] = tokenELSE;
@@ -3895,11 +3907,10 @@ void __not_in_flash_func(cmd_else)(void)
 		checkend(cmdline);
 
 	/* Fast path: PrepareProgram has built a table mapping every ELSE /
-	 * ELSEIF / ELSE_IF token to its matching ENDIF.  cmdline points at
-	 * the first byte after the command token, so the token address is
-	 * (cmdline - sizeof(CommandToken)).                                  */
+	 * ELSEIF / ELSE_IF token to its matching ENDIF.  cmdline points past
+	 * the command token and any spaces after it (CmdTokenBefore).        */
 	{
-		unsigned char *_else_token = cmdline - sizeof(CommandToken);
+		unsigned char *_else_token = CmdTokenBefore(cmdline);
 		struct iftab_entry *_ife = IfTableLookup(_else_token);
 		if (_ife && _ife->endif_tok)
 		{
