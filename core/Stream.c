@@ -741,8 +741,24 @@ static int RBSuffix(unsigned char **p)
     return t;
 }
 
-// A variable the compiler can bind: a symbol whose spelling has no '.' (a
-// structure member path), with its suffix, not followed by a bracket.
+// A dotted name (srv.pCurr, R.running) is a plain name, which findvar binds
+// like any other, unless the program or its library defines a TYPE: then
+// findvar may take it for a structure member path and does not bind it
+// (FINDVAR_DOTBLOCKS), so it stays text.  PrepareProgram registers the TYPEs
+// before the compile.
+static int RBDotBlocked(const unsigned char *sp, int len)
+{
+#ifdef STRUCTENABLED
+    return g_structcnt > 0 && memchr(sp, '.', len) != NULL;
+#else
+    (void)sp;
+    (void)len;
+    return 0;
+#endif
+}
+
+// A variable the compiler can bind: a symbol (dotted only where RBDotBlocked
+// allows it), with its suffix, not followed by a bracket or a member's dot.
 // Returns the byte after it, or NULL.  RBVarRef takes only a number's.
 static unsigned char *RBVarRefS(unsigned char *p, int *suffix)
 {
@@ -752,7 +768,7 @@ static unsigned char *RBVarRefS(unsigned char *p, int *suffix)
     if (!issymbol(*p))
         return NULL;
     sp = SymSpelling(p, &len);
-    if (memchr(sp, '.', len))
+    if (RBDotBlocked(sp, len))
         return NULL;
     p += symbolsize(*p);
     *suffix = RBSuffix(&p);
@@ -890,8 +906,8 @@ static int RBElement(rbcx_t *x, unsigned char **pp, int op, int target)
     if (!issymbol(*p))
         return 0;
     sp = SymSpelling(p, &len);
-    if (memchr(sp, '.', len))
-        return 0; // a structure's
+    if (RBDotBlocked(sp, len))
+        return 0; // perhaps a structure's
     q = p + symbolsize(*p);
     suf = RBSuffix(&q);
     if (suf == T_STR || *q != '(' || FindSubFun(p, 1) >= 0)
@@ -1916,8 +1932,8 @@ static int RBCompileLocal(unsigned char *entry, unsigned char *cmdl, uint16_t *c
         if (!issymbol(*p) || n == RB_MAXCODE / 2 - 2 || p - entry > 0xFFFF)
             return 0;
         sp = SymSpelling(p, &i);
-        if (memchr(sp, '.', i))
-            return 0; // a structure member
+        if (RBDotBlocked(sp, i))
+            return 0; // perhaps a structure member
         off[n++] = p - entry;
         p += symbolsize(*p);
         RBSuffix(&p);
