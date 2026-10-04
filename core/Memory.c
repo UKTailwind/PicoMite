@@ -2350,14 +2350,26 @@ void MIPS32 __not_in_flash_func (*GetMemory)(int size)
 }
 
 #ifdef rp2350
-/* The globals' records: always the SRAM heap.  A record in PSRAM would slow
-   every access to the variable, and SAVE CONTEXT does not keep PSRAM. */
-void *GetSRAMMemory(int size)
+/* A chunk of variables' records: the SRAM heap, where every access to a
+   variable reads its record.  PSRAM only when the SRAM heap is full - a
+   program whose arrays have filled it can still make variables (RUN has
+   already taken the records of the globals it declares: VarChunkReserve).
+   SAVE CONTEXT copies a chunk in PSRAM with the heap (Commands.c). */
+void *GetVarMemory(int size)
 {
     unsigned char *addr = TopDownFind(size);
-    if (addr == NULL)
-        OutOfMemory(size);
-    return (void *)addr;
+    if (addr != NULL)
+        return (void *)addr;
+    if (PSRAMsize)
+        return GetPSMemory(size);
+    OutOfMemory(size);
+    return NULL; // keep the compiler happy
+}
+
+// the SRAM heap or NULL (VarChunkReserve: as many as it holds)
+void *GetSRAMMemoryNull(int size)
+{
+    return (void *)TopDownFind(size);
 }
 #endif
 

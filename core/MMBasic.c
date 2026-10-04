@@ -1139,6 +1139,9 @@ unsigned char *getvalue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsign
 unsigned char tokenTHEN, tokenELSE, tokenGOTO, tokenEQUAL, tokenTO, tokenSTEP, tokenWHILE, tokenUNTIL, tokenGOSUB, tokenAS, tokenFOR;
 unsigned short cmdIF, cmdENDIF, cmdEND_IF, cmdELSEIF, cmdELSE_IF, cmdELSE, cmdSELECT_CASE, cmdFOR, cmdNEXT, cmdWHILE, cmdENDSUB, cmdENDFUNCTION, cmdLOCAL, cmdSTATIC, cmdCASE, cmdDO, cmdLOOP, cmdCASE_ELSE, cmdEND_SELECT;
 unsigned short cmdSUB, cmdFUN, cmdCFUN, cmdCSUB, cmdIRET, cmdComment, cmdEndComment;
+#ifdef rp2350
+static unsigned short cmdDIM, cmdCONST; // (PrepareProgramExt counts the globals they declare)
+#endif
 #ifdef STRUCTENABLED
 unsigned short cmdTYPE, cmdEND_TYPE; // Structure type definition commands
 #endif
@@ -1198,7 +1201,7 @@ void InitVarSlots(void)
 // for the run (they are cleared as their locals go)
 static void VarLocalChunk(int c)
 {
-    struct s_vartbl *r = (struct s_vartbl *)GetSRAMMemory(VARCHUNK * sizeof(struct s_vartbl));
+    struct s_vartbl *r = (struct s_vartbl *)GetVarMemory(VARCHUNK * sizeof(struct s_vartbl));
     g_varmem.lchunk[c] = r;
     for (int k = 0; k < VARCHUNK && c * VARCHUNK + k < maxlocalvars; k++)
         g_slotrec[c * VARCHUNK + k] = &r[k];
@@ -1260,13 +1263,67 @@ void VarChunkSeed(void)
         VarLocalChunk(0);
     if (g_varmem.chunks == 0)
     {
-        struct s_vartbl *r = (struct s_vartbl *)GetSRAMMemory(VARCHUNK * sizeof(struct s_vartbl));
+        struct s_vartbl *r = (struct s_vartbl *)GetVarMemory(VARCHUNK * sizeof(struct s_vartbl));
         g_varmem.chunk[g_varmem.chunks++] = r;
         g_varmem.cur = 0;
         g_varmem.next = r;
         g_varmem.end = r + VARCHUNK;
     }
 }
+
+#ifdef rp2350
+// the globals the program and the library declare (PrepareProgramExt counts
+// them for VarChunkReserve)
+static int g_DeclaredGlobals;
+
+// RUN (PrepareProgram): the records of the globals the program declares, in
+// the SRAM heap, before the program's arrays can fill it.  Taken later, as
+// each chunk filled, they found the SRAM heap full in a program with large
+// arrays (Prince of Pico: 192 variables, then "Not enough memory for 2048
+// bytes" with 6 MB of PSRAM free).  As many as the SRAM heap holds, and only
+// with PSRAM, where the arrays would otherwise take the SRAM; a global the
+// count does not see (made without DIM, by EXECUTE) takes a chunk when it
+// needs one, from PSRAM if the SRAM heap is full (GetVarMemory).
+static void VarChunkReserve(int globals)
+{
+    if (!PSRAMsize || g_varmem.chunks == 0)
+        return; // (no seed: the heap was given to a buffer, and chunks come as needed)
+    // (not limited to maxglobalvars: the program's OPTION LOCAL VARIABLES, which
+    // moves the split, has not run yet; the chunk table holds every global slot)
+    while (g_varmem.chunks * VARCHUNK < globals && g_varmem.chunks < (int)(sizeof(g_varmem.chunk) / sizeof(g_varmem.chunk[0])))
+    {
+        struct s_vartbl *r = (struct s_vartbl *)GetSRAMMemoryNull(VARCHUNK * sizeof(struct s_vartbl));
+        if (r == NULL)
+            return;
+        g_varmem.chunk[g_varmem.chunks++] = r; // (VarRecordTake moves on to it when the one before is full)
+    }
+}
+
+// the names a DIM, CONST or STATIC statement at p (its command token) declares:
+// its commas outside brackets and strings, before any comment, plus one (a
+// function's token opens a bracket, as getcsargs has it)
+static int DeclaredNames(unsigned char *p)
+{
+    int n = 1, depth = 0;
+    for (p += sizeof(CommandToken); *p && *p != '\''; p++)
+    {
+        if (*p == '"')
+        {
+            while (*++p && *p != '"')
+                ;
+            if (*p == 0)
+                break;
+        }
+        else if (*p == '(' || (tokentype(*p) & T_FUN))
+            depth++;
+        else if (*p == ')')
+            depth--;
+        else if (*p == ',' && depth == 0)
+            n++;
+    }
+    return n;
+}
+#endif
 
 // a zeroed record for the global about to be made in slot: an erased global's,
 // else the next unused one in the chunks, else one of a new chunk.  Called
@@ -1288,7 +1345,7 @@ static void VarRecordTake(int slot)
                     r = g_varmem.chunk[++g_varmem.cur]; // one CLEAR left
                 else
                 {
-                    r = (struct s_vartbl *)GetSRAMMemory(VARCHUNK * sizeof(struct s_vartbl));
+                    r = (struct s_vartbl *)GetVarMemory(VARCHUNK * sizeof(struct s_vartbl));
                     g_varmem.chunk[g_varmem.chunks] = r;
                     g_varmem.cur = g_varmem.chunks++;
                 }
@@ -1359,6 +1416,10 @@ void MIPS16 InitBasic(void)
     cmdFUN = GetCommandValue((unsigned char *)"Function");
     cmdLOCAL = GetCommandValue((unsigned char *)"Local");
     cmdSTATIC = GetCommandValue((unsigned char *)"Static");
+#ifdef rp2350
+    cmdDIM = GetCommandValue((unsigned char *)"Dim");
+    cmdCONST = GetCommandValue((unsigned char *)"Const");
+#endif
     cmdENDSUB = GetCommandValue((unsigned char *)"End Sub");
     cmdENDFUNCTION = GetCommandValue((unsigned char *)"End Function");
     cmdDO = GetCommandValue((unsigned char *)"Do");
@@ -1450,6 +1511,9 @@ int MIPS16 PrepareProgram(int ErrAbort)
     SymSetProgram(ProgMemory);
     SymOffLine = SymFindOff(ProgMemory);
     SymBindInit();
+#ifdef rp2350
+    g_DeclaredGlobals = 0; // (counted by PrepareProgramExt)
+#endif
     if (LibPresent())
     {
         NbrFuncts = PrepareProgramExt(LibMemory, 0, &CFunctionLibrary, ErrAbort);
@@ -1492,6 +1556,9 @@ int MIPS16 PrepareProgram(int ErrAbort)
     if (!ErrAbort)
         return 0;
 
+#ifdef rp2350
+    VarChunkReserve(g_DeclaredGlobals); // the declared globals' records, before any array (see MMBasic.h)
+#endif
     RBPrepare(); // OPTION COMPILE: check the stream's stamp, and compile if the program changed
     return 0;
 }
@@ -1509,12 +1576,25 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
        megabytes and hang the interpreter before the prompt was reachable.
        Bound every walk to the region and stop rather than run away. */
     unsigned char *const plimit = p + MAX_PROG_SIZE;
+#ifdef rp2350
+    bool insub = false;
+#endif
     while (*p != 0xff && p < plimit)
     {
         p = GetNextCommand(p, &CurrentLinePtr, NULL);
         if (*p == 0)
             break; // end of the program or module
         CommandToken tkn = commandtbl_at(p);
+#ifdef rp2350
+        // the globals declared, for VarChunkReserve: a DIM's and a STATIC's names
+        // anywhere, a CONST's outside a SUB or FUNCTION (inside one they are locals)
+        if (tkn == cmdDIM || tkn == cmdSTATIC || (tkn == cmdCONST && !insub))
+            g_DeclaredGlobals += DeclaredNames(p);
+        else if (tkn == cmdSUB || tkn == cmdFUN)
+            insub = true;
+        else if (tkn == cmdENDSUB || tkn == cmdENDFUNCTION)
+            insub = false;
+#endif
         if (tkn == cmdSUB || tkn == cmdFUN /*|| tkn == cmdCFUN*/ || tkn == cmdCSUB)
         { // found a SUB, FUN, CFUNCTION or CSUB token
             if (i >= MAXSUBFUN)

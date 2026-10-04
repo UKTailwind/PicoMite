@@ -4330,23 +4330,57 @@ extern char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalInde
    resizes, which trade heap for a bigger framebuffer and so only ever shrink
    it; HEAP_MEMORY_SIZE is therefore its ceiling.  Keep this list in step with
    the copies below. */
-_Static_assert(sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) +
-                       sizeof(g_StrTmp) + sizeof(g_StrTmpLocalIndex) +
-                       sizeof(g_LocalIndex) + sizeof(g_OptionBase) +
-                       sizeof(g_DimUsed) + sizeof(g_varcnt) +
-                       sizeof(g_Globalvarcnt) + sizeof(g_Localvarcnt) +
-                       sizeof(g_hashlistpointer) + sizeof(g_forindex) +
-                       sizeof(g_doindex) +
-                       sizeof(struct s_forstack) * MAXFORLOOPS +
-                       sizeof(struct s_dostack) * MAXDOLOOPS +
-                       sizeof(g_slotrec) + sizeof(g_varmem) +
-                       sizeof(g_hashlist) +
-                       (HEAP_MEMORY_SIZE + 256) + sizeof(mmap) + sizeof(psmap) <=
-                   0x60000,
-               "the SaveContext image no longer fits below the RAM slots");
+#define CONTEXT_BYTES 0x60000 // (the 384 KB under RAM slot 1)
+#define CONTEXT_FIXED_BYTES(heap) (sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) +   \
+								   sizeof(g_StrTmp) + sizeof(g_StrTmpLocalIndex) +           \
+								   sizeof(g_LocalIndex) + sizeof(g_OptionBase) +             \
+								   sizeof(g_DimUsed) + sizeof(g_varcnt) +                    \
+								   sizeof(g_Globalvarcnt) + sizeof(g_Localvarcnt) +          \
+								   sizeof(g_hashlistpointer) + sizeof(g_forindex) +          \
+								   sizeof(g_doindex) +                                       \
+								   sizeof(struct s_forstack) * MAXFORLOOPS +                 \
+								   sizeof(struct s_dostack) * MAXDOLOOPS +                   \
+								   sizeof(g_slotrec) + sizeof(g_varmem) +                    \
+								   sizeof(g_hashlist) +                                      \
+								   ((heap) + 256) + sizeof(mmap) + sizeof(psmap))
+_Static_assert(CONTEXT_FIXED_BYTES(HEAP_MEMORY_SIZE) <= CONTEXT_BYTES,
+			   "the SaveContext image no longer fits below the RAM slots");
+/* A chunk of variables' records in PSRAM (GetVarMemory puts one there when
+   the SRAM heap is full) is not in the heap's copy, and the program can go on
+   to use its records again (SAVE CONTEXT CLEAR, CHAIN), so its 2 KB follow the
+   heap's copy: each global chunk, then each local one, in g_varmem's order,
+   which RestoreContext has put back before it copies them.  save: the chunks
+   to p, else from p.  Returns the chunks in PSRAM, and p moved past them. */
+static int ContextPSChunks(uint8_t **p, bool save)
+{
+	int k, n = 0;
+	const int bytes = VARCHUNK * sizeof(struct s_vartbl);
+	const int nl = sizeof(g_varmem.lchunk) / sizeof(g_varmem.lchunk[0]);
+	for (k = 0; k < g_varmem.chunks + nl; k++)
+	{
+		uint8_t *c = (uint8_t *)(k < g_varmem.chunks ? g_varmem.chunk[k] : g_varmem.lchunk[k - g_varmem.chunks]);
+		if (c == NULL || c < (uint8_t *)PSRAMbase || c >= (uint8_t *)PSRAMbase + PSRAMsize)
+			continue; // none, or in the SRAM heap (the heap's copy holds it)
+		n++;
+		if (p == NULL)
+			continue; // (counting)
+		if (save)
+			memcpy(*p, c, bytes);
+		else
+			memcpy(c, *p, bytes);
+		*p += bytes;
+	}
+	return n;
+}
 #endif
 void SaveContext(void)
 {
+#if defined(rp2350)
+	/* before anything changes: the chunks of records in PSRAM must fit after
+	   the heap's copy (only a program whose arrays filled the SRAM heap has any) */
+	if (PSRAMsize && CONTEXT_FIXED_BYTES(heap_memory_size) + ContextPSChunks(NULL, true) * VARCHUNK * sizeof(struct s_vartbl) > CONTEXT_BYTES)
+		error("Not enough room to save the context: % chunks of variables are in PSRAM", ContextPSChunks(NULL, true));
+#endif
 	CloseAudio(1);
 	/* the symbol bindings live in the heap and belong to this program: keep
 	   them out of the snapshot (see the end of RestoreContext) */
@@ -4405,6 +4439,7 @@ void SaveContext(void)
 		p += sizeof(mmap);
 		memcpy(p, psmap, sizeof(psmap));
 		p += sizeof(psmap);
+		ContextPSChunks(&p, true); // (checked above to fit)
 	}
 	else
 	{
@@ -4501,6 +4536,7 @@ void RestoreContext(bool keep)
 		p += sizeof(mmap);
 		memcpy(psmap, p, sizeof(psmap));
 		p += sizeof(psmap);
+		ContextPSChunks(&p, false); // (the chunks g_varmem, now put back, has in PSRAM)
 		HeapHintsReset(); /* the page map was replaced wholesale */
 		/* the heap was rolled back: the stepper's retired-list links are stale */
 		extern void StepperForgetRetired(void);

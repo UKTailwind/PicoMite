@@ -394,8 +394,11 @@ extern "C"
     void NameIndexFree(void);    // SaveContext: kept out of the snapshot
     void NameIndexRebuild(void); // RestoreContext has put back another heap
     /* A variable's record is reached through its number: VREC(i).  Every
-       record is in the SRAM heap, in a chunk of VARCHUNK records, and never
-       moves while the variable exists.  A global's comes from a chunk as the
+       record is in a chunk of VARCHUNK records in the SRAM heap - in PSRAM
+       only when the SRAM heap is full (GetVarMemory) - and never moves while
+       the variable exists.  RUN takes the chunks for the globals the program
+       declares before anything else (VarChunkReserve, RP2350 with PSRAM).
+       A global's comes from a chunk as the
        global is made; a chunk of local slots (32 numbers on the local stack)
        gets its records the first time the stack reaches it, and keeps them for
        the run.  A slot with no record of its own (a free or blocked global, or
