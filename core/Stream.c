@@ -3119,10 +3119,45 @@ static int RBUnitHeader(unsigned char *p, int isfun)
     return 1;
 }
 
+// A /* ... */ block is comment: cmd_comment steps from the /* to the
+// statement after the first */.  Given p at the end of the /* statement (its
+// element's zero), the end of that */ statement, or NULL if another /* or the
+// end of the image comes first (cmd_comment's errors, left to the text path).
+// The compiler treats every statement from the /* to the */ as a comment line:
+// the walk gives each a map entry and no record, the surveys step over them.
+static unsigned char *RBCommentEnd(unsigned char *p)
+{
+    CommandToken t;
+    while (1)
+    {
+        if ((p[0] == 0 && p[1] == 0) || (p[0] == 0xff && p[1] == 0xff))
+            return NULL;
+        if (*p == 0)
+            p++;
+        if (*p == T_NEWLINE)
+            p += T_NEWLINE_HDR;
+        if (*p == T_LINENBR)
+            p += 3;
+        skipspace(p);
+        if (p[0] == T_LABEL)
+        {
+            p += p[1] + 2;
+            skipspace(p);
+        }
+        t = commandtbl_at(p);
+        if (*p)
+            skipelement(p);
+        if (t == cmdComment)
+            return NULL;
+        if (t == cmdEndComment)
+            return p;
+    }
+}
+
 // the header at cmdl starts a unit whose body starts at next
 static void RBUnitBegin(unsigned char *cmdl, unsigned char *next, int isfun)
 {
-    unsigned char *p = next, *q;
+    unsigned char *p = next, *q, *e;
     CommandToken ct;
     C.unit = 1;
     C.nulocal = 0;
@@ -3143,6 +3178,7 @@ static void RBUnitBegin(unsigned char *cmdl, unsigned char *next, int isfun)
             p += p[1] + 2;
             skipspace(p);
         }
+        ct = CMD_NOTOKEN;
         if (*p && *p != '\'' && p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
         {
             ct = commandtbl_decode(p);
@@ -3156,6 +3192,8 @@ static void RBUnitBegin(unsigned char *cmdl, unsigned char *next, int isfun)
         }
         if (*p)
             skipelement(p);
+        if (ct == cmdComment && (e = RBCommentEnd(p)) != NULL)
+            p = e; // a /* ... */ block: comment
         if ((p[0] == 0 && p[1] == 0) || (p[0] == 0xff && p[1] == 0xff))
             break;
     }
@@ -3164,7 +3202,7 @@ static void RBUnitBegin(unsigned char *cmdl, unsigned char *next, int isfun)
 
 static void RBWalk(unsigned char *base, uint32_t libbit)
 {
-    unsigned char *p = base, *entry, *tok, *cmdl, *next;
+    unsigned char *p = base, *entry, *tok, *cmdl, *next, *cmtend = NULL;
     int linestart, cmd;
     uint32_t endkey;
     uint16_t w[3];
@@ -3206,6 +3244,14 @@ static void RBWalk(unsigned char *base, uint32_t libbit)
             }
             skipspace(cmdl);
             skipelement(next);
+            if (cmtend == NULL && cmd > 0 && commandtbl_decode(tok) == cmdComment)
+                cmtend = RBCommentEnd(next);
+            if (cmtend != NULL)
+            { // from a /* to its */: comment, as a comment line (RBCommentEnd)
+                cmd = -1;
+                if (next >= cmtend)
+                    cmtend = NULL; // (the */)
+            }
             if (cmd > 0 && (commandtbl_decode(tok) == cmdSUB || commandtbl_decode(tok) == cmdFUN))
                 RBUnitBegin(cmdl, next, commandtbl_decode(tok) == cmdFUN);
             RBEmitStmt(base, libbit, entry, linestart, tok, cmd, cmdl, next);
@@ -3250,7 +3296,7 @@ static void RBWalkAll(void)
 // The survey's walk over one image: every DIM, LOCAL, STATIC and CONST.
 static void RBSurveyImage(unsigned char *p)
 {
-    unsigned char *cmdl;
+    unsigned char *cmdl, *e;
     CommandToken ct;
     int inunit = 0;
     skipspace(p);
@@ -3268,6 +3314,7 @@ static void RBSurveyImage(unsigned char *p)
             p += p[1] + 2;
             skipspace(p);
         }
+        ct = CMD_NOTOKEN;
         if (*p && *p != '\'')
         {
             if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
@@ -3292,6 +3339,8 @@ static void RBSurveyImage(unsigned char *p)
         }
         else if (*p)
             skipelement(p);
+        if (ct == cmdComment && (e = RBCommentEnd(p)) != NULL)
+            p = e; // a /* ... */ block: comment
         if ((p[0] == 0 && p[1] == 0) || (p[0] == 0xff && p[1] == 0xff))
             break;
     }
