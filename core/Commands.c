@@ -8684,6 +8684,57 @@ unsigned char *SetValue(unsigned char *p, int t, void *v)
 	return p;
 }
 
+// STATIC's global variable's name: a unique name from the name of the
+// SUB/FUNCTION this runs in - the innermost call frame that has one (a GOSUB
+// has none), so neither a call made earlier in the SUB nor an interrupt
+// changes it - then 0x1E (record separator, to avoid a conflict with the
+// structure member syntax), then arg, the variable's own text, as text (see
+// Symbols.h).  VarName holds (MAXVARLEN * 2) + 1 bytes.  (cmd_dim, and Route
+// B's compiled STATIC.)
+void StaticVarName(unsigned char *VarName, unsigned char *arg)
+{
+	unsigned char *def = NULL;
+	int k, n, m;
+	for (k = gosubindex - 1; k >= 0 && def == NULL; k--)
+		def = substack[k];
+	if (def == NULL)
+		error("Invalid here");
+	def += sizeof(CommandToken); // the name as the definition spells it, without a type suffix
+	skipspace(def);
+	CopyName(def, VarName, &k); // symbol or text (see Symbols.h)
+	strcat((char *)VarName, "\x1e");
+	n = strlen((char *)VarName);
+	m = SymExpand(VarName + n, arg, strlen((char *)arg), (MAXVARLEN * 2) + 1 - 1 - n);
+	if (m < 0)
+		error("Variable name too long");
+	VarName[n + m] = 0;
+}
+
+// STATIC's local variable: arg's name made a local (in one findvar call:
+// V_DIM_NEW errors with "$ already declared" if it is taken) and pointed at
+// the data of the global variable VIndexSave.  (cmd_dim, and Route B.)
+void StaticLink(unsigned char *arg, int typeSave, int VIndexSave)
+{
+	void *tv = findvar(arg, typeSave | V_LOCAL | V_FIND | V_DIM_VAR | V_DIM_NEW);
+	int j;
+#ifdef STRUCTENABLED
+	if (DimIsRealArray(RAW_DIM((*VREC(VIndexSave)), 0)) || (VREC(VIndexSave)->type & (T_STR | T_STRUCT)))
+#else
+	if (DimIsRealArray(RAW_DIM((*VREC(VIndexSave)), 0)) || (VREC(VIndexSave)->type & T_STR))
+#endif
+	{
+		if (!VAR_INLINE_STR(VREC(g_VarIndex)))
+			FreeMemorySafe((void **)&tv);						 // we don't need the memory allocated to the local
+		VREC(g_VarIndex)->val.s = VREC(VIndexSave)->val.s; // point to the memory of the global variable
+	}
+	else
+		VREC(g_VarIndex)->val.ia = &(VREC(VIndexSave)->val.i); // point to the data of the variable
+	VREC(g_VarIndex)->type = VREC(VIndexSave)->type | T_PTR;	 // set the type to a pointer
+	VREC(g_VarIndex)->size = VREC(VIndexSave)->size;			 // just in case it is a string copy the size
+	for (j = 0; j < MAXDIM; j++)
+		RAW_DIM((*VREC(g_VarIndex)), j) = RAW_DIM((*VREC(VIndexSave)), j); // just in case it is an array copy the dimensions
+}
+
 /** @endcond */
 
 // define a variable
@@ -8694,7 +8745,7 @@ void MIPS16 cmd_dim(void)
 	int i, j, k, type, typeSave, ImpliedType = 0, VIndexSave, StaticVar = false;
 	unsigned char *p, chSave, *chPosit;
 	unsigned char VarName[(MAXVARLEN * 2) + 1];
-	void *v, *tv;
+	void *v;
 
 	if (*cmdline == tokenAS)
 		cmdline++;									// this means that we can use DIM AS INTEGER a, b, etc
@@ -8708,6 +8759,8 @@ void MIPS16 cmd_dim(void)
 
 		for (i = 0; i < argc; i += 2)
 		{
+			type = ImpliedType;			 // each name has the type before the names, or its own AS type (set back
+										 // only after making a variable, a STATIC whose global existed kept the one before)
 			p = skipvar(argv[i], false); // point to after the variable
 			while (!(*p == 0 || *p == tokenAS || *p == (unsigned char)'\'' || *p == tokenEQUAL))
 				p++; // skip over a LENGTH keyword if there and see if we can find "AS"
@@ -8736,25 +8789,7 @@ void MIPS16 cmd_dim(void)
 			{
 				if (g_LocalIndex == 0)
 					error("Invalid here");
-				// create a unique global name from the name of the SUB/FUNCTION this
-				// runs in: the innermost call frame that has one (a GOSUB has none),
-				// so neither a call made earlier in the SUB nor an interrupt changes it
-				unsigned char *def = NULL;
-				for (k = gosubindex - 1; k >= 0 && def == NULL; k--)
-					def = substack[k];
-				if (def == NULL)
-					error("Invalid here");
-				def += sizeof(CommandToken); // the name as the definition spells it, without a type suffix
-				skipspace(def);
-				CopyName(def, VarName, &k);		 // symbol or text (see Symbols.h)
-				strcat((char *)VarName, "\x1e"); // use 0x1E (record separator) to avoid conflict with struct member syntax
-				{								  // by prefixing the var name with the sub/fun name, the name as text (see Symbols.h)
-					int n = strlen((char *)VarName);
-					int m = SymExpand(VarName + n, argv[i], strlen((char *)argv[i]), sizeof(VarName) - 1 - n);
-					if (m < 0)
-						error("Variable name too long");
-					VarName[n + m] = 0;
-				}
+				StaticVarName(VarName, argv[i]);
 				StaticVar = NAMELEN_STATIC;				  // flag for marking the variable as static
 			}
 			else
@@ -8928,25 +8963,9 @@ void MIPS16 cmd_dim(void)
 			// if it is a STATIC var create a local var pointing to the global var
 			if (StaticVar)
 			{
-				// Single call: V_DIM_NEW errors with "$ already declared" if the
-				// local pointer name is already taken, otherwise creates it.
-				tv = findvar(argv[i], typeSave | V_LOCAL | V_FIND | V_DIM_VAR | V_DIM_NEW);
-#ifdef STRUCTENABLED
-				if (DimIsRealArray(RAW_DIM((*VREC(VIndexSave)), 0)) || (VREC(VIndexSave)->type & (T_STR | T_STRUCT)))
-#else
-				if (DimIsRealArray(RAW_DIM((*VREC(VIndexSave)), 0)) || (VREC(VIndexSave)->type & T_STR))
-#endif
-				{
-					if (!VAR_INLINE_STR(VREC(g_VarIndex)))
-						FreeMemorySafe((void **)&tv);						 // we don't need the memory allocated to the local
-					VREC(g_VarIndex)->val.s = VREC(VIndexSave)->val.s; // point to the memory of the global variable
-				}
-				else
-					VREC(g_VarIndex)->val.ia = &(VREC(VIndexSave)->val.i); // point to the data of the variable
-				VREC(g_VarIndex)->type = VREC(VIndexSave)->type | T_PTR;	 // set the type to a pointer
-				VREC(g_VarIndex)->size = VREC(VIndexSave)->size;			 // just in case it is a string copy the size
-				for (j = 0; j < MAXDIM; j++)
-					RAW_DIM((*VREC(g_VarIndex)), j) = RAW_DIM((*VREC(VIndexSave)), j); // just in case it is an array copy the dimensions
+				*chPosit = 0; // the name's text alone again, as for the global: with the = put back, findvar
+							  // read LENGTH n = value as one expression ("Incompatible types")
+				StaticLink(argv[i], typeSave, VIndexSave);
 			}
 		}
 	}
