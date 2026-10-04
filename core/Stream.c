@@ -61,7 +61,7 @@ static int RBInPsram(void)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 36       // the stream format
+#define RB_VERSION 37       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -449,6 +449,7 @@ enum
     RF_SGNF,
     RF_SGNI,
     RF_RND, // no argument: RndVal() replaces the cell pushed for it
+    RF_CHOOSE, // float in, integer out: CHOICE's condition, made an int as fun_ternary's C does it
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -456,6 +457,9 @@ enum
 #define RK_GTE 3
 #define RK_EQ 4
 #define RK_NE 5
+#define RS_INT 1 // RC_FSPLICE's bits 5-6: the type the code takes the answer as (0: the function's own);
+#define RS_NBR 2 // VAL( converts its answer to it, MM.INFO( must give it
+#define RS_STR 3
 #define RK_AND 0 // RC_BITI
 #define RK_OR 1
 #define RK_XOR 2
@@ -848,6 +852,8 @@ typedef struct
     unsigned used;    // the binds met since it was cleared (bit j: bind j), and
     unsigned opt;     // those that may be unbound at the start (RBPartCheck)
     unsigned cmask;   // those that must be CONSTs (RB_BCONST, added by RBFinish)
+    unsigned char *valat; // LET's right-hand side, where a VAL( alone may compile (RBLetInto), and
+    int valwant, valstop; // the type it is stored as, and the character that may end it (an IF's ELSE)
 } rbcx_t;
 
 static void RBOp(rbcx_t *x, int w, int cells)
@@ -1049,6 +1055,35 @@ static int RBKeyword(unsigned char *p, const char *kw)
     return 1;
 }
 
+/* MM.INFO('s) keywords the compiler takes, and the type fun_info's branch for each
+   gives: every branch here sets that one type, and no shorter keyword checked
+   before it can take its text (MM_Misc.c, fun_info).  The text matches a keyword
+   as checkstring matches it there.  0: not one of them. */
+static const struct
+{
+    const char *kw;
+    unsigned char t;
+} RBInfoKw[] = {
+    {"FONTWIDTH", T_INT}, {"FONTHEIGHT", T_INT}, {"FONT", T_INT}, {"FCOLOUR", T_INT}, {"FCOLOR", T_INT},
+    {"BCOLOUR", T_INT}, {"BCOLOR", T_INT}, {"HEAP", T_INT}, {"HPOS", T_INT}, {"VPOS", T_INT},
+    {"WRITEBUFF", T_INT}, {"STACK", T_INT}, {"FLASH ADDRESS", T_INT}, {"FILESIZE", T_INT}, {"PINNO", T_INT},
+    {"DISK SIZE", T_INT}, {"FREE SPACE", T_INT}, {"ERRNO", T_INT}, {"UPTIME", T_NBR},
+    {"PATH", T_STR}, {"SOUND", T_STR}, {"CPUSPEED", T_STR}, {"ERRMSG", T_STR}, {"SYSTEM I2C", T_STR}, {"LCDPANEL", T_STR},
+#ifndef USBKEYBOARD
+    {"PS2", T_INT},
+#endif
+#ifdef PICOMITEWEB
+    {"MAX CONNECTIONS", T_INT}, {"TCPIP STATUS", T_INT}, {"IP ADDRESS", T_STR},
+#endif
+};
+static int RBInfoType(unsigned char *txt)
+{
+    for (unsigned k = 0; k < sizeof(RBInfoKw) / sizeof(RBInfoKw[0]); k++)
+        if (checkstring(txt, (unsigned char *)RBInfoKw[k].kw))
+            return RBInfoKw[k].t;
+    return 0;
+}
+
 static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
 {
     unsigned char *p = *pp, c = *p, *ae, txt[2 * RB_MAXLIT];
@@ -1098,6 +1133,63 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
         x->ncall++;
         *pp = RBNextOp(q + 1, op);
         return T_NBR;
+    }
+    if (fn == fun_val)
+    { // VAL(string) as the whole of LET's right-hand side (RBLetInto): its type is the
+      // string's, so the splice converts it to the target's type as evaluate converts
+      // for cmd_let (RBFnSpliceRun), and the type the string gives cannot matter
+        unsigned char *q = p + 1, *after;
+        if (p != x->valat)
+            return 0;
+        ae = RBArgEnd(q, ')');
+        skipspace(q);
+        x->calls = 0;
+        t = q == ae ? 0 : RBEvaluateS(x, &q);
+        x->calls = calls;
+        if (t != T_STR)
+            return 0; // (a number: getCstring's error)
+        skipspace(q);
+        if (q != ae || *ae != ')')
+            return 0;
+        after = ae + 1;
+        skipspace(after);
+        if (*after && *after != '\'' && !(x->valstop && *after == x->valstop))
+            return 0; // more after it: its type would matter
+        txt[0] = T_VALUE;
+        txt[1] = '0';
+        txt[2] = 0;
+        RBOp(x, RC_FSPLICE | (2 << 8), 0);
+        RBOp(x, 1 | ((x->valwant == T_INT ? RS_INT : RS_NBR) << 5) | (c << 8), 0);
+        RBOp(x, txt[0] | (txt[1] << 8), 0);
+        RBOp(x, 0, 0);
+        *pp = RBNextOp(ae + 1, op);
+        return x->valwant;
+    }
+    if (fn == fun_info)
+    { // MM.INFO(keyword ...): the text getvalue gives fun_info, its names spelled out,
+      // and the type its keyword's branch gives (RBInfoType), checked when it runs.
+      // Only names, numbers, strings and spaces, starting with the keyword: no
+      // bracket, so no FUNCTION and no other function in it.
+        unsigned char *q = p + 1, *e;
+        int k;
+        ae = RBArgEnd(q, ')');
+        if (*ae != ')' || ae == q || *q == ' ')
+            return 0;
+        for (e = q; e < ae; e++)
+            if (*e >= C_BASETOKEN || *e == '(' || *e == ',')
+                return 0;
+        if ((k = SymExpand(txt, q, ae - q, sizeof(txt) - 2)) < 0)
+            return 0;
+        txt[k] = 0;
+        if ((rt = RBInfoType(txt)) == 0)
+            return 0;
+        RBOp(x, RC_FSPLICE | (((k + 2) / 2) << 8), 1);
+        RBOp(x, 0 | ((rt == T_INT ? RS_INT : rt == T_NBR ? RS_NBR : RS_STR) << 5) | (c << 8), 0);
+        for (i = 0; i < k + 1; i += 2)
+            RBOp(x, txt[i] | ((i + 1 < k + 1 ? txt[i + 1] : 0) << 8), 0);
+        x->ncall++; // (HEAP, UPTIME, HPOS... change: no SHADOW check, an IF on it not pure)
+        *pp = RBNextOp(ae + 1, op);
+        return rt;
     }
     if (fn != fun_len && fn != fun_asc && fn != fun_chr && fn != fun_mid && fn != fun_instr && fn != fun_str &&
         fn != fun_space && fn != fun_trim && fn != fun_schange && fn != fun_base && fn != fun_rgb &&
@@ -1240,11 +1332,60 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
     return rt;
 }
 
+/* CHOICE(condition, a, b), as fun_ternary does it: the condition as getnumber
+   gives it, made an int by C's conversion (CHOICE(0.5, a, b) is b: RF_CHOOSE; an
+   integer condition is tested as it is, as no nonzero integer converts to a
+   float that converts back to 0), and then only the branch it picks.  Both
+   branches must compile to the same type, since the answer is the picked
+   branch's own; three arguments, none empty, as getcsargs gives them. */
+static int RBJump(rbcx_t *x, int op, int cells);
+static void RBLand(rbcx_t *x, int at);
+static int RBChoice(rbcx_t *x, unsigned char **pp, int *op)
+{
+    unsigned char *p = *pp + 1, *ae; // (the token's bracket is part of it)
+    int t, ta, tb, jf, jmp;
+    ae = RBArgEnd(p, ')');
+    skipspace(p);
+    if (*ae != ',' || p == ae || (t = RBEvaluate(x, &p)) == 0)
+        return 0; // (a string condition: getnumber's error)
+    skipspace(p);
+    if (p != ae)
+        return 0;
+    if (t == T_NBR)
+        RBOp(x, RC_FN | (RF_CHOOSE << 8), 0);
+    jf = RBJump(x, RC_JFI, -1);
+    p = ae + 1;
+    ae = RBArgEnd(p, ')');
+    skipspace(p);
+    if (*ae != ',' || p == ae || (ta = RBEvaluateS(x, &p)) == 0)
+        return 0;
+    skipspace(p);
+    if (p != ae)
+        return 0;
+    jmp = RBJump(x, RC_JMP, 0);
+    RBLand(x, jf);
+    x->depth--; // (one branch's answer is on the stack when they meet)
+    p = ae + 1;
+    ae = RBArgEnd(p, ')');
+    skipspace(p);
+    if (*ae != ')' || p == ae || (tb = RBEvaluateS(x, &p)) == 0 || tb != ta)
+        return 0;
+    skipspace(p);
+    if (p != ae)
+        return 0;
+    RBLand(x, jmp);
+    x->lk = 0; // (RBCvif must not convert a constant in one branch only)
+    *pp = RBNextOp(ae + 1, op);
+    return ta;
+}
+
 static int RBFunction(rbcx_t *x, unsigned char **pp, int *op)
 {
     unsigned char *p = *pp, c = *p;
     void (*fn)(void) = tokenfunction(c);
     int id, t, rt;
+    if (fn == fun_ternary)
+        return RBChoice(x, pp, op);
     if (fn == fun_pi && (tokentype(c) & T_FNA))
     { // fun_pi's M_PI, as a constant
         union
@@ -1557,7 +1698,15 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
     p++;
     skipspace(p);
     rhs = p;
-    if (rhs - x->entry > 255 || (t = RBEvaluateS(x, &p)) == 0 || (t == T_STR) != (ttype == T_STR))
+    if (ttype != T_STR)
+    { // a VAL( that is all of the right-hand side may compile, converted to ttype (RBFnSplice)
+        x->valat = rhs;
+        x->valwant = ttype;
+        x->valstop = stop;
+    }
+    t = rhs - x->entry > 255 ? 0 : RBEvaluateS(x, &p);
+    x->valat = NULL;
+    if (t == 0 || (t == T_STR) != (ttype == T_STR))
         return NULL; // (a string for a number or the other way: evaluate's error)
     skipspace(p);
     if (*p && *p != '\'' && !(stop && *p == stop))
@@ -2019,10 +2168,37 @@ static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandTok
     rbcx_t x;
     void (*fn)(void) = commandtbl[ct].fptr;
     unsigned char *p = cmdl, *ae, txt[2 * RB_MAXLIT];
-    int n = 0, len = 0, t, i, a = 0;
+    int n = 0, len = 0, t, i, a = 0, lett = -1, lett2 = -1, hash = 0;
     if (fn != cmd_box && fn != cmd_line && fn != cmd_pixel && fn != cmd_colour && fn != cmd_text && fn != cmd_circle &&
-        fn != cmd_triangle && fn != cmd_arc && fn != cmd_rbox)
+        fn != cmd_triangle && fn != cmd_arc && fn != cmd_rbox && fn != cmd_blit)
         return 0;
+    if (fn == cmd_blit)
+    { // BLIT FLASH slot, buffer, ...; BLIT FRAMEBUFFER from, to, ...; BLIT READ, WRITE
+      // and CLOSE #n, ...; and the plain BLIT x1, y1, x2, y2, w, h.  cmd_blit reads
+      // the program's text (it is symbol-aware): the keyword and a buffer's letter (L,
+      // F, N, T or 2, which it takes with checkstring) stay in the text as they are,
+      // a '#' before a number too, and every other argument is a value it reads
+      // with getint or getinteger.  Its other forms stay text.
+        static const char *const other[] = {"COMPRESSED", "MEMORY332", "LOADBMP", "LOAD", "MERGE", "RESIZE", NULL};
+        unsigned char *q;
+        for (i = 0; other[i]; i++)
+            if (checkstring(p, (unsigned char *)other[i]))
+                return 0;
+        if ((q = checkstring(p, (unsigned char *)"FLASH")))
+            lett = 1;
+        else if ((q = checkstring(p, (unsigned char *)"FRAMEBUFFER")))
+            lett = 0, lett2 = 1;
+        else if ((q = checkstring(p, (unsigned char *)"READ")) || (q = checkstring(p, (unsigned char *)"WRITE")) ||
+                 (q = checkstring(p, (unsigned char *)"CLOSE")))
+            hash = 1;
+        else
+            q = p; // the plain form
+        if (q - p > (int)sizeof(txt) / 2)
+            return 0;
+        memcpy(txt, p, q - p);
+        len = q - p;
+        p = q;
+    }
     if (fn == cmd_line && (checkstring(p, (unsigned char *)"PLOT") || checkstring(p, (unsigned char *)"GRAPH") || checkstring(p, (unsigned char *)"AA")))
         return 0; // the forms whose arguments are arrays or keywords
     if (fn == cmd_triangle && (checkstring(p, (unsigned char *)"SAVE") || checkstring(p, (unsigned char *)"RESTORE")))
@@ -2042,12 +2218,26 @@ static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandTok
             memcpy(txt + len, p, ae - p);
             len += ae - p;
         }
+        else if (a == lett || a == lett2)
+        { // BLIT's buffer letter, as cmd_blit's checkstring takes it: a name alone (its
+          // symbol), or 2
+            unsigned char *e = p;
+            if (issymbol(*p))
+                e = p + symbolsize(*p);
+            else if (*p == '2')
+                e = p + 1;
+            skipspace(e);
+            if (e == p || e != ae || len + (ae - p) > (int)sizeof(txt) - 6)
+                return 0;
+            memcpy(txt + len, p, ae - p);
+            len += ae - p;
+        }
         else if (p != ae)
         { // a value
             if (n == 26 || len > (int)sizeof(txt) - 7)
                 return 0;
-            if (fn == cmd_text && a == 4 && *p == '#')
-            { // TEXT's font as #n
+            if ((fn == cmd_text && a == 4 && *p == '#') || (hash && a == 0 && *p == '#'))
+            { // TEXT's font as #n, BLIT's buffer as #n
                 txt[len++] = '#';
                 p++;
             }
@@ -4130,6 +4320,12 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
     case RF_RND:
         v->f = RndVal();
         break;
+    case RF_CHOOSE:
+    { // fun_ternary's "int which = getnumber(argv[0])": the same conversion
+        int which = v->f;
+        v->i = which;
+        break;
+    }
     default: // RF_SGNI: fun_sgn's integer case
         v->i = (v->i > 0LL) - (v->i < 0LL);
     }
@@ -4183,6 +4379,22 @@ static __attribute__((noinline)) void RBFnSpliceRun(const uint16_t *pc, unsigned
     RBSplice = save;
     if ((tmp & targ) == 0)
         error("Internal fault 2(sorry)");
+    if (pc[0] & (3 << 5))
+    { // the type the code takes the answer as (RS_): VAL('s converted to it as evaluate
+      // converts for cmd_let; any other (MM.INFO() must give it
+        int want = (pc[0] >> 5) & 3;
+        want = want == RS_INT ? T_INT : want == RS_NBR ? T_NBR : T_STR;
+        if (tokenfunction(tkn) == fun_val)
+        {
+            if (want == T_INT && (targ & T_NBR))
+                iret = FloatToInt64(fret);
+            else if (want == T_NBR && (targ & T_INT))
+                fret = (MMFLOAT)iret;
+        }
+        else if (!(targ & want))
+            error("Internal fault 2(sorry)");
+        targ = want;
+    }
     if (targ & T_STR)
         vals[0].i = (uint32_t)sret;
     else if (targ & T_INT)
@@ -4931,7 +5143,7 @@ again:
             pc += 1 + (w >> 8);
             RBNEXT();
     L_FSPLICE: // a built-in function's handler, its arguments' values spliced (RBFnSpliceRun)
-            sp -= pc[0] & 0xFF;
+            sp -= pc[0] & 0x1F;
             RBFnSpliceRun(pc, w >> 8, sp);
             sp++;
             pc += 1 + (w >> 8);
