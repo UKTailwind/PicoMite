@@ -114,8 +114,10 @@ extern void ListProgram(unsigned char *p, int all);
 extern void ListProgramPaged(unsigned char *prog);
 extern unsigned char *llist(unsigned char *b, unsigned char *p);
 extern unsigned char *CheckIfTypeSpecified(unsigned char *p, int *type, int AllowDefaultType);
+#ifdef rp2350 // (cmd_dim's and Route B's compiled STATIC; on the RP2040 cmd_dim's alone)
 extern void StaticVarName(unsigned char *VarName, unsigned char *arg);
 extern void StaticLink(unsigned char *arg, int typeSave, int VIndexSave);
+#endif
 
 extern void MIPS16 ListNewLine(int *ListCnt, int all);
 // definitions related to setting video off and on

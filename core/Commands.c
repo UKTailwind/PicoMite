@@ -8727,7 +8727,12 @@ unsigned char *SetValue(unsigned char *p, int t, void *v)
 // structure member syntax), then arg, the variable's own text, as text (see
 // Symbols.h).  VarName holds (MAXVARLEN * 2) + 1 bytes.  (cmd_dim, and Route
 // B's compiled STATIC.)
-void StaticVarName(unsigned char *VarName, unsigned char *arg)
+#ifdef rp2350
+#define STATICHELPER
+#else
+#define STATICHELPER static MIPS16 // cmd_dim's alone without Route B: optimised as it is, so that it can be inlined (flash)
+#endif
+STATICHELPER void StaticVarName(unsigned char *VarName, unsigned char *arg)
 {
 	unsigned char *def = NULL;
 	int k, n, m;
@@ -8749,7 +8754,7 @@ void StaticVarName(unsigned char *VarName, unsigned char *arg)
 // STATIC's local variable: arg's name made a local (in one findvar call:
 // V_DIM_NEW errors with "$ already declared" if it is taken) and pointed at
 // the data of the global variable VIndexSave.  (cmd_dim, and Route B.)
-void StaticLink(unsigned char *arg, int typeSave, int VIndexSave)
+STATICHELPER void StaticLink(unsigned char *arg, int typeSave, int VIndexSave)
 {
 	void *tv = findvar(arg, typeSave | V_LOCAL | V_FIND | V_DIM_VAR | V_DIM_NEW);
 	int j;
