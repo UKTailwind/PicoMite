@@ -89,8 +89,10 @@ extern "C"
       moved into the heap: compact-vars and the name index), ~4.5 KB of RAM
       margin left for the stack; MAX_PROG_SIZE pinned at the old heap size
       (a bigger one would not leave RB_STREAM_SLOTS of it in the PSRAM
-      reserve); new MagicKey for the new layout. */
-#define FLASH_TARGET_OFFSET (1440 * 1024)
+      reserve); new MagicKey for the new layout.
+      +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
+      BLIT went 0.6 KB over. */
+#define FLASH_TARGET_OFFSET (1456 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (240 * 1024)
 #define MAX_PROG_SIZE (180 * 1024)
@@ -149,7 +151,9 @@ extern "C"
       BSS grows again; see [[heap-bss-overlap-on-rp2350]]. */
    /* +32 KB (2026-09-29): Route B (P1-P5) went 19.4 KB over; it had only
       been sized for HDMIWEB. */
-#define FLASH_TARGET_OFFSET (1120 * 1024)
+   /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
+      BLIT went 4.1 KB over. */
+#define FLASH_TARGET_OFFSET (1136 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -177,7 +181,9 @@ extern "C"
 #define MIN_CPU 252000
 #ifdef USBKEYBOARD
    /* +32 KB (2026-09-29): Route B (P1-P5) went 19.5 KB over. */
-#define FLASH_TARGET_OFFSET (1088 * 1024)
+   /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
+      BLIT went 3.9 KB over. */
+#define FLASH_TARGET_OFFSET (1104 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
@@ -304,7 +310,9 @@ extern "C"
       offset alone, so the A: drive is 16 KB smaller.  Moving the offset moves
       the option sector, so the first boot after the upgrade does a full clean. */
    /* +48 KB (2026-09-29): Route B (P1-P6) went 37.4 KB over. */
-#define FLASH_TARGET_OFFSET (1520 * 1024)
+   /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
+      BLIT went 6.0 KB over. */
+#define FLASH_TARGET_OFFSET (1536 * 1024)
 #else
 #define MagicKey 0x060B6881
 #define MAXSUBFUN 256
@@ -378,7 +386,9 @@ extern "C"
 #define MAX_CPU 396000
 #define MagicKey 0xEA895E8B
    /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
-#define FLASH_TARGET_OFFSET (1440 * 1024)
+   /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
+      BLIT went 2.6 KB over. */
+#define FLASH_TARGET_OFFSET (1456 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~4.1 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.9 KB of RAM margin left for the stack. */
@@ -395,7 +405,9 @@ extern "C"
 #define MAX_CPU 396000
 #define MagicKey 0x8D8186E6
    /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
-#define FLASH_TARGET_OFFSET (1472 * 1024)
+   /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
+      BLIT went 0.8 KB over. */
+#define FLASH_TARGET_OFFSET (1488 * 1024)
    /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.9 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.6 KB of RAM margin left for the stack. */
@@ -403,7 +415,9 @@ extern "C"
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #else
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */
-#define FLASH_TARGET_OFFSET (1136 * 1024)
+   /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
+      BLIT went 5.0 KB over. */
+#define FLASH_TARGET_OFFSET (1152 * 1024)
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
    /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~6.0 KB of RAM margin left for the stack. */
