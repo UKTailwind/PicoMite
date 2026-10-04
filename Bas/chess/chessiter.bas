@@ -1,4 +1,3 @@
-Option symbols off
 ' TSCP Chess
 ' Tom Kerrigan's Simple Chess Program
 ' (TSCP) version 1.81c, 2/3/19
