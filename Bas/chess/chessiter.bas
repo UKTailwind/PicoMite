@@ -1119,7 +1119,7 @@ End Sub
 
 ' MAIN
 Sub main
-Local computer_side,m,s$
+Local computer_side,m,s$,selfplay
 CLS
 Print "'help' lists commands. TSCP Chess By Tom Kerrigan. Converted MMBasic Ceptimus"
 
@@ -1132,12 +1132,18 @@ max_time=6e5' 10min '18e5 '30min' 4e5 '400sec '2^24
 max_depth=5
 
 Do
+  ' auto: the computer takes whichever side is to move, until a key
+  If selfplay Then
+    computer_side=side
+    If Inkey$<>"" Then selfplay=0:computer_side=MT
+  EndIf
   If side=computer_side Then
     think(1)
     If pv(0,0)=0 Then
       oPrintR ""
       oPrintR "(no legal moves)"
       computer_side=MT
+      selfplay=0
       print_result
     Else
       oPrintR""
@@ -1146,6 +1152,11 @@ Do
       ply=0
       gen
       print_result
+      If selfplay Then
+        draw_chessboard ' no tscp> prompt comes to draw it
+        ' a draw print_result reported ends auto
+        If (reps()=2)Or(fifty>=100) Then selfplay=0:computer_side=MT
+      EndIf
     EndIf
   Else
     s$=oInput$("tscp> ")
@@ -1153,6 +1164,8 @@ Do
       computer_side=side
     ElseIf s$="off" Then
       computer_side=MT
+    ElseIf s$="auto" Then
+      selfplay=1
     ElseIf (Left$(s$,2)="st")And(Len(s$)>2) Then
       max_time=1000*Val(Mid$(s$,3))
       max_depth=7'32
@@ -1185,6 +1198,8 @@ Do
     ElseIf s$="help" Then
       oPrintR "on - computer plays"
       oPrintR "     for the side to move"
+      oPrintR "auto - computer plays both sides"
+      oPrintR "       until a key is pressed"
       oPrintR "off - computer stops playing"
       oPrintR "st n - search for n secs per move"
       oPrintR "sd n - search n (1-7) ply per move"
