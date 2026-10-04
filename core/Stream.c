@@ -2144,7 +2144,7 @@ static void RBKey(rbcx_t *x, unsigned char *base, uint32_t libbit, unsigned char
    the token are kept); ELSE checks its end first.  CONTINUE FOR runs its
    loop's NEXT (RC_CONTFOR); CONTINUE DO and plain CONTINUE stay text. */
 /* P5b: BOX, LINE and PIXEL through the value splice (see RBSpliceCmd), and
-   COLOUR (P5d), TEXT, CIRCLE, TRIANGLE, ARC and RBOX: 0 if the compiler cannot
+   COLOUR (P5d), TEXT, CIRCLE, TRIANGLE, ARC, RBOX and BLIT MEMORY: 0 if the compiler cannot
    take every argument, or for another form.  Each handler reads its arguments
    with getcsargs and getinteger, getint, getnumber, getargaddress (whose
    literal path a spliced value takes) or, for TEXT, getCstring, so a string
@@ -2170,8 +2170,9 @@ static int RBCompileSplice(unsigned char *entry, unsigned char *cmdl, CommandTok
     unsigned char *p = cmdl, *ae, txt[2 * RB_MAXLIT];
     int n = 0, len = 0, t, i, a = 0, lett = -1, lett2 = -1, hash = 0;
     if (fn != cmd_box && fn != cmd_line && fn != cmd_pixel && fn != cmd_colour && fn != cmd_text && fn != cmd_circle &&
-        fn != cmd_triangle && fn != cmd_arc && fn != cmd_rbox && fn != cmd_blit)
-        return 0;
+        fn != cmd_triangle && fn != cmd_arc && fn != cmd_rbox && fn != cmd_blit && fn != cmd_blitmemory)
+        return 0; // (BLIT MEMORY, and SPRITE MEMORY which the tokeniser turns into it: its address
+                  // through GetPeekAddr, which is getinteger, then getinteger and getint)
     if (fn == cmd_blit)
     { // BLIT FLASH slot, buffer, ...; BLIT FRAMEBUFFER from, to, ...; BLIT READ, WRITE
       // and CLOSE #n, ...; and the plain BLIT x1, y1, x2, y2, w, h.  cmd_blit reads
