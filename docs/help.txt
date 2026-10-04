@@ -12412,9 +12412,11 @@ SAVE CONTEXT [CLEAR]
 Saves the variable space and optionally clears it - command should be used in
 top level program and not from within a subroutine. This saves the entire
 variable space to the A: drive. The command will fail if there is not enough
-free space on the A: drive. In the case of and RP2350 with PSRAM the variable
+free space on the A: drive. In the case of an RP2350 with PSRAM the variable
 space will be saved to a reserved area in the PSRAM and the A: drive is not
-used.
+used. Variables that had to be placed in PSRAM because the processor's own
+memory was full are saved too; in the rare case that there are too many of
+them the command fails with "Not enough room to save the context".
 See also LOAD CONTEXT
 
 See also: LOAD CONTEXT
