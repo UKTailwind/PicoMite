@@ -4805,8 +4805,8 @@ again:
                 {
                     q = g_forstack[i].nextptr + sizeof(CommandToken);
                     skipspace(q);
-                    if (q == cl)
-                        goto nextloop;
+                    if (q == cl && g_forstack[i].level == g_LocalIndex)
+                        goto nextloop; // (only this level's: see cmd_next)
                 }
             }
             else

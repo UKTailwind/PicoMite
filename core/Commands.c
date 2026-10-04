@@ -5270,12 +5270,15 @@ breakout:
 		g_forindex--;
 		// For multi-variable NEXT (e.g. NEXT j, i): if another loop also has
 		// its nextptr pointing here, close it too.  g_forstack[i].var already
-		// holds the direct variable pointer so no findvar needed.
+		// holds the direct variable pointer so no findvar needed.  Only a loop
+		// of this SUB/FUNCTION level: in a recursive one every level's loop has
+		// this same NEXT, and stepping the caller's loop here ran its body in
+		// the callee and lost a loop (later "Cannot find a matching FOR").
 		for (i = g_forindex - 1; i >= 0; i--)
 		{
 			p = g_forstack[i].nextptr + sizeof(CommandToken);
 			skipspace(p);
-			if (p == cmdline)
+			if (p == cmdline && g_forstack[i].level == g_LocalIndex)
 				goto breakout;
 		}
 	}
