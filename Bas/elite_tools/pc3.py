@@ -215,6 +215,12 @@ class PC3:
         self.send_line('XMODEM R "%s"' % devpath)
         time.sleep(0.3)
         crc, t0 = None, time.time()
+        # step over the console's echo of the command: a capital C in the path
+        # (TSCPChess.bas) would otherwise read as the receiver asking for CRC
+        while time.time() - t0 < 5:
+            b = self.s.read(1)
+            if not b or b == b"\n":
+                break
         while time.time() - t0 < 30:
             b = self.s.read(1)
             if not b:
