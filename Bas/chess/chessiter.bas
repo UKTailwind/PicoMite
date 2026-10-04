@@ -1,3 +1,4 @@
+Option symbols off
 ' TSCP Chess
 ' Tom Kerrigan's Simple Chess Program
 ' (TSCP) version 1.81c, 2/3/19
@@ -5,7 +6,13 @@
 ' MMBasic conversion by Ceptimus
 
 Option explicit:Option default integer:Option base 0
-MODE 2:Colour RGB(white),RGB(black):CLS :Font 8
+If Not Instr(MM.Info(lcdpanel),"MODE")) Then
+FRAMEBUFFER create
+FRAMEBUFFER write f
+Else
+MODE 2
+EndIf
+Colour RGB(white),RGB(black):CLS :Font 8
 Const autoplay=0
 
 'changes to monitor STACK usage (require picomite 5.07.05RC5 or newer)
@@ -492,7 +499,7 @@ End Sub
 Dim book_file=1 'set to 1 if opening book is present
 
 Sub open_book
-Local d$=MM.Device$
+Local d$=MM.DEVICE$
 
 On Error Skip
 Open "book.txt" For input As#1
@@ -555,7 +562,7 @@ End Function
 
 Function book_match(s1$, s2$)
 book_match=0
-If Left$(s2$, Len(s1$))=s1$ Then book_match=1
+If LEFT$(s2$, Len(s1$))=s1$ Then book_match=1
 End Function
 
 ' DATA
@@ -1062,6 +1069,8 @@ oPrint s$
 Blit B_W,B_T1+R_H,B_W,B_T1,B_W1,P_Y-B_T1
 Blit 0,B_T+R_H,0,B_T,B_W,P_Y-B_T
 Box 0,P_Y,E_W,R_H,0,0,0
+If Not Instr(MM.Info(lcdpanel),"MODE")) Then FRAMEBUFFER copy f,n
+
 '  Print
 End Sub
 
@@ -1070,6 +1079,7 @@ Local s$
 draw_chessboard
 Box 0,P_Y,E_W,R_H,0,0,0
 oPrint prompt$
+If Not Instr(MM.Info(lcdpanel),"MODE")) Then FRAMEBUFFER copy f,n
 '-------------------------------Volhout---------- autoplay itself -----
 If autoplay Then
  s$="on" '<--------this is autoplay
@@ -1081,6 +1091,7 @@ Blit 0,B_T+R_H,0,B_T,B_W,P_Y-B_T
 Box 0,P_Y,E_W,R_H,0,0,0
 '  Print
 oInput$=s$
+If Not Instr(MM.Info(lcdpanel),"MODE")) Then FRAMEBUFFER copy f,n
 End Function
 
 Sub draw_chessboard
@@ -1121,7 +1132,7 @@ End Sub
 Sub main
 Local computer_side,m,s$,selfplay
 CLS
-Print "'help' lists commands. TSCP Chess By Tom Kerrigan. Converted MMBasic Ceptimus"
+Text 0,0, "'help' lists commands. TSCP Chess By Tom Kerrigan. Converted MMBasic Ceptimus"
 
 init_hash
 init_board
@@ -1130,6 +1141,7 @@ gen
 computer_side=MT
 max_time=6e5' 10min '18e5 '30min' 4e5 '400sec '2^24
 max_depth=5
+If Not Instr(MM.Info(lcdpanel),"MODE")) Then FRAMEBUFFER copy f,n
 
 Do
   ' auto: the computer takes whichever side is to move, until a key
@@ -1147,7 +1159,7 @@ Do
       print_result
     Else
       oPrintR""
-      oPrintR "Computer's move: "+UCase$(move_str$(pv(0,0)))
+      oPrintR "Computer's move: "+UCASE$(move_str$(pv(0,0)))
       m=makemove(pv(0,0))
       ply=0
       gen
@@ -1166,10 +1178,10 @@ Do
       computer_side=MT
     ElseIf s$="auto" Then
       selfplay=1
-    ElseIf (Left$(s$,2)="st")And(Len(s$)>2) Then
+    ElseIf (LEFT$(s$,2)="st")And(Len(s$)>2) Then
       max_time=1000*Val(Mid$(s$,3))
       max_depth=7'32
-    ElseIf (Left$(s$,2)="sd")And(Len(s$)>2) Then
+    ElseIf (LEFT$(s$,2)="sd")And(Len(s$)>2) Then
       max_depth=Val(Mid$(s$,3))
       If max_depth<1 Then max_depth=1
       If max_Depth>MAX_PLY Then max_depth=MAX_PLY+1
@@ -1226,6 +1238,7 @@ Do
       EndIf
     EndIf
   EndIf
+  If Not Instr(MM.Info(lcdpanel),"MODE")) Then FRAMEBUFFER copy f,n
 Loop
 close_book
 End Sub
@@ -1234,7 +1247,7 @@ Function parse_move(vs$)
 Local from,too,i,a(4),s$
 
 parse_move=-1 'default to 'illegal move'
-s$=LCase$(vs$)
+s$=LCASE$(vs$)
 If Len(s$)<4 Then Exit Function
 For i=0 To 3:a(i)=Asc(Mid$(s$,i+1)):Next 'i
 If (a(0)<Asc("a"))Or(a(0)>Asc("h"))Then Exit Function
@@ -1332,7 +1345,9 @@ ElseIf reps()=2 Then
   oPrintR "1/2-1/2 {Draw by repetition}"
 ElseIf fifty>=100 Then
   oPrintR "1/2-1/2 {Draw by fifty move rule}"
+  If Not Instr(MM.Info(lcdpanel),"MODE")) Then FRAMEBUFFER copy f,n
 EndIf
+
 End Sub
 
 data_bench_color:
@@ -1432,7 +1447,7 @@ For i=1 To max_depth
    For j = 0 To pvl(0)-1
     move$=move$+" "+move_str$(pv(0, j))
    Next 'j
-   move$=UCase$(move$)
+   move$=UCASE$(move$)
    oPrintR ""
    oPrint Str$(i, 3)+Str$(nodes, 7)+Str$(x, 7)+"  "+move$
 '   oPrintR ""
