@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Route B VM Review</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --ink:#151A20; --muted:#5B6673; --line:#D3DAE2;
+  --accent:#0E6F92; --accent-ink:#0A5A77; --gold:#B8901E; --gold-bg:#FBF3DC;
+  --ok:#2E7D4F; --warn:#B25E12; --bad:#B3261E;
+  --code-bg:#EEF1F4; --space:#0B0E12; --space-ink:#DCE6EE;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+    --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+    --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+    --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0E1216; --panel:#151A20; --ink:#E4E9EE; --muted:#97A3AF; --line:#28313B;
+  --accent:#52C4E3; --accent-ink:#8ADCF1; --gold:#E3C25A; --gold-bg:#2A2412;
+  --ok:#5FBF86; --warn:#E39A4F; --bad:#EF6A5F;
+  --code-bg:#1B2129; --space:#05070A; --space-ink:#DCE6EE;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Source Sans 3",system-ui,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.55;font-variant-numeric:tabular-nums;overflow-wrap:break-word}
+a{color:var(--accent-ink);text-decoration-thickness:1px;text-underline-offset:2px}
+h1,h2,h3,h4{font-family:"Chakra Petch","Source Sans 3",sans-serif;text-wrap:balance;line-height:1.15;margin:0}
+h1{font-size:2.4rem;font-weight:700;letter-spacing:.01em}
+h2{font-size:1.5rem;font-weight:600;margin-top:.2rem}
+h3{font-size:1.12rem;font-weight:600;margin-top:1.6rem}
+h4{font-size:1rem;font-weight:600;margin-top:1rem;color:var(--muted)}
+p{margin:.7rem 0;max-width:70ch}
+ul,ol{max-width:74ch;padding-left:1.3rem}
+li{margin:.3rem 0}
+li ul,li ol{margin:.2rem 0}
+code,pre,.mono{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace}
+code{font-size:.86em;background:var(--code-bg);padding:.06em .32em;border-radius:3px}
+pre{background:var(--code-bg);padding:.9rem 1rem;border-radius:6px;overflow-x:auto;font-size:.84rem;line-height:1.45;border:1px solid var(--line)}
+pre code{background:none;padding:0;font-size:inherit}
+.eyebrow{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 1.4rem 4rem}
+header.hero{background:var(--space);color:var(--space-ink);border-bottom:1px solid var(--line)}
+header.hero .wrap{padding-top:2.2rem;padding-bottom:2rem}
+header.hero .eyebrow{color:#7FD6EE}
+header.hero p{color:#AAB8C4;max-width:72ch}
+header.hero .ref{color:#8C9AA6}
+nav.toc{display:flex;flex-wrap:wrap;gap:.4rem .9rem;padding:1rem 0 .4rem;border-bottom:1px solid var(--line);font-size:.92rem}
+nav.toc a{text-decoration:none;color:var(--muted)}
+nav.toc a:hover{color:var(--accent-ink)}
+section{padding-top:2.4rem}
+section+section{border-top:1px solid var(--line);margin-top:2.4rem}
+.lede{font-size:1.1rem;max-width:70ch}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1rem;margin:1rem 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:1rem 1.1rem}
+.card h3{margin-top:0}
+.card p,.card ul{max-width:none}
+.card .ref{margin-top:.6rem}
+.decide{background:var(--gold-bg);border:1px solid var(--gold);border-radius:6px;padding:1rem 1.1rem;margin:1.2rem 0}
+.decide .eyebrow{color:var(--gold)}
+.decide ol{margin:.4rem 0 0;max-width:none}
+.decide p{max-width:none}
+.gate{background:color-mix(in srgb,var(--accent) 7%,var(--panel));border:1px solid var(--accent);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.gate .eyebrow{margin-bottom:.2rem}
+.gate ul,.gate ol,.gate p{max-width:none}
+.warnbox{background:color-mix(in srgb,var(--warn) 8%,var(--panel));border:1px solid var(--warn);border-radius:6px;padding:.9rem 1.1rem;margin:1.1rem 0}
+.warnbox .eyebrow{color:var(--warn)}
+.warnbox p,.warnbox ul{max-width:none}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.8rem 0}
+.tablewrap{overflow-x:auto;margin:.8rem 0;-webkit-overflow-scrolling:touch}
+th,td{text-align:left;vertical-align:top;padding:.45rem .6rem;border-bottom:1px solid var(--line)}
+th{font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.num,th.num{text-align:right;white-space:nowrap}
+tr.rec td{background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.pill{display:inline-block;font-family:"Chakra Petch",sans-serif;font-size:.7rem;font-weight:600;letter-spacing:.08em;text-transform:uppercase;padding:.1em .45em;border-radius:3px;border:1px solid currentColor;white-space:nowrap}
+.pill.ok{color:var(--ok)} .pill.warn{color:var(--warn)} .pill.bad{color:var(--bad)} .pill.acc{color:var(--accent)}
+.phase{display:grid;grid-template-columns:5.2rem 1fr;gap:1rem;padding:1.1rem 0;border-top:1px dashed var(--line)}
+.phase:first-of-type{border-top:0}
+.phase .num{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:1.5rem;color:var(--accent);line-height:1}
+.phase .num small{display:block;font-size:.7rem;letter-spacing:.1em;color:var(--muted);font-weight:600;margin-top:.3rem}
+.phase h3{margin-top:0}
+.phase .meta{color:var(--muted);font-size:.9rem;margin:.2rem 0 .6rem}
+.note{border-left:3px solid var(--accent);padding:.2rem .9rem;margin:1rem 0;color:var(--muted);font-size:.95rem;max-width:74ch}
+.ref{font-size:.85rem;color:var(--muted)}
+.formula{font-family:"JetBrains Mono",ui-monospace,Consolas,monospace;font-size:.9rem;background:var(--code-bg);border:1px solid var(--line);border-radius:6px;padding:.6rem .9rem;margin:.8rem 0;overflow-x:auto;white-space:nowrap}
+footer{margin-top:3rem;color:var(--muted);font-size:.88rem;border-top:1px solid var(--line);padding-top:1rem}
+@media (max-width:640px){
+  .wrap{padding:0 16px 3rem}
+  body{font-size:16px}
+  h1{font-size:1.9rem}
+  h2{font-size:1.3rem}
+  .phase{grid-template-columns:1fr;gap:.3rem}
+  table{font-size:.84rem}
+  th,td{padding:.4rem .45rem}
+}
+</style>
+
+</head>
+<body>
+<header class="hero"><div class="wrap">
+<div class="eyebrow">Route B &middot; VM review</div>
+<h1>Making a compiled statement cheaper</h1>
+<p>The compiler now takes almost everything a typical program runs: the TSCP chess bench executes 99.9% of its statements compiled. It still runs 47 times slower than the same search converted by mmb2csub. Coverage is no longer the limit. The cost of each compiled statement is, and that cost is set by the executor (RBRun, the stream and the helpers it calls), not by what the compiler accepts. This review measures that cost piece by piece on the PC3 and proposes eight changes to the executor, ranked by what they would buy and what they would risk. Every proposal keeps the design's contract: the interpreter's state is exactly the text interpreter's wherever anything can look at it.</p>
+<p class="ref">Measured 5 October 2026 on COM9: PicoMiteHDMIWEB RP2350B, V7.0.00b4, 378 MHz, OPTION COMPILE ON, PSRAM fitted (the stream in PSRAM, the test arrays in SRAM). Programs: Bas/chess (the bench), and three timing programs listed under <a href="#method">Method</a>. Nothing in the firmware was changed for this review. R0, the measurement phase, ran the same day on COM16 (the released V7.0.00b5, 315 MHz) and COM9; its results are in <a href="#r0">R0 results</a> and change the order of work.</p>
+</div></header>
+<div class="wrap">
+<nav class="toc">
+<a href="#summary">Summary</a><a href="#done">What was done</a><a href="#r0">R0 results</a><a href="#evidence">Evidence</a><a href="#where">Where the cycles go</a><a href="#proposals">Proposals</a><a href="#fixed">What stays fixed</a><a href="#order">Order and gates</a><a href="#decide">Decisions</a><a href="#method">Method</a>
+</nav>
+
+<section id="summary">
+<h2>Summary</h2>
+<ul>
+<li><b>Outcome (5 October): the chess bench went from 58.9 s to 37.4 s compiled (-36%), Exile from 15.7 to 11.6-11.8 s (-25%), Elite from 6.9 to 6.1-6.2 s (-12%) and solar_eclipse from 6.9 to 6.0 s (-13%).</b> D1, V4 (in part), V2 (in part) and V3 were done; see <a href="#done">What was done</a> for each step, what was tried and dropped, and why further VM tuning now pays less than it costs.</li>
+<li><b>R0 found a defect worth fixing first (D1).</b> After any SUB return or FUNCTION call, compiled statements stop chaining until a string temporary is freed, because a temporary-memory flag stays set. In the chess bench that is about a fifth of the time. The measured profiles then put calls and locals, the record boundary and stream fetches ahead of the ops themselves, and the order of work below follows that: D1 (done), V4, V2, V1, V3, then V6 and V5.</li>
+<li><b>A compiled statement costs about 890 cycles in the chess bench; the C version does the same work in about 19.</b> The bench to depth 3 runs 20,013,119 statements in 47.0 s compiled (19,985,062 of them as compiled code) and in about 1.0 s as a CSUB. That ratio, not coverage, is the 47x.</li>
+<li><b>Five things make up that cost, and each was measured on its own.</b>
+<ul>
+<li>About <b>175 cycles at every record boundary</b> before a statement's own work begins: <code>x = j</code> costs 209 with two ops.</li>
+<li>About <b>17 cycles a VM op</b>.</li>
+<li><b>Array elements</b> cost 88 (1-D), 264 (2-D) and 352 (3-D) cycles on top of a scalar.</li>
+<li><b>Calls</b>: 1,197 cycles for a SUB with nothing in it, about 840 for each parameter, about 1,350 for each LOCAL made, and about 190 to 375 cycles for each statement of the called routine, which binds its variables again on every call.</li>
+<li><b>Fetching the stream from PSRAM.</b> The same statement costs 253 cycles when 50 of them loop, 534 when 400 do and 1,009 when 2,000 do. Once the hot code is bigger than the 16 KB XIP cache, each record is read from PSRAM again. The chess stream is 86 KB.</li>
+</ul></li>
+<li><b>Eight proposals, cheapest and safest first.</b>
+<ul>
+<li>V3: array descriptors addressed inline.</li>
+<li>V4: a cheaper record boundary.</li>
+<li>V1: a stream layout whose hot part stays in the cache.</li>
+<li>V2: calls that make their parameters and bind their locals without <code>findvar</code>.</li>
+<li>V5 and V6: fused ops and a cheaper <code>NEXT</code>.</li>
+<li>V7: running a straight run of compiled statements as one block.</li>
+<li>V8: native code, which is a different project, bounded here only so its size is known.</li>
+</ul></li>
+<li><b>What to expect.</b> Together, V1 to V7 might take the chess bench from about 890 to about 300-450 cycles a statement, roughly 2-3x. That is an estimate; R0, a measurement step, is proposed first to turn it into a figure. Getting near the CSUB's 19 cycles needs native code. No change to the VM alone gets there.</li>
+<li><b>One measurement came before any code (done, see R0).</b> A C-level profile of the chess bench and two games, on a build whose ELF is kept, and the same bench with the stream in flash rather than PSRAM, would replace this review's estimates of the split with figures. That is R0 in <a href="#order">Order and gates</a>.</li>
+</ul>
+</section>
+
+<section id="done">
+<h2>What was done</h2>
+<p>On a PC3 (PicoMiteHDMIWEB, 315 MHz, OPTION COMPILE ON), each step measured against the one before on identically configured boards (COM9 and COM16), solar_eclipse after <code>MODE 1 : CLS</code> or <code>MODE 2 : CLS</code>, the games under their harness (dyn.py).</p>
+<div class="tablewrap"><table>
+<tr><th>Step</th><th>Commit</th><th class="num">Chess bench</th><th class="num">Exile</th><th class="num">Elite</th><th class="num">solar_eclipse (MODE 1 / 2)</th></tr>
+<tr><td>V7.0.00b5 as released</td><td></td><td class="num">58.91 s</td><td class="num">15.690 s</td><td class="num">6.947 s</td><td class="num">6.903 / 6.369 s</td></tr>
+<tr><td>D1: the temporary-memory flag cleared when ClearTempMemory is done</td><td>18b91ca</td><td class="num">49.84</td><td class="num">14.602</td><td class="num">6.668</td><td class="num">6.566 / 6.028</td></tr>
+<tr><td>V4: one statement count; the chain's globals looked at only after a call-out</td><td>a29ab05</td><td class="num">48.18</td><td class="num">14.459</td><td class="num">6.588</td><td class="num">6.489 / 5.962</td></tr>
+<tr><td>V4: NEXT and LOOP go back through a slot, GOTOs keep their record, a statement's end skips nextstmt</td><td>d348d69</td><td class="num">44.19</td><td class="num">14.083</td><td class="num">6.456</td><td class="num">6.433 / 5.901</td></tr>
+<tr><td>Stream.c built with -Os (11-12 KB of flash back on every RP2350 variant)</td><td>334ee22</td><td class="num">42.88</td><td class="num">13.217</td><td class="num">6.530</td><td class="num">6.471 / 5.955</td></tr>
+<tr><td>V2: a LOCAL's types read when it is compiled</td><td>fd852dc</td><td class="num">39.42</td><td class="num">12.086</td><td class="num">6.185</td><td class="num">6.177 / 5.646</td></tr>
+<tr><td>V2: findvar makes a bound symbol's local scalar without its search (RP2350)</td><td>a644dd8</td><td class="num">38.39</td><td class="num">11.562</td><td class="num">6.063</td><td class="num">6.11 / 5.58</td></tr>
+<tr><td>V3: 2-D and 3-D elements straight through RBElementAt</td><td>7dd8c5c</td><td class="num">37.40</td><td class="num">11.775</td><td class="num">6.157</td><td class="num">6.02 / 5.49</td></tr>
+</table></div>
+<p class="note">The d348d69 row's chess and solar figures are its final build's; its Exile and Elite are from the build before its last change (the end-of-statement step), which was not timed on the games.</p>
+
+<h3>Tried and dropped</h3>
+<ul>
+<li><b>A successor cache in each record</b> (V4's first idea): two words more a record made Exile 9.1% slower through the XIP cache. Records must not grow.</li>
+<li><b>ClearVars stopping below the level it frees</b> while the local list is in order: no gain anywhere (Elite +2.5%), 260 bytes of RAM.</li>
+<li><b>findvar's short path on the RP2040</b>: solar_eclipse -0.4% and the logic analyser's trace redraw +1.2% on the PicoMiteVGA, for 770 bytes of RAM, so it is the RP2350's only.</li>
+<li><b>RBRun's RAM functions kept at -O2</b> inside an -Os Stream.c: solar_eclipse unchanged, but most of the chess gain lost.</li>
+</ul>
+
+<h3>What limits further tuning</h3>
+<ul>
+<li><b>Code placement.</b> Flash code and the PSRAM stream share the 16 KB XIP cache, so any change moves the games by about &plusmn;2% through which lines collide: a given image repeats to the millisecond, the next build reshuffles. V3 is 2.6% faster on chess and 1.5% on solar_eclipse, and 1.6-1.8% slower on Exile and Elite, which barely index 2-D arrays. A change worth less than about 3% cannot be measured, or kept, reliably.</li>
+<li><b>RBRun's register allocation.</b> A dozen lines in one op once cost every statement 8 cycles (spills, not the op's own code). Changes inside RBRun are kept to one path and few live values.</li>
+<li><b>The stream's size.</b> A record that grows costs more in misses than it saves.</li>
+</ul>
+
+<h3>What is left</h3>
+<div class="tablewrap"><table>
+<tr><th>Option</th><th>Likely gain</th><th>Cost and risk</th></tr>
+<tr><td>USB host polling less often while a program runs (the 100 &micro;s housekeeping is 4-6% of a compiled run; tuh_task alone 3% of the chess bench)</td><td>3-5% on everything</td><td>small; a policy choice about keyboard and mouse latency</td></tr>
+<tr><td>V1: the stream's and the hot code's layout (an SRAM area for hot records)</td><td>10% or more on large programs (stream misses were ~20% of the chess bench in R0); would also tame the placement effect</td><td>large; RAM</td></tr>
+<tr><td>findvar_local's symbol reads (9% of Exile, mostly flash and PSRAM loads of the name and its flags)</td><td>~3% on call-heavy programs</td><td>a small SRAM cache</td></tr>
+<tr><td>FUNCTION bodies inside RBRun (a FUNCTION call costs ~2,200 cycles, a SUB call ~1,150)</td><td>1.5-3%</td><td>medium-high: errors, interrupts and END inside the body</td></tr>
+<tr><td>Locals bound through the frame (the callee's statements bind again on every call; a BYREF parameter binds to the caller's variable, so only this design keeps them)</td><td>4-7% on call-heavy programs</td><td>large redesign</td></tr>
+<tr><td>V5 fused ops, V7 statement blocks</td><td>ops are 7-13%</td><td>RAM; a large rewrite</td></tr>
+</table></div>
+<p>The gap to native code stays: the chess bench's search as a CSUB runs in about 1 s against 37 s compiled. For code that must be fast, mmb2csub is the tool; the VM's remaining levers are the stream's layout and the USB housekeeping.</p>
+</section>
+
+<section id="r0">
+<h2>R0 results</h2>
+<p>The measurement phase ran on 5 October:</p>
+<ul>
+<li>C-level PC-sampled profiles on COM16, which runs the released V7.0.00b5 HDMIWEB image at 315 MHz with COMPILE ON;</li>
+<li>XIP cache counters read during runs;</li>
+<li>one run on COM9 with PSRAM switched off, so the stream sat in flash.</li>
+</ul>
+<p>Nothing in the firmware was changed. The profiles are resolved against an ELF rebuilt from the same commit at a path of the same length, which reproduces the released image to within 8 bytes (the build date and time and one drive letter). COM16's flash was checked against the released uf2 with fwsum.py.</p>
+
+<div class="warnbox"><div class="eyebrow">D1 &middot; a defect, not a design question</div>
+<p><b>After any SUB return or FUNCTION call, the compiled chain stays broken until a string temporary is freed.</b></p>
+<ul>
+<li><code>RBReturn</code> (Stream.c:4634) and <code>RBCallFun</code> (Stream.c:4240) set <code>g_TempMemoryIsChanged</code>, as the text path's return does.</li>
+<li><code>ClearTempMemory</code> (Memory.c:1967) clears the flag only inside its loop, that is, only when it frees a block.</li>
+<li>With nothing allocated, the flag stays set, and the chain's test (Stream.c:5404) sends every following statement back through <code>RunStream</code> and <code>RBTail</code>.</li>
+</ul>
+<p>A 50-statement loop costs 252 cycles a statement; right after an empty SUB call, 391 to 411; after the call followed by <code>s$ = Str$(1)</code>, 255 again. In the chess engine, which uses no strings, this holds for nearly the whole search. <code>RunStream</code>, <code>RBTail</code>, <code>RBFind</code> and <code>ClearTempMemory</code> together take 21.3% of the bench (Exile 11.4%, Elite 6.1%), most of it this round trip.</p>
+<p><b>Fix:</b> clear the flag when <code>ClearTempMemory</code> finishes, whether or not it freed anything. Every later allocation and every return sets the flag again, so nothing that needs the check can miss it. The text path calls the same function, and loses only an unneeded call per statement.</p>
+<p><b>Expected:</b> 15-20% off the chess bench, less on programs that use strings between calls.</p>
+<p><b>Applied and measured (R1, 5 October).</b> The flag is now cleared at the end of <code>ClearTempMemory</code> (core/Memory.c). It was built for HDMIWEB with no change in RAM (bss_end the same) and flashed on COM16, at 315 MHz:</p>
+<ul>
+<li>the loop after an empty SUB call: 270 cycles a statement (391-411 before);</li>
+<li>the chess bench to depth 3: 49.84 s (58.91 s before), <b>-15.4%</b>, with the same nodes, scores and PVs;</li>
+<li>Exile's physics test: 14.60 s (15.69 s), <b>-6.9%</b>;</li>
+<li>Elite's demo: 6.67 s (6.95 s), <b>-4.0%</b>;</li>
+<li>solar_eclipse, on two identically configured PC3s (b5 on COM9, D1 on COM16): 6.566 s against 6.903 s in MODE 1 (<b>-4.9%</b>), 6.028 s against 6.369 s in MODE 2 (<b>-5.4%</b>).</li>
+</ul>
+<p>Each ran the same number of statements as before. rbp4d, rbp5c, rbp3d, rbp3b and rbcache pass (OFF, ON and SHADOW identical). A leak check (40,000 rounds of string FUNCTIONs, a SUB with a LOCAL string and string temporaries) leaves the heap exactly as it was after its first round, as text and compiled.</p>
+<p><b>A timing trap found on the way:</b> the display mode moves solar_eclipse by about 8% through console scrolling (MODE 2 is faster). A b5 run left in MODE 2 by an earlier program first made D1 look 4.5% slower. Every timing now sets the mode and clears the screen first.</p></div>
+
+<h3>Where the time goes, measured</h3>
+<p>The share of all PC samples, compiled, on b5 at 315 MHz. The chess bench is depth 3 (622,142 samples). Exile is its physics test (165,412). Elite is its demo (74,182).</p>
+<div class="tablewrap"><table>
+<tr><th>Part</th><th class="num">Chess</th><th class="num">Exile</th><th class="num">Elite</th><th>What it is</th></tr>
+<tr><td>Record boundary inside RBRun</td><td class="num">21.4%</td><td class="num">17.4%</td><td class="num">11.0%</td><td>entry (header, bind stamp, cache) and end (counters, successor, chain test, return)</td></tr>
+<tr class="rec"><td>Chain round trips</td><td class="num">21.3%</td><td class="num">11.4%</td><td class="num">6.1%</td><td>RunStream, RBTail, RBFind, ClearTempMemory: mostly D1</td></tr>
+<tr><td>Calls and locals</td><td class="num">about 18%</td><td class="num">about 35%</td><td class="num">about 12%</td><td>findvar (1.30 million calls in the chess bench, 99% making locals), RBMakeParams and its memcpy, FindStructType, checkstring, CheckIfTypeSpecified, RBLocalTypesOK, ClearVars, LeaveLocalFrame, SymLocalMade/Freed</td></tr>
+<tr><td>Re-binding</td><td class="num">4.2%</td><td class="num">6.8%</td><td class="num">4.5%</td><td>RBBindAll after a stamp moved: the statements of a called routine</td></tr>
+<tr><td>Ops and dispatch</td><td class="num">12.9%</td><td class="num">9.8%</td><td class="num">7.2%</td><td>the arithmetic, tests and jumps themselves</td></tr>
+<tr><td>Array elements</td><td class="num">8.3%</td><td class="num">1.5%</td><td class="num">1.2%</td><td>RC_IDX and RC_LDEL inline, plus RBElementAt</td></tr>
+<tr><td>Housekeeping</td><td class="num">about 7%</td><td class="num">8.5%</td><td class="num">6.4%</td><td>the 100 &micro;s routinechecks; the USB host task alone 3-4.5%</td></tr>
+<tr><td>Everything else</td><td class="num">about 7%</td><td class="num">about 9%</td><td class="num">about 51%</td><td>Elite: drawing (DrawRectangle16, DrawBitmap16), MATH and the statements that stay text</td></tr>
+</table></div>
+<p>Four things stand out:</p>
+<ul>
+<li><b>The ops are a small part:</b> 7-13% everywhere. Fused ops (V5) would act on the smallest share.</li>
+<li><b>Calls and locals are the largest part in Exile</b>, and a fifth of the chess bench. Some of it is avoidable however calls are reorganised: each LOCAL and parameter has its type name checked at run time against the program's TYPEs (FindStructType and checkstring, 2.4% and 1.7% in Exile) although the compiler knew the type.</li>
+<li><b>The record boundary inside RBRun is 11-21% before D1's round trips are counted</b>, so it stays a large part after D1 is fixed.</li>
+<li><b>Housekeeping is the same in text and compiled runs.</b> It is outside the VM, but the USB host task's 3-4.5% at a 100 &micro;s cadence is worth a look of its own.</li>
+</ul>
+
+<h3>The XIP cache, measured</h3>
+<p>The RP2350's XIP controller counts cache hits and accesses (XIP_CTRL CTR_HIT at 0x400C800C and CTR_ACC at 0x400C8010, cleared by writing them). BASIC reads them with PEEK, so misses can be counted around any run.</p>
+<div class="tablewrap"><table>
+<tr><th>Run</th><th class="num">cycles a statement</th><th class="num">XIP accesses</th><th class="num">XIP misses</th></tr>
+<tr><td>50 distinct <code>x = x + 1</code>, stream in PSRAM (COM9, 378 MHz)</td><td class="num">252</td><td class="num">21.0</td><td class="num">0.03</td></tr>
+<tr><td>400 distinct, PSRAM</td><td class="num">556</td><td class="num">23.0</td><td class="num">2.67</td></tr>
+<tr><td>2,000 distinct, PSRAM</td><td class="num">895</td><td class="num">25.5</td><td class="num">6.42</td></tr>
+<tr><td>50 / 400 / 2,000 distinct, stream in flash (PSRAM off)</td><td class="num">367 / 681 / 1,066</td><td class="num">21-25</td><td class="num">0.03 / 2.68 / 6.42</td></tr>
+<tr><td>Chess bench, iterations 2 and 3 (COM16, 315 MHz)</td><td class="num">about 930</td><td class="num">64</td><td class="num">2.33</td></tr>
+<tr><td>A FUNCTION call: 1 parameter, 3 LOCALs, 5 statements</td><td class="num">13,264 a call</td><td class="num">1,271</td><td class="num">14.9</td></tr>
+<tr><td>A SUB call: 2 parameters</td><td class="num">4,051 a call</td><td class="num">416</td><td class="num">0.93</td></tr>
+</table></div>
+<ul>
+<li><b>A miss costs about 0.25-0.3 &micro;s</b> (80 cycles at 315 MHz, 100-118 at 378), from PSRAM and from flash alike. So a stream in flash would not be faster.</li>
+<li><b>Flash streams lose the bind cache</b> (a flash record cannot be written), which adds 115 cycles to the plainest statement.</li>
+<li><b>A record that misses costs about 6.5 misses</b>, one per 8-byte cache line of a roughly 48-byte record.</li>
+<li><b>The chess bench makes 2.33 misses a statement, about 190 cycles: about 20% of its time.</b> Its calls account for about 370 of its 5,200 misses a node. Most of the rest come from fetching the 86 KB stream.</li>
+<li><b>A FUNCTION call runs about 1,300 XIP accesses' worth of flash code</b> (findvar and the type checks). Moving that code to RAM is not an option, as RAM is stack.</li>
+</ul>
+
+<h3>What changes in the plan</h3>
+<ul>
+<li><b>D1 comes first:</b> one line, the largest single gain, and it makes every later measurement truer.</li>
+<li><b>V4 (boundary) next</b> (Peter, 5 October): every program gains on every statement, it is the lower risk, its share grows once D1 keeps the chain whole, it should give RBRun RAM back, and V1 and V7 build on its successor field and attention word.</li>
+<li><b>V2 (calls and locals) after it.</b> It is the largest part in call-heavy programs, and it includes taking the type checks out of the run.</li>
+<li><b>V1 (layout) follows V4.</b> Both shrink what a record costs, and storing the successor in the record (V4) is also part of making the hot part small (V1). R0 settles V1's question: the stream's working set is the main source of misses, so a smaller hot record is worth more than where the stream lives.</li>
+<li><b>V3 (elements) matters for array-heavy programs like the chess bench</b> (8.3%), and little elsewhere.</li>
+<li><b>V5 (fused ops) drops to last</b> among the VM changes: the ops are 7-13% and each fused op costs RAM.</li>
+</ul>
+</section>
+
+<section id="evidence">
+<h2>Evidence</h2>
+<h3>The gap</h3>
+<div class="tablewrap"><table>
+<tr><th>TSCP bench</th><th class="num">depth 3</th><th class="num">depth 5</th><th class="num">nodes/s</th></tr>
+<tr><td>Compiled BASIC (RP2350, 378 MHz)</td><td class="num">47.0 s</td><td class="num">2,857 s</td><td class="num">193</td></tr>
+<tr><td>search() as a CSUB (same board)</td><td class="num">about 1.0 s</td><td class="num">61.3 s</td><td class="num">8,986</td></tr>
+<tr><td>search() as a CSUB (RP2040, 252 MHz)</td><td class="num">2.0 s</td><td class="num">107.8 s</td><td class="num">5,110</td></tr>
+</table></div>
+<p>At depth 3, MM.INFO(COMPILE) reports RAN 20,013,119, CODE 19,985,062 and MISS 1,431,782. That is 2,246 statements a node, 2.35 &micro;s (about 890 cycles) a statement. The CSUB covers the same work at about 19 cycles a BASIC statement. The bench makes about 30 SUB and FUNCTION calls a node (counted on a Python model of the program that reproduces the bench to the node): the pawn evaluations 12.6, the king-shelter evaluations 5.8, <code>gen_push</code> 2.3, and one each of <code>makemove</code>, <code>takeback</code>, <code>in_check</code>, <code>attack</code>, <code>set_hash</code>, <code>tscpSort</code>, <code>eval_</code> and the two king evaluations.</p>
+
+<h3>What compiled constructs cost</h3>
+<p>Each figure is a loop of 20,000 or 50,000 runs of one statement, less the cost of the loop itself, at 378 MHz, all compiled.</p>
+<div class="tablewrap"><table>
+<tr><th>Statement</th><th class="num">cycles</th><th>Reading</th></tr>
+<tr><td><code>x = j</code></td><td class="num">209</td><td>two ops; the rest is the record boundary</td></tr>
+<tr><td><code>x = x + 1</code></td><td class="num">241</td><td>four ops</td></tr>
+<tr><td><code>x = x + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1</code></td><td class="num">485</td><td>seven more push-and-add pairs: about 35 a pair, 17 an op</td></tr>
+<tr><td><code>x = a(j)</code></td><td class="num">297</td><td>a 1-D element: +88 over a scalar (RC_IDX and the inline path)</td></tr>
+<tr><td><code>x = b(k, j)</code></td><td class="num">473</td><td>a 2-D element: +264 (<code>RBElementAt</code>)</td></tr>
+<tr><td><code>x = c(1, k, j)</code></td><td class="num">561</td><td>a 3-D element: +352</td></tr>
+<tr><td><code>If x &lt; 0 Then y = 1</code> (false)</td><td class="num">313</td><td></td></tr>
+<tr><td>two statements on one line, against two lines</td><td class="num">237 / 243</td><td>the line bookkeeping (<code>CurrentLinePtr</code>, <code>TraceBuff</code>) is about 6 cycles</td></tr>
+<tr><td>an empty <code>FOR</code> &hellip; <code>NEXT</code> iteration</td><td class="num">281</td><td><code>NEXT</code> is a record of its own</td></tr>
+<tr><td><code>x = mb(mb64(j)+offset(pp(j),k))</code> (from <code>attack</code>)</td><td class="num">768</td><td></td></tr>
+</table></div>
+
+<h3>What a call costs</h3>
+<div class="tablewrap"><table>
+<tr><th>Call</th><th class="num">cycles</th><th>Reading</th></tr>
+<tr><td><code>s0</code>: a SUB with no parameters and an empty body</td><td class="num">1,197</td><td>the call, the frame and END SUB</td></tr>
+<tr><td><code>s3 j, k, x</code>: three parameters</td><td class="num">3,727</td><td>about 840 a parameter: each is made by <code>findvar(&hellip;, V_LOCAL)</code></td></tr>
+<tr><td><code>x = f0(j)</code>: a FUNCTION, one statement</td><td class="num">3,918</td><td>the parameter, the result variable, a nested <code>ExecuteProgram</code></td></tr>
+<tr><td><code>x = f0l(j)</code>: the same with <code>Local q1, q2</code></td><td class="num">6,853</td><td>about 1,350 a LOCAL name, plus the statement</td></tr>
+<tr><td><code>x = f8(j)</code>: one LOCAL, nine statements</td><td class="num">10,331</td><td>the same nine statements inline: 2,123</td></tr>
+<tr><td>a loop on LOCALs inside one call</td><td class="num">254</td><td>as cheap as on globals: the bind cache holds within a call</td></tr>
+</table></div>
+<p>The nine-statement function puts the re-binding at about 375 cycles a statement, a call, for statements on locals. The 400-statement body below gives about 190 for statements on globals: 720 cycles a statement as a SUB called 50 times, against 534 for the same statements in a main-level loop.</p>
+
+<h3>How big the stream is matters</h3>
+<div class="tablewrap"><table>
+<tr><th>Distinct <code>x = x + 1</code> statements in a main-level loop</th><th class="num">cycles each</th><th class="num">records they span (approx.)</th></tr>
+<tr><td>50</td><td class="num">253</td><td class="num">about 2 KB</td></tr>
+<tr><td>400</td><td class="num">534</td><td class="num">about 19 KB</td></tr>
+<tr><td>2,000</td><td class="num">1,009</td><td class="num">about 95 KB</td></tr>
+</table></div>
+<p>Nothing differs between these but how much code the loop runs through. A record is about 48 bytes; with its map entry and the index, a stream takes 47-57 bytes a statement (the chess stream 85,996 bytes for 1,841 statements, this test 143,376 for 2,534). The stream lives in PSRAM, read through the XIP cache, which is 16 KB on the RP2350 and holds flash code as well. A loop whose records do not fit pays for PSRAM reads on every statement, up to about 760 cycles each here. The chess stream is 86 KB, and its search, move generation, evaluation and attack code all run every node.</p>
+<div class="note">The figures above are from V7.0.00b4. The executor's core (RBRun, the record format, binding, calls) has not changed since, but V7.0.00b5's item 7, 8 and BLIT work moved code, and placement alone moves timings by several percent. R0 re-measures on the build that the work starts from.</div>
+</section>
+
+<section id="where">
+<h2>Where the cycles go</h2>
+<div class="note">Written before R0 as an estimate. The measured split is in <a href="#r0">R0 results</a>, which this section is kept beside so the two can be compared: the estimate was right that the boundary is about a fifth, under-counted calls (a fifth, not a tenth) and could not see D1.</div>
+<p>The chess bench at depth 3 spends about 2.0 million cycles a node (47.03 s &times; 378 MHz &divide; 8,911 nodes). Four parts of that can be put in figures from the measurements and the counts. The rest cannot be split without R0.</p>
+<div class="tablewrap"><table>
+<tr><th>Part</th><th class="num">cycles a node</th><th class="num">share</th><th>From</th></tr>
+<tr><td>Record boundaries</td><td class="num">about 390,000</td><td class="num">about 20%</td><td>2,246 statements &times; about 175</td></tr>
+<tr><td>Calls</td><td class="num">120,000-300,000</td><td class="num">6-15%</td><td>about 30 calls &times; 4,000-10,000, by their parameters and LOCALs</td></tr>
+<tr><td>Re-binding in called routines</td><td class="num">60,000-125,000</td><td class="num">3-6%</td><td>about 330 records a node run for the first time in their call &times; 190-375</td></tr>
+<tr><td>Map lookups</td><td class="num">about 20,000</td><td class="num">about 1%</td><td>160 misses a node; a bucket read each since P1 (estimated)</td></tr>
+<tr class="rec"><td>The remainder: ops, element addressing and stream fetches</td><td class="num">1,150,000-1,400,000</td><td class="num">55-70%</td><td>measured per unit, not counted per node</td></tr>
+</table></div>
+<p>The remainder is where most of the time is, and its parts each have a measured unit cost but an unknown count. From the program's shape: the engine's statements average several ops, most index one array and many two (<code>offset(P(i),j)</code>, <code>gd(i,0)</code>, <code>hd(hply,k)</code>, <code>hi(from,too)</code>, <code>pawn_rank(LI,f)</code>), and set_hash indexes a three-dimensional one, <code>HP(H(i),P(i),i)</code>, in a 64-square loop. The stream-fetch share is the least certain part and potentially the largest. R0's profile and the flash-stream run settle it before V1 is designed in detail.</p>
+</section>
+
+<section id="proposals">
+<h2>Proposals</h2>
+<p>Each proposal says what it changes, why the measurements point at it, what it costs, what it might gain, and how it keeps the state identical. Gains are estimates from the unit costs above; R0 replaces them with measurements.</p>
+
+<div class="phase"><div class="num">V1<small>LAYOUT</small></div><div>
+<h3>Hot code that stays in the cache</h3>
+<p class="meta"><span class="pill acc">largest uncertain gain</span> &nbsp;stream format; the executor's reads &nbsp;&middot;&nbsp; RAM: none for (a) and (b); heap for (c)</p>
+<p><b>Why.</b> The size table: the same statement costs up to four times as much once its loop's records outgrow the 16 KB XIP cache, and the chess stream is 86 KB. A <code>x = x + 1</code> record is about 48 bytes: a six-word statement header (the STMT word, the text key, the CMD word, the token, the cmdline and nextstmt offsets), the code length, the bind count, the stamp, the bind descriptors, the bind cache and nine words of code. Of those, a compiled statement that binds from its cache reads the header, the stamp, the cache and the code; the descriptors, the token and the fallback offsets are read only when it binds or falls back.</p>
+<p><b>Proposal.</b></p>
+<ol>
+<li><b>Split each record into a hot part and a cold part.</b> The hot part holds the flags, the successor (see V4), the stamp, the bind cache and the code. The cold part, in a parallel array indexed by record number, holds the text key, the fallback's token and offsets, and the bind descriptors. For <code>x = x + 1</code> that halves what a run reads.</li>
+<li><b>Keep the hot parts of a unit together</b> and in the order they run, which the compiler already writes. A loop body is then a few cache lines rather than a few dozen.</li>
+<li><b>Consider an SRAM code cache</b>, only if R0 shows that (a) and (b) leave PSRAM fetches significant. The hot parts of the most-run units would be copied into an arena taken from the SRAM heap at RUN, and the executor would run from there. This costs heap, not static RAM, so it does not take stack; how much heap is a decision.</li>
+</ol>
+<p><b>Identical state.</b> Nothing observable changes; only where the executor reads its own data. RB_VERSION moves, so every stream recompiles once.</p>
+<p><b>Gain.</b> Between nothing and most of the stream-fetch share, which may be the largest part of the remainder. 10-30% on the chess bench is a guess until R0. Every program whose hot code exceeds the cache gains: Exile's stream is 81 KB, Elite's 303 KB.</p>
+<p><b>Risk.</b> Low for correctness. It touches the compiler's writer and every executor read of a record, so it is a large mechanical change.</p>
+</div></div>
+
+<div class="phase"><div class="num">V2<small>CALLS</small></div><div>
+<h3>Calls that do not look names up</h3>
+<p class="meta"><span class="pill warn">needs a decision</span> &nbsp;RBCallSub, RBCallFun, RBMakeParams, LOCAL, binding &nbsp;&middot;&nbsp; flash a few KB; heap for templates</p>
+<p><b>Why.</b> A call costs 1,197 cycles before anything is passed, about 840 a parameter, and about 1,350 a LOCAL. Every statement of the called routine then binds its variables again, because the call made new locals at its level, at 190-375 cycles a statement. The bench makes about 30 calls a node to routines of a few statements each. Each parameter, the FUNCTION's result and each LOCAL is made by <code>findvar</code> with <code>V_LOCAL</code>: a name copied out of the definition, the symbol's paths, the checks for an existing local and a SUB of that name, a 64-byte entry filled, <code>SymLocalMade</code>. A FUNCTION's body also runs in a nested <code>ExecuteProgram</code> and <code>RunStream</code>, two C frames a level.</p>
+<p><b>Proposal.</b></p>
+<ol>
+<li><b>A parameter template per unit, made at PrepareProgram</b> from the layout P6's F1 already reads. Each parameter's and the result's name, type and kind are known. A call takes their entries at <code>g_localtop</code> in one go: the template copied, the level set, <code>SymL</code> pushed for each, and the value or pointer stored directly, with no <code>findvar</code>.</li>
+<li><b>LOCAL made the same way.</b> The entry is the next one up and its template is known, but it is made only when the LOCAL statement runs, as now.</li>
+<li><b>Locals bound through the frame, not by name.</b> Parameters and the result sit at fixed places from the frame's base. A LOCAL is made only when its statement runs, so its place can vary (a LOCAL inside an IF); each call therefore keeps a small map, one word for each name in the unit's list, filled as its LOCALs are made. A compiled statement names a local as "entry k of this frame" and reads it through the base or the map, so only its globals go through the bind stamp, and a call no longer makes the callee's statements bind again. P6 planned binding by offset as F4's first option and chose option 2 because the frame was not reserved at entry; this keeps that reason intact (see Identical state).</li>
+<li><b>FUNCTION bodies run inside RBRun</b>, as SUB bodies already do, with a small return record (the caller's record, pc, stack depth and bind slots) instead of a nested <code>ExecuteProgram</code>. This also gives the C stack back at every FUNCTION level, which matters for recursion; rbdepth measures it.</li>
+</ol>
+<p><b>Identical state.</b> The frame stays a run of <code>g_vartbl</code> entries, so the 298 places that read <code>g_vartbl[g_VarIndex]</code> see what they see now. Parameters are made in the same order with the same type rules, BYREF demotion and errors (an error while making them still unwinds through DefinedSubFun's recovery). LOCALs are not reserved at entry, so "Not enough Local variable memory" comes at exactly the point it does now; that was the reason the reserved frame was not made in P6. A FUNCTION run inside RBRun must save and restore what DefinedSubFun saves around its nested loop (<code>nextstmt</code>, <code>cmdline</code>, <code>cmdtoken</code>, <code>CurrentLinePtr</code>, <code>ErrNext</code>), and an interrupt, an error or END inside the body must find the stacks as the text path leaves them.</p>
+<p><b>Gain.</b> Calls perhaps from 1,200-10,000 cycles to 400-1,500, and the re-binding gone. 10-20% on the chess bench; more on programs built from many small SUBs (the anchor, Exile, Elite).</p>
+<p><b>Risk.</b> Medium. Calls have many paths, and interrupts and errors arrive at awkward moments. rbp3a, rbp3b, rbp3d, rbf2, rbcache and the interrupt tests cover them.</p>
+</div></div>
+
+<div class="phase"><div class="num">V3<small>ARRAYS</small></div><div>
+<h3>Array elements addressed inline</h3>
+<p class="meta"><span class="pill ok">low risk</span> &nbsp;RC_IDX, RC_LDEL, RC_ADEL, RBElementAt &nbsp;&middot;&nbsp; flash small; RAM about one op's worth</p>
+<p><b>Why.</b> A 2-D element costs 264 cycles over a scalar and a 3-D one 352, against 88 for a 1-D one. Anything but a 1-D element in bounds calls <code>RBElementAt</code> in flash. That function counts the array's dimensions again, checks each index against <code>DimUpper</code> and <code>g_OptionBase</code>, and multiplies its way to the element, on every access. Each index has already been through RC_IDX, its own op.</p>
+<p><b>Proposal.</b></p>
+<ul>
+<li><b>Check the number of dimensions once, at bind time.</b> A mismatch fails the bind, so the statement goes to its fallback and raises "Array dimensions" exactly as now.</li>
+<li><b>Add LDEL2 and LDEL3 (and their address forms)</b> that convert, check and combine two or three indices inline.</li>
+<li><b>Fold RC_IDX into the element op</b> when the index is an integer, which is nearly always the case.</li>
+</ul>
+<p><b>Identical state.</b> The same checks in the same order, so the same errors: "Index out of bounds" after the conversion, "Dimensions" below OPTION BASE.</p>
+<p><b>Gain.</b> A 2-D element perhaps from 264 to about 110, a 3-D one from 352 to about 140. 5-15% on the chess bench, which indexes 2-D arrays on most lines of its evaluation and move generation.</p>
+<p><b>Risk.</b> Low. rbp4a and rbp5c already cover the element forms and errors.</p>
+</div></div>
+
+<div class="phase"><div class="num">V4<small>BOUNDARY</small></div><div>
+<h3>A cheaper record boundary</h3>
+<p class="meta"><span class="pill ok">every program gains</span> &nbsp;RBRun's entry and its <code>done:</code> path &nbsp;&middot;&nbsp; RAM: should shrink RBRun</p>
+<p><b>Why.</b> About 175 cycles of every statement are spent getting into and out of its record. <code>x = j</code> costs 209 with two ops, and line bookkeeping is only 6 of that.</p>
+<p>At each boundary RBRun:</p>
+<ul>
+<li>decodes the header (<code>RB_HDR</code>);</li>
+<li>finds the successor by walking past the code and any IF parts;</li>
+<li>computes the bind generation from three globals and compares it with the stamp, and aligns the cache pointer;</li>
+<li>counts <code>RBRan</code> and <code>RBCode</code>;</li>
+<li>tests the successor's kind, <code>OptionErrorSkip</code>, <code>g_TempMemoryIsChanged</code>, <code>TraceOn</code> and the housekeeping countdown;</li>
+<li>rebuilds the text pointer from the key (<code>RBImage(RBKeyAt(r))</code>).</li>
+</ul>
+<p><b>Proposal.</b></p>
+<ol>
+<li><b>Store the successor and whether it can be chained</b> in the record when compiling, so the walk goes.</li>
+<li><b>One attention word</b> that everything which can stop the chain sets: <code>OptionErrorSkip</code>, temporary memory, TRACE, an abort, an interrupt. The chain then tests one word.</li>
+<li><b>Check the bind stamp only where it can have moved:</b> at a unit's entry, after a call and after a fallback. The compiler knows where those are, and records between them share the stamp already checked.</li>
+<li><b>Count statements per chain, not per statement.</b> Add the chain's length when it ends.</li>
+<li><b>Keep the text pointer in a register</b> and materialise <code>nextstmt</code> where the tail, a fallback or the chain's end needs it. The design's own table lists those as its only readers (interrupts, Ctrl-C, fallback control flow).</li>
+</ol>
+<p><b>Identical state.</b> <code>CurrentLinePtr</code> and <code>TraceBuff</code> stay eager, since they cost 6 cycles and the PC sampler and errors read them. <code>nextstmt</code> is set wherever it can be read. Proposal 5 needs a short survey to confirm that nothing else reads <code>nextstmt</code> mid-chain.</p>
+<p><b>Gain.</b> Perhaps 175 down to 70-90 cycles a statement. About 10% on the chess bench and on any compiled loop.</p>
+<p><b>Risk.</b> Low to medium. The chain conditions were found one by one in P3c and P3e, and each must survive. rbp2c, rbnopchain, rbstamp and the interrupt tests cover them.</p>
+</div></div>
+
+<div class="phase"><div class="num">V5<small>OPS</small></div><div>
+<h3>Fused ops</h3>
+<p class="meta"><span class="pill warn">costs RAM</span> &nbsp;the compiler's emit; new labels in RBRun &nbsp;&middot;&nbsp; RAM: each op is RBRun code</p>
+<p><b>Why.</b> An op costs about 17 cycles: a dispatch and an 8-byte cell moved to or from the stack. Statements are short sequences of the same few shapes. <code>x = x + 1</code> is LDG, LK, ADDI, STG; an IF on a comparison is two loads, CMPI and JFI.</p>
+<p><b>Proposal.</b> A peephole pass picks the commonest pairs and triples from a count over the corpus's streams: add a small constant in place, compare-and-branch with a variable or literal operand, an element load whose index is a variable, and the store that copies one variable to another. Each fused op runs the same helpers in the same order as the ops it replaces.</p>
+<p><b>Gain.</b> 20-40% of the op share. About 5% on the chess bench.</p>
+<p><b>Risk.</b> Low for correctness. The cost is RAM: RBRun is RAM, which is stack, in 256-byte steps. Each op is perhaps 30-60 bytes, so this is weighed against recursion depth op by op.</p>
+</div></div>
+
+<div class="phase"><div class="num">V6<small>LOOPS</small></div><div>
+<h3>A cheaper NEXT</h3>
+<p class="meta"><span class="pill ok">low risk</span> &nbsp;RC_NEXT; FOR's push &nbsp;&middot;&nbsp; RAM: neutral</p>
+<p><b>Why.</b> An empty FOR iteration costs 281 cycles. <code>NEXT</code> is a record of its own, so it pays a boundary. It then searches <code>g_forstack</code> from the top, calling <code>skipspace</code> on each entry's text, before it adds the step and tests the limit in integer or float. The chess program's board scans are 64-iteration loops, several of them every node.</p>
+<p><b>Proposal.</b></p>
+<ul>
+<li><b>Look at the top entry first</b>, comparing it with a pointer the compiled FOR stored already normalised. Fall back to the search only when the top entry is not this loop's.</li>
+<li><b>Give integer loops with a literal step their own path.</b></li>
+<li><b>Fold NEXT into the body's last compiled record</b>, once V7 exists.</li>
+</ul>
+<p><b>Identical state.</b> The same <code>g_forstack</code> entry and the same closing rule, including NEXT-in-recursion's level test (5b90865). EXIT FOR, CONTINUE FOR, a fallback NEXT and ClearVars see what they see now.</p>
+<p><b>Gain.</b> Perhaps 281 down to about 120 an iteration. A few percent on the chess bench, more on tight-loop programs.</p>
+</div></div>
+
+<div class="phase"><div class="num">V7<small>BLOCKS</small></div><div>
+<h3>Straight runs of statements as one block</h3>
+<p class="meta"><span class="pill bad">structural</span> &nbsp;records, the map, binding, the chain &nbsp;&middot;&nbsp; after V1-V6 are measured</p>
+<p><b>Why.</b> After V4 each statement still pays a boundary. The CSUB's 19 cycles a statement show what is spent once statements have no boundaries at all.</p>
+<p><b>Proposal.</b> A run of compiled statements with no fallback and no call (a basic block, typically a loop body) is compiled as one record:</p>
+<ul>
+<li>one bind set (the union of the run's variables) and one stamp check;</li>
+<li>between its statements, a one-word BOUNDARY op that updates <code>CurrentLinePtr</code> at a line start, counts down the housekeeping counter and tests the attention word (V4 proposal 2);</li>
+<li>when attention is set, the executor materialises the interpreter's state for that statement from a small side table, and leaves the block at that boundary. So an interrupt, Ctrl-C, TRACE or ON ERROR SKIP still meets the state the text loop would leave.</li>
+</ul>
+<p>Each statement keeps its map entry, which then points at its block and offset, so a GOTO, NEXT or RETURN into the middle of a block still lands correctly.</p>
+<p><b>Identical state.</b> Kept at every point anything can look at it, by materialising at the boundary where the executor stops. That is what the design already does at its chain's end, applied inside a record.</p>
+<p><b>Gain.</b> The boundary drops to tens of cycles for straight-line code. With V3 and V5, the largest single step available inside the VM.</p>
+<p><b>Risk.</b> High. It changes the record model that P1 to P6 were built on, and SHADOW, the map, binding and the stream dump tools all follow it. It belongs after V1 to V6 have shown what is left.</p>
+</div></div>
+
+<div class="phase"><div class="num">V8<small>NATIVE</small></div><div>
+<h3>Native code, for scale only</h3>
+<p class="meta"><span class="pill acc">a different project</span></p>
+<p>The CSUB sets the ceiling: 19 cycles a statement against about 890 now, and perhaps 300-450 after V1-V7. Closing the rest means generating Thumb-2 for the M33 from the stream: copy machine-code templates per op, keep the value stack in registers where a block allows, and call the firmware's helpers for anything not trivial. That needs an SRAM arena to execute from (PSRAM through XIP is slow for code), templates in flash, and the same materialise-on-attention scheme as V7 for errors and interrupts. It is named here so the VM work can be judged against it. It is not proposed.</p>
+</div></div>
+</section>
+
+<section id="fixed">
+<h2>What stays fixed</h2>
+<ul>
+<li><b>The text is the program and the stream a cache of it.</b> A missing, stale or refused stream still runs as text.</li>
+<li><b>State identical wherever it can be read.</b> The Route B design's "Staying identical" table is the specification. Proposals V4 and V7 move some writes to the points where the state is read, and each needs that table re-checked against the code, not assumed.</li>
+<li><b>RAM is stack.</b> RBRun runs from RAM, and every byte of RAM code lowers the stack's floor for every program, text or compiled, in 256-byte steps (AllMemory's alignment). V4 should shrink RBRun; V5 grows it; V2 moves FUNCTION calls into it but takes C frames off every level. Each step is measured with rbdepth.</li>
+<li><b>Flash.</b> HDMIWEB had about 200 bytes left in its step at V7.0.00b5's offsets. Route B work may take further 16 KB FLASH_TARGET_OFFSET steps (agreed), each of which wipes A: on upgrade, so they should be batched into releases.</li>
+<li><b>RP2350 only.</b> Nothing here applies to the RP2040, where the CSUB route is the answer.</li>
+</ul>
+</section>
+
+<section id="order">
+<h2>Order and gates</h2>
+<div class="phase"><div class="num">R0<small>MEASURE</small></div><div>
+<h3>Measure first <span class="pill ok">done</span></h3>
+<ul>
+<li>A PC-sampled profile, at C-function level, of the chess bench, Exile and Elite, on a build whose ELF is kept with it.</li>
+<li>The chess bench with the stream in the hidden flash area (OPTION PSRAM PIN DISABLE, then back to GP47), to separate PSRAM from cache size.</li>
+<li>A count of ops and elements per executed statement, from a stream dump and the RAN counts.</li>
+</ul>
+<p><b>Gate:</b> the "Where the cycles go" table holds measured shares, and V1's size is decided from them.</p>
+</div></div>
+<div class="phase"><div class="num">R1<small>DEFECT</small></div><div>
+<h3>D1: the temporary-memory flag <span class="pill ok">done</span></h3>
+<p>One line in ClearTempMemory. The test is the after-a-call loop (252 against 391-411 cycles now) and the chess bench, with the goldens for the text path, which shares the function.</p>
+</div></div>
+<div class="phase"><div class="num">R2<small>BOUNDARY</small></div><div>
+<h3>V4, then V1</h3>
+<p>The successor in the record, one attention word, the stamp only where it can move, and the hot part of each record made small. The tests are the size table, which should flatten towards the 50-statement figure, the XIP misses a statement in the chess bench (2.33 now), and every program's profile.</p>
+</div></div>
+<div class="phase"><div class="num">R3<small>CALLS</small></div><div>
+<h3>V2</h3>
+<p>After the decision on parameter templates. It starts with the type checks the compiler can settle (FindStructType, checkstring, CheckIfTypeSpecified at run time). The call tables are the test, with rbdepth for the stack and Exile, whose time is mostly calls.</p>
+</div></div>
+
+<div class="phase"><div class="num">R4<small>ARRAYS</small></div><div>
+<h3>V3</h3>
+<p>For array-heavy programs; the element timings are the test.</p>
+</div></div>
+<div class="phase"><div class="num">R5<small>OPS</small></div><div>
+<h3>V6, then V5</h3>
+<p>V6 first (NEXT costs a boundary every iteration); V5 only by an op-pair census, each fused op weighed against its RAM.</p>
+</div></div>
+<div class="phase"><div class="num">R6<small>BLOCKS</small></div><div>
+<h3>V7</h3>
+<p>Only if R1-R5 leave the boundary as the largest remaining part.</p>
+</div></div>
+<div class="gate"><div class="eyebrow">Every step's gate</div>
+<ul>
+<li>Goldens and SHADOW clean.</li>
+<li>The rb* tests, the interrupt tests, symchain and cmtloop unchanged.</li>
+<li>The three games pass their checks.</li>
+<li>The chess bench gives 130, 3,441, 8,911, 141,331 and 550,727 nodes with the same scores and PVs, and its time is recorded.</li>
+<li>rbdepth not lower than before.</li>
+<li>Every variant builds within its flash and RAM.</li>
+</ul></div>
+</section>
+
+<section id="decide">
+<h2>Decisions</h2>
+<div class="decide"><div class="eyebrow">For Peter</div>
+<ol>
+<li><b>D1:</b> may ClearTempMemory clear the flag when it finishes, on both paths? (R0 needed no flashing: COM16's released image matched a rebuilt ELF.)</li>
+<li><b>V2:</b> parameter and result templates per unit, with locals bound by their place in the frame (LOCALs still made only when they run, so the local-memory error comes where it does now). And should FUNCTION bodies run inside RBRun?</li>
+<li><b>V1(c):</b> if R0 shows it is needed, how much SRAM heap may an arena for hot code take at RUN?</li>
+<li><b>V5:</b> how many 256-byte steps of RAM may RBRun grow by for fused ops, given that each costs recursion depth?</li>
+<li><b>V7:</b> is a block model that materialises state at the boundary where it stops acceptable in principle, so that R1-R4 can be shaped towards it?</li>
+</ol></div>
+</section>
+
+<section id="method">
+<h2>Method</h2>
+<ul>
+<li><b>Board:</b> COM9, a PicoComputer 3 (PicoMiteHDMIWEB RP2350B), V7.0.00b4, 378 MHz, OPTION COMPILE ON. Its test arrays were at 0x2004xxxx, in SRAM.</li>
+<li><b>Chess bench:</b> Bas/chess/chessiter.bas (with search renamed, so it runs beside the CSUB library) to depth 3, and the CSUB version (chesscsub.bas and chesslib.bas) to depth 5. MM.INFO(COMPILE) was read after the depth-3 run. The node counts per routine come from a Python transliteration of the program that reproduces the bench's five iterations exactly.</li>
+<li><b>Construct costs:</b> three programs in the session's scratch directory.
+<ul>
+<li>rbcost.bas: the first table.</li>
+<li>rbcost2.bas: calls, elements, the boundary and the in-SUB size test, generated by mkcost2.py.</li>
+<li>rbcost3.bas: the main-level size test.</li>
+</ul>
+Each times 20,000 to 50,000 runs with TIMER and subtracts the empty loop's 281 cycles. Repeats agreed within 1-2%. All three report CODE within 0.01% of RAN, so every statement timed ran compiled. They can go into Bas/bench with the R0 work.</li>
+<li><b>R0:</b> the ELF was rebuilt at 696d52c in a worktree at C:/Dropbox/PicoMite/PicoMite (a path of the same length as the real tree, so the image matches the release within 8 bytes); COM16 checked with fwsum.py; profiles by Bas/bench/rbprof.py and pcs_report.py, with two scratch helpers that split one function's samples by source line; XIP counters read with PEEK(WORD &amp;H400C800C) and &amp;H400C8010; the games from the census's profiling copies (A:/gb/gbxphysp.bas, gbelitep.bas); PSRAM off and on again on COM9 with OPTION PSRAM PIN DISABLE and GP47.</li>
+<li><b>Estimates</b> are marked as such. The shares in "Where the cycles go" multiply measured unit costs by counted events; the remainder is what is left over.</li>
+</ul>
+<p class="ref">Written for Peter's review, 5 October 2026. Branch development at 696d52c. Related: docs/Interpreter_RouteB_Design.html (the design and its decisions), docs/Interpreter_RouteB_Coverage.html (what compiles), docs/mmb2csub.md (the CSUB route).</p>
+</section>
+</div>
+</body>
+</html>
