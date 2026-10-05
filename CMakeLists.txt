@@ -139,6 +139,7 @@ set(OPTIMIZED_SOURCES
 	misc/XModem.c
 	io/AudioBBC.c
 	misc/FileIO.c
+	core/Stream.c
 )
 # misc/FileIO.c is here for ~3.7 KB of flash, which is what lets VGA's
 # FLASH_TARGET_OFFSET sit at 800 KB rather than 816 KB.
