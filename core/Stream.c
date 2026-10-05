@@ -382,7 +382,8 @@ enum
     RC_JFF,     // pop a float; if it is 0, skip the number of words in the next word
     RC_JFI,     // the same for an integer: IF's truth, value <> 0 as getnumber gives it
     RC_JMP,     // skip the number of words in the next word
-    RC_GOTO,    // the statement ends by going to the text position in the next two words (a key)
+    RC_GOTO,    // the statement ends by going to the text position in the next two words (a key);
+                // a = 1: they are its record's address instead (RBGotoFix)
     RC_SHADOWC, // OPTION COMPILE SHADOW: IF's condition at a, of the type in the next word
     RC_FORP,    // FOR, before its values: cmd_for's stack work for the loop variable, bind a
     RC_FORT,    // FOR, after: pop STEP and TO into its entry, test; keys of NEXT and after it follow
@@ -3816,6 +3817,35 @@ extern uint32_t DefinedSubFunMem;       // MMBasic.c: a call's arguments are bei
 extern int DefinedSubFunLocalIndex;     // MMBasic.c: g_LocalIndex when it started
 #define PERF_CMDTOKEN_MAX 1024 // as in MMBasic.c
 
+/* V4: the record a loop's body starts at, so that its NEXT or LOOP goes back
+   without a map lookup.  A slot per stack position (modulo RB_LOOPREC), holding
+   the text it was found for and RBFind's answer for it: the first time round
+   fills it, and every later time - this loop, or the same loop entered again
+   at the same depth - takes it when the stack entry's text is the same.  The
+   map is fixed while its stream is, and RBMapStream clears the slots. */
+#define RB_LOOPREC 4 // a power of two
+typedef struct
+{
+    unsigned char *txt;  // a forptr or doptr
+    const uint16_t *rec; // RBFind(txt)
+} rbloop_t;
+static rbloop_t RBLoopRec[2 * RB_LOOPREC]; // FOR's, then DO's
+#define RBForRec RBLoopRec
+#define RBDoRec (RBLoopRec + RB_LOOPREC)
+
+/* V4: an RC_GOTO whose target has a record, the first time it runs, keeps the
+   record's address in place of the key (a = 1), so that every later time goes
+   there without the map.  Only in PSRAM, where records already keep their
+   binds; a stream is written where it runs, and a new one is written again.
+   pc: the op's two words.  In flash. */
+static __attribute__((noinline)) void RBGotoFix(const uint16_t *pc, const uint16_t *t)
+{
+    uint16_t *w = (uint16_t *)pc;
+    w[0] = (uint32_t)t & 0xFFFF;
+    w[1] = (uint32_t)t >> 16;
+    w[-1] = RC_GOTO | (1 << 8);
+}
+
 // Clear every compiled record's bind-cache stamp: a stream used again may
 // hold stamps from before a reboot, which restarted SymBindEvent.
 static void RBClearCaches(void)
@@ -3841,6 +3871,7 @@ static void RBClearCaches(void)
 static void RBMapStream(void)
 {
     const rbheader_t *h = (const rbheader_t *)RBSlotBase();
+    memset(RBLoopRec, 0, sizeof(RBLoopRec));
     RBBase = RBSlotBase();
     RBMap = (const uint32_t *)(RBBase + h->mapoff);
     RBTab = (const uint16_t *)(RBBase + h->tabof);
@@ -4807,6 +4838,7 @@ static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
     union cell *slot[RB_MAXBIND], **slotp, st[RB_MAXDEPTH], *sp; // slotp: the binds' addresses
     unsigned int nb, j, w;
     int loopi;              // RC_LOOPF's stack entry
+    rbloop_t *ls;           // a loop going back: its slot (V4)
     unsigned char *clsave; // RC_CLSET: CurrentLinePtr before a CASE's line took its place
     unsigned char *nxcl, *nxend; // RC_NEXT, RC_CONTFOR: the NEXT's cmdline, and where it ends
     // V4: what an op that called out of the VM (a call or return, LOCAL or
@@ -5261,8 +5293,16 @@ again:
             pc += *pc + 1;
             RBNEXT();
     L_GOTO:
-            nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
-            goto ran; // the statement's end, which nextstmt is not: the executor looks it up
+            if (!(w >> 8))
+            { // the key: its record, kept in the op for the next time (V4)
+                nextstmt = RBImage(pc[0] | ((uint32_t)pc[1] << 16));
+                if (!RBCacheOK || (t = RBFind(nextstmt)) == NULL)
+                    goto ran; // the statement's end, which nextstmt is not: the executor looks it up
+                RBGotoFix(pc, t);
+            }
+            t = (const uint16_t *)(pc[0] | ((uint32_t)pc[1] << 16)); // its record.  nextstmt is
+            RBCode++;                                                 // left: the chain sets it from
+            goto jumped;                                              // the record, RBTail too
     L_FORP: // cmd_for before its values (RBForPush)
             RBForPush(slotp[w >> 8], *pc++);
             RBNEXT();
@@ -5322,7 +5362,8 @@ again:
             if (tst)
             { // loop again
                 nextstmt = g_dostack[loopi].doptr;
-                goto ran;
+                ls = &RBDoRec[loopi & (RB_LOOPREC - 1)];
+                goto loopback;
             }
             g_doindex = loopi; // the loop has ended
             RBNEXT();
@@ -5408,11 +5449,27 @@ again:
                 }
             }
             else
+            {
                 nextstmt = g_forstack[i].forptr; // back to the body
+                ls = &RBForRec[i & (RB_LOOPREC - 1)];
+                goto loopback;
+            }
             goto ran;
         }
-    L_END:
-    nextstmt = e + (nw >> 8);
+    loopback: // a loop going back to nextstmt: its record from the slot, or the map into it (V4)
+        if (ls->txt != nextstmt)
+        {
+            if ((t = RBFind(nextstmt)) == NULL)
+                goto ran; // (done: says so)
+            ls->txt = nextstmt;
+            ls->rec = t;
+        }
+        t = ls->rec;
+        RBCode++;
+        goto jumped;
+    L_END: // on to the next record: nextstmt is left (see jumped:), V4
+    RBCode++;
+    goto after;
 ran: // a statement run as compiled code (one count: RAN is RBRan + RBCode)
     RBCode++;
 done:
@@ -5420,6 +5477,7 @@ done:
     end = e + (nw >> 8);
     if (nextstmt == end)
     {
+    after:
         t = r;
         do
             t += RB_HDR(t) + ((t[0] & RB_COMPILED) ? 1 + t[RB_HDR(t)] : 0);
@@ -5427,6 +5485,8 @@ done:
     }
     else if ((t = RBFind(nextstmt)) == NULL)
         return RB_OUT;
+jumped: // t is the next record.  nextstmt may not be its text (L_END, a GOTO): the
+        // chain sets it from the record, and RunStream's RBTail sets it first
     if ((t[0] & 0xFF) != RB_OP_END && (t[3] & 0xFF) != RB_OP_NOP && (t[0] & RB_COMPILED) &&
         (!(co & 2) || (OptionErrorSkip == 0 && !g_TempMemoryIsChanged && !TraceOn)) &&
         (--RBHouseN > 0 || (RBHouseN = RB_HOUSE_N,
