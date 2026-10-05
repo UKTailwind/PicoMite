@@ -61,7 +61,7 @@ static int RBInPsram(void)
    reads as stale.
    --------------------------------------------------------------------------- */
 #define RB_MAGIC 0x31304252 // "RB01"
-#define RB_VERSION 37       // the stream format
+#define RB_VERSION 38       // the stream format
 #define RB_PAGE 256
 
 typedef struct
@@ -417,7 +417,8 @@ enum
     RC_STS,      // pop a string into string bind a, as cmd_let stores it
     RC_CONTFOR,  // CONTINUE FOR: the loop's NEXT, run as cmd_next runs it
     RC_FN,       // built-in function a (RF_) on the top, as its fun_ handler computes it (RBFn)
-    RC_LOCAL,    // LOCAL of the a names whose text's start and end offsets follow, as cmd_dim makes them (RBLocal)
+    RC_LOCAL,    // LOCAL of the a names whose text's start (with its type, RLT_SHIFT) and end offsets follow, as
+                 // cmd_dim makes them (RBLocal)
     RC_GUARD,    // to the fallback before anything happens if OPTION LEGACY (CMM1) is on, or (a) OPTION DEFAULT
                  // is not what the FUNCTION calls need (bit 0: a number, 1: float, 2: integer)
     RC_SPLICE,   // the command, its n values (the next word) on the stack, its spliced text (a words) after (RBSpliceCmd)
@@ -426,8 +427,6 @@ enum
     RC_PARTCHK,  // to the fallback if a bind in the mask (the next word) is unbound (RBPartCheck)
     RC_INCF,     // cmd_inc's float add: the two floats on the top, added with no overflow check
     RC_INCS,     // cmd_inc's string: pop a string and add it to string bind a (RBStoreStr)
-    RC_LOCALCHK, // P7b: to the fallback, before any LOCAL name is made, if the type of one of the a names (their text's
-                 // end offsets follow) is a structure's (RBLocalTypesOK)
     RC_LOCALV,   // P7b: make the LOCAL name whose text's start and end offsets follow; push its data and its type (RBLocalV)
     RC_LOCALSET, // P7b: pop a value of type a, the type and the data RC_LOCALV pushed: store it as cmd_dim's SetValue (RBLocalSet)
     RC_STATIC,   // P7c: STATIC of the a names whose text's start and end offsets follow, once their globals exist (RBStatic)
@@ -2389,8 +2388,11 @@ static int RBNamesLocal(unsigned char *p, unsigned char *end, unsigned char *ent
    which it gives findvar, stops (at an AS, a quote, an = or the comma).
    RBLocal makes a run of names with no value; a name with a value is
    RC_LOCALV, the value's code and RC_LOCALSET, so that each is made and then
-   set before the next is made, as cmd_dim does, and RC_LOCALCHK first sends a
-   structure type to cmd_dim before any is made.  A value is a scalar's, with
+   set before the next is made, as cmd_dim does.  Each name's type is read
+   here, as CheckIfTypeSpecified reads it for cmd_dim (V2): INTEGER, FLOAT or
+   STRING, or none, which is OPTION DEFAULT's when the name is made; it goes
+   above RLT_SHIFT in the name's start offset.  A structure type, a type given
+   twice and an AS that names no type are cmd_dim's (and its errors').  A value is a scalar's, with
    no FUNCTION call (one that fell back after a name was made would make
    cmd_dim say it was already declared), naming no variable the LOCAL makes
    (bound before any is made) and ending at its comma.  0 for another form. */
@@ -2453,14 +2455,53 @@ static int RBLocalNames(unsigned char *entry, unsigned char *cmdl, uint16_t *off
     return n;
 }
 
+// a LOCAL's type at p, as CheckIfTypeSpecified reads it for cmd_dim: RLT_INT,
+// RLT_NBR or RLT_STR, RLT_DEF for none (OPTION DEFAULT's), -1 for a structure's
+#define RLT_SHIFT 12 // a LOCAL name's start offset: its RLT_ type above (it is within its line)
+enum { RLT_DEF, RLT_INT, RLT_NBR, RLT_STR };
+static int RBLocalTypeAt(unsigned char *p)
+{
+    int type;
+    CheckIfTypeSpecified(p, &type, true);
+#ifdef STRUCTENABLED
+    if (type & T_STRUCT)
+        return -1;
+#endif
+    if (!(type & T_IMPLIED))
+        return RLT_DEF;
+    return (type & T_INT) ? RLT_INT : (type & T_NBR) ? RLT_NBR : RLT_STR;
+}
+
 static int RBCompileLocal(unsigned char *entry, unsigned char *cmdl, uint16_t *code)
 {
     rbcx_t x;
     unsigned char *q, *val[RB_MAXLOCALN], *vend[RB_MAXLOCALN];
     uint16_t off[2 * RB_MAXLOCALN];
-    int n, nv = 0, i, j, k, t, arr[RB_MAXLOCALN];
+    int n, nv = 0, i, j, k, t, implied, arr[RB_MAXLOCALN], tc[RB_MAXLOCALN];
     if ((n = RBLocalNames(entry, cmdl, off, val, vend, arr)) == 0)
         return 0;
+    q = cmdl;
+    if (*q == tokenAS)
+        q++;
+    if ((implied = RBLocalTypeAt(q)) < 0)
+        return 0; // a structure type: cmd_dim's
+    for (i = 0; i < n; i++)
+    {
+        q = entry + off[2 * i + 1];
+        t = implied;
+        if (*q == tokenAS)
+        { // its own type
+            if (implied != RLT_DEF)
+                return 0; // "Type specified twice"
+            q++;
+            skipspace(q);
+            if ((t = RBLocalTypeAt(q)) <= RLT_DEF)
+                return 0; // a structure type, or "Variable type"
+        }
+        if (off[2 * i] >> RLT_SHIFT)
+            return 0;
+        tc[i] = t;
+    }
     for (i = 0; i < n; i++)
         if (val[i] != NULL)
         {
@@ -2475,10 +2516,9 @@ static int RBCompileLocal(unsigned char *entry, unsigned char *cmdl, uint16_t *c
         for (i = 0; i < n; i++)
             if (val[i] != NULL && RBNamesLocal(val[i], vend[i], entry, off, n))
                 return 0;
-        RBOp(&x, RC_LOCALCHK | (n << 8), 0);
-        for (i = 0; i < n; i++)
-            RBOp(&x, off[2 * i + 1], 0);
     }
+    for (i = 0; i < n; i++)
+        off[2 * i] |= tc[i] << RLT_SHIFT; // (after RBNamesLocal, which reads the offsets)
     for (i = 0; i < n; i = k)
     {
         if (val[i] == NULL)
@@ -4447,13 +4487,7 @@ static __attribute__((noinline)) void RBSpliceCmd(const uint16_t *r, unsigned ch
     RBSplice = NULL;
 }
 
-// RC_LOCAL: what cmd_dim does for LOCAL with no value (see RBCompileLocal):
-// the type before the names, then for each name in its order its own AS type
-// and findvar on a copy of its text up to where cmd_dim's copy stops (so that
-// findvar reads LENGTH as cmd_dim has it read).  Each name is two offsets,
-// its text's start and end.  Returns the code after them, or NULL before
-// anything has happened if a type is a structure's (cmd_dim's).
-// the type before a LOCAL's names (CheckIfTypeSpecified: at run time, as
+// the type before STATIC's names (CheckIfTypeSpecified: at run time, as
 // OPTION DEFAULT may change)
 static int RBLocalImplied(unsigned char *e, unsigned int nw)
 {
@@ -4465,57 +4499,22 @@ static int RBLocalImplied(unsigned char *e, unsigned int nw)
     return implied;
 }
 
-// 0 if the type before the n names, or the AS type after one (each name's
-// text ends at the offset every stride words in ends), is a structure's:
-// cmd_dim's, found before any name is made
-static __attribute__((noinline)) int RBLocalTypesOK(unsigned char *e, unsigned int nw, const uint16_t *ends, int n, int stride)
+// One LOCAL name as cmd_dim makes it (see RBCompileLocal): its text's start
+// offset, with the type the compiler read above RLT_SHIFT, and its end, where
+// cmd_dim's copy of it stops (so that findvar reads LENGTH as cmd_dim has it
+// read); findvar on a copy of the text.  Returns findvar's pointer to its data.
+static void *RBLocalMake(unsigned char *e, unsigned int start, unsigned int end)
 {
-#ifdef STRUCTENABLED
-    unsigned char *q;
-    int type, i;
-    if (RBLocalImplied(e, nw) & T_STRUCT)
-        return 0;
-    for (i = 0; i < n; i++)
-    {
-        q = e + ends[i * stride];
-        if (*q == tokenAS)
-        {
-            q++;
-            skipspace(q);
-            CheckIfTypeSpecified(q, &type, true);
-            if (type & T_STRUCT)
-                return 0;
-        }
-    }
-#else
-    (void)e, (void)nw, (void)ends, (void)n, (void)stride;
-#endif
-    return 1;
-}
-
-// one LOCAL name as cmd_dim makes it, its text from start to end: its own AS
-// type, with cmd_dim's errors, then findvar on a copy of the text.  Returns
-// findvar's pointer to its data.
-static void *RBLocalMake(unsigned char *e, int implied, unsigned int start, unsigned int end)
-{
-    unsigned char *q = e + end, buf[STRINGSIZE];
-    int type = implied;
+    static const int8_t type[] = {[RLT_INT] = T_INT | T_IMPLIED, [RLT_NBR] = T_NBR | T_IMPLIED, [RLT_STR] = T_STR | T_IMPLIED};
+    unsigned char buf[STRINGSIZE];
+    int tc = start >> RLT_SHIFT;
     void *v;
-    if (*q == tokenAS)
-    { // its own type
-        if (implied & T_IMPLIED)
-            error("Type specified twice");
-        q++;
-        skipspace(q);
-        CheckIfTypeSpecified(q, &type, true);
-        if (!(type & T_IMPLIED))
-            error("Variable type");
-    }
+    start &= (1 << RLT_SHIFT) - 1;
     if (g_LocalIndex == 0)
         error("Invalid here");
     memcpy(buf, e + start, end - start);
     buf[end - start] = 0;
-    v = findvar(buf, type | V_LOCAL | V_FIND | V_DIM_VAR | V_DIM_NEW);
+    v = findvar(buf, (tc == RLT_DEF ? DefaultType : type[tc]) | V_LOCAL | V_FIND | V_DIM_VAR | V_DIM_NEW);
     if (DimIsEmptyParam(RAW_DIM((*VREC(g_VarIndex)), 0)))
         error("Array dimensions");
     if (DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
@@ -4523,14 +4522,13 @@ static void *RBLocalMake(unsigned char *e, int implied, unsigned int start, unsi
     return v;
 }
 
-static __attribute__((noinline)) const uint16_t *RBLocal(unsigned char *e, unsigned int nw, const uint16_t *off, unsigned int w)
+// RC_LOCAL: what cmd_dim does for LOCAL with no value, for each name in its
+// order.  Returns the code after them.
+static __attribute__((noinline)) const uint16_t *RBLocal(unsigned char *e, const uint16_t *off, unsigned int w)
 {
-    int n = w >> 8, implied, i;
-    if (!RBLocalTypesOK(e, nw, off + 1, n, 2))
-        return NULL;
-    implied = RBLocalImplied(e, nw);
+    int n = w >> 8, i;
     for (i = 0; i < n; i++)
-        RBLocalMake(e, implied, off[2 * i], off[2 * i + 1]);
+        RBLocalMake(e, off[2 * i], off[2 * i + 1]);
     return off + 2 * n;
 }
 
@@ -4591,9 +4589,9 @@ static __attribute__((noinline)) const uint16_t *RBStatic(unsigned char *e, unsi
 
 // RC_LOCALV (P7b): a name with a value, made as RBLocal makes it; its data
 // and its type pushed for RC_LOCALSET, after the value's code
-static __attribute__((noinline)) void RBLocalV(unsigned char *e, unsigned int nw, const uint16_t *off, union cell *sp)
+static __attribute__((noinline)) void RBLocalV(unsigned char *e, const uint16_t *off, union cell *sp)
 {
-    sp[0].i = (uint32_t)RBLocalMake(e, RBLocalImplied(e, nw), off[0], off[1]);
+    sp[0].i = (uint32_t)RBLocalMake(e, off[0], off[1]);
     sp[1].i = TypeMask(VREC(g_VarIndex)->type);
 }
 
@@ -4834,7 +4832,7 @@ static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
     unsigned char *e = *ep, *end;
     unsigned int nw; // cmdl | next << 8
     uint16_t *stamp, *cache;
-    uint32_t gen; // the bind cache's stamp as it stands now
+    uint32_t gen = 0; // the bind cache's stamp as it stands now (co's bit 0 sets it before its first use)
     union cell *slot[RB_MAXBIND], **slotp, st[RB_MAXDEPTH], *sp; // slotp: the binds' addresses
     unsigned int nb, j, w;
     int loopi;              // RC_LOOPF's stack entry
@@ -4953,7 +4951,6 @@ again:
         [RC_PARTCHK] = &&L_PARTCHK,
         [RC_INCF] = &&L_INCF,
         [RC_INCS] = &&L_STS,
-        [RC_LOCALCHK] = &&L_LOCALCHK,
         [RC_LOCALV] = &&L_LOCALV,
         [RC_LOCALSET] = &&L_LOCALSET,
         [RC_STATIC] = &&L_STATIC,
@@ -5217,17 +5214,11 @@ again:
             RBNEXT();
     L_LOCAL: // cmd_dim for LOCAL (RBLocal)
             RBCALLOUT();
-            if ((pc = RBLocal(e, nw, pc, w)) == NULL)
-                goto fail;
-            RBNEXT();
-    L_LOCALCHK: // a LOCAL with values: a structure type anywhere goes to cmd_dim before anything is made
-            if (!RBLocalTypesOK(e, nw, pc, w >> 8, 1))
-                goto fail;
-            pc += w >> 8;
+            pc = RBLocal(e, pc, w);
             RBNEXT();
     L_LOCALV: // one LOCAL name with a value: made, its data and type pushed (RBLocalV)
             RBCALLOUT();
-            RBLocalV(e, nw, pc, sp);
+            RBLocalV(e, pc, sp);
             sp += 2;
             pc += 2;
             RBNEXT();
