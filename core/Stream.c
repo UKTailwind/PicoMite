@@ -4320,7 +4320,26 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
 // findvar finds it
 static __attribute__((noinline)) union cell *RBElementAt(struct s_vartbl *v, union cell *idx, int k)
 {
-    int i, nbr, j;
+    int i, nbr, j, base = g_OptionBase;
+    // V3: two or three indices into an array of as many dimensions, straight
+    // through: the loops' checks below, in their order, and their element.
+    // RC_IDX made each index an int (at or above OPTION BASE).
+    if (k == 2 && !DimIsEnd(RAW_DIM(*v, 0)) && !DimIsEnd(RAW_DIM(*v, 1)) && DimIsEnd(RAW_DIM(*v, 2)))
+    {
+        int i0 = idx[0].i, i1 = idx[1].i, u0 = DimUpper(RAW_DIM(*v, 0));
+        if (i0 > u0 || i0 < base || i1 > DimUpper(RAW_DIM(*v, 1)) || i1 < base)
+            error("Index out of bounds");
+        return (union cell *)(v->val.s + ((i0 - base) + (i1 - base) * (u0 + 1 - base)) * 8);
+    }
+    if (k == 3 && !DimIsEnd(RAW_DIM(*v, 0)) && !DimIsEnd(RAW_DIM(*v, 1)) && !DimIsEnd(RAW_DIM(*v, 2)) &&
+        DimIsEnd(RAW_DIM(*v, 3)))
+    {
+        int i0 = idx[0].i, i1 = idx[1].i, i2 = idx[2].i, u0 = DimUpper(RAW_DIM(*v, 0)), u1 = DimUpper(RAW_DIM(*v, 1));
+        if (i0 > u0 || i0 < base || i1 > u1 || i1 < base || i2 > DimUpper(RAW_DIM(*v, 2)) || i2 < base)
+            error("Index out of bounds");
+        u0 += 1 - base; // the first dimension's elements
+        return (union cell *)(v->val.s + ((i0 - base) + ((i1 - base) + (i2 - base) * (u1 + 1 - base)) * u0) * 8);
+    }
     for (i = 0; i < MAXDIM && !DimIsEnd(RAW_DIM(*v, i)); i++)
         ;
     if (i != k)
