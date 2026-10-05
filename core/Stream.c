@@ -86,7 +86,7 @@ typedef struct
 int RBLive = 0;
 static int RBCompiles = 0;
 static int RBReused = 0;
-static uint32_t RBRan = 0;  // statements run from the stream since RUN
+static uint32_t RBRan = 0;  // statements run from the stream as fallbacks since RUN (MM.INFO's RAN adds RBCode)
 static uint32_t RBMiss = 0; // map lookups the cache did not answer (a bucket search each)
 static uint32_t RBCode = 0; // statements run as compiled code since RUN
 static const char *RBWhy = NULL; // why the last RUN ran as text
@@ -4140,7 +4140,6 @@ static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union
     // what would stop DefinedSubFun before it starts sends the call there
     if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
         return 0;
-    RBRan++;
     RBCode++;
     if (g_option_profiling)
     {
@@ -4810,6 +4809,15 @@ static const uint16_t *RBRAM(RBRun)(const uint16_t **rp, unsigned char **ep)
     int loopi;              // RC_LOOPF's stack entry
     unsigned char *clsave; // RC_CLSET: CurrentLinePtr before a CASE's line took its place
     unsigned char *nxcl, *nxend; // RC_NEXT, RC_CONTFOR: the NEXT's cmdline, and where it ends
+    // V4: what an op that called out of the VM (a call or return, LOCAL or
+    // STATIC, a string op or store, a spliced handler, SHADOW's check) leaves to
+    // look at again.  Only such an op can change these inside a chain; everything
+    // else that could (a fallback, an interrupt, an error) ends the chain first,
+    // and RBRun starts again with both set.  Bit 0: the binds' generation, at the
+    // next record's start; bit 1: the chain's globals (ON ERROR SKIP, temporary
+    // memory, TRACE), at this statement's end.
+    int co = 3;
+#define RBCALLOUT() (co = 3)
 again:
     clsave = NULL;
     c = r + RB_HDR(r) + 1;
@@ -4823,8 +4831,13 @@ again:
         cache++; // the pad
     loopi = 0;
     // what can have changed the binds at this level (Symbols.h): the globals,
-    // and this level's locals; 0, which never matches, past SYM_LEVELS
-    gen = g_LocalIndex < SYM_LEVELS ? SymBindGenG + SymLevelGen[g_LocalIndex] : 0;
+    // and this level's locals; 0, which never matches, past SYM_LEVELS.  The
+    // same until an op calls out (V4)
+    if (co & 1)
+    {
+        gen = g_LocalIndex < SYM_LEVELS ? SymBindGenG + SymLevelGen[g_LocalIndex] : 0;
+        co &= ~1;
+    }
     if (RBCacheOK && (stamp[0] | ((uint32_t)stamp[1] << 16)) == gen && gen && !(g_LocalIndex && SymTextLocals))
         slotp = (union cell **)cache; // what the binds found last time, used where it is
     else
@@ -4945,6 +4958,7 @@ again:
             sp[-2].i = FloatToInt64(sp[-2].f);
             RBNEXT();
     L_SHADOW:
+            RBCALLOUT();
             if (RBMode == RB_SHADOW)
                 RBShadow(e + (w >> 8), *pc, &sp[-1]);
             pc++;
@@ -5104,10 +5118,12 @@ again:
             skipelement(nextstmt);
             goto ran;
     L_RETURN: // cmd_return (RBReturn)
+            RBCALLOUT();
             if (!RBReturn())
                 goto fail; // "Nothing to return to"
             goto ran;
     L_ENDFUN: // cmd_endfun: the end of this run of ExecuteProgram
+            RBCALLOUT();
             if (gosubindex == 0 || gosubstack[gosubindex - 1] != NULL)
                 goto fail;
             nextstmt = (unsigned char *)"\0\0\0";
@@ -5140,11 +5156,13 @@ again:
             RBNEXT();
     L_SPLICE: // the command's handler, its arguments' values spliced (RBSpliceCmd)
             sp -= pc[0];
+            RBCALLOUT();
             RBSpliceCmd(r, e, nw, pc + 1, sp);
             pc += 1 + (w >> 8);
             RBNEXT();
     L_FSPLICE: // a built-in function's handler, its arguments' values spliced (RBFnSpliceRun)
             sp -= pc[0] & 0x1F;
+            RBCALLOUT();
             RBFnSpliceRun(pc, w >> 8, sp);
             sp++;
             pc += 1 + (w >> 8);
@@ -5166,6 +5184,7 @@ again:
             sp--;
             RBNEXT();
     L_LOCAL: // cmd_dim for LOCAL (RBLocal)
+            RBCALLOUT();
             if ((pc = RBLocal(e, nw, pc, w)) == NULL)
                 goto fail;
             RBNEXT();
@@ -5175,15 +5194,18 @@ again:
             pc += w >> 8;
             RBNEXT();
     L_LOCALV: // one LOCAL name with a value: made, its data and type pushed (RBLocalV)
+            RBCALLOUT();
             RBLocalV(e, nw, pc, sp);
             sp += 2;
             pc += 2;
             RBNEXT();
     L_LOCALSET: // its value, stored as SetValue (RBLocalSet)
+            RBCALLOUT();
             RBLocalSet(sp - 3, w >> 8);
             sp -= 3;
             RBNEXT();
     L_STATIC: // cmd_dim for STATIC once its globals exist (RBStatic)
+            RBCALLOUT();
             if ((pc = RBStatic(e, nw, pc, w)) == NULL)
                 goto fail;
             RBNEXT();
@@ -5195,11 +5217,13 @@ again:
             pc += w >> 8;
             RBNEXT();
     L_OPS: // doexpr's call on two strings (RBOpStr)
+            RBCALLOUT();
             RBOpStr(w >> 8, sp);
             sp--;
             RBNEXT();
     L_STS: // cmd_let's string store, and cmd_inc's (RBStoreStr)
             sp--;
+            RBCALLOUT();
             RBStoreStr(w, (struct s_vartbl *)slotp[w >> 8], (unsigned char *)(uint32_t)sp[0].i);
             RBNEXT();
     L_STP:
@@ -5304,11 +5328,13 @@ again:
             RBNEXT();
         }
     L_SHADOWCK:
+            RBCALLOUT();
             if (RBMode == RB_SHADOW)
                 RBShadowCond(RBImage(pc[1] | ((uint32_t)pc[2] << 16)), pc[0], &sp[-1]);
             pc += 3;
             RBNEXT();
     L_SHADOWC:
+            RBCALLOUT();
             if (RBMode == RB_SHADOW)
                 RBShadowCond(e + (w >> 8), *pc, &sp[-1]);
             pc++;
@@ -5316,6 +5342,7 @@ again:
     L_FCALL: // DefinedSubFun for a FUNCTION (RBCallFun): its value replaces the arguments
         {
             union cell res;
+            RBCALLOUT();
             if (!RBCallFun(pc, w >> 8, slotp, sp - pc[1], &res, r))
                 goto fail;
             sp -= pc[1];
@@ -5324,6 +5351,7 @@ again:
             RBNEXT();
         }
     L_CALL: // DefinedSubFun for a SUB (RBCallSub)
+            RBCALLOUT();
             if (!RBCallSub(pc, w >> 8, slotp, sp - pc[1], e + (nw >> 8)))
                 goto fail;
             goto done;
@@ -5385,8 +5413,7 @@ again:
         }
     L_END:
     nextstmt = e + (nw >> 8);
-ran: // a statement run as compiled code (one copy of the counts, for RAM)
-    RBRan++;
+ran: // a statement run as compiled code (one count: RAN is RBRan + RBCode)
     RBCode++;
 done:
     // the next record: the one after, past any IF parts, or nextstmt's
@@ -5401,7 +5428,7 @@ done:
     else if ((t = RBFind(nextstmt)) == NULL)
         return RB_OUT;
     if ((t[0] & 0xFF) != RB_OP_END && (t[3] & 0xFF) != RB_OP_NOP && (t[0] & RB_COMPILED) &&
-        OptionErrorSkip == 0 && !g_TempMemoryIsChanged && !TraceOn &&
+        (!(co & 2) || (OptionErrorSkip == 0 && !g_TempMemoryIsChanged && !TraceOn)) &&
         (--RBHouseN > 0 || (RBHouseN = RB_HOUSE_N,
 #ifndef PICOMITEWEB
                             core1stack[0] == 0x12345678 &&
@@ -5413,6 +5440,7 @@ done:
       // and the housekeeping timer once in RB_HOUSE_N (a few microseconds)
         {
             r = t;
+            co &= 1; // the globals are as tested; a generation to recompute stays
             e = nextstmt = RBImage(RBKeyAt(r)); // the tail's nextstmt, which nothing moved
             if (r[0] & RB_LINESTART)
             { // RunStream's line bookkeeping (TRACE is off)
@@ -5430,6 +5458,7 @@ fail:
     *ep = e;
     return NULL;
 #undef RBNEXT
+#undef RBCALLOUT
 }
 
 // RBExec while ON ERROR SKIP/IGNORE is in force: an error in the statement
@@ -5631,7 +5660,7 @@ void RBStatus(char *out)
         strcat(out, " STMTS ");
         IntToStr(out + strlen(out), ((const rbheader_t *)RBSlotBase())->stmts, 10);
         strcat(out, " RAN ");
-        IntToStr(out + strlen(out), RBRan, 10);
+        IntToStr(out + strlen(out), RBRan + RBCode, 10);
         strcat(out, " MISS ");
         IntToStr(out + strlen(out), RBMiss, 10);
         strcat(out, " CODE ");
