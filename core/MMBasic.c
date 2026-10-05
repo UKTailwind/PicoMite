@@ -5304,6 +5304,93 @@ static inline void probe_global_slot(const unsigned char *name, int namelen,
 // storage of the variable's data:
 //      if it is type T_NBR or T_INT the value is held in the variable slot
 //      for T_STR a block of memory of MAXSTRLEN size (or size determined by the LENGTH keyword) will be malloc'ed and the pointer stored in the variable slot.
+#ifdef rp2350
+/* V2b: what findvar does to make a local integer or float for a bound symbol
+   at p - a SUB's or FUNCTION's parameter, a FUNCTION's result, a LOCAL - the
+   same entry, counts and bindings, in the same order, as the path below makes
+   them, without its search.  The RP2350's only: its compiled calls make their
+   locals here (2-4% on call-heavy programs), where on the RP2040 the text path
+   gained nothing measurable for the RAM it took (Peter, 2026-10-05).  The symbol's newest local (SymL) is all the
+   search would look at (with no locals made from text), and a name it has
+   checked against the SUBs once (SYMC_NOSUB) stays checked.  NULL, before
+   anything has changed, for anything else, which the path below makes with
+   its errors: a string, an array, a TYPE, a suffix that clashes, OPTION
+   DEFAULT NONE, a name already made at this level (or one left deeper by an
+   error), a name's first check against the SUBs, a full local stack. */
+static void MIPS16 *__not_in_flash_func(findvar_local)(unsigned char *p, int action)
+{
+    struct s_vartbl *vr;
+    const unsigned char *nv;
+    int symk, i, k, n, vtype, suffix = 1;
+    skipspace(p);
+    if (!issymbol(*p) || !g_LocalIndex || SymTextLocals || (symk = SymCanonAt(p)) < 0)
+        return NULL;
+#ifdef STRUCTENABLED
+    if (g_structcnt > 0 && (SymCold[symk].flags & SYMC_DOT))
+        return NULL;
+#endif
+    if ((!(action & V_FUNCT) && !(SymCold[symk].flags & SYMC_NOSUB)) || (OptionExplicit && !(action & V_DIM_VAR)) ||
+        ((i = SymL[symk]) >= 0 && VREC(i)->level >= g_LocalIndex))
+        return NULL;
+    p = NameView(p, &nv, &n);
+    if (*p == '%')
+        vtype = T_INT, p++;
+    else if (*p == '!')
+        vtype = T_NBR, p++;
+    else if (*p == '$')
+        return NULL;
+    else
+    {
+        suffix = 0;
+        vtype = (action & T_IMPLIED) ? (action & (T_NBR | T_INT | T_STR)) : DefaultType;
+    }
+    if ((suffix && (action & T_IMPLIED) && !(action & vtype)) || (vtype != T_INT && vtype != T_NBR) || *p == '(' ||
+        n >= MAXVARLEN || (i = g_localtop) >= maxlocalvars || g_Localvarcnt + 1 >= maxlocalvars)
+        return NULL;
+#ifdef STRUCTENABLED
+    if (action & T_STRUCT)
+        return NULL;
+    g_StructMemberType = 0;
+    g_StructMemberOffset = 0;
+    g_StructMemberSize = 0;
+#endif
+    emptyarray = 0;
+    if (g_slotrec[i] == &g_emptyrec)
+        VarLocalChunk(i / VARCHUNK);
+    g_Localvarcnt++;
+    g_varcnt = g_Globalvarcnt + g_Localvarcnt;
+    g_VarIndex = i;
+    if (g_option_profiling)
+    {
+        g_perf_findvar_calls++;
+        g_perf_findvar_locals++;
+    }
+    vr = VREC(i);
+    for (k = 0; k < n; k++)
+        vr->name[k] = mytoupper(nv[k]);
+    if (n < MAXVARLEN)
+        vr->name[n] = 0;
+    vr->namelen = suffix ? NAMELEN_EXPLICIT : 0;
+    vr->type = vtype | (action & (T_IMPLIED | T_CONST));
+    g_hashlist[g_hashlistpointer].level = g_LocalIndex;
+    g_hashlist[g_hashlistpointer++].hash = i;
+    g_localtop = i + 1;
+    if (g_localtop > g_localpeak)
+        g_localpeak = g_localtop;
+    vr->level = g_LocalIndex;
+    SymLocalMade(i, symk);
+    for (k = 0; k < MAXDIM; k++)
+        RAW_DIM((*vr), k) = 0;
+    if (vtype & T_NBR)
+    {
+        vr->val.f = 0;
+        return &vr->val.f;
+    }
+    vr->val.i = 0;
+    return &vr->val.i;
+}
+#endif
+
 #if LOWRAM
 /* findvar in two parts on the LOWRAM builds (RP2040 VGA, VGAUSB and WebMite),
    which keep findvar in flash for want of RAM (Peter, 2026-10-02).  A
@@ -5489,6 +5576,10 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     int dim_error_deferred = 0; // set if V_NOFIND_NULL deferred a "Dimensions" error
     int symk = -1;              // the name's canonical entry, if it is a bound symbol (see Symbols.h)
     unsigned char *symp = NULL; // that symbol, while its name is still unread
+#ifdef rp2350
+    if ((action & V_LOCAL) && (mptr = findvar_local(p, action)) != NULL)
+        return mptr; // a local made for a bound symbol (V2b)
+#endif
 #ifdef STRUCTENABLED
     g_StructMemberType = 0;   // Reset struct member type flag
     g_StructMemberOffset = 0; // Reset struct member offset
