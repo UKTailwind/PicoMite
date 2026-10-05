@@ -660,8 +660,8 @@ End Sub
 
 ' DEFS
 Const GEN_STACK  = 1120' 400 '1120 '208
-Const MAX_PLY    = 16'4'6'32
-Const HIST_STACK = 200 '400
+Const MAX_PLY    = 32 ' as TSCP's C
+Const HIST_STACK = 400
 Const LI  = 0 'Light
 Const DK  = 1 'Dark
 Const PN  = 0 'Pawn
@@ -1460,7 +1460,7 @@ Do
     EndIf
   EndIf
   If done=0 Then
-    If (ply>=MAX_PLY)Or(hply>=HIST_STACK) Then
+    If (ply>=MAX_PLY-1)Or(hply>=HIST_STACK-1) Then
       v=eval_():done=1
     ElseIf depth Then
       c=in_check(side):If c Then Inc depth,1
