@@ -257,7 +257,22 @@
             }
             cyw43_wifi_pm(&cyw43_state, CYW43_NO_POWERSAVE_MODE);
             MMPrintString(" connecting to WiFi...\r\n");
-            int connect_result = cyw43_arch_wifi_connect_timeout_ms((char *)Option.SSID, (char *)(*Option.PASSWORD ? Option.PASSWORD : NULL), (*Option.PASSWORD ? CYW43_AUTH_WPA2_MIXED_PSK : CYW43_AUTH_OPEN), 30000);
+            /* The first join after a CPU RESTART can fail with LINK_FAIL
+               (PICO_ERROR_CONNECT_FAILED) where a second one a second later
+               succeeds. Retry that error only, up to three tries in all, with
+               1 s of polling between them; any other error ends it at once. */
+            int connect_result;
+            for (int attempt = 1;; attempt++)
+            {
+                connect_result = cyw43_arch_wifi_connect_timeout_ms((char *)Option.SSID, (char *)(*Option.PASSWORD ? Option.PASSWORD : NULL), (*Option.PASSWORD ? CYW43_AUTH_WPA2_MIXED_PSK : CYW43_AUTH_OPEN), 30000);
+                if (connect_result != PICO_ERROR_CONNECT_FAILED || attempt == 3)
+                    break;
+                for (int i = 0; i < 100; i++)
+                {
+                    cyw43_arch_poll();
+                    uSec(10000);
+                }
+            }
             if (connect_result)
             {
                 MMPrintString("failed to connect.\r\n");
