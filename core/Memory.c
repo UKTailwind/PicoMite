@@ -1973,11 +1973,16 @@ void __not_in_flash_func(ClearTempMemory)(void)
             g_StrTmpIndex--;
             FreeMemory((void *)g_StrTmp[g_StrTmpIndex]);
             g_StrTmp[g_StrTmpIndex] = NULL;
-            g_TempMemoryIsChanged = false;
         }
         else
             break;
     }
+    // Checked, whether or not anything was freed.  A return sets the flag with
+    // nothing to free (the caller's temporaries stay until its own level), and
+    // left set it stopped Route B chaining compiled statements until a string
+    // temporary next came and went.  Every allocation and every return sets it
+    // again, so nothing that needs the check can miss it.
+    g_TempMemoryIsChanged = false;
 }
 
 void MIPS16 ClearSpecificTempMemory(void *addr)
