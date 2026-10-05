@@ -1,3 +1,8 @@
+' This version calls search() from a CSUB in the library. The LIBRARY LOAD
+' below installs chesslib.bas there and restarts the program; once it is
+' installed the line does nothing. chessiter.bas is the same program in plain
+' BASIC.
+LIBRARY LOAD "chesslib.bas", O
 ' TSCP Chess
 ' Tom Kerrigan's Simple Chess Program
 ' (TSCP) version 1.81c, 2/3/19
@@ -1429,6 +1434,8 @@ If stop_search Then
 EndIf
 End Sub
 
+/*
+' --- mmb2csub: search replaced by a CSUB; original follows
 Function search(a,b,d)
 ' search() and quiesce() as one loop.  A recursive call per ply took
 ' about 24 BASIC call levels at MAX_PLY, more than the stack holds.  Here
@@ -1527,6 +1534,7 @@ Do
   Loop
 Loop
 End Function
+*/
 
 Function reps()
 Local i
