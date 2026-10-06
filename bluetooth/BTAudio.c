@@ -246,8 +246,16 @@ static void fill_sbc_audio_buffer(void)
     }
 }
 
+/* Diagnostics (BLUETOOTH STATUS): the longest wait for btstack to let a
+   packet go, and samples thrown away because sending fell behind. */
+static volatile uint32_t send_wait_max_us, samples_dropped;
+static uint32_t send_requested_us;
+
 static void send_media_packet(void)
 {
+    uint32_t waited = time_us_32() - send_requested_us;
+    if (waited > send_wait_max_us)
+        send_wait_max_us = waited;
     int frame_len = sbc_encoder->sbc_buffer_length(&sbc_encoder_state);
     uint8_t num_frames = sbc_storage_count / frame_len;
     sbc_storage[0] = num_frames; /* SBC media payload header: frame count */
@@ -289,7 +297,10 @@ static void audio_timeout_handler(btstack_timer_source_t *timer)
        to catch up more than a quarter of a second - the speaker has long
        since played silence for the gap. */
     if (samples_ready > rate / 4)
+    {
+        samples_dropped += samples_ready - rate / 4;
         samples_ready = rate / 4;
+    }
 
     if (!sbc_ready_to_send)
     {
@@ -298,6 +309,7 @@ static void audio_timeout_handler(btstack_timer_source_t *timer)
             (uint32_t)max_media_payload_size)
         {
             sbc_ready_to_send = true;
+            send_requested_us = time_us_32();
             a2dp_source_stream_endpoint_request_can_send_now(a2dp_cid, local_seid);
         }
     }
@@ -986,6 +998,10 @@ static void bta_status(void)
         bt_keyboard_stats(&saves, &save_max, &save_total, &pairings, &reenc);
         sprintf(buf, "\r\nLongest encoder gap: %lu ms", (unsigned long)(tick_gap_max_us / 1000));
         tick_gap_max_us = 0;
+        MMPrintString(buf);
+        sprintf(buf, "\r\nLongest send wait: %lu ms, samples dropped: %lu",
+                (unsigned long)(send_wait_max_us / 1000), (unsigned long)samples_dropped);
+        send_wait_max_us = samples_dropped = 0;
         MMPrintString(buf);
         sprintf(buf, "\r\nBond store: %lu writes, longest %lu ms, total %lu ms",
                 (unsigned long)saves, (unsigned long)(save_max / 1000), (unsigned long)(save_total / 1000));

@@ -1865,8 +1865,13 @@ void bt_keyboard_init(void)
        BLE-HID peripherals routinely require MITM and terminate the
        connection if Just Works is the only option. */
     sm_set_io_capabilities(IO_CAPABILITY_KEYBOARD_DISPLAY);
+    /* No SM_AUTHREQ_MITM_PROTECTION: a peer that wants MITM still gets it
+       (it sets the flag itself, and our IO capability allows it), but
+       requiring it here meant a Just Works bond - what most keyboards make -
+       was never reused. As central, btstack only re-encrypts with a stored
+       key that is authenticated or when MITM isn't required, so every wake
+       from sleep paired afresh (3-5 bond-store writes each time). */
     sm_set_authentication_requirements(SM_AUTHREQ_BONDING |
-                                       SM_AUTHREQ_MITM_PROTECTION |
                                        SM_AUTHREQ_SECURE_CONNECTION);
     /* btstack 1.8.2 (pico-sdk 2.3.0) defaults to Secure-Connections-ONLY
        mode and a 16-byte minimum encryption key size when
