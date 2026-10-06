@@ -638,6 +638,8 @@ static const char *const SymAwareNames[] = {
     "Sub", "Function", "End Sub", "End Function", "CSub", "End CSub",
     "DefineFont", "End DefineFont", "Rem", "/*", "*/", "Data",
     "Return", "IReturn", "Print", "Inc", "GoTo", "GoSub", "Dim", "Local", "Static", "Const",
+    // CALL: its name is an expression, the rest goes to DefinedSubFun as a direct call's does
+    "Call",
     // graphics (Draw.c, Blit.c, Sprite.c): arguments read through the evaluator and getargaddress()
     "Pixel", "Line", "Box", "RBox", "Circle", "Triangle", "Arc", "Bezier", "CLS",
     "Colour", "Color", "Text", "Font", "Blit", "Sprite", "Refresh",

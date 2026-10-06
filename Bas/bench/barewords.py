@@ -99,6 +99,23 @@ End Sub
 S1 a1(2), f, s$ + t
 S1 1, 2, t
 """, " 6 1.5abcxy 1\n 2 2xy 2"),
+    ("call", """Dim Integer a = 3, k(2) = (1, 2, 3)
+Dim Float f = 1.5
+Dim s$ = "ab", n$(1) = ("Bump", "Show")
+Sub Bump(x As Integer, y As Float)
+  x = x + 1 : y = y * 2
+End Sub
+Sub Show(x As Integer, y As Float, z As String)
+  Print x; y; z
+End Sub
+Function Sum(x As Integer, y As Integer) As Integer
+  Sum = x + y
+End Function
+Call n$(0), a, f
+Call "Show", a, f, s$ + "c"
+Call n$(1), k(2), f / 3, s$
+Print Call("Sum", a, k(1) * 10)
+""", " 4 3abc\n 3 1ab\n 24"),
     ("functions", """Function Twice(v As Integer) As Integer
   Twice = v * 2
 End Function
