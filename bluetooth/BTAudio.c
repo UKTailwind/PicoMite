@@ -672,13 +672,15 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
  * PLAY output service (main loop)
  * ============================================================================
  */
-#define BTA_IDLE_SUSPEND_MS 5000  /* suspend the stream after this much silence */
 #define BTA_START_TIMEOUT_MS 3000 /* give up waiting for a stream to start */
 #define BTA_DISCARD_RATE 44100
 
 /* Called from bt_keyboard_poll() in the main loop. With OPTION AUDIO
-   BLUETOOTH it starts the stream when PLAY has something to play, and
-   suspends it after BTA_IDLE_SUSPEND_MS of silence. While no speaker can
+   BLUETOOTH [idle] it starts the stream when PLAY has something to play,
+   and suspends it after idle seconds of silence - or, with idle 0, starts
+   it as soon as a speaker connects and never suspends it, so no sound
+   waits for a restart (~0.45 s) at the cost of the encoder's ~12% of the
+   CPU while a speaker is connected. While no speaker can
    take the sound it is discarded at the real-time rate, so PLAY behaves as
    a wired output does with nothing plugged in: sounds still end on time and
    their interrupts still fire. */
@@ -691,6 +693,7 @@ void bt_audio_service(void)
     uint32_t now_ms = to_ms_since_boot(get_absolute_time());
     bool playing = bt_audio_playing();
     bool tone = (tone_target != 0 || tone_gain != 0);
+    uint32_t idle_ms = (uint32_t)AUDIO_BLUETOOTH_IDLE * 1000u; /* 0: never suspend */
     if (playing || tone)
         last_active_ms = now_ms;
 
@@ -699,7 +702,7 @@ void bt_audio_service(void)
     case SPK_STREAMING:
         start_requested = false;
         last_us = time_us_32();
-        if (!playing && !tone && now_ms - last_active_ms > BTA_IDLE_SUSPEND_MS)
+        if (idle_ms && !playing && !tone && now_ms - last_active_ms > idle_ms)
         {
             bta_lock();
             a2dp_source_pause_stream(a2dp_cid, local_seid);
@@ -708,7 +711,7 @@ void bt_audio_service(void)
         }
         return;
     case SPK_OPEN:
-        if (!playing)
+        if (!playing && idle_ms)
         {
             start_requested = false;
             break;
@@ -726,6 +729,7 @@ void bt_audio_service(void)
             last_us = time_us_32(); /* hold the sound until the stream runs */
             return;
         }
+        start_requested = false; /* not started in time: ask again next pass */
         break;
     default:
         start_requested = false;

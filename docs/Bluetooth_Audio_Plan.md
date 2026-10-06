@@ -39,7 +39,8 @@ BLUETOOTH DISCONNECT            ' also stops automatic reconnection until the ne
 BLUETOOTH STATUS                ' keyboard and speaker state, stream format, diagnostics
 BLUETOOTH FORGET [addr$]        ' delete stored pairings - all, or one device's
 BLUETOOTH TEST freq | 0 | STOP  ' temporary: a test tone through the speaker
-OPTION AUDIO BLUETOOTH          ' PLAY output goes to the connected speaker
+OPTION AUDIO BLUETOOTH [idle]   ' PLAY output to the speaker; stream suspended after idle s of
+                                ' silence, 0 = never (starts on connect), default 60
 MM.INFO(BLUETOOTH SPEAKER)      ' connected speaker's address, or ""
 MM.INFO(BLUETOOTH KEYBOARD)     ' connected keyboard's address, or ""
 ```
@@ -105,7 +106,7 @@ Original plan:
   4. **After a reset, keyboards came back only with their pairing button**: scan matching ignored bonded and directed advertisers. That keyboard also pairs with a new static random address each time (f259253).
 - **Speaker remembered and reconnected** (9eb7338): 2 s after boot or a dropout, then backing off from 5 s to 60 s. `BLUETOOTH CONNECT name$` connects by the name SCAN showed; there is no bare CONNECT.
 - **Diagnostics in BLUETOOTH STATUS:** underruns, longest encoder gap, send wait and dropped samples, bond-store writes, keyboard pairings and re-encryptions, the last pairing's result.
-- **Still to do:** `BLUETOOTH FORGET`, `MM.INFO(BLUETOOTH …)`, the idle-suspend policy (5 s now), an automatic retry when CONNECT is refused with 0x67 right after a reset, showing a BLE passkey on screen, AVRCP (optional), and a decision on how much of the STATUS diagnostics to keep.
+- **Still to do:** `BLUETOOTH FORGET`, `MM.INFO(BLUETOOTH …)`, an automatic retry when CONNECT is refused with 0x67 right after a reset, showing a BLE passkey on screen, AVRCP (optional), and a decision on how much of the STATUS diagnostics to keep.
 
 Original plan:
 

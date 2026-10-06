@@ -3385,7 +3385,7 @@ void MIPS16 printoptions(void)
 #endif
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
     if (Option.audio_bluetooth)
-        PO2Str("AUDIO", "BLUETOOTH");
+        PO2Int("AUDIO BLUETOOTH", AUDIO_BLUETOOTH_IDLE);
 #endif
     if (AUDIO_CONFIGURED && !AUDIO_BLUETOOTH)
     {
@@ -7440,15 +7440,27 @@ void MIPS16 cmd_option(void)
             return; // this will restart the processor ? only works when not in debug
         }
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
-        if (checkstring(tp, (unsigned char *)"BLUETOOTH"))
+        if ((p = checkstring(tp, (unsigned char *)"BLUETOOTH")))
         {
-            /* Output to a Bluetooth speaker (bluetooth/BTAudio.c). No pins;
+            /* OPTION AUDIO BLUETOOTH [idle]: output to a Bluetooth speaker
+               (bluetooth/BTAudio.c). idle is the seconds of silence before
+               the stream is suspended, 0 for never (default 60); it is kept
+               as idle + 1 so that 0 still means "not Bluetooth". No pins;
                the PWM slice only carries the playing flag, as for I2S. */
+            int idle = 60;
+            if (*p)
+                idle = getint(p, 0, 250);
+            if (AUDIO_BLUETOOTH)
+            { /* already the output: just the timeout changes, no restart */
+                Option.audio_bluetooth = idle + 1;
+                SaveOptions();
+                return;
+            }
             if (AUDIO_CONFIGURED)
                 error("Audio already configured");
             if ((PinDef[Option.DISPLAY_BL].slice & 0x7f) == 11)
                 error("Channel in use for backlight");
-            Option.audio_bluetooth = 1;
+            Option.audio_bluetooth = idle + 1;
             Option.AUDIO_SLICE = 11;
             SaveOptions();
             SoftReset(SOFT_RESET);

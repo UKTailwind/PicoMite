@@ -59,6 +59,9 @@ void checkWAVinput(void);
    which takes them with bt_audio_pull() instead of the PWM wrap interrupt. */
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 #define AUDIO_BLUETOOTH (Option.audio_bluetooth != 0)
+/* OPTION AUDIO BLUETOOTH [idle]: seconds of silence before the stream is
+   suspended, 0 for never (stored as idle + 1). */
+#define AUDIO_BLUETOOTH_IDLE (Option.audio_bluetooth - 1)
 void bt_audio_pull(int16_t *pcm, int frames, uint32_t out_rate);
 bool bt_audio_playing(void);
 extern volatile uint32_t bt_audio_underruns;
