@@ -3387,16 +3387,19 @@ void MIPS16 printoptions(void)
     if (Option.audio_bluetooth)
         PO2Str("AUDIO", "BLUETOOTH");
 #endif
-    if (Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk)
+    if (AUDIO_CONFIGURED && !AUDIO_BLUETOOTH)
     {
         PO("AUDIO");
+#if !defined(NOPWMAUDIO)
         if (Option.AUDIO_L)
         {
             MMPrintString((char *)PinDef[Option.AUDIO_L].pinname);
             MMputchar(',', 1);
             MMPrintString((char *)PinDef[Option.AUDIO_R].pinname);
         }
-        else if (Option.audio_i2s_data)
+        else
+#endif
+        if (Option.audio_i2s_data)
         {
             MMPrintString((char *)"I2S ");
             MMPrintString((char *)PinDef[Option.audio_i2s_bclk].pinname);
@@ -3423,7 +3426,7 @@ void MIPS16 printoptions(void)
             MMPrintString((char *)PinDef[Option.AUDIO_RESET_PIN].pinname);
         }
 #endif
-#if !defined(PICOMITEMIN)
+#if !defined(PICOMITEMIN) && !defined(NOPWMAUDIO)
         else
         {
             MMPrintString((char *)"SPI ");
@@ -7441,7 +7444,7 @@ void MIPS16 cmd_option(void)
         {
             /* Output to a Bluetooth speaker (bluetooth/BTAudio.c). No pins;
                the PWM slice only carries the playing flag, as for I2S. */
-            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
+            if (AUDIO_CONFIGURED)
                 error("Audio already configured");
             if ((PinDef[Option.DISPLAY_BL].slice & 0x7f) == 11)
                 error("Channel in use for backlight");
@@ -7514,7 +7517,7 @@ void MIPS16 cmd_option(void)
             return;
         }
 #endif
-#if !defined(PICOMITEMIN)
+#if !defined(PICOMITEMIN) && !defined(NOPWMAUDIO)
         if ((p = checkstring(tp, (unsigned char *)"SPI")))
         {
             int pin1, pin2, pin3;
@@ -7564,7 +7567,7 @@ void MIPS16 cmd_option(void)
             if (argc != 3)
                 SyntaxError();
             ;
-            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
+            if (AUDIO_CONFIGURED)
                 error("Audio already configured");
             //
             pin1 = getpinarg(argv[0]);
@@ -7608,6 +7611,7 @@ void MIPS16 cmd_option(void)
             SoftReset(SOFT_RESET);
             return;
         }
+#if !defined(NOPWMAUDIO)
         getcsargs(&tp, 3);
         if (argc != 3)
             SyntaxError();
@@ -7629,6 +7633,9 @@ void MIPS16 cmd_option(void)
         SaveOptions();
         SoftReset(SOFT_RESET);
         return;
+#else
+        SyntaxError(); /* no PWM audio in this build */
+#endif
     }
 
     tp = checkstring(cmdline, (unsigned char *)"SYSTEM I2C");
@@ -8794,6 +8801,7 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(tp, (unsigned char *)"AUDIO"))
         {
+#if !defined(NOPWMAUDIO)
             if (Option.AUDIO_L)
                 strcpy((char *)sret, "PWM");
 #if !defined(NOVS1053)
@@ -8802,7 +8810,9 @@ void MIPS16 fun_info(void)
 #endif
             else if (Option.AUDIO_CLK_PIN)
                 strcpy((char *)sret, "SPI");
-            else if (Option.audio_i2s_bclk)
+            else
+#endif
+            if (Option.audio_i2s_bclk)
                 strcpy((char *)sret, "I2S");
             else if (AUDIO_BLUETOOTH)
                 strcpy((char *)sret, "BLUETOOTH");

@@ -812,7 +812,7 @@ static void apply_audio_rate(int rate)
 {
 	AUDIO_WRAP = (Option.CPU_Speed * 1000) / rate - 1;
 	pwm_set_wrap(AUDIO_SLICE, AUDIO_WRAP);
-	if (Option.AUDIO_L)
+	if (AUDIO_PWM)
 	{
 		pwm_set_both_levels(AUDIO_SLICE, (int)(((AUDIO_WRAP >> 1) * 4000) / 4096), (int)(((AUDIO_WRAP >> 1) * 4000) / 4096));
 	}
@@ -947,7 +947,7 @@ void wavcallback(char *p)
 	//        PInt(mywav.channels);MMPrintString(" Channels\r\n");
 	//        PInt(mywav.bitsPerSample);MMPrintString(" Bits per sample\r\n");
 	//        PInt(mywav.sampleRate);MMPrintString(" Sample rate\r\n");
-	if (Option.AUDIO_L)
+	if (AUDIO_PWM)
 	{
 		actualrate = mywav->sampleRate;
 		while (actualrate < 32000)
@@ -1003,7 +1003,7 @@ void PlayMemWav(const unsigned char *data, unsigned int len)
 	}
 	audiorepeat = 1;
 	int actualrate = mywav->sampleRate;
-	if (Option.AUDIO_L)
+	if (AUDIO_PWM)
 	{
 		while (actualrate < 32000)
 		{
@@ -1080,7 +1080,7 @@ void mp3callback(char *p, int position)
 	g_buff1 = (int16_t *)sbuff1;
 	g_buff2 = (int16_t *)sbuff2;
 	mono = (mymp3->channels == 1 ? 1 : 0);
-	if (Option.AUDIO_L)
+	if (AUDIO_PWM)
 	{
 		actualrate = mymp3->sampleRate;
 		while (actualrate < PWM_FREQ)
@@ -1158,7 +1158,7 @@ void flaccallback(char *p)
 	//	PInt(myflac->bitsPerSample);MMPrintString(" Bits per sample\r\n");
 	//	PInt(myflac->sampleRate);MMPrintString(" Sample rate\r\n");
 	mono = (myflac->channels == 1 ? 1 : 0);
-	if (Option.AUDIO_L)
+	if (AUDIO_PWM)
 	{
 		actualrate = myflac->sampleRate;
 		while (actualrate < PWM_FREQ)

@@ -339,6 +339,14 @@ if(IS_PICOMIN OR IS_BTH)
 	list(REMOVE_ITEM COMMON_SOURCES io/VS1053.c)
 endif()
 
+# NOPWMAUDIO builds have no PWM or SPI DAC audio output - only I2S and, on
+# the BT host builds, Bluetooth (OPTION AUDIO BLUETOOTH). It keeps the PWM
+# wrap interrupt down to the I2S path. The define is set further down.
+set(USES_PWM_AUDIO TRUE)
+if(IS_BTH)
+	set(USES_PWM_AUDIO FALSE)
+endif()
+
 if(IS_PICOMIN)
 	list(REMOVE_ITEM COMMON_SOURCES third_party_mod/re.c)
 	list(REMOVE_ITEM DISPLAY_SOURCES graphics/SSD1963.c)
@@ -605,6 +613,11 @@ endif()
 if(NOT USES_VS1053)
 	# see USES_VS1053 above
 	target_compile_definitions(PicoMite PRIVATE NOVS1053)
+endif()
+
+if(NOT USES_PWM_AUDIO)
+	# see USES_PWM_AUDIO above
+	target_compile_definitions(PicoMite PRIVATE NOPWMAUDIO)
 endif()
 
 foreach(source IN LISTS OPTIMIZED_SOURCES)

@@ -136,7 +136,7 @@ void __not_in_flash_func(DefaultAudio)(uint16_t left, uint16_t right)
 {
 	pwm_set_both_levels(AUDIO_SLICE, (left * AUDIO_WRAP) >> 12, (right * AUDIO_WRAP) >> 12);
 }
-#ifndef PICOMITEMIN
+#if !defined(PICOMITEMIN) && !defined(NOPWMAUDIO)
 void __not_in_flash_func(SPIAudio)(uint16_t left, uint16_t right)
 {
 	uint16_t l = 0x7000 | left, r = 0xF000 | right;
@@ -462,6 +462,7 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 			return;
 		}
 	}
+#if !defined(NOPWMAUDIO) /* I2S is the only output this interrupt drives there */
 	if (AUDIO_USES_VS1053)
 	{
 		if (!(gpio_get(PinDef[Option.AUDIO_DREQ_PIN].GPno)))
@@ -567,6 +568,7 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 		}
 		AudioOutput(left, right);
 	}
+#endif
 }
 
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
@@ -3074,6 +3076,7 @@ void InitReservedIO(void)
 			SD_MISO_PIN = SPI_MISO_PIN;
 		}
 	}
+#if !defined(NOPWMAUDIO) /* PWM and SPI DAC audio */
 	if (Option.AUDIO_L || Option.AUDIO_CLK_PIN)
 	{ // enable the audio system
 		if (Option.AUDIO_L)
@@ -3196,6 +3199,7 @@ void InitReservedIO(void)
 			irq_set_priority(PWM_IRQ_WRAP, 255);
 		}
 	}
+#endif /* !NOPWMAUDIO */
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 	if (AUDIO_BLUETOOTH)
 	{ // Bluetooth speaker: BTAudio's encoder tick takes the samples through

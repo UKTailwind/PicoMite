@@ -65,11 +65,22 @@ extern volatile uint32_t bt_audio_underruns;
 #else
 #define AUDIO_BLUETOOTH 0
 #endif
+#ifdef NOPWMAUDIO
+/* No PWM or SPI DAC output in this build (the BT host builds): only I2S and
+   Bluetooth, both signed 16-bit. PWM/SPI settings left in Option by another
+   firmware are ignored. */
+#define AUDIO_PWM 0
+#define AUDIO_CONFIGURED (Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
+#define AUDIO_SIGNED16 1
+#else
+/* PWM audio output (OPTION AUDIO pin, pin). */
+#define AUDIO_PWM (Option.AUDIO_L != 0)
 /* Some audio output is configured: PWM, SPI DAC, VS1053, I2S or Bluetooth. */
 #define AUDIO_CONFIGURED (Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
 /* The swing buffers hold signed 16-bit samples (I2S, Bluetooth) rather than
    the 12-bit levels the PWM and SPI DAC outputs take. */
 #define AUDIO_SIGNED16 (Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
+#endif
 extern int AudioCurrentRate;
 
 /* ============================================================================
