@@ -29,6 +29,7 @@
 #include "pico/cyw43_arch.h"
 #undef UNUSED
 #include "btstack.h"
+#include "btstack_tlv.h"
 #include "classic/btstack_sbc_bluedroid.h"
 
 #include "BTAudio.h"
@@ -77,6 +78,43 @@ static uint8_t media_sbc_codec_configuration[4];
 static uint8_t sdp_a2dp_source_service_buffer[150];
 
 static btstack_packet_callback_registration_t hci_event_callback_registration;
+
+/* ============================================================================
+ * The remembered speaker: the last one a stream was opened with, kept in the
+ * bond store (TLV tag 'BTAS', saved with the rest of Option.bt_tlv). With
+ * OPTION AUDIO BLUETOOTH it is reconnected BTA_RECONNECT_FIRST_MS after boot
+ * or after it drops out, then at intervals doubling from 5 s to a minute
+ * while it is absent - each attempt pages for at most 5.12 s - until
+ * BLUETOOTH DISCONNECT. (Straight after a reset the speaker still holds the
+ * old link for a while and refuses the first attempt.) Automatic attempts
+ * never pair: only a stored link key gets them in.
+ * ============================================================================
+ */
+#define BTA_TLV_TAG_SPEAKER 0x42544153u /* 'BTAS' */
+#define BTA_RECONNECT_FIRST_MS 2000
+#define BTA_RECONNECT_MIN_RETRY_MS 5000
+#define BTA_RECONNECT_MAX_RETRY_MS 60000
+#define BTA_PAGE_TIMEOUT 0x2000 /* 8192 slots = 5.12 s */
+
+static bd_addr_t remembered_speaker;
+static bool have_remembered_speaker;
+static volatile bool auto_reconnect;
+static btstack_timer_source_t reconnect_timer;
+static uint32_t reconnect_interval_ms;
+static void reconnect_soon(void);
+
+static void remember_speaker(const bd_addr_t addr)
+{
+    if (have_remembered_speaker && memcmp(remembered_speaker, addr, sizeof(bd_addr_t)) == 0)
+        return; /* unchanged - no bond-store write */
+    const btstack_tlv_t *tlv;
+    void *ctx;
+    btstack_tlv_get_instance(&tlv, &ctx);
+    if (tlv)
+        tlv->store_tag(ctx, BTA_TLV_TAG_SPEAKER, addr, sizeof(bd_addr_t));
+    memcpy(remembered_speaker, addr, sizeof(bd_addr_t));
+    have_remembered_speaker = true;
+}
 
 /* ============================================================================
  * Inquiry (BLUETOOTH SCAN) results
@@ -432,6 +470,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         }
         local_seid = a2dp_subevent_stream_established_get_local_seid(packet);
         spk_state = SPK_OPEN;
+        remember_speaker(speaker_addr);
         if (!spk_pairing_allowed && !CurrentLinePtr)
             MMPrintString("Bluetooth speaker connected\r\n> "); /* it reconnected by itself */
         break;
@@ -470,14 +509,62 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         a2dp_cid = 0;
         spk_state = SPK_NONE;
         bt_keyboard_scan_duty_changed();
-        if (was_connected && !spk_quiet_release && !CurrentLinePtr)
-            MMPrintString("Bluetooth speaker disconnected\r\n> ");
+        if (was_connected && !spk_quiet_release)
+        {
+            if (!CurrentLinePtr)
+                MMPrintString("Bluetooth speaker disconnected\r\n> ");
+            reconnect_soon(); /* switched off, or out of range */
+        }
         break;
     }
 
     default:
         break;
     }
+}
+
+/* Reconnect the remembered speaker (btstack context; see BTA_TLV_TAG_SPEAKER). */
+static void reconnect_timeout(btstack_timer_source_t *ts)
+{
+    if (AUDIO_BLUETOOTH && auto_reconnect && have_remembered_speaker &&
+        spk_state == SPK_NONE && !inquiry_active && !name_request_active)
+    {
+        uint16_t cid;
+        if (a2dp_source_establish_stream(remembered_speaker, &cid) == ERROR_CODE_SUCCESS)
+        {
+            a2dp_cid = cid;
+            spk_last_status = 0;
+            spk_state = SPK_CONNECTING;
+        }
+    }
+    btstack_run_loop_set_timer(ts, reconnect_interval_ms);
+    btstack_run_loop_add_timer(ts);
+    reconnect_interval_ms *= 2;
+    if (reconnect_interval_ms > BTA_RECONNECT_MAX_RETRY_MS)
+        reconnect_interval_ms = BTA_RECONNECT_MAX_RETRY_MS;
+}
+
+/* Try the remembered speaker shortly, then back off again. */
+static void reconnect_soon(void)
+{
+    reconnect_interval_ms = BTA_RECONNECT_MIN_RETRY_MS;
+    btstack_run_loop_remove_timer(&reconnect_timer);
+    btstack_run_loop_set_timer_handler(&reconnect_timer, reconnect_timeout);
+    btstack_run_loop_set_timer(&reconnect_timer, BTA_RECONNECT_FIRST_MS);
+    btstack_run_loop_add_timer(&reconnect_timer);
+}
+
+/* HCI is up: load the remembered speaker and start trying it. */
+static void reconnect_start(void)
+{
+    const btstack_tlv_t *tlv;
+    void *ctx;
+    btstack_tlv_get_instance(&tlv, &ctx);
+    if (tlv && tlv->get_tag(ctx, BTA_TLV_TAG_SPEAKER, remembered_speaker,
+                            sizeof(bd_addr_t)) == sizeof(bd_addr_t))
+        have_remembered_speaker = true;
+    auto_reconnect = true;
+    reconnect_soon();
 }
 
 /* ============================================================================
@@ -502,6 +589,11 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
     switch (hci_event_packet_get_type(packet))
     {
+    case BTSTACK_EVENT_STATE:
+        if (btstack_event_state_get_state(packet) == HCI_STATE_WORKING)
+            reconnect_start();
+        break;
+
     /* Pairing is accepted only while BLUETOOTH CONNECT is running: we are
        connectable (for paired speakers to reconnect), so without this any
        device that knew our address could pair through Just Works. */
@@ -680,6 +772,9 @@ void bt_audio_init(void)
        confirmed in hci_packet_handler only while BLUETOOTH CONNECT runs. */
     gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
     gap_ssp_set_auto_accept(0);
+    /* Give up paging an absent speaker after 5.12 s (the default is 15 s):
+       paging shares the radio with the keyboard. */
+    gap_set_page_timeout(BTA_PAGE_TIMEOUT);
 
     sdp_init();
     a2dp_source_init();
@@ -798,16 +893,25 @@ static void bta_error_status(const char *what, uint8_t status)
     error("$", buf);
 }
 
-/* BLUETOOTH CONNECT addr$ */
+/* BLUETOOTH CONNECT [addr$]  - no address: the remembered speaker */
 static void bta_connect(unsigned char *tp)
 {
     bd_addr_t addr;
-    if (!*tp)
-        SyntaxError();
-    char *s = (char *)getCstring(tp);
-    bta_require_ready();
-    if (sscanf_bd_addr(s, addr) == 0)
-        error("Invalid Bluetooth address");
+    if (*tp)
+    {
+        char *s = (char *)getCstring(tp);
+        bta_require_ready();
+        if (sscanf_bd_addr(s, addr) == 0)
+            error("Invalid Bluetooth address");
+    }
+    else
+    {
+        bta_require_ready();
+        if (!have_remembered_speaker)
+            error("No speaker remembered - give its address");
+        memcpy(addr, remembered_speaker, sizeof(bd_addr_t));
+    }
+    auto_reconnect = true;
     if (inquiry_active || name_request_active)
         error("Scan in progress");
 
@@ -864,6 +968,7 @@ static void bta_connect(unsigned char *tp)
 static void bta_disconnect(void)
 {
     bta_require_ready();
+    auto_reconnect = false; /* until the next CONNECT or reset */
     if (spk_state == SPK_NONE)
         error("No speaker connected");
     spk_quiet_release = true;
@@ -948,6 +1053,12 @@ static void bta_status(void)
     {
     case SPK_NONE:
         MMPrintString("not connected");
+        if (have_remembered_speaker)
+        {
+            MMPrintString(" (remembered ");
+            MMPrintString((char *)bd_addr_to_str(remembered_speaker));
+            MMPrintString(AUDIO_BLUETOOTH && auto_reconnect ? ", retrying)" : ")");
+        }
         break;
     case SPK_CONNECTING:
         MMPrintString("connecting");
