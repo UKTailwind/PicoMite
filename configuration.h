@@ -94,7 +94,10 @@ extern "C"
       BLIT went 0.6 KB over. */
 #define FLASH_TARGET_OFFSET (1456 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (240 * 1024)
+   /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
+      output added ~12.6 KB of BSS (less what dropping VS1053 and PWM/SPI
+      audio gave back); ~4.8 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (228 * 1024)
 #define MAX_PROG_SIZE (180 * 1024)
 #define MagicKey 0x8DECA3E8
 #elif defined(PICOMITEHDMIWEB)
