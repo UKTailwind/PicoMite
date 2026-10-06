@@ -961,6 +961,15 @@ static void bta_status(void)
                 (unsigned long)packets_sent, (unsigned long)(streamed_us / 1000000u));
         MMPrintString(buf);
     }
+    if (AUDIO_BLUETOOTH)
+    {
+        /* PLAY samples the encoder wanted but the swing buffers hadn't got;
+           counted since the last STATUS. */
+        char buf[48];
+        sprintf(buf, "\r\nUnderruns: %lu", (unsigned long)bt_audio_underruns);
+        bt_audio_underruns = 0;
+        MMPrintString(buf);
+    }
     PRet();
 }
 

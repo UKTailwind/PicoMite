@@ -589,6 +589,7 @@ bool bt_audio_playing(void)
    audiorepeat only repeats samples - and interpolates linearly between
    source samples. With nothing playing the output decays to silence over a
    couple of milliseconds instead of stopping dead, which would click. */
+volatile uint32_t bt_audio_underruns; /* source samples that weren't ready (BLUETOOTH STATUS) */
 void bt_audio_pull(int16_t *pcm, int frames, uint32_t out_rate)
 {
 	static int32_t prev_l, prev_r, cur_l, cur_r;
@@ -621,6 +622,8 @@ void bt_audio_pull(int16_t *pcm, int frames, uint32_t out_rate)
 					cur_l = (int16_t)sl;
 					cur_r = (int16_t)sr;
 				}
+				else
+					bt_audio_underruns++;
 			}
 		}
 		if (!playing)

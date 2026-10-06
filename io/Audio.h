@@ -61,6 +61,7 @@ void checkWAVinput(void);
 #define AUDIO_BLUETOOTH (Option.audio_bluetooth != 0)
 void bt_audio_pull(int16_t *pcm, int frames, uint32_t out_rate);
 bool bt_audio_playing(void);
+extern volatile uint32_t bt_audio_underruns;
 #else
 #define AUDIO_BLUETOOTH 0
 #endif
