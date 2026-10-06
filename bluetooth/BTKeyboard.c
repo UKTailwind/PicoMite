@@ -598,11 +598,55 @@ static uint32_t bt_tlv_get_alignment(void *ctx)
     return 4;
 }
 
+/* btstack writes the bond store from its own context (interrupt level).
+   Saving each write there - SaveOptions() waits 100 ms and erases the
+   options sector - froze audio and the interpreter for ~160 ms a write,
+   five writes per pairing, long enough for an SD read to time out and the
+   card to be reported removed. So writes change the RAM copy only, and
+   bt_keyboard_poll() saves it from the main loop once the store has been
+   quiet for BT_TLV_SAVE_DELAY_MS. LoadOptions() leaves Option.bt_tlv alone
+   while bt_tlv_dirty is set, so an error's reload can't undo unsaved bonds. */
+#define BT_TLV_SAVE_DELAY_MS 250
+volatile bool bt_tlv_dirty;
+static volatile uint32_t bt_tlv_changed_ms;
+
+static void bt_tlv_changed(void)
+{
+    bt_tlv_changed_ms = to_ms_since_boot(get_absolute_time());
+    bt_tlv_dirty = true;
+}
+
+/* Diagnostics for BLUETOOTH STATUS. */
+static volatile uint32_t tlv_saves, tlv_save_max_us, tlv_save_total_us;
+static volatile uint32_t kbd_pairings, kbd_reencryptions;
+
+static void bt_tlv_save(void)
+{
+    uint32_t t0 = time_us_32();
+    SaveOptions();
+    uint32_t us = time_us_32() - t0;
+    tlv_saves++;
+    tlv_save_total_us += us;
+    if (us > tlv_save_max_us)
+        tlv_save_max_us = us;
+}
+
+void bt_keyboard_stats(uint32_t *saves, uint32_t *save_max_us, uint32_t *save_total_us,
+                       uint32_t *pairings, uint32_t *reencryptions)
+{
+    *saves = tlv_saves;
+    *save_max_us = tlv_save_max_us;
+    *save_total_us = tlv_save_total_us;
+    *pairings = kbd_pairings;
+    *reencryptions = kbd_reencryptions;
+    tlv_saves = tlv_save_max_us = tlv_save_total_us = 0;
+}
+
 static void bt_tlv_erase(void *ctx, int bank)
 {
     (void)ctx;
     memset(&Option.bt_tlv[bank * BT_TLV_BANK_SIZE], 0xFF, BT_TLV_BANK_SIZE);
-    SaveOptions();
+    bt_tlv_changed();
 }
 
 static void bt_tlv_read(void *ctx, int bank, uint32_t offset,
@@ -624,7 +668,7 @@ static void bt_tlv_write(void *ctx, int bank, uint32_t offset,
     {
         dest[i] &= data[i];
     }
-    SaveOptions();
+    bt_tlv_changed();
 }
 
 static const hal_flash_bank_t bt_tlv_hal = {
@@ -1748,6 +1792,7 @@ static void packet_handler(uint8_t packet_type,
             break;
         }
         bth_log("SM pairing complete; link encrypted");
+        kbd_pairings++;
         btstack_run_loop_remove_timer(&pair_kickoff_timer);
         state = BTK_HIDS_CONNECTING;
         uint8_t hstat = hids_client_connect(conn_handle,
@@ -1771,6 +1816,7 @@ static void packet_handler(uint8_t packet_type,
             break;
         }
         bth_log("SM reencryption complete");
+        kbd_reencryptions++;
         btstack_run_loop_remove_timer(&pair_kickoff_timer);
         state = BTK_HIDS_CONNECTING;
         uint8_t hstat = hids_client_connect(conn_handle,
@@ -1896,6 +1942,16 @@ void bt_keyboard_poll(void)
 
     cyw43_arch_poll();
     bt_audio_service();
+
+    /* Save the bond store once btstack has stopped writing it (see
+       bt_tlv_changed). The flag is cleared first: a write that lands
+       during the save sets it again. */
+    if (bt_tlv_dirty &&
+        to_ms_since_boot(get_absolute_time()) - bt_tlv_changed_ms >= BT_TLV_SAVE_DELAY_MS)
+    {
+        bt_tlv_dirty = false;
+        bt_tlv_save();
+    }
 
     {
         static uint64_t last_heart_us;

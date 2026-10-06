@@ -7584,6 +7584,13 @@ void CheckSDCard(void)
 void LoadOptions(void)
 {
     int i = sizeof(struct option_s);
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    /* Bond-store writes not yet saved (BTKeyboard.c) stay in RAM - btstack's
+       TLV state refers to them. bt_tlv is the last member, so stop short. */
+    extern volatile bool bt_tlv_dirty;
+    if (bt_tlv_dirty)
+        i = offsetof(struct option_s, bt_tlv);
+#endif
     unsigned char *pp = (unsigned char *)flash_option_contents;
     unsigned char *qq = (unsigned char *)&Option;
     while (i--)

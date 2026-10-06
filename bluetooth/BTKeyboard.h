@@ -40,6 +40,10 @@ bool bt_keyboard_ready(void);
    stops, so a running LE scan picks up the matching duty cycle. */
 void bt_keyboard_scan_duty_changed(void);
 
+/* Diagnostics for BLUETOOTH STATUS (the save counters reset on each call). */
+void bt_keyboard_stats(uint32_t *saves, uint32_t *save_max_us, uint32_t *save_total_us,
+                       uint32_t *pairings, uint32_t *reencryptions);
+
 #ifdef __cplusplus
 }
 #endif

@@ -259,9 +259,15 @@ static void send_media_packet(void)
     packets_sent++;
 }
 
+static volatile uint32_t tick_gap_max_us; /* longest gap between ticks (BLUETOOTH STATUS) */
+static uint32_t tick_last_us;
+
 static void audio_timeout_handler(btstack_timer_source_t *timer)
 {
     uint32_t t0 = time_us_32();
+    if (tick_last_us && t0 - tick_last_us > tick_gap_max_us)
+        tick_gap_max_us = t0 - tick_last_us;
+    tick_last_us = t0;
     btstack_run_loop_set_timer(timer, BTA_AUDIO_TIMEOUT_MS);
     btstack_run_loop_add_timer(timer);
 
@@ -319,6 +325,7 @@ static void audio_timer_start(void)
 
 static void audio_timer_stop(void)
 {
+    tick_last_us = 0;
     btstack_run_loop_remove_timer(&audio_timer);
     sbc_storage_count = 0;
     sbc_ready_to_send = false;
@@ -968,6 +975,23 @@ static void bta_status(void)
         char buf[48];
         sprintf(buf, "\r\nUnderruns: %lu", (unsigned long)bt_audio_underruns);
         bt_audio_underruns = 0;
+        MMPrintString(buf);
+    }
+    {
+        /* Diagnostics, counted since the last STATUS: the longest stall of
+           the encoder tick (the btstack context blocked), the bond-store
+           writes (each one a SaveOptions()), and keyboard security events. */
+        uint32_t saves, save_max, save_total, pairings, reenc;
+        char buf[96];
+        bt_keyboard_stats(&saves, &save_max, &save_total, &pairings, &reenc);
+        sprintf(buf, "\r\nLongest encoder gap: %lu ms", (unsigned long)(tick_gap_max_us / 1000));
+        tick_gap_max_us = 0;
+        MMPrintString(buf);
+        sprintf(buf, "\r\nBond store: %lu writes, longest %lu ms, total %lu ms",
+                (unsigned long)saves, (unsigned long)(save_max / 1000), (unsigned long)(save_total / 1000));
+        MMPrintString(buf);
+        sprintf(buf, "\r\nKeyboard security: %lu pairings, %lu re-encryptions since boot",
+                (unsigned long)pairings, (unsigned long)reenc);
         MMPrintString(buf);
     }
     PRet();
