@@ -70,6 +70,18 @@ MM.INFO(BLUETOOTH ...)          ' state for programs (phase 3)
 
 ### Phase 2 — PLAY through the speaker
 
+**Status (2026-10-06): working on the PC3 (COM23).** Commits ad4ace5, e62f913, ab1c4f7, a404fa3.
+- **Formats checked by ear (Peter) with 0 underruns:** TONE, SOUND, WAV, MP3, FLAC 44.1 kHz, MOD, ARRAY, SAMPLE, BBC SOUND. FLAC above 48 kHz is refused by PLAY on every build.
+- **Encoder plus resampler:** 12.3–13.9% of the CPU at 200 MHz.
+- **No speaker, or the speaker dropped mid-sound:** the sound plays to silence in real time (a 1 s tone took 0.997 s; a 3 s tone cut at 1 s took 3.01 s).
+- **Restarting a suspended stream:** about 0.45 s before sound.
+- **Buffers:** TONE/SOUND/BBC swing buffers are 4 KB with Bluetooth output, because 176-frame buffers ran dry every encoder tick and distorted badly.
+- **PWM and SPI DAC audio removed from BTH (NOPWMAUDIO):** on_pwm_wrap went from 944 to 332 bytes of RAM, and flash margin rose to +9.9 KB. I2S was rechecked.
+- **Open:** the idle-suspend policy (currently 5 s).
+
+Original plan:
+
+
 - Abstract the audio output in `Audio.c`. Today the PWM wrap interrupt clocks every output: PWM directly, I2S by keeping the FIFO topped up. The new output kinds are PWM / I2S / SPI DAC / BLUETOOTH.
 - **Bluetooth output**: the A2DP 10 ms timer emulates the PWM sample tick at `AudioCurrentRate` (honouring `audiorepeat`). It pulls stereo pairs through `advance_swing_buffer()`, the same path the I2S output uses, with linear interpolation to a fixed 44.1 kHz SBC stream.
 - Samples arrive in the signed-16-bit I2S format (`i2sconvert`), so volume and ramping behave as on I2S.
