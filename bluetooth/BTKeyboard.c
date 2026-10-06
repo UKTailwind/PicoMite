@@ -1977,6 +1977,16 @@ void bt_keyboard_poll(void)
             return;
         }
 
+        /* While a Bluetooth speaker streams, leave the LED as it is. Each
+           toggle is a CYW43 control call made under the async-context lock,
+           and now and then one waits out CYW43_IOCTL_TIMEOUT_US (500 ms) for
+           its answer - stalling the audio encoder, which runs in that
+           context, for as long. Peter heard the pauses (239 and 505 ms
+           stalls measured); with OPTION HEARTBEAT OFF a whole track played
+           without one. */
+        if (bt_audio_streaming())
+            return;
+
         /* LED cadence telegraphs link state at a glance:
              1000 ms — not yet connected (HCI booting / scanning / pairing)
               500 ms — keyboard connected + HID notifications enabled */
