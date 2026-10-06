@@ -55,6 +55,7 @@ typedef enum
 static volatile spk_state_t spk_state;
 static volatile uint8_t spk_last_status; /* last failure reported by btstack */
 static volatile bool spk_quiet_release;  /* a command is waiting for the release */
+static volatile bool spk_pairing_allowed; /* BLUETOOTH CONNECT is running */
 static bool bta_ready;                   /* bt_audio_init() completed */
 
 static uint16_t a2dp_cid;
@@ -119,11 +120,20 @@ static volatile uint32_t load_busy_us;
 static volatile uint32_t load_start_us;
 static volatile uint32_t packets_sent;
 
-/* Test tone (BLUETOOTH TEST freq) */
+/* Test tone (BLUETOOTH TEST freq). The tone fades in and out over
+   BTA_RAMP_MS, and a fresh stream carries BTA_LEAD_IN_MS of silence before
+   any tone, so a click heard at start/stop can be told apart from the
+   speaker's own amplifier switching on and off with the stream. */
+#define BTA_RAMP_MS 20
+#define BTA_LEAD_IN_MS 200
+#define BTA_GAIN_FULL 32768 /* Q15 */
 static int16_t sine_table[256];
 static bool sine_ready;
 static volatile uint32_t tone_step;
+static volatile int32_t tone_target; /* 0 or BTA_GAIN_FULL */
+static volatile int32_t tone_gain;   /* current Q15 gain */
 static uint32_t tone_phase;
+static uint32_t lead_in_samples;
 
 /* ============================================================================
  * Helpers
@@ -178,13 +188,30 @@ bool bt_audio_streaming(void)
 static void produce_audio(int16_t *pcm, int frames)
 {
     uint32_t step = tone_step;
+    int32_t target = tone_target;
+    int32_t gain = tone_gain;
+    int32_t ramp = BTA_GAIN_FULL / (int32_t)(BTA_RAMP_MS * cfg_rate / 1000);
     for (int i = 0; i < frames; i++)
     {
-        int16_t s = step ? sine_table[tone_phase >> 24] : 0;
-        tone_phase += step;
+        int16_t s = 0;
+        if (lead_in_samples)
+            lead_in_samples--;
+        else
+        {
+            if (gain < target)
+                gain = (gain + ramp > target) ? target : gain + ramp;
+            else if (gain > target)
+                gain = (gain - ramp < target) ? target : gain - ramp;
+            if (gain)
+            {
+                s = (int16_t)((sine_table[tone_phase >> 24] * gain) >> 15);
+                tone_phase += step;
+            }
+        }
         pcm[2 * i] = s;
         pcm[2 * i + 1] = s;
     }
+    tone_gain = gain;
 }
 
 static void fill_sbc_audio_buffer(void)
@@ -310,6 +337,10 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         }
         a2dp_cid = a2dp_subevent_signaling_connection_established_get_a2dp_cid(packet);
         a2dp_subevent_signaling_connection_established_get_bd_addr(packet, speaker_addr);
+        /* A paired speaker can connect to us by itself (the A2DP service
+           makes us connectable); track it like one we connected to. */
+        if (spk_state == SPK_NONE)
+            spk_state = SPK_CONNECTING;
         break;
     }
 
@@ -365,10 +396,13 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         }
         local_seid = a2dp_subevent_stream_established_get_local_seid(packet);
         spk_state = SPK_OPEN;
+        if (!spk_pairing_allowed && !CurrentLinePtr)
+            MMPrintString("Bluetooth speaker connected\r\n> "); /* it reconnected by itself */
         break;
     }
 
     case A2DP_SUBEVENT_STREAM_STARTED:
+        lead_in_samples = cfg_rate * BTA_LEAD_IN_MS / 1000;
         audio_timer_start();
         spk_state = SPK_STREAMING;
         bt_keyboard_scan_duty_changed();
@@ -432,10 +466,25 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
     switch (hci_event_packet_get_type(packet))
     {
+    /* Pairing is accepted only while BLUETOOTH CONNECT is running: we are
+       connectable (for paired speakers to reconnect), so without this any
+       device that knew our address could pair through Just Works. */
     case HCI_EVENT_PIN_CODE_REQUEST:
         /* Legacy (pre-2.1) pairing: speakers that still use it take "0000". */
         hci_event_pin_code_request_get_bd_addr(packet, addr);
-        gap_pin_code_response(addr, "0000");
+        if (spk_pairing_allowed)
+            gap_pin_code_response(addr, "0000");
+        else
+            gap_pin_code_negative(addr);
+        break;
+
+    case HCI_EVENT_USER_CONFIRMATION_REQUEST:
+        /* Secure Simple Pairing, Just Works (neither side has a display). */
+        hci_event_user_confirmation_request_get_bd_addr(packet, addr);
+        if (spk_pairing_allowed)
+            gap_ssp_confirmation_response(addr);
+        else
+            gap_ssp_confirmation_negative(addr);
         break;
 
     case GAP_EVENT_INQUIRY_RESULT:
@@ -504,9 +553,10 @@ void bt_audio_init(void)
     gap_set_local_name(CYW43_HOST_NAME);
     /* Major service class Audio, major device class Computer (desktop). */
     gap_set_class_of_device(0x200104);
-    /* Speakers have no display or keys: Secure Simple Pairing, Just Works. */
+    /* Speakers have no display or keys: Secure Simple Pairing, Just Works,
+       confirmed in hci_packet_handler only while BLUETOOTH CONNECT runs. */
     gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
-    gap_ssp_set_auto_accept(1);
+    gap_ssp_set_auto_accept(0);
 
     sdp_init();
     a2dp_source_init();
@@ -616,6 +666,15 @@ static void bta_scan(unsigned char *tp)
     MMPrintString(found_count == 1 ? " device found\r\n" : " devices found\r\n");
 }
 
+/* error() with a btstack status code: "<what> (Bluetooth error 0x0C)".
+   ('&' is error()'s float placeholder, so the hex is formatted here.) */
+static void bta_error_status(const char *what, uint8_t status)
+{
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%s (Bluetooth error 0x%02X)", what, status);
+    error("$", buf);
+}
+
 /* BLUETOOTH CONNECT addr$ */
 static void bta_connect(unsigned char *tp)
 {
@@ -626,22 +685,34 @@ static void bta_connect(unsigned char *tp)
     bta_require_ready();
     if (sscanf_bd_addr(s, addr) == 0)
         error("Invalid Bluetooth address");
-    if (spk_state != SPK_NONE)
-        error("Speaker already connected");
     if (inquiry_active || name_request_active)
         error("Scan in progress");
 
-    spk_last_status = 0;
-    spk_state = SPK_CONNECTING;
+    /* Checked and started under the lock: a paired speaker may be
+       connecting to us by itself at the same moment. */
+    uint8_t status;
+    bool busy;
     bta_lock();
-    uint8_t status = a2dp_source_establish_stream(addr, &a2dp_cid);
-    bta_unlock();
-    if (status != ERROR_CODE_SUCCESS)
+    busy = (spk_state != SPK_NONE);
+    if (!busy)
     {
-        spk_state = SPK_NONE;
-        error("Connect failed (status &H%)", status);
+        status = a2dp_source_establish_stream(addr, &a2dp_cid);
+        if (status == ERROR_CODE_SUCCESS)
+        {
+            spk_last_status = 0;
+            spk_pairing_allowed = true;
+            spk_state = SPK_CONNECTING;
+        }
     }
-    if (!bta_wait(cond_not_connecting, 30000))
+    bta_unlock();
+    if (busy)
+        error(spk_state == SPK_CONNECTING ? "Speaker already connecting" : "Speaker already connected");
+    if (status != ERROR_CODE_SUCCESS)
+        bta_error_status("Connect failed", status);
+
+    bool answered = bta_wait(cond_not_connecting, 30000);
+    spk_pairing_allowed = false;
+    if (!answered)
     {
         spk_quiet_release = true;
         bta_lock();
@@ -653,7 +724,7 @@ static void bta_connect(unsigned char *tp)
         error("Speaker did not answer");
     }
     if (spk_state != SPK_OPEN)
-        error("Connection failed (status &H%)", spk_last_status);
+        bta_error_status("Connection failed", spk_last_status);
 
     MMPrintString("Connected to ");
     MMPrintString((char *)bd_addr_to_str(speaker_addr));
@@ -682,10 +753,21 @@ static void bta_disconnect(void)
         error("Speaker did not release the connection");
 }
 
-/* BLUETOOTH TEST freq   - stream a sine tone of freq Hz; 0 stops the stream */
+static bool cond_tone_silent(void) { return tone_gain == 0; }
+static bool cond_never(void) { return false; }
+
+/* BLUETOOTH TEST freq  - stream a sine tone of freq Hz (fades in; starts the
+                          stream if it is suspended)
+   BLUETOOTH TEST 0     - fade the tone out; the stream keeps running silent
+   BLUETOOTH TEST STOP  - fade out, send 200 ms of silence, suspend the stream */
 static void bta_test(unsigned char *tp)
 {
-    int freq = getint(tp, 0, 20000);
+    bool stop = false;
+    int freq = 0;
+    if (checkstring(tp, (unsigned char *)"STOP"))
+        stop = true;
+    else
+        freq = getint(tp, 0, 20000);
     bta_require_ready();
     if (spk_state != SPK_OPEN && spk_state != SPK_STREAMING)
         error("No speaker connected");
@@ -695,31 +777,40 @@ static void bta_test(unsigned char *tp)
             sine_table[i] = (int16_t)(8000.0f * sinf((float)i * (2.0f * 3.14159265f / 256.0f)));
         sine_ready = true;
     }
+    if (stop)
+    {
+        tone_target = 0;
+        if (spk_state == SPK_STREAMING)
+        {
+            bta_wait(cond_tone_silent, 500);
+            bta_wait(cond_never, 200);
+            bta_lock();
+            a2dp_source_pause_stream(a2dp_cid, local_seid);
+            bta_unlock();
+            bta_wait(cond_not_streaming, 5000);
+        }
+        return;
+    }
     if (freq)
     {
+        if (tone_gain == 0)
+            tone_phase = 0; /* start from a zero crossing */
         tone_step = (uint32_t)(((uint64_t)freq << 32) / cfg_rate);
+        __compiler_memory_barrier();
+        tone_target = BTA_GAIN_FULL;
         if (spk_state == SPK_OPEN)
         {
             bta_lock();
             uint8_t status = a2dp_source_start_stream(a2dp_cid, local_seid);
             bta_unlock();
             if (status != ERROR_CODE_SUCCESS)
-                error("Stream start failed (status &H%)", status);
+                bta_error_status("Stream start failed", status);
             if (!bta_wait(cond_streaming, 5000) || spk_state != SPK_STREAMING)
                 error("Speaker did not start the stream");
         }
     }
     else
-    {
-        tone_step = 0;
-        if (spk_state == SPK_STREAMING)
-        {
-            bta_lock();
-            a2dp_source_pause_stream(a2dp_cid, local_seid);
-            bta_unlock();
-            bta_wait(cond_not_streaming, 5000);
-        }
-    }
+        tone_target = 0;
 }
 
 /* BLUETOOTH STATUS */
