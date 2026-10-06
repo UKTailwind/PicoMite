@@ -7475,7 +7475,7 @@ void MIPS16 cmd_option(void)
             if (argc != 13)
                 SyntaxError();
             ;
-            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || AUDIO_BLUETOOTH)
+            if (AUDIO_CONFIGURED) /* any output already set, I2S included */
                 error("Audio already configured");
             //
             pin1 = getpinarg(argv[0]);
@@ -7537,7 +7537,7 @@ void MIPS16 cmd_option(void)
             if (argc != 5)
                 SyntaxError();
             ;
-            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || AUDIO_BLUETOOTH)
+            if (AUDIO_CONFIGURED) /* any output already set, I2S included */
                 error("Audio already configured");
             //
             pin1 = getpinarg(argv[0]);
@@ -7628,7 +7628,7 @@ void MIPS16 cmd_option(void)
         if (argc != 3)
             SyntaxError();
         ;
-        if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || AUDIO_BLUETOOTH)
+        if (AUDIO_CONFIGURED) /* any output already set, I2S included */
             error("Audio already configured");
         pin1 = getpinarg(argv[0]);
         if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
