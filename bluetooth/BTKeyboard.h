@@ -36,6 +36,10 @@ void bt_keyboard_poll(void);
 /* True once HCI has reached HCI_STATE_WORKING. */
 bool bt_keyboard_ready(void);
 
+/* BTAudio.c calls this (btstack context) when a speaker stream starts or
+   stops, so a running LE scan picks up the matching duty cycle. */
+void bt_keyboard_scan_duty_changed(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -3,11 +3,13 @@
  * console) and PicoMiteBTH (central / HID host).
  *
  * Role and GATT direction differ between the two builds; common ground
- * is "single BLE link, cyw43439 controller, no Classic, no malloc-heavy
- * allocations".
+ * is "cyw43439 controller, no malloc-heavy allocations". PicoMiteBT is
+ * BLE-only with a single link; the BT host builds are dual-mode, adding
+ * a Classic A2DP link to a speaker (BTAudio.c).
  *
- * pico_btstack_ble defines ENABLE_BLE=1 on the command line; don't
- * redefine it here.
+ * pico_btstack_ble defines ENABLE_BLE=1 on the command line, and the BT
+ * host block of CMakeLists.txt defines ENABLE_CLASSIC=1; don't redefine
+ * either here.
  */
 
 #ifndef BTSTACK_CONFIG_H
@@ -57,7 +59,27 @@
 #endif
 
 /* Static memory pools — keeps btstack's footprint deterministic. */
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+/* The BT host builds are dual-mode (ENABLE_CLASSIC from CMakeLists.txt):
+   one LE link to the keyboard/mouse plus one Classic link to a Bluetooth
+   speaker (BTAudio.c, A2DP source). */
+#define MAX_NR_HCI_CONNECTIONS 2
+#define MAX_NR_L2CAP_CHANNELS 4 /* SDP server, SDP client, AVDTP signalling + media */
+#define MAX_NR_L2CAP_SERVICES 2 /* SDP, AVDTP */
+#define MAX_NR_AVDTP_CONNECTIONS 1
+#define MAX_NR_AVDTP_STREAM_ENDPOINTS 1
+/* Cap outstanding ACL packets to the controller and let the host flow-
+   control the controller: the pico-examples A2DP config does both "to avoid
+   cyw43 shared bus overrun" once audio data is flowing. */
+#define MAX_NR_CONTROLLER_ACL_BUFFERS 3
+#define ENABLE_HCI_CONTROLLER_TO_HOST_FLOW_CONTROL
+#define HCI_HOST_ACL_PACKET_LEN 1024
+#define HCI_HOST_ACL_PACKET_NUM 3
+#define HCI_HOST_SCO_PACKET_LEN 120
+#define HCI_HOST_SCO_PACKET_NUM 3
+#else
 #define MAX_NR_HCI_CONNECTIONS 1
+#endif
 #define MAX_NR_SM_LOOKUP_ENTRIES 4
 #define MAX_NR_WHITELIST_ENTRIES 4
 /* Number of bonded peers held simultaneously. ~120 bytes of bt_tlv
@@ -77,11 +99,22 @@
 #else
 #define MAX_NR_GATT_CLIENTS 0
 #endif
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+#define MAX_NR_SERVICE_RECORD_ITEMS 1 /* the A2DP source SDP record */
+#else
 #define MAX_NR_SERVICE_RECORD_ITEMS 0
+#endif
 
-/* ACL buffer sized for a single high-throughput LE link. */
 #define HCI_OUTGOING_PRE_BUFFER_SIZE 4
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+/* A2DP media packets: 1021 bytes is one 3-DH5 baseband packet. Small
+   packets would cost several times the air time, which the LE keyboard
+   link shares. */
+#define HCI_ACL_PAYLOAD_SIZE (1021 + 4)
+#else
+/* ACL buffer sized for a single high-throughput LE link. */
 #define HCI_ACL_PAYLOAD_SIZE (255 + 4)
+#endif
 #define HCI_ACL_CHUNK_SIZE_ALIGNMENT 4
 
 /* Persistent device DB — must match MAX_NR_LE_DEVICE_DB_ENTRIES.
@@ -89,7 +122,12 @@
    BTConsole.c). At ~120 bytes/entry plus TLV overhead, 4 entries fit
    easily within the 1 KB-per-bank budget. */
 #define NVM_NUM_DEVICE_DB_ENTRIES 4
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+/* Classic link keys (speakers), in the same bt_tlv store: ~40 bytes each. */
+#define NVM_NUM_LINK_KEYS 4
+#else
 #define NVM_NUM_LINK_KEYS 0
+#endif
 
 /* HCI/btstack logging routes through printf, which the BTH build
    has via stdio_usb (USB CDC console). Verbose — every HCI command,

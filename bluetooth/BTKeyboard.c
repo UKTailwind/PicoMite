@@ -21,6 +21,7 @@
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 
 #include "BTKeyboard.h"
+#include "BTAudio.h"
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -803,19 +804,37 @@ static bool bth_scan_log_once(const uint8_t *addr)
  * Connection lifecycle
  * ============================================================================
  */
+/* Active scan with a 30 ms window. With no audio the window repeats every
+   30 ms (continuous) - aggressive, but keyboards advertise at 30-100 ms
+   during pairing so this catches them quickly. While a Bluetooth speaker
+   is streaming the window repeats every 100 ms instead, leaving the radio
+   free for the audio link 70% of the time. */
+static void set_scan_parameters(void)
+{
+    gap_set_scan_parameters(1 /*active*/, bt_audio_streaming() ? 0x00A0 : 0x0030, 0x0030);
+}
+
 static void start_scan(void)
 {
     state = BTK_SCANNING;
 #ifdef BTH_SCAN_DEBUG
     bth_scan_seen_count = 0;
 #endif
-    /* Active scan, 30 ms interval / 30 ms window — aggressive, but
-       keyboards advertise at 30-100 ms during pairing so this catches
-       them quickly. */
-    gap_set_scan_parameters(1 /*active*/, 0x0030, 0x0030);
+    set_scan_parameters();
     gap_start_scan();
     bth_log("scanning for keyboard %s (edit BTH_TARGET_ADDR_STRING to match)",
             BTH_TARGET_ADDR_STRING);
+}
+
+/* Called by BTAudio.c (in the btstack context) when a speaker stream starts
+   or stops: a scan in progress is restarted with the matching duty cycle. */
+void bt_keyboard_scan_duty_changed(void)
+{
+    if (state != BTK_SCANNING)
+        return;
+    gap_stop_scan();
+    set_scan_parameters();
+    gap_start_scan();
 }
 
 static void connect_target(void)
@@ -1652,6 +1671,10 @@ static void packet_handler(uint8_t packet_type,
 
     case HCI_EVENT_DISCONNECTION_COMPLETE:
     {
+        /* A speaker link (BTAudio.c) ends with this event too; only the
+           keyboard's own link concerns us. */
+        if (hci_event_disconnection_complete_get_connection_handle(packet) != conn_handle)
+            break;
         uint8_t reason = hci_event_disconnection_complete_get_reason(packet);
         bth_log("disconnected reason=0x%02x; restarting scan", reason);
         /* Only report to the console if the keyboard had actually
@@ -1844,6 +1867,10 @@ void bt_keyboard_init(void)
 
     sm_event_callback_registration.callback = &packet_handler;
     sm_add_event_handler(&sm_event_callback_registration);
+
+    /* Bluetooth Classic speaker output: its services must be registered
+       before HCI is powered on. */
+    bt_audio_init();
 
     hci_power_control(HCI_POWER_ON);
 

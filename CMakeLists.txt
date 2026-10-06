@@ -544,6 +544,28 @@ if(IS_BTH)
 	# pumps btstack and feeds incoming HID reports into the same
 	# process_kbd_report path the USB HID host uses.
 	target_sources(PicoMite PRIVATE bluetooth/BTKeyboard.c)
+
+	# Bluetooth Classic A2DP source - speaker output (bluetooth/BTAudio.c).
+	# Only the Classic sources A2DP needs are compiled: pico_btstack_classic
+	# would build every Classic profile. ENABLE_CLASSIC is set below with the
+	# other BTH defines.
+	if(NOT PICO_BTSTACK_PATH)
+		set(PICO_BTSTACK_PATH ${PICO_SDK_PATH}/lib/btstack)
+	endif()
+	target_sources(PicoMite PRIVATE
+		bluetooth/BTAudio.c
+		${PICO_BTSTACK_PATH}/src/classic/a2dp.c
+		${PICO_BTSTACK_PATH}/src/classic/a2dp_source.c
+		${PICO_BTSTACK_PATH}/src/classic/avdtp.c
+		${PICO_BTSTACK_PATH}/src/classic/avdtp_acceptor.c
+		${PICO_BTSTACK_PATH}/src/classic/avdtp_initiator.c
+		${PICO_BTSTACK_PATH}/src/classic/avdtp_source.c
+		${PICO_BTSTACK_PATH}/src/classic/avdtp_util.c
+		${PICO_BTSTACK_PATH}/src/classic/sdp_server.c
+		${PICO_BTSTACK_PATH}/src/classic/sdp_util.c
+		${PICO_BTSTACK_PATH}/src/classic/sdp_client.c
+		${PICO_BTSTACK_PATH}/src/classic/btstack_link_key_db_tlv.c
+	)
 endif()
 
 # KeyboardMap.c contains the shared HID keyboard keymap + report decoder
@@ -898,6 +920,8 @@ if(IS_BTH)
 		PICO_HEAP_SIZE=0x4000
 		PICO_CORE0_STACK_SIZE=0x4000
 		GUICONTROLS
+		# dual-mode btstack: Classic for the A2DP speaker link
+		ENABLE_CLASSIC=1
 	)
 	# btstack_config.h lives in bluetooth/ (the btstack library includes it
 	# by bare name, so that dir must be on the include path for BT builds).
@@ -975,6 +999,7 @@ if(IS_BTH)
 		pico_btstack_ble
 		pico_btstack_cyw43
 		pico_cyw43_arch_none
+		pico_btstack_sbc_encoder
 	)
 	# The SDK's default TLV bank is inside the A: drive; BTKeyboard.c hands
 	# btstack_cyw43_init() the Option-backed store instead.

@@ -411,7 +411,10 @@ extern "C"
    /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.9 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.6 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (336 * 1024)
+   /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
+      output (two HCI connections with 1 KB ACL buffers, A2DP/AVDTP/SDP, the
+      SBC encoder) added 12.8 KB of BSS; ~4.0 KB of RAM margin left for the stack. */
+#define HEAP_MEMORY_SIZE (324 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #else
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */

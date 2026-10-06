@@ -274,6 +274,9 @@ void cmd_update(void);
 #if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
 void cmd_keyboard(void);
 #endif
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+void cmd_bluetooth(void); /* bluetooth/BTAudio.c */
+#endif
 
 /* Operator functions */
 void op_invalid(void);
@@ -711,6 +714,9 @@ void fun_frame(void);
 #endif
 #if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
 	{(unsigned char *)"Keyboard", T_CMD, 0, cmd_keyboard},
+#endif
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+	{(unsigned char *)"Bluetooth", T_CMD, 0, cmd_bluetooth},
 #endif
 
 {
