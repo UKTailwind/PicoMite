@@ -30,7 +30,7 @@ VARIANTS = [
     "PicoMiteRP2350", "PicoMiteRP2350USB",
     "PicoMiteRP2350VGA", "PicoMiteRP2350VGAUSB",
     "PicoMiteRP2350BT", "PicoMiteRP2350BTH",
-    "PicoMiteHDMI", "PicoMiteHDMIUSB", "PicoMiteHDMIWEB",
+    "PicoMiteHDMI", "PicoMiteHDMIUSB", "PicoMiteHDMIWEB", "PicoMiteHDMIBTH",
     "WebMiteRP2040", "WebMiteRP2350",
 ]
 
@@ -104,13 +104,13 @@ if args:
     check("requested version matches Version.h", args[0].lstrip("Vv") == version,
           "asked for %s" % args[0])
 
-# 2. all 16 uf2 present, correctly named, and no leftovers from another version
+# 2. every variant's uf2 present, correctly named, and no leftovers from another version
 uf2dir = os.path.join(REPO, "uf2")
 present = sorted(f for f in os.listdir(uf2dir) if f.endswith(".uf2"))
 wanted = sorted("%sV%s.uf2" % (v, version) for v in VARIANTS)
 missing = [f for f in wanted if f not in present]
 stale = [f for f in present if f not in wanted]
-check("all 16 uf2 present for V%s" % version, not missing, "missing " + ", ".join(missing))
+check("all %d uf2 present for V%s" % (len(VARIANTS), version), not missing, "missing " + ", ".join(missing))
 check("no uf2 left over from another version", not stale, "stale " + ", ".join(stale))
 
 uf2_times = {f: os.path.getmtime(os.path.join(uf2dir, f)) for f in wanted
@@ -261,7 +261,7 @@ print()
 if fails:
     print("PRE-FLIGHT FAILED: " + ", ".join(fails))
     sys.exit(1)
-print("PRE-FLIGHT PASSED for V%s - 22 assets ready" % version)
-print("  16 uf2 + the manual PDF + %s" % zipname)
+print("PRE-FLIGHT PASSED for V%s - %d assets ready" % (version, len(VARIANTS) + 6))
+print("  %d uf2 + the manual PDF + %s" % (len(VARIANTS), zipname))
 print("  + docs/help.txt, docs/helpmin.txt, docs/helptiny.txt")
 print("  + %s" % supname)
