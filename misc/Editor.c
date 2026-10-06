@@ -4013,7 +4013,7 @@ static void fm_set_default_drive_dir(const fm_panel_t *panel)
 
 static int fm_audio_uses_vs1053(void)
 {
-#if defined(PICOMITEMIN)
+#if defined(NOVS1053)
     return 0;
 #else
     return Option.AUDIO_MISO_PIN != 0;
@@ -4032,6 +4032,7 @@ static void fm_adjust_volume(int delta, char *status, int status_len)
     vol_target_left = v;
     vol_target_right = v;
 
+#if !defined(NOVS1053)
     // VS1053 playback uses the chip mixer, so apply changes immediately.
     if (fm_audio_uses_vs1053() && CurrentlyPlaying != P_NOTHING)
     {
@@ -4039,6 +4040,7 @@ static void fm_adjust_volume(int delta, char *status, int status_len)
         vol_right = vol_target_right;
         setVolumes(vol_left, vol_right);
     }
+#endif
 
     snprintf(status, status_len, "Volume %d%%", v);
 }

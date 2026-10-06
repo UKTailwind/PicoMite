@@ -73,7 +73,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "dr_flac.h"
 #include "hxcmod.h"
 #include "VS1053.h"
-#if defined(PICOMITEMIN)
+#if defined(NOVS1053)
 #define AUDIO_USES_VS1053 0
 #else
 #define AUDIO_USES_VS1053 (Option.AUDIO_MISO_PIN != 0)
@@ -788,7 +788,7 @@ void CloseAudio(int all)
 	}
 	if (XDCS != -1)
 	{
-#if !defined(PICOMITEMIN)
+#if !defined(NOVS1053)
 		VS1053reset(XRST);
 #endif
 		XDCS = XCS = DREQ = XRST = -1;
@@ -841,7 +841,7 @@ void ResetAudioRate(void)
 	if (AudioCurrentRate > 0)
 		apply_audio_rate(AudioCurrentRate);
 }
-#if !defined(PICOMITEMIN)
+#if !defined(NOVS1053)
 void playvs1053(int mode)
 {
 	XCS = PinDef[Option.AUDIO_CS_PIN].GPno;
@@ -2531,7 +2531,7 @@ void MIPS16 cmd_play(void)
 		flaccallback(q);
 		return;
 	}
-#if !defined(PICOMITEMIN)
+#if !defined(NOVS1053)
 	if ((tp = checkstring(cmdline, (unsigned char *)"NOTE")))
 	{
 		if (!Option.AUDIO_MISO_PIN)

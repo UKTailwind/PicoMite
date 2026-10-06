@@ -3399,7 +3399,7 @@ void MIPS16 printoptions(void)
             MMputchar(',', 1);
             MMPrintString((char *)PinDef[Option.audio_i2s_data].pinname);
         }
-#if !defined(PICOMITEMIN)
+#if !defined(NOVS1053)
         else if (
             Option.AUDIO_DCS_PIN && Option.AUDIO_MISO_PIN)
         {
@@ -3418,7 +3418,8 @@ void MIPS16 printoptions(void)
             MMputchar(',', 1);
             MMPrintString((char *)PinDef[Option.AUDIO_RESET_PIN].pinname);
         }
-
+#endif
+#if !defined(PICOMITEMIN)
         else
         {
             MMPrintString((char *)"SPI ");
@@ -7425,7 +7426,7 @@ void MIPS16 cmd_option(void)
             SoftReset(SOFT_RESET);
             return; // this will restart the processor ? only works when not in debug
         }
-#if !defined(PICOMITEMIN)
+#if !defined(NOVS1053)
         if ((p = checkstring(tp, (unsigned char *)"VS1053")))
         {
             int pin1, pin2, pin3, pin4, pin5, pin6, pin7;
@@ -7486,7 +7487,8 @@ void MIPS16 cmd_option(void)
             SoftReset(SOFT_RESET);
             return;
         }
-
+#endif
+#if !defined(PICOMITEMIN)
         if ((p = checkstring(tp, (unsigned char *)"SPI")))
         {
             int pin1, pin2, pin3;
@@ -8768,7 +8770,7 @@ void MIPS16 fun_info(void)
         {
             if (Option.AUDIO_L)
                 strcpy((char *)sret, "PWM");
-#if !defined(PICOMITEMIN)
+#if !defined(NOVS1053)
             else if (Option.AUDIO_MISO_PIN)
                 strcpy((char *)sret, "VS1053");
 #endif

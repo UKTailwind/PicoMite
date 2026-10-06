@@ -329,8 +329,17 @@ compile_is_in(IS_BTH ${BTH_VARIANTS})
 
 option(MMBASIC_ENABLE_FM "Enable FM command and file manager runtime" ON)
 
-if(IS_PICOMIN)
+# NOVS1053 builds leave out the VS1053 audio codec: OPTION AUDIO VS1053,
+# PLAY NOTE/STREAM/MIDI/MIDIFILE/HALT/CONTINUE and VS1053 playback of
+# WAV/FLAC/MP3/MOD. PICOMITEMIN drops it for flash; the BT host builds drop it
+# to make room for Bluetooth audio. The define itself is set further down.
+set(USES_VS1053 TRUE)
+if(IS_PICOMIN OR IS_BTH)
+	set(USES_VS1053 FALSE)
 	list(REMOVE_ITEM COMMON_SOURCES io/VS1053.c)
+endif()
+
+if(IS_PICOMIN)
 	list(REMOVE_ITEM COMMON_SOURCES third_party_mod/re.c)
 	list(REMOVE_ITEM DISPLAY_SOURCES graphics/SSD1963.c)
 	list(APPEND COMMON_SOURCES graphics/SSD1963min.c)
@@ -569,6 +578,11 @@ endif()
 if(USES_SUBPROFILE)
 	# frame tracking for OPTION PROFILING's per-SUB times
 	target_compile_definitions(PicoMite PRIVATE SUBPROFILE)
+endif()
+
+if(NOT USES_VS1053)
+	# see USES_VS1053 above
+	target_compile_definitions(PicoMite PRIVATE NOVS1053)
 endif()
 
 foreach(source IN LISTS OPTIMIZED_SOURCES)

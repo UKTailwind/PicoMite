@@ -50,7 +50,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "pico/cyw43_arch.h"
 #endif
 #include "VS1053.h"
-#if defined(PICOMITEMIN)
+#if defined(NOVS1053)
 #define AUDIO_USES_VS1053 0
 #else
 #define AUDIO_USES_VS1053 (Option.AUDIO_MISO_PIN != 0)
