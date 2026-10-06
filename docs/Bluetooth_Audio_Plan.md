@@ -48,19 +48,19 @@ MM.INFO(BLUETOOTH ...)          ' state for programs (phase 3)
 ### Phase 1 — dual-mode stack and a test tone (no PLAY integration)
 
 1. **Done (d122987): remove VS1053 from the BTH builds.** New `NOVS1053` define, set from CMake for PICOMIN and both BTH builds. VS1053-only gates move from `PICOMITEMIN` to `NOVS1053`; the SPI DAC stays. Flashed to COM21 and checked: `OPTION AUDIO VS1053` gives Invalid syntax, and `MM.INFO(OPTION AUDIO)` still works.
-2. **Fix where BTstack keeps its pairing data.** The SDK's `btstack_cyw43_init()` sets up a TLV store at 16 MB − 12 KB, which is inside the A: drive. When the bank header isn't valid it erases a 4 KB sector there on boot (confirmed on COM21: the "BTstack" magic is at 0x10FFD000). The fix wraps `pico_flash_bank_instance()` so the SDK uses the existing Option-backed `bt_tlv` store. BTKeyboard then uses that single TLV instance for the LE device DB and the Classic link keys. (Released BT and BTH builds on development have the same overlap — reported separately.)
-3. **Dual-mode BTstack.**
+2. **Done (0d77864): fix where BTstack keeps its pairing data.** The SDK's `btstack_cyw43_init()` sets up a TLV store at 16 MB − 12 KB, which is inside the A: drive. When the bank header isn't valid it erases a 4 KB sector there on boot (confirmed on COM21: the "BTstack" magic is at 0x10FFD000). The fix wraps `pico_flash_bank_instance()` so the SDK uses the existing Option-backed `bt_tlv` store. BTKeyboard then uses that single TLV instance for the LE device DB and the Classic link keys. (Released BT and BTH builds on development have the same overlap — reported separately.)
+3. **Done (484e747): dual-mode BTstack.** PICOBTH flash margin +5.0 KB; BSS +12.8 KB, so `HEAP_MEMORY_SIZE` 336 → 324 KB (RAM margin +4.0 KB).
    - `ENABLE_CLASSIC`, plus only the Classic sources A2DP needs (not the whole `pico_btstack_classic`), plus `pico_btstack_sbc_encoder`.
    - In `btstack_config.h`: 2 HCI connections; 1021-byte ACL payload; L2CAP/AVDTP pools; 4 link keys; controller ACL buffers capped at 3 and controller-to-host flow control (the SDK example's settings to avoid CYW43 shared-bus overrun).
    - Check: the build still pairs and uses a BLE keyboard.
-4. **Changes to the keyboard path.**
+4. **Done (484e747): changes to the keyboard path.**
    - Filter `HCI_EVENT_DISCONNECTION_COMPLETE` by the keyboard's connection handle. Without this, a speaker dropping out would tear down the keyboard session.
    - Register the Classic services before `hci_power_control(ON)`.
    - Lower the LE scan duty cycle (currently 100%) while audio is streaming.
-5. **`bluetooth/BTAudio.c`.**
+5. **Done (484e747): `bluetooth/BTAudio.c`.** On COM21, `BLUETOOTH SCAN` finds a nearby audio device; connect and stream not yet tried.
    - A2DP source endpoint, SDP record, Classic name and pairing (SSP, Just Works).
    - `BLUETOOTH SCAN / CONNECT / DISCONNECT / STATUS`, plus a temporary `BLUETOOTH TEST freq` that streams an internal sine wave through the SBC encoder on BTstack's 10 ms timer, as the demo does.
-6. **Measurements on COM21, with a speaker and a BLE keyboard near the board:**
+6. **Next — measurements on COM21, with a speaker and a BLE keyboard near the board:**
    - Does the tone play cleanly while the keyboard types?
    - Encoder load: time spent in the timer, reported by STATUS.
    - Interpreter slowdown during streaming (a timed BASIC loop).
