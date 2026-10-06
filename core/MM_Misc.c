@@ -3383,6 +3383,10 @@ void MIPS16 printoptions(void)
         MMPrintString(buff);
     }
 #endif
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    if (Option.audio_bluetooth)
+        PO2Str("AUDIO", "BLUETOOTH");
+#endif
     if (Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk)
     {
         PO("AUDIO");
@@ -3777,6 +3781,9 @@ void MIPS16 disable_audio(void)
     Option.AUDIO_MISO_PIN = 0;
     Option.audio_i2s_bclk = 0;
     Option.audio_i2s_data = 0;
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    Option.audio_bluetooth = 0;
+#endif
     Option.AUDIO_SLICE = 99;
 }
 #ifndef PICOMITEVGA
@@ -4896,6 +4903,9 @@ static const struct optmap_s OptionMap[] = {
     OPT(THRESHOLD_CAP, OPT_U8),
     OPT(audio_i2s_data, OPT_U8),
     OPT(audio_i2s_bclk, OPT_U8),
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    OPT(audio_bluetooth, OPT_U8),
+#endif
     OPT(LCDVOP, OPT_I8),
     OPT(I2Coffset, OPT_I8),
     OPT(NoHeartbeat, OPT_U8),
@@ -7426,6 +7436,22 @@ void MIPS16 cmd_option(void)
             SoftReset(SOFT_RESET);
             return; // this will restart the processor ? only works when not in debug
         }
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+        if (checkstring(tp, (unsigned char *)"BLUETOOTH"))
+        {
+            /* Output to a Bluetooth speaker (bluetooth/BTAudio.c). No pins;
+               the PWM slice only carries the playing flag, as for I2S. */
+            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
+                error("Audio already configured");
+            if ((PinDef[Option.DISPLAY_BL].slice & 0x7f) == 11)
+                error("Channel in use for backlight");
+            Option.audio_bluetooth = 1;
+            Option.AUDIO_SLICE = 11;
+            SaveOptions();
+            SoftReset(SOFT_RESET);
+            return;
+        }
+#endif
 #if !defined(NOVS1053)
         if ((p = checkstring(tp, (unsigned char *)"VS1053")))
         {
@@ -7434,7 +7460,7 @@ void MIPS16 cmd_option(void)
             if (argc != 13)
                 SyntaxError();
             ;
-            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L)
+            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || AUDIO_BLUETOOTH)
                 error("Audio already configured");
             //
             pin1 = getpinarg(argv[0]);
@@ -7496,7 +7522,7 @@ void MIPS16 cmd_option(void)
             if (argc != 5)
                 SyntaxError();
             ;
-            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L)
+            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || AUDIO_BLUETOOTH)
                 error("Audio already configured");
             //
             pin1 = getpinarg(argv[0]);
@@ -7538,7 +7564,7 @@ void MIPS16 cmd_option(void)
             if (argc != 3)
                 SyntaxError();
             ;
-            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || Option.audio_i2s_bclk)
+            if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
                 error("Audio already configured");
             //
             pin1 = getpinarg(argv[0]);
@@ -7586,7 +7612,7 @@ void MIPS16 cmd_option(void)
         if (argc != 3)
             SyntaxError();
         ;
-        if (Option.AUDIO_CLK_PIN || Option.AUDIO_L)
+        if (Option.AUDIO_CLK_PIN || Option.AUDIO_L || AUDIO_BLUETOOTH)
             error("Audio already configured");
         pin1 = getpinarg(argv[0]);
         if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
@@ -8778,6 +8804,8 @@ void MIPS16 fun_info(void)
                 strcpy((char *)sret, "SPI");
             else if (Option.audio_i2s_bclk)
                 strcpy((char *)sret, "I2S");
+            else if (AUDIO_BLUETOOTH)
+                strcpy((char *)sret, "BLUETOOTH");
             else
                 strcpy((char *)sret, "NONE");
             CtoM(sret);

@@ -187,6 +187,12 @@ bool bt_audio_streaming(void)
  */
 static void produce_audio(int16_t *pcm, int frames)
 {
+    /* PLAY output (OPTION AUDIO BLUETOOTH) unless the test tone is sounding. */
+    if (AUDIO_BLUETOOTH && tone_target == 0 && tone_gain == 0)
+    {
+        bt_audio_pull(pcm, frames, cfg_rate);
+        return;
+    }
     uint32_t step = tone_step;
     int32_t target = tone_target;
     int32_t gain = tone_gain;
@@ -537,6 +543,93 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
 
     default:
         break;
+    }
+}
+
+/* ============================================================================
+ * PLAY output service (main loop)
+ * ============================================================================
+ */
+#define BTA_IDLE_SUSPEND_MS 5000  /* suspend the stream after this much silence */
+#define BTA_START_TIMEOUT_MS 3000 /* give up waiting for a stream to start */
+#define BTA_DISCARD_RATE 44100
+
+/* Called from bt_keyboard_poll() in the main loop. With OPTION AUDIO
+   BLUETOOTH it starts the stream when PLAY has something to play, and
+   suspends it after BTA_IDLE_SUSPEND_MS of silence. While no speaker can
+   take the sound it is discarded at the real-time rate, so PLAY behaves as
+   a wired output does with nothing plugged in: sounds still end on time and
+   their interrupts still fire. */
+void bt_audio_service(void)
+{
+    static uint32_t last_us, last_active_ms, start_requested_ms;
+    static bool start_requested;
+    if (!bta_ready || !AUDIO_BLUETOOTH)
+        return;
+    uint32_t now_ms = to_ms_since_boot(get_absolute_time());
+    bool playing = bt_audio_playing();
+    bool tone = (tone_target != 0 || tone_gain != 0);
+    if (playing || tone)
+        last_active_ms = now_ms;
+
+    switch (spk_state)
+    {
+    case SPK_STREAMING:
+        start_requested = false;
+        last_us = time_us_32();
+        if (!playing && !tone && now_ms - last_active_ms > BTA_IDLE_SUSPEND_MS)
+        {
+            bta_lock();
+            a2dp_source_pause_stream(a2dp_cid, local_seid);
+            bta_unlock();
+            last_active_ms = now_ms; /* don't repeat it while the suspend completes */
+        }
+        return;
+    case SPK_OPEN:
+        if (!playing)
+        {
+            start_requested = false;
+            break;
+        }
+        if (!start_requested)
+        {
+            bta_lock();
+            uint8_t status = a2dp_source_start_stream(a2dp_cid, local_seid);
+            bta_unlock();
+            start_requested = (status == ERROR_CODE_SUCCESS);
+            start_requested_ms = now_ms;
+        }
+        if (start_requested && now_ms - start_requested_ms < BTA_START_TIMEOUT_MS)
+        {
+            last_us = time_us_32(); /* hold the sound until the stream runs */
+            return;
+        }
+        break;
+    default:
+        start_requested = false;
+        break;
+    }
+
+    /* No speaker is taking the sound: discard it in real time. */
+    uint32_t now_us = time_us_32();
+    if (!playing)
+    {
+        last_us = now_us;
+        return;
+    }
+    uint32_t frames = (uint32_t)(((uint64_t)(now_us - last_us) * BTA_DISCARD_RATE) / 1000000u);
+    if (frames == 0)
+        return;
+    last_us += (uint32_t)(((uint64_t)frames * 1000000u) / BTA_DISCARD_RATE);
+    if (frames > BTA_DISCARD_RATE / 4)
+        frames = BTA_DISCARD_RATE / 4;
+    while (frames)
+    {
+        int n = frames > 128 ? 128 : (int)frames;
+        bta_lock(); /* the encoder tick may be pulling as the stream starts */
+        bt_audio_pull(pcm_frame, n, BTA_DISCARD_RATE);
+        bta_unlock();
+        frames -= n;
     }
 }
 

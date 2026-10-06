@@ -693,7 +693,7 @@ static void MIPS16 __attribute__((noinline)) fillBBCSwing(int idx)
 	else
 	{
 		bcount[idx] = fillBBCBuffer(sb, BBC_BUFFER_SIZE);
-		if (Option.audio_i2s_bclk)
+		if (AUDIO_SIGNED16)
 			i2sconvert((int16_t *)sb, (int16_t *)sb, bcount[idx]);
 		else
 			iconvert((uint16_t *)sb, (int16_t *)sb, bcount[idx]);
@@ -733,7 +733,7 @@ void CloseAudio(int all)
 #endif
 		modbuff = (Option.modbuff ? (char *)(XIP_BASE + RoundUpK4(TOP_OF_SYSTEM_FLASH)) : NULL);
 	int was_playing = CurrentlyPlaying;
-	if (!Option.audio_i2s_bclk)
+	if (!AUDIO_SIGNED16)
 	{
 		bcount[1] = bcount[2] = wav_filesize = 0;
 		swingbuf = nextbuf = playreadcomplete = 0;
@@ -765,7 +765,7 @@ void CloseAudio(int all)
 	if (was_playing == P_WAV || was_playing == P_PAUSE_WAV)
 		FreeMemorySafe((void **)&mywav);
 #ifdef rp2350
-	if ((was_playing == P_MP3 || was_playing == P_PAUSE_MP3) && (Option.AUDIO_L || Option.audio_i2s_bclk || Option.AUDIO_MOSI_PIN))
+	if ((was_playing == P_MP3 || was_playing == P_PAUSE_MP3) && (Option.AUDIO_L || AUDIO_SIGNED16 || Option.AUDIO_MOSI_PIN))
 	{
 		drmp3_uninit(mymp3);
 		FreeMemorySafe((void **)&mymp3);
@@ -967,7 +967,7 @@ void wavcallback(char *p)
 	g_buff1 = (int16_t *)sbuff1;
 	g_buff2 = (int16_t *)sbuff2;
 	bcount[1] = (volatile unsigned int)drwav_read_pcm_frames_s16(mywav, WAV_BUFFER_SIZE / 4, (drwav_int16 *)sbuff1) * mywav->channels;
-	if (Option.audio_i2s_bclk)
+	if (AUDIO_SIGNED16)
 		i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
 	else
 		iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -986,7 +986,7 @@ void wavcallback(char *p)
 // Safe to call from main-loop context (not from hard interrupt).
 void PlayMemWav(const unsigned char *data, unsigned int len)
 {
-	if (!(Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk))
+	if (!AUDIO_CONFIGURED)
 		return;
 	if (CurrentlyPlaying != P_NOTHING)
 		return;
@@ -1018,7 +1018,7 @@ void PlayMemWav(const unsigned char *data, unsigned int len)
 	g_buff1 = (int16_t *)sbuff1;
 	g_buff2 = (int16_t *)sbuff2;
 	bcount[1] = (volatile unsigned int)drwav_read_pcm_frames_s16(mywav, WAV_BUFFER_SIZE / 4, (drwav_int16 *)sbuff1) * mywav->channels;
-	if (Option.audio_i2s_bclk)
+	if (AUDIO_SIGNED16)
 		i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
 	else
 		iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -1091,7 +1091,7 @@ void mp3callback(char *p, int position)
 		setrate(mymp3->sampleRate);
 	}
 	bcount[1] = drmp3_read_pcm_frames_s16(mymp3, MP3_BUFFER_SIZE / 4, (drmp3_int16 *)sbuff1) * mymp3->channels;
-	if (!Option.audio_i2s_bclk)
+	if (!AUDIO_SIGNED16)
 		iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
 	else
 		i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
@@ -1176,7 +1176,7 @@ void flaccallback(char *p)
 	ubuff2 = (uint16_t *)sbuff2;
 	g_buff1 = (int16_t *)sbuff1;
 	g_buff2 = (int16_t *)sbuff2;
-	if (Option.audio_i2s_bclk)
+	if (AUDIO_SIGNED16)
 	{
 		bcount[1] = (volatile unsigned int)drflac_read_pcm_frames_s16(myflac, FLAC_BUFFER_SIZE / 4, (drwav_int16 *)sbuff1) * myflac->channels;
 		i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
@@ -1305,7 +1305,7 @@ void modcallback(char *p)
 	wav_filesize = MOD_BUFFER_SIZE / 4;
 	bcount[1] = MOD_BUFFER_SIZE / 4;
 	bcount[2] = 0;
-	if (Option.audio_i2s_bclk)
+	if (AUDIO_SIGNED16)
 		i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
 	else
 		iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -1454,7 +1454,7 @@ void MIPS16 cmd_play(void)
 		CloseAudio(1);
 		return;
 	}
-	if (!(Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk))
+	if (!AUDIO_CONFIGURED)
 		error((char *)"Audio not enabled");
 	if ((tp = checkstring(cmdline, (unsigned char *)"LOAD SOUND")))
 	{
@@ -1737,7 +1737,7 @@ void MIPS16 cmd_play(void)
 				{
 					bcount[1] = fillToneBuffer(sbuff1, TONE_BUFFER_SIZE) * 2; // bytes for VS1053
 				}
-				else if (Option.audio_i2s_bclk)
+				else if (AUDIO_SIGNED16)
 				{
 					bcount[1] = fillToneBuffer(sbuff1, TONE_BUFFER_SIZE);
 					i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
@@ -1816,7 +1816,7 @@ void MIPS16 cmd_play(void)
 		bcount[2] = 0;
 		playreadcomplete = 0;
 		bcount[1] = (volatile unsigned int)readarray(sbuff1);
-		if (Option.audio_i2s_bclk)
+		if (AUDIO_SIGNED16)
 			i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
 		else
 			iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -1953,7 +1953,7 @@ void MIPS16 cmd_play(void)
 		bcount[2] = 0;
 		playreadcomplete = 0;
 		bcount[1] = (volatile unsigned int)readsamplearray(sbuff1);
-		if (Option.audio_i2s_bclk)
+		if (AUDIO_SIGNED16)
 			i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
 		else
 			iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3059,7 +3059,7 @@ void MIPS16 cmd_play(void)
 		wav_filesize = MOD_BUFFER_SIZE / 4;
 		bcount[1] = MOD_BUFFER_SIZE / 4;
 		bcount[2] = 0;
-		if (Option.audio_i2s_bclk)
+		if (AUDIO_SIGNED16)
 			i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
 		else
 			iconvert((uint16_t *)ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3137,7 +3137,7 @@ void StopAudio(void)
 		int ramptime = 1000000 / PWM_FREQ - 1;
 		pwm_set_irq0_enabled(AUDIO_SLICE, false);
 		uSec(100); //
-		if (!(Option.audio_i2s_bclk))
+		if (!(AUDIO_SIGNED16))
 		{
 			uint32_t rr, r = right;
 			uint32_t ll, l = left;
@@ -3289,7 +3289,7 @@ static int fillSoundBuffer(char *buf, int bufsize)
 			samples[n++] = (int16_t)(((rightv / Rcount) - 2000) * 16);
 		}
 	}
-	else if (Option.audio_i2s_bclk)
+	else if (AUDIO_SIGNED16)
 	{
 		int16_t *samples = (int16_t *)buf;
 		while (n < max_samples)
@@ -3508,7 +3508,7 @@ void checkWAVinput(void)
 				if (swingbuf == 2)
 				{
 					bcount[1] = (volatile unsigned int)drflac_read_pcm_frames_s16(myflac, FLAC_BUFFER_SIZE / 4, (drwav_int16 *)sbuff1) * myflac->channels;
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
 					else
 						iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3517,7 +3517,7 @@ void checkWAVinput(void)
 				else
 				{
 					bcount[2] = (volatile unsigned int)drflac_read_pcm_frames_s16(myflac, FLAC_BUFFER_SIZE / 4, (drwav_int16 *)sbuff2) * myflac->channels;
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert((drwav_int16 *)sbuff2, (drwav_int16 *)sbuff2, bcount[2]);
 					else
 						iconvert(ubuff2, (int16_t *)sbuff2, bcount[2]);
@@ -3531,7 +3531,7 @@ void checkWAVinput(void)
 				if (swingbuf == 2)
 				{
 					bcount[1] = drmp3_read_pcm_frames_s16(mymp3, MP3_BUFFER_SIZE / 4, (int16_t *)sbuff1) * mymp3->channels;
-					if (!Option.audio_i2s_bclk)
+					if (!AUDIO_SIGNED16)
 						iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
 					else
 						i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
@@ -3540,7 +3540,7 @@ void checkWAVinput(void)
 				else
 				{
 					bcount[2] = drmp3_read_pcm_frames_s16(mymp3, MP3_BUFFER_SIZE / 4, (int16_t *)sbuff2) * mymp3->channels;
-					if (!Option.audio_i2s_bclk)
+					if (!AUDIO_SIGNED16)
 						iconvert(ubuff2, (int16_t *)sbuff2, bcount[2]);
 					else
 						i2sconvert(g_buff2, (int16_t *)sbuff2, bcount[2]);
@@ -3557,7 +3557,7 @@ void checkWAVinput(void)
 						playreadcomplete = 1;
 					wav_filesize = MOD_BUFFER_SIZE / 2;
 					bcount[1] = MOD_BUFFER_SIZE / 2;
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
 					else
 						iconvert((uint16_t *)ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3568,7 +3568,7 @@ void checkWAVinput(void)
 						playreadcomplete = 1;
 					wav_filesize = MOD_BUFFER_SIZE / 2;
 					bcount[2] = MOD_BUFFER_SIZE / 2;
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff2, (int16_t *)sbuff2, bcount[2]);
 					else
 						iconvert((uint16_t *)ubuff2, (int16_t *)sbuff2, bcount[2]);
@@ -3580,7 +3580,7 @@ void checkWAVinput(void)
 				if (swingbuf == 2)
 				{
 					bcount[1] = (volatile unsigned int)drwav_read_pcm_frames_s16(mywav, WAV_BUFFER_SIZE / 4, (drwav_int16 *)sbuff1) * mywav->channels;
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff1, (drwav_int16 *)sbuff1, bcount[1]);
 					else
 						iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3589,7 +3589,7 @@ void checkWAVinput(void)
 				else
 				{
 					bcount[2] = (volatile unsigned int)drwav_read_pcm_frames_s16(mywav, WAV_BUFFER_SIZE / 4, (drwav_int16 *)sbuff2) * mywav->channels;
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff2, (drwav_int16 *)sbuff2, bcount[2]);
 					else
 						iconvert(ubuff2, (int16_t *)sbuff2, bcount[2]);
@@ -3603,7 +3603,7 @@ void checkWAVinput(void)
 				if (swingbuf == 2)
 				{
 					bcount[1] = (volatile unsigned int)readarray(sbuff1);
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
 					else
 						iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3612,7 +3612,7 @@ void checkWAVinput(void)
 				else
 				{
 					bcount[2] = (volatile unsigned int)readarray(sbuff2);
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert((drwav_int16 *)sbuff2, (drwav_int16 *)sbuff2, bcount[2]);
 					else
 						iconvert(ubuff2, (int16_t *)sbuff2, bcount[2]);
@@ -3626,7 +3626,7 @@ void checkWAVinput(void)
 				if (swingbuf == 2)
 				{
 					bcount[1] = (volatile unsigned int)readsamplearray(sbuff1);
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert((drwav_int16 *)sbuff1, (drwav_int16 *)sbuff1, bcount[1]);
 					else
 						iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3635,7 +3635,7 @@ void checkWAVinput(void)
 				else
 				{
 					bcount[2] = (volatile unsigned int)readsamplearray(sbuff2);
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert((drwav_int16 *)sbuff2, (drwav_int16 *)sbuff2, bcount[2]);
 					else
 						iconvert(ubuff2, (int16_t *)sbuff2, bcount[2]);
@@ -3649,7 +3649,7 @@ void checkWAVinput(void)
 				if (swingbuf == 2)
 				{
 					bcount[1] = fillToneBuffer(sbuff1, TONE_BUFFER_SIZE);
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
 					else
 						iconvert(ubuff1, (int16_t *)sbuff1, bcount[1]);
@@ -3658,7 +3658,7 @@ void checkWAVinput(void)
 				else
 				{
 					bcount[2] = fillToneBuffer(sbuff2, TONE_BUFFER_SIZE);
-					if (Option.audio_i2s_bclk)
+					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff2, (int16_t *)sbuff2, bcount[2]);
 					else
 						iconvert(ubuff2, (int16_t *)sbuff2, bcount[2]);

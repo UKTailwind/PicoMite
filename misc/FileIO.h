@@ -123,7 +123,11 @@ extern "C"
                 int8_t ColourCode;
                 unsigned char MOUSE_CLOCK;
                 unsigned char MOUSE_DATA;
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+                uint8_t audio_bluetooth; // OPTION AUDIO BLUETOOTH (the spare byte)
+#else
                 char spare;
+#endif
                 int CPU_Speed;
                 unsigned int Telnet; // Also stores size of program flash (start of LIBRARY code)
 

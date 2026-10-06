@@ -569,6 +569,74 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 	}
 }
 
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+/* True while PLAY has a sound running. The PLAY code starts and stops the
+   PWM wrap interrupt (pwm_set_irq0_enabled) whatever the output; with
+   OPTION AUDIO BLUETOOTH that enable bit is the only part of it in use. */
+bool bt_audio_playing(void)
+{
+	if (!(pwm_hw->inte & (1u << AUDIO_SLICE)))
+		return false;
+	return CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_MOD ||
+		   CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND ||
+		   CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY || CurrentlyPlaying == P_SAMPLE;
+}
+
+/* Bluetooth output: BTAudio asks for `frames` stereo frames at out_rate
+   (from its encoder tick, or to discard sound in real time while no speaker
+   is streaming). This does the PWM wrap interrupt's job: it steps the swing
+   buffers at the source rate - AudioCurrentRate / audiorepeat, since
+   audiorepeat only repeats samples - and interpolates linearly between
+   source samples. With nothing playing the output decays to silence over a
+   couple of milliseconds instead of stopping dead, which would click. */
+void bt_audio_pull(int16_t *pcm, int frames, uint32_t out_rate)
+{
+	static int32_t prev_l, prev_r, cur_l, cur_r;
+	static uint32_t frac; /* position from prev towards cur, 16.16 */
+	bool playing = bt_audio_playing() && AudioCurrentRate > 0;
+	uint32_t step = 0;
+	if (playing)
+		step = (uint32_t)(((uint64_t)AudioCurrentRate << 16) /
+						  ((uint64_t)out_rate * (audiorepeat ? audiorepeat : 1)));
+	for (int i = 0; i < frames; i++)
+	{
+		if (playing)
+		{
+			frac += step;
+			while (frac >= 0x10000)
+			{
+				frac -= 0x10000;
+				prev_l = cur_l;
+				prev_r = cur_r;
+				int sl, sr;
+				int rc = advance_swing_buffer(&sl, &sr);
+				if (rc == 1)
+				{ /* end of the sound - as in on_pwm_wrap */
+					pwm_set_irq_enabled(AUDIO_SLICE, false);
+					playing = false;
+					break;
+				}
+				if (rc == 0)
+				{
+					cur_l = (int16_t)sl;
+					cur_r = (int16_t)sr;
+				}
+			}
+		}
+		if (!playing)
+		{
+			cur_l = cur_l * 63 / 64;
+			cur_r = cur_r * 63 / 64;
+			prev_l = cur_l;
+			prev_r = cur_r;
+			frac = 0;
+		}
+		pcm[2 * i] = (int16_t)(prev_l + (int32_t)(((int64_t)(cur_l - prev_l) * frac) >> 16));
+		pcm[2 * i + 1] = (int16_t)(prev_r + (int32_t)(((int64_t)(cur_r - prev_r) * frac) >> 16));
+	}
+}
+#endif
+
 void BitBangSendSPI(const BYTE *buff, int cnt)
 {
 	int i, SPICount;
@@ -3125,6 +3193,18 @@ void InitReservedIO(void)
 			irq_set_priority(PWM_IRQ_WRAP, 255);
 		}
 	}
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+	if (AUDIO_BLUETOOTH)
+	{ // Bluetooth speaker: BTAudio's encoder tick takes the samples through
+	  // bt_audio_pull(). The slice's IRQ enable bit is still the playing flag
+	  // the PLAY code sets and clears, but its interrupt stays off.
+		AUDIO_SLICE = Option.AUDIO_SLICE;
+		AUDIO_WRAP = (Option.CPU_Speed * 10) / 441 - 1;
+		pwm_set_wrap(AUDIO_SLICE, AUDIO_WRAP);
+		pwm_clear_irq(AUDIO_SLICE);
+		irq_set_enabled(PWM_IRQ_WRAP, false);
+	}
+#endif
 
 #if !defined(PICOMITEWEB) && !defined(PICOMITEBT) && !defined(PICOMITEHDMIBTH)
 	/* GP23 is the cyw43 WL_ON line on Pico W / Pico 2 W — don't drive

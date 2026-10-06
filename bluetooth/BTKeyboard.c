@@ -1895,6 +1895,7 @@ void bt_keyboard_poll(void)
         return;
 
     cyw43_arch_poll();
+    bt_audio_service();
 
     {
         static uint64_t last_heart_us;

@@ -26,6 +26,11 @@ void bt_audio_init(void);
    scan duty cycle so the radio has time for the audio link. */
 bool bt_audio_streaming(void);
 
+/* Main-loop service for PLAY output (OPTION AUDIO BLUETOOTH): starts and
+   suspends the stream, and discards sound while no speaker takes it.
+   Called from bt_keyboard_poll(). */
+void bt_audio_service(void);
+
 /* The BLUETOOTH command. */
 void cmd_bluetooth(void);
 

@@ -4053,7 +4053,7 @@ static int fm_play_audio_file(const fm_panel_t *panel, const fm_entry_t *entry, 
     if (audio_type == FM_AUDIO_NONE)
         return 0;
 
-    if (!(Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk))
+    if (!AUDIO_CONFIGURED)
     {
         snprintf(status, status_len, "Audio not enabled");
         return 1;

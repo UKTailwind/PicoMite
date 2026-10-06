@@ -54,6 +54,23 @@ void checkWAVinput(void);
  * ============================================================================ */
 #define WAV_BUFFER_SIZE 8192
 
+/* Audio output kinds. AUDIO_BLUETOOTH is OPTION AUDIO BLUETOOTH on the BT
+   host builds: samples go to a Bluetooth speaker through bluetooth/BTAudio.c,
+   which takes them with bt_audio_pull() instead of the PWM wrap interrupt. */
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+#define AUDIO_BLUETOOTH (Option.audio_bluetooth != 0)
+void bt_audio_pull(int16_t *pcm, int frames, uint32_t out_rate);
+bool bt_audio_playing(void);
+#else
+#define AUDIO_BLUETOOTH 0
+#endif
+/* Some audio output is configured: PWM, SPI DAC, VS1053, I2S or Bluetooth. */
+#define AUDIO_CONFIGURED (Option.AUDIO_L || Option.AUDIO_CLK_PIN || Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
+/* The swing buffers hold signed 16-bit samples (I2S, Bluetooth) rather than
+   the 12-bit levels the PWM and SPI DAC outputs take. */
+#define AUDIO_SIGNED16 (Option.audio_i2s_bclk || AUDIO_BLUETOOTH)
+extern int AudioCurrentRate;
+
 /* ============================================================================
  * Type definitions - Audio playback state enumeration
  * ============================================================================ */
