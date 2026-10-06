@@ -34,7 +34,7 @@
 #include "BTAudio.h"
 #include "BTKeyboard.h"
 
-#define BTA_AUDIO_TIMEOUT_MS 10   /* encode/send tick */
+#define BTA_AUDIO_TIMEOUT_MS 5    /* encode/send tick */
 #define BTA_SBC_STORAGE_SIZE 1030 /* one media packet: header byte + SBC frames */
 #define BTA_PREFERRED_RATE 44100
 #define BTA_MAX_FOUND 16
@@ -220,18 +220,29 @@ static void produce_audio(int16_t *pcm, int frames)
     tone_gain = gain;
 }
 
+/* At most this many samples are taken from PLAY's swing buffers per tick:
+   each of those buffers must hold a whole burst - see TONE_BUFFER_SIZE in
+   Audio.c. A tick needs ~220 at 44.1 kHz, but a tick that falls while a
+   packet waits to be sent encodes nothing, so the next must catch up; the
+   payload limit alone would allow up to 12 frames (1536 samples) at low
+   bitpools. */
+#define BTA_MAX_SAMPLES_PER_TICK 1024
+
 static void fill_sbc_audio_buffer(void)
 {
     unsigned int frames_per_sbc = sbc_encoder->num_audio_frames(&sbc_encoder_state);
     uint16_t sbc_len = sbc_encoder->sbc_buffer_length(&sbc_encoder_state);
+    unsigned int taken = 0;
     while (samples_ready >= frames_per_sbc &&
-           (max_media_payload_size - sbc_storage_count) >= sbc_len)
+           (max_media_payload_size - sbc_storage_count) >= sbc_len &&
+           taken + frames_per_sbc <= BTA_MAX_SAMPLES_PER_TICK)
     {
         produce_audio(pcm_frame, frames_per_sbc);
         sbc_encoder->encode_signed_16(&sbc_encoder_state, pcm_frame,
                                       &sbc_storage[1 + sbc_storage_count]);
         sbc_storage_count += sbc_len;
         samples_ready -= frames_per_sbc;
+        taken += frames_per_sbc;
     }
 }
 

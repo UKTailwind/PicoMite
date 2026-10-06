@@ -209,7 +209,7 @@ extern a_flist *alist;
 /* ============================================================================
  * BBC Micro sound engine (AudioBBC.c) - PLAY BBC SOUND / PLAY BBC ENVELOPE
  * ============================================================================ */
-#define BBC_BUFFER_SIZE 2048 // ~11.6ms at 44100Hz stereo (512 frames * 2ch * 2 bytes)
+#define BBC_BUFFER_SIZE (AUDIO_BLUETOOTH ? 4096 : 2048) // 2048: ~11.6ms at 44100Hz stereo (512 frames * 2ch * 2 bytes); see TONE_BUFFER_SIZE
 extern int fillBBCBuffer(char *buf, int bufsize);
 extern int BBCSoundQueue(int chan, int amp, int pitch, int dur);
 extern int BBCSoundFree(int chan); /* free note-queue slots; chan -1 = the emptiest */

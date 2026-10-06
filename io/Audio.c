@@ -66,8 +66,12 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #else
 #define MOD_BUFFER_SIZE (WAV_BUFFER_SIZE / 4)
 #endif
-#define TONE_BUFFER_SIZE 704  // ~23ms at 44100Hz stereo (176 frames * 2ch * 2 bytes)
-#define SOUND_BUFFER_SIZE 704 // ~4ms at 44100Hz stereo (176 frames * 2ch * 2 bytes)
+/* Bluetooth output takes samples in bursts of up to 1024 frames (BTAudio.c's
+   encoder tick) where the PWM interrupt takes one at a time, so each swing
+   buffer has to hold a whole burst; the extra latency is nothing beside the
+   speaker's own. */
+#define TONE_BUFFER_SIZE (AUDIO_BLUETOOTH ? 4096 : 704)  // 704: ~4ms at 44100Hz stereo (176 frames * 2ch * 2 bytes)
+#define SOUND_BUFFER_SIZE (AUDIO_BLUETOOTH ? 4096 : 704) // 704: ~4ms at 44100Hz stereo (176 frames * 2ch * 2 bytes)
 #include "hardware/pio.h"
 #include "hardware/pio_instructions.h"
 #include "dr_flac.h"
