@@ -46,6 +46,13 @@ void bt_keyboard_stats(uint32_t *saves, uint32_t *save_max_us, uint32_t *save_to
 /* The last keyboard pairing - address and whether a bond was stored. */
 void bt_keyboard_last_pairing(char *buf, int len);
 
+/* MM.INFO(BLUETOOTH KEYBOARD): the connected keyboard's address, or "". */
+void bt_keyboard_address(char *buf);
+
+/* BLUETOOTH FORGET: delete keyboard bonds (addr NULL = all), dropping the
+   keyboard's link if it is one of them. Call with the async-context lock. */
+void bt_keyboard_forget(const uint8_t *addr);
+
 #ifdef __cplusplus
 }
 #endif

@@ -34,6 +34,10 @@ void bt_audio_service(void);
 /* The BLUETOOTH command. */
 void cmd_bluetooth(void);
 
+/* MM.INFO(BLUETOOTH SPEAKER | KEYBOARD): the connected device's address in
+   out, or "" when none. */
+void bt_info(unsigned char *tp, char *out);
+
 #ifdef __cplusplus
 }
 #endif

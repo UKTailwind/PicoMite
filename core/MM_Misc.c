@@ -8230,6 +8230,17 @@ void MIPS16 fun_info(void)
         targ = T_INT;
         return;
     }
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    else if ((tp = checkstring(ep, (unsigned char *)"BLUETOOTH")))
+    {
+        /* MM.INFO(BLUETOOTH SPEAKER | KEYBOARD) - bluetooth/BTAudio.c */
+        extern void bt_info(unsigned char *tp, char *out);
+        bt_info(tp, (char *)sret);
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
+#endif
     else if (checkstring(ep, (unsigned char *)"BCOLOUR") || checkstring(ep, (unsigned char *)"BCOLOR"))
     {
         iret = gui_bcolour;

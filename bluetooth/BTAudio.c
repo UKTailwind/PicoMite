@@ -1041,6 +1041,65 @@ static void bta_test(unsigned char *tp)
         tone_target = 0;
 }
 
+/* BLUETOOTH FORGET [addr$] - delete stored pairings: every keyboard bond,
+   every Classic link key and the remembered speaker, or only those for
+   addr$. A connected device that is forgotten is disconnected first. */
+static void bta_forget(unsigned char *tp)
+{
+    bd_addr_t addr;
+    bool one = false;
+    if (*tp)
+    {
+        if (sscanf_bd_addr((char *)getCstring(tp), addr) == 0)
+            error("Invalid Bluetooth address");
+        one = true;
+    }
+    bta_require_ready();
+    if ((spk_state == SPK_OPEN || spk_state == SPK_STREAMING) &&
+        (!one || memcmp(addr, speaker_addr, sizeof(bd_addr_t)) == 0))
+    {
+        spk_quiet_release = true;
+        bta_lock();
+        a2dp_source_disconnect(a2dp_cid);
+        bta_unlock();
+        bta_wait(cond_released, 5000);
+        spk_quiet_release = false;
+    }
+    bta_lock();
+    bt_keyboard_forget(one ? addr : NULL);
+    if (one)
+        gap_drop_link_key_for_bd_addr(addr);
+    else
+        gap_delete_all_link_keys();
+    if (have_remembered_speaker && (!one || memcmp(addr, remembered_speaker, sizeof(bd_addr_t)) == 0))
+    {
+        const btstack_tlv_t *tlv;
+        void *ctx;
+        btstack_tlv_get_instance(&tlv, &ctx);
+        if (tlv)
+            tlv->delete_tag(ctx, BTA_TLV_TAG_SPEAKER);
+        have_remembered_speaker = false;
+    }
+    bta_unlock();
+}
+
+/* MM.INFO(BLUETOOTH SPEAKER | KEYBOARD): the connected device's address, or
+   "" when there is none. */
+void bt_info(unsigned char *tp, char *out)
+{
+    if (checkstring(tp, (unsigned char *)"SPEAKER"))
+    {
+        if (spk_state == SPK_OPEN || spk_state == SPK_STREAMING)
+            strcpy(out, bd_addr_to_str(speaker_addr));
+        else
+            out[0] = 0;
+    }
+    else if (checkstring(tp, (unsigned char *)"KEYBOARD"))
+        bt_keyboard_address(out);
+    else
+        SyntaxError();
+}
+
 /* BLUETOOTH STATUS */
 static void bta_status(void)
 {
@@ -1141,6 +1200,8 @@ void cmd_bluetooth(void)
         bta_test(tp);
     else if ((tp = checkstring(cmdline, (unsigned char *)"STATUS")))
         bta_status();
+    else if ((tp = checkstring(cmdline, (unsigned char *)"FORGET")))
+        bta_forget(tp);
     else
         SyntaxError();
 }

@@ -841,6 +841,37 @@ static bool bth_is_bonded(bd_addr_type_t type, const bd_addr_t addr)
     return false;
 }
 
+/* MM.INFO(BLUETOOTH KEYBOARD): the connected keyboard's address, or "". */
+void bt_keyboard_address(char *buf)
+{
+    if (state == BTK_READY)
+        strcpy(buf, bd_addr_to_str(target_addr));
+    else
+        buf[0] = 0;
+}
+
+/* BLUETOOTH FORGET: delete keyboard bonds - all of them (addr NULL) or the
+   one with this address - dropping the keyboard's link first if it is the
+   one. Called with the async-context lock held. */
+void bt_keyboard_forget(const uint8_t *addr)
+{
+    if (conn_handle != HCI_CON_HANDLE_INVALID &&
+        (addr == NULL || memcmp(addr, target_addr, sizeof(bd_addr_t)) == 0))
+        gap_disconnect(conn_handle);
+    int max = le_device_db_max_count();
+    for (int i = 0; i < max; i++)
+    {
+        int t = BD_ADDR_TYPE_UNKNOWN;
+        bd_addr_t a;
+        le_device_db_info(i, &t, a, NULL);
+        if (t == BD_ADDR_TYPE_UNKNOWN)
+            continue;
+        if (addr != NULL && memcmp(a, addr, sizeof(bd_addr_t)) != 0)
+            continue;
+        gap_delete_bonding((bd_addr_type_t)t, a);
+    }
+}
+
 /* The last pairing, for BLUETOOTH STATUS: the keyboard's address and
    whether btstack stored a bond for it - it does only when both sides ask
    to bond, and without one the keyboard can't come back after a reset. */
