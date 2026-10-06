@@ -931,7 +931,7 @@ static void bta_connect(unsigned char *tp)
 
     /* Checked and started under the lock: a paired speaker may be
        connecting to us by itself at the same moment. */
-    uint8_t status;
+    uint8_t status = ERROR_CODE_SUCCESS;
     bool busy;
     bta_lock();
     busy = (spk_state != SPK_NONE);

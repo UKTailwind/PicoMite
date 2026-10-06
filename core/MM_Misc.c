@@ -7428,7 +7428,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"AUDIO");
     if (tp)
     {
-        int pin1, pin2, slice;
+        int slice;
         unsigned char *p;
         if (CurrentLinePtr)
             StandardError(10);
@@ -7624,6 +7624,7 @@ void MIPS16 cmd_option(void)
             return;
         }
 #if !defined(NOPWMAUDIO)
+        int pin1, pin2;
         getcsargs(&tp, 3);
         if (argc != 3)
             SyntaxError();
