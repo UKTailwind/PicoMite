@@ -824,6 +824,43 @@ static bool ad_has_uuid16(const uint8_t *data, uint16_t len, uint16_t uuid)
     return false;
 }
 
+/* True if btstack holds a bond for this address (the LE device DB, kept in
+   Option.bt_tlv). Compares identity addresses, which is what a keyboard
+   with a public or static random address advertises. */
+static bool bth_is_bonded(bd_addr_type_t type, const bd_addr_t addr)
+{
+    int max = le_device_db_max_count();
+    for (int i = 0; i < max; i++)
+    {
+        int t = BD_ADDR_TYPE_UNKNOWN;
+        bd_addr_t a;
+        le_device_db_info(i, &t, a, NULL);
+        if (t != BD_ADDR_TYPE_UNKNOWN && t == (int)type && memcmp(a, addr, sizeof(bd_addr_t)) == 0)
+            return true;
+    }
+    return false;
+}
+
+/* The last pairing, for BLUETOOTH STATUS: the keyboard's address and
+   whether btstack stored a bond for it - it does only when both sides ask
+   to bond, and without one the keyboard can't come back after a reset. */
+static bd_addr_t last_pair_addr;
+static bd_addr_type_t last_pair_addr_type;
+static int8_t last_pair_result = -1; /* -1 none, 0 bond not stored, 1 stored, 2 failed */
+static uint8_t last_pair_status, last_pair_reason;
+
+void bt_keyboard_last_pairing(char *buf, int len)
+{
+    if (last_pair_result < 0)
+        snprintf(buf, len, "none since boot");
+    else if (last_pair_result == 2)
+        snprintf(buf, len, "failed, status 0x%02X reason 0x%02X", last_pair_status, last_pair_reason);
+    else
+        snprintf(buf, len, "%s (%s), %s", bd_addr_to_str(last_pair_addr),
+                 last_pair_addr_type == BD_ADDR_TYPE_LE_PUBLIC ? "public" : "random",
+                 last_pair_result ? "bond stored" : "BOND NOT STORED");
+}
+
 #ifdef BTH_SCAN_DEBUG
 /* Addresses already logged this scan session, so the verbose scan log
    shows each advertiser once rather than flooding. Reset by start_scan().
@@ -1623,32 +1660,38 @@ static void packet_handler(uint8_t packet_type,
                     (int)rssi, has_hid ? " HID" : "", name);
 #endif
 
-        /* Filter out distant advertisers — see BTH_SCAN_RSSI_MIN. */
-        if (rssi < BTH_SCAN_RSSI_MIN)
+        /* A keyboard bonded to us reconnects by advertising its stored
+           address, often with directed advertising (ADV_DIRECT_IND, event
+           type 1 - the controller only reports those addressed to us),
+           which carries no data and so no HID UUID. Without this it was
+           found only within the boot that bonded it, through target_addr;
+           after a reset only its pairing button brought it back. */
+        bool known = (gap_event_advertising_report_get_advertising_event_type(packet) == 1) ||
+                     bth_is_bonded(addr_type, addr);
+
+        /* Filter out distant strangers — see BTH_SCAN_RSSI_MIN. */
+        if (rssi < BTH_SCAN_RSSI_MIN && !known)
             break;
 
         bool mac_match = (memcmp(addr, target_addr, sizeof(bd_addr_t)) == 0);
 #ifdef BTH_MATCH_HID_UUID
-        if (mac_match || has_hid)
+        if (mac_match || has_hid || known)
+#else
+        if (mac_match || known)
+#endif
         {
-            /* If UUID match drove us (not the hardcoded MAC), adopt
-               the advertiser's address — gap_connect needs the
-               actual addr_type that was seen here. */
+            /* Unless the hardcoded MAC matched, adopt the advertiser's
+               address — gap_connect needs the actual addr_type that was
+               seen here. */
             if (!mac_match)
             {
                 memcpy(target_addr, addr, sizeof(bd_addr_t));
                 target_addr_type = addr_type;
-                bth_log("HID advertiser found: %s type=%u name=\"%s\"",
-                        bd_addr_to_str(addr), addr_type, name);
+                bth_log("%s advertiser found: %s type=%u name=\"%s\"",
+                        known ? "bonded" : "HID", bd_addr_to_str(addr), addr_type, name);
             }
             connect_target();
         }
-#else
-        if (mac_match)
-        {
-            connect_target();
-        }
-#endif
         break;
     }
 
@@ -1787,12 +1830,20 @@ static void packet_handler(uint8_t packet_type,
         {
             bth_log("SM pairing failed status=0x%02x reason=0x%02x",
                     pstatus, sm_event_pairing_complete_get_reason(packet));
+            last_pair_result = 2;
+            last_pair_status = pstatus;
+            last_pair_reason = sm_event_pairing_complete_get_reason(packet);
             /* Tear the link down so we try again from clean state. */
             gap_disconnect(conn_handle);
             break;
         }
         bth_log("SM pairing complete; link encrypted");
         kbd_pairings++;
+        /* btstack stores the keys at the end of key distribution, before
+           this event, so the DB already shows whether a bond was made. */
+        memcpy(last_pair_addr, target_addr, sizeof(bd_addr_t));
+        last_pair_addr_type = target_addr_type;
+        last_pair_result = bth_is_bonded(target_addr_type, target_addr) ? 1 : 0;
         btstack_run_loop_remove_timer(&pair_kickoff_timer);
         state = BTK_HIDS_CONNECTING;
         uint8_t hstat = hids_client_connect(conn_handle,

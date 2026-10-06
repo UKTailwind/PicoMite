@@ -1009,6 +1009,10 @@ static void bta_status(void)
         sprintf(buf, "\r\nKeyboard security: %lu pairings, %lu re-encryptions since boot",
                 (unsigned long)pairings, (unsigned long)reenc);
         MMPrintString(buf);
+        sprintf(buf, "\r\nKeyboard bonds held: %d\r\nLast pairing: ", le_device_db_count());
+        MMPrintString(buf);
+        bt_keyboard_last_pairing(buf, sizeof(buf));
+        MMPrintString(buf);
     }
     PRet();
 }

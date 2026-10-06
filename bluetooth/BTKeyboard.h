@@ -43,6 +43,8 @@ void bt_keyboard_scan_duty_changed(void);
 /* Diagnostics for BLUETOOTH STATUS (the save counters reset on each call). */
 void bt_keyboard_stats(uint32_t *saves, uint32_t *save_max_us, uint32_t *save_total_us,
                        uint32_t *pairings, uint32_t *reencryptions);
+/* The last keyboard pairing - address and whether a bond was stored. */
+void bt_keyboard_last_pairing(char *buf, int len);
 
 #ifdef __cplusplus
 }
