@@ -40,11 +40,14 @@ firmware images. Appendix K is the definition; this file is the authoring rule.
     USB VERSIONS ONLY
     NON-USB VERSIONS ONLY
     USB AND BLUETOOTH KEYBOARD VERSIONS ONLY
+    BLUETOOTH HOST VERSIONS ONLY
+    NOT BLUETOOTH HOST VERSIONS
     GUI CONTROLS VERSIONS ONLY
     PS2 KEYBOARD VERSIONS ONLY
     TRACE CACHE VERSIONS ONLY
     NOT PICOMITEMIN
     NOT PICOMITEMIN OR WEBMITE
+    NOT PICOMITEMIN OR BLUETOOTH HOST VERSIONS
     NOT RP2040 VGA
     NOT RP2040 VGA, RP2040 WEBMITE OR PICOMITEMIN
 
@@ -54,6 +57,10 @@ PINS`, `OPTION MOUSE`) are gated on `!USBKEYBOARD` and so are available on
 PicoMiteRP2350BTH; the PS/2 *keyboard* options (`OPTION KEYBOARD <layout>`,
 `OPTION KEYBOARD I2C`, `OPTION KEYBOARD DISABLE`) are gated on
 `!USBKEYBOARD && !PICOMITEBTH` and are not.
+
+`BLUETOOTH HOST` means PicoMiteRP2350BTH, the only Bluetooth host image the
+manual covers. It has no PWM, MCP48n2 (SPI) or VS1053 audio (`NOPWMAUDIO`,
+`NOVS1053`); its outputs are Bluetooth and I2S.
 
 ## Conditions
 

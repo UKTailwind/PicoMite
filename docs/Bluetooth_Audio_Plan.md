@@ -120,7 +120,7 @@ Original plan:
 ### Phase 4 — HDMIBTH, documentation, release checks
 
 - Build and test HDMIBTH (RAM and flash budget). Its scanout on core1 is unaffected; BTstack runs in the lowest-priority interrupt on core0.
-- User manual, `docs/help.txt` (regenerate), OPTION LIST.
+- **Done (2026-10-06): user manual and help files.** Commands rows BLUETOOTH SCAN/CONNECT/DISCONNECT/STATUS/FORGET (BLUETOOTH TEST left out as temporary), OPTION AUDIO BLUETOOTH [idle], MM.INFO$(BLUETOOTH device), a Sound Output section, and "PicoMiteBTH – Bluetooth Speakers and Headphones" in the Bluetooth Versions chapter. New labels BLUETOOTH HOST VERSIONS ONLY, NOT BLUETOOTH HOST VERSIONS (PWM audio) and NOT PICOMITEMIN OR BLUETOOTH HOST VERSIONS (SPI, VS1053), in MANUAL_STYLE.md and Appendix K. OPTION LIST was done with the code.
 - Goldens on PICOBTH.
 
 ## Later (raised during testing)
