@@ -1001,6 +1001,11 @@ if(IS_BT)
 		pico_btstack_cyw43
 		pico_cyw43_arch_none
 	)
+	# The SDK's default TLV bank is inside the A: drive; BTConsole.c hands
+	# btstack_cyw43_init() the Option-backed store instead.
+	target_link_options(PicoMite PRIVATE
+		"LINKER:--wrap=pico_flash_bank_instance"
+	)
 endif()
 
 if(IS_BTH)

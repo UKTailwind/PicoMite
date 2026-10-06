@@ -77,6 +77,18 @@ static const hal_flash_bank_t bt_tlv_hal = {
     .write = bt_tlv_write,
 };
 
+/* The SDK's btstack_cyw43_init(), run inside cyw43_arch_init(), builds the
+   global TLV on pico_flash_bank_instance(). Its default bank is the last
+   12 KB of flash, which is inside the A: drive (the drive runs to the end of
+   flash), and when no bank header is found there it erases a sector to write
+   one. The linker wraps that call for this build (CMakeLists.txt) so the SDK
+   gets the Option-backed store instead, and the LE device DB it attaches
+   lives in Option.bt_tlv. Same fix as BTKeyboard.c. */
+const hal_flash_bank_t *__wrap_pico_flash_bank_instance(void)
+{
+    return &bt_tlv_hal;
+}
+
 #include "nus_gatt.h"
 
 #define BT_TX_BUF_SIZE 1024
@@ -380,17 +392,10 @@ void bt_console_init(void)
 
     l2cap_init();
 
-    /* Persistent bonding via the Option struct (see bt_tlv_hal above).
-       The btstack TLV writes get redirected into Option.bt_tlv and
-       persisted via SaveOptions() — keeps the LTK alive across reboots
-       without colliding with MMBasic's flash claims. */
-    {
-        static btstack_tlv_flash_bank_t tlv_context;
-        const btstack_tlv_t *tlv = btstack_tlv_flash_bank_init_instance(
-            &tlv_context, &bt_tlv_hal, NULL);
-        btstack_tlv_set_instance(tlv, &tlv_context);
-        le_device_db_tlv_configure(tlv, &tlv_context);
-    }
+    /* Persistent bonding: btstack_cyw43_init() has already built the
+       global TLV on Option.bt_tlv (see __wrap_pico_flash_bank_instance)
+       and pointed the LE device DB at it, before sm_init() as the security
+       manager needs. Writes are persisted via SaveOptions(). */
 
     sm_init();
 
