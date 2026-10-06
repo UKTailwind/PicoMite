@@ -91,6 +91,20 @@ Original plan:
 
 ### Phase 3 — usability and robustness
 
+**Progress (2026-10-06, HDMIBTH on the PC3, COM16):**
+- HDMIBTH builds from the branch; its heap went 240 → 228 KB (5376a9f).
+- **BLE keyboard alongside audio** (Peter, by ear): typing, wake-from-sleep and reconnect after a reset all work during playback, with no audio pauses. Four bugs were found and fixed on the way. All four are also present in the released BTH builds:
+  1. **Bond-store writes ran inside btstack's interrupt** as SaveOptions() calls (a 100 ms busy-wait plus a flash erase), 3–5 per pairing. Audio and the interpreter stalled for up to 805 ms, and an SD read timed out ("SDcard Removed"). Writes are now buffered in RAM and saved once from the main loop (b03a72d).
+  2. **Every keyboard wake paired afresh**, because MITM was required and Just Works bonds were therefore never reused (f5530c6).
+  3. **The CYW43 LED heartbeat's control call** sometimes waits out its 500 ms timeout under the async-context lock, stalling the encoder. The LED is now left alone while audio streams (eafb765).
+  4. **After a reset, keyboards came back only with their pairing button**: scan matching ignored bonded and directed advertisers. That keyboard also pairs with a new static random address each time (f259253).
+- **Speaker remembered and reconnected** (9eb7338): 2 s after boot or a dropout, then backing off from 5 s to 60 s. `BLUETOOTH CONNECT` with no address reconnects it.
+- **Diagnostics in BLUETOOTH STATUS:** underruns, longest encoder gap, send wait and dropped samples, bond-store writes, keyboard pairings and re-encryptions, the last pairing's result.
+- **Still to do:** `BLUETOOTH FORGET`, `MM.INFO(BLUETOOTH …)`, the idle-suspend policy (5 s now), an automatic retry when CONNECT is refused with 0x67 right after a reset, showing a BLE passkey on screen, AVRCP (optional), and a decision on how much of the STATUS diagnostics to keep.
+
+Original plan:
+
+
 - Reconnect to the last speaker at boot, and accept the speaker reconnecting to us.
 - Implement `BLUETOOTH FORGET` and `MM.INFO(BLUETOOTH …)`.
 - Error messages for: speaker not found, pairing refused, no stream.
