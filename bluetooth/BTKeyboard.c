@@ -1835,11 +1835,19 @@ static void packet_handler(uint8_t packet_type,
 
     case SM_EVENT_PASSKEY_DISPLAY_NUMBER:
     {
-        /* Peer wants us to display a 6-digit passkey so the user can
-           type it on the peer (e.g. a keyboard). We log it; the user
-           reads it from the console. */
+        /* Passkey Entry: the keyboard asked for protection against
+           eavesdropping, so we show a 6-digit code and the user types it
+           on the keyboard. Until this went to the console the code only
+           reached the (normally disabled) debug log, and such keyboards -
+           common among brand-name ones - could never pair. Printed even
+           while a program runs: pairing is something the user started. */
         uint32_t passkey = sm_event_passkey_display_number_get_passkey(packet);
         bth_log("SM Passkey: type %06lu on the BT device", (unsigned long)passkey);
+        char msg[80];
+        snprintf(msg, sizeof(msg),
+                 "\r\nBluetooth keyboard pairing: type %06lu on the keyboard, then Enter\r\n",
+                 (unsigned long)passkey);
+        MMPrintString(msg);
         break;
     }
 
