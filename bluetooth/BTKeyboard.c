@@ -634,6 +634,18 @@ static const hal_flash_bank_t bt_tlv_hal = {
     .write = bt_tlv_write,
 };
 
+/* The SDK's btstack_cyw43_init(), run inside cyw43_arch_init(), builds the
+   global TLV on pico_flash_bank_instance(). Its default bank is the last
+   12 KB of flash, which is inside the A: drive (the drive runs to the end of
+   flash), and when no bank header is found there it erases a sector to write
+   one. The linker wraps that call for the BTH builds (CMakeLists.txt) so the
+   SDK gets the Option-backed store instead: the TLV, the LE device DB and
+   the Classic link-key DB it attaches all live in Option.bt_tlv. */
+const hal_flash_bank_t *__wrap_pico_flash_bank_instance(void)
+{
+    return &bt_tlv_hal;
+}
+
 typedef enum
 {
     BTK_OFF,
@@ -1771,16 +1783,10 @@ void bt_keyboard_init(void)
 
     l2cap_init();
 
-    /* Persistent bonding via the Option struct (see bt_tlv_hal above).
-       Must be set up BEFORE sm_init() so the security manager picks it
-       up as the LE Device DB backing store. */
-    {
-        static btstack_tlv_flash_bank_t tlv_context;
-        const btstack_tlv_t *tlv = btstack_tlv_flash_bank_init_instance(
-            &tlv_context, &bt_tlv_hal, NULL);
-        btstack_tlv_set_instance(tlv, &tlv_context);
-        le_device_db_tlv_configure(tlv, &tlv_context);
-    }
+    /* Persistent bonding: btstack_cyw43_init() has already built the
+       global TLV on Option.bt_tlv (see __wrap_pico_flash_bank_instance)
+       and pointed the LE device DB at it, before sm_init() as the security
+       manager needs. */
 
     sm_init();
     /* KEYBOARD_DISPLAY is the most flexible IO capability — it lets

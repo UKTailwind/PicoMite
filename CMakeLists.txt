@@ -976,6 +976,11 @@ if(IS_BTH)
 		pico_btstack_cyw43
 		pico_cyw43_arch_none
 	)
+	# The SDK's default TLV bank is inside the A: drive; BTKeyboard.c hands
+	# btstack_cyw43_init() the Option-backed store instead.
+	target_link_options(PicoMite PRIVATE
+		"LINKER:--wrap=pico_flash_bank_instance"
+	)
 endif()
 
 # TLS support (mbedtls + lwIP altcp_tls glue) for every WiFi (WEB) variant:
