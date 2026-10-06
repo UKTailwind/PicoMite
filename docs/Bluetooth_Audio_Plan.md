@@ -28,18 +28,23 @@ Consequences:
 - RAM: `HEAP_MEMORY_SIZE` will have to drop by about 8 KB on each build.
 - Flash: removing VS1053 makes room for the Classic stack on PICOBTH without moving `FLASH_TARGET_OFFSET`. HDMIBTH has the same VS1053 saving.
 
-## Proposed BASIC syntax (provisional — Peter to approve)
+## BASIC syntax (as implemented; Peter decides changes)
 
 ```
-BLUETOOTH SCAN [seconds]        ' list nearby Classic devices; audio devices marked
-BLUETOOTH CONNECT addr$         ' pair/connect to a speaker ("AA:BB:CC:DD:EE:FF")
-BLUETOOTH CONNECT               ' reconnect the last speaker used
-BLUETOOTH DISCONNECT
-BLUETOOTH STATUS                ' keyboard and speaker state, stream format, encoder load
-BLUETOOTH FORGET                ' delete all stored pairings (keyboard and speaker)
-OPTION AUDIO BLUETOOTH          ' PLAY output goes to the connected speaker (phase 2)
-MM.INFO(BLUETOOTH ...)          ' state for programs (phase 3)
+BLUETOOTH SCAN [seconds]        ' list nearby Classic devices: address, signal, "Audio", name
+BLUETOOTH CONNECT name$         ' pair/connect, by the name SCAN showed (any case)
+BLUETOOTH CONNECT addr$         ' ...or by address "AA:BB:CC:DD:EE:FF"
+                                ' (no bare form - it could not know which kind of device)
+BLUETOOTH DISCONNECT            ' also stops automatic reconnection until the next CONNECT
+BLUETOOTH STATUS                ' keyboard and speaker state, stream format, diagnostics
+BLUETOOTH FORGET [addr$]        ' delete stored pairings - all, or one device's
+BLUETOOTH TEST freq | 0 | STOP  ' temporary: a test tone through the speaker
+OPTION AUDIO BLUETOOTH          ' PLAY output goes to the connected speaker
+MM.INFO(BLUETOOTH SPEAKER)      ' connected speaker's address, or ""
+MM.INFO(BLUETOOTH KEYBOARD)     ' connected keyboard's address, or ""
 ```
+
+The speaker last connected is remembered and reconnected automatically (boot, dropouts).
 
 `BLUETOOTH` is a new command; it is appended at the end of the command table, so no existing token number changes. No new function tokens are used.
 
@@ -98,7 +103,7 @@ Original plan:
   2. **Every keyboard wake paired afresh**, because MITM was required and Just Works bonds were therefore never reused (f5530c6).
   3. **The CYW43 LED heartbeat's control call** sometimes waits out its 500 ms timeout under the async-context lock, stalling the encoder. The LED is now left alone while audio streams (eafb765).
   4. **After a reset, keyboards came back only with their pairing button**: scan matching ignored bonded and directed advertisers. That keyboard also pairs with a new static random address each time (f259253).
-- **Speaker remembered and reconnected** (9eb7338): 2 s after boot or a dropout, then backing off from 5 s to 60 s. `BLUETOOTH CONNECT` with no address reconnects it.
+- **Speaker remembered and reconnected** (9eb7338): 2 s after boot or a dropout, then backing off from 5 s to 60 s. `BLUETOOTH CONNECT name$` connects by the name SCAN showed; there is no bare CONNECT.
 - **Diagnostics in BLUETOOTH STATUS:** underruns, longest encoder gap, send wait and dropped samples, bond-store writes, keyboard pairings and re-encryptions, the last pairing's result.
 - **Still to do:** `BLUETOOTH FORGET`, `MM.INFO(BLUETOOTH …)`, the idle-suspend policy (5 s now), an automatic retry when CONNECT is refused with 0x67 right after a reset, showing a BLE passkey on screen, AVRCP (optional), and a decision on how much of the STATUS diagnostics to keep.
 

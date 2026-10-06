@@ -893,23 +893,33 @@ static void bta_error_status(const char *what, uint8_t status)
     error("$", buf);
 }
 
-/* BLUETOOTH CONNECT [addr$]  - no address: the remembered speaker */
+/* BLUETOOTH CONNECT name$ | addr$
+     name$ - a device name as the last BLUETOOTH SCAN listed it (any case)
+     addr$ - its address, "AA:BB:CC:DD:EE:FF"
+   There is no bare form: with more than one kind of device it couldn't
+   know which was meant. The remembered speaker reconnects by itself. */
 static void bta_connect(unsigned char *tp)
 {
     bd_addr_t addr;
-    if (*tp)
+    if (!*tp)
+        error("Device name or address required");
+    char *s = (char *)getCstring(tp);
+    bta_require_ready();
+    if (sscanf_bd_addr(s, addr) == 0)
     {
-        char *s = (char *)getCstring(tp);
-        bta_require_ready();
-        if (sscanf_bd_addr(s, addr) == 0)
-            error("Invalid Bluetooth address");
-    }
-    else
-    {
-        bta_require_ready();
-        if (!have_remembered_speaker)
-            error("No speaker remembered - give its address");
-        memcpy(addr, remembered_speaker, sizeof(bd_addr_t));
+        int match = -1;
+        for (int i = 0; i < found_count; i++)
+        {
+            if (found[i].name[0] && strcasecmp(found[i].name, s) == 0)
+            {
+                if (match >= 0)
+                    error("More than one device called $ - give its address", s);
+                match = i;
+            }
+        }
+        if (match < 0)
+            error("No device called $ in the last BLUETOOTH SCAN", s);
+        memcpy(addr, found[match].addr, sizeof(bd_addr_t));
     }
     auto_reconnect = true;
     if (inquiry_active || name_request_active)
