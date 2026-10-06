@@ -4424,11 +4424,16 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
 /* The value splice (P5b).  RC_SPLICE runs the command whose record is r as
    RBExec runs a CMD record, but with cmdline at the spliced copy of its
    arguments in the code, and RBSplice at their values on the VM's stack,
-   which getvalue reads through RBSpliceValue when it meets a T_VALUE. */
+   which getvalue reads through RBSpliceValue when it meets a T_VALUE.  The
+   two share one section, so they sit together in flash: a graphics loop goes
+   through both for every PIXEL or COLOUR, and apart they could fall in the
+   same XIP cache sets as each other (pixart 18% slower when Stream.c's -Os
+   moved them). */
+#define RBSPLICETEXT __attribute__((section(".text.RBSplice")))
 static union cell *RBSplice;
 extern char CMM1; // Draw.c: OPTION LEGACY
 
-unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *ta)
+RBSPLICETEXT unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *ta)
 {
     unsigned char k = p[1];
     if (RBSplice == NULL)
@@ -4494,7 +4499,7 @@ static __attribute__((noinline)) void RBFnSpliceRun(const uint16_t *pc, unsigned
 }
 
 
-static __attribute__((noinline)) void RBSpliceCmd(const uint16_t *r, unsigned char *e, unsigned int nw, const uint16_t *txt, union cell *vals)
+static RBSPLICETEXT __attribute__((noinline)) void RBSpliceCmd(const uint16_t *r, unsigned char *e, unsigned int nw, const uint16_t *txt, union cell *vals)
 {
     cmdline = (unsigned char *)txt;
     nextstmt = e + (nw >> 8);
