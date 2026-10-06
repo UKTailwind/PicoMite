@@ -91,6 +91,11 @@ MM.INFO(BLUETOOTH ...)          ' state for programs (phase 3)
 - User manual, `docs/help.txt` (regenerate), OPTION LIST.
 - Goldens on PICOBTH.
 
+## Later (raised during testing)
+
+- **Classic HID host** (Peter, 2026-10-06): phone keyboard apps that act as a Bluetooth Classic keyboard, older Classic keyboards and gamepads such as the DualShock 4 cannot see the board today. The board is not discoverable, and only the BLE (HOG) keyboard path exists. With the stack now dual-mode, this is mostly BTstack's `classic/hid_host.c` plus a pairing policy for incoming HID connections. It should feed the same `process_kbd_report` / mouse / gamepad paths as BLE.
+- On HDMIBTH the Classic name is `PicoMiteHDMIBTH` while the BLE GATT name is hard-coded `PicoMiteBTH` in BTKeyboard.c; take both from `CYW43_HOST_NAME`.
+
 ## Known limits to state in the manual
 
 - **Latency:** 150–250 ms, set by the speaker's buffering and the codec. Music is fine; game sound effects will lag.
