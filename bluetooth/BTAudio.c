@@ -308,6 +308,12 @@ static volatile uint32_t send_wait_max_us, samples_dropped, send_errors;
 static volatile uint8_t send_last_error;
 static uint32_t send_requested_us;
 
+/* Stream starts, pauses and closes (BLUETOOTH STATUS). A pause or close we
+   did not ask for came from the speaker: some suspend the stream by
+   themselves, and PLAY then starts it again - a gap in the sound each time. */
+static volatile uint32_t stream_starts, stream_pauses, stream_pauses_by_speaker, stream_closes;
+static volatile bool pause_requested;
+
 static void send_media_packet(void)
 {
     uint32_t waited = time_us_32() - send_requested_us;
@@ -510,6 +516,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         lead_in_samples = cfg_rate * BTA_LEAD_IN_MS / 1000;
         audio_timer_start();
         spk_state = SPK_STREAMING;
+        stream_starts++;
         bt_keyboard_scan_duty_changed();
         break;
 
@@ -522,6 +529,10 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         audio_timer_stop();
         if (spk_state == SPK_STREAMING)
             spk_state = SPK_OPEN;
+        stream_pauses++;
+        if (!pause_requested)
+            stream_pauses_by_speaker++;
+        pause_requested = false;
         bt_keyboard_scan_duty_changed();
         break;
 
@@ -529,6 +540,8 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         audio_timer_stop();
         if (spk_state == SPK_STREAMING)
             spk_state = SPK_OPEN;
+        if (!spk_quiet_release)
+            stream_closes++;
         bt_keyboard_scan_duty_changed();
         break;
 
@@ -735,7 +748,8 @@ void bt_audio_service(void)
         if (idle_ms && !playing && !tone && now_ms - last_active_ms > idle_ms)
         {
             bta_lock();
-            a2dp_source_pause_stream(a2dp_cid, local_seid);
+            if (a2dp_source_pause_stream(a2dp_cid, local_seid) == ERROR_CODE_SUCCESS)
+                pause_requested = true;
             bta_unlock();
             last_active_ms = now_ms; /* don't repeat it while the suspend completes */
         }
@@ -1062,7 +1076,8 @@ static void bta_test(unsigned char *tp)
             bta_wait(cond_tone_silent, 500);
             bta_wait(cond_never, 200);
             bta_lock();
-            a2dp_source_pause_stream(a2dp_cid, local_seid);
+            if (a2dp_source_pause_stream(a2dp_cid, local_seid) == ERROR_CODE_SUCCESS)
+                pause_requested = true;
             bta_unlock();
             bta_wait(cond_not_streaming, 5000);
         }
@@ -1226,6 +1241,11 @@ static void bta_status(void)
         if (send_errors)
             sprintf(buf + strlen(buf), " (last 0x%02X)", send_last_error);
         send_wait_max_us = samples_dropped = send_errors = 0;
+        MMPrintString(buf);
+        sprintf(buf, "\r\nStream starts: %lu, pauses: %lu (%lu by the speaker), closed by the speaker: %lu",
+                (unsigned long)stream_starts, (unsigned long)stream_pauses,
+                (unsigned long)stream_pauses_by_speaker, (unsigned long)stream_closes);
+        stream_starts = stream_pauses = stream_pauses_by_speaker = stream_closes = 0;
         MMPrintString(buf);
         sprintf(buf, "\r\nBond store: %lu writes, longest %lu ms, total %lu ms",
                 (unsigned long)saves, (unsigned long)(save_max / 1000), (unsigned long)(save_total / 1000));
