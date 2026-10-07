@@ -479,6 +479,9 @@ void SoftReset(int code);
 int CPUSpeedRuntime(uint32_t speed);
 #endif
 bool UserPIOActive(void); // true if a user PIO state machine is running
+#if defined(rp2350) && (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+void InitCYW43PIO(void); // set PIO2's GPIO window for the CYW43 radio and I2S audio
+#endif
 int codemap(int pin);
 int codecheck(unsigned char *line);
 int getpinarg(unsigned char *arg);

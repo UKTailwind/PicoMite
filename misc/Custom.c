@@ -112,7 +112,13 @@ int dma_rx_sm;
 #ifdef rp2350
 bool PIO0 = true;
 bool PIO1 = true;
+#if defined(PICOMITEBT) || defined(PICOMITEBTH)
+// PIO2 carries the CYW43 radio and, if configured, I2S audio (see
+// InitCYW43PIO) - a user PIO PROGRAM / PIO CLEAR on it would break both.
+bool PIO2 = false;
+#else
 bool PIO2 = true;
+#endif
 #else
 bool PIO0 = true;
 bool PIO1 = true;
@@ -120,9 +126,8 @@ bool PIO2 = false;
 #endif
 #endif
 /* HDMIWEB also defines PICOMITEVGA, but its PIO flags must come from the
-   PICOMITEWEB block below (cyw43 WiFi SPI on PIO2, I2S audio on PIO1, both
-   hidden from MMBasic). Exclude it here so PIO0/PIO1/PIO2 aren't defined
-   twice. */
+   PICOMITEWEB block below (cyw43 WiFi SPI and I2S audio share PIO2, hidden
+   from MMBasic). Exclude it here so PIO0/PIO1/PIO2 aren't defined twice. */
 #if defined(PICOMITEVGA) && !defined(PICOMITEHDMIWEB)
 #ifdef rp2350
 #ifdef HDMI
@@ -130,12 +135,14 @@ bool PIO0 = true;
 #else
 bool PIO0 = false;
 #endif
-#ifdef PICOMITEHDMIBTH
-bool PIO1 = false;
-#else
 bool PIO1 = true;
-#endif
+#ifdef PICOMITEHDMIBTH
+// PIO2 carries the CYW43 radio and, if configured, I2S audio (see
+// InitCYW43PIO) - a user PIO PROGRAM / PIO CLEAR on it would break both.
+bool PIO2 = false;
+#else
 bool PIO2 = true;
+#endif
 #else
 bool PIO0 = false;
 bool PIO1 = true;
@@ -144,17 +151,18 @@ bool PIO2 = false;
 #endif
 #ifdef PICOMITEWEB
 #ifdef rp2350
-// WEBRP2350: I2S audio is loaded onto PIO1 by start_i2s(1, 1); the cyw43
-// SPI driver claims the highest-numbered PIO with a free SM (SDK scans
-// PIO2 -> PIO1 -> PIO0) so it lands on PIO2. Both must be hidden from
-// MMBasic - a user PIO PROGRAM / PIO STOP would clear the instruction
-// memory and disable all SMs on the target PIO, breaking the WiFi link
-// or the audio output mid-run.
+// WEBRP2350 / HDMIWEB: the cyw43 SPI driver claims the highest-numbered PIO
+// with a free SM (SDK scans PIO2 -> PIO1 -> PIO0) so it lands on PIO2, and
+// I2S audio shares that block on another SM (start_i2s(2, 1)). PIO2 must be
+// hidden from MMBasic - a user PIO PROGRAM / PIO STOP would clear the
+// instruction memory and disable all SMs on it, breaking the WiFi link and
+// the audio output mid-run. PIO0 and PIO1 are free for user programs.
 bool PIO0 = true;
-bool PIO1 = false;
+bool PIO1 = true;
 bool PIO2 = false;
 #else
-// RP2040 has only 2 PIOs; cyw43 lands on PIO1 (highest).
+// RP2040 has only 2 PIOs; cyw43 lands on PIO1 (highest) and I2S audio
+// shares it on another SM (start_i2s(1, 1)).
 bool PIO0 = true;
 bool PIO1 = false;
 bool PIO2 = false;
@@ -172,7 +180,7 @@ volatile uint32_t g_index = 0;
 static uint g_dma_chan = 0;
 static PIO g_pio = NULL;
 static uint g_sm = 0;
-uint64_t piomap[2] = {0};
+uint64_t piomap[NUM_PIOS] = {0}; // GPIOs in use on each PIO block, for the GPIOBASE window checks
 #endif
 #define MAXLABEL 16
 static int sidepins = 0, sideopt = 0, sidepinsdir = 0, PIOlinenumber = 0, PIOstart = 0, p_wrap = 31, p_wrap_target = 0;
@@ -560,6 +568,13 @@ void start_i2s(int pior, int sm)
 #else
         pioi2s = (pior == 0 ? pio0 : pio1);
 #endif
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+        /* I2S shares the CYW43 radio's PIO block. The radio's SM is claimed
+           through the SDK, which hands out the lowest unclaimed SM - including
+           to a second bus start after a failed one - so claim this one too. */
+        if (!pio_sm_is_claimed(pioi2s, sm))
+                pio_sm_claim(pioi2s, sm);
+#endif
 #if !defined(PICOMITEVGA) || defined(HDMI)
 #ifdef rp2350
         if (PinDef[Option.audio_i2s_bclk].GPno + 1 > 31 || PinDef[Option.audio_i2s_data].GPno > 31)
@@ -625,6 +640,25 @@ void start_i2s(int pior, int sm)
         else
                 PIO0 = false;
 }
+#if defined(rp2350) && (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+/* PIO2 is shared by the CYW43 radio and, if configured, I2S audio. Its GPIO
+   window (GPIOBASE: GP0-31 or GP16-47) belongs to the whole block, and the
+   SDK refuses to move it once a program is loaded, so it is chosen here, at
+   boot before either program loads, from both sets of pins. Recording the
+   radio's pins in piomap[2] also makes OPTION AUDIO I2S refuse I2S pins that
+   the radio's window can't reach. */
+void InitCYW43PIO(void)
+{
+        piomap[2] = ((uint64_t)1 << CYW43_DEFAULT_PIN_WL_DATA_OUT) | ((uint64_t)1 << CYW43_DEFAULT_PIN_WL_CLOCK);
+        if (Option.audio_i2s_bclk)
+        {
+                piomap[2] |= (uint64_t)1 << PinDef[Option.audio_i2s_data].GPno;
+                piomap[2] |= (uint64_t)1 << PinDef[Option.audio_i2s_bclk].GPno;
+                piomap[2] |= (uint64_t)1 << (PinDef[Option.audio_i2s_bclk].GPno + 1);
+        }
+        pio_set_gpio_base(pio2, (piomap[2] & (uint64_t)0xFFFF00000000) ? 16 : 0);
+}
+#endif
 int getGPpin(unsigned char *pinarg, int pio, int base)
 {
         int pin;

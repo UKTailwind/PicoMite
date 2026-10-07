@@ -3421,6 +3421,10 @@ uint32_t testPSRAM(void)
         }
     }
 
+#if defined(PICOMITEBT) || defined(PICOMITEWEB) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    extern PIO pioi2s;    // I2S audio's PIO and SM (Custom.c start_i2s), which
+    extern uint8_t i2ssm; // share the cyw43 PIO - see the retune below
+#endif
     int CPUSpeedRuntime(uint32_t speed)
     {
         uint vco, postdiv1, postdiv2;
@@ -3502,16 +3506,18 @@ uint32_t testPSRAM(void)
            alone updates the stored value but leaves the LIVE PIO state machine
            on the old divider - at the new clk_sys that shifts SCK out of range
            and permanently desyncs the link (hdr mismatch / ioctl timeout).
-           cyw43 owns the highest PIO exclusively and hidden from MMBasic (pio2
-           on RP2350, pio1 on the RP2040 WiFi build - see Custom.c), so
-           retuning every SM on it is safe, and doing it inside the masked
-           window guarantees the SM is idle (no transfer mid-flight). */
+           cyw43 runs on the highest PIO, hidden from MMBasic (pio2 on RP2350,
+           pio1 on the RP2040 WiFi build - see Custom.c), and doing it inside
+           the masked window guarantees the SM is idle (no transfer
+           mid-flight). I2S audio shares that PIO on its own SM with its own
+           divider (ResetAudioRate() re-derives it below), so only the radio's
+           SM is retuned: the one the SDK claimed that isn't the I2S one. */
 #if defined(PICOMITEBT)
         uint32_t cyw43_div = (speed + 79999) / 80000;
-#elif defined(PICOMITEWEB) || defined(PICOMITEBTH)
+#elif defined(PICOMITEWEB) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
         uint32_t cyw43_div = (speed + 99999) / 100000;
 #endif
-#if defined(PICOMITEBT) || defined(PICOMITEWEB) || defined(PICOMITEBTH)
+#if defined(PICOMITEBT) || defined(PICOMITEWEB) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
         if (cyw43_div < 2)
             cyw43_div = 2;
         cyw43_set_pio_clkdiv_int_frac8(cyw43_div, 0); // keep the stored value coherent
@@ -3520,9 +3526,14 @@ uint32_t testPSRAM(void)
 #else
         PIO cyw43_pio = pio1;
 #endif
+        uint32_t cyw43_sms = 0;
         for (uint sm = 0; sm < 4; sm++)
-            pio_sm_set_clkdiv_int_frac8(cyw43_pio, sm, cyw43_div, 0);
-        pio_clkdiv_restart_sm_mask(cyw43_pio, 0xf);
+            if (pio_sm_is_claimed(cyw43_pio, sm) && !(pioi2s == cyw43_pio && sm == i2ssm))
+            {
+                pio_sm_set_clkdiv_int_frac8(cyw43_pio, sm, cyw43_div, 0);
+                cyw43_sms |= 1u << sm;
+            }
+        pio_clkdiv_restart_sm_mask(cyw43_pio, cyw43_sms);
 #endif
         restore_interrupts(irqs);
 
@@ -3983,6 +3994,9 @@ uint32_t testPSRAM(void)
 #endif
         InitReservedIO();
         ClearExternalIO();
+#if defined(rp2350) && (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+        InitCYW43PIO(); // before the radio or I2S audio loads onto PIO2
+#endif
         ConsoleRxBufHead = 0;
         ConsoleRxBufTail = 0;
         ConsoleTxBufHead = 0;
@@ -4323,15 +4337,17 @@ uint32_t testPSRAM(void)
             MMPrintString("PSRAM not responding: disabled until the next restart\r\n");
 #if defined(PICOMITEVGA) && !defined(HDMI)
         start_i2s(QVGA_PIO_NUM, 1);
-#elif defined(PICOMITEWEB)
-        // WEBRP2350: keep PIO2 free for the cyw43 SPI driver (the SDK
-        // picks the highest-numbered PIO with a free SM). I2S on PIO1.
-        start_i2s(1, 1);
 #else
+        // On the CYW43 builds this shares PIO2 with the radio, which has its
+        // own SM (see InitCYW43PIO and start_i2s)
         start_i2s(2, 1);
 #endif
 #else
+#ifdef PICOMITEWEB
+    start_i2s(1, 1); // shares PIO1 with the CYW43 radio, which has its own SM
+#else
     start_i2s(QVGA_PIO_NUM, 1);
+#endif
 #endif
         if (setjmp(mark) != 0)
         {
