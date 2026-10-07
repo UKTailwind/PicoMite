@@ -7282,6 +7282,10 @@ void MIPS16 cmd_option(void)
 #if CYW43_PIN_WL_DYNAMIC
         if (!CheckPin(41, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED)) // GP23: the radio's WL_ON on a Pico 2 W
             error("Pin %/| is reserved", 41, 41);
+#elif defined(PICOMITEWEB)
+        /* RP2040 WebMite: GP23 is the radio's WL_ON, always (no PinDef entry
+           to check); the Pico W's SMPS mode pin is on the radio, not GP23. */
+        error("GP23 is the wireless chip's power-on pin");
 #endif
         if (checkstring(tp, (unsigned char *)"PWM"))
             Option.PWM = true;
