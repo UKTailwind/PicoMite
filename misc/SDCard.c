@@ -3213,10 +3213,10 @@ void InitReservedIO(void)
 	}
 #endif
 
-#if !defined(PICOMITEWEB) && !defined(PICOMITEBT) && !defined(PICOMITEHDMIBTH)
+#if !defined(PICOMITEWEB) && !defined(PICOMITEBT) && !defined(PICOMITEBTH) && !defined(PICOMITEHDMIBTH)
 	/* GP23 is the cyw43 WL_ON line on Pico W / Pico 2 W — don't drive
-	   it manually in WEB / BT / HDMIBTH builds. CheckPin would refuse
-	   anyway (UNUSED), but be explicit. */
+	   it manually in the wireless builds. CheckPin would refuse anyway
+	   (the radio's pins are boot reserved), but be explicit. */
 #ifdef rp2350
 	if (rp2350a)
 	{
@@ -3296,6 +3296,9 @@ void InitReservedIO(void)
 		ExtCfg(Option.MOUSE_CLOCK, EXT_BOOT_RESERVED, 0);
 		ExtCfg(Option.MOUSE_DATA, EXT_BOOT_RESERVED, 0);
 	}
+#endif
+#if CYW43_PIN_WL_DYNAMIC
+	ReserveCYW43Pins(); // last, so a clash with another option's pins is seen
 #endif
 }
 
@@ -3473,6 +3476,16 @@ char *pinsearch(int pin)
 #ifdef rp2350
 	else if (pin == Option.PSRAM_CS_PIN)
 		strcpy(buff, "PSRAM CS");
+#if CYW43_PIN_WL_DYNAMIC
+	else if (pin == PINMAP[cyw43_gp[0]])
+		strcpy(buff, "CYW43 WL_ON");
+	else if (pin == PINMAP[cyw43_gp[1]])
+		strcpy(buff, "CYW43 WL_D");
+	else if (pin == PINMAP[cyw43_gp[2]])
+		strcpy(buff, "CYW43 WL_CS");
+	else if (pin == PINMAP[cyw43_gp[3]])
+		strcpy(buff, "CYW43 WL_CLK");
+#endif
 #if defined(PICOMITE)
 	else if (pin == Option.VGA_BLUE && Option.DISPLAY_TYPE >= VGA222 && Option.DISPLAY_TYPE < NEXTGEN)
 		strcpy(buff, "VGA BLUE L");

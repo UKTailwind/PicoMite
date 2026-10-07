@@ -547,6 +547,8 @@ static int scan_result(void *env, const cyw43_ev_scan_result_t *result)
 void cmd_web(void)
 {
         unsigned char *tp;
+        if (!startupcomplete) // the radio didn't start at boot: nothing here can reach it
+                error("WiFi radio not running");
         tp = checkstring(cmdline, (unsigned char *)"CONNECT");
         if (tp)
         {

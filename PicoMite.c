@@ -668,19 +668,16 @@ uint8_t PSRAMpin;
         {38, 99, "GND", UNUSED, 99, 99},                                                                   // pin 38
         {39, 99, "VSYS", UNUSED, 99, 99},                                                                  // pin 39
         {40, 99, "VBUS", UNUSED, 99, 99},                                                                  // pin 40
-#if (defined(PICOMITEWEB) && defined(rp2350)) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
-        /* GP23/24/25/29 wire to the CYW43439 wireless chip on Pico W /
-           Pico 2 W (and Pimoroni Pico Plus 2W). Mark them UNUSED so
-           CheckPin() refuses to reset them in ClearExternalIO —
-           otherwise the SPI link breaks and cyw43_arch_init() fails
-           silently. Applies to RP2040 and RP2350 CYW43 builds alike;
-           the previous &&defined(rp2350) qualifier left WebMite RP2040
-           without the pseudo-pins, exposing GP23-29 to whatever code
-           paths reach them. */
-        {41, 23, "GP23", UNUSED, 99, 99}, // pseudo pin 41 reserved for WEB/BT/BTH/HDMIBTH interface
-        {42, 24, "GP24", UNUSED, 99, 99}, // pseudo pin 42 reserved for WEB/BT/BTH/HDMIBTH interface
-        {43, 25, "GP25", UNUSED, 99, 99}, // pseudo pin 43 reserved for WEB/BT/BTH/HDMIBTH interface
-        {44, 29, "GP29", UNUSED, 99, 99}, // pseudo pin 44 reserved for WEB/BT/BTH/HDMIBTH interface
+#if CYW43_PIN_WL_DYNAMIC
+        /* The RP2350 wireless builds: GP23/24/25/29 are the CYW43439's pins
+           on a Pico 2 W, but OPTION CYW43 PINS can move the radio, so they
+           are ordinary pins here. Whichever four the radio uses are boot
+           reserved (ReserveCYW43Pins), which is what keeps ClearExternalIO
+           and the user off them. */
+    {41, 23, "GP23", DIGITAL_IN | DIGITAL_OUT | SPI0TX | I2C1SCL | PWM3B, 99, 131},             // pseudo pin 41
+    {42, 24, "GP24", DIGITAL_IN | DIGITAL_OUT | SPI1RX | UART1TX | I2C0SDA | PWM4A, 99, 4},     // pseudo pin 42
+    {43, 25, "GP25", DIGITAL_IN | DIGITAL_OUT | UART1RX | I2C0SCL | PWM4B, 99, 132},            // pseudo pin 43
+    {44, 29, "GP29", DIGITAL_IN | DIGITAL_OUT | ANALOG_IN | UART0RX | I2C0SCL | PWM6B, 3, 134}, // pseudo pin 44
 #else
 #ifndef PICOMITEWEB
     {41, 23, "GP23", DIGITAL_IN | DIGITAL_OUT | SPI0TX | I2C1SCL | PWM3B, 99, 131},             // pseudo pin 41
@@ -3991,7 +3988,7 @@ uint32_t testPSRAM(void)
 #endif
         InitReservedIO();
         ClearExternalIO();
-#if defined(rp2350) && (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+#if CYW43_PIN_WL_DYNAMIC
         InitCYW43PIO(); // before the radio or I2S audio loads onto PIO2
 #endif
         ConsoleRxBufHead = 0;
@@ -4063,8 +4060,11 @@ uint32_t testPSRAM(void)
         }
         if (cyw43_arch_init() == 0)
         {
-            bt_console_init();
+            if (CYW43Responds()) // else reported after the banner
+                bt_console_init();
         }
+        else
+            CYW43Failed(); // reported after the banner
 #endif
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 #ifdef PICOMITEHDMIBTH
@@ -4087,8 +4087,11 @@ uint32_t testPSRAM(void)
         }
         if (cyw43_arch_init() == 0)
         {
-            bt_keyboard_init();
+            if (CYW43Responds()) // else reported after the banner
+                bt_keyboard_init();
         }
+        else
+            CYW43Failed(); // reported after the banner
 #endif
         InitBasic();
 #ifndef PICOMITEVGA
@@ -4332,6 +4335,15 @@ uint32_t testPSRAM(void)
         }
         else if (psram_not_responding())
             MMPrintString("PSRAM not responding: disabled until the next restart\r\n");
+#if CYW43_PIN_WL_DYNAMIC
+        if (cyw43_pins_refused)
+        {
+            MMPrintString("OPTION CYW43 PINS not used (");
+            MMPrintString((char *)cyw43_pins_refused);
+            MMPrintString("): the radio is on GP23, GP24, GP25, GP29\r\n");
+        }
+        CYW43Report(); // the BT builds start the radio before this
+#endif
 #if defined(PICOMITEVGA) && !defined(HDMI)
         start_i2s(QVGA_PIO_NUM, 1);
 #else
@@ -4410,9 +4422,19 @@ uint32_t testPSRAM(void)
                                         (unsigned)cyw43_div,
                                         (unsigned)(clock_get_hz(clk_sys) / (2 * cyw43_div) / 1000));
                                 MMPrintString(dbg);*/
-                startupcomplete = 1;
-                WebConnect();
+#if CYW43_PIN_WL_DYNAMIC
+                if (CYW43Responds())
+#endif
+                {
+                    startupcomplete = 1;
+                    WebConnect();
+                }
             }
+#if CYW43_PIN_WL_DYNAMIC
+            else
+                CYW43Failed();
+            CYW43Report();
+#endif
 #endif
 #ifdef PICOMITE
             SPIatRisk = ((Option.DISPLAY_TYPE > I2C_PANEL && Option.DISPLAY_TYPE < BufferedPanel) && Option.SD_CLK_PIN == 0);

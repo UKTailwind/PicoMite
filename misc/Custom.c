@@ -640,16 +640,83 @@ void start_i2s(int pior, int sm)
         else
                 PIO0 = false;
 }
-#if defined(rp2350) && (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+#if CYW43_PIN_WL_DYNAMIC
+#include "pico/cyw43_driver.h"
+/* OPTION CYW43 PINS. The radio's WL_ON, WL_D, WL_CS and WL_CLK as GP numbers:
+   the board's own (Pico 2 W), or the option's once ReserveCYW43Pins() has
+   accepted them at boot. WL_D carries data both ways and the chip's
+   interrupt, so it is the SDK's DATA_OUT, DATA_IN and HOST_WAKE at once. */
+uint8_t cyw43_gp[4] = {CYW43_DEFAULT_PIN_WL_REG_ON, CYW43_DEFAULT_PIN_WL_DATA_OUT, CYW43_DEFAULT_PIN_WL_CS, CYW43_DEFAULT_PIN_WL_CLOCK};
+const char *cyw43_pins_refused;
+
+/* The rules a set of CYW43 pins (GP numbers, in cyw43_gp[] order) must meet
+   beyond each pin being free: NULL if it can be used, else why not. WL_D and
+   WL_CLK are PIO pins, and I2S audio shares the radio's PIO, so they and the
+   I2S pins must all fit one PIO GPIO window, GP0-31 or GP16-47. */
+const char *CheckCYW43Pins(const int gp[4])
+{
+        for (int i = 0; i < 4; i++)
+                for (int j = i + 1; j < 4; j++)
+                        if (gp[i] == gp[j])
+                                return "The same pin is given twice";
+        uint64_t map = ((uint64_t)1 << gp[1]) | ((uint64_t)1 << gp[3]);
+        if ((map & (uint64_t)0xFFFF) && (map & (uint64_t)0xFFFF00000000))
+                return "WL_D and WL_CLK must both be in GP0-31 or both in GP16-47";
+        if (Option.audio_i2s_bclk)
+        {
+                map |= (uint64_t)1 << PinDef[Option.audio_i2s_data].GPno;
+                map |= (uint64_t)1 << PinDef[Option.audio_i2s_bclk].GPno;
+                map |= (uint64_t)1 << (PinDef[Option.audio_i2s_bclk].GPno + 1);
+                if ((map & (uint64_t)0xFFFF) && (map & (uint64_t)0xFFFF00000000))
+                        return "I2S, WL_D and WL_CLK pins must all be in GP0-31 or GP16-47"; // < MAXERRMSG
+        }
+        return NULL;
+}
+
+/* Boot, at the end of InitReservedIO(): take the saved OPTION CYW43 PINS if
+   they are still valid and free of the other options' pins (OPTION DISK LOAD
+   doesn't check them), else stay on the board's own and say why after the
+   banner. Then reserve the four, so nothing can drive them. */
+void ReserveCYW43Pins(void)
+{
+        if (Option.CYW43_ON)
+        {
+                int pin[4] = {Option.CYW43_ON, Option.CYW43_D, Option.CYW43_CS, Option.CYW43_CLK}, gp[4];
+                for (int i = 0; i < 4 && !cyw43_pins_refused; i++)
+                {
+                        if (IsInvalidPin(pin[i]) || !CheckPin(pin[i], CP_NOABORT))
+                                cyw43_pins_refused = "a pin is invalid or in use by another option";
+                        else
+                                gp[i] = PinDef[pin[i]].GPno;
+                }
+                if (!cyw43_pins_refused)
+                        cyw43_pins_refused = CheckCYW43Pins(gp);
+                if (!cyw43_pins_refused)
+                        for (int i = 0; i < 4; i++)
+                                cyw43_gp[i] = gp[i];
+        }
+        for (int i = 0; i < 4; i++)
+                if (CheckPin(PINMAP[cyw43_gp[i]], CP_NOABORT))
+                        ExtCfg(PINMAP[cyw43_gp[i]], EXT_BOOT_RESERVED, 0);
+}
+
 /* PIO2 is shared by the CYW43 radio and, if configured, I2S audio. Its GPIO
    window (GPIOBASE: GP0-31 or GP16-47) belongs to the whole block, and the
    SDK refuses to move it once a program is loaded, so it is chosen here, at
    boot before either program loads, from both sets of pins. Recording the
    radio's pins in piomap[2] also makes OPTION AUDIO I2S refuse I2S pins that
-   the radio's window can't reach. */
+   the radio's window can't reach. The radio's pins are handed to the SDK
+   here too: before any cyw43_arch_init(), which attaches the host-wake
+   interrupt to whatever WL_D is at that moment. */
 void InitCYW43PIO(void)
 {
-        piomap[2] = ((uint64_t)1 << CYW43_DEFAULT_PIN_WL_DATA_OUT) | ((uint64_t)1 << CYW43_DEFAULT_PIN_WL_CLOCK);
+        uint pins[CYW43_PIN_INDEX_WL_COUNT];
+        pins[CYW43_PIN_INDEX_WL_REG_ON] = cyw43_gp[0];
+        pins[CYW43_PIN_INDEX_WL_DATA_OUT] = pins[CYW43_PIN_INDEX_WL_DATA_IN] = pins[CYW43_PIN_INDEX_WL_HOST_WAKE] = cyw43_gp[1];
+        pins[CYW43_PIN_INDEX_WL_CS] = cyw43_gp[2];
+        pins[CYW43_PIN_INDEX_WL_CLOCK] = cyw43_gp[3];
+        cyw43_set_pins_wl(pins);
+        piomap[2] = ((uint64_t)1 << cyw43_gp[1]) | ((uint64_t)1 << cyw43_gp[3]);
         if (Option.audio_i2s_bclk)
         {
                 piomap[2] |= (uint64_t)1 << PinDef[Option.audio_i2s_data].GPno;
@@ -657,6 +724,49 @@ void InitCYW43PIO(void)
                 piomap[2] |= (uint64_t)1 << (PinDef[Option.audio_i2s_bclk].GPno + 1);
         }
         pio_set_gpio_base(pio2, (piomap[2] & (uint64_t)0xFFFF00000000) ? 16 : 0);
+}
+
+#include "pico/cyw43_arch.h"
+static bool cyw43_failed;
+
+/* The radio didn't start - wrong OPTION CYW43 PINS, or no radio. The
+   driver's own shutdown skips the bus when it never came up, which leaves
+   the PIO state machine and the two DMA channels the attempt claimed, so
+   they are released here. The four pins go back to inputs: they may not be
+   the radio's at all. */
+void CYW43Failed(void)
+{
+        cyw43_ll_deinit(&cyw43_state.cyw43_ll);
+        for (int i = 0; i < 4; i++)
+                gpio_init(cyw43_gp[i]);
+        cyw43_failed = true;
+}
+
+/* After cyw43_arch_init(), which doesn't touch the chip (for Bluetooth
+   either: the firmware loads at the first HCI power-on): a radio that isn't
+   on its pins would only fail at its first use - for WiFi again at every use
+   (the heartbeat LED each second), each a 70 ms power cycle that claims
+   another PIO state machine and two more DMA channels. So bring it up now,
+   once, LED off - the work its first use would do anyway; if it doesn't
+   answer, shut the driver down for good. */
+bool CYW43Responds(void)
+{
+        if (cyw43_gpio_set(&cyw43_state, CYW43_WL_GPIO_LED_PIN, false) == 0)
+                return true;
+        cyw43_arch_deinit();
+        CYW43Failed();
+        return false;
+}
+
+void CYW43Report(void)
+{
+        if (cyw43_failed)
+        {
+                char buff[96];
+                sprintf(buff, "CYW43 radio failed to start on GP%d,GP%d,GP%d,GP%d (OPTION CYW43 PINS)\r\n",
+                        cyw43_gp[0], cyw43_gp[1], cyw43_gp[2], cyw43_gp[3]);
+                MMPrintString(buff);
+        }
 }
 #endif
 int getGPpin(unsigned char *pinarg, int pio, int base)

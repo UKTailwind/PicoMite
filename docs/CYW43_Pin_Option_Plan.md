@@ -1,11 +1,50 @@
 # OPTION CYW43 PINS: plan
 
-Status, 2026-10-07: the approach is agreed but not implemented. Two things must
-be finished first:
+Status, 2026-10-07: **implemented** on development, in the five RP2350 wireless
+builds. It is tested on a PicoComputer 3 (HDMIWEB and HDMIBTH): default pins,
+every command error, and deliberately wrong pins (GP36-39). It is not yet tested
+on a real Waveshare board; Peter has one arriving 2026-10-08. The manual entry
+and the help file are still to do.
 
-- the Bluetooth background-interrupt storm on the BT-host builds (see "Blocking
-  work");
-- committing the PIO2 sharing work it builds on (see "Already done").
+What was built differs from the steps below in these ways:
+
+- **Option bytes:** `CYW43_ON`, `CYW43_D`, `CYW43_CS` and `CYW43_CLK` are pin
+  numbers. They are taken from the end of `extensions[]`, just before
+  `LIBRARY_HASH`, not after `Compile`, so HDMIWEB's `mousespeed` doesn't move.
+  Giving the Pico 2 W pins explicitly is stored as the default (all 0).
+- **Guards:** use `#if CYW43_PIN_WL_DYNAMIC`, never `#ifdef`. The SDK's
+  `pico_w.h` board header defines it as 0, so `#ifdef` is true on the RP2040
+  WebMite.
+- **Boot:** `ReserveCYW43Pins()` runs at the end of `InitReservedIO()`, after
+  every other option has reserved its pins. A saved set that is invalid or
+  clashes is not used (a line after the PSRAM message says why), and the
+  radio stays on GP23/24/25/29.
+- **A radio that doesn't answer.** `cyw43_arch_init()` never touches the chip,
+  for WiFi or for Bluetooth, so wrong pins used to fail only at first use:
+  - WiFi failed again every second (the heartbeat LED), with a 70 ms stall
+    each time;
+  - Bluetooth kept polling the dead radio, costing about 25% of the CPU.
+
+  Each failed bring-up also left a PIO state machine and two DMA channels
+  claimed, because `cyw43_deinit()` skips the bus when it never came up.
+  `CYW43Responds()` now brings the chip up straight after `cyw43_arch_init()`.
+  On failure, `CYW43Failed()`:
+  - releases the claims (`cyw43_ll_deinit`);
+  - returns the four pins to inputs;
+  - prints "CYW43 radio failed to start on GPa,GPb,GPc,GPd (OPTION CYW43
+    PINS)".
+
+  The radio is then left alone. `cmd_web` refuses with "WiFi radio not
+  running", and `MM.INFO(IP ADDRESS)` returns 0.0.0.0.
+- **Other paths onto GP23-29** that relied on the UNUSED PinDef entries are
+  closed:
+  - the Pico SMPS/VBUS/VSYS and GPIO-heartbeat set-up is compiled out for
+    PICOMITEBTH too;
+  - `OPTION POWER` refuses while GP23 is reserved;
+  - `MM.INFO(PIN)` / `MM.INFO(PINNO)` report the real state (for example
+    "CYW43 WL_CLK").
+- **Still open:** the RP2040 WebMite's `OPTION POWER` drives GP23 (WL_ON)
+  directly. This predates the option and is not fixed.
 
 ## Why
 

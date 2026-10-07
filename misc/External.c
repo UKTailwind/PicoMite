@@ -373,13 +373,10 @@ void writeIRclock(void)
 const uint8_t PINMAP[48] = {1, 2, 4, 5, 6, 7, 9, 10, 11, 12, 14, 15, 16, 17, 19, 20, 21, 22, 24, 25, 26, 27, 29, 41, 42, 43, 31, 32, 34, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62};
 int codemap(int pin)
 {
-#ifdef PICOMITEWEB
-    if (pin > (rp2350a ? 29 : 47) || pin < 0 || pin == 23 || pin == 24 || pin == 25 || pin == 29)
-        error("Invalid GPIO");
-#else
+    /* The wireless builds' radio pins (OPTION CYW43 PINS) are refused later,
+       as boot reserved, rather than here as invalid: they can be anywhere. */
     if (pin > (rp2350a ? 29 : 47) || pin < 0)
         error("Invalid GPIO");
-#endif
     return (int)PINMAP[pin];
 }
 #else
@@ -5918,12 +5915,10 @@ void MIPS16 ClearExternalIO(void)
             ExtCfg(58, EXT_ANA_IN, 0);
     }
 #endif
-#if !defined(PICOMITEWEB) && !defined(PICOMITEBT) && !defined(PICOMITEHDMIBTH)
-    /* Pins 41/42/44 are the wireless interface on Pico W / Pico 2 W —
-       skip the default ExtCfg for those when running WEB / BT /
-       HDMIBTH. (PICOMITEBTH currently relies on CheckPin returning
-       false for the UNUSED pseudo-pins to skip these blocks; add it
-       to the exclusion list if a regression appears.) */
+#if !defined(PICOMITEWEB) && !defined(PICOMITEBT) && !defined(PICOMITEBTH) && !defined(PICOMITEHDMIBTH)
+    /* Pins 41/42/44 are the Pico's SMPS, VBUS and VSYS lines, and the
+       wireless interface on Pico W / Pico 2 W: the wireless builds have no
+       Pico power pins and no GPIO heartbeat (the LED is on the radio). */
     if (!Option.AllPins)
     {
         if (CheckPin(41, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))

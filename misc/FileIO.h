@@ -373,10 +373,19 @@ extern "C"
                    normal extensions[75], so the whole struct stays exactly 896
                    bytes (== 7 XMODEM blocks). */
                 float mousespeed;
-                unsigned char extensions[62]; // (63 before Compile)
+                unsigned char extensions[58]; // (63 before Compile, 62 before CYW43_ON..CYW43_CLK)
 #else
-        unsigned char extensions[70]; // 896 bytes == 7 XMODEM blocks (71 before Compile)
+        unsigned char extensions[66]; // 896 bytes == 7 XMODEM blocks (71 before Compile, 70 before CYW43_ON..CYW43_CLK)
 #endif
+                /* OPTION CYW43 PINS (RP2350 wireless builds): the radio's WL_ON,
+                   WL_D, WL_CS and WL_CLK as pin numbers, all 0 for the board's own
+                   (GP23, GP24, GP25, GP29). Taken from the end of extensions[] in
+                   both arms above, so nothing that already exists moves; the bytes
+                   are in every build, as spare ones where the option isn't. */
+                uint8_t CYW43_ON;
+                uint8_t CYW43_D;
+                uint8_t CYW43_CS;
+                uint8_t CYW43_CLK;
                 /* Hash of the source file the library was last loaded from, so
                    LIBRARY LOAD can tell "already have this one" from "about to
                    replace somebody else's library".  Zero means not recorded - a

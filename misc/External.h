@@ -479,8 +479,15 @@ void SoftReset(int code);
 int CPUSpeedRuntime(uint32_t speed);
 #endif
 bool UserPIOActive(void); // true if a user PIO state machine is running
-#if defined(rp2350) && (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+#if CYW43_PIN_WL_DYNAMIC /* the RP2350 wireless builds */
 void InitCYW43PIO(void); // set PIO2's GPIO window for the CYW43 radio and I2S audio
+extern uint8_t cyw43_gp[4];           // the radio's WL_ON, WL_D, WL_CS, WL_CLK as GP numbers
+extern const char *cyw43_pins_refused; // why the saved OPTION CYW43 PINS was not used, or NULL
+const char *CheckCYW43Pins(const int gp[4]);
+void ReserveCYW43Pins(void);
+void CYW43Failed(void);   // the radio didn't start: release what the attempt claimed
+bool CYW43Responds(void); // bring the radio up now, CYW43Failed() if it can't be
+void CYW43Report(void);   // say so once, if it failed
 #endif
 int codemap(int pin);
 int codecheck(unsigned char *line);

@@ -3501,6 +3501,20 @@ void MIPS16 printoptions(void)
     if (Option.PSRAM_CS_PIN != 0)
         PO2Str("PSRAM PIN", PinDef[Option.PSRAM_CS_PIN].pinname);
 #endif
+#if CYW43_PIN_WL_DYNAMIC
+    if (Option.CYW43_ON)
+    {
+        PO("CYW43 PINS");
+        MMPrintString((char *)PinDef[Option.CYW43_ON].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.CYW43_D].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.CYW43_CS].pinname);
+        MMputchar(',', 1);
+        MMPrintString((char *)PinDef[Option.CYW43_CLK].pinname);
+        PRet();
+    }
+#endif
 #if !(defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
     /* CYW43 builds have no GPIO heartbeat (LED is on the wireless chip)
        so never report a HEARTBEAT PIN, even for legacy saved options
@@ -4948,6 +4962,12 @@ static const struct optmap_s OptionMap[] = {
     OPT(GPSTX, OPT_U8),
     OPT(heartbeatpin, OPT_U8),
     OPT(PSRAM_CS_PIN, OPT_U8),
+#if CYW43_PIN_WL_DYNAMIC
+    OPT(CYW43_ON, OPT_U8),
+    OPT(CYW43_D, OPT_U8),
+    OPT(CYW43_CS, OPT_U8),
+    OPT(CYW43_CLK, OPT_U8),
+#endif
     OPT(BGR, OPT_U8),
     OPT(NoScroll, OPT_U8),
     OPT(CombinedCS, OPT_U8),
@@ -7259,6 +7279,10 @@ void MIPS16 cmd_option(void)
 #endif
         if (Option.AllPins)
             error("OPTION PICO set");
+#if CYW43_PIN_WL_DYNAMIC
+        if (!CheckPin(41, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED)) // GP23: the radio's WL_ON on a Pico 2 W
+            error("Pin %/| is reserved", 41, 41);
+#endif
         if (checkstring(tp, (unsigned char *)"PWM"))
             Option.PWM = true;
         if (checkstring(tp, (unsigned char *)"PFM"))
@@ -7650,6 +7674,50 @@ void MIPS16 cmd_option(void)
         SyntaxError(); /* no PWM audio in this build */
 #endif
     }
+
+#if CYW43_PIN_WL_DYNAMIC
+    /* OPTION CYW43 PINS wl_on, wl_d, wl_cs, wl_clk | DEFAULT: where the
+       board wires the CYW43 radio, for boards that differ from the Pico 2 W.
+       Each pin must be free, or one the radio has now. */
+    tp = checkstring(cmdline, (unsigned char *)"CYW43 PINS");
+    if (tp)
+    {
+        const int board[4] = {CYW43_DEFAULT_PIN_WL_REG_ON, CYW43_DEFAULT_PIN_WL_DATA_OUT, CYW43_DEFAULT_PIN_WL_CS, CYW43_DEFAULT_PIN_WL_CLOCK};
+        int gp[4], pin[4];
+        bool isboard = true;
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (checkstring(tp, (unsigned char *)"DEFAULT"))
+            memcpy(gp, board, sizeof(gp));
+        else
+        {
+            getcsargs(&tp, 7);
+            if (argc != 7)
+                SyntaxError();
+            for (int i = 0; i < 4; i++)
+                gp[i] = PinDef[getpinarg(argv[i * 2])].GPno;
+        }
+        for (int i = 0; i < 4; i++)
+        {
+            pin[i] = PINMAP[gp[i]];
+            if (ExtCurrentConfig[pin[i]] != EXT_NOT_CONFIG && gp[i] != cyw43_gp[0] && gp[i] != cyw43_gp[1] &&
+                gp[i] != cyw43_gp[2] && gp[i] != cyw43_gp[3])
+                StandardErrorParam2(27, pin[i], pin[i]);
+            if (gp[i] != board[i])
+                isboard = false;
+        }
+        const char *why = CheckCYW43Pins(gp);
+        if (why)
+            error((char *)why);
+        Option.CYW43_ON = isboard ? 0 : pin[0];
+        Option.CYW43_D = isboard ? 0 : pin[1];
+        Option.CYW43_CS = isboard ? 0 : pin[2];
+        Option.CYW43_CLK = isboard ? 0 : pin[3];
+        SaveOptions();
+        SoftReset(SOFT_RESET);
+        return;
+    }
+#endif
 
     tp = checkstring(cmdline, (unsigned char *)"SYSTEM I2C");
     if (tp)
@@ -8618,7 +8686,8 @@ void MIPS16 fun_info(void)
     }
     else if (checkstring(ep, (unsigned char *)"IP ADDRESS"))
     {
-        strcpy((char *)sret, ip4addr_ntoa(netif_ip4_addr(netif_list)));
+        /* no interface at all if the radio didn't start */
+        strcpy((char *)sret, netif_list ? ip4addr_ntoa(netif_ip4_addr(netif_list)) : "0.0.0.0");
         CtoM(sret);
         targ = T_STR;
         return;
@@ -9064,9 +9133,11 @@ void MIPS16 fun_info(void)
             pin = getinteger((unsigned char *)string);
             if (!code)
                 pin = codemap(pin);
-#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+#if (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)) && !CYW43_PIN_WL_DYNAMIC
             /* GP23/24/25/29 are CYW43-wireless on every cyw43-bearing
-               variant (Pico W / Pico 2 W / Pimoroni Pico Plus 2W).
+               variant (Pico W / Pico 2 W / Pimoroni Pico Plus 2W). Not in
+               the RP2350 builds, where OPTION CYW43 PINS can move the radio:
+               they are ordinary pins there, reported like any other.
                Previously only PICOMITEWEB matched, so MM.INFO(PIN n)
                on those pins returned "invalid" on BT/BTH/HDMIBTH even
                though the pins are reserved there too. */
@@ -9175,7 +9246,7 @@ void MIPS16 fun_info(void)
                 return;
             }
 #endif
-#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+#if (defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)) && !CYW43_PIN_WL_DYNAMIC
             /* Same widening as the iret block above — CYW43 pins are
                reserved on every cyw43-bearing variant. */
             if (pin >= 41 && pin <= 44)

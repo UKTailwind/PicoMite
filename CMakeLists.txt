@@ -855,6 +855,11 @@ if(IS_WEB)
 		PICO_HEAP_SIZE=0x2800
 		PICO_CORE0_STACK_SIZE=0x2000
 	)
+	if(IS_WEBRP2350 OR IS_HDMIWEB)
+		# OPTION CYW43 PINS: the radio's pins are set at run time
+		# (cyw43_set_pins_wl, InitCYW43PIO). The RP2040 WebMite keeps them fixed.
+		target_compile_definitions(PicoMite PRIVATE CYW43_PIN_WL_DYNAMIC=1)
+	endif()
 	if(IS_HDMIWEB)
 		# HDMIWEB = HDMIUSB display + USB host stack + WebMite WiFi/lwIP/TLS,
 		# no Bluetooth. PICOMITEHDMIWEB is the identity marker that disambiguates
@@ -909,6 +914,7 @@ if(IS_BT)
 		PICOMITEBT
 		CYW43_ENABLE_BLUETOOTH=1
 		CYW43_PIO_CLOCK_DIV_DYNAMIC=1
+		CYW43_PIN_WL_DYNAMIC=1 # OPTION CYW43 PINS
 		CYW43_HOST_NAME="PicoMiteBT"
 		# 16 KB each for heap and stack — matches WEB build. Adequate
 		# given the MIN_CPU=200 MHz floor set in configuration.h
@@ -930,6 +936,7 @@ if(IS_BTH)
 	target_compile_definitions(PicoMite PRIVATE
 		CYW43_ENABLE_BLUETOOTH=1
 		CYW43_PIO_CLOCK_DIV_DYNAMIC=1
+		CYW43_PIN_WL_DYNAMIC=1 # OPTION CYW43 PINS
 		PICO_HEAP_SIZE=0x4000
 		PICO_CORE0_STACK_SIZE=0x4000
 		GUICONTROLS
