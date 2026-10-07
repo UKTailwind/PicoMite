@@ -4031,6 +4031,12 @@ void MIPS16 configure(unsigned char *p, bool noask)
             Option.SerialTX = PINMAP[8];
             Option.SerialRX = PINMAP[9];
             Option.SerialConsole = 2;
+#elif defined(PICOMITEBT)
+            /* No USB on this build: GP8/GP9 (the PC3's USB-serial bridge)
+               are a backup console beside the BLE one - COM2, BOTH. */
+            Option.SerialTX = PINMAP[8];
+            Option.SerialRX = PINMAP[9];
+            Option.SerialConsole = 6;
 #else
 #endif
             Option.PSRAM_CS_PIN = PINMAP[47];

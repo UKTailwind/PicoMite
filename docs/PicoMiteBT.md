@@ -422,6 +422,27 @@ entry; that host then has to re-pair next time.
 
 ---
 
+## Backup serial console
+
+PicoMiteBT has no USB console, so if the Bluetooth link can't be used
+(no BLE host to hand, a bond mismatch, a radio fault) a UART can stand
+in. Set it from the BLE console:
+
+```
+OPTION SERIAL CONSOLE GP8, GP9, B
+```
+
+Any UART TX/RX pin pair will do. **Keep the `B`.** On this build it
+means "Bluetooth and serial": console output goes to both, and either
+can type. Without it the console is serial only and the BLE console
+goes silent.
+
+On a PicoComputer 3, `OPTION RESET PICO COMPUTER 3` (and the automatic
+PC3 configuration on a fresh install) sets this for you on GP8/GP9,
+which are wired to the board's USB-serial bridge.
+
+---
+
 ## Limitations
 
 These are constraints of the design, not bugs to be reported.
