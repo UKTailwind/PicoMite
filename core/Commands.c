@@ -3296,7 +3296,7 @@ void IfTableForget(void)
 static int iftab_grow(void)
 {
 	int newcap = iftab_capacity ? iftab_capacity * 2 : IFTAB_INITIAL_CAPACITY;
-	struct iftab_entry *n = (struct iftab_entry *)GetMemory(newcap * sizeof(struct iftab_entry));
+	struct iftab_entry *n = (struct iftab_entry *)GetMemoryNull(newcap * sizeof(struct iftab_entry));
 	if (!n)
 		return 0;
 	if (iftab)
@@ -3337,11 +3337,12 @@ static int iftab_is_multiline_if(unsigned char *p)
 /* Build IF table entries for one region (ProgMemory or LibMemory).
  * Uses a parallel "previous arm" chain (prev_arm[]) keyed by iftab index,
  * so that we can patch endif_tok for every arm of a frame when ENDIF is
- * seen, without walking through nested closed frames. */
-static void iftab_build_region(unsigned char *prog)
+ * seen, without walking through nested closed frames.  Returns 0 if the
+ * heap ran out (IfTableBuild then drops the table), else 1. */
+static int iftab_build_region(unsigned char *prog)
 {
 	if (!prog || *prog == 0xff || *prog == 0)
-		return;
+		return 1;
 
 	/* Per-frame state (small fixed nesting cap; deeper nesting falls
 	 * back to the linear scan at runtime). */
@@ -3356,9 +3357,9 @@ static void iftab_build_region(unsigned char *prog)
 	int *prev_arm = NULL;
 	if (prev_arm_capacity > 0)
 	{
-		prev_arm = (int *)GetMemory(prev_arm_capacity * sizeof(int));
+		prev_arm = (int *)GetMemoryNull(prev_arm_capacity * sizeof(int));
 		if (!prev_arm)
-			return;
+			return 0;
 	}
 
 	unsigned char *p = prog;
@@ -3391,17 +3392,17 @@ static void iftab_build_region(unsigned char *prog)
 					/* allocation failed: abandon */
 					if (prev_arm)
 						FreeMemorySafe((void **)&prev_arm);
-					return;
+					return 0;
 				}
 				/* keep prev_arm[] sized in step with iftab_capacity */
 				if (iftab_capacity != prev_arm_capacity)
 				{
-					int *np = (int *)GetMemory(iftab_capacity * sizeof(int));
+					int *np = (int *)GetMemoryNull(iftab_capacity * sizeof(int));
 					if (!np)
 					{
 						if (prev_arm)
 							FreeMemorySafe((void **)&prev_arm);
-						return;
+						return 0;
 					}
 					if (prev_arm)
 					{
@@ -3426,16 +3427,16 @@ static void iftab_build_region(unsigned char *prog)
 			{
 				if (prev_arm)
 					FreeMemorySafe((void **)&prev_arm);
-				return;
+				return 0;
 			}
 			if (iftab_capacity != prev_arm_capacity)
 			{
-				int *np = (int *)GetMemory(iftab_capacity * sizeof(int));
+				int *np = (int *)GetMemoryNull(iftab_capacity * sizeof(int));
 				if (!np)
 				{
 					if (prev_arm)
 						FreeMemorySafe((void **)&prev_arm);
-					return;
+					return 0;
 				}
 				if (prev_arm)
 				{
@@ -3476,6 +3477,7 @@ static void iftab_build_region(unsigned char *prog)
 	 * triggers the existing "No matching ENDIF" error.               */
 	if (prev_arm)
 		FreeMemorySafe((void **)&prev_arm);
+	return 1;
 }
 
 /* Insertion sort iftab[lo..hi-1] by tok ascending.  Each region is
@@ -3496,19 +3498,32 @@ static void iftab_sort_range(int lo, int hi)
 	}
 }
 
+/* With too little heap for the table there is no table: every IF finds its
+ * ELSE or ENDIF by the scan, as before the table existed.  The prompt rebuilds
+ * the table each time it comes back, and a program that stopped with "Not
+ * enough memory" leaves the heap full, so an allocation that raised the error
+ * itself (GetMemory) sent the prompt round that loop for ever. */
 void MIPS16 IfTableBuild(void)
 {
 	IfTableFree();
 
 	if (LibPresent() && LibMemory)
 	{
-		iftab_build_region(LibMemory);
+		if (!iftab_build_region(LibMemory))
+		{
+			IfTableFree();
+			return;
+		}
 		iftab_lib_count = iftab_count;
 		iftab_sort_range(0, iftab_lib_count);
 	}
 
 	int prog_lo = iftab_count;
-	iftab_build_region(ProgMemory);
+	if (!iftab_build_region(ProgMemory))
+	{
+		IfTableFree();
+		return;
+	}
 	iftab_sort_range(prog_lo, iftab_count);
 }
 
