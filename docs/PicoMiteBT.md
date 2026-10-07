@@ -425,21 +425,27 @@ entry; that host then has to re-pair next time.
 ## Backup serial console
 
 PicoMiteBT has no USB console, so if the Bluetooth link can't be used
-(no BLE host to hand, a bond mismatch, a radio fault) a UART can stand
-in. Set it from the BLE console:
+(no BLE host to hand, a bond mismatch, a radio fault) a UART stands in.
+By default - after a fresh install or any `OPTION RESET` - the console
+also runs on **GP8 (TX) and GP9 (RX)**, UART1 at the console baud rate,
+alongside the BLE one. Connect a USB-serial adapter there. On a
+PicoComputer 3 those pins are wired to the board's own USB-serial bridge.
+
+`OPTION LIST` shows it as `OPTION SERIAL CONSOLE COM2,GP8,GP9,BOTH`. To
+move it to other UART pins:
 
 ```
-OPTION SERIAL CONSOLE GP8, GP9, B
+OPTION SERIAL CONSOLE GP0, GP1, B
 ```
 
-Any UART TX/RX pin pair will do. **Keep the `B`.** On this build it
-means "Bluetooth and serial": console output goes to both, and either
-can type. Without it the console is serial only and the BLE console
-goes silent.
+**Keep the `B`.** On this build it means "Bluetooth and serial": console
+output goes to both, and either can type. Without it the console is
+serial only and the BLE console goes silent. To free the pins and use
+Bluetooth alone:
 
-On a PicoComputer 3, `OPTION RESET PICO COMPUTER 3` (and the automatic
-PC3 configuration on a fresh install) sets this for you on GP8/GP9,
-which are wired to the board's USB-serial bridge.
+```
+OPTION SERIAL CONSOLE DISABLE
+```
 
 ---
 

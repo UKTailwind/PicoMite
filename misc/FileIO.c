@@ -7762,7 +7762,12 @@ void ResetOptions(bool startup)
        Force CPU_Speed to 200 MHz on reset — anything lower destabilises
        BLE under sustained traffic (matches MIN_CPU in configuration.h). */
     Option.NoHeartbeat = 1;
-    Option.SerialConsole = 0; /* 0 = console over BT (replaces CDC) */
+    /* Console over BT (it replaces CDC), with a serial backup on GP8/GP9
+       (UART1, COM2): SerialConsole 6 = COM2, BOTH. The build has no USB, so
+       without it a board whose Bluetooth link can't be used has no console. */
+    Option.SerialConsole = 6;
+    Option.SerialTX = 11; // GP8
+    Option.SerialRX = 12; // GP9
     Option.CPU_Speed = 200000;
 #endif
 #ifdef PICOMITEBTH
