@@ -70,10 +70,13 @@ static volatile uint32_t cfg_rate;
 static uint8_t cfg_channel_mode; /* btstack_sbc_channel_mode_t */
 static uint8_t cfg_bitpool, cfg_blocks, cfg_subbands;
 
-/* Offer 44.1 and 48 kHz, stereo or joint stereo, any block length / subband
-   count / allocation, bitpool 2..53 - the sink picks within that. */
+/* Offer 44.1 and 48 kHz, joint stereo, stereo or mono, any block length /
+   subband count / allocation, bitpool 2..53 - the sink picks within that.
+   btstack prefers joint stereo, then stereo; mono is for the few speakers
+   that offer nothing else (the sound is mixed down in
+   fill_sbc_audio_buffer). */
 static const uint8_t media_sbc_codec_capabilities[] = {
-    (AVDTP_SBC_44100 << 4) | (AVDTP_SBC_48000 << 4) | AVDTP_SBC_STEREO | AVDTP_SBC_JOINT_STEREO,
+    (AVDTP_SBC_44100 << 4) | (AVDTP_SBC_48000 << 4) | AVDTP_SBC_STEREO | AVDTP_SBC_JOINT_STEREO | AVDTP_SBC_MONO,
     0xFF,
     2, 53};
 static uint8_t media_sbc_codec_configuration[4];
@@ -220,6 +223,21 @@ static bool cod_is_audio(uint32_t cod)
     return ((cod >> 8) & 0x1F) == 0x04;
 }
 
+static const char *channel_mode_name(void)
+{
+    switch (cfg_channel_mode)
+    {
+    case SBC_CHANNEL_MODE_JOINT_STEREO:
+        return "joint stereo";
+    case SBC_CHANNEL_MODE_STEREO:
+        return "stereo";
+    case SBC_CHANNEL_MODE_DUAL_CHANNEL:
+        return "dual channel";
+    default:
+        return "mono";
+    }
+}
+
 bool bt_audio_streaming(void)
 {
     return spk_state == SPK_STREAMING;
@@ -284,6 +302,11 @@ static void fill_sbc_audio_buffer(void)
            taken + frames_per_sbc <= BTA_MAX_SAMPLES_PER_TICK)
     {
         produce_audio(pcm_frame, frames_per_sbc);
+        if (cfg_channel_mode == SBC_CHANNEL_MODE_MONO)
+        { /* the encoder takes one sample per frame: mix left and right */
+            for (unsigned int i = 0; i < frames_per_sbc; i++)
+                pcm_frame[i] = (int16_t)(((int32_t)pcm_frame[2 * i] + pcm_frame[2 * i + 1]) / 2);
+        }
         sbc_encoder->encode_signed_16(&sbc_encoder_state, pcm_frame,
                                       &sbc_storage[1 + sbc_storage_count]);
         sbc_frame_len = sbc_encoder->sbc_buffer_length(&sbc_encoder_state);
@@ -475,7 +498,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         case AVDTP_CHANNEL_MODE_DUAL_CHANNEL:
             sbc_mode = SBC_CHANNEL_MODE_DUAL_CHANNEL;
             break;
-        default: /* mono is never offered */
+        default: /* AVDTP_CHANNEL_MODE_MONO */
             sbc_mode = SBC_CHANNEL_MODE_MONO;
             break;
         }
@@ -1021,7 +1044,7 @@ static void bta_connect(unsigned char *tp)
     MMPrintString(": SBC ");
     PInt(cfg_rate);
     MMPrintString(" Hz, ");
-    MMPrintString(cfg_channel_mode == SBC_CHANNEL_MODE_JOINT_STEREO ? "joint stereo" : (cfg_channel_mode == SBC_CHANNEL_MODE_STEREO ? "stereo" : "dual channel"));
+    MMPrintString((char *)channel_mode_name());
     MMPrintString(", bitpool ");
     PInt(cfg_bitpool);
     PRet();
@@ -1193,7 +1216,7 @@ static void bta_status(void)
         MMPrintString("\r\nStream:    SBC ");
         PInt(cfg_rate);
         MMPrintString(" Hz, ");
-        MMPrintString(cfg_channel_mode == SBC_CHANNEL_MODE_JOINT_STEREO ? "joint stereo" : (cfg_channel_mode == SBC_CHANNEL_MODE_STEREO ? "stereo" : "dual channel"));
+        MMPrintString((char *)channel_mode_name());
         MMPrintString(", bitpool ");
         PInt(cfg_bitpool);
         MMPrintString(", ");
