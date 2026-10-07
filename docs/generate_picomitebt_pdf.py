@@ -6,7 +6,7 @@ from fpdf import FPDF
 class PDF(FPDF):
     def header(self):
         self.set_font('Helvetica', 'B', 15)
-        self.cell(0, 10, 'PicoMiteBT -- BLE Console for Pico 2 W', 0, 1, 'C')
+        self.cell(0, 10, 'PicoMite Bluetooth Versions', 0, 1, 'C')
         self.ln(5)
 
     def footer(self):
@@ -51,13 +51,37 @@ def clean_inline(text):
     return _fold_to_latin1(text)
 
 
+def _table_cells(line):
+    """A table row's cells, empty ones included (an empty top-left header
+    cell must not shift the columns)."""
+    s = line.strip()
+    if s.startswith('|'):
+        s = s[1:]
+    if s.endswith('|'):
+        s = s[:-1]
+    return [c.strip() for c in s.split('|')]
+
+
+def _list_item(lines, i, text):
+    """A list item's text plus its indented continuation lines; returns
+    (text, next i)."""
+    while i < len(lines):
+        nxt = lines[i].rstrip('\n')
+        if (nxt.strip() == '' or not nxt.startswith(' ')
+                or nxt.strip().startswith(('- ', '```', '|', '#'))
+                or re.match(r'^\s*\d+\.\s+', nxt)):
+            break
+        text += ' ' + nxt.strip()
+        i += 1
+    return text, i
+
+
 def render_table(pdf, table_lines):
     """Render a markdown table."""
-    headers = [c.strip() for c in table_lines[0].split('|') if c.strip()]
+    headers = _table_cells(table_lines[0])
     data_rows = []
     for row_line in table_lines[2:]:
-        cells = [c.strip() for c in row_line.split('|') if c.strip()]
-        data_rows.append(cells)
+        data_rows.append(_table_cells(row_line))
 
     n_cols = len(headers)
     page_w = pdf.w - pdf.l_margin - pdf.r_margin
@@ -98,9 +122,10 @@ def render_table(pdf, table_lines):
         y0 = pdf.get_y()
         for j in range(n_cols):
             x = x0 + sum(col_widths[:j])
+            pdf.rect(x, y0, col_widths[j], row_h)  # full row height, whatever wraps
             pdf.set_xy(x, y0)
             pdf.multi_cell(col_widths[j], 5, '\n'.join(cell_lines[j]),
-                           border=1)
+                           border=0)
         pdf.set_xy(x0, y0 + row_h)
 
 
@@ -193,21 +218,21 @@ def render_markdown(pdf, md_path):
         # Numbered list item
         m = re.match(r'^\s*(\d+)\.\s+(.*)', line)
         if m:
-            num, text = m.group(1), clean_inline(m.group(2))
+            num = m.group(1)
+            text, i = _list_item(lines, i + 1, m.group(2))
+            text = clean_inline(text)
             pdf.set_font('Helvetica', '', 10)
             pdf.cell(8, 5, num + '.', 0, 0)
             pdf.multi_cell(0, 5, text)
-            i += 1
             continue
 
         # Bullet list item
         if line.strip().startswith('- '):
-            text = line.strip()[2:]
+            text, i = _list_item(lines, i + 1, line.strip()[2:])
             text = clean_inline(text)
             pdf.set_font('Helvetica', '', 10)
             pdf.cell(6, 5, chr(149), 0, 0)
             pdf.multi_cell(0, 5, text)
-            i += 1
             continue
 
         # Bold-only paragraph
@@ -219,8 +244,9 @@ def render_markdown(pdf, md_path):
             i += 1
             continue
 
-        # Regular paragraph
-        para = clean_inline(line)
+        # Regular paragraph (joined first, so an inline `code` span may
+        # cross a line break)
+        para = line
         i += 1
         while i < len(lines):
             nxt = lines[i].rstrip('\n')
@@ -230,10 +256,10 @@ def render_markdown(pdf, md_path):
                     or nxt.strip() == '---'
                     or (nxt.strip().startswith('**') and nxt.strip().endswith('**'))):
                 break
-            para += ' ' + clean_inline(nxt)
+            para += ' ' + nxt.strip()
             i += 1
         pdf.set_font('Helvetica', '', 10)
-        pdf.multi_cell(0, 5, para)
+        pdf.multi_cell(0, 5, clean_inline(para))
         continue
 
     return pdf

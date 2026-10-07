@@ -1,4 +1,4 @@
-# PicoMiteBT — BLE console for Pico 2 W
+# PicoMite Bluetooth versions
 
 `PicoMiteBT` is a build variant of PicoMite MMBasic that replaces the USB
 CDC console with a Bluetooth Low Energy serial link. Instead of plugging
@@ -10,6 +10,12 @@ GATT profile used by Adafruit Bluefruit, Nordic dev kits, and most other
 BLE-serial peripherals — so the device works out of the box with any
 BLE-NUS-aware terminal app, and with a small Python bridge for OSes that
 don't have one (Windows, Linux).
+
+This document covers all three Bluetooth builds. Most of it is about
+PicoMiteBT, the console over Bluetooth. The two Bluetooth host builds,
+PicoMiteRP2350BTH and PicoMiteHDMIBTH, which take Bluetooth keyboards,
+mice and speakers instead, are covered in *Bluetooth host versions* near
+the end.
 
 ## What you need
 
@@ -409,8 +415,9 @@ confirm anything beyond the OS-level "Pair?" dialog.
 
 After pairing, the long-term key (LTK) is stored on the Pico inside the
 PicoMite `Option` struct (`Option.bt_tlv[]` — a 2 KB area split into
-two 1 KB banks). It survives reboot and `OPTION RESET` — only a full
-factory reset / MagicKey change wipes it.
+two 1 KB banks). It survives a reboot or a power cycle. `OPTION RESET`,
+or a firmware update that resets the options, wipes it, and every host
+then has to pair again.
 
 **Up to 4 hosts** can be paired at the same time. The Pico keeps a key
 for each. So you can pair the same Pico with your desk PC, laptop, and
@@ -517,7 +524,8 @@ runs through cleanly at 200 MHz CPU). Not suited for moving large
 binary files end-to-end.
 
 ### CPU speed bounds
-The cyw43 wireless driver and btstack run in alarm-IRQ context. At low
+The cyw43 wireless driver and btstack are polled from the main loop,
+as the WebMite polls its WiFi. At low
 CPU speeds, the per-event processing margin becomes too tight for
 sustained bidirectional traffic and the link destabilises. To prevent
 this the build enforces a CPU-speed range:
@@ -636,6 +644,186 @@ for VS**, or `CMake: Select a Kit` and choose the Visual Studio kit.
 
 ---
 
+## Bluetooth host versions: PicoMiteRP2350BTH and PicoMiteHDMIBTH
+
+The other two Bluetooth builds work the other way round. Instead of
+being a Bluetooth device that a computer connects to, the PicoMite is the
+Bluetooth **host**, and keyboards, mice, game controllers and speakers
+connect to it.
+
+- **PicoMiteRP2350BTH** is the PicoMite RP2350 build (LCD panels, touch,
+  the GUI controls) with Bluetooth added. The console stays on USB. It
+  needs a Raspberry Pi Pico 2 W.
+- **PicoMiteHDMIBTH** is the PicoMiteHDMIUSB build (HDMI video, and USB
+  keyboards, mice, game controllers and touch screens) with the same
+  Bluetooth added. It needs an RP2350 module with the Raspberry Pi
+  wireless chip, such as a Pico 2 W. It was released for the first time
+  in V7.0.00 beta 7.
+
+Everything below applies to both, unless it says otherwise.
+
+### The two builds side by side
+
+| | PicoMiteRP2350BTH | PicoMiteHDMIBTH |
+|---|---|---|
+| Video | LCD panels | HDMI, 8-bit colour: 640x480 (default), 720x400, 800x600, 848x480, 800x480 or 1024x600 |
+| Console | USB | the HDMI screen and keyboard; serial on GP8 (Tx) and GP9 (Rx) as on the other USB versions |
+| Keyboards | Bluetooth LE | Bluetooth LE and USB |
+| Mice | Bluetooth LE and PS/2 | Bluetooth LE and USB |
+| Audio | a Bluetooth speaker or an I2S DAC | a Bluetooth speaker or an I2S DAC |
+| CPU speed | 200 to 396 MHz, set with `OPTION CPUSPEED` | set by the HDMI resolution |
+| Largest program | 208 KB | 180 KB |
+| MMBasic heap | 324 KB | 228 KB |
+
+### Keyboards, mice and game controllers
+
+Only Bluetooth LE devices (HID over GATT) can be used. Older Bluetooth
+Classic keyboards and mice will not connect.
+
+To pair, put the keyboard or mouse into its pairing mode close to the
+PicoMite. It is found, paired and connected with nothing to type, and the
+console shows `Bluetooth Keyboard Connected`. Only devices that are close
+(roughly in the same room) are paired, so a neighbour's keyboard is left
+alone.
+
+A few keyboards ask for a passkey while pairing. The PicoMite then shows
+a six-digit number on the console, for example `Bluetooth keyboard
+pairing: type 123456 on the keyboard, then Enter`. Type the number on the
+Bluetooth keyboard and press Enter.
+
+A paired keyboard connects again by itself after a reset or a power
+cycle when a key is pressed. It does not need its pairing button again.
+
+A connected keyboard behaves like a USB or PS/2 one: at the command
+prompt, in the full screen editor, and in a program with `INKEY$` and
+`KEYDOWN()`. Set its layout with `OPTION KEYBOARD` and its repeat timing
+with `OPTION KEYBOARD REPEAT`. A Bluetooth mouse is read with
+`DEVICE(MOUSE ...)` and can be used with the GUI controls. A game controller is read with
+`DEVICE(GAMEPAD ...)`.
+
+`BLUETOOTH STATUS` shows whether a keyboard is connected, and
+`MM.INFO$(BLUETOOTH KEYBOARD)` returns its address (or an empty string).
+
+### Speakers and headphones
+
+Anything that supports the A2DP profile will play, which is almost every
+Bluetooth speaker. Everything `PLAY` can produce (tones, sounds, WAV,
+FLAC, MP3 and MOD files, arrays, samples and BBC sounds) goes to the
+speaker, and a Bluetooth keyboard or mouse keeps working at the same
+time.
+
+First make Bluetooth the audio output. The option is saved, so this is
+needed only once, and the PicoMite restarts:
+
+```
+OPTION AUDIO BLUETOOTH
+```
+
+Then put the speaker into its pairing mode and search for it. The scan
+lists the address, signal strength and name of each device found, and
+marks the audio devices. It takes 10 seconds unless you give it a time
+(2 to 60 seconds):
+
+```
+> BLUETOOTH SCAN
+```
+
+Connect to the speaker by the name the scan showed (upper or lower case)
+or by its address. The command waits up to 30 seconds for the speaker
+and then shows the format of the audio stream:
+
+```
+BLUETOOTH CONNECT "BT Speaker"
+```
+
+The speaker is then paired and remembered. It is connected again
+automatically when the PicoMite starts and whenever the speaker is
+switched on or comes back into range (the PicoMite keeps trying, at
+intervals of up to a minute). `BLUETOOTH DISCONNECT` lets it go until the
+next `BLUETOOTH CONNECT` or restart. One speaker can be connected at a
+time.
+
+If `BLUETOOTH CONNECT` reports `Connection failed (Bluetooth error 0x04)`,
+the speaker did not answer in time. This is common just after a speaker
+is switched on, or while it is still trying to reconnect to the phone or
+computer it was last used with. Try again.
+
+To save power the stream to the speaker is suspended when nothing has
+been played for 60 seconds, and restarted by the next sound (which is
+then delayed by about half a second). Change the time by adding it to the
+option, from 0 to 250 seconds. 0 keeps the stream running for as long as
+a speaker is connected:
+
+```
+OPTION AUDIO BLUETOOTH 120
+```
+
+Some things to expect:
+
+- Bluetooth speakers buffer the sound, so it is heard a fraction of a
+  second (typically 0.2 seconds) after it is played. Music is not
+  affected, but sound effects in a game lag slightly behind the action.
+- Encoding the sound takes 12 to 14% of the processor's time at 200 MHz
+  while the stream is running.
+- While the stream is running the PicoMite listens less often for
+  keyboards and mice, so a keyboard that has gone to sleep may take a
+  little longer to reconnect.
+- `PLAY VOLUME` scales the sound before it is sent. The speaker's own
+  volume buttons work as usual; the PicoMite does not set the speaker's
+  volume over Bluetooth.
+
+`MM.INFO$(BLUETOOTH SPEAKER)` returns the address of the connected
+speaker, or an empty string.
+
+### Pairings
+
+The pairings of up to four keyboards, mice or game controllers and up to
+four speakers are stored with the saved options, so they survive a power
+cycle. `BLUETOOTH FORGET` deletes all of them, and `BLUETOOTH FORGET
+addr$` only those of one device (a connected device that is forgotten is
+disconnected). `OPTION RESET`, and a firmware update that resets the
+options, delete them too. The devices then have to be paired again.
+
+`BLUETOOTH STATUS` lists the connections first. The lines after them are
+diagnostics, such as the number of keyboard pairings held and how the
+last pairing went (for example "interrupted, the keyboard dropped the
+link"), which are useful when reporting a problem.
+
+### What the host builds leave out
+
+- PWM audio, the MCP48n2 SPI DAC and the VS1053 (with the `PLAY` commands
+  that need it, such as `PLAY MIDI` and `PLAY STREAM`). The audio outputs
+  are Bluetooth and an I2S DAC.
+- PicoMiteRP2350BTH: a PS/2 keyboard (a PS/2 mouse still works).
+- PicoMiteHDMIBTH: PS/2 devices, the `CAMERA` commands and `YMODEM`, and
+  the full set of HDMI resolutions (it has the same reduced set as the
+  PicoMiteHDMIWEB).
+- WiFi, on both.
+- PIO2, which the wireless chip uses (an I2S DAC shares it). PIO0 and
+  PIO1 remain for programs.
+
+### Boards that wire the wireless chip differently
+
+All three Bluetooth builds expect the wireless chip on the same pins as
+the Pico 2 W: GP23 (power on), GP24 (data), GP25 (chip select) and GP29
+(clock). A module that uses other pins needs `OPTION CYW43 PINS`, which
+lists them in that order. For example, the Waveshare RP2350B Pico WiFi
+board needs:
+
+```
+OPTION CYW43 PINS GP36, GP37, GP38, GP39
+```
+
+The pins given are reserved instead of GP23, GP24, GP25 and GP29, which
+become normal I/O pins. If the wireless chip does not answer on the pins
+set, the PicoMite says `CYW43 radio failed to start on ...` when it
+starts and runs without Bluetooth. `OPTION CYW43 PINS DEFAULT`, or
+`OPTION RESET`, goes back to the standard pins. If an I2S DAC is used, it
+shares a PIO with the wireless chip, so its pins and the data and clock
+pins must all be within GP0 to GP31 or all within GP16 to GP47.
+
+---
+
 ## Files of interest in this build
 
 | File | Purpose |
@@ -647,4 +835,6 @@ for VS**, or `CMake: Select a Kit` and choose the Visual Studio kit.
 | `ble_bridge.py` | Alternative cross-platform BLE NUS → TCP forwarder for users who prefer an external Telnet client |
 | `FileIO.h` | Defines `Option.bt_tlv[2048]` for persistent bond storage |
 | `configuration.h` | PICOMITEBT block: flash offsets, magic key, heap sizes |
-| `CMakeLists.txt` | `PICOBTRP2350` variant definition; links `pico_btstack_ble`, `pico_btstack_cyw43`, `pico_cyw43_arch_none` |
+| `CMakeLists.txt` | `PICOBTRP2350` variant definition; links `pico_btstack_ble`, `pico_btstack_cyw43`, `pico_cyw43_arch_poll` (the host builds `PICOBTHRP2350` and `HDMIBTH` also compile the Bluetooth Classic sources that A2DP needs) |
+| `BTKeyboard.c` / `BTKeyboard.h` | Host builds: the BLE HID host - scanning, pairing, keyboards, mice and game controllers |
+| `BTAudio.c` / `BTAudio.h` | Host builds: the A2DP source for speakers and the `BLUETOOTH` command |

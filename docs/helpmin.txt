@@ -1404,9 +1404,10 @@ Returns the cosine of the argument 'number' in radians.
 ~CPU
 CPU speed bounds
 
-The cyw43 wireless driver and btstack run in alarm-IRQ context. At low CPU
-speeds, the per-event processing margin becomes too tight for sustained
-bidirectional traffic and the link destabilises.
+The cyw43 wireless driver and btstack are polled from the main loop, as the
+WebMite polls its WiFi. At low CPU speeds, the per-event processing margin
+becomes too tight for sustained bidirectional traffic and the link
+destabilises.
 
 ~CPU RESTART
 CPU RESTART

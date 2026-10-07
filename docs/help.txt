@@ -1911,7 +1911,8 @@ Returns the cosine of the argument 'number' in radians.
 ~CPU
 CPU speed bounds
 
-The cyw43 wireless driver and btstack run in alarm-IRQ context. At low
+The cyw43 wireless driver and btstack are polled from the main loop,
+as the WebMite polls its WiFi. At low
 CPU speeds, the per-event processing margin becomes too tight for
 sustained bidirectional traffic and the link destabilises. To prevent
 this the build enforces a CPU-speed range:
@@ -10074,6 +10075,9 @@ Changes operation of the 3.3V supply switch mode power supply.
 By default this runs in PFM mode. PWM gives better noise performance but is
 less power-efficient. Note that under heavy load the system will run in PWM
 mode regardless of this setting.
+Not available on the WiFi and Bluetooth versions while GP23 is the wireless
+chip's power-on pin, as it is on the Pico W and Pico 2 W (on the WebMiteRP2040
+it always is).
 
 ~OPTION PROFILING
 OPTION PROFILING counts how often each command and each subroutine or function
