@@ -618,7 +618,7 @@ static void bt_tlv_changed(void)
 
 /* Diagnostics for BLUETOOTH STATUS. */
 static volatile uint32_t tlv_saves, tlv_save_max_us, tlv_save_total_us;
-static volatile uint32_t kbd_pairings, kbd_reencryptions;
+static volatile uint32_t kbd_pairings, kbd_reencryptions, kbd_interrupted;
 
 static void bt_tlv_save(void)
 {
@@ -632,13 +632,14 @@ static void bt_tlv_save(void)
 }
 
 void bt_keyboard_stats(uint32_t *saves, uint32_t *save_max_us, uint32_t *save_total_us,
-                       uint32_t *pairings, uint32_t *reencryptions)
+                       uint32_t *pairings, uint32_t *reencryptions, uint32_t *interrupted)
 {
     *saves = tlv_saves;
     *save_max_us = tlv_save_max_us;
     *save_total_us = tlv_save_total_us;
     *pairings = kbd_pairings;
     *reencryptions = kbd_reencryptions;
+    *interrupted = kbd_interrupted;
     tlv_saves = tlv_save_max_us = tlv_save_total_us = 0;
 }
 
@@ -710,6 +711,15 @@ static bd_addr_t target_addr;
 static bd_addr_type_t target_addr_type = BTH_TARGET_ADDR_TYPE;
 
 static hci_con_handle_t conn_handle = HCI_CON_HANDLE_INVALID;
+/* The keyboard link's handle, latched when the Security Manager starts pairing
+   or re-encryption on it. btstack reports SM events for every LE link -
+   including devices that connect to our GATT server - and reports a link that
+   drops mid-procedure as complete with status 0x13 (remote user terminated
+   connection). Only completions on these handles are the keyboard's; they are
+   latched at the start because our disconnect handling may clear conn_handle
+   before btstack reports the drop. */
+static hci_con_handle_t kbd_pairing_handle = HCI_CON_HANDLE_INVALID;
+static hci_con_handle_t kbd_reenc_handle = HCI_CON_HANDLE_INVALID;
 static uint16_t hids_cid;
 static uint32_t report_count;
 
@@ -877,7 +887,7 @@ void bt_keyboard_forget(const uint8_t *addr)
    to bond, and without one the keyboard can't come back after a reset. */
 static bd_addr_t last_pair_addr;
 static bd_addr_type_t last_pair_addr_type;
-static int8_t last_pair_result = -1; /* -1 none, 0 bond not stored, 1 stored, 2 failed */
+static int8_t last_pair_result = -1; /* -1 none, 0 bond not stored, 1 stored, 2 failed, 3 link dropped */
 static uint8_t last_pair_status, last_pair_reason;
 
 void bt_keyboard_last_pairing(char *buf, int len)
@@ -886,6 +896,8 @@ void bt_keyboard_last_pairing(char *buf, int len)
         snprintf(buf, len, "none since boot");
     else if (last_pair_result == 2)
         snprintf(buf, len, "failed, status 0x%02X reason 0x%02X", last_pair_status, last_pair_reason);
+    else if (last_pair_result == 3)
+        snprintf(buf, len, "interrupted, the keyboard dropped the link");
     else
         snprintf(buf, len, "%s (%s), %s", bd_addr_to_str(last_pair_addr),
                  last_pair_addr_type == BD_ADDR_TYPE_LE_PUBLIC ? "public" : "random",
@@ -1860,11 +1872,31 @@ static void packet_handler(uint8_t packet_type,
 
     case SM_EVENT_PAIRING_STARTED:
         bth_log("SM pairing started");
+        if (sm_event_pairing_started_get_handle(packet) == conn_handle)
+            kbd_pairing_handle = conn_handle;
+        break;
+
+    case SM_EVENT_REENCRYPTION_STARTED:
+        if (sm_event_reencryption_started_get_handle(packet) == conn_handle)
+            kbd_reenc_handle = conn_handle;
         break;
 
     case SM_EVENT_PAIRING_COMPLETE:
     {
+        hci_con_handle_t handle = sm_event_pairing_complete_get_handle(packet);
+        if (handle != kbd_pairing_handle && handle != conn_handle)
+            break; /* another link, not the keyboard */
+        kbd_pairing_handle = HCI_CON_HANDLE_INVALID;
         uint8_t pstatus = sm_event_pairing_complete_get_status(packet);
+        if (pstatus == ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION)
+        {
+            /* The keyboard dropped the link mid-pairing (switched off, asleep
+               or out of range): nothing to tear down. */
+            bth_log("SM pairing interrupted: link dropped");
+            kbd_interrupted++;
+            last_pair_result = 3;
+            break;
+        }
         if (pstatus != ERROR_CODE_SUCCESS)
         {
             bth_log("SM pairing failed status=0x%02x reason=0x%02x",
@@ -1873,7 +1905,7 @@ static void packet_handler(uint8_t packet_type,
             last_pair_status = pstatus;
             last_pair_reason = sm_event_pairing_complete_get_reason(packet);
             /* Tear the link down so we try again from clean state. */
-            gap_disconnect(conn_handle);
+            gap_disconnect(handle);
             break;
         }
         bth_log("SM pairing complete; link encrypted");
@@ -1898,11 +1930,21 @@ static void packet_handler(uint8_t packet_type,
 
     case SM_EVENT_REENCRYPTION_COMPLETE:
     {
+        hci_con_handle_t handle = sm_event_reencryption_complete_get_handle(packet);
+        if (handle != kbd_reenc_handle && handle != conn_handle)
+            break; /* another link, not the keyboard */
+        kbd_reenc_handle = HCI_CON_HANDLE_INVALID;
         uint8_t rstatus = sm_event_reencryption_complete_get_status(packet);
+        if (rstatus == ERROR_CODE_REMOTE_USER_TERMINATED_CONNECTION)
+        {
+            bth_log("SM reencryption interrupted: link dropped");
+            kbd_interrupted++;
+            break;
+        }
         if (rstatus != ERROR_CODE_SUCCESS)
         {
             bth_log("SM reencryption failed status=0x%02x", rstatus);
-            gap_disconnect(conn_handle);
+            gap_disconnect(handle);
             break;
         }
         bth_log("SM reencryption complete");

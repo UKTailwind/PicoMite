@@ -1341,9 +1341,9 @@ static void bta_status(void)
         /* Diagnostics, counted since the last STATUS: the longest stall of
            the encoder tick (the btstack context blocked), the bond-store
            writes (each one a SaveOptions()), and keyboard security events. */
-        uint32_t saves, save_max, save_total, pairings, reenc;
+        uint32_t saves, save_max, save_total, pairings, reenc, interrupted;
         char buf[128];
-        bt_keyboard_stats(&saves, &save_max, &save_total, &pairings, &reenc);
+        bt_keyboard_stats(&saves, &save_max, &save_total, &pairings, &reenc, &interrupted);
         sprintf(buf, "\r\nLongest encoder gap: %lu ms", (unsigned long)(tick_gap_max_us / 1000));
         tick_gap_max_us = 0;
         MMPrintString(buf);
@@ -1367,8 +1367,8 @@ static void bta_status(void)
         sprintf(buf, "\r\nBond store: %lu writes, longest %lu ms, total %lu ms",
                 (unsigned long)saves, (unsigned long)(save_max / 1000), (unsigned long)(save_total / 1000));
         MMPrintString(buf);
-        sprintf(buf, "\r\nKeyboard security: %lu pairings, %lu re-encryptions since boot",
-                (unsigned long)pairings, (unsigned long)reenc);
+        sprintf(buf, "\r\nKeyboard security: %lu pairings, %lu re-encryptions, %lu interrupted since boot",
+                (unsigned long)pairings, (unsigned long)reenc, (unsigned long)interrupted);
         MMPrintString(buf);
         sprintf(buf, "\r\nKeyboard bonds held: %d\r\nLast pairing: ", le_device_db_count());
         MMPrintString(buf);
