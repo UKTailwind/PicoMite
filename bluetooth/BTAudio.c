@@ -69,6 +69,8 @@ static bd_addr_t speaker_addr;
 static volatile uint32_t cfg_rate;
 static uint8_t cfg_channel_mode; /* btstack_sbc_channel_mode_t */
 static uint8_t cfg_bitpool, cfg_blocks, cfg_subbands;
+static uint8_t cfg_min_bitpool;
+static volatile uint8_t cur_bitpool; /* the bitpool in use - see adapt_bitpool() */
 
 /* Offer 44.1 and 48 kHz, joint stereo, stereo or mono, any block length /
    subband count / allocation, bitpool 2..53 - the sink picks within that.
@@ -301,6 +303,10 @@ static void fill_sbc_audio_buffer(void)
            (max_media_payload_size - sbc_storage_count) >= sbc_frame_len &&
            taken + frames_per_sbc <= BTA_MAX_SAMPLES_PER_TICK)
     {
+        /* A new bitpool starts with a packet, so the frames in one packet
+           are all the same length. Each frame carries its own bitpool. */
+        if (sbc_storage_frames == 0)
+            sbc_encoder_state.params.s16BitPool = cur_bitpool;
         produce_audio(pcm_frame, frames_per_sbc);
         if (cfg_channel_mode == SBC_CHANNEL_MODE_MONO)
         { /* the encoder takes one sample per frame: mix left and right */
@@ -336,6 +342,69 @@ static uint32_t send_requested_us;
    themselves, and PLAY then starts it again - a gap in the sound each time. */
 static volatile uint32_t stream_starts, stream_pauses, stream_pauses_by_speaker, stream_closes;
 static volatile bool pause_requested;
+
+/* Adaptive bitpool. The stream starts at the negotiated maximum, which a
+   weak or busy link may not carry: the sound waiting to go then grows
+   until the quarter-second limit throws some away - a gap every few
+   seconds. Once a second, if more than 50 ms is waiting and that is 20 ms
+   more than a second before (or 200 ms or more is waiting and it has not
+   drained by 20 ms - held at the limit), the bitpool steps down (to no less
+   than half the maximum, or the speaker's minimum); after ten seconds with
+   less than 50 ms waiting it steps back up. A second in which the encoder itself stalled (a flash
+   write with interrupts off) is not judged: that backlog is ours. */
+#define BTA_BITPOOL_STEP_DOWN 4
+#define BTA_BITPOOL_STEP_UP 2
+#define BTA_BITPOOL_CALM_SECONDS 10
+#define BTA_STALL_MS 50
+static uint32_t backlog_check_ms, backlog_last;
+static uint8_t calm_seconds;
+static bool stalled_this_second;
+static volatile uint32_t bitpool_lowered; /* BLUETOOTH STATUS */
+static volatile uint8_t bitpool_lowest;
+
+static void adapt_bitpool(uint32_t now_ms, uint32_t rate, unsigned int frames_per_sbc)
+{
+    if (now_ms - backlog_check_ms < 1000)
+        return;
+    backlog_check_ms = now_ms;
+    /* waiting to go: not yet encoded, and encoded but not yet sent */
+    uint32_t backlog = samples_ready + sbc_storage_frames * frames_per_sbc;
+    uint32_t last = backlog_last;
+    backlog_last = backlog;
+    if (stalled_this_second)
+    {
+        stalled_this_second = false;
+        calm_seconds = 0;
+        return;
+    }
+    uint8_t floor = cfg_bitpool / 2;
+    if (floor < cfg_min_bitpool)
+        floor = cfg_min_bitpool;
+    bool growing = backlog > last + rate / 50;
+    bool stuck = backlog >= rate / 5 && backlog + rate / 50 > last; /* not draining */
+    if (backlog > rate / 20 && (growing || stuck))
+    {
+        if (cur_bitpool > floor)
+        {
+            cur_bitpool = (cur_bitpool - floor > BTA_BITPOOL_STEP_DOWN) ? cur_bitpool - BTA_BITPOOL_STEP_DOWN : floor;
+            bitpool_lowered++;
+            if (cur_bitpool < bitpool_lowest)
+                bitpool_lowest = cur_bitpool;
+        }
+        calm_seconds = 0;
+    }
+    else if (backlog < rate / 20)
+    {
+        if (++calm_seconds >= BTA_BITPOOL_CALM_SECONDS)
+        {
+            calm_seconds = 0;
+            if (cur_bitpool < cfg_bitpool)
+                cur_bitpool = (cfg_bitpool - cur_bitpool > BTA_BITPOOL_STEP_UP) ? cur_bitpool + BTA_BITPOOL_STEP_UP : cfg_bitpool;
+        }
+    }
+    else
+        calm_seconds = 0;
+}
 
 static void send_media_packet(void)
 {
@@ -375,6 +444,8 @@ static void audio_timeout_handler(btstack_timer_source_t *timer)
     uint32_t period = BTA_AUDIO_TIMEOUT_MS;
     if (time_audio_data_sent > 0)
         period = now - time_audio_data_sent;
+    if (period > BTA_STALL_MS)
+        stalled_this_second = true;
     uint32_t rate = cfg_rate;
     uint32_t num = (period * rate) / 1000;
     acc_num_missed_samples += (period * rate) % 1000;
@@ -393,6 +464,7 @@ static void audio_timeout_handler(btstack_timer_source_t *timer)
         samples_dropped += samples_ready - rate / 4;
         samples_ready = rate / 4;
     }
+    adapt_bitpool(now, rate, sbc_encoder->num_audio_frames(&sbc_encoder_state));
 
     if (!sbc_ready_to_send)
     {
@@ -423,6 +495,10 @@ static void audio_timer_start(void)
     load_busy_us = 0;
     load_start_us = time_us_32();
     packets_sent = 0;
+    backlog_check_ms = btstack_run_loop_get_time_ms(); /* cur_bitpool carries over */
+    backlog_last = 0;
+    calm_seconds = 0;
+    stalled_this_second = false;
     btstack_run_loop_remove_timer(&audio_timer);
     btstack_run_loop_set_timer_handler(&audio_timer, audio_timeout_handler);
     btstack_run_loop_set_timer(&audio_timer, BTA_AUDIO_TIMEOUT_MS);
@@ -505,6 +581,9 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         cfg_rate = rate;
         cfg_channel_mode = sbc_mode;
         cfg_bitpool = bitpool;
+        cfg_min_bitpool = a2dp_subevent_signaling_media_codec_sbc_configuration_get_min_bitpool_value(packet);
+        cur_bitpool = bitpool;
+        bitpool_lowest = bitpool;
         cfg_blocks = blocks;
         cfg_subbands = subbands;
         sbc_encoder = btstack_sbc_encoder_bluedroid_init_instance(&sbc_encoder_state);
@@ -1218,7 +1297,13 @@ static void bta_status(void)
         MMPrintString(" Hz, ");
         MMPrintString((char *)channel_mode_name());
         MMPrintString(", bitpool ");
-        PInt(cfg_bitpool);
+        PInt(cur_bitpool);
+        if (cur_bitpool != cfg_bitpool)
+        {
+            MMPrintString(" (of ");
+            PInt(cfg_bitpool);
+            MMputchar(')', 1);
+        }
         MMPrintString(", ");
         PInt(cfg_blocks);
         MMPrintString(" blocks, ");
@@ -1269,6 +1354,11 @@ static void bta_status(void)
                 (unsigned long)stream_starts, (unsigned long)stream_pauses,
                 (unsigned long)stream_pauses_by_speaker, (unsigned long)stream_closes);
         stream_starts = stream_pauses = stream_pauses_by_speaker = stream_closes = 0;
+        MMPrintString(buf);
+        sprintf(buf, "\r\nBitpool lowered: %lu times, lowest %u",
+                (unsigned long)bitpool_lowered, (unsigned)bitpool_lowest);
+        bitpool_lowered = 0;
+        bitpool_lowest = cur_bitpool;
         MMPrintString(buf);
         sprintf(buf, "\r\nBond store: %lu writes, longest %lu ms, total %lu ms",
                 (unsigned long)saves, (unsigned long)(save_max / 1000), (unsigned long)(save_total / 1000));
