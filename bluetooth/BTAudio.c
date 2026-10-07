@@ -37,6 +37,8 @@
 
 #define BTA_AUDIO_TIMEOUT_MS 5    /* encode/send tick */
 #define BTA_SBC_STORAGE_SIZE 1030 /* one media packet: header byte + SBC frames */
+#define BTA_MAX_FRAMES_PER_PACKET 15 /* the SBC payload header counts frames in 4 bits */
+#define BTA_RTP_HEADER_SIZE 12    /* in front of the payload in each media packet */
 #define BTA_PREFERRED_RATE 44100
 #define BTA_MAX_FOUND 16
 #define BTA_NAME_LEN 32
@@ -143,6 +145,8 @@ static const btstack_sbc_encoder_t *sbc_encoder;
 static btstack_sbc_encoder_bluedroid_t sbc_encoder_state;
 static uint8_t sbc_storage[BTA_SBC_STORAGE_SIZE];
 static uint16_t sbc_storage_count;
+static uint8_t sbc_storage_frames; /* frames in sbc_storage */
+static uint16_t sbc_frame_len;     /* length of the last frame encoded (0 before the first) */
 static bool sbc_ready_to_send;
 static int16_t pcm_frame[16 * 8 * 2]; /* one SBC frame: 16 blocks x 8 subbands, stereo */
 
@@ -157,6 +161,8 @@ static int max_media_payload_size;
 static volatile uint32_t load_busy_us;
 static volatile uint32_t load_start_us;
 static volatile uint32_t packets_sent;
+static volatile uint8_t packet_frames; /* frames in the last packet (BLUETOOTH STATUS) */
+static volatile uint16_t media_mtu;    /* the speaker's MTU for media packets */
 
 /* Test tone (BLUETOOTH TEST freq). The tone fades in and out over
    BTA_RAMP_MS, and a fresh stream carries BTA_LEAD_IN_MS of silence before
@@ -266,27 +272,40 @@ static void produce_audio(int16_t *pcm, int frames)
    bitpools. */
 #define BTA_MAX_SAMPLES_PER_TICK 1024
 
+/* The encoder gives a frame's length only once it has encoded it, so the
+   room for the next frame is judged by the last one's length. */
 static void fill_sbc_audio_buffer(void)
 {
     unsigned int frames_per_sbc = sbc_encoder->num_audio_frames(&sbc_encoder_state);
-    uint16_t sbc_len = sbc_encoder->sbc_buffer_length(&sbc_encoder_state);
     unsigned int taken = 0;
     while (samples_ready >= frames_per_sbc &&
-           (max_media_payload_size - sbc_storage_count) >= sbc_len &&
+           sbc_storage_frames < BTA_MAX_FRAMES_PER_PACKET &&
+           (max_media_payload_size - sbc_storage_count) >= sbc_frame_len &&
            taken + frames_per_sbc <= BTA_MAX_SAMPLES_PER_TICK)
     {
         produce_audio(pcm_frame, frames_per_sbc);
         sbc_encoder->encode_signed_16(&sbc_encoder_state, pcm_frame,
                                       &sbc_storage[1 + sbc_storage_count]);
-        sbc_storage_count += sbc_len;
+        sbc_frame_len = sbc_encoder->sbc_buffer_length(&sbc_encoder_state);
+        sbc_storage_count += sbc_frame_len;
+        sbc_storage_frames++;
         samples_ready -= frames_per_sbc;
         taken += frames_per_sbc;
     }
 }
 
+/* A packet is due when the next frame would not fit, by count or by size. */
+static bool packet_full(void)
+{
+    return sbc_storage_frames >= BTA_MAX_FRAMES_PER_PACKET ||
+           (sbc_storage_frames && sbc_storage_count + sbc_frame_len > max_media_payload_size);
+}
+
 /* Diagnostics (BLUETOOTH STATUS): the longest wait for btstack to let a
-   packet go, and samples thrown away because sending fell behind. */
-static volatile uint32_t send_wait_max_us, samples_dropped;
+   packet go, samples thrown away because sending fell behind, and packets
+   btstack refused. */
+static volatile uint32_t send_wait_max_us, samples_dropped, send_errors;
+static volatile uint8_t send_last_error;
 static uint32_t send_requested_us;
 
 static void send_media_packet(void)
@@ -294,15 +313,21 @@ static void send_media_packet(void)
     uint32_t waited = time_us_32() - send_requested_us;
     if (waited > send_wait_max_us)
         send_wait_max_us = waited;
-    int frame_len = sbc_encoder->sbc_buffer_length(&sbc_encoder_state);
-    uint8_t num_frames = sbc_storage_count / frame_len;
-    sbc_storage[0] = num_frames; /* SBC media payload header: frame count */
-    a2dp_source_stream_send_media_payload_rtp(a2dp_cid, local_seid, 0, rtp_timestamp,
-                                              sbc_storage, sbc_storage_count + 1);
-    rtp_timestamp += num_frames * sbc_encoder->num_audio_frames(&sbc_encoder_state);
+    sbc_storage[0] = sbc_storage_frames; /* SBC media payload header: frame count */
+    uint8_t status = a2dp_source_stream_send_media_payload_rtp(a2dp_cid, local_seid, 0, rtp_timestamp,
+                                                               sbc_storage, sbc_storage_count + 1);
+    if (status == ERROR_CODE_SUCCESS)
+        packets_sent++;
+    else
+    {
+        send_errors++;
+        send_last_error = status;
+    }
+    packet_frames = sbc_storage_frames;
+    rtp_timestamp += sbc_storage_frames * sbc_encoder->num_audio_frames(&sbc_encoder_state);
     sbc_storage_count = 0;
+    sbc_storage_frames = 0;
     sbc_ready_to_send = false;
-    packets_sent++;
 }
 
 static volatile uint32_t tick_gap_max_us; /* longest gap between ticks (BLUETOOTH STATUS) */
@@ -343,8 +368,7 @@ static void audio_timeout_handler(btstack_timer_source_t *timer)
     if (!sbc_ready_to_send)
     {
         fill_sbc_audio_buffer();
-        if ((sbc_storage_count + sbc_encoder->sbc_buffer_length(&sbc_encoder_state)) >
-            (uint32_t)max_media_payload_size)
+        if (packet_full())
         {
             sbc_ready_to_send = true;
             send_requested_us = time_us_32();
@@ -356,10 +380,13 @@ static void audio_timeout_handler(btstack_timer_source_t *timer)
 
 static void audio_timer_start(void)
 {
-    /* sbc_storage[0] is the payload header, so frames fit in SIZE - 1. */
-    max_media_payload_size = btstack_min(a2dp_max_media_payload_size(a2dp_cid, local_seid),
+    /* The payload is the header byte (sbc_storage[0]) and the frames, and
+       btstack refuses a packet over the speaker's MTU: the frames get one
+       byte less than a2dp_max_media_payload_size(). */
+    max_media_payload_size = btstack_min(a2dp_max_media_payload_size(a2dp_cid, local_seid) - 1,
                                          BTA_SBC_STORAGE_SIZE - 1);
     sbc_storage_count = 0;
+    sbc_storage_frames = 0;
     sbc_ready_to_send = false;
     time_audio_data_sent = 0;
     acc_num_missed_samples = 0;
@@ -378,6 +405,7 @@ static void audio_timer_stop(void)
     tick_last_us = 0;
     btstack_run_loop_remove_timer(&audio_timer);
     sbc_storage_count = 0;
+    sbc_storage_frames = 0;
     sbc_ready_to_send = false;
     time_audio_data_sent = 0;
     acc_num_missed_samples = 0;
@@ -454,6 +482,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         /* The spec's allocation method counts from 1; btstack's from 0. */
         sbc_encoder->configure(&sbc_encoder_state, SBC_MODE_STANDARD, blocks, subbands,
                                (btstack_sbc_allocation_method_t)(alloc - 1), rate, bitpool, sbc_mode);
+        sbc_frame_len = 0;
         break;
     }
 
@@ -469,6 +498,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
             break;
         }
         local_seid = a2dp_subevent_stream_established_get_local_seid(packet);
+        media_mtu = (uint16_t)(a2dp_max_media_payload_size(a2dp_cid, local_seid) + BTA_RTP_HEADER_SIZE);
         spk_state = SPK_OPEN;
         remember_speaker(speaker_addr);
         if (!spk_pairing_allowed && !CurrentLinePtr)
@@ -1150,7 +1180,8 @@ static void bta_status(void)
         PInt(cfg_blocks);
         MMPrintString(" blocks, ");
         PInt(cfg_subbands);
-        MMPrintString(" subbands");
+        MMPrintString(" subbands, MTU ");
+        PInt(media_mtu);
         break;
     }
     if (spk_state == SPK_STREAMING)
@@ -1158,10 +1189,11 @@ static void bta_status(void)
         uint32_t streamed_us = time_us_32() - load_start_us;
         uint32_t busy = load_busy_us;
         uint32_t permille = streamed_us ? (uint32_t)(((uint64_t)busy * 1000u) / streamed_us) : 0;
-        char buf[64];
-        sprintf(buf, "\r\nEncoder:   %lu.%lu%% of CPU, %lu packets in %lu s",
+        char buf[96];
+        sprintf(buf, "\r\nEncoder:   %lu.%lu%% of CPU, %lu packets of %u frames in %lu s",
                 (unsigned long)(permille / 10), (unsigned long)(permille % 10),
-                (unsigned long)packets_sent, (unsigned long)(streamed_us / 1000000u));
+                (unsigned long)packets_sent, (unsigned)packet_frames,
+                (unsigned long)(streamed_us / 1000000u));
         MMPrintString(buf);
     }
     if (AUDIO_BLUETOOTH)
@@ -1178,14 +1210,17 @@ static void bta_status(void)
            the encoder tick (the btstack context blocked), the bond-store
            writes (each one a SaveOptions()), and keyboard security events. */
         uint32_t saves, save_max, save_total, pairings, reenc;
-        char buf[96];
+        char buf[128];
         bt_keyboard_stats(&saves, &save_max, &save_total, &pairings, &reenc);
         sprintf(buf, "\r\nLongest encoder gap: %lu ms", (unsigned long)(tick_gap_max_us / 1000));
         tick_gap_max_us = 0;
         MMPrintString(buf);
-        sprintf(buf, "\r\nLongest send wait: %lu ms, samples dropped: %lu",
-                (unsigned long)(send_wait_max_us / 1000), (unsigned long)samples_dropped);
-        send_wait_max_us = samples_dropped = 0;
+        sprintf(buf, "\r\nLongest send wait: %lu ms, samples dropped: %lu, send errors: %lu",
+                (unsigned long)(send_wait_max_us / 1000), (unsigned long)samples_dropped,
+                (unsigned long)send_errors);
+        if (send_errors)
+            sprintf(buf + strlen(buf), " (last 0x%02X)", send_last_error);
+        send_wait_max_us = samples_dropped = send_errors = 0;
         MMPrintString(buf);
         sprintf(buf, "\r\nBond store: %lu writes, longest %lu ms, total %lu ms",
                 (unsigned long)saves, (unsigned long)(save_max / 1000), (unsigned long)(save_total / 1000));
