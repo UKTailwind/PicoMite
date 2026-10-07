@@ -310,11 +310,10 @@ g=first_move(ply+1)
 Inc first_move(ply+1),1
 'Poke var q,0,from: Poke var q,1,too: Poke var q,2,0: Poke var q,3,bits
 q=from Or(too<<8)Or(bits<<24)
-gd(g,0)=q
 If H(too)<>MT Then
-  gd(g,1)=1000000+P(too)*10-P(from)
+  gd(g)=q Or((1000000+P(too)*10-P(from))<<32)
 Else
-  gd(g,1)=hi(from,too)
+  gd(g)=q Or(hi(from,too)<<32)
 EndIf
 End Sub
 
@@ -325,8 +324,7 @@ For i=KT To QUEEN
   Inc first_move(ply+1),1
 ' Poke var p,0,from: Poke var p,1,too: Poke var p,2,i: Poke var p,3,bits Or 32
   p=from Or(too<<8)Or(i<<16)Or((bits Or 32)<<24)
-  gd(g,0)=p
-  gd(g,1)=1000000+i*10
+  gd(g)=p Or((1000000+i*10)<<32)
 Next 'i
 End Sub
 
@@ -385,12 +383,8 @@ If (m_bits And 2) Then
   P(from)=MT
 EndIf
 
-hd(hply,0)=m
-hd(hply,1)=P(m_too)
-hd(hply,2)=castle
-hd(hply,3)=ep
-hd(hply,4)=fifty
-hd(hply,5)=hash
+hd(hply,0)=m Or(P(m_too)<<32)Or(castle<<36)Or((ep+1)<<40)Or(fifty<<48)
+hd(hply,1)=hash
 Inc ply,1
 Inc hply,1
 
@@ -447,22 +441,22 @@ Inc hply,-1
 m=hd(hply,0)
 'm_from=Peek(var m,0):m_too=Peek(var m,1):m_bits=Peek(var m,3)
 m_from=m And &HFF:m_too=m>>8 And &HFF:m_bits=m>>24 And &HFF
-castle=hd(hply,2)
-ep=hd(hply,3)
-fifty=hd(hply,4)
-hash=hd(hply,5)
+castle=m>>36 And 15
+ep=(m>>40 And 255)-1
+fifty=m>>48
+hash=hd(hply,1)
 H(m_from)=side
 If (m_bits And 32) Then
   P(m_from)=PN
 Else
   P(m_from)=P(m_too)
 EndIf
-If hd(hply,1)=MT Then
+If (m>>32 And 15)=MT Then
   H(m_too)=MT
   P(m_too)=MT
 Else
   H(m_too)=xside
-  P(m_too)=hd(hply,1)
+  P(m_too)=m>>32 And 15
 EndIf
 If (m_bits And 2) Then
   Select Case m_too
@@ -540,7 +534,7 @@ Do While Not Eof(#1)
   If book_match(L$, book_line$) Then
     m=parse_move(Mid$(book_line$, Len(L$)+1))
     If m<>-1 Then
-      m=gd(m, 0)
+      m=gd(m) And &HFFFFFFFF
       found=0
       For j=0 To moves-1
         If move(j)=m Then Inc count(j),1:found=1:j=moves
@@ -1198,7 +1192,7 @@ Do
       If m=-1 Then
         oPrintR ""
         oPrintR "Illegal move."
-      ElseIf makemove(gd(m,0))=0 Then
+      ElseIf makemove(gd(m) And &HFFFFFFFF)=0 Then
         oPrintR ""
         oPrintR "Illegal move."
       Else
@@ -1235,9 +1229,9 @@ too=too+8*(8-(a(3)-Asc("0")))
 
 For i=0 To first_move(1)-1
 '  If (Peek(var gd(i,0),0)=from)And(Peek(var gd(i,0),1)=too)Then
-   If (gd(i,0)And &HFF)=from And (gd(i,0)>>8 And &HFF)=too Then
+   If (gd(i)And &HFF)=from And (gd(i)>>8 And &HFF)=too Then
 '    If (Peek(var gd(i,0),3)And 32) Then
-    If gd(i,0)And &H20000000 Then
+    If gd(i)And &H20000000 Then
       Select Case a(4)
         Case Asc("n")
           parse_move=i:Exit For
@@ -1300,7 +1294,7 @@ Sub print_result
 Local i
 
 For i=0 To first_move(1)-1
-  If makemove(gd(i,0)) Then takeback:Exit For
+  If makemove(gd(i) And &HFFFFFFFF) Then takeback:Exit For
 Next 'i
 If i=first_move(1)) Then
   If in_check(side) Then
@@ -1485,7 +1479,7 @@ Do
       mv=0
       Do While i<first_move(ply+1)
         tscpSort(i)
-        If makemove(gd(i,0)) Then mv=1:Exit Do
+        If makemove(gd(i) And &HFFFFFFFF) Then mv=1:Exit Do
         Inc i,1
       Loop
       If mv Then
@@ -1515,15 +1509,15 @@ Do
     done=0
     If x>alpha Then
       If depth Then
-        from=gd(i,0) And &HFF'Peek(var gd(i,0),0)
-        too=gd(i,0)>>8 And &HFF'Peek(var gd(i,0),1)
+        from=gd(i) And &HFF'Peek(var gd(i,0),0)
+        too=gd(i)>>8 And &HFF'Peek(var gd(i,0),1)
         Inc hi(from,too),depth
       EndIf
       If x>=beta Then
         v=beta:done=1
       Else
         alpha=x
-        pv(ply,ply)=gd(i,0)
+        pv(ply,ply)=gd(i) And &HFFFFFFFF
         For j=ply+1 To pvl(ply+1)-1
           pv(ply,j)=pv(ply+1,j)
         Next 'j
@@ -1540,7 +1534,7 @@ Function reps()
 Local i
 reps=0
 For i=hply-fifty To hply-1
-  If hd(i,5)=hash Then Inc reps'1
+  If hd(i,1)=hash Then Inc reps'1
 Next 'i
 End Function
 
@@ -1548,26 +1542,24 @@ Sub sort_pv
 Local i
 follow_pv=0
 For i=first_move(ply) To first_move(ply+1)-1
-  If gd(i,0)=pv(0,ply) Then
+  If (gd(i) And &HFFFFFFFF)=pv(0,ply) Then
     follow_pv=1
-    Inc gd(i,1),1e7
+    Inc gd(i),10000000<<32
     i=first_move(ply+1)-1
   EndIf
 Next 'i
 End Sub
 
 Sub tscpSort(from)
-Local g(1)
+Local g
 Local i,bs,bi
 bs=-1
 bi=from
 
 For i=from To first_move(ply+1)-1
-  If gd(i,1)>bs Then bs=gd(i,1):bi=i
+  If (gd(i)>>32)>bs Then bs=gd(i)>>32:bi=i
 Next 'i
-g(0)=gd(from,0):g(1)=gd(from,1)
-gd(from,0)=gd(bi,0):gd(from,1)=gd(bi,1)
-gd(bi,0)=g(0):gd(bi,1)=g(1)
+g=gd(from):gd(from)=gd(bi):gd(bi)=g
 End Sub
 
 ' globals: Dim'd here at program level rather than inside init_arrays,
@@ -1582,10 +1574,11 @@ Dim fifty
 Dim hash
 Dim ply
 Dim hply
-Dim gd(GEN_STACK,1) 'Gen Dat
+Dim gd(GEN_STACK) 'Gen Dat: the move in the low 32 bits, its score in the high 32
 Dim first_move(MAX_PLY)
 Dim hi(63,63) 'History
-Dim hd(HIST_STACK, 5) 'History Data
+Dim hd(HIST_STACK, 1) 'History Data: (n,0) the move, the captured piece<<32, castle<<36,
+'  (ep+1)<<40 and fifty<<48; (n,1) the hash (48 bits)
 Dim max_time,max_depth
 Dim start_time,stop_time
 Dim nodes
