@@ -627,6 +627,23 @@ foreach(source IN LISTS OPTIMIZED_SOURCES)
 	set_source_files_properties(${source} PROPERTIES COMPILE_FLAGS -Os)
 endforeach()
 
+if(NOT USES_USB_HOST)
+	# The USB console's TinyUSB files at -Os, on every build whose console is
+	# USB (PICOBTRP2350 has no USB, so this does nothing there). TinyUSB master
+	# (e42fa9357) grew the device stack by 816 bytes and took PICO 724 bytes
+	# over 912 KB, from 92 spare on 0.21; -Os saves 1344 bytes there, leaving
+	# 620, without moving FLASH_TARGET_OFFSET - which would wipe every
+	# PicoMiteRP2040's A: drive and options on upgrade. Tested on a PICO: 300
+	# lines out in 0.11 s, Ctrl-C, a 207-character line in, and 20 KB and
+	# 100 KB XMODEM round trips. TinyUSB aligns its buffers explicitly, so -Os
+	# dropping DATA_ALIGNMENT (see FileIO.c above) does not reach them. The USB
+	# host builds keep tusb.c and tusb_fifo.c at -O3, as tested.
+	foreach(source IN ITEMS src/device/usbd.c src/portable/raspberrypi/rp2040/dcd_rp2040.c
+	                        src/class/cdc/cdc_device.c src/tusb.c src/common/tusb_fifo.c)
+		set_source_files_properties(${PICO_TINYUSB_PATH}/${source} PROPERTIES COMPILE_FLAGS -Os)
+	endforeach()
+endif()
+
 pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/io/PicoMiteI2S.pio)
 
 if(IS_FULL_RP2040)
