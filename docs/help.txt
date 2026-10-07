@@ -513,27 +513,28 @@ OPTION CONSOLE                 OPTION PROFILING ON
 OPTION CONTINUATION LINES      OPTION PS2 PINS
 OPTION COUNT                   OPTION PSRAM PIN
 OPTION CPUSPEED                OPTION RESET
-OPTION DEFAULT                 OPTION RESOLUTION
-OPTION DEFAULT COLOURS         OPTION RTC AUTO
-OPTION DEFAULT MODE            OPTION SCREEN KEYBOARD
-OPTION DISK SAVE               OPTION SDCARD
-OPTION DISPLAY                 OPTION SDCARD COMBINED CS
-OPTION ESCAPE                  OPTION SERIAL CONSOLE
-OPTION EXPLICIT                OPTION SERIAL CONSOLE DISABLE
-OPTION FAST AUDIO              OPTION SYMBOLS OFF
-OPTION GPS                     OPTION SYSTEM I2C
-OPTION GUI CONTROLS            OPTION SYSTEM SPI
-OPTION HDMI PINS               OPTION TAB
-OPTION HEARTBEAT               OPTION TCP SERVER PORT
-OPTION KEYBOARD                OPTION TELNET CONSOLE
-OPTION KEYBOARD I2C            OPTION TFTP
-OPTION KEYBOARD PINS           OPTION TOUCH
-OPTION KEYBOARD REPEAT         OPTION TOUCH FT6336
-OPTION LCD SPI                 OPTION UDP SERVER PORT
-OPTION LCD320                  OPTION VCC
-OPTION LCDPANEL                OPTION VGA PINS
-OPTION LCDPANEL CONSOLE        OPTION WEB MESSAGES
-OPTION LCDPANEL NOCONSOLE      OPTION WIFI
+OPTION CYW43 PINS              OPTION RESOLUTION
+OPTION DEFAULT                 OPTION RTC AUTO
+OPTION DEFAULT COLOURS         OPTION SCREEN KEYBOARD
+OPTION DEFAULT MODE            OPTION SDCARD
+OPTION DISK SAVE               OPTION SDCARD COMBINED CS
+OPTION DISPLAY                 OPTION SERIAL CONSOLE
+OPTION ESCAPE                  OPTION SERIAL CONSOLE DISABLE
+OPTION EXPLICIT                OPTION SYMBOLS OFF
+OPTION FAST AUDIO              OPTION SYSTEM I2C
+OPTION GPS                     OPTION SYSTEM SPI
+OPTION GUI CONTROLS            OPTION TAB
+OPTION HDMI PINS               OPTION TCP SERVER PORT
+OPTION HEARTBEAT               OPTION TELNET CONSOLE
+OPTION KEYBOARD                OPTION TFTP
+OPTION KEYBOARD I2C            OPTION TOUCH
+OPTION KEYBOARD PINS           OPTION TOUCH FT6336
+OPTION KEYBOARD REPEAT         OPTION UDP SERVER PORT
+OPTION LCD SPI                 OPTION VCC
+OPTION LCD320                  OPTION VGA PINS
+OPTION LCDPANEL                OPTION WEB MESSAGES
+OPTION LCDPANEL CONSOLE        OPTION WIFI
+OPTION LCDPANEL NOCONSOLE
 
 ~VARIABLES
 Predefined read-only variables
@@ -1386,7 +1387,7 @@ function as a variable.
 ~CAMERA
 CAMERA
 
-NOT VGA OR HDMIWEB VERSIONS
+NOT VGA, HDMIWEB OR HDMIBTH VERSIONS
 Command supporting the OV7670 camera module.
 On the HDMI versions (PicoMiteHDMI and HDMIUSB) the camera is supported when
 the screen is in MODE 4 (320x240) and the captured image is written directly
@@ -9591,6 +9592,27 @@ without saving it or restarting the firmware, and can be used in a program.
 
 See also: CPU SPEED
 
+~OPTION CYW43 PINS
+OPTION CYW43 PINS wl_on, wl_d, wl_cs, wl_clk
+or
+OPTION CYW43 PINS DEFAULT
+
+RP2350 WIFI AND BLUETOOTH VERSIONS ONLY Specifies the pins used to connect to
+the wireless chip, for modules that do not connect it in the same way as the
+Raspberry Pi Pico 2 W (GP23, GP24, GP25 and GP29).  'wl_on' is the chip's
+power-on pin, 'wl_d' its data pin, 'wl_cs' its chip select and 'wl_clk' its
+clock.  For example, the Waveshare RP2350B Pico WiFi board needs OPTION CYW43
+PINS GP36, GP37, GP38, GP39.  DEFAULT returns to the standard pins.
+The pins must be unused.  'wl_d' and 'wl_clk' must both be within GP0 to GP31
+or both within GP16 to GP47.  If an I2S DAC is configured it shares a PIO with
+the wireless chip, so its pins must be within the same range.
+The configured pins are reserved and cannot be used by a program.  If the
+wireless chip does not respond on them the firmware reports this when it
+starts and runs without WiFi or Bluetooth.  OPTION RESET also returns to the
+standard pins.
+This command must be run at the command prompt (not in a program) and will
+cause a restart.
+
 ~OPTION DEFAULT
 OPTION DEFAULT FLOAT | INTEGER | STRING | NONE
 
@@ -10232,6 +10254,11 @@ defaults to 115200 baud but can be changed with OPTION BAUDRATE. Adding the
 Revert to the normal the USB console.
 
 These commands must be run at the command prompt (not in a program).
+On the PicoMiteRP2350BT version the serial console is enabled by default on
+GP8 (Tx) and GP9 (Rx) as a backup to the Bluetooth console.  On this version
+"B" means both Bluetooth and the serial port; without it the console is on the
+serial port only and the Bluetooth console is not used.  OPTION SERIAL CONSOLE
+DISABLE leaves just the Bluetooth console.
 
 ~OPTION SERIAL CONSOLE DISABLE
 OPTION SERIAL CONSOLE DISABLE
