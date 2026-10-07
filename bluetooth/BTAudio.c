@@ -806,6 +806,11 @@ void bt_audio_init(void)
        confirmed in hci_packet_handler only while BLUETOOTH CONNECT runs. */
     gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
     gap_ssp_set_auto_accept(0);
+    /* btstack requires a 16-byte encryption key by default. Some speakers
+       and adapters negotiate less; their link then counts as insecure and
+       the audio channel is refused ("Bluetooth error 0x66") although the
+       pairing worked. Accept down to the 7 bytes the specification allows. */
+    gap_set_required_encryption_key_size(7);
     /* Give up paging an absent speaker after 5.12 s (the default is 15 s):
        paging shares the radio with the keyboard. */
     gap_set_page_timeout(BTA_PAGE_TIMEOUT);
