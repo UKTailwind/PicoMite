@@ -408,17 +408,20 @@ endif()
 set(PICO_BOARD ${_PM_BOARD} CACHE STRING "PICO target board (derived from COMPILE)" FORCE)
 message(STATUS "PicoMite: COMPILE=${COMPILE} -> PICO_PLATFORM=${PICO_PLATFORM} PICO_BOARD=${PICO_BOARD}")
 
-# TinyUSB 0.21 for every variant (host and device). The tree is the proven
-# 0.21.0 pin from the Pico Computer 3 MicroPython port with its three hcd
-# patches baked in (see tinyusb-0.21/patches/): EPX buf_ctrl clear on
-# RX-timeout, single-buffered host CONTROL transfers, and 100 ms enumeration
-# reset recovery. 0.21's rewritten rp2040 hcd schedules host bulk on EPX
-# (double-buffered) instead of 1-packet-per-frame interrupt endpoints,
-# lifting USB MSC from ~64 KB/s to the full-speed wire ceiling (~1.1 MB/s).
+# TinyUSB for every variant (host and device): ../tinyusb-master is TinyUSB
+# master at e42fa9357 (2026-10-07), which has the enumeration retry and
+# control-transfer timeout (#3862) that answer our issue #3876, plus our RP2
+# host driver fixes (endpoint-0 RX-timeout grace, EPX buf_ctrl cleared on an
+# RX timeout, single-buffered host control on RP2350, faults recorded instead
+# of panic(), stale interrupt-endpoint slots). Its README-PICOMITE.md lists
+# them and the test behind dropping tinyusb-0.21's three usbh.c workarounds;
+# patches/ holds the diffs against stock master. Since 0.21 the rp2040 hcd
+# schedules host bulk on EPX (double-buffered), lifting USB MSC from ~64 KB/s
+# to the full-speed wire ceiling (~1.1 MB/s).
 # CACHE FORCE for the same reason as PICO_BOARD above: the build dir is
-# reused across variants. Rollback = comment out this line (the SDK then
-# falls back to its bundled hand-copied 0.20 tree).
-set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21 CACHE PATH "TinyUSB 0.21 (PC3-patched)" FORCE)
+# reused across variants. Rollback = ../tinyusb-0.21 (TinyUSB 0.21.0 with all
+# the workarounds).
+set(PICO_TINYUSB_PATH ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-master CACHE PATH "TinyUSB master e42fa9357 (PicoMite-patched)" FORCE)
 
 include(pico_sdk_import.cmake)
 project(PicoMite C CXX ASM)
@@ -437,8 +440,8 @@ add_executable(PicoMite ${COMMON_SOURCES})
 option(PC3_USB_EVLOG "USB host event-ring instrumentation" OFF)
 if(PC3_USB_EVLOG)
     set_source_files_properties(
-        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/rp2040_usb.c
-        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/hcd_rp2040.c
+        ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/rp2040/rp2040_usb.c
+        ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/rp2040/hcd_rp2040.c
         PROPERTIES COMPILE_DEFINITIONS "PC3_USB_EVLOG;PC3_EVLOG_N=112")
 endif()
 
@@ -451,7 +454,7 @@ option(FORCE_EPX_SOF "Force the RP2040 EPX SOF round-robin path on RP2350" OFF)
 if(FORCE_EPX_SOF)
     # APPEND: PC3_USB_EVLOG above may already have set definitions on this file
     set_property(SOURCE
-        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/hcd_rp2040.c
+        ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/rp2040/hcd_rp2040.c
         APPEND PROPERTY COMPILE_DEFINITIONS "PM_FORCE_EPX_SOF")
     message(STATUS "PicoMite: FORCE_EPX_SOF=ON - RP2350 uses the RP2040 EPX SOF path")
 endif()
@@ -463,7 +466,7 @@ endif()
 option(EPX_PREEMPT_UNGUARDED "Diagnostic: let the SOF round-robin preempt mid-transfer" OFF)
 if(EPX_PREEMPT_UNGUARDED)
     set_property(SOURCE
-        ${CMAKE_CURRENT_LIST_DIR}/../tinyusb-0.21/src/portable/raspberrypi/rp2040/hcd_rp2040.c
+        ${PICO_TINYUSB_PATH}/src/portable/raspberrypi/rp2040/hcd_rp2040.c
         APPEND PROPERTY COMPILE_DEFINITIONS "PM_EPX_PREEMPT_UNGUARDED")
     message(WARNING "PicoMite: EPX_PREEMPT_UNGUARDED=ON - diagnostic build, do not ship")
 endif()
