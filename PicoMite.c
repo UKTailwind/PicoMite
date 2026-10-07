@@ -3629,6 +3629,13 @@ uint32_t testPSRAM(void)
            build-specific flash address. See PicoCFunctions.h / armcfgen. */
         ((volatile uint32_t *)(*(volatile uint32_t *)0xE000ED08))[7] = (uint32_t)CallTable;
         i = watchdog_caused_reboot();
+        /* _excep_code survives any reset that keeps RAM, but SoftReset()
+           always reboots through the watchdog. After any other reset (the
+           reset switch, a brown-out) the code is left over from an earlier
+           restart: MM.INFO(BOOT) would say "Restart", and the boot would act
+           on it (no sign-on banner, a repeated "Command timeout"). */
+        if (!i)
+            _excep_code = 0;
 #ifdef rp2350
         restart_reason = powman_hw->chip_reset | i;
         rp2350a = (*((io_ro_32 *)(SYSINFO_BASE + SYSINFO_PACKAGE_SEL_OFFSET)) & 1);
