@@ -53,11 +53,14 @@ typedef enum
     SPK_CONNECTING, /* a2dp_source_establish_stream() issued */
     SPK_OPEN,       /* stream configured, not playing */
     SPK_STREAMING,  /* media packets flowing */
+    SPK_LINKED,     /* connected, but the stream is gone - see bt_audio_service() */
 } spk_state_t;
 
 static volatile spk_state_t spk_state;
 static volatile uint8_t spk_last_status; /* last failure reported by btstack */
 static volatile bool spk_quiet_release;  /* a command is waiting for the release */
+static volatile bool spk_reopening;      /* the link was dropped to reopen the stream */
+static volatile bool spk_reopen_quiet;   /* ...so its reconnection is not announced */
 static volatile bool spk_pairing_allowed; /* BLUETOOTH CONNECT is running */
 static bool bta_ready;                   /* bt_audio_init() completed */
 
@@ -99,6 +102,7 @@ static btstack_packet_callback_registration_t hci_event_callback_registration;
  */
 #define BTA_TLV_TAG_SPEAKER 0x42544153u /* 'BTAS' */
 #define BTA_RECONNECT_FIRST_MS 2000
+#define BTA_REOPEN_DELAY_MS 200 /* reconnect after dropping the link to reopen a stream */
 #define BTA_RECONNECT_MIN_RETRY_MS 5000
 #define BTA_RECONNECT_MAX_RETRY_MS 60000
 #define BTA_PAGE_TIMEOUT 0x2000 /* 8192 slots = 5.12 s */
@@ -109,6 +113,7 @@ static volatile bool auto_reconnect;
 static btstack_timer_source_t reconnect_timer;
 static uint32_t reconnect_interval_ms;
 static void reconnect_soon(void);
+static void reconnect_after(uint32_t first_ms);
 
 static void remember_speaker(const bd_addr_t addr)
 {
@@ -342,6 +347,12 @@ static uint32_t send_requested_us;
    themselves, and PLAY then starts it again - a gap in the sound each time. */
 static volatile uint32_t stream_starts, stream_pauses, stream_pauses_by_speaker, stream_closes;
 static volatile bool pause_requested;
+
+/* Starts that failed, and streams reopened (BLUETOOTH STATUS): btstack
+   refused the request (no stream left, or an earlier start unanswered), the
+   speaker rejected it, or it went unanswered for BTA_START_TIMEOUT_MS. */
+static volatile uint32_t start_refused, start_rejected, start_unanswered, stream_reopens;
+static volatile uint8_t start_last_error;
 
 /* Adaptive bitpool. The stream starts at the negotiated maximum, which a
    weak or busy link may not carry: the sound waiting to go then grows
@@ -609,7 +620,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         media_mtu = (uint16_t)(a2dp_max_media_payload_size(a2dp_cid, local_seid) + BTA_RTP_HEADER_SIZE);
         spk_state = SPK_OPEN;
         remember_speaker(speaker_addr);
-        if (!spk_pairing_allowed && !CurrentLinePtr)
+        if (!spk_pairing_allowed && !CurrentLinePtr && !spk_reopen_quiet)
             bt_notice("Bluetooth speaker connected\r\n> "); /* it reconnected by itself */
         break;
     }
@@ -640,20 +651,51 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
 
     case A2DP_SUBEVENT_STREAM_RELEASED:
         audio_timer_stop();
-        if (spk_state == SPK_STREAMING)
-            spk_state = SPK_OPEN;
-        if (!spk_quiet_release)
+        if (spk_quiet_release || spk_reopening)
+        { /* our own disconnect: the connection follows it */
+            if (spk_state == SPK_STREAMING)
+                spk_state = SPK_OPEN;
+        }
+        else
+        {
+            /* The speaker closed the stream and kept the connection.
+               btstack cannot open a second stream on that connection, so
+               the stream is gone until bt_audio_service() reconnects for
+               PLAY. */
+            if (spk_state == SPK_OPEN || spk_state == SPK_STREAMING)
+                spk_state = SPK_LINKED;
             stream_closes++;
+        }
         bt_keyboard_scan_duty_changed();
+        break;
+
+    case A2DP_SUBEVENT_COMMAND_REJECTED:
+        if (a2dp_subevent_command_rejected_get_signal_identifier(packet) == AVDTP_SI_START)
+        {
+            start_rejected++;
+            if (spk_state == SPK_OPEN)
+                spk_state = SPK_LINKED; /* try again on a fresh connection */
+        }
         break;
 
     case A2DP_SUBEVENT_SIGNALING_CONNECTION_RELEASED:
     {
-        bool was_connected = (spk_state == SPK_OPEN || spk_state == SPK_STREAMING);
+        bool was_connected = (spk_state == SPK_OPEN || spk_state == SPK_STREAMING || spk_state == SPK_LINKED);
         audio_timer_stop();
         a2dp_cid = 0;
         spk_state = SPK_NONE;
         bt_keyboard_scan_duty_changed();
+        if (spk_reopening)
+        {
+            /* bt_audio_service() dropped the link to reopen the stream:
+               connect again (from a timer - btstack is still releasing
+               this connection) */
+            spk_reopening = false;
+            spk_reopen_quiet = true;
+            stream_reopens++;
+            reconnect_after(BTA_REOPEN_DELAY_MS);
+            break;
+        }
         if (was_connected && !spk_quiet_release)
         {
             if (!CurrentLinePtr)
@@ -694,12 +736,17 @@ static void reconnect_timeout(btstack_timer_source_t *ts)
    OPTION AUDIO restarts the board, so it cannot become due later. */
 static void reconnect_soon(void)
 {
+    reconnect_after(BTA_RECONNECT_FIRST_MS);
+}
+
+static void reconnect_after(uint32_t first_ms)
+{
     if (!AUDIO_BLUETOOTH)
         return;
     reconnect_interval_ms = BTA_RECONNECT_MIN_RETRY_MS;
     btstack_run_loop_remove_timer(&reconnect_timer);
     btstack_run_loop_set_timer_handler(&reconnect_timer, reconnect_timeout);
-    btstack_run_loop_set_timer(&reconnect_timer, BTA_RECONNECT_FIRST_MS);
+    btstack_run_loop_set_timer(&reconnect_timer, first_ms);
     btstack_run_loop_add_timer(&reconnect_timer);
 }
 
@@ -821,7 +868,10 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
  * PLAY output service (main loop)
  * ============================================================================
  */
-#define BTA_START_TIMEOUT_MS 3000 /* give up waiting for a stream to start */
+#define BTA_START_TIMEOUT_MS 3000       /* give up waiting for a stream to start */
+#define BTA_REOPEN_HOLD_MS 8000         /* hold the sound while a stream is reopened (a page alone can take 5.12 s) */
+#define BTA_REOPEN_BACKOFF_MS 20000     /* before reopening again if that did not help... */
+#define BTA_REOPEN_BACKOFF_MAX_MS 160000 /* ...doubling to this */
 #define BTA_DISCARD_RATE 44100
 
 /* Called from bt_keyboard_poll() in the main loop. With OPTION AUDIO
@@ -832,11 +882,19 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
    CPU while a speaker is connected. While no speaker can
    take the sound it is discarded at the real-time rate, so PLAY behaves as
    a wired output does with nothing plugged in: sounds still end on time and
-   their interrupts still fire. */
+   their interrupts still fire.
+
+   A stream that cannot be started - the speaker closed it, rejected the
+   start, or never answered it - is reopened when PLAY next needs it, on a
+   fresh connection (btstack cannot open a second stream on the old one):
+   the link is dropped, the release reconnects, and the sound is held for
+   up to BTA_REOPEN_HOLD_MS meanwhile. If that does not give a stream, the
+   next try waits BTA_REOPEN_BACKOFF_MS, doubling. */
 void bt_audio_service(void)
 {
     static uint32_t last_us, last_active_ms, start_requested_ms;
-    static bool start_requested;
+    static uint32_t hold_until_ms, next_reopen_ms, reopen_backoff_ms;
+    static bool start_requested, reopen_hold;
     if (!bta_ready || !AUDIO_BLUETOOTH)
         return;
     uint32_t now_ms = to_ms_since_boot(get_absolute_time());
@@ -845,11 +903,19 @@ void bt_audio_service(void)
     uint32_t idle_ms = (uint32_t)AUDIO_BLUETOOTH_IDLE * 1000u; /* 0: never suspend */
     if (playing || tone)
         last_active_ms = now_ms;
+    if (reopen_hold && (int32_t)(hold_until_ms - now_ms) <= 0)
+    {
+        reopen_hold = false;
+        spk_reopen_quiet = false;
+    }
 
     switch (spk_state)
     {
     case SPK_STREAMING:
         start_requested = false;
+        reopen_backoff_ms = 0; /* a stream runs: a later reopen need not wait */
+        reopen_hold = false;
+        spk_reopen_quiet = false;
         last_us = time_us_32();
         if (idle_ms && !playing && !tone && now_ms - last_active_ms > idle_ms)
         {
@@ -871,18 +937,61 @@ void bt_audio_service(void)
             bta_lock();
             uint8_t status = a2dp_source_start_stream(a2dp_cid, local_seid);
             bta_unlock();
-            start_requested = (status == ERROR_CODE_SUCCESS);
+            if (status != ERROR_CODE_SUCCESS)
+            {
+                /* btstack refused: no stream left to start, or an earlier
+                   start still unanswered - asking again cannot help */
+                start_refused++;
+                start_last_error = status;
+                spk_state = SPK_LINKED;
+                last_us = time_us_32();
+                return;
+            }
+            start_requested = true;
             start_requested_ms = now_ms;
         }
-        if (start_requested && now_ms - start_requested_ms < BTA_START_TIMEOUT_MS)
+        if (now_ms - start_requested_ms < BTA_START_TIMEOUT_MS)
         {
             last_us = time_us_32(); /* hold the sound until the stream runs */
             return;
         }
-        start_requested = false; /* not started in time: ask again next pass */
-        break;
-    default:
+        start_unanswered++;
         start_requested = false;
+        spk_state = SPK_LINKED;
+        last_us = time_us_32();
+        return;
+    case SPK_LINKED:
+        start_requested = false;
+        if (!playing && idle_ms)
+            break;
+        if (!spk_reopening && (reopen_backoff_ms == 0 || (int32_t)(now_ms - next_reopen_ms) >= 0))
+        {
+            bta_lock();
+            spk_reopening = true;
+            if (a2dp_source_disconnect(a2dp_cid) != ERROR_CODE_SUCCESS)
+                spk_reopening = false;
+            bta_unlock();
+            reopen_hold = true;
+            hold_until_ms = now_ms + BTA_REOPEN_HOLD_MS;
+            if (reopen_backoff_ms == 0)
+                reopen_backoff_ms = BTA_REOPEN_BACKOFF_MS;
+            else if (reopen_backoff_ms < BTA_REOPEN_BACKOFF_MAX_MS)
+                reopen_backoff_ms *= 2;
+            next_reopen_ms = now_ms + reopen_backoff_ms;
+        }
+        if (reopen_hold)
+        {
+            last_us = time_us_32(); /* hold the sound while the stream reopens */
+            return;
+        }
+        break;
+    default: /* SPK_NONE, SPK_CONNECTING */
+        start_requested = false;
+        if (playing && reopen_hold)
+        {
+            last_us = time_us_32(); /* a reopen is reconnecting */
+            return;
+        }
         break;
     }
 
@@ -1225,7 +1334,7 @@ static void bta_forget(unsigned char *tp)
         one = true;
     }
     bta_require_ready();
-    if ((spk_state == SPK_OPEN || spk_state == SPK_STREAMING) &&
+    if ((spk_state == SPK_OPEN || spk_state == SPK_STREAMING || spk_state == SPK_LINKED) &&
         (!one || memcmp(addr, speaker_addr, sizeof(bd_addr_t)) == 0))
     {
         spk_quiet_release = true;
@@ -1259,7 +1368,7 @@ void bt_info(unsigned char *tp, char *out)
 {
     if (checkstring(tp, (unsigned char *)"SPEAKER"))
     {
-        if (spk_state == SPK_OPEN || spk_state == SPK_STREAMING)
+        if (spk_state == SPK_OPEN || spk_state == SPK_STREAMING || spk_state == SPK_LINKED)
             strcpy(out, bd_addr_to_str(speaker_addr));
         else
             out[0] = 0;
@@ -1291,6 +1400,10 @@ static void bta_status(void)
         break;
     case SPK_CONNECTING:
         MMPrintString("connecting");
+        break;
+    case SPK_LINKED:
+        MMPrintString((char *)bd_addr_to_str(speaker_addr));
+        MMPrintString(", no stream (PLAY reconnects)");
         break;
     case SPK_OPEN:
     case SPK_STREAMING:
@@ -1342,7 +1455,7 @@ static void bta_status(void)
            the encoder tick (the btstack context blocked), the bond-store
            writes (each one a SaveOptions()), and keyboard security events. */
         uint32_t saves, save_max, save_total, pairings, reenc, interrupted;
-        char buf[128];
+        char buf[160];
         bt_keyboard_stats(&saves, &save_max, &save_total, &pairings, &reenc, &interrupted);
         sprintf(buf, "\r\nLongest encoder gap: %lu ms", (unsigned long)(tick_gap_max_us / 1000));
         tick_gap_max_us = 0;
@@ -1358,6 +1471,13 @@ static void bta_status(void)
                 (unsigned long)stream_starts, (unsigned long)stream_pauses,
                 (unsigned long)stream_pauses_by_speaker, (unsigned long)stream_closes);
         stream_starts = stream_pauses = stream_pauses_by_speaker = stream_closes = 0;
+        MMPrintString(buf);
+        sprintf(buf, "\r\nStart failures: %lu refused, %lu rejected, %lu unanswered; streams reopened: %lu",
+                (unsigned long)start_refused, (unsigned long)start_rejected,
+                (unsigned long)start_unanswered, (unsigned long)stream_reopens);
+        if (start_refused)
+            sprintf(buf + strlen(buf), " (last refusal 0x%02X)", start_last_error);
+        start_refused = start_rejected = start_unanswered = stream_reopens = 0;
         MMPrintString(buf);
         sprintf(buf, "\r\nBitpool lowered: %lu times, lowest %u",
                 (unsigned long)bitpool_lowered, (unsigned)bitpool_lowest);
