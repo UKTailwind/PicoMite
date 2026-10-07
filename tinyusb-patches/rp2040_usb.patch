@@ -1,6 +1,6 @@
 --- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
 +++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
-@@ -48,6 +48,79 @@
+@@ -29,6 +29,79 @@
  
  critical_section_t rp2usb_lock;
  
@@ -80,7 +80,7 @@
  //--------------------------------------------------------------------+
  // Implementation
  //--------------------------------------------------------------------+
-@@ -118,7 +191,13 @@
+@@ -103,7 +176,13 @@
    const uint32_t current    = *buf_reg;
    const uint32_t avail_mask = USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16);
    if (current & value & avail_mask) {
@@ -95,7 +95,7 @@
    }
    *buf_reg = value & ~(USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16)); // write other bits first
  
-@@ -136,7 +215,9 @@
+@@ -121,7 +200,9 @@
  void __tusb_irq_path_func(bufctrl_write16)(io_rw_16 *buf_reg16, uint16_t value) {
    const uint16_t current = *buf_reg16;
    if (current & value & USB_BUF_CTRL_AVAIL) {
@@ -106,43 +106,24 @@
    }
    *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
  
-@@ -196,7 +277,34 @@
-   if (ep_reg != NULL) {
-     uint32_t ep_ctrl = *ep_reg;
+@@ -186,7 +267,15 @@
+     // double-buffered bulk path is unaffected.)
+     const bool is_iso = (((ep_ctrl >> EP_CTRL_BUFFER_TYPE_LSB) & 0x3u) == TUSB_XFER_ISOCHRONOUS);
    #if CFG_TUH_ENABLED
--    const bool force_single = (rp2usb_is_host_mode() && ep->interrupt_num > 0);
-+    /* PC3: single-buffer host CONTROL transfers as well as interrupt ones.
-+     * A 525-byte GET_DESCRIPTOR(report) IN from a touch panel - nine
-+     * full-speed packets, double-buffered on EPX - was completed by this
-+     * driver after the first 64 bytes with the other buffer still armed;
-+     * the status stage then hit "buf_ctrl already available" (a panic).
-+     * Two-packet control INs and 64 KB double-buffered BULK reads work,
-+     * so only control is narrowed here.  0.20 double-buffered EP0 too
-+     * but synced both halves per interrupt rather than trusting
-+     * BUF_CPU_SHOULD_HANDLE.  Control transfers are small; the cost is
-+     * nil.  (Pico Computer 3, 2026-09-01, ports/rp2/rp2040_usb.patch) */
-+    /* ...but NOT on a chip with RP2040-E4.  That erratum applies exactly to
-+     * host SINGLE-BUFFERED MULTI-PACKET transfers: the controller writes
-+     * completion status to the BUF1 half, leaves BUF0 intact, and can run an
-+     * EXTRA packet before the buf_status interrupt.  The extra packet shows up
-+     * as ERROR_DATA_SEQ and the still-armed BUF0 as "buf_ctrl already
-+     * available" on the next arm - both on EP0, which is what an RP2040
-+     * VGAUSB board reports on every keyboard plug (DATA_SEQ @180 = dev 1
-+     * ep 0x80, BUFCTRL32 @80 = epx_buf_ctrl).  The E4 handling below only
-+     * corrects WHICH buffer is read; it does not stop the extra packet.
-+     * So force single-buffering on the control pipe only where it is safe -
-+     * RP2350, where the PC3 problem above was found and where E4 does not
-+     * exist.  On RP2040 EP0 goes back to double-buffered, which is what
-+     * TinyUSB 0.20 did and why b1 was clean.  Interrupt endpoints keep
-+     * force_single on both chips: they are single-packet per arming, so the
-+     * multi-packet precondition for E4 never applies to them. */
-+    const bool force_single = rp2usb_is_host_mode() &&
+-    const bool force_single = is_iso || (rp2usb_is_host_mode() && ep->interrupt_num > 0);
++    /* PicoMite (TinyUSB #3875): single-buffer host CONTROL transfers as well
++     * as interrupt ones - on RP2350 only (RP2040-E4 makes single-buffered
++     * multi-packet host transfers unsafe there). A 9-packet control IN
++     * double-buffered on EPX completed after the first 64 bytes with the other
++     * buffer still armed, and the status stage hit "buf_ctrl already
++     * available". Full rationale in tinyusb-0.21's copy of this file. */
++    const bool force_single = is_iso || (rp2usb_is_host_mode() &&
 +                              (ep->interrupt_num > 0 ||
-+                               (tu_edpt_number(ep->ep_addr) == 0 && !CFG_TUSB_RP2_ERRATA_E4));
++                               (tu_edpt_number(ep->ep_addr) == 0 && !CFG_TUSB_RP2_ERRATA_E4)));
    #else
-     const bool force_single = false;
+     const bool force_single = is_iso;
    #endif
-@@ -230,6 +338,9 @@
+@@ -220,6 +309,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -152,7 +133,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -356,6 +467,16 @@
+@@ -346,6 +438,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;

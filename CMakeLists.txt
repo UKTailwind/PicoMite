@@ -413,9 +413,9 @@ message(STATUS "PicoMite: COMPILE=${COMPILE} -> PICO_PLATFORM=${PICO_PLATFORM} P
 # control-transfer timeout (#3862) that answer our issue #3876, plus our RP2
 # host driver fixes (endpoint-0 RX-timeout grace, EPX buf_ctrl cleared on an
 # RX timeout, single-buffered host control on RP2350, faults recorded instead
-# of panic(), stale interrupt-endpoint slots). Its README-PICOMITE.md lists
-# them and the test behind dropping tinyusb-0.21's three usbh.c workarounds;
-# patches/ holds the diffs against stock master. Since 0.21 the rp2040 hcd
+# of panic(), stale interrupt-endpoint slots). tinyusb-patches/setup-tinyusb
+# creates it; tinyusb-patches/README.md lists the patches and the test behind
+# dropping tinyusb-0.21's usbh.c workarounds. Since 0.21 the rp2040 hcd
 # schedules host bulk on EPX (double-buffered), lifting USB MSC from ~64 KB/s
 # to the full-speed wire ceiling (~1.1 MB/s).
 # CACHE FORCE for the same reason as PICO_BOARD above: the build dir is

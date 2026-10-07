@@ -1,5 +1,5 @@
 @echo off
-rem setup-tinyusb.bat - create the patched TinyUSB 0.21 tree PicoMite builds
+rem setup-tinyusb.bat - create the patched TinyUSB master tree PicoMite builds
 rem against, by running setup-tinyusb.sh under Git Bash (Git for Windows).
 setlocal
 

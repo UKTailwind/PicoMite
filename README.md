@@ -40,10 +40,10 @@ toolchain and the Raspberry Pi Pico SDK.
   automatically at link time (see below); no edit to the SDK's `gpio.c` is
   required.
 - **arm-none-eabi GCC 13.3.1**
-- **TinyUSB v0.21.0 (patched)** — the USB-**host** driver fixes (fast USB
-  flash-drive transfers, and reliable enumeration of several devices behind a
-  hub) live in a patched TinyUSB 0.21 tree kept in a **sibling directory**
-  `../tinyusb-0.21` (next to this repo, not inside it) and selected by
+- **TinyUSB master at e42fa9357 (patched)** — the USB-**host** driver fixes
+  (fast USB flash-drive transfers, and reliable enumeration of several devices
+  behind a hub) live in a patched TinyUSB tree kept in a **sibling directory**
+  `../tinyusb-master` (next to this repo, not inside it) and selected by
   `PICO_TINYUSB_PATH` in [`CMakeLists.txt`](CMakeLists.txt). The Pico SDK's own
   bundled TinyUSB is **not** touched.
 
@@ -54,8 +54,8 @@ toolchain and the Raspberry Pi Pico SDK.
   tinyusb-patches\setup-tinyusb.bat     # Windows
   ```
 
-  This clones TinyUSB 0.21.0 into `../tinyusb-0.21` and applies the patches in
-  [`tinyusb-patches/`](tinyusb-patches). See
+  This fetches TinyUSB master at e42fa9357 into `../tinyusb-master` and applies
+  the patches in [`tinyusb-patches/`](tinyusb-patches). See
   [`tinyusb-patches/README.md`](tinyusb-patches/README.md) for what each patch
   does, and the [`docs/usb-host-hardening.html`](docs/usb-host-hardening.html)
   guide for the host-driver fixes in depth.
