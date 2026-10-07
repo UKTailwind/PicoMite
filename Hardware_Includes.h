@@ -854,6 +854,24 @@ void clearrepeat(void);
 #endif
 
 /* ============================================================================
+ * Bluetooth-host polling (PICOMITEBTH / PICOMITEHDMIBTH)
+ * ============================================================================
+ * These builds run the CYW43 and btstack on a polled async_context, like the
+ * WiFi builds, and poll it from the same places ProcessWeb() is called.
+ * btstack callbacks therefore run inside ProcessBT() and must never print or
+ * wait (they post messages with bt_notice() instead), just as lwIP callbacks
+ * use web_async_set_error(). */
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+void bt_keyboard_poll(void);
+#define ProcessBT() bt_keyboard_poll()
+#elif defined(PICOMITEBT)
+void bt_console_process(void);
+#define ProcessBT() bt_console_process()
+#else
+#define ProcessBT()
+#endif
+
+/* ============================================================================
  * Function declarations - WiFi/Web (PICOMITEWEB)
  * ============================================================================ */
 #ifdef PICOMITEWEB

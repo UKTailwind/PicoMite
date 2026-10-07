@@ -6672,6 +6672,7 @@ void MIPS16 cmd_files(void)
 #ifdef PICOMITEWEB
             ProcessWeb(1);
 #endif
+            ProcessBT();
             if (fcnt >= maxfiles)
             {
                 FreeMemorySafe((void **)&fptrs);
@@ -6722,6 +6723,7 @@ void MIPS16 cmd_files(void)
 #ifdef PICOMITEWEB
             ProcessWeb(1);
 #endif
+            ProcessBT();
             FSerror = lfs_dir_read(&lfs, &lfs_dir, &lfs_info);
             if (FSerror == 0)
                 break;
@@ -6817,6 +6819,7 @@ void MIPS16 cmd_files(void)
 #ifdef PICOMITEWEB
         ProcessWeb(1);
 #endif
+        ProcessBT();
         if (fptrs[i]->fn[0] == 'D')
         {
             dirs++;
@@ -6866,6 +6869,7 @@ void MIPS16 cmd_files(void)
 #ifdef PICOMITEWEB
                 ProcessWeb(1);
 #endif
+                ProcessBT();
                 routinechecks();
                 if (MMAbort)
                 {

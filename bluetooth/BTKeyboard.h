@@ -28,10 +28,16 @@ extern "C" {
    same place PICOMITEBT calls bt_console_init). */
 void bt_keyboard_init(void);
 
-/* Cooperative poll — call from the main loop. Pumps cyw43_arch_poll
-   and runs a heartbeat that toggles the cyw43 LED so we can visually
-   confirm the BT firmware is alive. */
+/* Cooperative poll (ProcessBT() in Hardware_Includes.h) — called from the
+   same places as the WiFi builds' ProcessWeb(). Pumps cyw43_arch_poll on
+   the polled async_context, prints any bt_notice() messages and runs a
+   heartbeat that toggles the cyw43 LED so we can visually confirm the BT
+   firmware is alive. */
 void bt_keyboard_poll(void);
+
+/* Post a console message from a btstack callback. Callbacks run inside the
+   poll, so they must not print; the next bt_keyboard_poll() prints it. */
+void bt_notice(const char *msg);
 
 /* True once HCI has reached HCI_STATE_WORKING. */
 bool bt_keyboard_ready(void);

@@ -1016,6 +1016,7 @@ int __not_in_flash_func(GetTouchValue)(int cmd)
 #ifdef PICOMITEWEB
     ProcessWeb(1);
 #endif
+    ProcessBT();
 
     return val;
 }

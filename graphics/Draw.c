@@ -551,6 +551,7 @@ void MIPS16 cmd_guiMX170(void)
                         ProcessWeb(1);
                 }
 #endif
+                ProcessBT();
                 DrawCircle(rand() % HRes, rand() % VRes, (rand() % t) + t / 5, 1, 1, rgb((rand() % 8) * 256 / 8, (rand() % 8) * 256 / 8, (rand() % 8) * 256 / 8), 1);
                 count++;
 #ifdef PICOMITEVGA

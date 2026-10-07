@@ -136,10 +136,9 @@ uint8_t PSRAMpin;
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 /* PICOMITEBTH and PICOMITEHDMIBTH both use the BLE HID-host stack
    (BTKeyboard.c) for keyboard input and to keep the CYW43 LED
-   heartbeat alive — pico_cyw43_arch_none alone has no async pump, so
-   cyw43_arch_gpio_put hangs after the first call. btstack's workers
-   keep the async_context alive, and bt_keyboard_poll() drives the
-   heartbeat from main-thread context. */
+   heartbeat alive. The cyw43 and btstack run on a polled async_context
+   (pico_cyw43_arch_poll), pumped by bt_keyboard_poll() - ProcessBT() -
+   from the same places the WiFi builds call ProcessWeb(). */
 #include "pico/cyw43_arch.h"
 #include "pico/cyw43_driver.h"
 #include "BTKeyboard.h"
@@ -1003,18 +1002,13 @@ uint8_t PSRAMpin;
             USB_fault_service();
         }
 #endif
-#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
-        /* Pump btstack/cyw43 from the keyboard-tick site too. HID
-           reports route into the console RX ring from inside the
-           packet handler (process_kbd_report path), so no extra
-           drain logic is needed here. Also drives the CYW43 LED
-           heartbeat — see bt_keyboard_poll() in BTKeyboard.c. */
-        bt_keyboard_poll();
-#endif
+        /* The Bluetooth-host builds (BTH/HDMIBTH) are not polled here: like
+           the WiFi builds' ProcessWeb(), ProcessBT() runs from CheckAbort,
+           getConsole, uSec and the long-running loops instead. */
 #ifdef PICOMITEBT
-        /* Pump btstack/cyw43 and drain inbound RFCOMM bytes into the
-           standard console RX ring. Mirrors the USB CDC path. */
-        bt_console_poll();
+        /* Drain inbound BLE console bytes into the standard console RX
+           ring. Mirrors the USB CDC path. The radio itself is polled by
+           ProcessBT() (CheckAbort calls it just before this), not here. */
         if (bt_console_connected() &&
             (Option.SerialConsole == 0 || Option.SerialConsole > 4))
         {
@@ -1213,20 +1207,16 @@ uint8_t PSRAMpin;
 #ifdef rp2350
         stepper_poll_events();
 #endif
-#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
-        /* Pump btstack/cyw43 from the main loop. No bytes-to-drain
-           wrapper like PICOMITEBT — HID reports route directly into
-           the console RX ring via process_kbd_report() from inside
-           the packet handler. */
-        bt_keyboard_poll();
-#endif
+        /* Bluetooth-host builds: poll btstack/cyw43 here, as ProcessWeb does
+           above. No bytes-to-drain wrapper like PICOMITEBT — HID reports
+           route directly into the console RX ring via process_kbd_report()
+           from inside the packet handler. */
+        ProcessBT();
 #ifdef PICOMITEBT
-        /* Service cyw43/btstack work from the main thread at full
-           console-read rate. Without this, pending work scheduled by
-           the cyw43 SPI IRQ has to wait for the alarm callback or
-           the next routinechecks tick (which is throttled). XMODEM
-           ACKs and rapid bidirectional traffic need polling much
-           more frequently than every 1 ms. Also drains any newly-
+        /* Poll cyw43/btstack at full console-read rate, on top of the
+           throttled ProcessBT() above: XMODEM ACKs and rapid
+           bidirectional traffic need polling much more frequently than
+           every 1 ms. Also drains any newly-
            received BLE bytes into ConsoleRxBuf so the read below
            sees them immediately. */
         bt_console_poll();
@@ -1338,6 +1328,7 @@ uint8_t PSRAMpin;
         TelnetPutC(c, flush);
         ProcessWeb(1);
 #endif
+        ProcessBT(); // keeps a Bluetooth speaker fed while long output prints
         return c;
     }
     char MMputchar(char c, int flush)
@@ -2673,7 +2664,7 @@ int __not_in_flash_func(MMInkey)(void)
     }
     void __not_in_flash_func(uSec)(int us)
     {
-#ifdef PICOMITEWEB
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
         if (us < 500)
         {
             busy_wait_us(us);
@@ -2684,7 +2675,12 @@ int __not_in_flash_func(MMInkey)(void)
             while (time_us_64() < end)
             {
                 if (time_us_64() % 500 == 0)
+                {
+#ifdef PICOMITEWEB
                     ProcessWeb(1);
+#endif
+                    ProcessBT();
+                }
             }
         }
 #else
@@ -2698,6 +2694,7 @@ int __not_in_flash_func(MMInkey)(void)
         if (WIFIconnected || WebScanActive) // no network work without a connection
             ProcessWeb(1);
 #endif
+        ProcessBT();
         routinechecks();
         if (MMAbort)
         {

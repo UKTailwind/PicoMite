@@ -114,9 +114,10 @@ static uint8_t rx_buf[BT_RX_BUF_SIZE];
 static hci_con_handle_t conn_handle = HCI_CON_HANDLE_INVALID;
 
 /* notifications_enabled, can_send_now_requested and att_mtu are
-   touched both from the main thread (bt_console_putc) and from the
-   cyw43 alarm-IRQ context (packet_handler / drain_tx_notify under
-   threadsafe_background). Without volatile the compiler can cache
+   touched both from bt_console_putc and from packet_handler /
+   drain_tx_notify. Those now run inside cyw43_arch_poll() on the polled
+   async_context (they ran in the cyw43 alarm-IRQ context under the old
+   threadsafe_background backend). Without volatile the compiler can cache
    stale values, leaving bytes stranded in tx_buf with no pending
    CAN_SEND_NOW event — manifests as "stalls after first packet" in
    XMODEM where there's no further bt_console_putc activity to
@@ -564,6 +565,26 @@ void bt_console_poll(void)
                 led_state);
         }
     }
+}
+
+/* ProcessBT() (Hardware_Includes.h): called from the same places as the WiFi
+   builds' ProcessWeb(), and throttled the same way - the radio is polled at
+   most once a millisecond, or every 100 calls. getConsole() still calls
+   bt_console_poll() directly, and bt_console_putc() cyw43_arch_poll() while
+   the TX ring is full, at full rate, for console traffic such as XMODEM. */
+void bt_console_process(void)
+{
+    static uint64_t lastusec;
+    static int testcount;
+    uint64_t timenow = time_us_64();
+    if (testcount == 0 || timenow > lastusec)
+    {
+        lastusec = timenow + 1000;
+        testcount = 0;
+        bt_console_poll();
+    }
+    if (++testcount == 100)
+        testcount = 0;
 }
 
 bool bt_console_connected(void)

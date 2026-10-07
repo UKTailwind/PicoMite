@@ -1604,7 +1604,7 @@ static void hids_client_handler(uint8_t packet_type,
         }
 
         if (!CurrentLinePtr)
-            MMPrintString("Bluetooth Keyboard Connected\r\n> ");
+            bt_notice("Bluetooth Keyboard Connected\r\n> ");
 
         state = BTK_READY;
         break;
@@ -1799,7 +1799,7 @@ static void packet_handler(uint8_t packet_type,
            reached the ready (HID-connected) state — avoids spurious
            "Disconnected" lines for failed pairings / dropped scans. */
         if (state == BTK_READY && !CurrentLinePtr)
-            MMPrintString("Bluetooth Keyboard Disconnected\r\n> ");
+            bt_notice("Bluetooth Keyboard Disconnected\r\n> ");
         btstack_run_loop_remove_timer(&pair_kickoff_timer);
         if (bth_raw_listener_installed)
         {
@@ -1847,7 +1847,7 @@ static void packet_handler(uint8_t packet_type,
         snprintf(msg, sizeof(msg),
                  "\r\nBluetooth keyboard pairing: type %06lu on the keyboard, then Enter\r\n",
                  (unsigned long)passkey);
-        MMPrintString(msg);
+        bt_notice(msg);
         break;
     }
 
@@ -2030,12 +2030,45 @@ void bt_keyboard_init(void)
         keylayout = BEkeyValue;
 }
 
+/* Messages from btstack callbacks. The callbacks run inside cyw43_arch_poll()
+   below, so - like lwIP's callbacks with web_async_set_error() - they never
+   print: printing could reach another poll site. bt_keyboard_poll() prints
+   what they posted once the poll has returned. */
+static char bt_notice_buf[192];
+
+void bt_notice(const char *msg)
+{
+    size_t used = strlen(bt_notice_buf);
+    if (used + strlen(msg) < sizeof(bt_notice_buf))
+        strcpy(bt_notice_buf + used, msg);
+}
+
+/* ProcessBT(): called from the same places as the WiFi builds' ProcessWeb()
+   (see Hardware_Includes.h), and throttled the same way - the radio is
+   polled at most once a millisecond, or every 100 calls. */
 void bt_keyboard_poll(void)
 {
+    static uint64_t lastusec;
+    static int testcount;
     if (!bt_startup_complete)
         return;
 
-    cyw43_arch_poll();
+    uint64_t timenow = time_us_64();
+    if (testcount == 0 || timenow > lastusec)
+    {
+        lastusec = timenow + 1000;
+        testcount = 0;
+        cyw43_arch_poll();
+    }
+    if (++testcount == 100)
+        testcount = 0;
+    if (bt_notice_buf[0])
+    {
+        char msg[sizeof(bt_notice_buf)];
+        strcpy(msg, bt_notice_buf);
+        bt_notice_buf[0] = 0;
+        MMPrintString(msg);
+    }
     bt_audio_service();
 
     /* Save the bond store once btstack has stopped writing it (see

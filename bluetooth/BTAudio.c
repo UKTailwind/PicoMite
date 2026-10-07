@@ -610,7 +610,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         spk_state = SPK_OPEN;
         remember_speaker(speaker_addr);
         if (!spk_pairing_allowed && !CurrentLinePtr)
-            MMPrintString("Bluetooth speaker connected\r\n> "); /* it reconnected by itself */
+            bt_notice("Bluetooth speaker connected\r\n> "); /* it reconnected by itself */
         break;
     }
 
@@ -657,7 +657,7 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         if (was_connected && !spk_quiet_release)
         {
             if (!CurrentLinePtr)
-                MMPrintString("Bluetooth speaker disconnected\r\n> ");
+                bt_notice("Bluetooth speaker disconnected\r\n> ");
             reconnect_soon(); /* switched off, or out of range */
         }
         break;
@@ -689,9 +689,13 @@ static void reconnect_timeout(btstack_timer_source_t *ts)
         reconnect_interval_ms = BTA_RECONNECT_MAX_RETRY_MS;
 }
 
-/* Try the remembered speaker shortly, then back off again. */
+/* Try the remembered speaker shortly, then back off again. Only when PLAY
+   goes to the speaker: reconnect_timeout() does nothing otherwise, and
+   OPTION AUDIO restarts the board, so it cannot become due later. */
 static void reconnect_soon(void)
 {
+    if (!AUDIO_BLUETOOTH)
+        return;
     reconnect_interval_ms = BTA_RECONNECT_MIN_RETRY_MS;
     btstack_run_loop_remove_timer(&reconnect_timer);
     btstack_run_loop_set_timer_handler(&reconnect_timer, reconnect_timeout);

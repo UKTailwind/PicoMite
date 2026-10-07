@@ -3084,6 +3084,7 @@ void MIPS16 cmd_play(void)
 #ifdef PICOMITEWEB
 			ProcessWeb(1);
 #endif
+			ProcessBT();
 		}
 		return;
 	}

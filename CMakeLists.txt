@@ -178,10 +178,10 @@ set(BT_VARIANTS
 
 # BT-host variants: pull in cyw43 BT firmware, link btstack, and provide
 # bt_keyboard_init / bt_keyboard_poll (BTKeyboard.c). HDMIBTH reuses the
-# same BT-host stack — pico_cyw43_arch_none alone has no async pump, so
-# cyw43_arch_gpio_put hangs after the first call. With btstack in the
-# picture the async_context is kept alive by btstack's workers, and
-# bt_keyboard_poll() drives both the chip and the heartbeat.
+# same BT-host stack. The cyw43 runs on a polled async_context
+# (pico_cyw43_arch_poll, see the IS_BTH link block): bt_keyboard_poll(),
+# called as ProcessBT() from the ProcessWeb sites, drives both the chip
+# and the heartbeat.
 set(BTH_VARIANTS
 	PICOBTHRP2350
 	HDMIBTH
@@ -833,7 +833,7 @@ if(COMPILE STREQUAL "HDMIBTH")
 	# HDMIBTH = HDMIUSB + BLE HID host (Bluetooth keyboard + heartbeat
 	# LED on the CYW43 chip). HDMIBTH is in BTH_VARIANTS so IS_BTH
 	# fires — that block pulls in BTKeyboard.c, links pico_btstack_ble /
-	# pico_btstack_cyw43 / pico_cyw43_arch_none, and sets the shared
+	# pico_btstack_cyw43 / pico_cyw43_arch_poll, and sets the shared
 	# defines (CYW43_ENABLE_BLUETOOTH, CYW43_PIO_CLOCK_DIV_DYNAMIC,
 	# heap=0x4000, stack=0x4000, GUICONTROLS). This block only adds
 	# the HDMIBTH-specific identity.
@@ -990,17 +990,21 @@ if(IS_WEB)
 endif()
 
 if(IS_BT)
-	# pico_cyw43_arch_none is the right backend for BT-only (no lwIP):
-	# it sets CYW43_LWIP=0 and uses threadsafe_background internally via
-	# async_context. pico_cyw43_arch_poll requires lwIP (only built when
-	# pico_lwip target exists), so it can't be used here.
+	# Polled cyw43 + btstack, like the WiFi and BTH builds:
+	# pico_cyw43_arch_poll runs the async_context only when ProcessBT()
+	# (bt_console_process) or the console paths call cyw43_arch_poll. The
+	# SDK only provides it when the pico_lwip target exists, which it does
+	# here; CYW43_LWIP=0 because arch_poll otherwise assumes lwIP. The old
+	# pico_cyw43_arch_none (threadsafe_background) backend's low-priority
+	# IRQ starved the main loop, so I2S audio stalled.
 	# We supply our own hal_flash_bank (BTConsole.c) backed by Option
 	# struct, so pico_btstack_flash_bank is not required.
 	target_link_libraries(PicoMite
 		pico_btstack_ble
 		pico_btstack_cyw43
-		pico_cyw43_arch_none
+		pico_cyw43_arch_poll
 	)
+	target_compile_definitions(PicoMite PRIVATE CYW43_LWIP=0)
 	# The SDK's default TLV bank is inside the A: drive; BTConsole.c hands
 	# btstack_cyw43_init() the Option-backed store instead.
 	target_link_options(PicoMite PRIVATE
@@ -1009,16 +1013,23 @@ if(IS_BT)
 endif()
 
 if(IS_BTH)
-	# Same backend as IS_BT: BLE-only + cyw43 + threadsafe-background.
+	# Polled cyw43 + btstack, like the WiFi builds: pico_cyw43_arch_poll
+	# runs the async_context only when ProcessBT() (= bt_keyboard_poll)
+	# calls cyw43_arch_poll from the ProcessWeb sites. The background-IRQ
+	# backend (pico_cyw43_arch_none / threadsafe_background) was dropped:
+	# its low-priority IRQ re-fired tens of thousands of times a second and
+	# starved the main loop, so I2S audio warbled. CYW43_LWIP=0 because
+	# arch_poll otherwise assumes lwIP (arch_none used to set it).
 	# BLE-central (HOG) reuses pico_btstack_ble; Bluetooth Classic HID
 	# host would additionally need pico_btstack_classic, deferred until
 	# basic HOG works.
 	target_link_libraries(PicoMite
 		pico_btstack_ble
 		pico_btstack_cyw43
-		pico_cyw43_arch_none
+		pico_cyw43_arch_poll
 		pico_btstack_sbc_encoder
 	)
+	target_compile_definitions(PicoMite PRIVATE CYW43_LWIP=0)
 	# The SDK's default TLV bank is inside the A: drive; BTKeyboard.c hands
 	# btstack_cyw43_init() the Option-backed store instead.
 	target_link_options(PicoMite PRIVATE

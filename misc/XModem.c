@@ -1089,10 +1089,12 @@ static int check(const unsigned char *buf, int sz)
 static void flushinput(void)
 {
     while (_inbyte(((DLY_1S) * 3) >> 1) >= 0)
+    {
 #ifdef PICOMITEWEB
-        ProcessWeb(1)
+        ProcessWeb(1);
 #endif
-            ;
+        ProcessBT();
+    }
 }
 
 void xmodemReceive(char *sp, int maxbytes, int fnbr, int crunch)
