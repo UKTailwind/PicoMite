@@ -1757,18 +1757,18 @@ void USB_bus_reset(void)
 }
 
 /* Controller tuning applied once, immediately after tuh_init() (which owns
-   the INTE register - anything written before it is overwritten). Both
-   fixes were identified on the PC3 (RP2350B host, every device behind a
-   hub) and are carried by its MicroPython and Fuzix ports. */
+   the INTE register - anything written before it is overwritten). The
+   PC3's MicroPython and Fuzix ports set the same bit. */
 void USB_host_controller_tuning(void)
 {
 #ifdef rp2350
-	/* "Host - increase inter-packet and turnaround timeouts to accommodate
-	   worst-case hub delays." Off by default; without it a status-stage IN
-	   through a hub times out at boot, which TinyUSB 0.20 rode over by
-	   letting the SIE retry and 0.21 turns into a failed transfer and an
-	   abandoned device (keyboard registers but reports never arrive, MSC
-	   never mounts). */
+	/* MULTI_HUB_FIX: "Host - increase inter-packet and turnaround timeouts
+	   to accommodate worst-case hub delays." Off by default. Set as a
+	   precaution, because every PC3 device is behind a hub; no effect has
+	   been measured. With the endpoint-0 grace window in hcd_rp2040.c,
+	   clearing it at runtime (POKE WORD &H50110088) changed nothing in 15
+	   hot-plug cycles on the PC3, including the Raspberry Pi keyboard's
+	   two-hub path (2026-10-08). It is only set here, at host start. */
 	hw_set_bits((io_rw_32 *)(USBCTRL_REGS_BASE + USB_LINESTATE_TUNING_OFFSET),
 				USB_LINESTATE_TUNING_MULTI_HUB_FIX_BITS);
 	/* NOTE: the Fuzix port additionally masks ERROR_DATA_SEQ+HOST_RESUME
