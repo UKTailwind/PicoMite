@@ -4,7 +4,7 @@
 #
 # PicoMite's USB-host driver fixes (fast USB flash-drive transfers and reliable
 # enumeration of several devices behind a hub) are carried as patches on top of
-# TinyUSB master at commit e42fa9357 (2026-10-07), in a SIBLING directory
+# TinyUSB master at commit e20482387 (2026-10-08), in a SIBLING directory
 # ../tinyusb-master (next to this repo, not inside it) that PICO_TINYUSB_PATH in
 # CMakeLists.txt points at. The Pico SDK's own bundled TinyUSB is left untouched.
 #
@@ -13,7 +13,7 @@
 #
 set -euo pipefail
 
-COMMIT=e42fa93570a672d4779b7a3d0e14145a3ae919e6         # TinyUSB master, 2026-10-07
+COMMIT=e20482387575da72b11d84ed008b25a28e068a01         # TinyUSB master, 2026-10-08
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"   # tinyusb-patches/
 REPO="$(cd "$HERE/.." && pwd)"                          # PicoMite/
 DEST="$(cd "$REPO/.." && pwd)/tinyusb-master"           # ../tinyusb-master
