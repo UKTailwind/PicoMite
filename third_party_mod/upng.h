@@ -54,12 +54,15 @@ typedef enum upng_format
 
 typedef struct upng_t upng_t;
 
-upng_t *upng_new_from_bytes(const unsigned char *buffer, unsigned long size);
+/* PicoMite: a decoded scanline as RGBA8888, row y of the image; return 0 to stop decoding */
+typedef int (*upng_row_fn)(void *ctx, unsigned y, const unsigned char *rgba);
+
 upng_t *upng_new_from_file(char *path);
 void upng_free(upng_t *upng);
 
 upng_error upng_header(upng_t *upng);
-upng_error upng_decode(upng_t *upng);
+upng_error upng_decode_rows(upng_t *upng, upng_row_fn row, void *ctx);
+void upng_error_check(upng_t *upng); /* on an error: free the decoder and report it */
 
 upng_error upng_get_error(const upng_t *upng);
 unsigned upng_get_error_line(const upng_t *upng);
@@ -71,8 +74,5 @@ unsigned upng_get_bitdepth(const upng_t *upng);
 unsigned upng_get_components(const upng_t *upng);
 unsigned upng_get_pixelsize(const upng_t *upng);
 upng_format upng_get_format(const upng_t *upng);
-
-const unsigned char *upng_get_buffer(const upng_t *upng);
-unsigned upng_get_size(const upng_t *upng);
 
 #endif /*defined(UPNG_H)*/

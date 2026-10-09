@@ -1243,6 +1243,53 @@ bool loadBMPlinecallback(int *imagewidth, int *imageheight, uint32_t *linedata, 
     memcpy(d, s, readstate->width * 3);
     return true;
 }
+#ifdef rp2350
+/* SPRITE LOADPNG takes the decoded rows one at a time and packs the chosen part
+   two RGB121 pixels to a byte, stopping the decoder after its last row */
+typedef struct
+{
+    int xoff, yoff, sw, sh, transparent, cutoff, remap_colour, toggle;
+    unsigned char *t;
+} s_spritepng;
+static int spritepngrow(void *v, unsigned y, const unsigned char *rgba)
+{
+    s_spritepng *c = (s_spritepng *)v;
+    if ((int)y < c->yoff)
+        return 1;
+    if ((int)y >= c->yoff + c->sh)
+        return 0;
+    const unsigned char *rr = rgba + c->xoff * 4;
+    for (int x = 0; x < c->sw; x++, rr += 4)
+    {
+        unsigned char pp[3];
+        uint8_t c4;
+        if (rr[3] > c->cutoff)
+        {
+            pp[0] = rr[2];
+            pp[1] = rr[1];
+            pp[2] = rr[0];
+        }
+        else
+        {
+            pp[0] = (c->transparent & 0xFF0000) >> 16;
+            pp[1] = (c->transparent & 0xFF00) >> 8;
+            pp[2] = (c->transparent & 0xFF);
+        }
+        if (DISPLAY_TYPE == SCREENMODE1)
+            c4 = (((uint16_t)pp[2] + (uint16_t)pp[1] + (uint16_t)pp[0]) < 0x180) ? 0 : 0xF;
+        else
+            c4 = ((pp[2] & 0x80) >> 4) | ((pp[1] & 0xC0) >> 5) | ((pp[0] & 0x80) >> 7);
+        if (c->remap_colour >= 0 && c4 == 0 && rr[3] > c->cutoff)
+            c4 = (uint8_t)c->remap_colour;
+        if (c->toggle)
+            *c->t++ |= (c4 << 4);
+        else
+            *c->t = c4;
+        c->toggle = !c->toggle;
+    }
+    return 1;
+}
+#endif
 void cmd_sprite(void)
 {
     int x1, y1, w, h, bnbr;
@@ -1839,11 +1886,11 @@ void cmd_sprite(void)
 #ifdef rp2350
     else if ((p = checkstring(cmdline, (unsigned char *)"LOADPNG")))
     {
-        int toggle = 0, transparent = 0, cutoff = 30, remap_colour = -1;
-        int w, h;
+        int transparent = 0, cutoff = 30, remap_colour = -1;
+        int w, h, xoff = 0, yoff = 0, sw = -1, sh = -1;
         upng_t *upng;
         // get the command line arguments
-        getcsargs(&p, 11); // this MUST be the first executable line in the function
+        getcsargs(&p, 15); // this MUST be the first executable line in the function
         if (*argv[0] == '#')
             argv[0]++;                         // check if the first arg is prefixed with a #
         bnbr = getint(argv[0], 1, MAXBLITBUF); // get the buffer number
@@ -1868,81 +1915,60 @@ void cmd_sprite(void)
             }
         }
         transparent = RGB121map[transparent];
-        if (argc == 7)
+        if (argc >= 7 && *argv[6])
             cutoff = getint(argv[6], 1, 254);
+        // optional part of the image to load, as SPRITE LOADBMP: x, y, width, height
+        if (argc >= 9 && *argv[8])
+            xoff = getinteger(argv[8]);
+        if (argc >= 11 && *argv[10])
+            yoff = getinteger(argv[10]);
+        if (xoff < 0 || yoff < 0)
+            StandardError(34);
+        if (argc >= 13 && *argv[12])
+            sw = getinteger(argv[12]);
+        if (argc == 15)
+            sh = getinteger(argv[14]);
         AppendDefaultExtension((char *)q, ".png");
         upng = upng_new_from_file((char *)q);
-        routinechecks();
+        if (upng == NULL)
+            return;
         upng_header(upng);
+        upng_error_check(upng);
         w = upng_get_width(upng);
         h = upng_get_height(upng);
-        // Allocate sprite structure if needed
-        if (spritebuff[bnbr] == NULL)
-            allocSpriteBuff(bnbr);
-        // Allocate both buffers in one block to save memory pages
+        if (sw == -1)
+            sw = w - xoff;
+        if (sh == -1)
+            sh = h - yoff;
+        if (sw < 0 || sh < 0 || sw + xoff > w || sh + yoff > h)
         {
-            int bufsize = (w * h + 4) >> 1;
-            char *combined = GetMemory(bufsize * 2);
-            spritebuff[bnbr]->spritebuffptr = combined;
-            spritebuff[bnbr]->blitstoreptr = combined + bufsize;
+            upng_free(upng);
+            StandardError(34);
         }
-        initSpriteBuff(bnbr, w, h);
-        unsigned char *t = (unsigned char *)spritebuff[bnbr]->spritebuffptr;
-        if (w > HRes || h > VRes)
+        if (sw > HRes || sh > VRes)
         {
             upng_free(upng);
             error("Image too large");
         }
-        routinechecks();
-        upng_decode(upng);
-        if (!(upng_get_format(upng) == UPNG_RGBA8))
+        // Allocate both buffers in one block to save memory pages.  The rows are
+        // packed straight into it, and it is the sprite's only once they have all
+        // decoded: an error before then must not leave the buffer "in use".
         {
+            int bufsize = (sw * sh + 4) >> 1;
+            char *combined = GetMemory(bufsize * 2);
+            s_spritepng c = {.xoff = xoff, .yoff = yoff, .sw = sw, .sh = sh, .transparent = transparent, .cutoff = cutoff, .remap_colour = remap_colour, .toggle = 0, .t = (unsigned char *)combined};
+            upng_decode_rows(upng, spritepngrow, &c);
+            if (upng_get_error(upng) != UPNG_EOK)
+                FreeMemory(combined);
+            upng_error_check(upng);
             upng_free(upng);
-            error("Invalid format, must be RGBA8888 or indexed PNG");
+            // Allocate sprite structure if needed
+            if (spritebuff[bnbr] == NULL)
+                allocSpriteBuff(bnbr);
+            spritebuff[bnbr]->spritebuffptr = combined;
+            spritebuff[bnbr]->blitstoreptr = combined + bufsize;
         }
-        unsigned char *rr;
-        routinechecks();
-        rr = (unsigned char *)upng_get_buffer(upng);
-        unsigned char *pp = rr;
-        char d[3];
-        int i = w * h;
-        while (i--)
-        {
-            d[0] = rr[2];
-            d[1] = rr[1];
-            d[2] = rr[0];
-            if (rr[3] > cutoff)
-            {
-                pp[0] = d[0];
-                pp[1] = d[1];
-                pp[2] = d[2];
-            }
-            else
-            {
-                pp[0] = (transparent & 0xFF0000) >> 16;
-                pp[1] = (transparent & 0xFF00) >> 8;
-                pp[2] = (transparent & 0xFF);
-            }
-            {
-                uint8_t c4;
-                if (DISPLAY_TYPE == SCREENMODE1)
-                    c4 = (((uint16_t)pp[2] + (uint16_t)pp[1] + (uint16_t)pp[0]) < 0x180) ? 0 : 0xF;
-                else
-                    c4 = ((pp[2] & 0x80) >> 4) | ((pp[1] & 0xC0) >> 5) | ((pp[0] & 0x80) >> 7);
-                if (remap_colour >= 0 && c4 == 0 && rr[3] > cutoff)
-                    c4 = (uint8_t)remap_colour;
-                if (toggle)
-                    *t |= (c4 << 4);
-                else
-                    *t = c4;
-            }
-            if (toggle)
-                t++;
-            toggle = !toggle;
-            pp += 3;
-            rr += 4;
-        }
-        upng_free(upng);
+        initSpriteBuff(bnbr, sw, sh);
         return;
     }
 #endif

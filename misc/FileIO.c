@@ -5050,15 +5050,67 @@ void MIPS16 cmd_loadCMM2(void)
 
 #endif
 #ifdef rp2350
+/* LOAD PNG takes the decoded rows one at a time.  As with LOAD BMP and LOAD
+   JPG, the image from column xOffset and row yOffset is placed at x,y and
+   cropped to the screen: columns x0 to x1-1 of the rows that land on it are
+   drawn (the drivers clamp coordinates, they do not clip them), and the
+   decoder is stopped at the first row below it. */
+typedef struct
+{
+    int ex, ey;          // where image pixel 0,0 would be on the screen
+    int x0, x1, yOffset; // the image columns drawn, the first image row shown
+    int transparent, cutoff;
+    unsigned char *bg, *out; // the screen behind the row (transparent -1), the row as drawn
+} s_pngdraw;
+static int pngdrawrow(void *v, unsigned y, const unsigned char *rgba)
+{
+    s_pngdraw *c = (s_pngdraw *)v;
+    int sy = c->ey + (int)y;
+    if (sy >= VRes)
+        return 0;
+    if ((int)y < c->yOffset || sy < 0)
+        return 1;
+    const unsigned char *rr = rgba + c->x0 * 4;
+    unsigned char *pp = c->out, *bg = c->bg;
+    if (bg)
+        ReadBuffer(c->ex + c->x0, sy, c->ex + c->x1 - 1, sy, bg);
+    for (int x = c->x0; x < c->x1; x++)
+    {
+        if (rr[3] > c->cutoff)
+        {
+            pp[0] = rr[2];
+            pp[1] = rr[1];
+            pp[2] = rr[0];
+        }
+        else if (bg)
+        {
+            pp[0] = bg[0];
+            pp[1] = bg[1];
+            pp[2] = bg[2];
+        }
+        else
+        {
+            pp[0] = (c->transparent & 0xFF0000) >> 16;
+            pp[1] = (c->transparent & 0xFF00) >> 8;
+            pp[2] = (c->transparent & 0xFF);
+        }
+        pp += 3;
+        rr += 4;
+        if (bg)
+            bg += 3;
+    }
+    DrawBuffer(c->ex + c->x0, sy, c->ex + c->x1 - 1, sy, c->out);
+    return 1;
+}
+
 void LoadPNG(unsigned char *p)
 {
-    //	int fnbr;
     int xOrigin, yOrigin, w, h, transparent = 0, cutoff = 20;
-    int maxW = HRes;
-    int maxH = VRes;
+    int xOffset = 0, yOffset = 0;
     upng_t *upng;
+    s_pngdraw c;
     // get the command line arguments
-    getcsargs(&p, 9); // this MUST be the first executable line in the function
+    getcsargs(&p, 13); // this MUST be the first executable line in the function
     if (argc == 0)
         StandardError(2);
     if (!InitSDCard())
@@ -5077,99 +5129,42 @@ void LoadPNG(unsigned char *p)
         transparent = getint(argv[6], -1, 15);
     if (transparent != -1)
         transparent = RGB121map[transparent];
-    if (argc == 9)
+    if (argc >= 9 && *argv[8])
         cutoff = getint(argv[8], 1, 254);
+    if (argc >= 11 && *argv[10])
+        xOffset = getinteger(argv[10]); // first image column to show (optional)
+    if (argc >= 13 && *argv[12])
+        yOffset = getinteger(argv[12]); // first image row to show (optional)
+    if (xOffset < 0 || yOffset < 0)
+        StandardError(34);
     AppendDefaultExtension((char *)q, ".png");
     upng = upng_new_from_file((char *)q);
-    routinechecks();
+    if (upng == NULL)
+        return;
     upng_header(upng);
+    upng_error_check(upng);
     w = upng_get_width(upng);
     h = upng_get_height(upng);
-    if (w + xOrigin > maxW || h + yOrigin > maxH)
+    if (xOffset >= w || yOffset >= h)
     {
         upng_free(upng);
-        error("Image too large");
+        StandardError(34);
     }
-    routinechecks();
-    upng_decode(upng);
-    if (!(upng_get_format(upng) == UPNG_RGBA8))
+    c.ex = xOrigin - xOffset;
+    c.ey = yOrigin - yOffset;
+    c.x0 = (c.ex < 0) ? -c.ex : 0;
+    if (c.x0 < xOffset)
+        c.x0 = xOffset;
+    c.x1 = (c.ex + w > HRes) ? HRes - c.ex : w;
+    c.yOffset = yOffset;
+    c.transparent = transparent;
+    c.cutoff = cutoff;
+    if (c.x1 > c.x0)
     {
-        upng_free(upng);
-        error("Invalid format, must be RGBA8888 or indexed PNG");
-    }
-    unsigned char *rr;
-    routinechecks();
-    rr = (unsigned char *)upng_get_buffer(upng);
-    unsigned char *pp = rr;
-    char d[3];
-    /* Converted and drawn a row at a time so the audio can be fed between rows:
-       one DrawBuffer of the whole image can outlast the audio buffers.  The
-       conversion is in place and a row's output never reaches the next row's
-       input.  Rows above the screen are not drawn (the drivers clamp, not clip). */
-    if (transparent == -1)
-    {
-        unsigned char *buff = GetTempMainMemory(w * 3);
-        for (int y = 0; y < h; y++)
-        {
-            unsigned char *row = pp;
-            unsigned char *bg = buff;
-            if (yOrigin + y >= 0)
-                ReadBuffer(xOrigin, yOrigin + y, xOrigin + w - 1, yOrigin + y, buff);
-            for (int x = 0; x < w; x++)
-            {
-                d[0] = rr[2];
-                d[1] = rr[1];
-                d[2] = rr[0];
-                if (rr[3] > cutoff)
-                {
-                    pp[0] = d[0];
-                    pp[1] = d[1];
-                    pp[2] = d[2];
-                }
-                else
-                {
-                    pp[0] = bg[0];
-                    pp[1] = bg[1];
-                    pp[2] = bg[2];
-                }
-                pp += 3;
-                rr += 4;
-                bg += 3;
-            }
-            if (yOrigin + y >= 0)
-                DrawBuffer(xOrigin, yOrigin + y, xOrigin + w - 1, yOrigin + y, row);
-            CheckAudio();
-        }
-    }
-    else
-    {
-        for (int y = 0; y < h; y++)
-        {
-            unsigned char *row = pp;
-            for (int x = 0; x < w; x++)
-            {
-                d[0] = rr[2];
-                d[1] = rr[1];
-                d[2] = rr[0];
-                if (rr[3] > cutoff)
-                {
-                    pp[0] = d[0];
-                    pp[1] = d[1];
-                    pp[2] = d[2];
-                }
-                else
-                {
-                    pp[0] = (transparent & 0xFF0000) >> 16;
-                    pp[1] = (transparent & 0xFF00) >> 8;
-                    pp[2] = (transparent & 0xFF);
-                }
-                pp += 3;
-                rr += 4;
-            }
-            if (yOrigin + y >= 0)
-                DrawBuffer(xOrigin, yOrigin + y, xOrigin + w - 1, yOrigin + y, row);
-            CheckAudio();
-        }
+        c.out = GetTempMainMemory((c.x1 - c.x0) * 3);
+        c.bg = (transparent == -1) ? GetTempMainMemory((c.x1 - c.x0) * 3) : NULL;
+        upng_decode_rows(upng, pngdrawrow, &c);
+        upng_error_check(upng);
     }
     upng_free(upng);
     clearrepeat();
