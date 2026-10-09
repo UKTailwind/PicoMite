@@ -2160,9 +2160,10 @@ Slots 1 to 3 are the flash slots.
 ~FLASH MODBUFF LOAD
 FLASH MODBUFF LOAD fname$
 
-Loads the .MOD file 'fname$' into the mod buffer created by OPTION MODBUFF so
-that it can be played with PLAY MODFILE without being read from a drive each
-time. The file is read from the current drive.
+Loads the .MOD file 'fname$' into the mod buffer (created by OPTION MODBUFF,
+or the fixed 1MB buffer of an RP2350 with 16MB of flash) so that it can be
+played with PLAY MODFILE without being read from a drive each time. The file
+is read from the current drive.
 
 ~FLASH OVERWRITE
 FLASH OVERWRITE n

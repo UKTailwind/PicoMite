@@ -3461,9 +3461,10 @@ current display.
 ~FLASH MODBUFF LOAD
 FLASH MODBUFF LOAD fname$
 
-Loads the .MOD file 'fname$' into the mod buffer created by OPTION MODBUFF so
-that it can be played with PLAY MODFILE without being read from a drive each
-time.  The file is read from the current drive.
+Loads the .MOD file 'fname$' into the mod buffer (created by OPTION MODBUFF,
+or the fixed 1MB buffer of an RP2350 with 16MB of flash) so that it can be
+played with PLAY MODFILE without being read from a drive each time.  The file
+is read from the current drive.
 
 ~FLASH OVERWRITE
 FLASH OVERWRITE n
@@ -9974,6 +9975,9 @@ Note that this option reserves part of the Flash Filesystem (ie, it shrinks
 the Flash Filesystem).  The default is disabled.
 Note: This option is not required on an RP2350 with PSRAM enabled. In this
 case the MOD file will be loaded to space in the PSRAM.
+Note: On an RP2350 with 16MB of flash the mod buffer is always present and
+fixed at 1Mbyte (it does not shrink the Flash Filesystem), and this option
+cannot be used.
 
 ~OPTION MOUSE
 OPTION MOUSE CLKpin, DATApin
@@ -11322,7 +11326,8 @@ If the optional 'interrupt' is specified This will be called when the file has
 played once through the sequence and playback will then be terminated. This
 command will preferentially use space in PSRAM if enabled for the file buffer
 (RP2350 only). In this case a modbuffer does not need to be enabled with the
-OPTION command
+OPTION command, nor on an RP2350 with 16MB of flash, which has a fixed 1MB mod
+buffer.
 
 ~PLAY MODSAMPLE
 PLAY MODSAMPLE Samplenum, channel [,volume]
