@@ -148,6 +148,7 @@ extern "C"
 #define CFG_TUH_CDC_FTDI 1
 #define CFG_TUH_CDC_CP210X 1
 #define CFG_TUH_CDC_CH34X 1
+#define CFG_TUH_CDC_PL2303 1 // Prolific PL2303 (VID 067B), common in GPS receivers
 
 // Set Line Control state on enumeration/mounted:
 // DTR ( bit 0), RTS (bit 1)
