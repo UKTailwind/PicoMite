@@ -668,19 +668,22 @@ Everything below applies to both, unless it says otherwise.
 |---|---|---|
 | Video | LCD panels | HDMI, 8-bit colour: 640x480 (default), 720x400, 800x600, 848x480, 800x480 or 1024x600 |
 | Console | USB | the HDMI screen and keyboard; serial on GP8 (Tx) and GP9 (Rx) as on the other USB versions |
-| Keyboards | Bluetooth LE | Bluetooth LE and USB |
-| Mice | Bluetooth LE and PS/2 | Bluetooth LE and USB |
+| Keyboards | Bluetooth LE and Bluetooth Classic | Bluetooth LE, Bluetooth Classic and USB |
+| Mice | Bluetooth LE, a Classic keyboard's touchpad, and PS/2 | Bluetooth LE, a Classic keyboard's touchpad, and USB |
 | Audio | a Bluetooth speaker or an I2S DAC | a Bluetooth speaker or an I2S DAC |
 | CPU speed | 200 to 396 MHz, set with `OPTION CPUSPEED` | set by the HDMI resolution |
 | Largest program | 208 KB | 180 KB |
-| MMBasic heap | 324 KB | 228 KB |
+| MMBasic heap | 320 KB | 224 KB |
 
 ### Keyboards, mice and game controllers
 
-Only Bluetooth LE devices (HID over GATT) can be used. Older Bluetooth
-Classic keyboards and mice will not connect.
+Keyboards, mice and game controllers that use Bluetooth LE (HID over GATT)
+pair by themselves, as described here. A Bluetooth Classic keyboard, the older kind,
+is paired with `BLUETOOTH CONNECT` instead (see *Bluetooth Classic keyboards*
+below). A Bluetooth LE keyboard, a Classic keyboard and a speaker can all be
+connected at once.
 
-To pair, put the keyboard or mouse into its pairing mode close to the
+To pair a Bluetooth LE device, put it into its pairing mode close to the
 PicoMite. It is found, paired and connected with nothing to type, and the
 console shows `Bluetooth Keyboard Connected`. Only devices that are close
 (roughly in the same room) are paired, so a neighbour's keyboard is left
@@ -688,8 +691,9 @@ alone.
 
 A few keyboards ask for a passkey while pairing. The PicoMite then shows
 a six-digit number on the console, for example `Bluetooth keyboard
-pairing: type 123456 on the keyboard, then Enter`. Type the number on the
-Bluetooth keyboard and press Enter.
+pairing: type 123456 on the keyboard being paired, then Enter`. Type the
+number on that keyboard, not on one already connected, and press Enter
+within about 30 seconds. Nothing appears on the screen while you type it.
 
 A paired keyboard connects again by itself after a reset or a power
 cycle when a key is pressed. It does not need its pairing button again.
@@ -703,6 +707,59 @@ with `OPTION KEYBOARD REPEAT`. A Bluetooth mouse is read with
 
 `BLUETOOTH STATUS` shows whether a keyboard is connected, and
 `MM.INFO$(BLUETOOTH KEYBOARD)` returns its address (or an empty string).
+
+Compact keyboards often leave keys out. The Logitech Pebble Keys 2 K380s,
+for example, gives F1 to F12 only with Fn held (its top row is media keys),
+Home, End, Page Up and Page Down only as Fn with an arrow key, and has no
+Caps Lock light. Media keys work on keyboards that send them in the usual
+way; the K380s's are not decoded.
+
+### Bluetooth Classic keyboards
+
+A Bluetooth Classic keyboard, and the touchpad or mouse built into one, is
+found with a scan and paired with `BLUETOOTH CONNECT`, like a speaker. Put
+the keyboard into its pairing mode, then scan; the keyboard is listed as a
+`Keyboard`:
+
+```
+> BLUETOOTH SCAN
+Scanning...
+54:46:6E:AD:87:50  -65 dBm  Keyboard  "Bluetooth 3.0 Keyboard"
+1 device found
+```
+
+Connect to it by that name or by its address:
+
+```
+BLUETOOTH CONNECT "Bluetooth 3.0 Keyboard"
+```
+
+If the keyboard asks for a code, the console shows a six-digit number, as
+for a Bluetooth LE keyboard: type it on the keyboard and press Enter. The
+command waits up to 60 seconds for that, and prints `Connected to keyboard`
+and the address when the keyboard is paired.
+
+The keyboard is then remembered, and connects again by itself whenever it
+wakes up or is switched on, also after the PicoMite restarts. One Classic
+keyboard is remembered at a time: connecting another replaces it. Only the
+remembered keyboard is let in, so another Classic keyboard nearby cannot type
+into the PicoMite.
+
+Its keys work as a Bluetooth LE keyboard's do, its Caps, Num and Scroll Lock
+LEDs follow the lock keys, and its touchpad or mouse is read with
+`DEVICE(MOUSE 2, ...)`, the same as a Bluetooth LE mouse.
+
+Many low-cost keyboards sold for tablets have an operating-system mode,
+chosen with an Fn key combination or a switch (see the keyboard's
+instructions). Use its Windows or PC mode. In its iOS mode such a keyboard
+sends Cmd and an arrow instead of Home, End, Page Up and Page Down, iPad
+shortcuts instead of F1 to F12, and its touchpad in a different form.
+
+`BLUETOOTH STATUS` has a line for the Classic keyboard: its address, whether
+it is connected, and which of its reports carry the keys, the pointer and
+the media keys (taken from the keyboard when it is paired). When no
+Bluetooth LE keyboard is connected, `MM.INFO$(BLUETOOTH KEYBOARD)` returns
+the Classic keyboard's address.
 
 ### Speakers and headphones
 
@@ -721,7 +778,7 @@ OPTION AUDIO BLUETOOTH
 
 Then put the speaker into its pairing mode and search for it. The scan
 lists the address, signal strength and name of each device found, and
-marks the audio devices. It takes 10 seconds unless you give it a time
+marks the audio devices and the keyboards. It takes 10 seconds unless you give it a time
 (2 to 60 seconds):
 
 ```
@@ -777,9 +834,9 @@ speaker, or an empty string.
 
 ### Pairings
 
-The pairings of up to four keyboards, mice or game controllers and up to
-four speakers are stored with the saved options, so they survive a power
-cycle. `BLUETOOTH FORGET` deletes all of them, and `BLUETOOTH FORGET
+The pairings of up to four Bluetooth LE keyboards, mice or game
+controllers, and of up to four speakers and Classic keyboards together, are
+stored with the saved options, so they survive a power cycle. `BLUETOOTH FORGET` deletes all of them, and `BLUETOOTH FORGET
 addr$` only those of one device (a connected device that is forgotten is
 disconnected). `OPTION RESET`, and a firmware update that resets the
 options, delete them too. The devices then have to be paired again.
@@ -838,3 +895,4 @@ pins must all be within GP0 to GP31 or all within GP16 to GP47.
 | `CMakeLists.txt` | `PICOBTRP2350` variant definition; links `pico_btstack_ble`, `pico_btstack_cyw43`, `pico_cyw43_arch_poll` (the host builds `PICOBTHRP2350` and `HDMIBTH` also compile the Bluetooth Classic sources that A2DP needs) |
 | `BTKeyboard.c` / `BTKeyboard.h` | Host builds: the BLE HID host - scanning, pairing, keyboards, mice and game controllers |
 | `BTAudio.c` / `BTAudio.h` | Host builds: the A2DP source for speakers and the `BLUETOOTH` command |
+| `BTClassicKeyboard.c` / `BTClassicKeyboard.h` | Host builds: Bluetooth Classic keyboards and their touchpads (btstack's `hid_host`, report protocol, the layout read from the HID descriptor) |

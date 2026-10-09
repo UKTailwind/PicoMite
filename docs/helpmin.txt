@@ -983,7 +983,8 @@ BLUETOOTH CONNECT name$
 BLUETOOTH CONNECT addr$
 
 BLUETOOTH HOST VERSIONS ONLY Pairs with and connects to a Bluetooth speaker or
-headphones. 'name$' is the name of the device as listed by the last BLUETOOTH
+headphones, or a Bluetooth Classic keyboard (one that BLUETOOTH SCAN marked
+'Keyboard'). 'name$' is the name of the device as listed by the last BLUETOOTH
 SCAN (upper and lower case are treated as the same).
 
 ~BLUETOOTH DISCONNECT
@@ -998,25 +999,25 @@ BLUETOOTH FORGET [addr$]
 
 BLUETOOTH HOST VERSIONS ONLY Deletes stored Bluetooth pairing information.
 With no argument the pairings of every device are deleted - keyboards, mice,
-game controllers and the remembered speaker.
+game controllers, the remembered Classic keyboard and the remembered speaker.
 
 ~BLUETOOTH SCAN
 BLUETOOTH SCAN [seconds]
 
 BLUETOOTH HOST VERSIONS ONLY Searches for nearby Bluetooth Classic devices
-such as speakers and headphones and lists the address, signal strength and
-name of each one found. Devices that describe themselves as audio devices are
-marked 'Audio'.
+such as speakers, headphones and keyboards and lists the address, signal
+strength and name of each one found. Devices that describe themselves as audio
+devices are marked 'Audio' and keyboards 'Keyboard'.
 
 ~BLUETOOTH STATUS
 BLUETOOTH STATUS
 
 BLUETOOTH HOST VERSIONS ONLY Lists the state of the Bluetooth connections:
-whether a keyboard (or mouse or game controller) is connected, the address of
-the connected speaker and whether audio is streaming to it (or the remembered
-speaker if it is not connected), and the format of the audio stream. The lines
-that follow are diagnostic information which may be useful when reporting a
-problem.
+whether a Bluetooth LE keyboard (or mouse or game controller) is connected,
+the Bluetooth Classic keyboard, the address of the connected speaker and
+whether audio is streaming to it (or the remembered speaker if it is not
+connected), and the format of the audio stream. The lines that follow are
+diagnostic information which may be useful when reporting a problem.
 
 ~BOUND
 BOUND(array() [,dimension]
@@ -5903,7 +5904,7 @@ read from the console.
 OPTION KEYBOARD nn
 
 USB AND BLUETOOTH KEYBOARD VERSIONS ONLY Set the layout of a USB or Bluetooth
-LE keyboard. 'nn' is a two character code: US, UK, FR, GR, IT or ES.
+keyboard. 'nn' is a two character code: US, UK, FR, GR, IT or ES.
 
 ~OPTION KEYBOARD I2C
 OPTION KEYBOARD I2C

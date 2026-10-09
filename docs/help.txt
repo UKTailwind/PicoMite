@@ -1248,18 +1248,21 @@ BLUETOOTH CONNECT name$
 BLUETOOTH CONNECT addr$
 
 BLUETOOTH HOST VERSIONS ONLY
-Pairs with and connects to a Bluetooth speaker or headphones.  'name$' is the
+Pairs with and connects to a Bluetooth speaker or headphones, or a Bluetooth
+Classic keyboard (one that BLUETOOTH SCAN marked 'Keyboard').  'name$' is the
 name of the device as listed by the last BLUETOOTH SCAN (upper and lower case
 are treated as the same).  'addr$' is its address in the form
 "AA:BB:CC:DD:EE:FF", which can be used without a scan.  If the scan found two
 devices with the same name the address must be used.
 The command waits up to 30 seconds for the device to answer and then shows the
 format of the audio stream that has been agreed.  Only one speaker can be
-connected at a time.
+connected at a time.  For a keyboard it waits up to 60 seconds, as a passkey
+may have to be typed on it (see the chapter Bluetooth Versions).
 The speaker is remembered: when OPTION AUDIO BLUETOOTH is set it is
 reconnected automatically after a restart and when it is switched off and on
 again, so this command is normally needed only once.  Connecting to another
-speaker replaces the remembered one.
+speaker replaces the remembered one.  A Classic keyboard is remembered in the
+same way and reconnects by itself.
 
 ~BLUETOOTH DISCONNECT
 BLUETOOTH DISCONNECT
@@ -1274,23 +1277,24 @@ BLUETOOTH FORGET [addr$]
 
 BLUETOOTH HOST VERSIONS ONLY
 Deletes stored Bluetooth pairing information.  With no argument the pairings
-of every device are deleted - keyboards, mice, game controllers and the
-remembered speaker.  'addr$' deletes only those of the device with that
-address (as listed by BLUETOOTH STATUS or returned by MM.INFO$(BLUETOOTH
-device)).  A connected device that is forgotten is disconnected.
+of every device are deleted - keyboards, mice, game controllers, the
+remembered Classic keyboard and the remembered speaker.  'addr$' deletes only
+those of the device with that address (as listed by BLUETOOTH STATUS or
+returned by MM.INFO$(BLUETOOTH device)).  A connected device that is forgotten
+is disconnected.
 This can be used to clear a pairing that has stopped working, after which the
-device can be paired again.  A forgotten speaker is no longer reconnected
-automatically.  OPTION RESET also deletes all the pairings.
+device can be paired again.  A forgotten speaker or Classic keyboard is no
+longer reconnected automatically.  OPTION RESET also deletes all the pairings.
 
 ~BLUETOOTH SCAN
 BLUETOOTH SCAN [seconds]
 
 BLUETOOTH HOST VERSIONS ONLY
-Searches for nearby Bluetooth Classic devices such as speakers and headphones
-and lists the address, signal strength and name of each one found.  Devices
-that describe themselves as audio devices are marked 'Audio'.  A device is
-only found while it is discoverable, which for most speakers means while they
-are in pairing mode.
+Searches for nearby Bluetooth Classic devices such as speakers, headphones and
+keyboards and lists the address, signal strength and name of each one found.
+Devices that describe themselves as audio devices are marked 'Audio' and
+keyboards 'Keyboard'.  A device is only found while it is discoverable, which
+for most speakers and keyboards means while they are in pairing mode.
 'seconds' is how long to search for (2 to 60 seconds, the default is 10).  The
 names are fetched after the search so the command can take a few seconds
 longer than this.
@@ -1301,10 +1305,11 @@ paired automatically (see the chapter Bluetooth Versions).
 BLUETOOTH STATUS
 
 BLUETOOTH HOST VERSIONS ONLY
-Lists the state of the Bluetooth connections: whether a keyboard (or mouse or
-game controller) is connected, the address of the connected speaker and
-whether audio is streaming to it (or the remembered speaker if it is not
-connected), and the format of the audio stream.
+Lists the state of the Bluetooth connections: whether a Bluetooth LE keyboard
+(or mouse or game controller) is connected, the Bluetooth Classic keyboard,
+the address of the connected speaker and whether audio is streaming to it (or
+the remembered speaker if it is not connected), and the format of the audio
+stream.
 The lines that follow are diagnostic information which may be useful when
 reporting a problem.
 
@@ -9777,9 +9782,9 @@ reboot.  The setting can be removed with OPTION KEYBOARD DISABLE.
 OPTION KEYBOARD nn
 
 USB AND BLUETOOTH KEYBOARD VERSIONS ONLY Set the layout of a USB or Bluetooth
-LE keyboard.  'nn' is a two character code: US, UK, FR, GR, IT or ES.  BE and
-BR are not available on these versions.  Any further parameters are accepted
-but ignored - use OPTION KEYBOARD REPEAT to set the repeat timing on these
+keyboard.  'nn' is a two character code: US, UK, FR, GR, IT or ES.  BE and BR
+are not available on these versions.  Any further parameters are accepted but
+ignored - use OPTION KEYBOARD REPEAT to set the repeat timing on these
 versions.  OPTION KEYBOARD DISABLE is not available; a USB or Bluetooth
 keyboard needs no configuration beyond its layout.  This command must be
 entered at the command line and will cause a reboot.
