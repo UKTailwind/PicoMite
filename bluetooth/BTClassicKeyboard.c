@@ -66,7 +66,7 @@
 /* Where a keyboard's reports keep their fields, from its HID report
    descriptor. Bit positions count from after the report ID. A size of 0
    means the field is absent. */
-#define CK_LAYOUT_VERSION 1
+#define CK_LAYOUT_VERSION 2
 #define CK_NO_POS 0xFFFFu
 typedef struct
 {
@@ -89,6 +89,7 @@ typedef struct
     uint8_t cons_id;     /* media keys: one consumer usage, as an array */
     uint8_t cons_size;
     uint16_t cons_pos;
+    bt_led_layout_t led; /* the lock keys' LEDs (output report) */
     uint16_t desc_len;   /* BLUETOOTH STATUS */
 } ck_layout_t;
 
@@ -110,6 +111,8 @@ static volatile uint32_t ck_reports; /* since connecting (BLUETOOTH STATUS) */
 static ck_layout_t ck_layout;
 static bool ck_have_layout;
 static uint8_t ck_desc_status = 0xFF; /* the last descriptor's outcome (0 = read) */
+static uint8_t ck_led_buf[8];        /* hid_host sends from it later */
+static bool ck_led_pending;          /* LEDs to set with the next key report */
 
 static uint8_t ck_descriptor_storage[CK_DESCRIPTOR_SIZE];
 static btstack_packet_callback_registration_t ck_hci_registration;
@@ -176,6 +179,50 @@ static void ck_passkey_notice(uint32_t passkey)
  * Report layout, from the HID report descriptor
  * ============================================================================
  */
+void bt_hid_led_layout(const uint8_t *descriptor, uint16_t len, bt_led_layout_t *l)
+{
+    uint16_t end = 0;
+    memset(l, 0, sizeof(*l));
+    l->pos[0] = l->pos[1] = l->pos[2] = CK_NO_POS;
+
+    btstack_hid_usage_iterator_t it;
+    btstack_hid_usage_item_t item;
+    btstack_hid_usage_iterator_init(&it, descriptor, len, HID_REPORT_TYPE_OUTPUT);
+    while (btstack_hid_usage_iterator_has_more(&it))
+    {
+        btstack_hid_usage_iterator_get_item(&it, &item);
+        bool variable = (item.descriptor_item.item_value & 2) != 0;
+        uint8_t id = item.report_id == 0xFFFF ? 0 : (uint8_t)item.report_id;
+        if (!l->present)
+        {
+            /* LED page: Num Lock 1, Caps Lock 2, Scroll Lock 3 */
+            if (item.usage_page != 0x08 || !variable || item.size != 1 || item.usage < 1 || item.usage > 3)
+                continue;
+            l->present = 1;
+            l->has_id = item.report_id != 0xFFFF;
+            l->id = id;
+        }
+        if (id != l->id)
+            continue;
+        if (item.usage_page == 0x08 && variable && item.size == 1 && item.usage >= 1 && item.usage <= 3)
+            l->pos[item.usage - 1] = item.bit_pos;
+        if (item.bit_pos + item.size > end)
+            end = item.bit_pos + item.size;
+    }
+    l->len = (uint8_t)((end + 7) / 8 > 8 ? 8 : (end + 7) / 8);
+    if (!l->len)
+        l->present = 0;
+}
+
+uint8_t bt_hid_led_report(const bt_led_layout_t *l, uint8_t leds, uint8_t *out)
+{
+    memset(out, 0, 8);
+    for (int i = 0; i < 3; i++)
+        if ((leds & (1u << i)) && l->pos[i] != CK_NO_POS && l->pos[i] < l->len * 8u)
+            out[l->pos[i] >> 3] |= (uint8_t)(1u << (l->pos[i] & 7));
+    return l->len;
+}
+
 static void ck_parse_descriptor(const uint8_t *d, uint16_t len, ck_layout_t *l)
 {
     memset(l, 0, sizeof(*l));
@@ -270,6 +317,43 @@ static void ck_parse_descriptor(const uint8_t *d, uint16_t len, ck_layout_t *l)
         l->x_size = 0; /* not a pointer */
     if (l->btn_count && l->btn_id != l->mouse_id)
         l->btn_count = 0;
+    bt_hid_led_layout(d, len, &l->led);
+}
+
+/* The lock keys' LEDs. A keyboard lights its LED for a moment and turns it
+   off again unless the host sets it. Sent with the first key report after
+   connecting (the link is idle then; hid_host_send_report would cut into
+   the connection's own setup) and whenever a lock key is pressed on it.
+   The boot keyboard's output report (ID 1, one byte) when there is no
+   layout. */
+static void ck_send_leds(void)
+{
+    ck_led_pending = false;
+    if (ck_state != CK_CONNECTED)
+        return;
+    uint8_t len;
+    uint16_t id;
+    if (ck_have_layout)
+    {
+        if (!ck_layout.led.present)
+            return;
+        len = bt_hid_led_report(&ck_layout.led, kbd_lock_leds(), ck_led_buf);
+        id = ck_layout.led.has_id ? ck_layout.led.id : HID_REPORT_ID_UNDEFINED;
+    }
+    else
+    {
+        ck_led_buf[0] = kbd_lock_leds(); /* the boot keyboard's output report */
+        len = 1;
+        id = 1;
+    }
+    /* Tried again with the next report while hid_host is busy. */
+    ck_led_pending = hid_host_send_report(ck_cid, id, ck_led_buf, len) == ERROR_CODE_COMMAND_DISALLOWED;
+}
+
+void bt_ckbd_set_leds(uint8_t leds)
+{
+    (void)leds; /* ck_send_leds() reads them, as for the first report */
+    ck_send_leds();
 }
 
 static uint32_t ck_bits(const uint8_t *p, uint16_t n, uint16_t pos, uint8_t size)
@@ -310,7 +394,11 @@ static void ck_report(const uint8_t *r, uint16_t len)
         /* No descriptor read: the boot protocol's keyboard (ID 1) and mouse
            (ID 2) reports. */
         if (p[0] == 1 && n >= 9)
-            process_kbd_report((const hid_keyboard_report_t *)(p + 1), 0);
+        {
+            process_kbd_report((const hid_keyboard_report_t *)(p + 1), KBD_SOURCE_BT_CLASSIC);
+            if (ck_led_pending)
+                ck_send_leds();
+        }
         else if (p[0] == 2 && n >= 4) /* buttons, X, Y [, wheel] */
             process_mouse_input((int8_t)p[2], (int8_t)p[3], n >= 5 ? (int8_t)p[4] : 0, p[1], 2);
         return;
@@ -332,7 +420,9 @@ static void ck_report(const uint8_t *r, uint16_t len)
             k.modifier = (uint8_t)ck_bits(p, n, l->kbd_mod_pos, 8);
         for (int i = 0; i < l->kbd_keys; i++)
             k.keycode[i] = (uint8_t)ck_bits(p, n, (uint16_t)(l->kbd_keys_pos + 8 * i), 8);
-        process_kbd_report(&k, 0);
+        process_kbd_report(&k, KBD_SOURCE_BT_CLASSIC);
+        if (ck_led_pending)
+            ck_send_leds();
     }
     if (l->x_size && id == l->mouse_id)
     {
@@ -454,6 +544,7 @@ static void ck_hid_handler(uint8_t packet_type, uint16_t channel, uint8_t *packe
             break;
         }
         ck_reports = 0;
+        ck_led_pending = true;
         ck_state = CK_CONNECTED;
         if (was_pairing)
             ck_remember(ck_addr); /* here, not in CONNECT: Ctrl-C may have left it */

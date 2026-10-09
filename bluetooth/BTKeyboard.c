@@ -22,6 +22,7 @@
 
 #include "BTKeyboard.h"
 #include "BTAudio.h"
+#include "BTClassicKeyboard.h" /* bt_hid_led_layout(), shared with the Classic keyboard */
 
 #include <inttypes.h>
 #include <stdarg.h>
@@ -48,6 +49,7 @@
 #define hids_client_connect hids_host_connect
 #define hids_client_descriptor_storage_get_descriptor_data hids_host_descriptor_storage_get_descriptor_data
 #define hids_client_descriptor_storage_get_descriptor_len hids_host_descriptor_storage_get_descriptor_len
+#define hids_client_send_write_report hids_host_send_write_report
 #else /* btstack <= 1.6 (pico-sdk <= 2.2.0) */
 #include "ble/gatt-service/hids_client.h"
 #endif
@@ -722,6 +724,11 @@ static hci_con_handle_t kbd_pairing_handle = HCI_CON_HANDLE_INVALID;
 static hci_con_handle_t kbd_reenc_handle = HCI_CON_HANDLE_INVALID;
 static uint16_t hids_cid;
 static uint32_t report_count;
+/* The lock keys' LEDs: where the keyboard's output report keeps them, and
+   the report itself (hids_host writes from it later). */
+static bt_led_layout_t ble_led;
+static uint8_t ble_led_buf[8];
+static bool ble_led_pending;
 
 static uint8_t hid_descriptor_storage[HID_DESCRIPTOR_STORAGE_SIZE];
 
@@ -959,6 +966,27 @@ void bt_keyboard_scan_duty_changed(void)
     gap_stop_scan();
     set_scan_parameters();
     gap_start_scan();
+}
+
+/* The lock keys' LEDs. A keyboard lights its LED for a moment and turns it
+   off again unless the host sets it. Sent with the first key report after
+   the HID service is up, and whenever a lock key is pressed on this
+   keyboard; tried again with the next report while hids_host is busy. */
+static void ble_send_leds(void)
+{
+    ble_led_pending = false;
+    if (state != BTK_READY || !ble_led.present)
+        return;
+    uint8_t len = bt_hid_led_report(&ble_led, kbd_lock_leds(), ble_led_buf);
+    ble_led_pending = hids_client_send_write_report(hids_cid, ble_led.has_id ? ble_led.id : 0,
+                                                    HID_REPORT_TYPE_OUTPUT, ble_led_buf, len) ==
+                      ERROR_CODE_COMMAND_DISALLOWED;
+}
+
+void bt_keyboard_set_leds(uint8_t leds)
+{
+    (void)leds; /* ble_send_leds() reads them */
+    ble_send_leds();
 }
 
 static void connect_target(void)
@@ -1466,7 +1494,9 @@ static void bth_raw_notification_handler(uint8_t packet_type,
            path the USB-HID-host build uses. n = 0 means "no associated
            USB HID[] device" (the LED-set call sites in process_key are
            gated by #ifdef USBKEYBOARD anyway, so n is unused here). */
-        process_kbd_report((const hid_keyboard_report_t *)val, 0);
+        process_kbd_report((const hid_keyboard_report_t *)val, KBD_SOURCE_BT_LE);
+        if (ble_led_pending)
+            ble_send_leds();
         return;
     }
 
@@ -1571,6 +1601,7 @@ static void hids_client_handler(uint8_t packet_type,
                                             desc_len);
 #endif
                 hid_extract_mouse_descriptor(desc, desc_len, &mouse_info);
+                bt_hid_led_layout(desc, desc_len, &ble_led);
                 /* Also extract gamepad layout (axes / hat / buttons)
                    so notifications matching its bit-length get decoded
                    in bth_try_handle_gamepad_report below. */
@@ -1580,6 +1611,7 @@ static void hids_client_handler(uint8_t packet_type,
             {
                 /* Fall back to the raw buffer if btstack didn't expose
                                             the accessor for this build. */
+                ble_led.present = 0;
                 hid_extract_mouse_descriptor(
                     hid_descriptor_storage,
                     sizeof(hid_descriptor_storage),
@@ -1618,6 +1650,7 @@ static void hids_client_handler(uint8_t packet_type,
         if (!CurrentLinePtr)
             bt_notice("Bluetooth Keyboard Connected\r\n> ");
 
+        ble_led_pending = true;
         state = BTK_READY;
         break;
     }

@@ -113,6 +113,16 @@ extern int caps_lock;
 extern int num_lock;
 extern int scroll_lock;
 
+/* process_kbd_report()'s n for the Bluetooth keyboards, past the USB HID[]
+   slots, so that a lock key's LED report goes back to the keyboard it came
+   from. */
+#define KBD_SOURCE_BT_LE 0xF0
+#define KBD_SOURCE_BT_CLASSIC 0xF1
+
+/* The lock keys as a boot keyboard's LED output report has them: bit 0
+   Num Lock, bit 1 Caps Lock, bit 2 Scroll Lock. */
+uint8_t kbd_lock_leds(void);
+
 /* KeyDown[0..5] = currently-pressed ASCII characters (up to 6
    simultaneous keys), KeyDown[6] = modifier bitmask. Read by the
    KEYDOWN() BASIC function in Functions.c. */

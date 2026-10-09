@@ -1103,75 +1103,61 @@ void USR_KEYBRD_ProcessData(uint8_t data)
 	if (OnKeyGOSUB != NULL)
 		IntSignal(); // ON KEY: a key is waiting
 }
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+void bt_keyboard_set_leds(uint8_t leds); /* BTKeyboard.c */
+void bt_ckbd_set_leds(uint8_t leds);     /* BTClassicKeyboard.c */
+#endif
+
+uint8_t kbd_lock_leds(void)
+{
+	return (num_lock ? 1 : 0) | (caps_lock ? 2 : 0) | (scroll_lock ? 4 : 0);
+}
+
+/* Show the lock keys on the keyboard the key came from: a USB keyboard
+   through its HID[] slot, a Bluetooth one through its own output report.
+   Bluetooth keyboards used to pass n = 0 and so lit USB slot 0's LEDs, and
+   their own LED went out again - a keyboard waits for the host to set it. */
+static void kbd_send_leds(uint8_t n)
+{
+	uint8_t leds = kbd_lock_leds();
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+	if (n == KBD_SOURCE_BT_LE)
+	{
+		bt_keyboard_set_leds(leds);
+		return;
+	}
+	if (n == KBD_SOURCE_BT_CLASSIC)
+	{
+		bt_ckbd_set_leds(leds);
+		return;
+	}
+#endif
+#ifdef USBKEYBOARD
+	if (n < sizeof(HID) / sizeof(HID[0]))
+	{
+		HID[n].sendlights = (uint8_t)((HID[n].sendlights & ~7u) | leds);
+		tuh_hid_set_report(HID[n].Device_address, HID[n].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights, 1);
+	}
+#else
+	(void)leds;
+	(void)n;
+#endif
+}
+
 static void process_key(int key, uint8_t n, int modifier)
 {
 	keytimer = 0;
-	/* Caps/Num/Scroll lock toggles. We always flip the local state
-	   (so APP_MapKeyToUsage shifts case correctly on subsequent
-	   keypresses). The remote-LED feedback via tuh_hid_set_report
-	   only runs in the USB-host build — the BLE build doesn't drive
-	   the keyboard's physical LEDs because the phone-side firmware
-	   manages them locally, and tuh_hid_set_report / HID[] aren't
-	   linked in that build anyway. */
-#ifndef USBKEYBOARD
-	(void)n; /* unused without USB-host LED feedback */
-#endif
-	if (key == 0x39)
-	{ // Caps lock
-		if (caps_lock)
-		{
-			caps_lock = 0;
-#ifdef USBKEYBOARD
-			HID[n].sendlights &= ~(uint8_t)2;
-			tuh_hid_set_report(HID[n].Device_address, HID[n].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights, 1);
-#endif
-		}
+	/* Caps/Num/Scroll lock toggle the local state (APP_MapKeyToUsage shifts
+	   case by it) and are shown on the keyboard the key came from. */
+	if (key == 0x39 || key == 0x53 || key == 0x47)
+	{
+		if (key == 0x39)
+			caps_lock = !caps_lock;
+		else if (key == 0x53)
+			num_lock = !num_lock;
 		else
-		{
-			caps_lock = 1;
-#ifdef USBKEYBOARD
-			HID[n].sendlights |= 0x02;
-			tuh_hid_set_report(HID[n].Device_address, HID[n].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights, 1);
-#endif
-		}
-	}
-	else if (key == 0x53)
-	{ // Num lock
-		if (num_lock)
-		{
-			num_lock = 0;
-#ifdef USBKEYBOARD
-			HID[n].sendlights &= ~(uint8_t)1;
-			tuh_hid_set_report(HID[n].Device_address, HID[n].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights, 1);
-#endif
-		}
-		else
-		{
-			num_lock = 1;
-#ifdef USBKEYBOARD
-			HID[n].sendlights |= 0x01;
-			tuh_hid_set_report(HID[n].Device_address, HID[n].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights, 1);
-#endif
-		}
-	}
-	else if (key == 0x47)
-	{ // Scroll lock
-		if (scroll_lock)
-		{
-			scroll_lock = 0;
-#ifdef USBKEYBOARD
-			HID[n].sendlights &= ~(uint8_t)4;
-			tuh_hid_set_report(HID[n].Device_address, HID[n].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights, 1);
-#endif
-		}
-		else
-		{
-			scroll_lock = 1;
-#ifdef USBKEYBOARD
-			HID[n].sendlights |= 0x04;
-			tuh_hid_set_report(HID[n].Device_address, HID[n].Device_instance, 0, HID_REPORT_TYPE_OUTPUT, (void *)&HID[n].sendlights, 1);
-#endif
-		}
+			scroll_lock = !scroll_lock;
+		kbd_send_leds(n);
 	}
 	else
 	{ // normal key

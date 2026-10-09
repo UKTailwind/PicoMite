@@ -59,6 +59,10 @@ void bt_keyboard_address(char *buf);
    keyboard's link if it is one of them. Call with the async-context lock. */
 void bt_keyboard_forget(const uint8_t *addr);
 
+/* Show the lock keys (kbd_lock_leds() bits) on the BLE keyboard. btstack
+   context: KeyboardMap.c calls it for a lock key from this keyboard. */
+void bt_keyboard_set_leds(uint8_t leds);
+
 #ifdef __cplusplus
 }
 #endif

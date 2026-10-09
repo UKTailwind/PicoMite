@@ -46,6 +46,28 @@ void bt_ckbd_status(char *buf, int len);
    the one, and forget it. Call with the async-context lock held. */
 void bt_ckbd_forget(const uint8_t *addr);
 
+/* Show the lock keys (kbd_lock_leds() bits) on the Classic keyboard.
+   btstack context: KeyboardMap.c calls it for a lock key from this keyboard. */
+void bt_ckbd_set_leds(uint8_t leds);
+
+/* Where a keyboard's LED output report keeps Num, Caps and Scroll Lock,
+   from its HID report descriptor - shared with the BLE keyboard. Bit
+   positions count from after the report ID. */
+typedef struct
+{
+    uint8_t present; /* the descriptor has an LED output report */
+    uint8_t has_id;
+    uint8_t id;
+    uint8_t len;     /* bytes, without the report ID */
+    uint16_t pos[3]; /* Num, Caps, Scroll; 0xFFFF where absent */
+} bt_led_layout_t;
+
+void bt_hid_led_layout(const uint8_t *descriptor, uint16_t len, bt_led_layout_t *l);
+
+/* The LED report for leds (kbd_lock_leds() bits) into out (8 bytes);
+   returns its length. */
+uint8_t bt_hid_led_report(const bt_led_layout_t *l, uint8_t leds, uint8_t *out);
+
 #ifdef __cplusplus
 }
 #endif
