@@ -148,7 +148,7 @@ extern "C"
       _exit -> __breakpoint - which surfaces as a HardFault with CFSR=0
       and HFSR=DEBUGEVT (a BKPT, not a memory fault).  Launching a program
       from FM reaches it through the 256-byte littlefs file caches that
-      lfs_file_rawopencfg takes from this heap.  156 -> 152 KB moves
+      lfs_file_opencfg_ takes from this heap.  156 -> 152 KB moves
       __end__ down to 0x2007E690 for 6512 bytes: one full page of arena
       growth plus ~2.4 KB.  Keep several KB of C-heap headroom here if
       BSS grows again; see [[heap-bss-overlap-on-rp2350]]. */
@@ -487,6 +487,9 @@ extern "C"
    /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~7.0 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (152 * 1024)
+   /* +16 KB (2026-10-09, Peter): littlefs 2.5.1 -> 2.11.3 costs ~1.4 KB on the
+      M0+ and took this variant 580 bytes over 912 KB.  The offset moves, so the
+      first boot of beta 8 does a full clean (A: drive and options). */
    /* -16 KB (2026-09-26): back to 912 KB.  Removing the trace cache left 34 KB
       of flash spare, so the step taken on 2026-09-22 (below) returns to the
       A: drive with about 18 KB still spare.  Moving the offset again means
@@ -500,7 +503,7 @@ extern "C"
       the magic key check fails on the first boot after the upgrade and the
       board does a full clean - existing A: drives and options do not
       survive.  See [[project_flash_target_offset_alignment]]. */
-#define FLASH_TARGET_OFFSET (912 * 1024)
+#define FLASH_TARGET_OFFSET (928 * 1024)
 #define MagicKey 0x956AD03D
 #endif
 #endif

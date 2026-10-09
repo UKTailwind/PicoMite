@@ -95,15 +95,14 @@ uint8_t *gHuffVal2;
 uint8_t *gHuffVal3;
 uint8_t *gInBuf;
 #define BLOCK_SIZE 4096
-// littlefs takes these three as its static read / prog / lookahead buffers, and
-// lfs_mount() asserts the lookahead one is 32-bit aligned - lfs->free.buffer is a
-// uint32_t* and the allocator does buffer[off/32] on it. That assert is compiled
-// out by NDEBUG, so nothing catches a misaligned buffer at runtime.
-// The alignment is NOT automatic: GCC's arm DATA_ALIGNMENT macro raises a plain
-// char array to word alignment only when !optimize_size, so at -Os these land on
-// whatever byte the linker picks. The RP2350's M33 does unaligned loads in
-// hardware and shrugs; the RP2040's M0+ HardFaults, which is a reset loop at boot
-// as soon as anything allocates an lfs block. Align them explicitly.
+// littlefs takes these three as its static read / prog / lookahead buffers.
+// littlefs up to 2.8 read the lookahead one as a uint32_t* (buffer[off/32]), so it
+// had to be 32-bit aligned: GCC's arm DATA_ALIGNMENT macro raises a plain char
+// array to word alignment only when !optimize_size, so at -Os these landed on
+// whatever byte the linker picked, and the RP2040's M0+ HardFaulted on the
+// unaligned access - a reset loop at boot. From 2.9 the lookahead buffer is a
+// uint8_t* and any alignment works; the explicit alignment is kept as cheap
+// insurance for the M0+.
 char __attribute__((aligned(4))) FlashReadBuffer[256];
 char __attribute__((aligned(4))) FlashProgBuffer[256];
 char __attribute__((aligned(4))) FlashLookBuffer[256];
@@ -2420,6 +2419,17 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
         Display_Refresh();
 }
 
+// littlefs links an open directory handle into lfs.mlist and lfs_dir_close()
+// unlinks it. A command that error()s between the two leaves the handle linked,
+// and opening it again then makes the list circular, which hangs littlefs the
+// next time it walks the list (every commit). Unlinking first is always safe:
+// lfs_dir_close() on a handle that is not in the list does nothing.
+static int lfs_dir_reopen(lfs_dir_t *dir, const char *path)
+{
+    lfs_dir_close(&lfs, dir);
+    return lfs_dir_open(&lfs, dir, path);
+}
+
 // search for a volume label, directory or file
 // s$ = DIR$(fspec, DIR|FILE|ALL)       will return the first entry
 // s$ = DIR$()                          will return the next
@@ -2486,7 +2496,7 @@ void fun_dir(void)
         if (FSsave)
             FSerror = f_opendir(&djd, path);
         else
-            FSerror = lfs_dir_open(&lfs, &lfs_dir_dir, path);
+            FSerror = lfs_dir_reopen(&lfs_dir_dir, path);
         ErrorCheck(0);
     }
     if (FSsave == 1 && (SDCardStat & STA_NOINIT))
@@ -2517,7 +2527,7 @@ void fun_dir(void)
             {
                 FSerror = lfs_dir_read(&lfs, &lfs_dir_dir, &lfs_info_dir);
                 strcpy(fnod.fname, lfs_info_dir.name);
-                if (FSerror == 0)
+                if (FSerror <= 0)
                     break;
                 if (lfs_info_dir.type == LFS_TYPE_DIR && pattern_matching(pp, lfs_info_dir.name, 0, 0) && !(strcmp(lfs_info_dir.name, ".") == 0 || strcmp(lfs_info_dir.name, "..") == 0))
                 {
@@ -2542,7 +2552,7 @@ void fun_dir(void)
             {
                 FSerror = lfs_dir_read(&lfs, &lfs_dir_dir, &lfs_info_dir);
                 strcpy(fnod.fname, lfs_info_dir.name);
-                if (FSerror == 0)
+                if (FSerror <= 0)
                     break;
                 if (lfs_info_dir.type == LFS_TYPE_REG && pattern_matching(pp, lfs_info_dir.name, 0, 0))
                 {
@@ -2567,7 +2577,7 @@ void fun_dir(void)
             {
                 FSerror = lfs_dir_read(&lfs, &lfs_dir_dir, &lfs_info_dir);
                 strcpy(fnod.fname, lfs_info_dir.name);
-                if (FSerror == 0)
+                if (FSerror <= 0)
                     break;
                 if (lfs_info_dir.type & (LFS_TYPE_REG | LFS_TYPE_DIR) && pattern_matching(pp, lfs_info_dir.name, 0, 0) && !(strcmp(lfs_info_dir.name, ".") == 0 || strcmp(lfs_info_dir.name, "..") == 0))
                 {
@@ -2577,6 +2587,16 @@ void fun_dir(void)
         }
     }
 
+    if (!FSsave)
+    {
+        // lfs_dir_read() returns 1 for an entry, 0 at the end and < 0 on an error.
+        // The handle stays open (linked) between calls so that littlefs keeps it
+        // valid while the program changes the directory, eg KILLs what it found.
+        if (FSerror > 0)
+            FSerror = FR_OK;
+        else
+            fnod.fname[0] = 0;
+    }
     if (FSerror != FR_OK || !fnod.fname[0])
     {
         if (FSsave)
@@ -2691,9 +2711,9 @@ void chdir(char *p)
     else
     {
         if (filepath[FatFSFileSystem][3] == 0)
-            FSerror = lfs_dir_open(&lfs, &lfs_dir, "/");
+            FSerror = lfs_dir_reopen(&lfs_dir, "/");
         else
-            FSerror = lfs_dir_open(&lfs, &lfs_dir, &filepath[FatFSFileSystem][3]);
+            FSerror = lfs_dir_reopen(&lfs_dir, &filepath[FatFSFileSystem][3]);
         if (!FSerror)
             lfs_dir_close(&lfs, &lfs_dir);
     }
@@ -2803,7 +2823,7 @@ void MIPS16 cmd_kill(void)
             PRet();
         }
         if (fromfilesystem == 0)
-            FSerror = lfs_dir_open(&lfs, &lfs_dir, fromdir);
+            FSerror = lfs_dir_reopen(&lfs_dir, fromdir);
         else
             FSerror = f_findfirst(&djd, &fnod, fromdir, pp);
         ErrorCheck(0);
@@ -6311,7 +6331,7 @@ void MIPS16 cmd_copy(void)
             error("Source and destination are the same");
         }
         if (fromfilesystem == 0)
-            FSerror = lfs_dir_open(&lfs, &lfs_dir, fromdir);
+            FSerror = lfs_dir_reopen(&lfs_dir, fromdir);
         else
             FSerror = f_findfirst(&djd, &fnod, fromdir, pp);
         ErrorCheck(0);
@@ -6748,7 +6768,7 @@ void MIPS16 cmd_files(void)
     MMPrintString(fullpathname[FatFSFileSystem]);
     PRet();
     if (FatFSFileSystem == 0)
-        FSerror = lfs_dir_open(&lfs, &lfs_dir, fullpathname[FatFSFileSystem]);
+        FSerror = lfs_dir_reopen(&lfs_dir, fullpathname[FatFSFileSystem]);
     else
         FSerror = f_findfirst(&djd, &fnod, fullpathname[FatFSFileSystem], pp);
     ErrorCheck(0);
