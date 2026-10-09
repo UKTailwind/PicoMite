@@ -68,6 +68,27 @@ void bt_hid_led_layout(const uint8_t *descriptor, uint16_t len, bt_led_layout_t 
    returns its length. */
 uint8_t bt_hid_led_report(const bt_led_layout_t *l, uint8_t leds, uint8_t *out);
 
+/* Where a keyboard's input report keeps its modifier byte and key slots,
+   from its HID report descriptor - shared with the BLE keyboard. Bit
+   positions count from after the report ID. */
+typedef struct
+{
+    uint8_t present;    /* the descriptor has a keyboard report with key slots */
+    uint8_t has_id;
+    uint8_t id;
+    uint8_t keys;       /* 8-bit key slots, at most the 6 a boot report holds */
+    uint16_t mod_pos;   /* the modifier byte (usages E0-E7); 0xFFFF if absent */
+    uint16_t keys_pos;  /* the first key slot */
+    uint8_t len;        /* the report's length in bytes, without the ID */
+    uint8_t len_unique; /* no other input report has this length */
+} bt_kbd_layout_t;
+
+void bt_hid_kbd_layout(const uint8_t *descriptor, uint16_t len, bt_kbd_layout_t *k);
+
+/* The boot keyboard report (modifier, reserved, 6 keys) for a keyboard
+   report p of n bytes, without its report ID. */
+void bt_hid_kbd_report(const bt_kbd_layout_t *k, const uint8_t *p, uint16_t n, uint8_t out[8]);
+
 #ifdef __cplusplus
 }
 #endif

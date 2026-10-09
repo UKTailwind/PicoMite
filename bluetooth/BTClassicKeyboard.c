@@ -168,9 +168,9 @@ static void ck_pairing_done(void)
 
 static void ck_passkey_notice(uint32_t passkey)
 {
-    char msg[80];
+    char msg[96];
     snprintf(msg, sizeof(msg),
-             "\r\nBluetooth keyboard pairing: type %06lu on the keyboard, then Enter\r\n",
+             "\r\nBluetooth keyboard pairing: type %06lu on the keyboard being paired, then Enter\r\n",
              (unsigned long)passkey);
     bt_notice(msg);
 }
@@ -245,28 +245,6 @@ static void ck_parse_descriptor(const uint8_t *d, uint16_t len, ck_layout_t *l)
         }
         switch (item.usage_page)
         {
-        case 0x07: /* Keyboard */
-            if (variable && item.size == 1 && item.usage == 0xE0 && l->kbd_mod_pos == CK_NO_POS)
-            {
-                if (l->kbd_keys && id != l->kbd_id)
-                    break;
-                l->kbd_id = id;
-                l->kbd_mod_pos = item.bit_pos;
-            }
-            else if (!variable && item.size == 8)
-            {
-                if (l->kbd_keys == 0 && (l->kbd_mod_pos == CK_NO_POS || id == l->kbd_id))
-                {
-                    l->kbd_id = id;
-                    l->kbd_keys_pos = item.bit_pos;
-                    l->kbd_keys = 1;
-                }
-                else if (l->kbd_keys && l->kbd_keys < 6 && id == l->kbd_id &&
-                         item.bit_pos == l->kbd_keys_pos + 8u * l->kbd_keys)
-                    l->kbd_keys++;
-            }
-            break;
-
         case 0x01: /* Generic Desktop */
             if (!variable)
                 break;
@@ -317,6 +295,15 @@ static void ck_parse_descriptor(const uint8_t *d, uint16_t len, ck_layout_t *l)
         l->x_size = 0; /* not a pointer */
     if (l->btn_count && l->btn_id != l->mouse_id)
         l->btn_count = 0;
+    bt_kbd_layout_t k;
+    bt_hid_kbd_layout(d, len, &k);
+    if (k.present)
+    {
+        l->kbd_id = k.id;
+        l->kbd_keys = k.keys;
+        l->kbd_mod_pos = k.mod_pos;
+        l->kbd_keys_pos = k.keys_pos;
+    }
     bt_hid_led_layout(d, len, &l->led);
 }
 
@@ -378,6 +365,77 @@ static int32_t ck_sbits(const uint8_t *p, uint16_t n, uint16_t pos, uint8_t size
 static int32_t ck_clamp(int32_t v, int32_t lo, int32_t hi)
 {
     return v < lo ? lo : v > hi ? hi : v;
+}
+
+void bt_hid_kbd_layout(const uint8_t *descriptor, uint16_t len, bt_kbd_layout_t *k)
+{
+    /* each input report's length, to tell whether the keyboard's is unique */
+    uint8_t ids[16];
+    uint16_t ends[16];
+    int nid = 0;
+    memset(k, 0, sizeof(*k));
+    k->mod_pos = k->keys_pos = CK_NO_POS;
+
+    btstack_hid_usage_iterator_t it;
+    btstack_hid_usage_item_t item;
+    btstack_hid_usage_iterator_init(&it, descriptor, len, HID_REPORT_TYPE_INPUT);
+    while (btstack_hid_usage_iterator_has_more(&it))
+    {
+        btstack_hid_usage_iterator_get_item(&it, &item);
+        bool variable = (item.descriptor_item.item_value & 2) != 0;
+        uint8_t id = item.report_id == 0xFFFF ? 0 : (uint8_t)item.report_id;
+        int j = 0;
+        while (j < nid && ids[j] != id)
+            j++;
+        if (j == nid && nid < 16)
+        {
+            ids[nid] = id;
+            ends[nid++] = 0;
+        }
+        if (j < nid && item.bit_pos + item.size > ends[j])
+            ends[j] = item.bit_pos + item.size;
+        if (item.usage_page != 0x07) /* Keyboard */
+            continue;
+        if (variable && item.size == 1 && item.usage == 0xE0 && k->mod_pos == CK_NO_POS)
+        {
+            if (k->keys && id != k->id)
+                continue;
+            k->id = id;
+            k->has_id = item.report_id != 0xFFFF;
+            k->mod_pos = item.bit_pos;
+        }
+        else if (!variable && item.size == 8)
+        {
+            if (k->keys == 0 && (k->mod_pos == CK_NO_POS || id == k->id))
+            {
+                k->id = id;
+                k->has_id = item.report_id != 0xFFFF;
+                k->keys_pos = item.bit_pos;
+                k->keys = 1;
+            }
+            else if (k->keys && k->keys < 6 && id == k->id && item.bit_pos == k->keys_pos + 8u * k->keys)
+                k->keys++;
+        }
+    }
+    if (!k->keys)
+        return;
+    k->present = 1;
+    for (int j = 0; j < nid; j++)
+        if (ids[j] == k->id)
+            k->len = (uint8_t)((ends[j] + 7) / 8);
+    k->len_unique = 1;
+    for (int j = 0; j < nid; j++)
+        if (ids[j] != k->id && (ends[j] + 7) / 8 == k->len)
+            k->len_unique = 0;
+}
+
+void bt_hid_kbd_report(const bt_kbd_layout_t *k, const uint8_t *p, uint16_t n, uint8_t out[8])
+{
+    memset(out, 0, 8);
+    if (k->mod_pos != CK_NO_POS)
+        out[0] = (uint8_t)ck_bits(p, n, k->mod_pos, 8);
+    for (int i = 0; i < k->keys; i++)
+        out[2 + i] = (uint8_t)ck_bits(p, n, (uint16_t)(k->keys_pos + 8 * i), 8);
 }
 
 /* An input report: transaction header 0xA1 (DATA, input), then the report. */

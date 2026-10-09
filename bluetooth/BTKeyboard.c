@@ -711,6 +711,9 @@ static bool bt_startup_complete;
 
 static bd_addr_t target_addr;
 static bd_addr_type_t target_addr_type = BTH_TARGET_ADDR_TYPE;
+/* The advertiser being connected to is bonded to us (or advertised
+   directly to us): its link is re-encrypted at once. */
+static bool target_known;
 
 static hci_con_handle_t conn_handle = HCI_CON_HANDLE_INVALID;
 /* The keyboard link's handle, latched when the Security Manager starts pairing
@@ -729,6 +732,8 @@ static uint32_t report_count;
 static bt_led_layout_t ble_led;
 static uint8_t ble_led_buf[8];
 static bool ble_led_pending;
+/* Where the keyboard report keeps its keys, from the report map. */
+static bt_kbd_layout_t ble_kbd;
 
 static uint8_t hid_descriptor_storage[HID_DESCRIPTOR_STORAGE_SIZE];
 
@@ -902,9 +907,10 @@ void bt_keyboard_last_pairing(char *buf, int len)
     if (last_pair_result < 0)
         snprintf(buf, len, "none since boot");
     else if (last_pair_result == 2)
-        snprintf(buf, len, "failed, status 0x%02X reason 0x%02X", last_pair_status, last_pair_reason);
+        snprintf(buf, len, "%s, failed, status 0x%02X reason 0x%02X", bd_addr_to_str(last_pair_addr),
+                 last_pair_status, last_pair_reason);
     else if (last_pair_result == 3)
-        snprintf(buf, len, "interrupted, the keyboard dropped the link");
+        snprintf(buf, len, "%s, interrupted, the keyboard dropped the link", bd_addr_to_str(last_pair_addr));
     else
         snprintf(buf, len, "%s (%s), %s", bd_addr_to_str(last_pair_addr),
                  last_pair_addr_type == BD_ADDR_TYPE_LE_PUBLIC ? "public" : "random",
@@ -1487,6 +1493,21 @@ static void bth_raw_notification_handler(uint8_t packet_type,
        which would misfire on any peer whose mouse uses a different
        field layout (wheel, extra buttons, etc.). Everything else
        is logged raw so the operator can investigate. */
+    /* The keyboard report, recognised by its length from the report map,
+       since a notification carries no report ID - only when no other input
+       report has that length. A Logitech Pebble Keys 2 K380s sends 7 bytes
+       (modifier and 6 keys, no reserved byte), which the 8-byte rule below
+       dropped: it paired and connected but never typed. */
+    if (ble_kbd.present && ble_kbd.len_unique && vlen == ble_kbd.len)
+    {
+        uint8_t boot[8];
+        bt_hid_kbd_report(&ble_kbd, val, vlen, boot);
+        process_kbd_report((const hid_keyboard_report_t *)boot, KBD_SOURCE_BT_LE);
+        if (ble_led_pending)
+            ble_send_leds();
+        return;
+    }
+
     if (vlen == 8)
     {
         /* Standard 8-byte HID boot-keyboard report (modifier, reserved,
@@ -1602,6 +1623,7 @@ static void hids_client_handler(uint8_t packet_type,
 #endif
                 hid_extract_mouse_descriptor(desc, desc_len, &mouse_info);
                 bt_hid_led_layout(desc, desc_len, &ble_led);
+                bt_hid_kbd_layout(desc, desc_len, &ble_kbd);
                 /* Also extract gamepad layout (axes / hat / buttons)
                    so notifications matching its bit-length get decoded
                    in bth_try_handle_gamepad_report below. */
@@ -1612,6 +1634,7 @@ static void hids_client_handler(uint8_t packet_type,
                 /* Fall back to the raw buffer if btstack didn't expose
                                             the accessor for this build. */
                 ble_led.present = 0;
+                ble_kbd.present = 0;
                 hid_extract_mouse_descriptor(
                     hid_descriptor_storage,
                     sizeof(hid_descriptor_storage),
@@ -1766,6 +1789,7 @@ static void packet_handler(uint8_t packet_type,
                 bth_log("%s advertiser found: %s type=%u name=\"%s\"",
                         known ? "bonded" : "HID", bd_addr_to_str(addr), addr_type, name);
             }
+            target_known = known;
             connect_target();
         }
         break;
@@ -1810,11 +1834,15 @@ static void packet_handler(uint8_t packet_type,
                with auth failure — and such peers also lock down the HID
                ATT handles until encrypted, so early GATT must be avoided.
 
-               Single-target assumption: this host pairs one keyboard, so a
-               non-empty LE device DB means "this peer is bonded". If you
-               bond a second, different keyboard its very first connect may
-               initiate early; clear bonds when switching keyboards. */
-            bool bonded = (le_device_db_count() > 0);
+               "Bonded" is this advertiser, as the scan judged it: in the
+               bond store, or advertising directly to us. It used to be
+               "any bond at all" (le_device_db_count() > 0), so with one
+               keyboard bonded a second one's first connection started
+               pairing early, and a keyboard that sends its own Security
+               Request (a Logitech Pebble Keys 2 K380s) dropped the link -
+               about once a second, for as long as it stayed in pairing
+               mode, without ever pairing. */
+            bool bonded = target_known;
             bth_log("LE connected, handle=0x%04x; %s", (unsigned)conn_handle,
                     bonded ? "bonded — requesting reencryption"
                            : "waiting for SM");
@@ -1888,9 +1916,9 @@ static void packet_handler(uint8_t packet_type,
            while a program runs: pairing is something the user started. */
         uint32_t passkey = sm_event_passkey_display_number_get_passkey(packet);
         bth_log("SM Passkey: type %06lu on the BT device", (unsigned long)passkey);
-        char msg[80];
+        char msg[96];
         snprintf(msg, sizeof(msg),
-                 "\r\nBluetooth keyboard pairing: type %06lu on the keyboard, then Enter\r\n",
+                 "\r\nBluetooth keyboard pairing: type %06lu on the keyboard being paired, then Enter\r\n",
                  (unsigned long)passkey);
         bt_notice(msg);
         break;
@@ -1927,6 +1955,8 @@ static void packet_handler(uint8_t packet_type,
                or out of range): nothing to tear down. */
             bth_log("SM pairing interrupted: link dropped");
             kbd_interrupted++;
+            memcpy(last_pair_addr, target_addr, sizeof(bd_addr_t));
+            last_pair_addr_type = target_addr_type;
             last_pair_result = 3;
             break;
         }
@@ -1934,6 +1964,8 @@ static void packet_handler(uint8_t packet_type,
         {
             bth_log("SM pairing failed status=0x%02x reason=0x%02x",
                     pstatus, sm_event_pairing_complete_get_reason(packet));
+            memcpy(last_pair_addr, target_addr, sizeof(bd_addr_t));
+            last_pair_addr_type = target_addr_type;
             last_pair_result = 2;
             last_pair_status = pstatus;
             last_pair_reason = sm_event_pairing_complete_get_reason(packet);
@@ -2198,6 +2230,7 @@ void bt_keyboard_poll(void)
         }
     }
 }
+
 
 bool bt_keyboard_ready(void)
 {
