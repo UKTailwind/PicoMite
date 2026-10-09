@@ -363,12 +363,16 @@ static volatile uint8_t start_last_error;
    drained by 20 ms - held at the limit), the bitpool steps down (to no less
    than half the maximum, or the speaker's minimum); after ten seconds with
    less than 50 ms waiting it steps back up. A second in which the encoder itself stalled (a flash
-   write with interrupts off) is not judged: that backlog is ours. */
+   write with interrupts off) is not judged: that backlog is ours. Nor is one
+   in which no packet went at all: the link is gone (a speaker switched off
+   is noticed only when the link times out, after up to 20 s), not slow, and
+   lowering the bitpool cannot help it. */
 #define BTA_BITPOOL_STEP_DOWN 4
 #define BTA_BITPOOL_STEP_UP 2
 #define BTA_BITPOOL_CALM_SECONDS 10
 #define BTA_STALL_MS 50
 static uint32_t backlog_check_ms, backlog_last;
+static uint32_t packets_at_check; /* packets_sent at the last check */
 static uint8_t calm_seconds;
 static bool stalled_this_second;
 static volatile uint32_t bitpool_lowered; /* BLUETOOTH STATUS */
@@ -383,7 +387,9 @@ static void adapt_bitpool(uint32_t now_ms, uint32_t rate, unsigned int frames_pe
     uint32_t backlog = samples_ready + sbc_storage_frames * frames_per_sbc;
     uint32_t last = backlog_last;
     backlog_last = backlog;
-    if (stalled_this_second)
+    bool none_sent = packets_sent == packets_at_check;
+    packets_at_check = packets_sent;
+    if (stalled_this_second || none_sent)
     {
         stalled_this_second = false;
         calm_seconds = 0;
@@ -507,6 +513,7 @@ static void audio_timer_start(void)
     load_busy_us = 0;
     load_start_us = time_us_32();
     packets_sent = 0;
+    packets_at_check = 0;
     backlog_check_ms = btstack_run_loop_get_time_ms(); /* cur_bitpool carries over */
     backlog_last = 0;
     calm_seconds = 0;
@@ -595,7 +602,10 @@ static void a2dp_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *
         cfg_bitpool = bitpool;
         cfg_min_bitpool = a2dp_subevent_signaling_media_codec_sbc_configuration_get_min_bitpool_value(packet);
         cur_bitpool = bitpool;
-        bitpool_lowest = bitpool;
+        /* The lowest since the last BLUETOOTH STATUS, as the count is: a
+           new connection does not hide what the last one did. */
+        if (bitpool_lowest == 0 || bitpool < bitpool_lowest)
+            bitpool_lowest = bitpool;
         cfg_blocks = blocks;
         cfg_subbands = subbands;
         sbc_encoder = btstack_sbc_encoder_bluedroid_init_instance(&sbc_encoder_state);
