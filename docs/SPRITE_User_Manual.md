@@ -76,11 +76,11 @@ SPRITE LOADARRAY #1, 10, 10, sprite_data()
 ---
 
 #### SPRITE LOADPNG (RP2350 only)
-Loads a sprite from a PNG file.
+Loads a sprite from a PNG file, or from part of one.
 
 **Syntax:**
 ```
-SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff]
+SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff] [, x_offset] [, y_offset] [, width] [, height]
 ```
 
 **Parameters:**
@@ -90,8 +90,12 @@ SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff]
 | `filename$` | Path to PNG file (`.png` extension added if omitted) |
 | `transparent` | Transparent color index (0-15, default: 0) |
 | `cutoff` | Alpha threshold for transparency (1-254, default: 30) |
+| `x_offset` | X offset within image (default: 0) |
+| `y_offset` | Y offset within image (default: 0) |
+| `width` | Width to load (default: the rest of the image) |
+| `height` | Height to load (default: the rest of the image) |
 
-**Note:** PNG must be in RGBA8888 format.
+**Note:** PNG must be in RGBA8888 or indexed (palette) format; interlaced files are not supported. The part loaded must fit on the screen, but the image it comes from can be any size: it is decoded a line at a time, so a large image needs little memory.
 
 ---
 

@@ -101,14 +101,21 @@ pdf.table_row('array()', 'Numeric array containing color values')
 pdf.ln(2)
 
 pdf.subsection_title('SPRITE LOADPNG (RP2350 only)')
-pdf.body_text("Loads a sprite from a PNG file.")
-pdf.code_block("SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff]")
+pdf.body_text("Loads a sprite from a PNG file, or from part of one.")
+pdf.code_block("SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff] [, x_offset] [, y_offset] [, width] [, height]")
 pdf.table_row('Parameter', 'Description', header=True)
 pdf.table_row('#n', 'Sprite buffer number (1-64)')
 pdf.table_row('filename$', 'Path to PNG file (.png extension added if omitted)')
 pdf.table_row('transparent', 'Transparent color index (0-15, default: 0)')
 pdf.table_row('cutoff', 'Alpha threshold for transparency (1-254, default: 30)')
+pdf.table_row('x_offset', 'X offset within image (default: 0)')
+pdf.table_row('y_offset', 'Y offset within image (default: 0)')
+pdf.table_row('width', 'Width to load (default: the rest of the image)')
+pdf.table_row('height', 'Height to load (default: the rest of the image)')
 pdf.ln(2)
+pdf.body_text("PNG must be in RGBA8888 or indexed (palette) format; interlaced files are not supported. "
+              "The part loaded must fit on the screen, but the image it comes from can be any size: "
+              "it is decoded a line at a time, so a large image needs little memory.")
 
 pdf.subsection_title('SPRITE LOADBMP')
 pdf.body_text("Loads a sprite from a BMP file.")

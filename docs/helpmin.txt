@@ -3578,11 +3578,12 @@ be used with care.
 LOAD JPG file$ [, x] [, y] [,mode] [,ximage] [,yimage] [,scale]
 
 ~LOAD PNG
-LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut]
+LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut] [,ximage] [,yimage]
 
 RP2350 VERSIONS ONLY Loads and displays a png file 'fname' If no extension is
 specified .png will be automatically added to the filename. The file must be
-in RGBA8888 format which is the normal default.
+in RGBA8888 format, which is the normal default, or an indexed (palette)
+format; interlaced files are not supported.
 
 ~LOC
 LOC( [#]fnbr )
@@ -7800,9 +7801,10 @@ SPRITE LOADBMP #n, filename$ [, x_offset, y_offset, width, height]
 Loads a sprite from a BMP file.
 
 ~SPRITE LOADPNG
-SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff]
+SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff] [, x_offset] [,
+y_offset] [, width] [, height]
 
-Loads a sprite from a PNG file.
+Loads a sprite from a PNG file, or from part of one.
 
 ~SPRITE MOVE
 SPRITE MOVE

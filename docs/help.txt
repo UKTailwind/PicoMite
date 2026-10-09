@@ -6574,19 +6574,23 @@ If an extension is not specified ".JPG" will be added to the file name.
 Progressive jpg images are not supported.
 
 ~LOAD PNG
-LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut]
+LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut] [,ximage] [,yimage]
 
 RP2350 VERSIONS ONLY
 Loads and displays a png file 'fname'
 If no extension is specified .png will be automatically added to the filename.
-The file must be in RGBA8888 format which is the normal default. If specified
-'x' and 'y' indicate where on the display or framebuffer the image will
-appear.
+The file must be in RGBA8888 format, which is the normal default, or an
+indexed (palette) format; interlaced files are not supported. If specified 'x'
+and 'y' indicate where on the display or framebuffer the image will appear.
 The optional parameter 'transparent' (defaults to 0) specifies one of the
 colour codes (0-15) which will be allocated to pixels in the png file with an
 alpha value less than 'alphacut' (defaults to 20). If 'transparent' is set to
 -1 the png image is written with pixels with an alpha value less than
 'alphacut' missed completely.
+'ximage' and 'yimage' specify where in the image file to start writing to the
+display (defaults to 0,0). An image larger than the display is cropped to fit,
+and as the image is decoded a line at a time a large image needs little
+memory.
 
 ~LOC
 LOC( [#]fnbr )
@@ -13164,9 +13168,10 @@ Parameters:
 Full details: SPRITE_User_Manual.pdf
 
 ~SPRITE LOADPNG
-SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff]
+SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff] [, x_offset] [,
+y_offset] [, width] [, height]
 
-Loads a sprite from a PNG file.
+Loads a sprite from a PNG file, or from part of one.
 
 Parameters:
   Parameter  Description
@@ -13174,8 +13179,15 @@ Parameters:
   filename$  Path to PNG file (.png extension added if omitted)
   transparent  Transparent color index (0-15, default: 0)
   cutoff  Alpha threshold for transparency (1-254, default: 30)
+  x_offset  X offset within image (default: 0)
+  y_offset  Y offset within image (default: 0)
+  width  Width to load (default: the rest of the image)
+  height  Height to load (default: the rest of the image)
 
-Note: PNG must be in RGBA8888 format.
+Note: PNG must be in RGBA8888 or indexed (palette) format; interlaced files
+are not supported. The part loaded must fit on the screen, but the image it
+comes from can be any size: it is decoded a line at a time, so a large image
+needs little memory.
 
 ---
 

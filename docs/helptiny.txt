@@ -2135,7 +2135,7 @@ LOAD DATA fname$, address
 LOAD JPG file$ [, x] [, y] [,mode] [,ximage] [,yimage] [,scale]
 
 ~LOAD PNG
-LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut]
+LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut] [,ximage] [,yimage]
 
 ~LOC
 LOC( [#]fnbr )
@@ -4521,7 +4521,8 @@ SPRITE LOADARRAY #n, width, height, array()
 SPRITE LOADBMP #n, filename$ [, x_offset, y_offset, width, height]
 
 ~SPRITE LOADPNG
-SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff]
+SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff] [, x_offset] [,
+y_offset] [, width] [, height]
 
 ~SPRITE MOVE
 SPRITE MOVE
