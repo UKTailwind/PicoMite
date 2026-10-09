@@ -5901,10 +5901,11 @@ PS2 KEYBOARD VERSIONS ONLY Configure a PS2 keyboard. This can be used for
 console input and any characters typed will be available via any commands that
 read from the console.
 
-OPTION KEYBOARD nn
+OPTION KEYBOARD nn [,capslock] [,numlock] [,repeatstart] [,repeatrate]
 
-USB AND BLUETOOTH KEYBOARD VERSIONS ONLY Set the layout of a USB or Bluetooth
-keyboard. 'nn' is a two character code: US, UK, FR, GR, IT or ES.
+USB AND BLUETOOTH KEYBOARD VERSIONS ONLY Set the layout and the initial state
+of a USB or Bluetooth keyboard. 'nn' is a two character code: US, UK, FR, GR,
+IT or ES.
 
 ~OPTION KEYBOARD I2C
 OPTION KEYBOARD I2C

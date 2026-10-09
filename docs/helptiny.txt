@@ -3552,7 +3552,7 @@ OPTION HEARTBEAT ON/OFF [HEARTBEATpin]
 OPTION KEYBOARD nn [,capslock] [,numlock] [,repeatstart] [,repeatrate]
 or
 OPTION KEYBOARD DISABLE
-OPTION KEYBOARD nn
+OPTION KEYBOARD nn [,capslock] [,numlock] [,repeatstart] [,repeatrate]
 
 ~OPTION KEYBOARD I2C
 OPTION KEYBOARD I2C

@@ -9779,15 +9779,22 @@ subsequent repeats: 'repeatstart' is 0 to 3 indicating 250mSec, 500mSec,
 100mSec).  This command must be entered at the command line and will cause a
 reboot.  The setting can be removed with OPTION KEYBOARD DISABLE.
 
-OPTION KEYBOARD nn
+OPTION KEYBOARD nn [,capslock] [,numlock] [,repeatstart] [,repeatrate]
 
-USB AND BLUETOOTH KEYBOARD VERSIONS ONLY Set the layout of a USB or Bluetooth
-keyboard.  'nn' is a two character code: US, UK, FR, GR, IT or ES.  BE and BR
-are not available on these versions.  Any further parameters are accepted but
-ignored - use OPTION KEYBOARD REPEAT to set the repeat timing on these
-versions.  OPTION KEYBOARD DISABLE is not available; a USB or Bluetooth
-keyboard needs no configuration beyond its layout.  This command must be
-entered at the command line and will cause a reboot.
+USB AND BLUETOOTH KEYBOARD VERSIONS ONLY Set the layout and the initial state
+of a USB or Bluetooth keyboard.  'nn' is a two character code: US, UK, FR, GR,
+IT or ES.  BE and BR are not available on these versions.  The optional
+parameters 'capslock' and 'numlock' are true/false integers that set the state
+of Caps Lock and Num Lock when a USB keyboard is connected (default is 0 and
+1); a Bluetooth keyboard always starts with both off.  A keyboard with a
+numeric keypad built into its letter keys, such as the Raspberry Pi keyboard,
+needs 'numlock' set to 0 or keys such as U, I and O will type 4, 5 and 6.  The
+optional parameters 'repeatstart' and 'repeatrate' set the time before a held
+key first repeats (100 to 2000mSec, default 600mSec) and the time between
+subsequent repeats (25 to 2000mSec, default 150mSec); if they are omitted the
+current setting is kept.  These can also be set with OPTION KEYBOARD REPEAT.
+OPTION KEYBOARD DISABLE is not available.  This command must be entered at the
+command line and will cause a reboot.
 
 ~OPTION KEYBOARD I2C
 OPTION KEYBOARD I2C
