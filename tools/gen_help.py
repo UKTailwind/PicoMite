@@ -427,6 +427,10 @@ NOT_A_MANUAL = (
     # a tutorial, not a reference: every command it shows is documented in its
     # own family's manual, so it would only ever duplicate or contradict
     "game_development_guide",
+    # measurements and advice, not a reference; its paragraphs that begin with
+    # a keyword ("Not in V7 with symbols...") became that keyword's topic
+    # (~NOT), so it was filtered out by hand at every regeneration
+    "performance_guide",
 )
 EXTRA_SOURCES = ["generate_stepper_pdf.py", "Advanced Graphics Functions.docx"]
 
