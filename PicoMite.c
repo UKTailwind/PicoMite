@@ -3134,7 +3134,7 @@ uint32_t testPSRAM(void)
     void MIPS16 updatebootcount(bool format)
     {
         lfs_file_t lfs_file;
-        pico_lfs_cfg.block_count = (Option.FlashSize - RoundUpK4(TOP_OF_SYSTEM_FLASH) - (Option.modbuff ? 1024 * Option.modbuffsize : 0)) / 4096;
+        pico_lfs_cfg.block_count = (Option.FlashSize - FlashStoreStart) / 4096;
         int err, boot_count = 0;
         /* Writing the boot count is the first flash write the board ever
            makes, and after a power-on reset it is made while the rails are
@@ -3163,7 +3163,11 @@ uint32_t testPSRAM(void)
     if (restart_reason & 0x100)
 #endif
             sleep_ms(1000);
-        if (format)
+        /* A reset asks for a format because the drive may have moved (a change
+           of build, MODBUFF); in the fixed map of a 16 MB flash it never does, so
+           the drive is kept if it mounts.  Formatting it on purpose
+           (ResetFlashStorage) is not this path. */
+        if (format && !FixedFlashMap)
             err = true;
         else
             err = lfs_mount(&lfs, &pico_lfs_cfg);
@@ -3682,7 +3686,9 @@ uint32_t testPSRAM(void)
             ResetAllFlash(); // init the options if this is the very first startup
             /* A magic key that does not match means a different variant was
                flashed (or the option sector is unreadable): make it a full
-               clean, A: drive included, not just the options and slots.  The
+               clean, A: drive included, not just the options and slots - except
+               in the fixed map of a 16 MB flash, where the drive is where every
+               build expects it and is kept if it mounts.  The
                format itself happens in updatebootcount() on the next boot,
                once the console and the heap exist; doreset() carries this
                code across the extra soft reset the platform auto-configure
@@ -3692,6 +3698,18 @@ uint32_t testPSRAM(void)
             watchdog_enable(1, 1);
             while (1)
                 ;
+        }
+        /* The flash's real size, and from it where the MOD buffer and the A:
+           drive are (SetFlashMap), before anything uses either.  Measured on
+           every boot, so the map never rests on a size saved by older firmware. */
+        {
+            uint32_t flashsize = FlashSizeDetect();
+            if (Option.FlashSize != flashsize)
+            {
+                Option.FlashSize = flashsize;
+                SaveOptions();
+            }
+            SetFlashMap();
         }
 #ifndef HDMI
         if (Option.VGA_HSYNC == 0)

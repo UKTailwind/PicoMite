@@ -474,6 +474,36 @@ uint32_t FlashSizeDetect(void)
     return 16u << 20;
 }
 
+/* Where the MOD buffer and the A: drive sit, as offsets into the flash, and
+   their sizes, set once at boot by SetFlashMap().  On an RP2350 with 16 MB of
+   flash the map is fixed and the same on every build: the firmware and its
+   system areas below 3 MB, a 1 MB MOD buffer, and the A: drive from 4 MB to the
+   end, so nothing an option or a change of build does moves A:.  Otherwise the
+   map is the build's own: the MOD buffer (OPTION MODBUFF) straight after the
+   system areas and the A: drive after it. */
+uint32_t ModBuffStart, ModBuffSize, FlashStoreStart;
+bool FixedFlashMap = false;
+#ifdef rp2350
+_Static_assert(TOP_OF_SYSTEM_FLASH <= FIXED_MAP_SYSTEM_TOP, "the system areas must end below the 16 MB flash map's MOD buffer");
+#endif
+void SetFlashMap(void)
+{
+#ifdef rp2350
+    if (Option.FlashSize >= FIXED_MAP_FLASH_SIZE)
+    {
+        FixedFlashMap = true;
+        ModBuffStart = FIXED_MAP_SYSTEM_TOP;
+        ModBuffSize = FIXED_MAP_MODBUFF_SIZE;
+        FlashStoreStart = FIXED_MAP_FLASH_STORE;
+        return;
+    }
+#endif
+    FixedFlashMap = false;
+    ModBuffStart = RoundUpK4(TOP_OF_SYSTEM_FLASH);
+    ModBuffSize = Option.modbuff ? 1024 * Option.modbuffsize : 0;
+    FlashStoreStart = ModBuffStart + ModBuffSize;
+}
+
 void __not_in_flash_func(disable_interrupts_pico)(void)
 {
 #ifdef rp2350
@@ -545,7 +575,7 @@ int __not_in_flash_func(fs_flash_read)(const struct lfs_config *cfg, lfs_block_t
     assert(off % cfg->read_size == 0);
     assert(size % cfg->read_size == 0);
     assert(block < cfg->block_count);
-    uint32_t addr = XIP_BASE + RoundUpK4(TOP_OF_SYSTEM_FLASH) + (Option.modbuff ? 1024 * Option.modbuffsize : 0) + block * 4096 + off;
+    uint32_t addr = XIP_BASE + FlashStoreStart + block * 4096 + off;
     memcpy(buffer, (char *)addr, size);
     return 0;
 }
@@ -566,7 +596,7 @@ int __not_in_flash_func(fs_flash_prog)(const struct lfs_config *cfg, lfs_block_t
     if (off + size > BLOCK_SIZE)
         return LFS_ERR_INVAL;
 
-    uint32_t addr = RoundUpK4(TOP_OF_SYSTEM_FLASH) + (Option.modbuff ? 1024 * Option.modbuffsize : 0) + block * 4096 + off;
+    uint32_t addr = FlashStoreStart + block * 4096 + off;
 #if PICOMITERP2350
     bool lockfb = (Option.DISPLAY_TYPE >= NEXTGEN);
     if (lockfb)
@@ -587,7 +617,7 @@ int __not_in_flash_func(fs_flash_erase)(const struct lfs_config *cfg, lfs_block_
     if (block >= cfg->block_count)
         return LFS_ERR_INVAL;
 
-    uint32_t block_addr = RoundUpK4(TOP_OF_SYSTEM_FLASH) + (Option.modbuff ? 1024 * Option.modbuffsize : 0) + block * 4096;
+    uint32_t block_addr = FlashStoreStart + block * 4096;
 #if PICOMITERP2350
     bool lockfb = (Option.DISPLAY_TYPE >= NEXTGEN);
     if (lockfb)
@@ -1440,10 +1470,10 @@ void MIPS16 cmd_flash(void)
         fsize = FileSize((char *)pp);
         if (!BasicFileOpen((char *)pp, fnbr, FA_READ))
             return;
-        if (RoundUpK4(fsize) > 1024 * Option.modbuffsize)
+        if (RoundUpK4(fsize) > ModBuffSize)
             error("File too large for modbuffer");
         char *r = GetTempMainMemory(256);
-        uint32_t j = RoundUpK4(TOP_OF_SYSTEM_FLASH);
+        uint32_t j = ModBuffStart;
         disable_interrupts_pico();
         safe_flash_range_erase(j, RoundUpK4(fsize));
         enable_interrupts_pico();
@@ -6992,7 +7022,7 @@ void MIPS16 cmd_files(void)
     else
     {
         lfs_dir_close(&lfs, &lfs_dir);
-        IntToStr(ts, Option.FlashSize - (Option.modbuff ? 1024 * Option.modbuffsize : 0) - RoundUpK4(TOP_OF_SYSTEM_FLASH) - lfs_fs_size(&lfs) * 4096, 10);
+        IntToStr(ts, Option.FlashSize - FlashStoreStart - lfs_fs_size(&lfs) * 4096, 10);
         MMPrintString(", ");
         MMPrintString(ts);
         MMPrintString(" bytes free");

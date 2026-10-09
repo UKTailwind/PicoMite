@@ -854,6 +854,14 @@ extern "C"
                          ((MAXFLASHSLOTS + 1) * MAX_PROG_SIZE))
 #define RB_STREAM_FLASH_SIZE (RB_STREAM_SLOTS * MAX_PROG_SIZE)
 #define TOP_OF_SYSTEM_FLASH (RB_STREAM_FLASH + RB_STREAM_FLASH_SIZE)
+/* The fixed flash map of a 16 MB flash, the same on every RP2350 build so that
+   the A: drive survives a change of build or an options reset (SetFlashMap in
+   FileIO.c): the firmware and the areas above below 3 MB, a 1 MB MOD buffer,
+   and the A: drive from 4 MB to the end of the flash. */
+#define FIXED_MAP_FLASH_SIZE (16 * 1024 * 1024)
+#define FIXED_MAP_SYSTEM_TOP (3072 * 1024)
+#define FIXED_MAP_MODBUFF_SIZE (1024 * 1024)
+#define FIXED_MAP_FLASH_STORE (FIXED_MAP_SYSTEM_TOP + FIXED_MAP_MODBUFF_SIZE)
 #else
 #define TOP_OF_SYSTEM_FLASH (FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE + \
                              ((MAXFLASHSLOTS + 1) * MAX_PROG_SIZE))

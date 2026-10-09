@@ -598,6 +598,10 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
 #define safe_flash_do_cmd flash_do_cmd
 #endif
         uint32_t FlashSizeDetect(void); /* the flash chip's size: JEDEC ID, proved by address wrap-around */
+        /* where the MOD buffer and the A: drive are in flash (offsets), set at boot */
+        extern uint32_t ModBuffStart, ModBuffSize, FlashStoreStart;
+        extern bool FixedFlashMap; /* the fixed map of a 16 MB flash on the RP2350 */
+        void SetFlashMap(void);
 
         /* ============================================================================
          * Function declarations - Flash operations

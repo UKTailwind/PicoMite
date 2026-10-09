@@ -3474,7 +3474,7 @@ void MIPS16 printoptions(void)
     if (Option.Compile == RB_ON || Option.Compile == RB_SHADOW)
         PO2Str("COMPILE", Option.Compile == RB_ON ? "ON" : "SHADOW");
 #endif
-    if (Option.modbuff)
+    if (Option.modbuff && !FixedFlashMap)
     {
         PO("MODBUFF ENABLE ");
         if (Option.modbuffsize != 128)
@@ -3911,7 +3911,9 @@ void MIPS16 clear320(void)
 #endif
 bool MIPS16 testMODBUFF(bool proposed, int proposedsize, bool noask)
 {
-    if (!((Option.modbuff == proposed && Option.modbuffsize == proposedsize) || noask))
+    /* The fixed map of a 16 MB flash has its own MOD buffer, and nothing moves
+       whatever MODBUFF is set to: the same as an unchanged setting below. */
+    if (!FixedFlashMap && !((Option.modbuff == proposed && Option.modbuffsize == proposedsize) || noask))
     {
         MMPrintString("\r\nThis erases everything in flash including the A: drive - are you sure (Y/N) ? ");
         int i;
@@ -7385,6 +7387,8 @@ void MIPS16 cmd_option(void)
         int i, size = 0;
         if (CurrentLinePtr)
             StandardError(10);
+        if (FixedFlashMap)
+            error("The MOD buffer is fixed at 1024K with 16M of flash");
         if ((p = checkstring(tp, (unsigned char *)"ENABLE")))
         {
             if (!Option.modbuff)
@@ -7392,7 +7396,7 @@ void MIPS16 cmd_option(void)
                 getcsargs(&p, 1);
                 if (argc)
                 {
-                    size = getint(argv[0], 16, (Option.FlashSize - RoundUpK4(TOP_OF_SYSTEM_FLASH)) / 1024 - 132);
+                    size = getint(argv[0], 16, (Option.FlashSize - ModBuffStart) / 1024 - 132);
                     if (size & 3)
                         error("Must be a multiple of 4");
                 }
@@ -7414,7 +7418,7 @@ void MIPS16 cmd_option(void)
                 Option.modbuff = true;
                 SaveOptions();
                 ResetFlashStorage(1);
-                modbuff = (char *)(XIP_BASE + RoundUpK4(TOP_OF_SYSTEM_FLASH));
+                modbuff = (char *)(XIP_BASE + ModBuffStart);
                 SoftReset(SOFT_RESET);
             }
             else
@@ -8495,7 +8499,7 @@ void MIPS16 fun_info(void)
             }
             else
             {
-                iret = (Option.FlashSize - (Option.modbuff ? 1024 * Option.modbuffsize : 0) - RoundUpK4(TOP_OF_SYSTEM_FLASH));
+                iret = Option.FlashSize - FlashStoreStart;
             }
             targ = T_INT;
             return;
@@ -8592,7 +8596,7 @@ void MIPS16 fun_info(void)
             }
             else
             {
-                iret = Option.FlashSize - (Option.modbuff ? 1024 * Option.modbuffsize : 0) - RoundUpK4(TOP_OF_SYSTEM_FLASH) - lfs_fs_size(&lfs) * 4096;
+                iret = Option.FlashSize - FlashStoreStart - lfs_fs_size(&lfs) * 4096;
             }
             targ = T_INT;
             return;
@@ -8804,7 +8808,7 @@ void MIPS16 fun_info(void)
     }
     else if ((tp = checkstring(ep, (unsigned char *)"MODBUFF ADDRESS")))
     {
-        iret = (int64_t)((uint32_t)(char *)(XIP_BASE + RoundUpK4(TOP_OF_SYSTEM_FLASH)));
+        iret = (int64_t)((uint32_t)(char *)(XIP_BASE + ModBuffStart));
         targ = T_INT;
         return;
     }

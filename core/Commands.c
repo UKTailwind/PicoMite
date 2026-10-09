@@ -4468,7 +4468,7 @@ void SaveContext(void)
 						 sizeof(g_LocalIndex) + sizeof(g_OptionBase) + sizeof(g_DimUsed) + sizeof(g_varcnt) + sizeof(g_Globalvarcnt) + sizeof(g_Localvarcnt) +
 						 sizeof(g_hashlistpointer) + sizeof(g_forindex) + sizeof(g_doindex) + sizeof(struct s_forstack) * MAXFORLOOPS + sizeof(struct s_dostack) * MAXDOLOOPS +
 						 sizeof(g_slotrec) + sizeof(g_varmem) + sizeof(g_hashlist) + heap_memory_size + 256 + sizeof(mmap);
-		if (sizeneeded >= Option.FlashSize - (Option.modbuff ? 1024 * Option.modbuffsize : 0) - RoundUpK4(TOP_OF_SYSTEM_FLASH) - lfs_fs_size(&lfs) * 4096)
+		if (sizeneeded >= Option.FlashSize - FlashStoreStart - lfs_fs_size(&lfs) * 4096)
 			error("Not enough free space on A: drive: % needed", sizeneeded);
 		lfs_file_open(&lfs, &lfs_file, ".vars", LFS_O_RDWR | LFS_O_CREAT);
 		;

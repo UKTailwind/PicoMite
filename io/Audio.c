@@ -739,7 +739,7 @@ void CloseAudio(int all)
 #ifdef rp2350
 	if (!PSRAMsize)
 #endif
-		modbuff = (Option.modbuff ? (char *)(XIP_BASE + RoundUpK4(TOP_OF_SYSTEM_FLASH)) : NULL);
+		modbuff = (ModBuffSize ? (char *)(XIP_BASE + ModBuffStart) : NULL);
 	int was_playing = CurrentlyPlaying;
 	if (!AUDIO_SIGNED16)
 	{
@@ -1240,7 +1240,7 @@ void modcallback(char *p)
 	if (!PSRAMsize)
 	{
 #endif
-		if (RoundUpK4(fsize) > 1024 * Option.modbuffsize)
+		if (RoundUpK4(fsize) > ModBuffSize)
 		{
 			FileClose(WAV_fnbr);
 			FreeMemorySafe((void **)&sbuff1);
@@ -1271,7 +1271,7 @@ void modcallback(char *p)
 	{
 		unsigned char *r = GetTempStrMemory();
 		positionfile(WAV_fnbr, 0, false);
-		uint32_t j = RoundUpK4(TOP_OF_SYSTEM_FLASH);
+		uint32_t j = ModBuffStart;
 		disable_interrupts_pico();
 		safe_flash_range_erase(j, RoundUpK4(fsize));
 		enable_interrupts_pico();
@@ -2993,7 +2993,7 @@ void MIPS16 cmd_play(void)
 		if (!PSRAMsize)
 		{
 #endif
-			if (RoundUpK4(fsize) > 1024 * Option.modbuffsize)
+			if (RoundUpK4(fsize) > ModBuffSize)
 				error("File too large for modbuffer");
 			char *check = modbuff;
 			while (!FileEOF(WAV_fnbr))
@@ -3021,7 +3021,7 @@ void MIPS16 cmd_play(void)
 		{
 			unsigned char *r = GetTempStrMemory();
 			positionfile(WAV_fnbr, 0, false);
-			uint32_t j = RoundUpK4(TOP_OF_SYSTEM_FLASH);
+			uint32_t j = ModBuffStart;
 			disable_interrupts_pico();
 			safe_flash_range_erase(j, RoundUpK4(fsize));
 			enable_interrupts_pico();
