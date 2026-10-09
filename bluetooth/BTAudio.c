@@ -34,6 +34,7 @@
 
 #include "BTAudio.h"
 #include "BTKeyboard.h"
+#include "BTClassicKeyboard.h"
 
 #define BTA_AUDIO_TIMEOUT_MS 5    /* encode/send tick */
 #define BTA_SBC_STORAGE_SIZE 1030 /* one media packet: header byte + SBC frames */
@@ -796,6 +797,8 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     case HCI_EVENT_PIN_CODE_REQUEST:
         /* Legacy (pre-2.1) pairing: speakers that still use it take "0000". */
         hci_event_pin_code_request_get_bd_addr(packet, addr);
+        if (bt_ckbd_owns_pairing(addr))
+            break; /* a keyboard BLUETOOTH CONNECT is pairing (BTClassicKeyboard.c) */
         if (spk_pairing_allowed)
             gap_pin_code_response(addr, "0000");
         else
@@ -805,6 +808,8 @@ static void hci_packet_handler(uint8_t packet_type, uint16_t channel, uint8_t *p
     case HCI_EVENT_USER_CONFIRMATION_REQUEST:
         /* Secure Simple Pairing, Just Works (neither side has a display). */
         hci_event_user_confirmation_request_get_bd_addr(packet, addr);
+        if (bt_ckbd_owns_pairing(addr))
+            break;
         if (spk_pairing_allowed)
             gap_ssp_confirmation_response(addr);
         else
@@ -1045,6 +1050,7 @@ void bt_audio_init(void)
     gap_set_page_timeout(BTA_PAGE_TIMEOUT);
 
     sdp_init();
+    bt_ckbd_init(); /* Classic HID keyboards (BTClassicKeyboard.c) */
     a2dp_source_init();
     a2dp_source_register_packet_handler(&a2dp_packet_handler);
 
@@ -1139,7 +1145,7 @@ static void bta_scan(unsigned char *tp)
         print_padded(bd_addr_to_str(found[i].addr), 19);
         sprintf(buf, "%d dBm", found[i].rssi);
         print_padded(buf, 9);
-        print_padded(cod_is_audio(found[i].cod) ? "Audio" : "", 7);
+        print_padded(cod_is_audio(found[i].cod) ? "Audio" : bt_ckbd_cod_is_keyboard(found[i].cod) ? "Keyboard" : "", 10);
         if (found[i].name[0])
         {
             MMputchar('"', 1);
@@ -1189,9 +1195,18 @@ static void bta_connect(unsigned char *tp)
             error("No device called $ in the last BLUETOOTH SCAN", s);
         memcpy(addr, found[match].addr, sizeof(bd_addr_t));
     }
-    auto_reconnect = true;
     if (inquiry_active || name_request_active)
         error("Scan in progress");
+
+    /* A keyboard, by its Class of Device in the last SCAN, or the
+       remembered one given by address. */
+    bta_device_t *d = found_lookup(addr);
+    if (d ? bt_ckbd_cod_is_keyboard(d->cod) : bt_ckbd_is_remembered(addr))
+    {
+        bt_ckbd_connect(addr);
+        return;
+    }
+    auto_reconnect = true;
 
     /* Checked and started under the lock: a paired speaker may be
        connecting to us by itself at the same moment. */
@@ -1346,6 +1361,7 @@ static void bta_forget(unsigned char *tp)
     }
     bta_lock();
     bt_keyboard_forget(one ? addr : NULL);
+    bt_ckbd_forget(one ? addr : NULL);
     if (one)
         gap_drop_link_key_for_bd_addr(addr);
     else
@@ -1374,7 +1390,11 @@ void bt_info(unsigned char *tp, char *out)
             out[0] = 0;
     }
     else if (checkstring(tp, (unsigned char *)"KEYBOARD"))
+    {
         bt_keyboard_address(out);
+        if (!out[0])
+            bt_ckbd_address(out);
+    }
     else
         SyntaxError();
 }
@@ -1386,6 +1406,12 @@ static void bta_status(void)
     MMPrintString(bta_ready && hci_get_state() == HCI_STATE_WORKING ? "on" : "not available");
     MMPrintString("\r\nKeyboard:  ");
     MMPrintString(bt_keyboard_ready() ? "connected" : "not connected");
+    {
+        char buf[160];
+        bt_ckbd_status(buf, sizeof(buf));
+        MMPrintString("\r\nClassic keyboard: ");
+        MMPrintString(buf);
+    }
     MMPrintString("\r\nSpeaker:   ");
     switch (spk_state)
     {

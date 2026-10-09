@@ -577,6 +577,9 @@ if(IS_BTH)
 		${PICO_BTSTACK_PATH}/src/classic/sdp_util.c
 		${PICO_BTSTACK_PATH}/src/classic/sdp_client.c
 		${PICO_BTSTACK_PATH}/src/classic/btstack_link_key_db_tlv.c
+		# Bluetooth Classic HID keyboards (bluetooth/BTClassicKeyboard.c)
+		bluetooth/BTClassicKeyboard.c
+		${PICO_BTSTACK_PATH}/src/classic/hid_host.c
 	)
 endif()
 

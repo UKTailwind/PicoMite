@@ -91,13 +91,18 @@ extern "C"
       (a bigger one would not leave RB_STREAM_SLOTS of it in the PSRAM
       reserve); new MagicKey for the new layout.
       +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
-      BLIT went 0.6 KB over. */
-#define FLASH_TARGET_OFFSET (1456 * 1024)
+      BLIT went 0.6 KB over.
+      +16 KB (2026-10-09): Bluetooth Classic keyboards (BTClassicKeyboard.c and
+      btstack's hid_host.c, ~7.1 KB) went 4.4 KB over. */
+#define FLASH_TARGET_OFFSET (1472 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
    /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
       output added ~12.6 KB of BSS (less what dropping VS1053 and PWM/SPI
       audio gave back); ~4.8 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (228 * 1024)
+   /* -4 KB (2026-10-09, Peter): Bluetooth Classic keyboards - a third HCI
+      connection (2.3 KB), the HID descriptor buffer and the HID host took
+      the margin to 1.6 KB. MAX_PROG_SIZE is pinned, so nothing in flash moves. */
+#define HEAP_MEMORY_SIZE (224 * 1024)
 #define MAX_PROG_SIZE (180 * 1024)
 #define MagicKey 0x8DECA3E8
 #elif defined(PICOMITEHDMIWEB)
@@ -409,15 +414,20 @@ extern "C"
 #define MagicKey 0x8D8186E6
    /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
-      BLIT went 0.8 KB over. */
-#define FLASH_TARGET_OFFSET (1488 * 1024)
+      BLIT went 0.8 KB over.
+      +16 KB (2026-10-09): Bluetooth Classic keyboards (BTClassicKeyboard.c and
+      btstack's hid_host.c) went 6.7 KB over. */
+#define FLASH_TARGET_OFFSET (1504 * 1024)
    /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.9 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.6 KB of RAM margin left for the stack. */
    /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
       output (two HCI connections with 1 KB ACL buffers, A2DP/AVDTP/SDP, the
       SBC encoder) added 12.8 KB of BSS; ~4.0 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (324 * 1024)
+   /* -4 KB (2026-10-09, Peter): Bluetooth Classic keyboards - a third HCI
+      connection (2.3 KB), the HID descriptor buffer and the HID host took
+      the margin to 1.1 KB. MAX_PROG_SIZE is pinned, so nothing in flash moves. */
+#define HEAP_MEMORY_SIZE (320 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #else
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */

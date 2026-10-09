@@ -61,11 +61,13 @@
 /* Static memory pools — keeps btstack's footprint deterministic. */
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 /* The BT host builds are dual-mode (ENABLE_CLASSIC from CMakeLists.txt):
-   one LE link to the keyboard/mouse plus one Classic link to a Bluetooth
-   speaker (BTAudio.c, A2DP source). */
-#define MAX_NR_HCI_CONNECTIONS 2
-#define MAX_NR_L2CAP_CHANNELS 4 /* SDP server, SDP client, AVDTP signalling + media */
-#define MAX_NR_L2CAP_SERVICES 2 /* SDP, AVDTP */
+   one LE link to the keyboard/mouse, one Classic link to a Bluetooth
+   speaker (BTAudio.c, A2DP source) and one to a Classic keyboard
+   (BTClassicKeyboard.c), all at once. */
+#define MAX_NR_HCI_CONNECTIONS 3
+#define MAX_NR_L2CAP_CHANNELS 6 /* SDP server, SDP client, AVDTP signalling + media, HID control + interrupt */
+#define MAX_NR_L2CAP_SERVICES 4 /* SDP, AVDTP, HID control, HID interrupt */
+#define MAX_NR_HID_HOST_CONNECTIONS 1 /* a Classic keyboard (BTClassicKeyboard.c) */
 #define MAX_NR_AVDTP_CONNECTIONS 1
 #define MAX_NR_AVDTP_STREAM_ENDPOINTS 1
 /* Cap outstanding ACL packets to the controller and let the host flow-
