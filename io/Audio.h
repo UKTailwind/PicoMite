@@ -46,7 +46,7 @@ void flaccallback(char *p);
 void midicallback(char *p);
 void modcallback(char *p);
 void audioInterrupt(void);
-void CheckAudio(void);
+void CheckAudio(void); /* keeps playback fed from a long C loop (image decoders) */
 void checkWAVinput(void);
 
 /* ============================================================================

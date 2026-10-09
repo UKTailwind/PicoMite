@@ -521,6 +521,7 @@ static void inflate_huffman(upng_t *upng, unsigned char *out, unsigned long outs
 	unsigned codetree_buffer[DEFLATE_CODE_BUFFER_SIZE];
 	unsigned codetreeD_buffer[DISTANCE_BUFFER_SIZE];
 	unsigned done = 0;
+	unsigned long nextcheck = (*pos) + 4096; /* keep audio playing through a long inflate */
 
 	huffman_tree codetree;
 	huffman_tree codetreeD;
@@ -545,6 +546,11 @@ static void inflate_huffman(upng_t *upng, unsigned char *out, unsigned long outs
 
 	while (done == 0)
 	{
+		if ((*pos) >= nextcheck)
+		{
+			CheckAudio();
+			nextcheck = (*pos) + 4096;
+		}
 		unsigned code = huffman_decode_symbol(upng, in, bp, &codetree, inlength);
 		if (upng->error != UPNG_EOK)
 		{
@@ -881,6 +887,7 @@ static void unfilter(upng_t *upng, unsigned char *out, const unsigned char *in, 
 		unsigned long inindex = (1 + linebytes) * y; /*the extra filterbyte added to each row */
 		unsigned char filterType = in[inindex];
 
+		CheckAudio();
 		unfilter_scanline(upng, &out[outindex], &in[inindex + 1], prevline, bytewidth, filterType, linebytes);
 		if (upng->error != UPNG_EOK)
 		{
@@ -905,6 +912,7 @@ static void remove_padding_bits(unsigned char *out, const unsigned char *in, uns
 	for (y = 0; y < h; y++)
 	{
 		unsigned long x;
+		CheckAudio();
 		for (x = 0; x < olinebits; x++)
 		{
 			unsigned char bit = (unsigned char)((in[(ibp) >> 3] >> (7 - ((ibp) & 0x7))) & 1);
@@ -1372,6 +1380,8 @@ upng_error upng_decode(upng_t *upng)
 			/* fast path: one byte per index */
 			for (unsigned long i = 0; i < npixels; i++)
 			{
+				if ((i & 4095) == 0)
+					CheckAudio();
 				unsigned idx = src[i];
 				if (idx >= upng->palette_entries) idx = 0;
 				dst[i * 4 + 0] = upng->palette[idx][0];
@@ -1389,6 +1399,8 @@ upng_error upng_decode(upng_t *upng)
 			unsigned long nbytes = (npixels * depth + 7) / 8;
 			for (unsigned long bi = 0; bi < nbytes && pi < npixels; bi++)
 			{
+				if ((bi & 1023) == 0)
+					CheckAudio();
 				unsigned char byte = src[bi];
 				for (unsigned j = 0; j < ppb && pi < npixels; j++, pi++)
 				{
@@ -1497,6 +1509,7 @@ upng_t *upng_new_from_file(char *filename)
 	}
 	while (size > 0)
 	{
+		CheckAudio();
 		FileGetData(fnbr, buffer, 512, &sizeread);
 		size -= sizeread;
 		buffer += sizeread;

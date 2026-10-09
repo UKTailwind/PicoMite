@@ -92,6 +92,10 @@ extern const int mapping[101];
 extern int getsound(int i, int mode);
 extern PIO pioi2s;
 extern uint8_t i2ssm;
+#if defined(PICOMITE) || defined(PICOMITEMIN)
+#include "pico/mutex.h"
+extern mutex_t frameBufferMutex;
+#endif
 static int arraypos = 0;
 static int arraysize = 0;
 short *leftarray = NULL, *rightarray = NULL;
@@ -3724,6 +3728,45 @@ void checkWAVinput(void)
 			}
 		}
 	}
+}
+/******************************************************************************************
+ * Keep audio playing through a long C loop inside one statement
+ *
+ * routinechecks() refills the swing buffers between statements, so a statement that runs
+ * for a long time (the image decoders behind LOAD BMP/JPG/PNG, SPRITE/BLIT LOADBMP and
+ * SPRITE LOADPNG) leaves the IRQ replaying the last buffer until it ends.  Those loops call
+ * this instead: the audio part of routinechecks() and the Bluetooth poll that feeds a BT
+ * speaker, without the cursor refresh, USB and touch work that does not belong in the
+ * middle of a draw.  Nothing is done while a flash write has interrupts off (FLASH LOAD
+ * IMAGE): the output is stopped then anyway and the card must not be touched.
+ *******************************************************************************************/
+void CheckAudio(void)
+{
+	if (irqs_off_pico)
+		return;
+	if (CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC ||
+		CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_MIDI)
+	{
+#if defined(PICOMITE) || defined(PICOMITEMIN)
+		if (SPIatRisk)
+			mutex_enter_blocking(&frameBufferMutex);
+		checkWAVinput();
+		if (SPIatRisk)
+			mutex_exit(&frameBufferMutex);
+#else
+		checkWAVinput();
+#endif
+	}
+	else if (CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY ||
+			 CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC
+#ifdef rp2350
+			 || CurrentlyPlaying == P_SAMPLE
+#endif
+	)
+	{
+		checkWAVinput();
+	}
+	ProcessBT();
 }
 void audio_checks(void)
 {

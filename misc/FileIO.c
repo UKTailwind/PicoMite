@@ -2145,6 +2145,7 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
         // (must decode sequentially even if we won't display this row)
         for (mcu_x = 0; mcu_x < image_info.m_MCUSPerRow; mcu_x++)
         {
+            CheckAudio();
             status = pjpeg_decode_mcu();
 
             if (status)
@@ -2206,6 +2207,7 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
                     break;
 
                 uint8_t *row_ptr = mcu_row_buffer + (y * mcu_row_width);
+                CheckAudio();
                 dither_image_row(row_ptr, image_info.m_width, curr_error, next_error, dither_mode);
 
                 // Swap buffers for next row
@@ -2260,6 +2262,7 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
                 // Draw just this line from the buffer, starting at xOffset
                 uint8_t *line_ptr = mcu_row_buffer + (line * mcu_row_width) + (source_start_x * 3);
                 DrawBuffer(screen_x, screen_y, screen_x + display_width - 1, screen_y, line_ptr);
+                CheckAudio();
             }
         }
         else if (should_display)
@@ -2326,6 +2329,7 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
                 }
 
                 DrawBuffer(screen_x, screen_y, screen_x + display_width - 1, screen_y, scaled_line_buffer);
+                CheckAudio();
             }
         }
     }
@@ -5097,61 +5101,80 @@ void LoadPNG(unsigned char *p)
     routinechecks();
     rr = (unsigned char *)upng_get_buffer(upng);
     unsigned char *pp = rr;
-    unsigned char *ppp = rr;
     char d[3];
+    /* Converted and drawn a row at a time so the audio can be fed between rows:
+       one DrawBuffer of the whole image can outlast the audio buffers.  The
+       conversion is in place and a row's output never reaches the next row's
+       input.  Rows above the screen are not drawn (the drivers clamp, not clip). */
     if (transparent == -1)
     {
-        unsigned char *buff = GetTempMainMemory(w * h * 3);
-        ReadBuffer(xOrigin, yOrigin, xOrigin + w - 1, yOrigin + h - 1, buff);
-        for (int i = 0; i < w * h; i++)
+        unsigned char *buff = GetTempMainMemory(w * 3);
+        for (int y = 0; y < h; y++)
         {
-            d[0] = rr[2];
-            d[1] = rr[1];
-            d[2] = rr[0];
-            if (rr[3] > cutoff)
+            unsigned char *row = pp;
+            unsigned char *bg = buff;
+            if (yOrigin + y >= 0)
+                ReadBuffer(xOrigin, yOrigin + y, xOrigin + w - 1, yOrigin + y, buff);
+            for (int x = 0; x < w; x++)
             {
-                pp[0] = d[0];
-                pp[1] = d[1];
-                pp[2] = d[2];
+                d[0] = rr[2];
+                d[1] = rr[1];
+                d[2] = rr[0];
+                if (rr[3] > cutoff)
+                {
+                    pp[0] = d[0];
+                    pp[1] = d[1];
+                    pp[2] = d[2];
+                }
+                else
+                {
+                    pp[0] = bg[0];
+                    pp[1] = bg[1];
+                    pp[2] = bg[2];
+                }
+                pp += 3;
+                rr += 4;
+                bg += 3;
             }
-            else
-            {
-                pp[0] = buff[0];
-                pp[1] = buff[1];
-                pp[2] = buff[2];
-            }
-            pp += 3;
-            rr += 4;
-            buff += 3;
+            if (yOrigin + y >= 0)
+                DrawBuffer(xOrigin, yOrigin + y, xOrigin + w - 1, yOrigin + y, row);
+            CheckAudio();
         }
-        DrawBuffer(xOrigin, yOrigin, xOrigin + w - 1, yOrigin + h - 1, ppp);
     }
     else
     {
-        for (int i = 0; i < w * h; i++)
+        for (int y = 0; y < h; y++)
         {
-            d[0] = rr[2];
-            d[1] = rr[1];
-            d[2] = rr[0];
-            if (rr[3] > cutoff)
+            unsigned char *row = pp;
+            for (int x = 0; x < w; x++)
             {
-                pp[0] = d[0];
-                pp[1] = d[1];
-                pp[2] = d[2];
+                d[0] = rr[2];
+                d[1] = rr[1];
+                d[2] = rr[0];
+                if (rr[3] > cutoff)
+                {
+                    pp[0] = d[0];
+                    pp[1] = d[1];
+                    pp[2] = d[2];
+                }
+                else
+                {
+                    pp[0] = (transparent & 0xFF0000) >> 16;
+                    pp[1] = (transparent & 0xFF00) >> 8;
+                    pp[2] = (transparent & 0xFF);
+                }
+                pp += 3;
+                rr += 4;
             }
-            else
-            {
-                pp[0] = (transparent & 0xFF0000) >> 16;
-                pp[1] = (transparent & 0xFF00) >> 8;
-                pp[2] = (transparent & 0xFF);
-            }
-            pp += 3;
-            rr += 4;
+            if (yOrigin + y >= 0)
+                DrawBuffer(xOrigin, yOrigin + y, xOrigin + w - 1, yOrigin + y, row);
+            CheckAudio();
         }
-        DrawBuffer(xOrigin, yOrigin, xOrigin + w - 1, yOrigin + h - 1, ppp);
     }
     upng_free(upng);
     clearrepeat();
+    if (Option.Refresh)
+        Display_Refresh();
 }
 #endif
 void MIPS16 cmd_load(void)

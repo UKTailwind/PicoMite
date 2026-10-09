@@ -163,6 +163,7 @@ static LineStartTable *buildLineStartTable(int height, long dataStart)
         // Scan through RLE data and record line start positions
         while (!done && currentLine < height)
         {
+                CheckAudio();
                 // Record current file position as start of this line
                 table->positions[currentLine] = dataStart;
 
@@ -282,6 +283,7 @@ static LineStartTable *buildLineStartTableRLE4(int height, long dataStart)
         // Scan through RLE data and record line start positions
         while (!done && currentLine < height)
         {
+                CheckAudio();
                 // Record current file position as start of this line
                 table->positions[currentLine] = dataStart;
 
@@ -802,6 +804,7 @@ BMP_Result decodeBMP(bool topdown)
                 // Process lines
                 for (int i = 0; i < result.height; i++)
                 {
+                        CheckAudio();
                         // Determine which file line to read and which screen row to report
                         int fileRow;
                         int screenRow;
@@ -883,6 +886,7 @@ BMP_Result decodeBMP(bool topdown)
         // Read and decode pixel data
         for (int i = 0; i < result.height; i++)
         {
+                CheckAudio();
                 // Determine which file line to read and which screen row to report
                 int fileRow;
                 int screenRow;
