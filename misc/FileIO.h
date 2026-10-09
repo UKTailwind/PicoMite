@@ -591,10 +591,13 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
 #ifdef rp2350
         void safe_flash_range_erase(uint32_t flash_offs, size_t count);
         void safe_flash_range_program(uint32_t flash_offs, const uint8_t *data, size_t count);
+        void safe_flash_do_cmd(const uint8_t *txbuf, uint8_t *rxbuf, size_t count);
 #else
 #define safe_flash_range_erase flash_range_erase
 #define safe_flash_range_program flash_range_program
+#define safe_flash_do_cmd flash_do_cmd
 #endif
+        uint32_t FlashSizeDetect(void); /* the flash chip's size: JEDEC ID, proved by address wrap-around */
 
         /* ============================================================================
          * Function declarations - Flash operations

@@ -422,7 +422,57 @@ void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const ui
     if (qmi_hw->m[0].rfmt != saved_rfmt)
         qmi_hw->m[0].rfmt = saved_rfmt;
 }
+
+// flash_do_cmd leaves XIP the same way, so the same restore
+void __not_in_flash_func(safe_flash_do_cmd)(const uint8_t *txbuf, uint8_t *rxbuf, size_t count)
+{
+    uint32_t saved_timing = qmi_hw->m[0].timing;
+    uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
+    flash_do_cmd(txbuf, rxbuf, count);
+    if (qmi_hw->m[0].timing != saved_timing)
+        qmi_hw->m[0].timing = saved_timing;
+    if (qmi_hw->m[0].rfmt != saved_rfmt)
+        qmi_hw->m[0].rfmt = saved_rfmt;
+}
 #endif
+
+/* The size of the flash chip.  The JEDEC ID's capacity byte is the first answer,
+   but its encoding is the maker's (most use log2 of the size, not all), so it is
+   proved by address wrap-around, as psram_init() does for the PSRAM: a read past
+   the end of the chip comes back from its start.  The start of flash is the
+   firmware's vector table, never blank, and the option sector is compared too, so
+   a stray copy of the firmware at a power of two cannot pass for the wrap.  Reads
+   go through the uncached XIP alias.  Chip select 0 maps 16 MB, so a larger chip
+   reports 16 MB. */
+static bool flash_wraps_at(uint32_t size)
+{
+    const uint8_t *f = (const uint8_t *)XIP_NOCACHE_NOALLOC_BASE;
+    return memcmp(f, f + size, 64) == 0 &&
+           memcmp(f + FLASH_TARGET_OFFSET, f + FLASH_TARGET_OFFSET + size, 64) == 0;
+}
+
+uint32_t FlashSizeDetect(void)
+{
+    uint8_t txbuf[4] = {0x9f};
+    uint8_t rxbuf[4] = {0};
+    uint32_t size;
+    disable_interrupts_pico();
+    safe_flash_do_cmd(txbuf, rxbuf, 4);
+    enable_interrupts_pico();
+    if (rxbuf[3] >= 20 && rxbuf[3] <= 23)
+    { // 1 MB to 8 MB: it must wrap there, and not at half of it
+        size = 1u << rxbuf[3];
+        if (flash_wraps_at(size) && (rxbuf[3] == 20 || !flash_wraps_at(size >> 1)))
+            return size;
+    }
+    else if (rxbuf[3] >= 24 && !flash_wraps_at(8u << 20))
+        return 16u << 20;
+    // the capacity byte does not fit this chip: find where it wraps
+    for (size = 1u << 20; size < (16u << 20); size <<= 1)
+        if (flash_wraps_at(size))
+            return size;
+    return 16u << 20;
+}
 
 void __not_in_flash_func(disable_interrupts_pico)(void)
 {
@@ -7847,8 +7897,6 @@ void ResetOptions(bool startup)
     Option.repeat = 0b101100;
     Option.VGA_HSYNC = 21;
     Option.VGA_BLUE = 24;
-    uint8_t txbuf[4] = {0x9f};
-    uint8_t rxbuf[4] = {0};
 #if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
     /* CYW43 builds: the heartbeat LED is on the wireless chip, there is
        no GPIO heartbeat, so don't default to GP25 — a non-zero pin here
@@ -7881,10 +7929,7 @@ void ResetOptions(bool startup)
         /* The default-builder (BuildDefaultOptions) drives ResetOptions purely to
            populate a scratch copy of the defaults in RAM; it must not touch the SPI
            flash (read its size or commit via SaveOptions) nor stall for 250 ms. */
-        disable_interrupts_pico();
-        flash_do_cmd(txbuf, rxbuf, 4);
-        Option.FlashSize = 1 << rxbuf[3];
-        enable_interrupts_pico();
+        Option.FlashSize = FlashSizeDetect();
         SaveOptions();
         uSec(250000);
     }

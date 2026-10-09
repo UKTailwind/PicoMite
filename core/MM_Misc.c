@@ -8982,12 +8982,7 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(tp, (unsigned char *)"FLASH SIZE"))
         {
-            uint8_t txbuf[4] = {0x9f};
-            uint8_t rxbuf[4] = {0};
-            disable_interrupts_pico();
-            flash_do_cmd(txbuf, rxbuf, 4);
-            enable_interrupts_pico();
-            iret = 1 << rxbuf[3];
+            iret = FlashSizeDetect();
             targ = T_INT;
             return;
         }
