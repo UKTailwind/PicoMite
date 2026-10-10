@@ -47,8 +47,6 @@ write stops the console from receiving.
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
 
-#if defined(rp2350)
-
 uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size); // littlefs: reflected CRC-32, the one ZMODEM uses
 char *ProgramReceiveBuffer(int *size);                          // XModem.c: program memory, as XMODEM does it
 char *ProgramToText(char *name);
@@ -1249,5 +1247,3 @@ void cmd_zmodem(void)
         longjmp(mark, 1); // back to the prompt, as XMODEM and YMODEM
     }
 }
-
-#endif

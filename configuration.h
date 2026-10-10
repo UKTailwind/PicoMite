@@ -237,7 +237,8 @@ extern "C"
       but 108 of them - which is no place to stop. */
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 1.4 KB over 848 KB. */
-#define FLASH_TARGET_OFFSET (864 * 1024)
+   /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 2.2 KB over 864 KB. */
+#define FLASH_TARGET_OFFSET (880 * 1024)
 #define MagicKey 0x561D3FB6
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
@@ -332,7 +333,8 @@ extern "C"
 #define HEAP_MEMORY_SIZE (108 * 1024)
 #define MAX_PROG_SIZE (88 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
    /* +16 KB (2026-09-29): 8.0 KB over (on development already, before P6). */
-#define FLASH_TARGET_OFFSET (1312 * 1024)
+   /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 3.9 KB over 1312 KB. */
+#define FLASH_TARGET_OFFSET (1328 * 1024)
 #endif
 #endif /* !PICOMITEHDMIWEB */
 
@@ -460,7 +462,8 @@ extern "C"
       steps, so one step. */
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 2.9 KB over 928 KB. */
-#define FLASH_TARGET_OFFSET (944 * 1024)
+   /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 3.2 KB over 944 KB. */
+#define FLASH_TARGET_OFFSET (960 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which

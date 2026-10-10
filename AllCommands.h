@@ -719,9 +719,7 @@ void fun_frame(void);
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 	{(unsigned char *)"Bluetooth", T_CMD, 0, cmd_bluetooth},
 #endif
-#if defined(rp2350)
 	{(unsigned char *)"ZModem", T_CMD, 0, cmd_zmodem},
-#endif
 
 {
 	(unsigned char *)"", 0, 0, cmd_null
