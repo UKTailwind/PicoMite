@@ -9041,9 +9041,9 @@ ZMODEM RECEIVE file$
 or
 ZMODEM CRUNCH
 
-RP2350 VERSIONS ONLY Transfers a BASIC program or a file to or from a remote
-computer using the ZModem protocol. It works like XMODEM but is much faster,
-and it recovers from transmission errors: every block of data is checked and
-if any is lost or damaged the receiver asks for it again from that point, so a
-poor connection slows a transfer down rather than stopping it.
+Transfers a BASIC program or a file to or from a remote computer using the
+ZModem protocol. It works like XMODEM but is much faster, and it recovers from
+transmission errors: every block of data is checked and if any is lost or
+damaged the receiver asks for it again from that point, so a poor connection
+slows a transfer down rather than stopping it.
 

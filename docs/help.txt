@@ -15662,8 +15662,8 @@ XMODEM CRUNCH
 
 Transfers a BASIC program to or from a remote computer using the XModem
 protocol.  The transfer is done over the USB console connection.
-On the RP2350 versions the ZMODEM command does the same job faster, and
-recovers from transmission errors.
+The ZMODEM command does the same job faster, and recovers from transmission
+errors.
 XMODEM SEND will send the current program held in the PicoMite's program
 memory to the remote device.
 XMODEM RECEIVE will accept a program sent by the remote device and save it
@@ -15750,15 +15750,12 @@ ZMODEM RECEIVE file$
 or
 ZMODEM CRUNCH
 
-RP2350 VERSIONS ONLY
 Transfers a BASIC program or a file to or from a remote computer using the
 ZModem protocol.  It works like XMODEM but is much faster, and it recovers
 from transmission errors: every block of data is checked and if any is lost or
 damaged the receiver asks for it again from that point, so a poor connection
 slows a transfer down rather than stopping it.  The transfer is made over the
-console, either the USB console or a serial console, so ZMODEM is also
-available on the versions with USB host support, where the console is a serial
-port.
+console, either the USB console or a serial console.
 ZMODEM SEND will send the program held in program memory.  If the program was
 loaded from the Flash Filesystem or SD Card the remote computer is given the
 name of that file, otherwise it is called FILE.DAT.
@@ -15786,8 +15783,9 @@ program such as minicom.
 If the remote computer does not start the transfer within 60 seconds the
 command returns to the MMBasic prompt with an error.  If the remote computer
 cancels the transfer the error is "Cancelled by remote".
-Over the USB console a 2 MB file takes around 8 seconds with Tera Term.  Over
-a serial console the speed depends on the baud rate (see OPTION BAUDRATE).
-Some USB to serial adapters (eg, the CH340) lose data sent to the computer at
-921600 baud; ZModem recovers, but the transfer is faster at 750000 baud.
+Over the USB console a 512 KB file takes around 2 seconds on the RP2350 and 3
+seconds on the RP2040 with Tera Term.  Over a serial console the speed depends
+on the baud rate (see OPTION BAUDRATE).  Some USB to serial adapters (eg, the
+CH340) lose data sent to the computer at 921600 baud; ZModem recovers, but the
+transfer is faster at 750000 baud.
 
