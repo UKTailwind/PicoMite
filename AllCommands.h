@@ -179,6 +179,7 @@ void cmd_ds18b20(void);
 void cmd_spi(void);
 void cmd_spi2(void);
 void cmd_xmodem(void);
+void cmd_zmodem(void);
 void cmd_ctrlval(void);
 void cmd_GUIpage(unsigned char *p);
 void cmd_gamepad(void);
@@ -717,6 +718,9 @@ void fun_frame(void);
 #endif
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 	{(unsigned char *)"Bluetooth", T_CMD, 0, cmd_bluetooth},
+#endif
+#if defined(rp2350)
+	{(unsigned char *)"ZModem", T_CMD, 0, cmd_zmodem},
 #endif
 
 {

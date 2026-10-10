@@ -70,6 +70,7 @@ set(COMMON_SOURCES
 	graphics/FrameBuffer.c
 	misc/Editor.c
 	misc/XModem.c
+	misc/ZModem.c
 	core/MM_Misc.c
 	misc/External.c
 	core/MATHS.c
@@ -137,6 +138,7 @@ set(OPTIMIZED_SOURCES
 	misc/Editor.c
 	third_party_mod/aes.c
 	misc/XModem.c
+	misc/ZModem.c
 	io/AudioBBC.c
 	misc/FileIO.c
 	core/Stream.c
