@@ -30,8 +30,43 @@ struct tftp_context ctx;
 int tftp_fnbr;
 void *tftp_open(const char *fname, const char *fmode, u8_t write)
 {
+    // Take the drive from the name the client sent. getfullfilename() only
+    // honours an "X:/" prefix while cmdline holds a command, and this runs from
+    // the network poll whatever the interpreter is doing: after an error, EDIT
+    // or XMODEM cmdline is NULL, and after a command with no arguments (CLS)
+    // it is empty, so "B:/name" went to the current drive.
+    // An unknown drive is refused here - error() must not run from the poll.
+    // FatFSFileSystem is put back on the way out, as the poll can land in the
+    // middle of a command that has selected a drive of its own.
+    const char *name = fname;
+    int drive = FatFSFileSystem;
+    int target = FatFSFileSystem;
+    if (fname[0] && fname[1] == ':' && fname[2] == '/')
+    {
+        switch (mytoupper(fname[0]))
+        {
+        case 'A':
+            target = 0;
+            break;
+        case 'B':
+            target = 1;
+            break;
+#if HAS_USB_MSC
+        case 'C':
+            target = 2;
+            break;
+#endif
+        default:
+            return NULL;
+        }
+        name = fname + 2;
+    }
+    FatFSFileSystem = target;
     if (!InitSDCard())
+    {
+        FatFSFileSystem = drive;
         return NULL;
+    }
     BYTE mode = 0;
     tftp_fnbr = FindFreeFileNbr();
     if (write)
@@ -52,7 +87,12 @@ void *tftp_open(const char *fname, const char *fmode, u8_t write)
         MMPrintString((char *)fname);
     if (!optionsuppressstatus)
         PRet();
-    if (!BasicFileOpen((char *)fname, tftp_fnbr, mode))
+    // Select the drive again: InitSDCard() calls ErrorThrow(), which resets
+    // FatFSFileSystem to the current drive.
+    FatFSFileSystem = target;
+    int opened = BasicFileOpen((char *)name, tftp_fnbr, mode);
+    FatFSFileSystem = drive;
+    if (!opened)
         return NULL;
     return &tftp_fnbr;
 }
