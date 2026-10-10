@@ -4,9 +4,10 @@ PicoMite MMBasic
 ZModem.c
 
 ZMODEM RECEIVE ["file"]: receive one or more files from a ZMODEM sender (Tera Term, lrzsz sz) over the console.
+ZMODEM SEND "file": send a file to a ZMODEM receiver (Tera Term, lrzsz rz) over the console.
 
-The protocol engine (frame parser, header handling, CRC checks, ZRPOS recovery) is adapted from the receive side of
-Tera Term's teraterm/ttpfile/zmodem.c, under the licence below. The console, file, timing and flow-control layers are
+The protocol engine (frame parser, header handling, CRC checks, ZRPOS recovery) is adapted from Tera Term's
+teraterm/ttpfile/zmodem.c, under the licence below. The console, file, timing and flow-control layers are
 MMBasic's: file data is held in RAM and written only while the sender waits for an acknowledgement, because a flash
 write stops the console from receiving.
 
@@ -67,6 +68,8 @@ uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size); // littlefs: re
 #define ZEOF 11
 #define ZFERR 12
 
+#define ZCBIN 1 // ZFILE: a binary file
+
 #define ZCRCE 'h'
 #define ZCRCG 'i'
 #define ZCRCQ 'j'
@@ -82,6 +85,7 @@ uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size); // littlefs: re
 
 #define CANFDX 0x01
 #define CANFC32 0x20
+#define ESCCTL 0x40
 
 // File data is kept in RAM until the sender pauses for a ZACK (ZCRCQ/ZCRCW). Tera Term pauses after its
 // window (32 KB by default). lrzsz streams on regardless of the buffer length in ZRINIT, so when the RAM
@@ -101,12 +105,17 @@ uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size); // littlefs: re
 #define ZT_DATA_TRIES 30
 #define ZT_FIN 1000000 // us to wait for the sender's "OO"
 
+// Sending: the receiver is asked for a ZACK (ZCRCW) after this much, or after its buffer length if that is
+// smaller, so a receiver that has fallen behind or lost data is never more than this far behind.
+#define ZTXWINDOW (16 * 1024)
+
 enum
 {
     Z_RecvInit = 1,
     Z_RecvInit2,
     Z_RecvData,
     Z_RecvFIN,
+    Z_Send,
     Z_End
 };
 
@@ -140,6 +149,11 @@ typedef struct
     bool held; // the RAM was full and a ZRPOS asked the sender to restart and pause
     const char *target; // name given to ZMODEM RECEIVE, or NULL to use the sender's names
     char name[FF_MAX_LFN];
+    bool gothdr;      // sending: a header from the receiver is in RxType/RxHdr
+    bool txcrc32;     // sending: the receiver takes CRC-32
+    bool escctl;      // sending: the receiver wants every control character escaped
+    uint8_t lastsent; // sending: the last byte out, for the escape of "@ CR"
+    uint32_t window;  // sending: bytes between ZACKs
     int files;     // files completed
     int tries;     // timeouts in a row
     uint32_t timeout; // us of silence before ZTimeOut
@@ -280,14 +294,21 @@ static void zflush(zrx_t *z)
         zfail(z, *MMErrMsg ? MMErrMsg : "File write failed");
 }
 
+// close the file, unless a file error has closed it already (ErrorCheck does)
+static void zfileclose(zrx_t *z)
+{
+    z->fileopen = false;
+    FSerror = 0;
+    if (filesource[z->fnbr] != NONEFILE)
+        FileClose(z->fnbr);
+}
+
 static void zclose(zrx_t *z)
 {
     if (!z->fileopen)
         return;
     zflush(z);
-    z->fileopen = false;
-    FSerror = 0;
-    FileClose(z->fnbr);
+    zfileclose(z);
     if (FSerror)
         zfail(z, *MMErrMsg ? MMErrMsg : "File close failed");
 }
@@ -478,6 +499,11 @@ static bool ZCheckHdr(zrx_t *z)
 
 static void ZParseHdr(zrx_t *z)
 {
+    if (z->ZState == Z_Send)
+    {
+        z->gothdr = true; // the sender acts on it
+        return;
+    }
     switch (z->RxType)
     {
     case ZRQINIT:
@@ -765,46 +791,360 @@ static void zreceive(zrx_t *z)
     }
 }
 
+// ---- sending ----
+
+// one byte of a binary header or a data subpacket, escaped as lrzsz does (and every control character if the
+// receiver asked for that); flush sends it at once on a USB console
+static void zputbin(zrx_t *z, uint8_t b, int flush)
+{
+    bool esc;
+    switch (b)
+    {
+    case ZDLE:
+    case 0x10:
+    case 0x11:
+    case 0x13:
+    case 0x90:
+    case 0x91:
+    case 0x93:
+        esc = true;
+        break;
+    case 0x0D:
+    case 0x8D:
+        esc = z->escctl || (z->lastsent & 0x7F) == '@'; // "@ CR" means something to a modem or a telnet server
+        break;
+    default:
+        esc = z->escctl && (b & 0x60) == 0;
+    }
+    if (esc)
+    {
+        SerialConsolePutC(ZDLE, 0);
+        b ^= 0x40;
+    }
+    z->lastsent = b;
+    SerialConsolePutC(b, flush);
+}
+
+static uint32_t ztxcrc(zrx_t *z, uint8_t b, uint32_t crc)
+{
+    return z->txcrc32 ? zcrc32(b, crc) : zcrc16(b, crc);
+}
+
+// the check that ends a binary header or a subpacket: CRC-32 low byte first, CRC-16 high byte first
+static void zputcrc(zrx_t *z, uint32_t crc)
+{
+    if (z->txcrc32)
+    {
+        crc = ~crc;
+        for (int i = 0; i < 4; i++, crc >>= 8)
+            zputbin(z, crc, i == 3);
+    }
+    else
+    {
+        zputbin(z, crc >> 8, 0);
+        zputbin(z, crc, 1);
+    }
+}
+
+// send a binary header (what a sender uses)
+static void ZSbHdr(zrx_t *z, uint8_t type)
+{
+    uint32_t crc = ztxcrc(z, type, z->txcrc32 ? 0xFFFFFFFF : 0);
+    SerialConsolePutC(ZPAD, 0);
+    SerialConsolePutC(ZDLE, 0);
+    SerialConsolePutC(z->txcrc32 ? ZBIN32 : ZBIN, 0);
+    zputbin(z, type, 0);
+    for (int i = 0; i < 4; i++)
+    {
+        zputbin(z, z->TxHdr[i], 0);
+        crc = ztxcrc(z, z->TxHdr[i], crc);
+    }
+    zputcrc(z, crc);
+}
+
+// send a data subpacket ending in term
+static void ZSdata(zrx_t *z, const uint8_t *buf, int n, uint8_t term)
+{
+    uint32_t crc = z->txcrc32 ? 0xFFFFFFFF : 0;
+    for (int i = 0; i < n; i++)
+    {
+        zputbin(z, buf[i], 0);
+        crc = ztxcrc(z, buf[i], crc);
+    }
+    SerialConsolePutC(ZDLE, 0);
+    SerialConsolePutC(term, 0);
+    zputcrc(z, ztxcrc(z, term, crc));
+}
+
+// wait up to timeout_us for a header from the receiver: its type, or -1 for none (or the session has ended)
+static int zgethdr(zrx_t *z, uint32_t timeout_us)
+{
+    uint64_t end = time_us_64() + timeout_us;
+    z->gothdr = false;
+    while (z->ZState == Z_Send)
+    {
+        uint64_t now = time_us_64();
+        int c = zgetc(now < end ? (uint32_t)(end - now) : 0);
+        if (c < 0)
+            return -1;
+        ZParse(z, c);
+        if (z->gothdr)
+            return z->RxType;
+    }
+    return -1;
+}
+
+// a header that ends the session from the receiver's side
+static bool zrefused(zrx_t *z, int t)
+{
+    if (t != ZFIN && t != ZABORT && t != ZFERR)
+        return false;
+    zfail(z, "Receiver cancelled");
+    return true;
+}
+
+// ZRQINIT until the receiver answers ZRINIT, then take its capabilities
+static bool zsendinit(zrx_t *z)
+{
+    for (z->tries = 0;;)
+    {
+        ZStoHdr(z, 0);
+        ZShHdr(z, ZRQINIT);
+        int t = zgethdr(z, ZT_INIT); // the first waits for a person to start the receiver
+        if (z->ZState != Z_Send)
+            return false;
+        if (t == ZRINIT)
+            break;
+        if (t < 0 && ++z->tries > ZT_INIT_TRIES)
+        {
+            zfail(z, "Receiver did not respond");
+            return false;
+        }
+    }
+    uint32_t rxbuf = z->RxHdr[ZP0] | (z->RxHdr[ZP1] << 8); // 0: it can take any amount
+    z->txcrc32 = (z->RxHdr[ZF0] & CANFC32) != 0;
+    z->escctl = (z->RxHdr[ZF0] & ESCCTL) != 0;
+    z->window = ZTXWINDOW;
+    if (!(z->RxHdr[ZF0] & CANFDX)) // it cannot listen while it receives: stop after every subpacket
+        z->window = ZMAXDATA;
+    else if (rxbuf && rxbuf < z->window)
+        z->window = rxbuf;
+    return true;
+}
+
+// send the open file z->fnbr under the name z->name: false if the session has ended
+static bool zsendfile(zrx_t *z)
+{
+    uint32_t size = filesource[z->fnbr] == FLASHFILE ? (uint32_t)lfs_file_size(&lfs, FileTable[z->fnbr].lfsptr)
+                                                     : (uint32_t)f_size(FileTable[z->fnbr].fptr);
+    int t;
+    // ZFILE: the receiver answers with where to start (ZRPOS), or that it does not want the file (ZSKIP)
+    for (z->tries = 0;;)
+    {
+        ZStoHdr(z, 0);
+        z->TxHdr[ZF0] = ZCBIN;
+        ZSbHdr(z, ZFILE);
+        int n = strlen(z->name) + 1;
+        memcpy(z->stage, z->name, n);
+        // size, no time (0: the receiver uses its own) and an ordinary file (else lrzsz makes one only its owner reads)
+        n += sprintf((char *)z->stage + n, "%lu 0 100644", (unsigned long)size) + 1;
+        ZSdata(z, z->stage, n, ZCRCW);
+        t = zgethdr(z, ZT_DATA);
+        if (z->ZState != Z_Send || zrefused(z, t))
+            return false;
+        if (t == ZRPOS)
+            break;
+        if (t == ZSKIP)
+            return true;
+        if (t < 0 && ++z->tries > ZT_DATA_TRIES)
+        {
+            zfail(z, "Receiver stopped responding");
+            return false;
+        }
+    }
+    uint32_t pos = ZRclHdr(z), start = 0, rpos = ~0u;
+    int rposcount = 0;
+    bool frame = false; // a ZDATA header has started a frame and data follows it
+    for (z->tries = 0;;)
+    {
+        if (!frame)
+        {
+            if (pos > size)
+                pos = size;
+            start = pos;
+            positionfile(z->fnbr, pos, true);
+            if (filesource[z->fnbr] == NONEFILE) // a failed seek closes the file (on A: FSerror is the new position)
+            {
+                zfail(z, "File read failed");
+                return false;
+            }
+            ZStoHdr(z, pos);
+            ZSbHdr(z, ZDATA);
+            frame = true;
+        }
+        unsigned int n = 0;
+        if (pos < size)
+        {
+            FSerror = 0;
+            FileGetData(z->fnbr, z->stage, size - pos < ZMAXDATA ? size - pos : ZMAXDATA, &n);
+            if (FSerror || n == 0)
+            {
+                zfail(z, "File read failed");
+                return false;
+            }
+        }
+        pos += n;
+        uint8_t term = pos >= size ? ZCRCE : pos - start >= z->window ? ZCRCW : ZCRCG;
+        ZSdata(z, z->stage, n, term);
+        if (term == ZCRCE)
+        {
+            ZStoHdr(z, pos);
+            ZSbHdr(z, ZEOF);
+        }
+        // while streaming, only look for a header (a receiver that loses data says so at once); after a
+        // ZCRCW or the ZEOF, wait for the answer
+        t = zgethdr(z, term == ZCRCG ? 0 : ZT_DATA);
+        while (1)
+        {
+            if (z->ZState != Z_Send || zrefused(z, t))
+                return false;
+            if (t == ZRPOS) // the receiver lost data: go back to where it is
+            {
+                if (ZRclHdr(z) != rpos)
+                    rposcount = 0;
+                else if (++rposcount > ZT_DATA_TRIES)
+                {
+                    zfail(z, "Too many errors");
+                    return false;
+                }
+                rpos = pos = ZRclHdr(z);
+                frame = false;
+                break;
+            }
+            if (t == ZSKIP)
+                return true;
+            if (term == ZCRCG)
+                break;
+            if (t == ZACK && term == ZCRCW) // carry on from where the receiver is
+            {
+                pos = ZRclHdr(z);
+                frame = false;
+                z->tries = 0;
+                break;
+            }
+            if (t == ZRINIT && term == ZCRCE) // the file is complete
+            {
+                z->files++;
+                z->bytes += size;
+                return true;
+            }
+            if (t < 0) // no answer: send again from the start of this frame
+            {
+                if (++z->tries > ZT_DATA_TRIES)
+                {
+                    zfail(z, "Receiver stopped responding");
+                    return false;
+                }
+                pos = start;
+                frame = false;
+                break;
+            }
+            t = zgethdr(z, ZT_DATA); // anything else: keep waiting
+        }
+    }
+}
+
+// ZFIN, the receiver's ZFIN, then "OO"
+static void zsendfin(zrx_t *z)
+{
+    for (z->tries = 0; z->tries < 3; z->tries++)
+    {
+        ZStoHdr(z, 0);
+        ZShHdr(z, ZFIN);
+        if (zgethdr(z, ZT_REPLY) == ZFIN || z->ZState != Z_Send)
+            break;
+    }
+    SerialConsolePutC('O', 0);
+    SerialConsolePutC('O', 1);
+}
+
 void cmd_zmodem(void)
 {
-    if (mytoupper(*cmdline) != 'R')
-        error("Only ZMODEM RECEIVE is available");
+    bool send = mytoupper(*cmdline) == 'S';
+    if (!send && mytoupper(*cmdline) != 'R')
+        SyntaxError();
     while (isalpha(*cmdline))
         cmdline++;
     skipspace(cmdline);
     zrx_t *z = GetTempMemory(sizeof(zrx_t));
-    if (*cmdline && *cmdline != '\'')
-        z->target = (char *)getFstring(cmdline);
-    z->stage = GetTempMemory(ZSTAGE);
     z->fnbr = FindFreeFileNbr();
+    if (send)
+    {
+        char *fname = (char *)getFstring(cmdline), *p;
+        if (!BasicFileOpen(fname, z->fnbr, FA_READ))
+            return;
+        z->fileopen = true;
+        // the receiver gets the name without its drive or directory
+        for (p = fname; *fname; fname++)
+            if (*fname == '/' || *fname == '\\' || *fname == ':')
+                p = fname + 1;
+        strncpy(z->name, p, FF_MAX_LFN - 1);
+        z->stage = GetTempMemory(ZMAXDATA);
+    }
+    else
+    {
+        if (*cmdline && *cmdline != '\'')
+            z->target = (char *)getFstring(cmdline);
+        z->stage = GetTempMemory(ZSTAGE);
+    }
 
     ClearExternalIO();
     char BreakKeySave = BreakKey;
     BreakKey = 0; // the data can hold any byte, Ctrl-C included
     int abortsave = OptionFileErrorAbort;
     OptionFileErrorAbort = 0; // a file error must end the session cleanly, not jump out of it
-    zreceive(z);
+    if (send)
+    {
+        z->ZState = Z_Send;
+        z->ZPktState = Z_PktGetPAD;
+        z->CanCount = 5;
+        if (zsendinit(z) && zsendfile(z))
+            zsendfin(z);
+    }
+    else
+        zreceive(z);
     if (z->fileopen) // the session ended part way through a file: keep what arrived
     {
-        zflush(z);
-        z->fileopen = false;
-        FileClose(z->fnbr);
+        if (!send)
+            zflush(z);
+        zfileclose(z);
     }
     OptionFileErrorAbort = abortsave;
     BreakKey = BreakKeySave;
-    busy_wait_ms(50); // let the sender finish before anything is printed
+    busy_wait_ms(50); // let the other end finish before anything is printed
     while (getConsole() != -1)
         ;
     if (*z->err)
         error("$", z->err);
-    if (z->target)
+    if (send)
+    {
+        MMPrintString(z->files ? "Sent " : "Not wanted by the receiver: ");
+        MMPrintString(z->name);
+        if (!z->files)
+        {
+            MMPrintString("\r\n");
+            return;
+        }
+        MMPrintString(", ");
+    }
+    else if (z->target)
         MMPrintString("Received ");
     else
     {
         PInt(z->files);
         MMPrintString(z->files == 1 ? " file received, " : " files received, ");
     }
-    if (z->target)
+    if (z->target && !send)
     {
         MMPrintString(z->name);
         MMPrintString(", ");

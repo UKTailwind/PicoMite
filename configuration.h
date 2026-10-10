@@ -120,7 +120,8 @@ extern "C"
       change so stale cached options get rewritten.  1536 KB from Route B's
       P3b (compiled SUB calls) on development. */
    /* +16 KB (2026-09-29): Route B's P5c left 832 bytes. */
-#define FLASH_TARGET_OFFSET (1552 * 1024)
+   /* +16 KB (2026-10-10): ZMODEM SEND was 1.3 KB over. */
+#define FLASH_TARGET_OFFSET (1568 * 1024)
    /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
       kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
       pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
