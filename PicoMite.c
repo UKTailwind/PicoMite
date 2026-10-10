@@ -1256,6 +1256,43 @@ uint8_t PSRAMpin;
         return c;
     }
 
+#ifdef PICOMITE_CDC_WRAP
+    /* The USB console calls tud_cdc_* from this thread, while stdio_usb runs
+       tud_task() from a background IRQ that the USB interrupt and a 1 ms alarm
+       both trigger. Both sides take TinyUSB's mutexes to claim an endpoint. If
+       the IRQ interrupted this thread while it held one, tud_task() would wait
+       for ever for a thread that can never run again: USB stops, endpoint 0
+       included, and so does core 0. Bytes arriving one per USB packet (a
+       PicoMite host's PRINT #3, or a PC writing byte by byte) hit it within
+       seconds. So the three calls that can claim an endpoint run with
+       interrupts off; the linker sends every caller here (--wrap,
+       CMakeLists.txt). The mutex is always free on entry: only core 0's IRQs
+       take it, and they cannot be active while this thread runs. */
+    uint32_t __real_tud_cdc_n_read(uint8_t itf, void *buffer, uint32_t bufsize);
+    uint32_t __real_tud_cdc_n_write(uint8_t itf, void const *buffer, uint32_t bufsize);
+    uint32_t __real_tud_cdc_n_write_flush(uint8_t itf);
+    uint32_t __wrap_tud_cdc_n_read(uint8_t itf, void *buffer, uint32_t bufsize)
+    {
+        uint32_t save = save_and_disable_interrupts();
+        uint32_t n = __real_tud_cdc_n_read(itf, buffer, bufsize);
+        restore_interrupts(save);
+        return n;
+    }
+    uint32_t __wrap_tud_cdc_n_write(uint8_t itf, void const *buffer, uint32_t bufsize)
+    {
+        uint32_t save = save_and_disable_interrupts();
+        uint32_t n = __real_tud_cdc_n_write(itf, buffer, bufsize);
+        restore_interrupts(save);
+        return n;
+    }
+    uint32_t __wrap_tud_cdc_n_write_flush(uint8_t itf)
+    {
+        uint32_t save = save_and_disable_interrupts();
+        uint32_t n = __real_tud_cdc_n_write_flush(itf);
+        restore_interrupts(save);
+        return n;
+    }
+#endif
     void __not_in_flash_func(putConsole)(int c, int flush)
     {
         if (OptionConsole & 2)

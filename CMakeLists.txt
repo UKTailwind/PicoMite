@@ -682,6 +682,16 @@ elseif(IS_BT)
 	Pico_enable_stdio_usb(PicoMite 0)
 else()
 	Pico_enable_stdio_usb(PicoMite 1)
+	# The USB console calls tud_cdc_* from the main thread while stdio_usb runs
+	# tud_task() from a background IRQ; both take TinyUSB's endpoint mutexes.
+	# Route every caller of the three that claim an endpoint through wrappers
+	# that run them with interrupts off (PicoMite.c, PICOMITE_CDC_WRAP).
+	target_link_options(PicoMite PRIVATE
+		"LINKER:--wrap=tud_cdc_n_read"
+		"LINKER:--wrap=tud_cdc_n_write"
+		"LINKER:--wrap=tud_cdc_n_write_flush"
+	)
+	target_compile_definitions(PicoMite PRIVATE PICOMITE_CDC_WRAP)
 endif()
 
 pico_enable_stdio_uart(PicoMite 0)
