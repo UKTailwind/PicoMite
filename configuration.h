@@ -94,7 +94,7 @@ extern "C"
       BLIT went 0.6 KB over.
       +16 KB (2026-10-09): Bluetooth Classic keyboards (BTClassicKeyboard.c and
       btstack's hid_host.c, ~7.1 KB) went 4.4 KB over. */
-#define FLASH_TARGET_OFFSET (1472 * 1024)
+#define FLASH_TARGET_OFFSET (1488 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
    /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
       output added ~12.6 KB of BSS (less what dropping VS1053 and PWM/SPI
