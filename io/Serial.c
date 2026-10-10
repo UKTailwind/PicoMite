@@ -502,6 +502,23 @@ void MIPS16 setupuart(int uart, int s2, int parity, int b7, int baud, int inv)
 	uart_set_irq_enables(UART_ID, true, false);
 	uart_set_irq_enables(UART_ID, true, false);
 }
+#ifdef USBKEYBOARD
+// Undo a half-opened COM3-COM6 and report the request the USB device did not accept
+static void cdc_open_failed(int comnbr, const char *what)
+{
+	int cdc_idx = comnbr - 3;
+	*cdc_com_flag[cdc_idx] = false;
+	*cdc_interrupt[cdc_idx] = NULL;
+	if (*cdc_rx_buf[cdc_idx] != NULL)
+	{
+		FreeMemory(*cdc_rx_buf[cdc_idx]);
+		*cdc_rx_buf[cdc_idx] = NULL;
+	}
+	char errmsg[64];
+	sprintf(errmsg, "COM%d: USB device did not accept %s", comnbr, what);
+	error(errmsg);
+}
+#endif // USBKEYBOARD
 /***************************************************************************************************
 Initialise the serial function including the timer and interrupts.
 ****************************************************************************************************/
@@ -693,14 +710,25 @@ void MIPS16 SerialOpen(unsigned char *spec)
 
 		*cdc_com_flag[cdc_idx] = true;
 
+		// Both requests below block, and res gets the outcome of each one actually sent. One never
+		// sent (an ACM device that declares no line-state support) leaves res at XFER_RESULT_INVALID
+		// and is not an error. One the device failed, stalled or never answered is: without DTR a
+		// PicoMite at the other end ignores what it is sent and sends nothing back.
+		xfer_result_t res = XFER_RESULT_INVALID;
+
 		// Send SET_LINE_CODING with the requested baud rate (essential for USB-UART bridges like CH340)
 		cdc_baud[cdc_idx] = baud;
 		cdc_line_coding_t coding = {baud, CDC_LINE_CODING_STOP_BITS_1, CDC_LINE_CODING_PARITY_NONE, 8};
-		if (!tuh_cdc_set_line_coding(cdc_idx, &coding, NULL, 0))
-			tuh_cdc_set_baudrate(cdc_idx, baud, NULL, 0); // fallback for FTDI/CP210x
+		if (!tuh_cdc_set_line_coding(cdc_idx, &coding, NULL, (uintptr_t)&res) && res == XFER_RESULT_INVALID)
+			tuh_cdc_set_baudrate(cdc_idx, baud, NULL, (uintptr_t)&res); // fallback for FTDI/CP210x
+		if (res != XFER_RESULT_INVALID && res != XFER_RESULT_SUCCESS)
+			cdc_open_failed(comnbr, "the baud rate");
 
 		// Assert DTR (and RTS) to signal the device we are ready
-		tuh_cdc_set_control_line_state(cdc_idx, CDC_CONTROL_LINE_STATE_DTR | CDC_CONTROL_LINE_STATE_RTS, NULL, 0);
+		res = XFER_RESULT_INVALID;
+		tuh_cdc_set_control_line_state(cdc_idx, CDC_CONTROL_LINE_STATE_DTR | CDC_CONTROL_LINE_STATE_RTS, NULL, (uintptr_t)&res);
+		if (res != XFER_RESULT_INVALID && res != XFER_RESULT_SUCCESS)
+			cdc_open_failed(comnbr, "DTR/RTS");
 	}
 #endif // USBKEYBOARD
 }
