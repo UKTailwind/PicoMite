@@ -26,350 +26,351 @@ description of every entry along with the tutorial chapters.
 ~COMMANDS
 MMBasic commands
 
-'                          MANDELBROT ZOOM
-*FILE                      MAP
-/*                         MAP GREYSCALE
-?                          MAP MAXIMITE
-A:                         MAP RESET
-ADC                        MAP SET
-ADC CLOSE                  MATH
-ADC FREQUENCY              MATH ADD
-ADC OPEN                   MATH AES128
-ADC RUN                    MATH CLAMP
-ADC START                  MATH FFT
-AND                        MATH FFT INVERSE
-ARC                        MATH FFT MAGNITUDE
-ARRAY                      MATH FFT PHASE
-ARRAY ADD                  MATH INSERT
-ARRAY INSERT               MATH INTERPOLATE
-ARRAY SET                  MATH PID INIT
-ARRAY SLICE                MATH PID START
-AS                         MATH PID STOP
-ASTRO                      MATH POWER
-AUTOSAVE                   MATH RANDOMIZE
-BACKLIGHT                  MATH SCALE
-BEZIER                     MATH SENSORFUSION
-BIT                        MATH SET
-BITBANG                    MATH SHIFT
-BITSTREAM                  MATH SINC
-BLIT                       MATH SLICE
-BLIT CLOSE                 MATH WINDOW
-BLIT COMPRESSED            MEMORY
-BLIT FLASH                 MEMORY COPY
-BLIT FRAMEBUFFER           MEMORY COPY FLOAT
-BLIT LOAD                  MEMORY COPY INTEGER
-BLIT MEMORY                MEMORY INPUT
-BLIT MEMORY332             MEMORY PACK
-BLIT MERGE                 MEMORY PRINT
-BLIT READ                  MEMORY SET
-BLIT RESIZE                MEMORY SET BYTE
-BLIT WRITE                 MEMORY SET FLOAT
-BLUETOOTH                  MEMORY SET INTEGER
-BLUETOOTH CONNECT          MEMORY SET SHORT
-BLUETOOTH DISCONNECT       MEMORY SET WORD
-BLUETOOTH FORGET           MEMORY SHARE CLIENT
-BLUETOOTH SCAN             MEMORY SHARE HOST
-BLUETOOTH STATUS           MEMORY SHARE STOP
-BOX                        MEMORY SHARE STOP CLIENT
-BYTE                       MEMORY SHARE STOP HOST
-CALL                       MEMORY UNPACK
-CAMERA                     MID$
-CAMERA CAPTURE             MIN
-CAMERA CAPTURE JPEG        MKDIR
-CAMERA CHANGE              MOD
-CAMERA CLOSE               MODE
-CAMERA OPEN                MOUSE
-CAMERA REGISTER            MOUSE CLOSE
-CAMERA TEST                MOUSE INTERRUPT DISABLE
-CAMERA(OV2640)             MOUSE INTERRUPT ENABLE
-CAMERA(OV5640)             MOUSE OPEN
-CASE                       MOUSE SET
-CASE ELSE                  MSGBOX
-CAT                        NEW
-CHAIN                      NEXT
-CHDIR                      NOT
-CIRCLE                     ON ERROR ABORT
-CLEAR                      ON KEY
-CLICK                      ON PS2
-CLOSE                      ONESHOT
-CLS                        ONESHOT DISABLE
-CMM2 LOAD                  ONESHOT R
-CMM2 RUN                   ONEWIRE
-COLOR                      ONEWIRE RESET
-COLOR AS INTEGER           OPEN
-COLOUR                     OPERATORS
-COLOUR MAP                 OPTION PROFILING
-CONFIGURE                  OR
-CONFIGURE LIST             PAUSE
-CONST                      PEEK
-CONST SOLID                PIN
-CONTINUE                   PIO
-CONTINUE DO                PIO CLEAR
-COPY                       PIO CONFIGURE
-COPY A2A                   PIO DMA RX
-CPU                        PIO DMA RX OFF
-CPU RESTART                PIO EXECUTE
-CPU SLEEP                  PIO INIT MACHINE
-CPU SPEED                  PIO INTERRUPT
-CSUB                       PIO PROGRAM
-CTRLVAL                    PIO PROGRAM LINE
-DATA                       PIO READ
-DATA COLLECT               PIO SET BASE
-DATA DAMAGE                PIO START
-DATA LADDER                PIO STOP
-DATA SOLID                 PIO SYNC
-DATE$                      PIO WRITE
-DEFINEFONT                 PIO WRITEFIFO
-DEVICE                     PIXEL
-DEVICE BITSTREAM           PLAY
-DEVICE CAMERA              PLAY ARRAY
-DEVICE GAMEPAD             PLAY BBC ENVELOPE
-DEVICE HUMID               PLAY BBC SOUND
-DEVICE KEYPAD              PLAY CONTINUE
-DEVICE LCD                 PLAY FLAC
-DEVICE MOUSE               PLAY HALT
-DEVICE SERIALRX            PLAY LOAD SOUND
-DEVICE SERIALTX            PLAY MIDI
-DEVICE WII                 PLAY MIDI CMD
-DEVICE WS2812              PLAY MIDI TEST
-DIM                        PLAY MIDIFILE
-DO                         PLAY MODFILE
-DO UNTIL                   PLAY MODSAMPLE
-DO WHILE                   PLAY MP3
-DRAW3D                     PLAY NEXT
-DRAW3D CAMERA              PLAY NOTE OFF
-DRAW3D CLOSE               PLAY NOTE ON
-DRAW3D CLOSE ALL           PLAY PAUSE
-DRAW3D CREATE              PLAY PREVIOUS
-DRAW3D DIAGNOSE            PLAY RELEASE
-DRAW3D HIDE                PLAY SAMPLE
-DRAW3D HIDE ALL            PLAY SOUND
-DRAW3D LIGHT               PLAY STOP
-DRAW3D RESET               PLAY STREAM
-DRAW3D RESTORE             PLAY TONE
-DRAW3D ROTATE              PLAY VOLUME
-DRAW3D SET FLAGS           PLAY WAV
-DRAW3D SHOW                POKE
-DRAW3D WRITE               POKE BYTE
-DRIVE                      POKE DISPLAY
-EDIT                       POKE DISPLAY HRES
-EDIT FILE                  POKE FLOAT
-ELSE                       POKE INTEGER
-ELSE IF                    POKE SHORT
-ELSEIF                     POKE VAR
-END                        POKE WORD
-END CSUB                   POLYGON
-END DEFINEFONT             PORT
-END FUNCTION               PRINT
-END IF                     PULSE
-END SELECT                 PWM
-END SUB                    PWM SYNC
-END TYPE                   RAM
-ENDIF                      RAM CHAIN
-EPOCH                      RAM ERASE
-ERASE                      RAM ERASE ALL
-ERROR                      RAM FILE LOAD
-ESCAPE CODES               RAM LIST
-EXECUTE                    RAM LOAD
-EXIT                       RAM OVERWRITE
-EXIT DO                    RAM RUN
-EXIT FOR                   RAM SAVE
-EXIT FUNCTION              RANDOMIZE
-EXIT SUB                   RAY
-FILES                      RAY CAMERA
-FILL                       RAY CAST
-FLAG                       RAY CELL
-FLAGS                      RAY CLOSE
-FLASH                      RAY COLOUR
-FLASH CHAIN                RAY DEFINE
-FLASH DISK LOAD            RAY DOOR
-FLASH ERASE                RAY DOOR CLEAR
-FLASH ERASE ALL            RAY DOOR CLOSE
-FLASH LIST                 RAY MAP
-FLASH LOAD                 RAY MINIMAP
-FLASH LOAD IMAGE           RAY MOVE
-FLASH MODBUFF LOAD         RAY RENDER
-FLASH OVERWRITE            RAY SPRITE
-FLASH RUN                  RAY SPRITE CLEAR
-FLASH SAVE                 RAY SPRITE REMOVE
-FLASH UF2                  RAY TURN
-FLUSH                      RBOX
-FM                         READ
-FONT                       READ SAVE
-FOR                        REDIM
-FRAME                      REFRESH
-FRAME BOX                  REM
-FRAME CLEAR                RENAME
-FRAME CLOSE                RESOLUTION
-FRAME CLS                  RESTORE
-FRAME COLOUR               RETURN
-FRAME CREATE               RMDIR
-FRAME CURSOR               RTC
-FRAME DESTROY              RTC GETTIME
-FRAME HIDE                 RTC SETREG
-FRAME HLINE                RTC SETTIME
-FRAME INPUT                RTC SETTIME MID$
-FRAME OVERLAY              RUN
-FRAME PANEL                SAVE
-FRAME SCROLL               SAVE CONTEXT
-FRAME SHOW                 SAVE DATA
-FRAME TITLE                SAVE IMAGE
-FRAME VBUF                 SAVE PERSISTENT
-FRAME WRITE                SEEK
-FRAMEBUFFER                SELECT
-FRAMEBUFFER CLOSE          SELECT CASE
-FRAMEBUFFER COPY           SERVO
-FRAMEBUFFER CREATE         SETPIN
-FRAMEBUFFER LAYER          SETTICK
-FRAMEBUFFER LAYER TOP      SETTICK PAUSE
-FRAMEBUFFER MERGE          SETTICK RESUME
-FRAMEBUFFER SYNC           SLEW
-FRAMEBUFFER WAIT           SORT
-FRAMEBUFFER WRITE          SPI OPEN
-FUNCTION                   SPI2
-GAMEPAD                    SPRITE
-GAMEPAD COLOUR             SPRITE CLOSE
-GAMEPAD CONFIGURE          SPRITE CLOSE ALL
-GAMEPAD HAPTIC             SPRITE COPY
-GAMEPAD INTERRUPT DISABLE  SPRITE HIDE
-GAMEPAD INTERRUPT ENABLE   SPRITE HIDE ALL
-GAMEPAD MONITOR            SPRITE HIDE SAFE
-GOSUB                      SPRITE INTERRUPT
-GOTO                       SPRITE LOAD
-GUI                        SPRITE LOADARRAY
-GUI AREA                   SPRITE LOADBMP
-GUI BARGAUGE               SPRITE LOADPNG
-GUI BCOLOUR                SPRITE MOVE
-GUI BEEP                   SPRITE NEXT
-GUI BITMAP                 SPRITE NOINTERRUPT
-GUI BUTTON                 SPRITE NOSTINTERRUPT
-GUI CALIBRATE              SPRITE READ
-GUI CAPTION                SPRITE RESTORE
-GUI CHECKBOX               SPRITE SCROLL
-GUI CLICK                  SPRITE SET TRANSPARENT
-GUI CLICK DOWN             SPRITE SHOW
-GUI CLICK PIN              SPRITE SHOW SAFE
-GUI CURSOR                 SPRITE STATIC
-GUI CURSOR COLOUR          SPRITE STATIC CLEAR
-GUI CURSOR HIDE            SPRITE STINTERRUPT
-GUI CURSOR LINK MOUSE      SPRITE SWAP
-GUI CURSOR LOAD            SPRITE WRITE
-GUI CURSOR OFF             STAR
-GUI CURSOR ON              STATIC
-GUI CURSOR SHOW            STEP
-GUI DELETE                 STEPPER
-GUI DISABLE                STEPPER ARC
-GUI DISPLAYBOX             STEPPER AXIS
-GUI ENABLE                 STEPPER BUFFER
-GUI FCOLOUR                STEPPER CLEAR
-GUI FORMATBOX              STEPPER CLOSE
-GUI FORMATBOX CANCEL       STEPPER ENABLE
-GUI FRAME                  STEPPER ESTOP
-GUI GAUGE                  STEPPER GC
-GUI HIDE                   STEPPER GC G28
-GUI INTERRUPT              STEPPER GCODE
-GUI LED                    STEPPER GS
-GUI LISTBOX                STEPPER HWLIMITS
-GUI LISTBOX CANCEL         STEPPER INIT
-GUI NUMBERBOX              STEPPER INVERT
-GUI NUMBERBOX CANCEL       STEPPER JERK
-GUI PAGE                   STEPPER LIMITS
-GUI RADIO                  STEPPER POSITION
-GUI REDRAW                 STEPPER POSITION HOME
-GUI RESET LCDPANEL         STEPPER RECOVER
-GUI SETUP                  STEPPER RESET
-GUI SHOW                   STEPPER RUN
-GUI SLIDER                 STEPPER SCURVE
-GUI SPINBOX                STEPPER SPINDLE
-GUI SWITCH                 STEPPER STATUS
-GUI TEST LCDPANEL          STEPPER TUNE
-GUI TEST TOUCH             STRUCT
-GUI TEXTBOX                STRUCT COPY
-GUI TEXTBOX CANCEL         STRUCT LOAD
-HELP                       STRUCT SAVE
-HUMID                      SUB
-I2C                        SYNC
-I2C CHECK                  TEMPR START
-I2C CLOSE                  TEXT
-I2C OPEN                   THEN
-I2C READ                   TILE
-I2C SLAVE                  TILE HEIGHT
-I2C WRITE                  TILEMAP
-I2C2                       TILEMAP ATTR
-I2CLCD                     TILEMAP CLOSE
-I2CLCD CLOSE               TILEMAP CREATE
-I2CLCD CREATECHAR          TILEMAP DESTROY
-I2CLCD INIT                TILEMAP DRAW
-IF                         TILEMAP LOAD
-IF ALARM THEN              TILEMAP SCROLL
-IF ASC                     TILEMAP SET
-IN                         TILEMAP SPRITE CLOSE
-INC                        TILEMAP SPRITE CREATE
-INPUT                      TILEMAP SPRITE DESTROY
-INTERRUPT                  TILEMAP SPRITE DRAW
-INV                        TILEMAP SPRITE MOVE
-IR                         TILEMAP SPRITE SET
-IR SEND                    TILEMAP VIEW
-IRETURN                    TIME$
-KEYBOARD                   TIMER
-KEYBOARD OFF               TMC22XX
-KEYBOARD ON                TO
-KEYPAD                     TOUCH
-KILL                       TRACE
-LCD                        TRACE ON
-LCD CMD                    TRIANGLE
-LCD INIT                   TRIANGLE RESTORE
-LET                        TRIANGLE SAVE
-LIBRARY                    TURTLE
-LIBRARY DELETE             TYPE
-LIBRARY DISK SAVE          UNTIL
-LIBRARY LIST               UPDATE FIRMWARE
-LIBRARY LOAD               VAR SAVE
-LIBRARY SAVE               WATCHDOG
-LINE                       WEB
-LINE AA                    WEB CLOSE TCP CLIENT
-LINE GRAPH                 WEB CONNECT
-LINE INPUT                 WEB MQTT CLOSE
-LINE PLOT                  WEB MQTT CONNECT
-LIST                       WEB MQTT PUBLISH
-LIST COLLISIONS            WEB MQTT SUBSCRIBE
-LIST COMMANDS              WEB MQTT UNSUBSCRIBE
-LIST PINS                  WEB NTP
-LIST SYSTEM I2C            WEB OPEN TCP CLIENT
-LIST TYPE                  WEB OPEN TCP STREAM
-LIST VARIABLES             WEB OPEN TLS CLIENT
-LMID                       WEB OPEN TLS STREAM
-LOAD                       WEB PING
-LOAD CONTEXT               WEB SCAN
-LOAD DATA                  WEB TCP CLIENT READ
-LOAD JPG                   WEB TCP CLIENT REQUEST
-LOAD PNG                   WEB TCP CLIENT STREAM
-LOCAL                      WEB TCP CLIENT WRITE
-LOCATION                   WEB TCP INTERRUPT
-LONGSTRING                 WEB TCP READ
-LONGSTRING AES128          WEB TCP SEND
-LONGSTRING APPEND          WEB TLS
-LONGSTRING BASE64          WEB TLS CA
-LONGSTRING CLEAR           WEB TLS NOVERIFY
-LONGSTRING CONCAT          WEB TRANSMIT CODE
-LONGSTRING COPY            WEB TRANSMIT FILE
-LONGSTRING LCASE           WEB TRANSMIT PAGE
-LONGSTRING LEFT            WEB UDP INTERRUPT
-LONGSTRING LOAD            WEB UDP SEND
-LONGSTRING MID             WHILE
-LONGSTRING PRINT           WII
-LONGSTRING REPLACE         WII CLASSIC
-LONGSTRING RESIZE          WII CLASSIC OPEN
-LONGSTRING RIGHT           WII NUNCHUCK
-LONGSTRING SETBYTE         WII NUNCHUCK CLOSE
-LONGSTRING TRIM            WII NUNCHUCK OPEN
-LONGSTRING UCASE           WS2812
-LOOP                       XMODEM
-MANDELBROT                 XMODEM SEND
-MANDELBROT CENTRE          XOR
-MANDELBROT DRAW            YMODEM
-MANDELBROT PAN             YMODEM SEND
-MANDELBROT RESET
+'                          MAP
+*FILE                      MAP GREYSCALE
+/*                         MAP MAXIMITE
+?                          MAP RESET
+A:                         MAP SET
+ADC                        MATH
+ADC CLOSE                  MATH ADD
+ADC FREQUENCY              MATH AES128
+ADC OPEN                   MATH CLAMP
+ADC RUN                    MATH FFT
+ADC START                  MATH FFT INVERSE
+AND                        MATH FFT MAGNITUDE
+ARC                        MATH FFT PHASE
+ARRAY                      MATH INSERT
+ARRAY ADD                  MATH INTERPOLATE
+ARRAY INSERT               MATH PID INIT
+ARRAY SET                  MATH PID START
+ARRAY SLICE                MATH PID STOP
+AS                         MATH POWER
+ASTRO                      MATH RANDOMIZE
+AUTOSAVE                   MATH SCALE
+BACKLIGHT                  MATH SENSORFUSION
+BEZIER                     MATH SET
+BIT                        MATH SHIFT
+BITBANG                    MATH SINC
+BITSTREAM                  MATH SLICE
+BLIT                       MATH WINDOW
+BLIT CLOSE                 MEMORY
+BLIT COMPRESSED            MEMORY COPY
+BLIT FLASH                 MEMORY COPY FLOAT
+BLIT FRAMEBUFFER           MEMORY COPY INTEGER
+BLIT LOAD                  MEMORY INPUT
+BLIT MEMORY                MEMORY PACK
+BLIT MEMORY332             MEMORY PRINT
+BLIT MERGE                 MEMORY SET
+BLIT READ                  MEMORY SET BYTE
+BLIT RESIZE                MEMORY SET FLOAT
+BLIT WRITE                 MEMORY SET INTEGER
+BLUETOOTH                  MEMORY SET SHORT
+BLUETOOTH CONNECT          MEMORY SET WORD
+BLUETOOTH DISCONNECT       MEMORY SHARE CLIENT
+BLUETOOTH FORGET           MEMORY SHARE HOST
+BLUETOOTH SCAN             MEMORY SHARE STOP
+BLUETOOTH STATUS           MEMORY SHARE STOP CLIENT
+BOX                        MEMORY SHARE STOP HOST
+BYTE                       MEMORY UNPACK
+CALL                       MID$
+CAMERA                     MIN
+CAMERA CAPTURE             MKDIR
+CAMERA CAPTURE JPEG        MOD
+CAMERA CHANGE              MODE
+CAMERA CLOSE               MOUSE
+CAMERA OPEN                MOUSE CLOSE
+CAMERA REGISTER            MOUSE INTERRUPT DISABLE
+CAMERA TEST                MOUSE INTERRUPT ENABLE
+CAMERA(OV2640)             MOUSE OPEN
+CAMERA(OV5640)             MOUSE SET
+CASE                       MSGBOX
+CASE ELSE                  NEW
+CAT                        NEXT
+CHAIN                      NOT
+CHDIR                      ON ERROR ABORT
+CIRCLE                     ON KEY
+CLEAR                      ON PS2
+CLICK                      ONESHOT
+CLOSE                      ONESHOT DISABLE
+CLS                        ONESHOT R
+CMM2 LOAD                  ONEWIRE
+CMM2 RUN                   ONEWIRE RESET
+COLOR                      OPEN
+COLOR AS INTEGER           OPERATORS
+COLOUR                     OPTION PROFILING
+COLOUR MAP                 OR
+CONFIGURE                  PAUSE
+CONFIGURE LIST             PEEK
+CONST                      PIN
+CONST SOLID                PIO
+CONTINUE                   PIO CLEAR
+CONTINUE DO                PIO CONFIGURE
+COPY                       PIO DMA RX
+COPY A2A                   PIO DMA RX OFF
+CPU                        PIO EXECUTE
+CPU RESTART                PIO INIT MACHINE
+CPU SLEEP                  PIO INTERRUPT
+CPU SPEED                  PIO PROGRAM
+CSUB                       PIO PROGRAM LINE
+CTRLVAL                    PIO READ
+DATA                       PIO SET BASE
+DATA COLLECT               PIO START
+DATA DAMAGE                PIO STOP
+DATA LADDER                PIO SYNC
+DATA SOLID                 PIO WRITE
+DATE$                      PIO WRITEFIFO
+DEFINEFONT                 PIXEL
+DEVICE                     PLAY
+DEVICE BITSTREAM           PLAY ARRAY
+DEVICE CAMERA              PLAY BBC ENVELOPE
+DEVICE GAMEPAD             PLAY BBC SOUND
+DEVICE HUMID               PLAY CONTINUE
+DEVICE KEYPAD              PLAY FLAC
+DEVICE LCD                 PLAY HALT
+DEVICE MOUSE               PLAY LOAD SOUND
+DEVICE SERIALRX            PLAY MIDI
+DEVICE SERIALTX            PLAY MIDI CMD
+DEVICE WII                 PLAY MIDI TEST
+DEVICE WS2812              PLAY MIDIFILE
+DIM                        PLAY MODFILE
+DO                         PLAY MODSAMPLE
+DO UNTIL                   PLAY MP3
+DO WHILE                   PLAY NEXT
+DRAW3D                     PLAY NOTE OFF
+DRAW3D CAMERA              PLAY NOTE ON
+DRAW3D CLOSE               PLAY PAUSE
+DRAW3D CLOSE ALL           PLAY PREVIOUS
+DRAW3D CREATE              PLAY RELEASE
+DRAW3D DIAGNOSE            PLAY SAMPLE
+DRAW3D HIDE                PLAY SOUND
+DRAW3D HIDE ALL            PLAY STOP
+DRAW3D LIGHT               PLAY STREAM
+DRAW3D RESET               PLAY TONE
+DRAW3D RESTORE             PLAY VOLUME
+DRAW3D ROTATE              PLAY WAV
+DRAW3D SET FLAGS           POKE
+DRAW3D SHOW                POKE BYTE
+DRAW3D WRITE               POKE DISPLAY
+DRIVE                      POKE DISPLAY HRES
+EDIT                       POKE FLOAT
+EDIT FILE                  POKE INTEGER
+ELSE                       POKE SHORT
+ELSE IF                    POKE VAR
+ELSEIF                     POKE WORD
+END                        POLYGON
+END CSUB                   PORT
+END DEFINEFONT             PRINT
+END FUNCTION               PULSE
+END IF                     PWM
+END SELECT                 PWM SYNC
+END SUB                    RAM
+END TYPE                   RAM CHAIN
+ENDIF                      RAM ERASE
+EPOCH                      RAM ERASE ALL
+ERASE                      RAM FILE LOAD
+ERROR                      RAM LIST
+ESCAPE CODES               RAM LOAD
+EXECUTE                    RAM OVERWRITE
+EXIT                       RAM RUN
+EXIT DO                    RAM SAVE
+EXIT FOR                   RANDOMIZE
+EXIT FUNCTION              RAY
+EXIT SUB                   RAY CAMERA
+FILES                      RAY CAST
+FILL                       RAY CELL
+FLAG                       RAY CLOSE
+FLAGS                      RAY COLOUR
+FLASH                      RAY DEFINE
+FLASH CHAIN                RAY DOOR
+FLASH DISK LOAD            RAY DOOR CLEAR
+FLASH ERASE                RAY DOOR CLOSE
+FLASH ERASE ALL            RAY MAP
+FLASH LIST                 RAY MINIMAP
+FLASH LOAD                 RAY MOVE
+FLASH LOAD IMAGE           RAY RENDER
+FLASH MODBUFF LOAD         RAY SPRITE
+FLASH OVERWRITE            RAY SPRITE CLEAR
+FLASH RUN                  RAY SPRITE REMOVE
+FLASH SAVE                 RAY TURN
+FLASH UF2                  RBOX
+FLUSH                      READ
+FM                         READ SAVE
+FONT                       REDIM
+FOR                        REFRESH
+FRAME                      REM
+FRAME BOX                  RENAME
+FRAME CLEAR                RESOLUTION
+FRAME CLOSE                RESTORE
+FRAME CLS                  RETURN
+FRAME COLOUR               RMDIR
+FRAME CREATE               RTC
+FRAME CURSOR               RTC GETTIME
+FRAME DESTROY              RTC SETREG
+FRAME HIDE                 RTC SETTIME
+FRAME HLINE                RTC SETTIME MID$
+FRAME INPUT                RUN
+FRAME OVERLAY              SAVE
+FRAME PANEL                SAVE CONTEXT
+FRAME SCROLL               SAVE DATA
+FRAME SHOW                 SAVE IMAGE
+FRAME TITLE                SAVE PERSISTENT
+FRAME VBUF                 SEEK
+FRAME WRITE                SELECT
+FRAMEBUFFER                SELECT CASE
+FRAMEBUFFER CLOSE          SERVO
+FRAMEBUFFER COPY           SETPIN
+FRAMEBUFFER CREATE         SETTICK
+FRAMEBUFFER LAYER          SETTICK PAUSE
+FRAMEBUFFER LAYER TOP      SETTICK RESUME
+FRAMEBUFFER MERGE          SLEW
+FRAMEBUFFER SYNC           SORT
+FRAMEBUFFER WAIT           SPI OPEN
+FRAMEBUFFER WRITE          SPI2
+FUNCTION                   SPRITE
+GAMEPAD                    SPRITE CLOSE
+GAMEPAD COLOUR             SPRITE CLOSE ALL
+GAMEPAD CONFIGURE          SPRITE COPY
+GAMEPAD HAPTIC             SPRITE HIDE
+GAMEPAD INTERRUPT DISABLE  SPRITE HIDE ALL
+GAMEPAD INTERRUPT ENABLE   SPRITE HIDE SAFE
+GAMEPAD MONITOR            SPRITE INTERRUPT
+GOSUB                      SPRITE LOAD
+GOTO                       SPRITE LOADARRAY
+GUI                        SPRITE LOADBMP
+GUI AREA                   SPRITE LOADPNG
+GUI BARGAUGE               SPRITE MOVE
+GUI BCOLOUR                SPRITE NEXT
+GUI BEEP                   SPRITE NOINTERRUPT
+GUI BITMAP                 SPRITE NOSTINTERRUPT
+GUI BUTTON                 SPRITE READ
+GUI CALIBRATE              SPRITE RESTORE
+GUI CAPTION                SPRITE SCROLL
+GUI CHECKBOX               SPRITE SET TRANSPARENT
+GUI CLICK                  SPRITE SHOW
+GUI CLICK DOWN             SPRITE SHOW SAFE
+GUI CLICK PIN              SPRITE STATIC
+GUI CURSOR                 SPRITE STATIC CLEAR
+GUI CURSOR COLOUR          SPRITE STINTERRUPT
+GUI CURSOR HIDE            SPRITE SWAP
+GUI CURSOR LINK MOUSE      SPRITE WRITE
+GUI CURSOR LOAD            STAR
+GUI CURSOR OFF             STATIC
+GUI CURSOR ON              STEP
+GUI CURSOR SHOW            STEPPER
+GUI DELETE                 STEPPER ARC
+GUI DISABLE                STEPPER AXIS
+GUI DISPLAYBOX             STEPPER BUFFER
+GUI ENABLE                 STEPPER CLEAR
+GUI FCOLOUR                STEPPER CLOSE
+GUI FORMATBOX              STEPPER ENABLE
+GUI FORMATBOX CANCEL       STEPPER ESTOP
+GUI FRAME                  STEPPER GC
+GUI GAUGE                  STEPPER GC G28
+GUI HIDE                   STEPPER GCODE
+GUI INTERRUPT              STEPPER GS
+GUI LED                    STEPPER HWLIMITS
+GUI LISTBOX                STEPPER INIT
+GUI LISTBOX CANCEL         STEPPER INVERT
+GUI NUMBERBOX              STEPPER JERK
+GUI NUMBERBOX CANCEL       STEPPER LIMITS
+GUI PAGE                   STEPPER POSITION
+GUI RADIO                  STEPPER POSITION HOME
+GUI REDRAW                 STEPPER RECOVER
+GUI RESET LCDPANEL         STEPPER RESET
+GUI SETUP                  STEPPER RUN
+GUI SHOW                   STEPPER SCURVE
+GUI SLIDER                 STEPPER SPINDLE
+GUI SPINBOX                STEPPER STATUS
+GUI SWITCH                 STEPPER TUNE
+GUI TEST LCDPANEL          STRUCT
+GUI TEST TOUCH             STRUCT COPY
+GUI TEXTBOX                STRUCT LOAD
+GUI TEXTBOX CANCEL         STRUCT SAVE
+HELP                       SUB
+HUMID                      SYNC
+I2C                        TEMPR START
+I2C CHECK                  TEXT
+I2C CLOSE                  THEN
+I2C OPEN                   TILE
+I2C READ                   TILE HEIGHT
+I2C SLAVE                  TILEMAP
+I2C WRITE                  TILEMAP ATTR
+I2C2                       TILEMAP CLOSE
+I2CLCD                     TILEMAP CREATE
+I2CLCD CLOSE               TILEMAP DESTROY
+I2CLCD CREATECHAR          TILEMAP DRAW
+I2CLCD INIT                TILEMAP LOAD
+IF                         TILEMAP SCROLL
+IF ALARM THEN              TILEMAP SET
+IF ASC                     TILEMAP SPRITE CLOSE
+IN                         TILEMAP SPRITE CREATE
+INC                        TILEMAP SPRITE DESTROY
+INPUT                      TILEMAP SPRITE DRAW
+INTERRUPT                  TILEMAP SPRITE MOVE
+INV                        TILEMAP SPRITE SET
+IR                         TILEMAP VIEW
+IR SEND                    TIME$
+IRETURN                    TIMER
+KEYBOARD                   TMC22XX
+KEYBOARD OFF               TO
+KEYBOARD ON                TOUCH
+KEYPAD                     TRACE
+KILL                       TRACE ON
+LCD                        TRIANGLE
+LCD CMD                    TRIANGLE RESTORE
+LCD INIT                   TRIANGLE SAVE
+LET                        TURTLE
+LIBRARY                    TYPE
+LIBRARY DELETE             UNTIL
+LIBRARY DISK SAVE          UPDATE FIRMWARE
+LIBRARY LIST               VAR SAVE
+LIBRARY LOAD               WATCHDOG
+LIBRARY SAVE               WEB
+LINE                       WEB CLOSE TCP CLIENT
+LINE AA                    WEB CONNECT
+LINE GRAPH                 WEB MQTT CLOSE
+LINE INPUT                 WEB MQTT CONNECT
+LINE PLOT                  WEB MQTT PUBLISH
+LIST                       WEB MQTT SUBSCRIBE
+LIST COLLISIONS            WEB MQTT UNSUBSCRIBE
+LIST COMMANDS              WEB NTP
+LIST PINS                  WEB OPEN TCP CLIENT
+LIST SYSTEM I2C            WEB OPEN TCP STREAM
+LIST TYPE                  WEB OPEN TLS CLIENT
+LIST VARIABLES             WEB OPEN TLS STREAM
+LMID                       WEB PING
+LOAD                       WEB SCAN
+LOAD CONTEXT               WEB TCP CLIENT READ
+LOAD DATA                  WEB TCP CLIENT REQUEST
+LOAD JPG                   WEB TCP CLIENT STREAM
+LOAD PNG                   WEB TCP CLIENT WRITE
+LOCAL                      WEB TCP INTERRUPT
+LOCATION                   WEB TCP READ
+LONGSTRING                 WEB TCP SEND
+LONGSTRING AES128          WEB TLS
+LONGSTRING APPEND          WEB TLS CA
+LONGSTRING BASE64          WEB TLS NOVERIFY
+LONGSTRING CLEAR           WEB TRANSMIT CODE
+LONGSTRING CONCAT          WEB TRANSMIT FILE
+LONGSTRING COPY            WEB TRANSMIT PAGE
+LONGSTRING LCASE           WEB UDP INTERRUPT
+LONGSTRING LEFT            WEB UDP SEND
+LONGSTRING LOAD            WHILE
+LONGSTRING MID             WII
+LONGSTRING PRINT           WII CLASSIC
+LONGSTRING REPLACE         WII CLASSIC OPEN
+LONGSTRING RESIZE          WII NUNCHUCK
+LONGSTRING RIGHT           WII NUNCHUCK CLOSE
+LONGSTRING SETBYTE         WII NUNCHUCK OPEN
+LONGSTRING TRIM            WS2812
+LONGSTRING UCASE           XMODEM
+LOOP                       XMODEM SEND
+MANDELBROT                 XOR
+MANDELBROT CENTRE          YMODEM
+MANDELBROT DRAW            YMODEM SEND
+MANDELBROT PAN             ZMODEM
+MANDELBROT RESET           ZMODEM SEND
+MANDELBROT ZOOM
 
 ~FUNCTIONS
 MMBasic functions
@@ -15661,6 +15662,8 @@ XMODEM CRUNCH
 
 Transfers a BASIC program to or from a remote computer using the XModem
 protocol.  The transfer is done over the USB console connection.
+On the RP2350 versions the ZMODEM command does the same job faster, and
+recovers from transmission errors.
 XMODEM SEND will send the current program held in the PicoMite's program
 memory to the remote device.
 XMODEM RECEIVE will accept a program sent by the remote device and save it
@@ -15726,4 +15729,65 @@ Pico, you have complete freedom to specify the name and directory in the
 normal way  NB: YMODEM is very sensitive to the quality of the connection and
 the USB implementation on the host. If it doesn't work for you continue to use
 XMODEM
+The ZMODEM command does the same job and also recovers from transmission
+errors.
+
+~ZMODEM
+ZMODEM is the first word of several entries:
+
+ZMODEM SEND
+
+List them all with:  HELP ZMODEM*
+
+~ZMODEM SEND
+ZMODEM SEND
+or
+ZMODEM SEND file$
+or
+ZMODEM RECEIVE
+or
+ZMODEM RECEIVE file$
+or
+ZMODEM CRUNCH
+
+RP2350 VERSIONS ONLY
+Transfers a BASIC program or a file to or from a remote computer using the
+ZModem protocol.  It works like XMODEM but is much faster, and it recovers
+from transmission errors: every block of data is checked and if any is lost or
+damaged the receiver asks for it again from that point, so a poor connection
+slows a transfer down rather than stopping it.  The transfer is made over the
+console, either the USB console or a serial console, so ZMODEM is also
+available on the versions with USB host support, where the console is a serial
+port.
+ZMODEM SEND will send the program held in program memory.  If the program was
+loaded from the Flash Filesystem or SD Card the remote computer is given the
+name of that file, otherwise it is called FILE.DAT.
+ZMODEM RECEIVE will accept a program sent by the remote computer and save it
+into program memory, overwriting the program currently held there.
+In both cases you can also specify 'file$' which will transfer the data to or
+from a file on the Flash Filesystem or SD Card.  When sending, the remote
+computer is given the name of the file without its drive or directory.  When
+receiving, the name sent by the remote computer is ignored and the data is
+saved in 'file$', overwriting any file of that name.  If the remote computer
+sends several files only the first is received.  ZMODEM SEND file$ and ZMODEM
+RECEIVE file$ can also be used in a program.
+The CRUNCH option works like RECEIVE but will remove all comments, blank lines
+and unnecessary spaces from the program before saving it.
+SEND, RECEIVE and CRUNCH can be abbreviated to S, R and C.
+A program received into program memory is buffered in RAM, which limits its
+size.  If it is too large the transfer stops with "Not enough memory" and the
+program in memory is left as it was.
+The ZModem protocol requires a cooperating program on the remote computer.  On
+Windows Tera Term is recommended: after running the ZMODEM command select File
+-> Transfer -> ZMODEM -> Send or Receive from the Tera Term menu.  On Linux
+and macOS use sz (to send) and rz (to receive) from the lrzsz package, run
+with the serial port as their input and output, for example from a terminal
+program such as minicom.
+If the remote computer does not start the transfer within 60 seconds the
+command returns to the MMBasic prompt with an error.  If the remote computer
+cancels the transfer the error is "Cancelled by remote".
+Over the USB console a 2 MB file takes around 8 seconds with Tera Term.  Over
+a serial console the speed depends on the baud rate (see OPTION BAUDRATE).
+Some USB to serial adapters (eg, the CH340) lose data sent to the computer at
+921600 baud; ZModem recovers, but the transfer is faster at 750000 baud.
 
