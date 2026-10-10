@@ -729,6 +729,7 @@ void routinechecks(void);
 int BasicFileOpen(char *fname, int fnbr, int mode);
 void FileClose(int fnbr);
 int InitSDCard(void);
+int SDCardConfigured(void);
 
 /* ============================================================================
  * Function declarations - SPI

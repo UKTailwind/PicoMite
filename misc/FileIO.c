@@ -5697,6 +5697,11 @@ void MMfputs(unsigned char *p, int filenbr)
 #if HAS_USB_MSC
 int InitUSBDrive(void);
 #endif
+// the SD card has a chip select and a full set of SPI pins (InitSDCard errors if not)
+int SDCardConfigured(void)
+{
+    return !((IsInvalidPin(Option.SD_CS) && !Option.CombinedCS) || (IsInvalidPin(Option.SYSTEM_MOSI) && IsInvalidPin(Option.SD_MOSI_PIN)) || (IsInvalidPin(Option.SYSTEM_MISO) && IsInvalidPin(Option.SD_MISO_PIN)) || (IsInvalidPin(Option.SYSTEM_CLK) && IsInvalidPin(Option.SD_CLK_PIN)));
+}
 int InitSDCard(void)
 {
 #if HAS_USB_MSC
@@ -5707,7 +5712,7 @@ int InitSDCard(void)
         return 1;
     int i;
     ErrorThrow(0, NONEFILE); // reset mm.errno to zero
-    if (((IsInvalidPin(Option.SD_CS) && !Option.CombinedCS) || (IsInvalidPin(Option.SYSTEM_MOSI) && IsInvalidPin(Option.SD_MOSI_PIN)) || (IsInvalidPin(Option.SYSTEM_MISO) && IsInvalidPin(Option.SD_MISO_PIN)) || (IsInvalidPin(Option.SYSTEM_CLK) && IsInvalidPin(Option.SD_CLK_PIN))))
+    if (!SDCardConfigured())
         error("SDcard not configured");
     if (!(SDCardStat & STA_NOINIT))
     {
