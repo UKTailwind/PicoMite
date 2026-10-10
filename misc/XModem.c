@@ -104,9 +104,70 @@ bool rcvnoint = false;
 
 /*  @endcond */
 
+// the buffer a program is received into, for XMODEM, YMODEM and ZMODEM RECEIVE with no file name: the program
+// and everything else in the heap is cleared to make room
+char *ProgramReceiveBuffer(int *size)
+{
+    ClearProgram(true); // we need all the RAM
+    HeapReleaseForBuffer();
+    *size = XMODEMBUFFERSIZE;
+    return GetTempMemory(XMODEMBUFFERSIZE);
+}
+
+// the program in memory as text, each line ending in CR LF, for XMODEM, YMODEM and ZMODEM SEND with no file name.
+// A first line of "'#" (the file LOAD read the program from) is left out, and copied to name if name is not NULL.
+char *ProgramToText(char *name)
+{
+    char *buf, *p, *fromp;
+    int nbrlines = 0;
+    closeframebuffer('A');
+    CloseAudio(1);
+    ClearVars(0, true);
+#ifdef STRUCTENABLED
+    // Clear structure type definitions to free heap memory
+    for (int i = 0; i < MAX_STRUCT_TYPES; i++)
+    {
+        if (g_structtbl[i] != NULL)
+        {
+            FreeMemorySafe((void **)&g_structtbl[i]);
+        }
+    }
+    g_structcnt = 0;
+#endif
+    HeapReleaseForBuffer(); // (the variables are cleared and ClearExternalIO has stopped the interrupts)
+    buf = GetTempMemory(XMODEMBUFFERSIZE);
+    // we must copy program memory into RAM expanding tokens as we go
+    fromp = (char *)ProgMemory;
+    p = buf; // the RAM buffer
+    while (1)
+    {
+        if (*fromp == T_NEWLINE)
+        {
+            fromp = (char *)llist((unsigned char *)p, (unsigned char *)fromp); // expand the line into the buffer
+            nbrlines++;
+            if (!(nbrlines == 1 && p[0] == '\'' && p[1] == '#'))
+            {
+                p += strlen(p);
+                if ((p - buf) > (XMODEMBUFFERSIZE - STRINGSIZE))
+                    StandardError(29);
+                *p++ = '\r';
+                *p++ = '\n';
+                *p = 0; // terminate that line
+            }
+            else if (name != NULL)
+                strcpy(name, &p[2]);
+        }
+        if (fromp[0] == 0 || fromp[0] == 0xff)
+            break; // finally, is it the end of the program?
+    }
+    --p;
+    *p = 0; // erase the last line terminator
+    return buf;
+}
+
 void MIPS16 cmd_xmodem(void)
 {
-    char *buf, BreakKeySave, *p, *fromp;
+    char *buf, BreakKeySave;
     int rcv = 0, fnbr, crunch = false;
     char *fname;
     bool xmodem = true;
@@ -142,78 +203,27 @@ void MIPS16 cmd_xmodem(void)
         if (CurrentLinePtr)
             StandardError(10);
         if (rcv)
-            ClearProgram(true); // we need all the RAM
-        else
         {
-            closeframebuffer('A');
-            CloseAudio(1);
-            ClearVars(0, true);
-#ifdef STRUCTENABLED
-            // Clear structure type definitions to free heap memory
-            for (int i = 0; i < MAX_STRUCT_TYPES; i++)
-            {
-                if (g_structtbl[i] != NULL)
-                {
-                    FreeMemorySafe((void **)&g_structtbl[i]);
-                }
-            }
-            g_structcnt = 0;
-#endif
-        }
-        HeapReleaseForBuffer(); // (the variables are cleared and ClearExternalIO has stopped the interrupts)
-        buf = GetTempMemory(XMODEMBUFFERSIZE);
-        if (rcv)
-        {
+            int size;
+            buf = ProgramReceiveBuffer(&size);
             if (xmodem)
-                xmodemReceive(buf, XMODEMBUFFERSIZE, 0, crunch);
+                xmodemReceive(buf, size, 0, crunch);
 #if defined(rp2350) && !defined(USBKEYBOARD)
             else
-                ymodemReceive(buf, XMODEMBUFFERSIZE, 0, crunch);
+                ymodemReceive(buf, size, 0, crunch);
 #endif
             ClearSavedVars(); // clear any saved variables
             SaveProgramToFlash((unsigned char *)buf, true, PROGRAM_FLASH);
         }
         else
         {
-            int nbrlines = 0;
-            // we must copy program memory into RAM expanding tokens as we go
-            fromp = (char *)ProgMemory;
-            p = buf; // the RAM buffer
-#if defined(rp2350) && !defined(USBKEYBOARD)
-            char ymodemname[FF_MAX_LFN] = {0};
-#endif
-            while (1)
-            {
-                if (*fromp == T_NEWLINE)
-                {
-                    fromp = (char *)llist((unsigned char *)p, (unsigned char *)fromp); // expand the line into the buffer
-                    nbrlines++;
-                    if (!(nbrlines == 1 && p[0] == '\'' && p[1] == '#'))
-                    {
-                        p += strlen(p);
-                        if ((p - buf) > (XMODEMBUFFERSIZE - STRINGSIZE))
-                            StandardError(29);
-                        *p++ = '\r';
-                        *p++ = '\n';
-                        *p = 0; // terminate that line
-                    }
-#if defined(rp2350) && !defined(USBKEYBOARD)
-                    else if (!xmodem && nbrlines == 1 && p[0] == '\'' && p[1] == '#') // we can use the filename for the ymodem transfer name
-                    {
-                        strcpy(ymodemname, &p[4]);
-                    }
-#endif
-                }
-                if (fromp[0] == 0 || fromp[0] == 0xff)
-                    break; // finally, is it the end of the program?
-            }
-            --p;
-            *p = 0; // erase the last line terminator
+            char name[FF_MAX_LFN] = {0}; // "B:/dir/name.bas" from the "'#" line: YMODEM sends the name from its 3rd character
+            buf = ProgramToText(name);
             if (xmodem)
                 xmodemTransmit(buf, 0, 0); // send it off
 #if defined(rp2350) && !defined(USBKEYBOARD)
             else
-                ymodemTransmit(buf, 0, ymodemname[0] ? ymodemname : NULL, 0); // send it off
+                ymodemTransmit(buf, 0, strlen(name) > 2 ? name + 2 : NULL, 0); // send it off
 #endif
         }
     }

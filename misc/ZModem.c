@@ -3,8 +3,12 @@ PicoMite MMBasic
 
 ZModem.c
 
-ZMODEM RECEIVE ["file"]: receive one or more files from a ZMODEM sender (Tera Term, lrzsz sz) over the console.
-ZMODEM SEND "file": send a file to a ZMODEM receiver (Tera Term, lrzsz rz) over the console.
+The ZMODEM command over the console, in the forms XMODEM and YMODEM take:
+  ZMODEM SEND file$      send a file to a ZMODEM receiver (Tera Term, lrzsz rz)
+  ZMODEM SEND            send the program in memory
+  ZMODEM RECEIVE file$   receive a file from a ZMODEM sender (Tera Term, lrzsz sz)
+  ZMODEM RECEIVE         receive a program into program memory
+  ZMODEM CRUNCH          the same, without comments, indentation and blank lines
 
 The protocol engine (frame parser, header handling, CRC checks, ZRPOS recovery) is adapted from Tera Term's
 teraterm/ttpfile/zmodem.c, under the licence below. The console, file, timing and flow-control layers are
@@ -46,6 +50,8 @@ write stops the console from receiving.
 #if defined(rp2350)
 
 uint32_t lfs_crc(uint32_t crc, const void *buffer, size_t size); // littlefs: reflected CRC-32, the one ZMODEM uses
+char *ProgramReceiveBuffer(int *size);                          // XModem.c: program memory, as XMODEM does it
+char *ProgramToText(char *name);
 
 #define ZPAD '*'
 #define ZDLE 0x18
@@ -147,7 +153,11 @@ typedef struct
     int fnbr;
     bool fileopen;
     bool held; // the RAM was full and a ZRPOS asked the sender to restart and pause
-    const char *target; // name given to ZMODEM RECEIVE, or NULL to use the sender's names
+    const char *target;   // receiving: the file to write
+    unsigned char *prog;  // the program: received into (RECEIVE, CRUNCH with no file name) or sent from (SEND)
+    unsigned char *progp; // receiving: where the program's next byte goes
+    int progmax;          // receiving: the size of the program buffer; sending: the length of the program
+    bool crunch;          // receiving: ZMODEM CRUNCH
     char name[FF_MAX_LFN];
     bool gothdr;      // sending: a header from the receiver is in RxType/RxHdr
     bool txcrc32;     // sending: the receiver takes CRC-32
@@ -319,31 +329,19 @@ static bool ZParseFile(zrx_t *z)
     if (z->ZState != Z_RecvInit && z->ZState != Z_RecvInit2)
         return false;
     z->PktIn[z->PktInPtr] = 0; // for safety
-    if (z->target)
+    if (z->files)
+        return false; // one file was asked for: skip the rest of a batch
+    if (!z->prog)
     {
-        if (z->files)
-            return false; // one file was asked for: skip the rest of a batch
         strncpy(z->name, z->target, FF_MAX_LFN - 1);
-    }
-    else
-    {
-        // the sender's name, without any path it sent
-        char *n = (char *)z->PktIn, *p;
-        if ((p = strrchr(n, '/')))
-            n = p + 1;
-        if ((p = strrchr(n, '\\')))
-            n = p + 1;
-        if (!*n)
+        MMErrMsg[0] = 0;
+        if (!BasicFileOpen(z->name, z->fnbr, FA_WRITE | FA_CREATE_ALWAYS))
+        {
+            zfail(z, *MMErrMsg ? MMErrMsg : "Cannot create the file");
             return false;
-        strncpy(z->name, n, FF_MAX_LFN - 1);
+        }
+        z->fileopen = true;
     }
-    MMErrMsg[0] = 0;
-    if (!BasicFileOpen(z->name, z->fnbr, FA_WRITE | FA_CREATE_ALWAYS))
-    {
-        zfail(z, *MMErrMsg ? MMErrMsg : "Cannot create the file");
-        return false;
-    }
-    z->fileopen = true;
     z->held = false;
     z->stagelen = 0;
     z->Pos = 0;
@@ -353,12 +351,37 @@ static bool ZParseFile(zrx_t *z)
     return true;
 }
 
+// a program goes straight into its buffer, without NULs and crunched if asked, as XMODEM does it
+static bool zprogdata(zrx_t *z)
+{
+    for (int i = 0; i < z->PktInPtr; i++)
+    {
+        if (z->PktIn[i] == 0)
+            continue;
+        if (z->progp >= z->prog + z->progmax - 1) // room for one more byte and the terminating zero
+        {
+            zfail(z, "Not enough memory");
+            return false;
+        }
+        if (z->crunch)
+            CrunchData(&z->progp, z->PktIn[i]);
+        else
+            *z->progp++ = z->PktIn[i];
+    }
+    return true;
+}
+
 // a good data subpacket: hold its bytes until the sender pauses
 static bool ZWriteData(zrx_t *z)
 {
     if (z->ZState != Z_RecvData)
         return false;
-    if (z->stagelen + z->PktInPtr > ZSTAGE)
+    if (z->prog)
+    {
+        if (!zprogdata(z))
+            return false;
+    }
+    else if (z->stagelen + z->PktInPtr > ZSTAGE)
     {
         if (z->TERM == ZCRCG && !z->held && Option.SerialConsole)
         {
@@ -372,9 +395,12 @@ static bool ZWriteData(zrx_t *z)
         if (z->ZState == Z_End)
             return false;
     }
-    z->held = false;
-    memcpy(z->stage + z->stagelen, z->PktIn, z->PktInPtr);
-    z->stagelen += z->PktInPtr;
+    if (!z->prog)
+    {
+        z->held = false;
+        memcpy(z->stage + z->stagelen, z->PktIn, z->PktInPtr);
+        z->stagelen += z->PktInPtr;
+    }
     z->Pos += z->PktInPtr;
     z->bytes += z->PktInPtr;
     ZStoHdr(z, z->Pos);
@@ -932,11 +958,13 @@ static bool zsendinit(zrx_t *z)
     return true;
 }
 
-// send the open file z->fnbr under the name z->name: false if the session has ended
+// send the program or the open file z->fnbr, under the name z->name: false if the session has ended
 static bool zsendfile(zrx_t *z)
 {
-    uint32_t size = filesource[z->fnbr] == FLASHFILE ? (uint32_t)lfs_file_size(&lfs, FileTable[z->fnbr].lfsptr)
-                                                     : (uint32_t)f_size(FileTable[z->fnbr].fptr);
+    uint32_t size = z->prog                                 ? (uint32_t)z->progmax
+                    : filesource[z->fnbr] == FLASHFILE ? (uint32_t)lfs_file_size(&lfs, FileTable[z->fnbr].lfsptr)
+                                                       : (uint32_t)f_size(FileTable[z->fnbr].fptr);
+    uint8_t info[FF_MAX_LFN + 32];
     int t;
     // ZFILE: the receiver answers with where to start (ZRPOS), or that it does not want the file (ZSKIP)
     for (z->tries = 0;;)
@@ -945,10 +973,10 @@ static bool zsendfile(zrx_t *z)
         z->TxHdr[ZF0] = ZCBIN;
         ZSbHdr(z, ZFILE);
         int n = strlen(z->name) + 1;
-        memcpy(z->stage, z->name, n);
+        memcpy(info, z->name, n);
         // size, no time (0: the receiver uses its own) and an ordinary file (else lrzsz makes one only its owner reads)
-        n += sprintf((char *)z->stage + n, "%lu 0 100644", (unsigned long)size) + 1;
-        ZSdata(z, z->stage, n, ZCRCW);
+        n += sprintf((char *)info + n, "%lu 0 100644", (unsigned long)size) + 1;
+        ZSdata(z, info, n, ZCRCW);
         t = zgethdr(z, ZT_DATA);
         if (z->ZState != Z_Send || zrefused(z, t))
             return false;
@@ -972,30 +1000,40 @@ static bool zsendfile(zrx_t *z)
             if (pos > size)
                 pos = size;
             start = pos;
-            positionfile(z->fnbr, pos, true);
-            if (filesource[z->fnbr] == NONEFILE) // a failed seek closes the file (on A: FSerror is the new position)
+            if (!z->prog)
             {
-                zfail(z, "File read failed");
-                return false;
+                positionfile(z->fnbr, pos, true);
+                if (filesource[z->fnbr] == NONEFILE) // a failed seek closes the file (on A: FSerror is the new position)
+                {
+                    zfail(z, "File read failed");
+                    return false;
+                }
             }
             ZStoHdr(z, pos);
             ZSbHdr(z, ZDATA);
             frame = true;
         }
+        const uint8_t *data = z->stage;
         unsigned int n = 0;
         if (pos < size)
         {
-            FSerror = 0;
-            FileGetData(z->fnbr, z->stage, size - pos < ZMAXDATA ? size - pos : ZMAXDATA, &n);
-            if (FSerror || n == 0)
+            n = size - pos < ZMAXDATA ? size - pos : ZMAXDATA;
+            if (z->prog)
+                data = z->prog + pos;
+            else
             {
-                zfail(z, "File read failed");
-                return false;
+                FSerror = 0;
+                FileGetData(z->fnbr, z->stage, n, &n);
+                if (FSerror || n == 0)
+                {
+                    zfail(z, "File read failed");
+                    return false;
+                }
             }
         }
         pos += n;
         uint8_t term = pos >= size ? ZCRCE : pos - start >= z->window ? ZCRCW : ZCRCG;
-        ZSdata(z, z->stage, n, term);
+        ZSdata(z, data, n, term);
         if (term == ZCRCE)
         {
             ZStoHdr(z, pos);
@@ -1068,37 +1106,89 @@ static void zsendfin(zrx_t *z)
     SerialConsolePutC('O', 1);
 }
 
+// the name without its drive or directory, which is what a receiver is given
+static void zbasename(char *to, const char *from)
+{
+    const char *p = from;
+    for (; *from; from++)
+        if (*from == '/' || *from == '\\' || *from == ':')
+            p = from + 1;
+    strncpy(to, p, FF_MAX_LFN - 1);
+}
+
 void cmd_zmodem(void)
 {
-    bool send = mytoupper(*cmdline) == 'S';
-    if (!send && mytoupper(*cmdline) != 'R')
+    bool send = false, crunch = false;
+    char *fname = NULL, *prog = NULL;
+    int progsize = 0;
+    switch (mytoupper(*cmdline))
+    {
+    case 'S':
+        send = true;
+        break;
+    case 'C':
+        crunch = true;
+        break;
+    case 'R':
+        break;
+    default:
         SyntaxError();
+    }
     while (isalpha(*cmdline))
         cmdline++;
     skipspace(cmdline);
-    zrx_t *z = GetTempMemory(sizeof(zrx_t));
-    z->fnbr = FindFreeFileNbr();
-    if (send)
+    ClearExternalIO();
+    char progname[FF_MAX_LFN] = {0};
+    if (*cmdline && *cmdline != '\'')
     {
-        char *fname = (char *)getFstring(cmdline), *p;
-        if (!BasicFileOpen(fname, z->fnbr, FA_READ))
-            return;
-        z->fileopen = true;
-        // the receiver gets the name without its drive or directory
-        for (p = fname; *fname; fname++)
-            if (*fname == '/' || *fname == '\\' || *fname == ':')
-                p = fname + 1;
-        strncpy(z->name, p, FF_MAX_LFN - 1);
-        z->stage = GetTempMemory(ZMAXDATA);
+        if (crunch)
+            error("Invalid command");
+        fname = (char *)getFstring(cmdline);
     }
     else
     {
-        if (*cmdline && *cmdline != '\'')
-            z->target = (char *)getFstring(cmdline);
-        z->stage = GetTempMemory(ZSTAGE);
+        // no file name: the program in memory, as XMODEM and YMODEM
+        if (CurrentLinePtr)
+            StandardError(10);
+        if (send)
+        {
+            prog = ProgramToText(progname);
+            progsize = strlen(prog);
+        }
+        else
+            prog = ProgramReceiveBuffer(&progsize);
+    }
+    zrx_t *z = GetTempMemory(sizeof(zrx_t));
+    if (prog)
+    {
+        z->prog = z->progp = (unsigned char *)prog;
+        z->progmax = progsize;
+        z->crunch = crunch;
+        if (crunch)
+            CrunchData(&z->progp, 0); // start afresh
+        zbasename(z->name, progname); // the file the program was loaded from, if it says
+        if (!*z->name)
+            strcpy(z->name, "FILE.DAT"); // what YMODEM calls it
+    }
+    else
+    {
+        z->fnbr = FindFreeFileNbr();
+        if (send)
+        {
+            if (!BasicFileOpen(fname, z->fnbr, FA_READ))
+                return;
+            z->fileopen = true;
+            zbasename(z->name, fname);
+            z->stage = GetTempMemory(ZMAXDATA);
+        }
+        else
+        {
+            z->target = fname;
+            strncpy(z->name, fname, FF_MAX_LFN - 1);
+            z->stage = GetTempMemory(ZSTAGE);
+        }
     }
 
-    ClearExternalIO();
     char BreakKeySave = BreakKey;
     BreakKey = 0; // the data can hold any byte, Ctrl-C included
     int abortsave = OptionFileErrorAbort;
@@ -1120,37 +1210,44 @@ void cmd_zmodem(void)
         zfileclose(z);
     }
     OptionFileErrorAbort = abortsave;
-    BreakKey = BreakKeySave;
-    busy_wait_ms(50); // let the other end finish before anything is printed
-    while (getConsole() != -1)
+    // let the other end finish before anything is printed. After a failure the sender may still be sending, and
+    // none of that may reach the command prompt as keystrokes: wait for the line to go quiet (10 s at most)
+    uint64_t quiet = time_us_64() + 10000000;
+    while (zgetc(*z->err ? 500000 : 50000) >= 0 && time_us_64() < quiet)
         ;
+    BreakKey = BreakKeySave;
     if (*z->err)
         error("$", z->err);
-    if (send)
+    if (prog && !send)
     {
-        MMPrintString(z->files ? "Sent " : "Not wanted by the receiver: ");
-        MMPrintString(z->name);
+        // into program memory, as XMODEM and YMODEM
         if (!z->files)
-        {
-            MMPrintString("\r\n");
-            return;
-        }
-        MMPrintString(", ");
+            error("Nothing received");
+        *z->progp = 0;
+        ClearSavedVars();
+        SaveProgramToFlash(z->prog, true, PROGRAM_FLASH); // prints "Saved n bytes"
     }
-    else if (z->target)
-        MMPrintString("Received ");
     else
     {
-        PInt(z->files);
-        MMPrintString(z->files == 1 ? " file received, " : " files received, ");
-    }
-    if (z->target && !send)
-    {
+        if (z->files)
+            MMPrintString(send ? "Sent " : "Received ");
+        else
+            MMPrintString(send ? "Not wanted by the receiver: " : "Nothing received: ");
         MMPrintString(z->name);
-        MMPrintString(", ");
+        if (z->files)
+        {
+            MMPrintString(", ");
+            PInt(z->bytes);
+            MMPrintString(" bytes");
+        }
+        MMPrintString("\r\n");
     }
-    PInt(z->bytes);
-    MMPrintString(" bytes\r\n");
+    if (prog)
+    {
+        cmdline = NULL;
+        do_end(false);
+        longjmp(mark, 1); // back to the prompt, as XMODEM and YMODEM
+    }
 }
 
 #endif
