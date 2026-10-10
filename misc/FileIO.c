@@ -1009,6 +1009,7 @@ void MIPS16 cmd_psram(void)
         }
         enable_interrupts_pico();
         FlashLoad = 0;
+        SymSetProgram(ProgMemory); // the new program's table (EDIT or LIST may follow on this line)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CHAIN")))
     {
@@ -1618,6 +1619,7 @@ void MIPS16 cmd_flash(void)
         }
         enable_interrupts_pico();
         FlashLoad = 0;
+        SymSetProgram(ProgMemory); // the new program's table (EDIT or LIST may follow on this line)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CHAIN")))
     {
