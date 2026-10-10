@@ -21,7 +21,7 @@ tinyusb-patches\setup-tinyusb.bat     # Windows (runs the .sh via Git Bash)
 ```
 
 It fetches TinyUSB master at e20482387 into `../tinyusb-master` and applies the
-two patches. To recreate the tree, delete `../tinyusb-master` and run it again.
+three patches. To recreate the tree, delete `../tinyusb-master` and run it again.
 (Only that one commit is fetched; TinyUSB's `lib/` submodules are not needed
 for the PicoMite build.) A `../tinyusb-0.21` tree from an earlier setup is no
 longer used.
@@ -76,6 +76,7 @@ fixed upstream at that commit.
 |-------|------|-----------------|
 | `hcd_rp2040.patch` | `src/portable/raspberrypi/rp2040/hcd_rp2040.c` | RP2 host driver: a 1 s endpoint-0 RX-timeout **grace period** (`PC3_CTRL_RX_TIMEOUT_GRACE_US`) in which the controller retries instead of failing the request, so a spurious shared-latch timeout does not fail an enumeration; the window closes when the control transfer ends, whether it completes or is aborted or closed (`epx_retire()`). Also: `ERROR_DATA_SEQ` is recorded instead of `panic()`; the RP2040 SOF round-robin never preempts a transfer that has already moved data (`PM_EPX_PREEMPT_UNGUARDED` restores the stock behaviour, for diagnosis); a freed or EPX endpoint slot drops its interrupt-endpoint number and completions are never delivered to a free slot (a stale number let a newly plugged mouse steal a working keyboard's completions); `PM_FORCE_EPX_SOF` build switch; `pm_epx_*` counters; `PC3_USB_EVLOG` hooks. |
 | `rp2040_usb.patch` | `src/portable/raspberrypi/rp2040/rp2040_usb.c` | Host **control** transfers single-buffered on the RP2350 ([#3875](https://github.com/hathach/tinyusb/issues/3875): a 9-packet control IN double-buffered on EPX completed after its first packet), but not on the RP2040, where erratum E4 makes single-buffered multi-packet host transfers unsafe; the two `buf_ctrl already available` `panic()`s clear the stale arming and continue; the shared USB fault record; optional timing-neutral event ring (`PC3_USB_EVLOG`, off by default). |
+| `cdc_host.patch` | `src/class/cdc/cdc_host.c` | CDC host: a bulk IN that ends `XFER_RESULT_FAILED` is **re-armed**. Stock returns without re-arming, so one failed IN stops a COM3-COM6 port receiving until the device re-enumerates. On the RP2 host the failure need not be the CDC endpoint's: `SIE_STATUS.RX_TIMEOUT` is shared with the interrupt endpoints the controller polls in the background (a keyboard behind the hub), and `hcd_rp2040` charges a timeout to whatever transfer holds EPX, nearly always the CDC IN waiting on an idle device. Found by reading the code while investigating a COM3 report (2026-10-10); not yet seen to fire. A STALL is not re-armed. |
 
 ## No `panic()` in the host path
 
