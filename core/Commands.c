@@ -1591,6 +1591,8 @@ void array_slice(unsigned char *tp)
 			pos[i] = 1;
 		}
 	}
+	if (target == -1)
+		error("One index must be omitted"); // the omitted one is the dimension sliced
 	if (t & T_STR)
 	{
 		toarray = parsestringarray(argv[i * 2 + 2], &a2str, i + 1, 1, dims, true, &size2) - 1;
