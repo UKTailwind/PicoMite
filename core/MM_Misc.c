@@ -5658,7 +5658,11 @@ void MIPS16 cmd_option(void)
     {
         if (checkstring(tp, (unsigned char *)"OFF"))
         {
+#if !(defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
+            /* CYW43 builds keep their heartbeat: the LED on the radio is
+               there on every W board, not just the Pico Plus 2 W. */
             Option.NoHeartbeat = true;
+#endif
             Option.special = 0;
             Option.PSRAM_CS_PIN = 0;
         }
@@ -5668,12 +5672,21 @@ void MIPS16 cmd_option(void)
                 error("Invalid for RP2350A");
             if (ExtCurrentConfig[58] != EXT_NOT_CONFIG)
                 error("Pin | is in use", 58);
+#if !(defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH))
             if (ExtCurrentConfig[43] != EXT_NOT_CONFIG)
                 error("Pin | is in use", PINMAP[25]);
+#endif
             if (ExtCurrentConfig[PINMAP[47]] != EXT_NOT_CONFIG)
                 error("Pin | is in use", PINMAP[47]);
             Option.NoHeartbeat = false;
+#if defined(PICOMITEWEB) || defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+            /* Pico Plus 2 W: GP25 is the CYW43 chip select and the LED is
+               the radio's WL_GPIO 0, which the CYW43 heartbeat blinks while
+               NoHeartbeat is clear. No GPIO heartbeat, so no pin. */
+            Option.heartbeatpin = 0;
+#else
             Option.heartbeatpin = PINMAP[25];
+#endif
             Option.PSRAM_CS_PIN = PINMAP[47];
             Option.special = 1;
             SaveOptions();
