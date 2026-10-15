@@ -2108,6 +2108,10 @@ void InitHeap(bool all)
     /* Same for the TYPE definitions, which are GetMemory blocks too. */
     StructTableForget();
 #endif
+#ifdef PICOMITEWEB
+    /* And JSON$'s parse arena, blocks of this heap chained from a static pointer. */
+    JsonArenaForget();
+#endif
 #ifdef rp2350
     if (all)
         memset(psmap, 0, sizeof(psmap));

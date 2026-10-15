@@ -798,6 +798,7 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
     void IfTableForget(void);                              // after InitHeap: the pointer is dangling
 #ifdef STRUCTENABLED
     void StructTableForget(void);                         // ditto for the TYPE definitions
+    void JsonArenaForget(void);                           // ditto for JSON$'s parse arena (WEB builds)
 #endif
     void IfTableFree(void);                                // free all entries
     struct iftab_entry *IfTableLookup(unsigned char *tok); // NULL if not found

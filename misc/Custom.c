@@ -3139,6 +3139,15 @@ static void json_arena_reset(void)
         json_arena_cur = json_arena_end = NULL;
 }
 
+/* InitHeap has wiped the heap: the arena's blocks are gone with it, so drop
+   the chain rather than let the next json_arena_reset() free pages that now
+   belong to something else (see IfTableForget() in Commands.c). */
+void JsonArenaForget(void)
+{
+        json_arena_head = NULL;
+        json_arena_cur = json_arena_end = NULL;
+}
+
 static void *CJSON_CDECL json_malloc_hook(size_t sz)
 {
         size_t n = (sz + 7u) & ~(size_t)7u; // keep every allocation 8-byte aligned
@@ -3206,6 +3215,9 @@ void fun_json(void)
         }
         else
                 StandardError(35);
+        // the item path first: an error here must not find the arena allocated
+        p = (char *)getCstring((unsigned char *)argv[2]);
+        int len = strlen(p);
         cJSON_Hooks json_hooks = {json_malloc_hook, json_free_hook};
         cJSON_InitHooks(&json_hooks);
         json_arena_reset(); // ensure a clean arena (frees any stragglers from an aborted call)
@@ -3216,8 +3228,6 @@ void fun_json(void)
                 error("Invalid JSON data");
         }
         root = parse;
-        p = (char *)getCstring((unsigned char *)argv[2]);
-        int len = strlen(p);
         memset(field, 0, 32);
         memset(num, 0, 6);
         i = 0;
