@@ -17,10 +17,28 @@ void InitDisplaySSD(void)
 {
 }
 
+/* OPTION LCDPANEL offers the panel name to each ConfigDisplay* in turn and
+   each returns, leaving DISPLAY_TYPE at 0, when the name is not its own.
+   So refuse only the names the full driver (SSD1963.c) accepts: anything
+   else, SSD1306I2C included, goes on to ConfigDisplayI2C. */
+static const char *const SSDnames[] = {
+    "SSD1963_4", "SSD1963_5", "SSD1963_5A", "SSD1963_7", "SSD1963_7A", "SSD1963_8",
+    "ILI9341_8", "SSD1963_4_16", "SSD1963_5_16",
+#if PICOMITERP2350
+    "SSD1963_5_12BUFF", "SSD1963_5_16BUFF", "SSD1963_5_BUFF",
+    "SSD1963_7_12BUFF", "SSD1963_7_16BUFF", "SSD1963_7_BUFF",
+#endif
+    "SSD1963_5A_16", "SSD1963_7_16", "SSD1963_7A_16", "SSD1963_8_16",
+    "ILI9341_16", "ILI9486_16", "IPS_4_16"};
+
 void ConfigDisplaySSD(unsigned char *p)
 {
-    (void)p;
-    error("SSD1963 displays not enabled");
+    getcsargs(&p, 13);
+    if ((argc & 1) != 1 || argc < 3)
+        StandardError(2);
+    for (int i = 0; i < (int)(sizeof(SSDnames) / sizeof(SSDnames[0])); i++)
+        if (checkstring(argv[0], (unsigned char *)SSDnames[i]))
+            error("SSD1963 displays not enabled");
 }
 
 void SetBacklightSSD1963(int intensity)
