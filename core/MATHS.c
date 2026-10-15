@@ -741,6 +741,8 @@ int parsestringarray(unsigned char *tp, unsigned char **a1str, int argno, int di
 		if ((uint32_t)ptr1 != (uint32_t)VREC(g_VarIndex)->val.s)
 			SyntaxError();
 		;
+		if (!DimIsRealArray(dims[0])) // a scalar passes the test above: its data starts at val.s too
+			error("Argument % must be a string array", argno);
 	}
 	else
 		error("Argument % must be a string array", argno);
@@ -1609,7 +1611,7 @@ void cmd_math(void)
 				else
 				{
 					for (i = 0; i < card1; i++)
-						STRIDE_INT(a2int, i, s2) = ((t & T_INT) ? i64 : f) * STRIDE_INT(a1int, i, s1);
+						STRIDE_INT(a2int, i, s2) = (t & T_INT) ? i64 * STRIDE_INT(a1int, i, s1) : FloatToInt64(f * (MMFLOAT)STRIDE_INT(a1int, i, s1));
 				}
 			}
 			else
@@ -1896,7 +1898,11 @@ void cmd_math(void)
 			{
 				for (int i = 0; i < card; i++)
 				{
-					STRIDE_INT(a3int, i, s3) = STRIDE_INT(a1int, i, s1) / STRIDE_INT(a2int, i, s2);
+				{
+				if (STRIDE_INT(a2int, i, s2) == 0)
+					error("Divide by zero");
+				STRIDE_INT(a3int, i, s3) = STRIDE_INT(a1int, i, s1) / STRIDE_INT(a2int, i, s2);
+			}
 				}
 			}
 			return;
@@ -2414,7 +2420,7 @@ void cmd_math(void)
 			card = parsefloatarray(argv[2], &q2, 2, 1, dims, false, NULL);
 			if (card != 5)
 				StandardErrorParam(41, 2);
-			card = parsefloatarray(argv[4], &n, 31, 1, dims, true, NULL);
+			card = parsefloatarray(argv[4], &n, 3, 1, dims, true, NULL);
 			if (card != 5)
 				StandardErrorParam(41, 3);
 			Q_Mult(q1, q2, n);
@@ -2436,7 +2442,7 @@ void cmd_math(void)
 			card = parsefloatarray(argv[2], &v1, 2, 1, dims, false, NULL);
 			if (card != 5)
 				StandardErrorParam(41, 2);
-			card = parsefloatarray(argv[4], &n, 31, 1, dims, true, NULL);
+			card = parsefloatarray(argv[4], &n, 3, 1, dims, true, NULL);
 			if (card != 5)
 				StandardErrorParam(41, 3);
 			Q_Mult(q1, v1, temp);
@@ -2556,9 +2562,9 @@ void cmd_math(void)
 				int channel = getint(argv[0], 1, MAXPID);
 				int card = parsefloatarray(argv[2], &q1, 2, 1, NULL, true, NULL);
 				RequireGlobal(q1); // used and updated on every PID tick
-				PIDchannels[channel].PIDparams = (PIDController *)q1;
 				if (card != 14)
 					error("Argument 2 must be a 14 element floating point array");
+				PIDchannels[channel].PIDparams = (PIDController *)q1; // kept only once the array has passed
 				if (PIDchannels[channel].PIDparams->T < 0.001)
 					error("Invalid update rate");
 				PIDchannels[channel].interrupt = GetIntAddress(argv[4]);
@@ -2607,12 +2613,12 @@ void cmd_math(void)
 				else if (a2float == NULL && a1float != NULL)
 				{
 					for (i = 0; i < card1; i++)
-						STRIDE_INT(a2int, i, s2) = FloatToInt64(pow(STRIDE_FLOAT(a1float, i, s1), ((t & T_INT) ? i64 : FloatToInt64(f))));
+						STRIDE_INT(a2int, i, s2) = FloatToInt64(pow(STRIDE_FLOAT(a1float, i, s1), (t & T_INT) ? (MMFLOAT)i64 : f));
 				}
 				else
 				{
 					for (i = 0; i < card1; i++)
-						STRIDE_INT(a2int, i, s2) = FloatToInt64(pow(STRIDE_INT(a1int, i, s1), (t & T_INT) ? i64 : FloatToInt64(f)));
+						STRIDE_INT(a2int, i, s2) = FloatToInt64(pow((MMFLOAT)STRIDE_INT(a1int, i, s1), (t & T_INT) ? (MMFLOAT)i64 : f));
 				}
 			}
 			else
@@ -2681,6 +2687,8 @@ void cmd_math(void)
 			{
 				int scale_vtype;
 				void *ptr1 = findvar(argv[8], V_FIND);
+				if (VREC(g_VarIndex)->type & T_CONST)
+					StandardError(22);
 				scale_vtype = VREC(g_VarIndex)->type;
 #ifdef STRUCTENABLED
 				if (g_StructMemberType != 0)
@@ -2693,6 +2701,8 @@ void cmd_math(void)
 				else
 					*(MMFLOAT *)ptr1 = inmin;
 				void *ptr2 = findvar(argv[10], V_FIND);
+				if (VREC(g_VarIndex)->type & T_CONST)
+					StandardError(22);
 				scale_vtype = VREC(g_VarIndex)->type;
 #ifdef STRUCTENABLED
 				if (g_StructMemberType != 0)
@@ -2705,26 +2715,29 @@ void cmd_math(void)
 				else
 					*(MMFLOAT *)ptr2 = inmax;
 			}
+/* a constant input (inmax == inmin) maps to outmin rather than 0/0 */
+#define WINDOW_MAP(v) (inmax == inmin ? outmin : ((v) - inmin) / (inmax - inmin) * (outmax - outmin) + outmin)
 			if (a2float != NULL && a1float != NULL)
 			{ // in and out are floats
 				for (i = 0; i < card1; i++)
-					STRIDE_FLOAT(a2float, i, s2) = ((STRIDE_FLOAT(a1float, i, s1) - inmin) / (inmax - inmin)) * (outmax - outmin) + outmin;
+					STRIDE_FLOAT(a2float, i, s2) = WINDOW_MAP(STRIDE_FLOAT(a1float, i, s1));
 			}
 			else if (a2float == NULL && a1float != NULL)
 			{ // in is a float and out is an integer
 				for (i = 0; i < card1; i++)
-					STRIDE_INT(a2int, i, s2) = (long long int)(((STRIDE_FLOAT(a1float, i, s1) - inmin) / (inmax - inmin)) * (outmax - outmin) + outmin);
+					STRIDE_INT(a2int, i, s2) = FloatToInt64(WINDOW_MAP(STRIDE_FLOAT(a1float, i, s1)));
 			}
 			else if (a2float != NULL && a1float == NULL)
 			{ // in is an integer and out is a float
 				for (i = 0; i < card1; i++)
-					STRIDE_FLOAT(a2float, i, s2) = ((((MMFLOAT)STRIDE_INT(a1int, i, s1) - inmin) / (inmax - inmin)) * (outmax - outmin) + outmin);
+					STRIDE_FLOAT(a2float, i, s2) = WINDOW_MAP((MMFLOAT)STRIDE_INT(a1int, i, s1));
 			}
 			else
 			{ // in and out are integers
 				for (i = 0; i < card1; i++)
-					STRIDE_INT(a2int, i, s2) = (long long int)((((MMFLOAT)STRIDE_INT(a1int, i, s1) - inmin) / (inmax - inmin)) * (outmax - outmin) + outmin);
+					STRIDE_INT(a2int, i, s2) = FloatToInt64(WINDOW_MAP((MMFLOAT)STRIDE_INT(a1int, i, s1)));
 			}
+#undef WINDOW_MAP
 			return;
 		}
 
@@ -2736,7 +2749,7 @@ void cmd_math(void)
 			if (argc == 1)
 				i = getinteger(argv[0]);
 			else
-				i = time_us_32();
+				i = time_us_32() & 0x7FFFFFFF; // the counter passes 2^31 after 35.8 minutes: keep the seed positive
 			if (i < 0)
 				StandardError(21);
 			if (g_myrand == NULL)
@@ -2763,10 +2776,15 @@ void cmd_math(void)
 			card3 = parsenumberarray(argv[6], &a3float, &a3int, 4, 0, dims, true, NULL);
 			if ((card1 != card2) || (card1 != card3))
 				error("Size mismatch");
+			{ // the three arrays must be different: compare the pointers in use, not the unused NULLs
+				void *p1 = a1int ? (void *)a1int : (void *)a1float;
+				void *p2 = a2int ? (void *)a2int : (void *)a2float;
+				void *p3 = a3int ? (void *)a3int : (void *)a3float;
+				if (p1 == p2 || p1 == p3 || p2 == p3)
+					error("Arrays must be different");
+			}
 			if (a3int != NULL)
 			{
-				if ((a1int == a2int) || (a1int == a3int) || (a2int == a3int))
-					error("Arrays must be different");
 				for (i = 0; i < card1; i++)
 				{
 					if (a1int != NULL)
@@ -2783,8 +2801,6 @@ void cmd_math(void)
 			}
 			else
 			{
-				if ((a1float == a2float) || (a1float == a3float) || (a2float == a3float))
-					error("Arrays must be different");
 				for (i = 0; i < card1; i++)
 				{
 					if (a1int != NULL)
@@ -3588,7 +3604,7 @@ void fun_math(void)
 		if (tp)
 		{
 			int i, card1 = 1;
-			MMFLOAT *a1float = NULL, max = -3.0e+38, val;
+			MMFLOAT *a1float = NULL, max, val;
 			int64_t *a1int = NULL;
 			long long int *temp = NULL;
 			int s1;
@@ -3612,6 +3628,9 @@ void fun_math(void)
 					StandardError(6);
 			}
 
+			max = a1float != NULL ? STRIDE_FLOAT(a1float, 0, s1) : (MMFLOAT)STRIDE_INT(a1int, 0, s1); // start from element 0
+			if (temp != NULL)
+				*temp = g_OptionBase;
 			if (a1float != NULL)
 			{
 				for (i = 0; i < card1; i++)
@@ -3650,7 +3669,7 @@ void fun_math(void)
 		if (tp)
 		{
 			int i, card1 = 1;
-			MMFLOAT *a1float = NULL, min = 3.0e+38, val;
+			MMFLOAT *a1float = NULL, min, val;
 			int64_t *a1int = NULL;
 			long long int *temp = NULL;
 			int s1;
@@ -3673,6 +3692,9 @@ void fun_math(void)
 				if (!(min_vtype & T_INT))
 					StandardError(6);
 			}
+			min = a1float != NULL ? STRIDE_FLOAT(a1float, 0, s1) : (MMFLOAT)STRIDE_INT(a1int, 0, s1); // start from element 0
+			if (temp != NULL)
+				*temp = g_OptionBase;
 			if (a1float != NULL)
 			{
 				for (i = 0; i < card1; i++)
@@ -4032,13 +4054,13 @@ void cmd_FFT(unsigned char *pp)
 		card2 = parsefloatarray(argv[2], &a4float, 2, 1, dims, true, NULL);
 		if (card1 != card2)
 			StandardError(16);
-		for (i = 1; i < 65536; i *= 2)
+		for (i = 2; i < 65536; i *= 2) // at least 2: a single element reaches an allocation of 0
 		{
 			if (card1 == i)
 				powerof2 = 1;
 		}
 		if (!powerof2)
-			error("array size must be a power of 2");
+			error("array size must be a power of 2, at least 2");
 		a1cplx = (cplx *)GetTempMainMemory((card1) * 16);
 		a5float = (MMFLOAT *)a1cplx;
 		for (i = 0; i < card1; i++)
@@ -4060,13 +4082,13 @@ void cmd_FFT(unsigned char *pp)
 		card2 = parsefloatarray(argv[2], &a4float, 2, 1, dims, true, NULL);
 		if (card1 != card2)
 			StandardError(16);
-		for (i = 1; i < 65536; i *= 2)
+		for (i = 2; i < 65536; i *= 2) // at least 2: a single element reaches an allocation of 0
 		{
 			if (card1 == i)
 				powerof2 = 1;
 		}
 		if (!powerof2)
-			error("array size must be a power of 2");
+			error("array size must be a power of 2, at least 2");
 		a1cplx = (cplx *)GetTempMainMemory((card1) * 16);
 		a5float = (MMFLOAT *)a1cplx;
 		for (i = 0; i < card1; i++)
@@ -4085,18 +4107,20 @@ void cmd_FFT(unsigned char *pp)
 	{
 		getcsargs(&tp, 3);
 		card1 = parsefloatarray(argv[0], &a4float, 1, 2, dims, false, NULL);
+		if (DimElements(dims[0]) != 2)
+			error("Argument 1 must be a 2 x n array"); // real and imaginary per element
 		int size = DimUpper(dims[1]) - g_OptionBase + 1;
 		a1cplx = (cplx *)a4float;
 		card2 = parsefloatarray(argv[2], &a3float, 2, 1, dims, true, NULL);
 		if (card2 != size)
 			StandardError(16);
-		for (i = 1; i < 65536; i *= 2)
+		for (i = 2; i < 65536; i *= 2) // at least 2: a single element reaches an allocation of 0
 		{
 			if (card2 == i)
 				powerof2 = 1;
 		}
 		if (!powerof2)
-			error("array size must be a power of 2");
+			error("array size must be a power of 2, at least 2");
 		a2cplx = (cplx *)GetTempMainMemory((card2) * 16);
 		memcpy(a2cplx, a1cplx, card2 * 16);
 		for (i = 0; i < card2; i++)
@@ -4112,16 +4136,18 @@ void cmd_FFT(unsigned char *pp)
 	getcsargs(&pp, 3);
 	card1 = parsefloatarray(argv[0], &a3float, 1, 1, dims, false, NULL);
 	card2 = parsefloatarray(argv[2], &a4float, 2, 2, dims, true, NULL);
+	if (DimElements(dims[0]) != 2)
+		error("Argument 2 must be a 2 x n array"); // real and imaginary per element
 	a2cplx = (cplx *)a4float;
 	if ((DimUpper(dims[1]) - g_OptionBase + 1) != card1)
 		StandardError(16);
-	for (i = 1; i < 65536; i *= 2)
+	for (i = 2; i < 65536; i *= 2) // at least 2: a single element reaches an allocation of 0
 	{
 		if (card1 == i)
 			powerof2 = 1;
 	}
 	if (!powerof2)
-		error("array size must be a power of 2");
+		error("array size must be a power of 2, at least 2");
 	for (i = 0; i < card1; i++)
 	{
 		a4float[i * 2] = a3float[i];

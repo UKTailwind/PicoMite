@@ -42,8 +42,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "hardware/irq.h"
 #include "hardware/pwm.h"
 #ifdef PICOMITEWEB
-#define CJSON_NESTING_LIMIT 100
-#include "cJSON.h"
+#include "cJSON.h" // its nesting limit is set where cJSON.c is compiled (CMakeLists.txt), 128
 #endif
 #define STATIC static
 
@@ -3180,9 +3179,11 @@ void fun_json(void)
         sret = GetTempStrMemory();
         int64_t *dest = NULL;
         MMFLOAT tempd;
-        int i, j, k, mode, index;
-        char field[32], num[6];
+        int i, j, k;
+        char field[64], num[8];
         getcsargs(&ep, 3);
+        if (argc != 3)
+                StandardError(2);
         char *a = GetTempStrMemory();
         ptr1 = findvar(argv[0], V_FIND | V_EMPTY_OK);
         CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
@@ -3228,54 +3229,55 @@ void fun_json(void)
                 error("Invalid JSON data");
         }
         root = parse;
-        memset(field, 0, 32);
-        memset(num, 0, 6);
+        /* Walk the path: keys separated by '.', each followed by any number of
+           [index], in any order, so a path may start with an index (a document
+           that is an array) or end with one. A key is matched exactly, except
+           the last one, which is matched regardless of case, as it always was.
+           A key or an index longer than its buffer is an error, not an overrun. */
         i = 0;
-        j = 0;
-        k = 0;
-        mode = 0;
-        while (i < len)
+        while (i < len && root != NULL)
         {
                 if (p[i] == '[')
-                { // start of index
-                        mode = 1;
-                        field[j] = 0;
-                        root = cJSON_GetObjectItemCaseSensitive(root, field);
-                        memset(field, 0, 32);
-                        j = 0;
-                }
-                if (p[i] == ']')
                 {
-                        num[k] = 0;
-                        index = atoi(num);
-                        root = cJSON_GetArrayItem(root, index);
-                        memset(num, 0, 6);
                         k = 0;
-                }
-                if (p[i] == '.')
-                { // new field separator
-                        if (mode == 0)
+                        i++;
+                        while (i < len && p[i] != ']')
                         {
-                                field[j] = 0;
-                                root = cJSON_GetObjectItemCaseSensitive(root, field);
-                                memset(field, 0, 32);
-                                j = 0;
+                                if (k >= (int)sizeof(num) - 1)
+                                {
+                                        json_arena_reset();
+                                        error("Invalid JSON path");
+                                }
+                                num[k++] = p[i++];
                         }
-                        else
-                        { // step past the dot after a close bracket
-                                mode = 0;
+                        if (i >= len || k == 0)
+                        {
+                                json_arena_reset();
+                                error("Invalid JSON path"); // no ] or an empty []
                         }
+                        num[k] = 0;
+                        i++; // past the ]
+                        root = cJSON_GetArrayItem(root, atoi(num));
                 }
                 else
                 {
-                        if (mode == 0)
-                                field[j++] = p[i];
-                        else if (p[i] != '[')
-                                num[k++] = p[i];
+                        if (p[i] == '.')
+                                i++; // the separator before a key
+                        j = 0;
+                        while (i < len && p[i] != '.' && p[i] != '[')
+                        {
+                                if (j >= (int)sizeof(field) - 1)
+                                {
+                                        json_arena_reset();
+                                        error("Invalid JSON path");
+                                }
+                                field[j++] = p[i++];
+                        }
+                        field[j] = 0;
+                        if (j)
+                                root = (i >= len) ? cJSON_GetObjectItem(root, field) : cJSON_GetObjectItemCaseSensitive(root, field);
                 }
-                i++;
         }
-        root = cJSON_GetObjectItem(root, field);
 
         if (cJSON_IsObject(root))
         {
@@ -3318,6 +3320,11 @@ void fun_json(void)
         }
         if (cJSON_IsString(root))
         {
+                if (strlen(root->valuestring) > MAXSTRLEN)
+                {
+                        json_arena_reset();
+                        error("String too long");
+                }
                 strcpy(a, root->valuestring);
                 json_arena_reset();
                 sret = (unsigned char *)a;

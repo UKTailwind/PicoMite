@@ -832,8 +832,13 @@ void MIPS16 cmd_3D(void)
         if (nf < 1)
             error("3D object must have a minimum of 1 face");
         int cam = getint(argv[6], 1, MAXCAM);
-        if (parsefloatarray(argv[8], &vertex, 5, 2, NULL, false, NULL) < nv)
-            error("Vertex array too small");
+#ifdef rp2350
+        int dims[MAXDIM] = {0};
+#else
+        short dims[MAXDIM] = {0};
+#endif
+        if (parsefloatarray(argv[8], &vertex, 5, 2, dims, false, NULL) < nv * 3 || DimElements(dims[0]) != 3)
+            error("Vertex array must be (2, n) with n at least the vertex count"); // x, y, z per vertex, contiguous
         if (parseintegerarray(argv[10], &facecount, 6, 1, NULL, false, NULL) < nf)
             error("Vertex count array too small");
         facecountindex = facecount;

@@ -106,7 +106,7 @@ __not_in_flash("data") const unsigned char name_end_tbl[256] = {
 
 // Forward declarations for struct helper functions (NOT in RAM for size savings)
 #ifdef STRUCTENABLED
-int ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, int argtype, unsigned char *argname);
+int ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, int argtype, unsigned char *argname, int argStructIdx);
 unsigned char *CopyStructReturn(void *struct_data, int struct_type_idx, int *out_struct_type);
 void *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsigned char *member_path,
                           unsigned char **pp, int *member_type);
@@ -1674,17 +1674,23 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
             name[namelen] = 0;
 
             // Check for duplicate type name
-            for (j = 0; j < g_structcnt; j++)
             {
-                if (g_structtbl[j] != NULL && strcmp((char *)name, (char *)g_structtbl[j]->name) == 0)
+                int duplicate = 0;
+                for (j = 0; j < g_structcnt; j++)
                 {
-                    if (ErrAbort)
+                    if (g_structtbl[j] != NULL && strcmp((char *)name, (char *)g_structtbl[j]->name) == 0)
                     {
-                        SetPreprogramError("TYPE already defined", CurrentLinePtr);
-                        return -1;
+                        if (ErrAbort)
+                        {
+                            SetPreprogramError("TYPE already defined", CurrentLinePtr);
+                            return -1;
+                        }
+                        duplicate = 1; // at the prompt: the definition already there stands
+                        break;
                     }
-                    continue;
                 }
+                if (duplicate)
+                    continue;
             }
 
             // Check max types
@@ -2797,6 +2803,9 @@ union u_argval
 static union u_argval s_argval[MAX_ARG_COUNT];
 static int s_argtype[MAX_ARG_COUNT];
 static int s_argVarIndex[MAX_ARG_COUNT];
+#ifdef STRUCTENABLED
+static int s_argStructIdx[MAX_ARG_COUNT]; // the structure type each argument carries, -1 for none (ValidateStructParam)
+#endif
 static unsigned char s_argbuf1[STRINGSIZE];
 static unsigned char *s_argv1[MAX_ARG_COUNT];
 static unsigned char s_argbuf2[STRINGSIZE];
@@ -3323,6 +3332,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     //    - missing (ie, caller did not supply that parameter)
     //    - a variable, in which case we need to get a pointer to that variable's data and save its index so later we can get its type
     //    - an expression, in which case we evaluate the expression and get its value and type
+#ifdef STRUCTENABLED
+    for (i = 0; i < MAX_ARG_COUNT; i++)
+        s_argStructIdx[i] = -1;
+#endif
     for (i = 0; i < argc2; i += 2)
     { // count through the arguments in the definition of the sub/fun
         if (i < argc1 && *argv1[i])
@@ -3343,6 +3356,13 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
                         argtype[i] = VREC(g_VarIndex)->type; // and the variable's type
                     argVarIndex[i] = g_VarIndex;
+#ifdef STRUCTENABLED
+                    // the structure type the argument itself carries: a nested member's own, a whole variable's, or none
+                    if ((VREC(g_VarIndex)->type & T_STRUCT) && g_StructMemberType != 0)
+                        s_argStructIdx[i] = (g_StructMemberType & T_STRUCT) ? g_StructMemberSize : -1;
+                    else if (VREC(g_VarIndex)->type & T_STRUCT)
+                        s_argStructIdx[i] = (int)VREC(g_VarIndex)->size;
+#endif
                     if (argtype[i] & T_CONST)
                     {
                         argtype[i] = 0; // we don't want to point to a constant
@@ -3433,7 +3453,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 
 #ifdef STRUCTENABLED
         // if the definition called for a struct, use helper (NOT in RAM for size savings)
-        if (ValidateStructParam(g_VarIndex, argVarIndex[i], argval[i].s, argtype[i], argv1[i]))
+        if (ValidateStructParam(g_VarIndex, argVarIndex[i], argval[i].s, argtype[i], argv1[i], s_argStructIdx[i]))
             continue; // Skip normal pointer/value handling below
 #endif
 
@@ -4178,7 +4198,7 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
                 if (g_StructMemberType != 0)
                 {
                     t = TypeMask(g_StructMemberType);
-                    g_ExprStructType = -1; // Not a whole struct
+                    g_ExprStructType = (g_StructMemberType & T_STRUCT) ? g_StructMemberSize : -1; // a nested member carries its own type
                 }
                 else if (VREC(g_VarIndex)->type & T_STRUCT)
                 {
@@ -4653,9 +4673,9 @@ routines for storing and manipulating variables
  * Returns 1 if handled (caller should continue to next param), 0 if not a struct case.
  ***********************************************************************************************/
 #ifdef rp2350
-int ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, int argtype, unsigned char *argname)
+int ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, int argtype, unsigned char *argname, int argStructIdx)
 #else
-int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, int argtype, unsigned char *argname)
+int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, int argtype, unsigned char *argname, int argStructIdx)
 #endif
 {
     // Check if definition expects a struct
@@ -4668,12 +4688,12 @@ int MIPS16 ValidateStructParam(int varIndex, int argVarIndex, void *argval_s, in
         error("Expected a structure variable: $", argname);
     }
 
-    // Verify caller provided a struct
-    if (!(VREC(argVarIndex)->type & T_STRUCT))
+    // Verify caller provided a struct: the argument's own type (a nested member's, say), not its base variable's
+    if (argStructIdx < 0)
         error("Expected a structure variable: $", argname);
 
-    // Check struct types match (stored in size field)
-    if (VREC(varIndex)->size != VREC(argVarIndex)->size)
+    // Check struct types match (the type's index)
+    if (VREC(varIndex)->size != argStructIdx)
         error("Structure type mismatch: $", argname);
 
     // Free any memory allocated for local struct (findvar allocates memory)
@@ -4769,6 +4789,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
     unsigned char *current_member = member_path;
     unsigned char *p = *pp;
     int nest_depth = 0;
+    unsigned char cont_member[MAXVARLEN + 1]; // the rest of a path read from the program: a local, as an index in the path may resolve another path
 
     while (1)
     {
@@ -4951,7 +4972,6 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
                     if (*p == '$' || *p == '%' || *p == '!')
                         p++;
                     // Use static buffer for continuation
-                    static unsigned char cont_member[MAXVARLEN + 1];
                     memcpy(cont_member, membuf, ml + 1);
                     current_member = cont_member;
                 }

@@ -567,7 +567,7 @@ endif()
 
 if(IS_WEB)
 	target_sources(PicoMite PRIVATE ${WEB_SOURCES})
-	set_source_files_properties(third_party_mod/cJSON.c PROPERTIES COMPILE_FLAGS -Os)
+	set_source_files_properties(third_party_mod/cJSON.c PROPERTIES COMPILE_FLAGS "-Os -DCJSON_NESTING_LIMIT=128") # JSON$: the C stack, not cJSON's 1000, bounds the depth
 	target_include_directories(PicoMite PRIVATE
 		${CMAKE_CURRENT_LIST_DIR}
 		${CMAKE_CURRENT_LIST_DIR}/..

@@ -1056,8 +1056,8 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 			{
 				SerialPutchar(GPSchannel, s[i]);
 				if (s[i] == '$')
-					xsum = 0;
-				if (s[i] != '*')
+					xsum = 0; // the checksum covers the characters between $ and *
+				else if (s[i] != '*')
 					xsum ^= s[i];
 			}
 			i = xsum / 16;
@@ -1395,7 +1395,7 @@ void array_add(unsigned char *tp)
 			else if (a2float == NULL && a1float != NULL)
 			{
 				for (i = 0; i < card1; i++)
-					STRIDE_INT(a2int, i, s2) = FloatToInt64(((t & T_INT) ? i64 : FloatToInt64(f)) + STRIDE_FLOAT(a1float, i, s1));
+					STRIDE_INT(a2int, i, s2) = FloatToInt64(((t & T_INT) ? (MMFLOAT)i64 : f) + STRIDE_FLOAT(a1float, i, s1));
 			}
 			else
 			{
@@ -1436,7 +1436,7 @@ void array_insert(unsigned char *tp)
 {
 	int i, j, t, start, increment, dim[MAXDIM], pos[MAXDIM], off[MAXDIM], dimcount = 0, target = -1;
 	int64_t *a1int = NULL, *a2int = NULL;
-	MMFLOAT *afloat = NULL;
+	MMFLOAT *a1float = NULL, *a2float = NULL;
 	unsigned char *a1str = NULL, *a2str = NULL;
 	unsigned char size = 0, size2 = 0;
 #ifdef rp2350
@@ -1455,9 +1455,7 @@ void array_insert(unsigned char *tp)
 	}
 	else
 	{
-		parsenumberarray(argv[0], &afloat, &a1int, 1, 0, dims, false, NULL);
-		if (!a1int)
-			a1int = (int64_t *)afloat;
+		parsenumberarray(argv[0], &a1float, &a1int, 1, 0, dims, false, NULL);
 	}
 	if (!DimIsRealArray(dims[1]))
 		error("Argument 1 must be a 2D or more array");
@@ -1491,12 +1489,10 @@ void array_insert(unsigned char *tp)
 	}
 	else
 	{
-		parsenumberarray(argv[i * 2 + 2], &afloat, &a2int, i + 1, 1, dims, true, NULL);
-		if (!a2int)
-			a2int = (int64_t *)afloat;
+		parsenumberarray(argv[i * 2 + 2], &a2float, &a2int, i + 1, 1, dims, true, NULL);
 	}
 	if (target == -1)
-		return;
+		error("One index must be omitted"); // the omitted one is the dimension inserted into
 	if (dim[target] + g_OptionBase != DimUpper(dims[0]))
 		error("Size mismatch between insert and target array");
 	if (size != size2)
@@ -1529,8 +1525,18 @@ void array_insert(unsigned char *tp)
 	}
 	else
 	{
-		for (i = 0; i <= dim[target]; i++)
-			a1int[start + i * increment] = *a2int++;
+		for (i = 0; i <= dim[target]; i++) // the types may differ: convert, as LET does
+		{
+			int k = start + i * increment;
+			if (a1float != NULL && a2float != NULL)
+				a1float[k] = a2float[i];
+			else if (a1float != NULL)
+				a1float[k] = (MMFLOAT)a2int[i];
+			else if (a2float != NULL)
+				a1int[k] = FloatToInt64(a2float[i]);
+			else
+				a1int[k] = a2int[i];
+		}
 	}
 	return;
 }
@@ -1542,7 +1548,7 @@ void array_slice(unsigned char *tp)
 {
 	int i, j, t, start, increment, dim[MAXDIM], pos[MAXDIM], off[MAXDIM], dimcount = 0, target = -1, toarray = 0;
 	int64_t *a1int = NULL, *a2int = NULL;
-	MMFLOAT *afloat = NULL;
+	MMFLOAT *a1float = NULL, *a2float = NULL;
 	unsigned char *a1str = NULL, *a2str = NULL;
 	unsigned char size = 0, size2 = 0;
 #ifdef rp2350
@@ -1561,9 +1567,7 @@ void array_slice(unsigned char *tp)
 	}
 	else
 	{
-		parsenumberarray(argv[0], &afloat, &a1int, 1, 0, dims, false, NULL);
-		if (!a1int)
-			a1int = (int64_t *)afloat;
+		parsenumberarray(argv[0], &a1float, &a1int, 1, 0, dims, false, NULL);
 	}
 	if (!DimIsRealArray(dims[1]))
 		error("Argument 1 must be a 2D or more array");
@@ -1599,9 +1603,7 @@ void array_slice(unsigned char *tp)
 	}
 	else
 	{
-		toarray = parsenumberarray(argv[i * 2 + 2], &afloat, &a2int, i + 1, 1, dims, true, NULL) - 1;
-		if (!a2int)
-			a2int = (int64_t *)afloat;
+		toarray = parsenumberarray(argv[i * 2 + 2], &a2float, &a2int, i + 1, 1, dims, true, NULL) - 1;
 	}
 	if (dim[target] != toarray)
 		error("Size mismatch between slice and target array");
@@ -1635,8 +1637,18 @@ void array_slice(unsigned char *tp)
 	}
 	else
 	{
-		for (i = 0; i <= dim[target]; i++)
-			*a2int++ = a1int[start + i * increment];
+		for (i = 0; i <= dim[target]; i++) // the types may differ: convert, as LET does
+		{
+			int k = start + i * increment;
+			if (a1float != NULL && a2float != NULL)
+				a2float[i] = a1float[k];
+			else if (a1float != NULL)
+				a2int[i] = FloatToInt64(a1float[k]);
+			else if (a2float != NULL)
+				a2float[i] = (MMFLOAT)a1int[k];
+			else
+				a2int[i] = a1int[k];
+		}
 	}
 	return;
 }
@@ -1869,7 +1881,8 @@ void MIPS16 __not_in_flash_func(cmd_let)(void)
 	{
 		// Struct assignment - evaluate the right side and copy struct data
 		// Save destination info BEFORE evaluate changes g_VarIndex
-		int dest_struct_idx = (int)VREC(g_VarIndex)->size;
+		// a nested member (a.inner = ...) has its own type; a whole variable has the base's
+		int dest_struct_idx = (g_StructMemberType & T_STRUCT) ? g_StructMemberSize : (int)VREC(g_VarIndex)->size;
 		int dest_struct_size = g_structtbl[dest_struct_idx]->total_size;
 
 		t = T_NOTYPE; // Let evaluate determine the actual type
@@ -8149,6 +8162,10 @@ void MIPS16 cmd_read(void)
 	{
 		ptr = findvar(argv[i], V_FIND | V_EMPTY_OK);
 		vtbl[vcnt] = (char *)ptr;
+#ifdef STRUCTENABLED
+		if (emptyarray && g_StructMemberType != 0)
+			StandardError(47); // pts().x: the step from element to element would be the member's size, not the structure's
+#endif
 		card = 1;
 		if (emptyarray)
 		{ // empty array
@@ -8708,7 +8725,7 @@ unsigned char *CheckIfTypeSpecified(unsigned char *p, int *type, int AllowDefaul
 	return tp;
 }
 
-unsigned char *SetValue(unsigned char *p, int t, void *v)
+unsigned char *SetValue(unsigned char *p, int t, void *v, int maxlen)
 {
 	MMFLOAT f;
 	long long int i64;
@@ -8716,6 +8733,8 @@ unsigned char *SetValue(unsigned char *p, int t, void *v)
 	if (t & T_STR)
 	{
 		p = evaluate(p, &f, &i64, &s, &t, true);
+		if (*s > maxlen)
+			error("String too long"); // the variable's or the member's LENGTH
 		Mstrcpy(v, s);
 	}
 	else if (t & T_NBR)
@@ -8957,7 +8976,7 @@ void MIPS16 cmd_dim(void)
 										error("Unsupported member type in initialisation");
 
 									// Use SetValue to parse and assign the value
-									p = SetValue(p, member->type, member_ptr);
+									p = SetValue(p, member->type, member_ptr, member->size);
 									member_ptr += elem_size;
 
 									skipspace(p);
@@ -8992,7 +9011,7 @@ void MIPS16 cmd_dim(void)
 						do
 						{
 							p++; // step over the opening bracket or terminating comma
-							p = SetValue(p, type, v);
+							p = SetValue(p, type, v, VREC(VIndexSave)->size);
 							if (type & T_STR)
 								v = (char *)v + VREC(VIndexSave)->size + 1;
 							if (type & T_NBR)
@@ -9008,7 +9027,7 @@ void MIPS16 cmd_dim(void)
 							error("Number of initialising values");
 					}
 					else
-						SetValue(p, type, v);
+						SetValue(p, type, v, VREC(VIndexSave)->size);
 				}
 				type = ImpliedType;
 			}
@@ -9731,6 +9750,8 @@ void MIPS16 cmd_struct(void)
 
 		// Read struct data from file
 		FileGetData(fnbr, var_ptr, struct_size * num_elements, &bytes_read);
+		if (bytes_read != struct_size * num_elements)
+			error("Not enough data in the file");
 	}
 	else if ((p = checkstring(cmdline, (unsigned char *)"PRINT")) != NULL)
 	{
