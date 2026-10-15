@@ -10083,10 +10083,13 @@ or
 OPTION PICO PLUS 2 OFF
 
 RP2350B VERSIONS ONLY
-Configures the firmware for the Pimoroni Pico Plus 2 board with a single
-command.  ON sets the heartbeat to the board's LED pin and enables the PSRAM
-fitted to the board (chip select GP47), then saves the options and restarts.
-OFF disables the heartbeat and the PSRAM.
+Configures the firmware for the Pimoroni Pico Plus 2 or Pico Plus 2 W board
+with a single command.  ON sets the heartbeat to the board's LED pin and
+enables the PSRAM fitted to the board (chip select GP47), then saves the
+options and restarts.  OFF disables the heartbeat and the PSRAM.
+On the Pico Plus 2 W (the WiFi and Bluetooth versions) the LED is on the
+wireless chip, so ON uses that as the heartbeat and OFF leaves the heartbeat
+on (OPTION HEARTBEAT OFF will turn it off).
 This command will generate an error on RP2350A based boards (eg, the Raspberry
 Pi Pico 2).
 
