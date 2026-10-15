@@ -1040,7 +1040,7 @@ void MIPS16 cmd_longString(void)
         getcsargs(&tp, 3);
         if (argc != 3)
             StandardError(2);
-        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL);
+        j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1; // element 0 holds the length
         q = (char *)&dest[1];
         dest[0] = 0;
         parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
