@@ -664,6 +664,8 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 		// Caller must handle stride for struct member arrays
 		if (stride == NULL)
 			StandardError(47);
+		if (!emptyarray) // a(2).x starts at one element, s.x is no array at all: only a().x is a member array
+			error("Argument % must be a member of every element: a().x", argno);
 
 		// Verify member is integer type
 		if (!(g_StructMemberType & T_INT))
@@ -675,18 +677,9 @@ int parseintegerarray(unsigned char *tp, int64_t **a1int, int argno, int dimensi
 
 		*a1int = (int64_t *)ptr1;
 
-		// Calculate cardinality from struct array dimensions
-		int card = 1;
-		for (i = 0; i < MAXDIM; i++)
-		{
-			j = (DimUpper(RAW_DIM((*VREC(g_VarIndex)), i)) - g_OptionBase + 1);
-			if (j > 0)
-				card *= j;
-			else
-				break;
-		}
-		return card;
+		memcpy(dims, DIM_TABLE((*VREC(g_VarIndex))), MAXDIM * sizeof(dims[0])); // for the shape check and the count below, and the caller
 	}
+	else
 #endif
 	if (VREC(g_VarIndex)->type & T_INT)
 	{
@@ -783,6 +776,8 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 		// Caller must handle stride for struct member arrays
 		if (stride == NULL)
 			StandardError(47);
+		if (!emptyarray) // a(2).x starts at one element, s.x is no array at all: only a().x is a member array
+			error("Argument % must be a member of every element: a().x", argno);
 
 		// Verify member is numeric type
 		if (!(g_StructMemberType & (T_INT | T_NBR)))
@@ -797,18 +792,9 @@ int parsenumberarray(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, int 
 		else
 			*a1int = (int64_t *)ptr1;
 
-		// Calculate cardinality from struct array dimensions
-		int card = 1;
-		for (i = 0; i < MAXDIM; i++)
-		{
-			j = (DimUpper(RAW_DIM((*VREC(g_VarIndex)), i)) - g_OptionBase + 1);
-			if (j > 0)
-				card *= j;
-			else
-				break;
-		}
-		return card;
+		memcpy(dims, DIM_TABLE((*VREC(g_VarIndex))), MAXDIM * sizeof(dims[0])); // for the shape check and the count below, and the caller
 	}
+	else
 #endif
 	if (VREC(g_VarIndex)->type & (T_INT | T_NBR))
 	{
@@ -863,6 +849,8 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 		// Caller must handle stride for struct member arrays
 		if (stride == NULL)
 			StandardError(47);
+		if (!emptyarray) // a(2).x starts at one element, s.x is no array at all: only a().x is a member array
+			error("Argument % must be a member of every element: a().x", argno);
 
 		// Verify member is float type
 		if (!(g_StructMemberType & T_NBR))
@@ -874,18 +862,9 @@ int parsefloatarray(unsigned char *tp, MMFLOAT **a1float, int argno, int dimensi
 
 		*a1float = (MMFLOAT *)ptr1;
 
-		// Calculate cardinality from struct array dimensions
-		int card = 1;
-		for (i = 0; i < MAXDIM; i++)
-		{
-			j = (DimUpper(RAW_DIM((*VREC(g_VarIndex)), i)) - g_OptionBase + 1);
-			if (j > 0)
-				card *= j;
-			else
-				break;
-		}
-		return card;
+		memcpy(dims, DIM_TABLE((*VREC(g_VarIndex))), MAXDIM * sizeof(dims[0])); // for the shape check and the count below, and the caller
 	}
+	else
 #endif
 	if (VREC(g_VarIndex)->type & T_NBR)
 	{
@@ -1100,6 +1079,7 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 {
 	void *ptr1 = findvar(tp, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
 	int arraylength;
+	CHECK_STRUCT_MEMBER_ARRAY(); // a().x: "Struct member arrays not supported for this command", not "Invalid syntax"
 	if (VREC(g_VarIndex)->type & T_NBR)
 	{
 		if (!DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
@@ -2390,7 +2370,7 @@ void cmd_math(void)
 			MMFLOAT z = getnumber(argv[6]);
 			card = parsefloatarray(argv[8], &q, 5, 1, dims, true, NULL);
 			if (card != 5)
-				StandardErrorParam(41, 4);
+				StandardErrorParam(41, 5);
 			MMFLOAT halftheta = theta / 2.0 / optionangle; // respect OPTION ANGLE for both terms
 			MMFLOAT sineterm = sin(halftheta);
 			q[0] = cos(halftheta);
