@@ -5828,6 +5828,13 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                 p = ptemp; // Now points past the closing )
             }
         }
+#ifdef STRUCTENABLED
+        // An index may have been a structure's member (a(p.x)): its nested findvar
+        // left the member state set. Clear it; the struct paths below set it again.
+        g_StructMemberType = 0;
+        g_StructMemberOffset = 0;
+        g_StructMemberSize = 0;
+#endif
     }
 
     // we now have the variable name and, if it is an array, the parameters
