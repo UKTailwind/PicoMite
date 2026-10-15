@@ -3500,6 +3500,7 @@ int cmpstr(char *s1, char *s2)
 int massage(char *buff)
 {
     int i = nDefines;
+    str_replace_toolong = 0;
     while (i--)
     {
         char *p = dlist[i].from;
@@ -3533,6 +3534,8 @@ int massage(char *buff)
     STR_REPLACE(buff, "> ", ">", 0);
     STR_REPLACE(buff, "< ", "<", 0);
     STR_REPLACE(buff, " '", "'", 0);
+    if (str_replace_toolong)
+        return -1; // a #DEFINE replacement would not fit the line
     return strlen(buff);
 }
 void importfile(char *pp, char *tp, char **p, uint32_t buf, int convertdebug, bool message)
@@ -3691,6 +3694,12 @@ void importfile(char *pp, char *tp, char **p, uint32_t buf, int convertdebug, bo
                     FreeMemorySafe((void *)&dlist);
                     error("Too many #DEFINE statements");
                 }
+                if (strlen((char *)getCstring(argv[0])) >= sizeof(dlist[0].from) || strlen((char *)getCstring(argv[2])) >= sizeof(dlist[0].to))
+                {
+                    FreeMemorySafe((void **)&buf);
+                    FreeMemorySafe((void **)&dlist);
+                    error("#DEFINE string too long");
+                }
                 strcpy(dlist[nDefines].from, (char *)getCstring(argv[0]));
                 strcpy(dlist[nDefines].to, (char *)getCstring(argv[2]));
                 nDefines++;
@@ -3716,11 +3725,25 @@ void importfile(char *pp, char *tp, char **p, uint32_t buf, int convertdebug, bo
         }
         else
         {
+            if ((sbuff - buff) + len + 2 > MAXSTRLEN)
+            {
+                FileClose(fnbr);
+                FreeMemorySafe((void **)&buf);
+                FreeMemorySafe((void **)&dlist);
+                error("Line is too long");
+            }
             if (toggle)
                 sbuff[len++] = 34;
             sbuff[len++] = 39;
             sbuff[len] = 0;
             len = massage(sbuff); // can't risk crushing lines with a quote in them
+            if (len < 0)
+            {
+                FileClose(fnbr);
+                FreeMemorySafe((void **)&buf);
+                FreeMemorySafe((void **)&dlist);
+                error("Line is too long");
+            }
             if ((sbuff[0] != 39) || (sbuff[0] == 39 && sbuff[1] == 39))
             {
                 memcpy(*p, sbuff, len);
@@ -3855,6 +3878,12 @@ int FileLoadCMM2Program(char *fname, bool message)
                     FreeMemorySafe((void *)&dlist);
                     error("Too many #DEFINE statements");
                 }
+                if (strlen((char *)getCstring(argv[0])) >= sizeof(dlist[0].from) || strlen((char *)getCstring(argv[2])) >= sizeof(dlist[0].to))
+                {
+                    FreeMemorySafe((void *)&buf);
+                    FreeMemorySafe((void *)&dlist);
+                    error("#DEFINE string too long");
+                }
                 strcpy(dlist[nDefines].from, (char *)getCstring(argv[0]));
                 strcpy(dlist[nDefines].to, (char *)getCstring(argv[2]));
                 nDefines++;
@@ -3910,11 +3939,25 @@ int FileLoadCMM2Program(char *fname, bool message)
                     break;
                 }
             }
+            if ((sbuff - buff) + len + 2 > MAXSTRLEN)
+            {
+                FileClose(fnbr);
+                FreeMemorySafe((void *)&buf);
+                FreeMemorySafe((void *)&dlist);
+                error("Line is too long");
+            }
             if (toggle)
                 sbuff[len++] = 34;
             sbuff[len++] = 39;
             sbuff[len] = 0;
             len = massage(sbuff); // can't risk crushing lines with a quote in them
+            if (len < 0)
+            {
+                FileClose(fnbr);
+                FreeMemorySafe((void *)&buf);
+                FreeMemorySafe((void *)&dlist);
+                error("Line is too long");
+            }
             if ((sbuff[0] != 39) || (sbuff[0] == 39 && sbuff[1] == 39))
             {
                 memcpy(p, sbuff, len);

@@ -730,6 +730,7 @@ long long int FloatToInt64(MMFLOAT x);
     unsigned char *getFstring(unsigned char *p);
     char *fstrstr(const char *s1, const char *s2);
     void str_replace(char *target, const char *needle, const char *replacement, uint8_t ignore);
+    extern int str_replace_toolong; // set by str_replace/STR_REPLACE when the result would not fit a line
     void MIPS16 STR_REPLACE(char *target, const char *needle, const char *replacement, uint8_t ignore);
 
 /* ============================================================================

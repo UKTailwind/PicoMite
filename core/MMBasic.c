@@ -1977,6 +1977,7 @@ int MIPS16 tokenise(int console)
     if (multi == false && i == false)
     {
         int i = 0;
+        str_replace_toolong = 0;
         while (i < MMEND)
         {
             char buff[] = "~( )";
@@ -1998,6 +1999,8 @@ int MIPS16 tokenise(int console)
         STR_REPLACE((char *)inpbuf, "MAX(", "TOPBOTTOM(A,", 2);
         STR_REPLACE((char *)inpbuf, "LEFT$(", "SCHANGE$(E,", 2);
         STR_REPLACE((char *)inpbuf, "RIGHT$(", "SCHANGE$(R,", 2);
+        if (str_replace_toolong)
+            goto toolong; // a rewrite (MIN( to TOPBOTTOM(I, say) would not fit the line
     }
     // setup the input and output buffers
     p = inpbuf;
@@ -3604,112 +3607,109 @@ char MIPS16 *fstrstr(const char *s1, const char *s2)
     return (0);
 }
 
-void MIPS16 str_replace(char *target, const char *needle, const char *replacement, uint8_t ignoresurround)
+int str_replace_toolong = 0; // a replacement would not have fitted the line: the target was left as it was
+
+/* Replace every occurrence of needle in target with replacement, matching
+   case-blind. An occurrence counts only as a whole word: not preceded by a name
+   character (unless ignoresurround bit 0, or it starts the line) and not
+   followed by one (unless bit 1). An occurrence that does not count is kept as
+   it is, in its own case. An empty needle matches nothing. The result must fit
+   limit characters: when it would not, target is left unchanged and 0 is
+   returned. */
+static int MIPS16 str_replace_into(char *target, size_t limit, const char *needle, const char *replacement, uint8_t ignoresurround)
 {
-    char buffer[288] = {0};
-    char *insert_point = &buffer[0];
+    char buffer[STRINGSIZE];
+    char *op = buffer;
     const char *tmp = target;
     size_t needle_len = strlen(needle);
     size_t repl_len = strlen(replacement);
 
+    if (needle_len == 0)
+        return 1;
+    if (limit > MAXSTRLEN)
+        limit = MAXSTRLEN;
     while (1)
     {
         const char *p = fstrstr(tmp, needle);
+        size_t keep = p ? (size_t)(p - tmp) : strlen(tmp); // the text before the match, or the rest
+        const char *piece;
+        size_t piece_len;
 
-        // walked past last occurrence of needle; copy remaining part
+        if ((size_t)(op - buffer) + keep > limit)
+            return 0;
+        memcpy(op, tmp, keep);
+        op += keep;
         if (p == NULL)
-        {
-            strcpy(insert_point, tmp);
             break;
-        }
-        char *q;
-        if (p == target)
+        if ((p == target || !isnamechar(p[-1]) || (ignoresurround & 1)) &&
+            (!isnameend(p[needle_len]) || (ignoresurround & 2)))
         {
-            ignoresurround |= 1;
-            q = (char *)p;
-        }
-        else
-            q = (char *)p - 1;
-        if ((isnamechar(*q) && !(ignoresurround & 1)) || (isnameend(p[strlen(needle)]) && !(ignoresurround & 2)))
-        {
-            // copy part before needle
-            memcpy(insert_point, tmp, p - tmp);
-            insert_point += p - tmp;
-
-            // copy replacement string
-            memcpy(insert_point, needle, needle_len);
-            insert_point += needle_len;
-
-            // adjust pointers, move on
-            tmp = p + needle_len;
+            piece = replacement; // a whole word: replaced
+            piece_len = repl_len;
         }
         else
         {
-            // copy part before needle
-            memcpy(insert_point, tmp, p - tmp);
-            insert_point += p - tmp;
-
-            // copy replacement string
-            memcpy(insert_point, replacement, repl_len);
-            insert_point += repl_len;
-
-            // adjust pointers, move on
-            tmp = p + needle_len;
+            piece = p; // part of a longer name: kept as it is
+            piece_len = needle_len;
         }
+        if ((size_t)(op - buffer) + piece_len > limit)
+            return 0;
+        memcpy(op, piece, piece_len);
+        op += piece_len;
+        tmp = p + needle_len;
     }
-
-    // write altered string back to target
+    *op = 0;
     strcpy(target, buffer);
+    return 1;
 }
 
+void MIPS16 str_replace(char *target, const char *needle, const char *replacement, uint8_t ignoresurround)
+{
+    if (!str_replace_into(target, MAXSTRLEN, needle, replacement, ignoresurround))
+        str_replace_toolong = 1;
+}
+
+/* str_replace on a program line: text in quotes and the comment after ' are
+   hidden from it, a line that is a REM statement is left alone, and the
+   comment is put back afterwards (the replacement is given the room it needs). */
 void MIPS16 STR_REPLACE(char *target, const char *needle, const char *replacement, uint8_t ignoresurround)
 {
     char *ip = target;
     int toggle = 0;
     char comment[STRINGSIZE] = {0};
     skipspace(ip);
-    if (!(mytoupper(*ip) == 'R' && mytoupper(ip[1]) == 'E' && mytoupper(ip[2]) == 'M'))
+    if (mytoupper(ip[0]) == 'R' && mytoupper(ip[1]) == 'E' && mytoupper(ip[2]) == 'M' && !isnamechar(ip[3]))
+        return; // REM as a whole word: REMAINING = ... is not a comment
+    while (*ip)
     {
-        while (*ip)
+        if (*ip == 34)
         {
-            if (*ip == 34)
-            {
-                if (toggle == 0)
-                    toggle = 1;
-                else
-                    toggle = 0;
-                ip++;
-                continue;
-            }
-            if (toggle == 0 && *ip == '\'')
-            {
-                strcpy(comment, ip);
-                *ip = 0;
-                break;
-            }
-            if (toggle)
-            {
-                // Mark every char inside a quoted string by setting the high bit
-                // so str_replace cannot match a needle that falls inside the literal.
-                // tokenise() has already stripped the high bit from caller input, so
-                // any byte >= 0x80 we see on the way back out is one we set here.
-                *ip |= 0x80;
-            }
+            toggle = !toggle;
             ip++;
+            continue;
         }
-        str_replace(target, needle, replacement, ignoresurround);
-        ip = target;
-        if (comment[0] == '\'')
+        if (toggle == 0 && *ip == '\'')
         {
-            strcat(target, comment);
+            strcpy(comment, ip);
+            *ip = 0;
+            break;
         }
-        while (*ip)
+        if (toggle)
         {
-            if (*ip & 0x80)
-                *ip &= 0x7F;
-            ip++;
+            // Mark every char inside a quoted string by setting the high bit
+            // so str_replace cannot match a needle that falls inside the literal.
+            // tokenise() has already stripped the high bit from caller input, so
+            // any byte >= 0x80 we see on the way back out is one we set here.
+            *ip |= 0x80;
         }
+        ip++;
     }
+    if (!str_replace_into(target, MAXSTRLEN - strlen(comment), needle, replacement, ignoresurround))
+        str_replace_toolong = 1; // the line is as it was
+    if (comment[0] == '\'')
+        strcat(target, comment); // fits: the limit above kept room for it
+    for (ip = target; *ip; ip++)
+        *ip &= 0x7F;
 }
 
 /********************************************************************************************************************************************
