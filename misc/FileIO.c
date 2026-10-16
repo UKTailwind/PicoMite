@@ -2123,6 +2123,7 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
 
     int xOrigin, yOrigin;
     int xOffset, yOffset;
+    long long ximage = 0, yimage = 0; // as given: checked against the image's size once that is known
     int scale = 1; // pixel-binning factor: 1=full, 2=50%, 4=25%, 8=12.5%
 
     getcsargs(&p, 13);
@@ -2144,6 +2145,19 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
         dither_mode = getint(argv[6], -1, 7);
     if (dither_mode == 3 || dither_mode == 7)
         error("RGB565 dithering not yet supported");
+    /* ximage, yimage and scale are read before the file is opened, so an
+       error here leaves no file open.  The image's size, which bounds the
+       two offsets, is known only after pjpeg_decode_init: see below. */
+    if (argc >= 9 && *argv[8])
+        ximage = getinteger(argv[8]);
+    if (argc >= 11 && *argv[10])
+        yimage = getinteger(argv[10]);
+    if (argc >= 13 && *argv[12])
+    {
+        scale = getint(argv[12], 1, 8);
+        if (scale != 1 && scale != 2 && scale != 4 && scale != 8)
+            error("Scale must be 1, 2, 4 or 8");
+    }
 
     AppendDefaultExtension((char *)p, ".jpg");
     jpgfnbr = FindFreeFileNbr();
@@ -2163,16 +2177,18 @@ void MIPS16 cmd_LoadJPGImage(unsigned char *p)
         error("pjpeg_decode_init() failed with status %", status);
     }
 
-    if (argc >= 9 && *argv[8])
-        xOffset = getint(argv[8], 0, image_info.m_width - 1);
-    if (argc >= 11 && *argv[10])
-        yOffset = getint(argv[10], 0, image_info.m_height - 1);
-    if (argc >= 13 && *argv[12])
-    {
-        scale = getint(argv[12], 1, 8);
-        if (scale != 1 && scale != 2 && scale != 4 && scale != 8)
-            error("Scale must be 1, 2, 4 or 8");
+    if (ximage < 0 || ximage >= image_info.m_width)
+    { // the same error getint gave, with the file closed first
+        FileClose(jpgfnbr);
+        error("% is invalid (valid is % to %)", (int)ximage, 0, image_info.m_width - 1);
     }
+    if (yimage < 0 || yimage >= image_info.m_height)
+    {
+        FileClose(jpgfnbr);
+        error("% is invalid (valid is % to %)", (int)yimage, 0, image_info.m_height - 1);
+    }
+    xOffset = ximage;
+    yOffset = yimage;
 
     int mcu_row_width = image_info.m_width * image_info.m_comps;
     int mcu_row_height = image_info.m_MCUHeight;

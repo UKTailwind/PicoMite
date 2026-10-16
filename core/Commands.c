@@ -4674,10 +4674,31 @@ void MIPS16 do_chain(unsigned char *cmdline)
 	{
 		// Error in program - print message and don't run
 		RestoreContext(false);
+		IfTableForget(); /* both were built from the heap just rolled back: see below */
+#ifdef STRUCTENABLED
+		StructTableForget();
+#endif
 		PrintPreprogramError();
 		return;
 	}
 	RestoreContext(false);
+	/* PrepareProgram above built the TYPE definitions and the IF jump table
+	   from the heap SaveContext had emptied, and RestoreContext has just copied
+	   the old heap back over them: both tables now point into the old program's
+	   variables, and the IF table's next free would hand back pages that are
+	   live.  Forget them (the memory is not theirs to free) and prepare the
+	   program again, from the restored heap; this pass cannot fail, the first
+	   having checked the program.  RestoreContext's own name index and symbol
+	   bindings are valid and are freed first, as PrepareProgram makes them anew.
+	   A kept variable of a structure type carries the type's number, so the
+	   chained program must declare the TYPEs in the same order (the manual). */
+	IfTableForget();
+#ifdef STRUCTENABLED
+	StructTableForget();
+#endif
+	SymBindFree();
+	NameIndexFree();
+	PrepareProgram(true);
 	if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
 	{
 		ClearScreen(gui_bcolour);
