@@ -7972,7 +7972,7 @@ void cmd_redim(void)
 	int structIdx = -1;
 #endif
 	unsigned char *tp;
-	unsigned char old[MAXVARLEN + 1];
+	unsigned char old[STRINGSIZE]; // a whole argument: the name and its dimension expressions
 	int preserve = ((tp = checkstring(cmdline, (unsigned char *)"PRESERVE")) ? 1 : 0);
 	if (tp == NULL)
 		tp = cmdline;
@@ -7980,7 +7980,7 @@ void cmd_redim(void)
 		getcsargs(&tp, MAX_ARG_COUNT);
 		for (int i = 0; i < argc; i += 2)
 		{ // step through the arguments
-			strncpy((char *)old, (char *)argv[i], MAXVARLEN);
+			strcpy((char *)old, (char *)argv[i]); // argv[i] is shorter than a line
 			parse_and_strip((char *)old, newdims);
 			findvar(old, V_FIND | V_NOFIND_ERR | V_EMPTY_OK);
 			if (VREC(g_VarIndex)->type & T_STR)
@@ -11122,15 +11122,15 @@ unsigned char *llist(unsigned char *b, unsigned char *p)
 		*b = 0;
 		replaceAlpha((char *)b_start, overlaid_functions); // replace the user version of all the MM. functions
 		STR_REPLACE((char *)b_start, "PEEK(INT8", "PEEK(BYTE", 0);
-		STR_REPLACE((char *)b_start, "BASE$(2,", "BIN$(", 3);
-		STR_REPLACE((char *)b_start, "BASE$(8,", "OCT$(", 3);
-		STR_REPLACE((char *)b_start, "BASE$(16,", "HEX$(", 3);
-		STR_REPLACE((char *)b_start, "SCHANGE$(L,", "LCASE$(", 3);
-		STR_REPLACE((char *)b_start, "SCHANGE$(U,", "UCASE$(", 3);
-		STR_REPLACE((char *)b_start, "TOPBOTTOM(I,", "MIN(", 3);
-		STR_REPLACE((char *)b_start, "TOPBOTTOM(A,", "MAX(", 3);
-		STR_REPLACE((char *)b_start, "SCHANGE$(E,", "LEFT$(", 3);
-		STR_REPLACE((char *)b_start, "SCHANGE$(R,", "RIGHT$(", 3);
+		STR_REPLACE((char *)b_start, "BASE$(2,", "BIN$(", 2);
+		STR_REPLACE((char *)b_start, "BASE$(8,", "OCT$(", 2);
+		STR_REPLACE((char *)b_start, "BASE$(16,", "HEX$(", 2);
+		STR_REPLACE((char *)b_start, "SCHANGE$(L,", "LCASE$(", 2);
+		STR_REPLACE((char *)b_start, "SCHANGE$(U,", "UCASE$(", 2);
+		STR_REPLACE((char *)b_start, "TOPBOTTOM(I,", "MIN(", 2);
+		STR_REPLACE((char *)b_start, "TOPBOTTOM(A,", "MAX(", 2);
+		STR_REPLACE((char *)b_start, "SCHANGE$(E,", "LEFT$(", 2);
+		STR_REPLACE((char *)b_start, "SCHANGE$(R,", "RIGHT$(", 2);
 		return ++p;
 	} // end while
 }
@@ -11142,9 +11142,8 @@ void execute_one_command(unsigned char *p)
 	CheckAbort();
 	targ = T_CMD;
 	skipspace(p); // skip any whitespace
-	if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+	if (commandtbl_is_cmd(p)) // two token bytes that name a command: two adjacent operator tokens are not one
 	{
-		//                    if(*(char*)p >= C_BASETOKEN && *(char*)p - C_BASETOKEN < CommandTableSize - 1 && (commandtbl[*(char*)p - C_BASETOKEN].type & T_CMD)) {
 		CommandToken cmd = commandtbl_decode(p);
 		if (cmd == cmdWHILE || cmd == cmdDO || cmd == cmdFOR)
 			error("Invalid inside THEN ... ELSE");

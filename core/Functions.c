@@ -1688,6 +1688,8 @@ void fun_schange(void)
 	}
 	else if (*argv[0] == 'R')
 	{
+		if (argc != 5)
+			StandardError(2); // as E: RIGHT$(s$) alone read an unset argv[4]
 		unsigned char *s = getstring(argv[2]);
 		int nbr = getint(argv[4], 0, MAXSTRLEN);
 		fun_right(s, nbr);

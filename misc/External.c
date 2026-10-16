@@ -4575,7 +4575,8 @@ void cmd_WS2812(void)
     nbr = getint(argv[4], 1, 256);
     if (nbr > 1)
     {
-        parseintegerarray(argv[6], &dest, 4, 1, NULL, false, NULL);
+        if (parseintegerarray(argv[6], &dest, 4, 1, NULL, false, NULL) < nbr)
+            error("Array too small"); // the loop below reads nbr colours from it
     }
     else
     {

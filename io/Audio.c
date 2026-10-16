@@ -1624,9 +1624,8 @@ void MIPS16 cmd_play(void)
 		return;
 	}
 	if ((tp = checkstring(cmdline, (unsigned char *)"TONE")))
-	{					  //
-		SoundPlay = 1000; // this MUST be the first executable line in the function
-		float f_left, f_right;
+	{
+		float f_left, f_right; // SoundPlay is set below, once the arguments have passed: a failed PLAY TONE must not shorten a running tone
 		float hw, duration;
 		uint64_t PlayDuration = 0xffffffffffffffff; // default is to play forever
 													//        uint64_t  x;
@@ -1653,6 +1652,8 @@ void MIPS16 cmd_play(void)
 			}
 			else
 				duration = 1;
+			WAVInterrupt = NULL; // a finished earlier sound's handler must not fire again when this tone ends
+			WAVcomplete = false;
 			if (argc == 7)
 			{
 				if (!CurrentLinePtr)
@@ -1735,6 +1736,8 @@ void MIPS16 cmd_play(void)
 		getcsargs(&tp, 11); // this MUST be the first executable line in the function
 		if (!(argc == 11 || argc == 9 || argc == 7 || argc == 5))
 			StandardError(2);
+		if (!(CurrentlyPlaying == P_NOTHING || CurrentlyPlaying == P_STOP || CurrentlyPlaying == P_WAVOPEN || CurrentlyPlaying == P_ARRAY || CurrentlyPlaying == P_PAUSE_ARRAY))
+			error("Sound output in use for $", PlayingStr[CurrentlyPlaying]); // the buffers below belong to whatever is playing
 		arraysize = parseintegerarray(argv[0], (int64_t **)&leftarray, 1, 1, NULL, false, NULL);
 		RequireGlobal(leftarray); // read while it plays
 		int rightsize = parseintegerarray(argv[2], (int64_t **)&rightarray, 2, 1, NULL, false, NULL);
@@ -1754,6 +1757,7 @@ void MIPS16 cmd_play(void)
 		{
 			arraysize = getint(argv[8], arraypos, arraysize);
 		}
+		WAVInterrupt = NULL; // a finished earlier sound's handler must not fire again when this ends
 		if (argc == 11)
 		{
 			if (!CurrentLinePtr)
@@ -1842,6 +1846,7 @@ void MIPS16 cmd_play(void)
 			release_ms_r = release_ms_l;
 		}
 		freq_r = freq_r_val;
+		WAVInterrupt = NULL; // a finished earlier sound's handler must not fire again when this ends
 		// Interrupt is the last argument if argc is odd (15 or 25)
 		if (argc == 15 || argc == 25)
 		{
@@ -2226,7 +2231,7 @@ void MIPS16 cmd_play(void)
 			error("Valid is 1Hz to 20KHz");
 		if (left)
 		{
-			if (!(sound_mode_left[channel] == whitenoise))
+			if (!(local_sound_mode_left == whitenoise)) // the new waveform, not the channel's old one
 			{
 				PhaseM = f_in / (float)PWM_FREQ * 4096.0;
 			}
@@ -2249,7 +2254,7 @@ void MIPS16 cmd_play(void)
 		}
 		if (right)
 		{
-			if (!(sound_mode_right[channel] == whitenoise))
+			if (!(local_sound_mode_right == whitenoise)) // the new waveform, not the channel's old one
 			{
 				PhaseM = f_in / (float)PWM_FREQ * 4096.0;
 			}
@@ -2767,7 +2772,7 @@ void MIPS16 cmd_play(void)
 			return;
 		int i;
 		if (filesource[WAV_fnbr] == FLASHFILE)
-			i = lfs_file_tell(&lfs, FileTable[fnbr].lfsptr) + 1;
+			i = lfs_file_tell(&lfs, FileTable[WAV_fnbr].lfsptr) + 1; // the track, not the .mem file just opened
 		else
 			i = (*(FileTable[WAV_fnbr].fptr)).fptr + 1;
 		i -= 418;
@@ -3089,9 +3094,8 @@ void MIPS16 cmd_play(void)
 		volume = 63;
 		if (argc >= 5 && *argv[4])
 		{
-			volume = getint(argv[4], 0, 64) - 1;
-			if (volume < 0)
-				volume = 0;
+			int vol = getint(argv[4], 0, 64);
+			volume = vol ? vol - 1 : 0; // 0 to 63 for hxcmod; volume is unsigned, so not 0 - 1
 		}
 		samprate = 16000;
 
@@ -3739,7 +3743,7 @@ void audio_checks(void)
 			if (CurrentlyPlaying == P_FLAC)
 				drflac_close(myflac);
 			if (CurrentlyPlaying == P_MOD)
-				FreeMemory((void *)mcontext);
+				FreeMemorySafe((void **)&mcontext); // CloseAudio frees it again otherwise
 			if (CurrentlyPlaying == P_WAV)
 				FreeMemorySafe((void **)&mywav);
 #ifdef rp2350

@@ -481,6 +481,17 @@ extern "C"
     extern int CommandTableSize, TokenTableSize;
     extern const struct s_tokentbl tokentbl[];
     extern const struct s_tokentbl commandtbl[];
+    /* True when p starts a statement that is a command: two token bytes whose
+       decoded number is inside commandtbl and names a command. Two adjacent
+       one-byte function or operator tokens (^^) pass the byte test alone and
+       decoded past the table's end. */
+    static inline int commandtbl_is_cmd(const unsigned char *p)
+    {
+        if (!(p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN))
+            return 0;
+        unsigned int t = ((unsigned int)(p[0] & 0x7f)) | ((unsigned int)(p[1] & 0x7f) << 7);
+        return t < (unsigned int)(CommandTableSize - 1) && (commandtbl[t].type & T_CMD);
+    }
 
     extern unsigned char tokenTHEN, tokenELSE, tokenGOTO, tokenEQUAL, tokenTO, tokenSTEP;
     extern unsigned char tokenWHILE, tokenUNTIL, tokenGOSUB, tokenAS, tokenFOR;

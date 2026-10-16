@@ -1365,7 +1365,20 @@ int hxcmod_fillbuffer(modcontext *modctx, msample *outbuffer, unsigned long nbsa
 							if (modctx->tablepos >= modctx->song.length)
 							{
 								if (noloop)
+								{
+									/* the module is over: the rest of this buffer would otherwise
+									   keep its previous fill and play again after the last note */
+									for (; i < nbsample; i++)
+									{
+#ifdef HXCMOD_MONO_OUTPUT
+										outbuffer[i] = 0;
+#else
+										outbuffer[(i * 2)] = 0;
+										outbuffer[(i * 2) + 1] = 0;
+#endif
+									}
 									return 1;
+								}
 								else
 									modctx->tablepos = 0;
 							}

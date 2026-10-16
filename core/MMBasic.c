@@ -2011,15 +2011,15 @@ int MIPS16 tokenise(int console)
         STR_REPLACE((char *)inpbuf, "=<", "<=", 3);
         STR_REPLACE((char *)inpbuf, "SPRITE MEMORY", "BLIT MEMORY", 0);
         STR_REPLACE((char *)inpbuf, "PEEK(BYTE", "PEEK(INT8", 0);
-        STR_REPLACE((char *)inpbuf, "BIN$(", "BASE$(2,", 2);
-        STR_REPLACE((char *)inpbuf, "OCT$(", "BASE$(8,", 2);
-        STR_REPLACE((char *)inpbuf, "HEX$(", "BASE$(16,", 2);
-        STR_REPLACE((char *)inpbuf, "LCASE$(", "SCHANGE$(L,", 2);
-        STR_REPLACE((char *)inpbuf, "UCASE$(", "SCHANGE$(U,", 2);
-        STR_REPLACE((char *)inpbuf, "MIN(", "TOPBOTTOM(I,", 2);
-        STR_REPLACE((char *)inpbuf, "MAX(", "TOPBOTTOM(A,", 2);
-        STR_REPLACE((char *)inpbuf, "LEFT$(", "SCHANGE$(E,", 2);
-        STR_REPLACE((char *)inpbuf, "RIGHT$(", "SCHANGE$(R,", 2);
+        STR_REPLACE((char *)inpbuf, "BIN$(", "BASE$(2,", 6);
+        STR_REPLACE((char *)inpbuf, "OCT$(", "BASE$(8,", 6);
+        STR_REPLACE((char *)inpbuf, "HEX$(", "BASE$(16,", 6);
+        STR_REPLACE((char *)inpbuf, "LCASE$(", "SCHANGE$(L,", 6);
+        STR_REPLACE((char *)inpbuf, "UCASE$(", "SCHANGE$(U,", 6);
+        STR_REPLACE((char *)inpbuf, "MIN(", "TOPBOTTOM(I,", 6);
+        STR_REPLACE((char *)inpbuf, "MAX(", "TOPBOTTOM(A,", 6);
+        STR_REPLACE((char *)inpbuf, "LEFT$(", "SCHANGE$(E,", 6);
+        STR_REPLACE((char *)inpbuf, "RIGHT$(", "SCHANGE$(R,", 6);
         if (str_replace_toolong)
             goto toolong; // a rewrite (MIN( to TOPBOTTOM(I, say) would not fit the line
     }
@@ -2636,7 +2636,7 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
                 }
                 nextstmt = cmdline = p + 1;
             }
-            else if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+            else if (commandtbl_is_cmd(p))
                 nextstmt = cmdline = p + sizeof(CommandToken); // a command token
             else
                 nextstmt = cmdline = p; // a call to a user SUB starts with its name, which can be
@@ -2654,7 +2654,7 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
 #define EXEC_ONE_STATEMENT()                                            \
     do                                                                  \
     {                                                                   \
-        if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)                 \
+        if (commandtbl_is_cmd(p))                                       \
         {                                                               \
             cmdtoken = commandtbl_decode(p);                            \
             if (g_perf_cmdcount && cmdtoken < PERF_CMDTOKEN_MAX)        \
@@ -3654,19 +3654,32 @@ int str_replace_toolong = 0; // a replacement would not have fitted the line: th
 static int MIPS16 str_replace_into(char *target, size_t limit, const char *needle, const char *replacement, uint8_t ignoresurround)
 {
     char buffer[STRINGSIZE];
+    char name[MAXVARLEN + 2];
     char *op = buffer;
     const char *tmp = target;
     size_t needle_len = strlen(needle);
     size_t repl_len = strlen(replacement);
+    /* bit 2 (4): the needle ends in '(' and names a function: the fold takes
+       LEFT$ (a$, 2) as well as LEFT$(a$, 2), the spaces between the name and
+       its bracket included in what is replaced */
+    int fold = (ignoresurround & 4) && needle_len > 1 && needle_len <= MAXVARLEN + 1 && needle[needle_len - 1] == '(';
 
     if (needle_len == 0)
         return 1;
     if (limit > MAXSTRLEN)
         limit = MAXSTRLEN;
+    if (fold)
+    {
+        memcpy(name, needle, needle_len - 1); // the name alone is what is searched for
+        name[needle_len - 1] = 0;
+        needle = name;
+        needle_len--;
+    }
     while (1)
     {
         const char *p = fstrstr(tmp, needle);
         size_t keep = p ? (size_t)(p - tmp) : strlen(tmp); // the text before the match, or the rest
+        size_t matched = needle_len;                       // the text the match covers
         const char *piece;
         size_t piece_len;
 
@@ -3676,22 +3689,30 @@ static int MIPS16 str_replace_into(char *target, size_t limit, const char *needl
         op += keep;
         if (p == NULL)
             break;
-        if ((p == target || !isnamechar(p[-1]) || (ignoresurround & 1)) &&
-            (!isnameend(p[needle_len]) || (ignoresurround & 2)))
+        if (fold)
+        { // the name, any spaces, then the bracket; without the bracket it is not this function
+            const char *r = p + needle_len;
+            while (*r == ' ')
+                r++;
+            matched = (*r == '(') ? (size_t)(r + 1 - p) : 0;
+        }
+        if (matched && (p == target || !isnamechar(p[-1]) || (ignoresurround & 1)) &&
+            (!isnameend(p[matched]) || (ignoresurround & 2)))
         {
             piece = replacement; // a whole word: replaced
             piece_len = repl_len;
         }
         else
         {
-            piece = p; // part of a longer name: kept as it is
-            piece_len = needle_len;
+            piece = p; // part of a longer name, or the name without its bracket: kept as it is
+            piece_len = matched ? matched : needle_len;
+            matched = piece_len;
         }
         if ((size_t)(op - buffer) + piece_len > limit)
             return 0;
         memcpy(op, piece, piece_len);
         op += piece_len;
-        tmp = p + needle_len;
+        tmp = p + matched;
     }
     *op = 0;
     strcpy(target, buffer);
@@ -7752,6 +7773,17 @@ void MIPS16 ClearRuntime(bool all)
 #endif
     CloseAllFiles();
     ClearExternalIO(); // this MUST come before InitHeap(true)
+    {
+        /* A CSUB's interrupt vectors and INTERRUPT's SUB point into the program
+           that set them: the next program must not inherit a tick or a pin edge
+           that calls into wherever that code was. */
+        extern unsigned int CFuncmSec, CFuncInt1, CFuncInt2, CFuncInt3, CFuncInt4;
+        extern char *CSubInterrupt;
+        extern volatile bool CSubComplete;
+        CFuncmSec = CFuncInt1 = CFuncInt2 = CFuncInt3 = CFuncInt4 = (unsigned int)NULL;
+        CSubInterrupt = NULL;
+        CSubComplete = 0;
+    }
     ClearStack();
     clearrepeat();
     OptionExplicit = false;

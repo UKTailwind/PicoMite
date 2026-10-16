@@ -661,10 +661,20 @@ BMP_Result decodeBMP(bool topdown)
                 cleanupAndError("Unsupported BMP header format", &palette, &rowBuffer, &lineData, &lineTable);
         }
 
-        // Skip any extra header bytes for V4/V5 headers (we already read 40 bytes)
+        // Skip any extra header bytes for V4/V5 headers (we already read 40 bytes).
+        // A BI_BITFIELDS file keeps its colour masks there, in the first 12 of them.
+        uint32_t hdrMasks[3] = {0, 0, 0};
+        int hdrMasksRead = 0;
         if (infoHeader.biSize > 40)
         {
                 int extraBytes = infoHeader.biSize - 40;
+                if (infoHeader.biCompression == BI_BITFIELDS)
+                {
+                        if (onBMPRead((char *)hdrMasks, 12) != 12)
+                                cleanupAndError("Failed to read bitfield masks", &palette, &rowBuffer, &lineData, &lineTable);
+                        hdrMasksRead = 1;
+                        extraBytes -= 12;
+                }
                 onBMPSeek(extraBytes, SEEK_CUR);
         }
 
@@ -752,15 +762,24 @@ BMP_Result decodeBMP(bool topdown)
         int redMax = 31, greenMax = 31, blueMax = 31;
 
         if (infoHeader.biCompression == BI_BITFIELDS && infoHeader.biBitCount == 16 &&
-            bytesRead + 12 <= fileHeader.bfOffBits)
+            (hdrMasksRead || bytesRead + 12 <= fileHeader.bfOffBits))
         {
-                if (onBMPRead((char *)&redMask, 4) != 4 ||
-                    onBMPRead((char *)&greenMask, 4) != 4 ||
-                    onBMPRead((char *)&blueMask, 4) != 4)
-                {
-                        cleanupAndError("Failed to read bitfield masks", &palette, &rowBuffer, &lineData, &lineTable);
+                if (hdrMasksRead)
+                { // a V4/V5 header carried the masks
+                        redMask = hdrMasks[0];
+                        greenMask = hdrMasks[1];
+                        blueMask = hdrMasks[2];
                 }
-                bytesRead += 12;
+                else
+                {
+                        if (onBMPRead((char *)&redMask, 4) != 4 ||
+                            onBMPRead((char *)&greenMask, 4) != 4 ||
+                            onBMPRead((char *)&blueMask, 4) != 4)
+                        {
+                                cleanupAndError("Failed to read bitfield masks", &palette, &rowBuffer, &lineData, &lineTable);
+                        }
+                        bytesRead += 12;
+                }
                 getMaskInfo(redMask, &redShift, &redBits);
                 getMaskInfo(greenMask, &greenShift, &greenBits);
                 getMaskInfo(blueMask, &blueShift, &blueBits);
@@ -915,8 +934,8 @@ BMP_Result decodeBMP(bool topdown)
                         }
                         else
                         {
-                                // File line 0 = image top → screen row 479 (upside down)
-                                screenRow = result.height - 1 - i;
+                                // File line 0 = image top → screen row 0
+                                screenRow = i;
                         }
                 }
 

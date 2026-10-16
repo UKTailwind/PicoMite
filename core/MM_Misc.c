@@ -1241,7 +1241,7 @@ void cmd_lmid(void)
     int start = getint(argv[2], 1, currentlength); // pick a starting point in the string
     if (argc == 5)
         num = getint(argv[4], 0, currentlength);
-    if (start + (num < 0 ? 0 : num - 1) - 1 > currentlength)
+    if (start + (num < 0 ? 0 : num - 1) > currentlength) // as MID$: the section must lie within the string
         error("Selection exceeds length of string");
     start--; // position 1 is the array position 0
     while (*cmdline && tokenfunction(*cmdline) != op_equal)
@@ -1265,7 +1265,7 @@ void cmd_lmid(void)
         if (currentlength + change > totalsize)
             error("String too long");
         // first move the original after the insertion to it's new position
-        memmove(&lsStart[start + value[0]], &lsStart[start + num], totalsize - (start + num - 1));
+        memmove(&lsStart[start + value[0]], &lsStart[start + num], currentlength - (start + num)); // only the bytes after the section move
         dest[0] += change;
         memcpy(&lsStart[start], p, value[0]);
     }
