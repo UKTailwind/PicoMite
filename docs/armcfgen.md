@@ -497,6 +497,7 @@ python armcfgen.py INPUT [INPUT ...] [options]
 | `-n`, `--name NAME` | input stem, upper‑cased | CSUB name in merge mode. |
 | `-O`, `--opt LEVEL` | `0` | Optimisation level for `--compile`. `0` is the simple, reliable default; use `s` (or `2`) for compute‑heavy CSUBs. |
 | `-o`, `--output FILE` | stdout | Write to a file. |
+| `--cpu {cortex-m0plus,cortex-m7}` | `cortex-m0plus` | The processor to compile for: the PicoMite's, or the Colour Maximite 2's (§2.9). A blob runs only on the processor it was built for. |
 
 Built‑in compile flags: `-mcpu=cortex-m0plus -mthumb -O0 -ffreestanding
 -fno-exceptions -fpie -mpic-data-is-text-relative -msingle-pic-base`. The
@@ -580,6 +581,27 @@ No CallTable argument is needed — the blob finds the CallTable itself.
 | `no symbol table` | The object was stripped — rebuild without stripping. |
 
 ---
+
+## 2.9 Building for the Colour Maximite 2
+
+`--cpu cortex-m7` compiles for the CMM2's STM32H743, using the firmware's own
+flags: `-mcpu=cortex-m7 -mfpu=fpv5-d16 -mfloat-abi=hard -mthumb`, plus the same
+PIC and section flags. The CMM2 finds the CallTable through vector slot 7 at
+the same offsets, so `PicoCFunctions.h` is the header for both boards. On the M7:
+
+- **Write the arithmetic as plain C.** `a * b` on doubles compiles to one FPU
+  instruction, and `FMul`, `LMul` and the other M0+ helpers are not needed. They
+  are still in the table, so the header stays shared.
+- **The ABI is hard-float.** A double is passed and returned in d0-d7, in the
+  firmware's functions and in the CSUB's. A blob built for the M0+ passes
+  doubles in core registers and must not be run on the CMM2.
+- **Helpers you write for GCC** (`__aeabi_l2d`, `__aeabi_d2lz` and the rest)
+  use the base calling convention even in a hard-float build. Declare them, and
+  every prototype of them, `__attribute__((pcs("aapcs")))`, as `mmcsub.h` does
+  with `MMCSUB_RTABI`. A declaration without it passes the double in the wrong
+  registers.
+- **`Option` is the CMM2's structure** at the same slot, not the PicoMite's.
+  Like the variable table, its layout is board-specific.
 
 # Appendix A — The CallTable
 

@@ -55,6 +55,13 @@ MMB2C_CANDIDATES = [
 ]
 
 
+# armcfgen's processor for the target board (--target): none for the PicoMite's default
+CPU_ARGS = []
+# the comment that ends a CMM2 CSUB's first line, so a tool (or one day the firmware) can tell its blob from one
+# built for the PicoMite's processors; the firmware's type-list parse stops at the '
+CMM2_MARK = "   ' Cortex-M7 (CMM2)"
+
+
 def load_mmb2c(explicit=None):
     """Import mmb2c.py from wherever it is and return the module."""
     import importlib.util
@@ -856,7 +863,7 @@ def try_build(conv, mmb2c, routine, name, opt="s"):
     out = os.path.join(tmp, "%s.txt" % name)
     r = subprocess.run([sys.executable, ARMCFGEN, cpath, "--compile",
                         "-n", name + "K", "-e", name + "K", "-O", opt,
-                        "-I", FIRMWARE, "-I", HERE, "-o", out],
+                        "-I", FIRMWARE, "-I", HERE, "-o", out] + CPU_ARGS,
                        capture_output=True, text=True)
     if r.returncode != 0:
         why = "did not build"
@@ -1087,12 +1094,18 @@ def rewrite_source(path, conv, routine, subname, wrapper, block, ctext,
             f.writelines(lines)
 
     if keep_original:
-        # MMBasic's block comment; the interpreter wants /* and */ on lines of
-        # their own, which is also what makes it easy to restore by hand
         original = lines[span[0]:span[1] + 1]
-        lines[span[0]:span[1] + 1] = (
-            ["/*\n", MARKER + "%s replaced by a CSUB; original follows\n" % subname]
-            + original + ["*/\n"])
+        if CPU_ARGS:
+            # the CMM2 has no block comment (yet): an apostrophe on each line
+            lines[span[0]:span[1] + 1] = (
+                [MARKER + "%s replaced by a CSUB; original follows\n" % subname]
+                + ["'" + ln for ln in original])
+        else:
+            # MMBasic's block comment; the interpreter wants /* and */ on lines of
+            # their own, which is also what makes it easy to restore by hand
+            lines[span[0]:span[1] + 1] = (
+                ["/*\n", MARKER + "%s replaced by a CSUB; original follows\n" % subname]
+                + original + ["*/\n"])
     else:
         lines[span[0]:span[1] + 1] = [
             MARKER + "%s is now the CSUB below (original in %s.bak)\n"
@@ -1143,6 +1156,10 @@ def main():
                          "and change nothing")
     ap.add_argument("--name", help="CSUB name (default <sub>K)")
     ap.add_argument("-O", "--opt", default="s", help="armcfgen -O level (default s)")
+    ap.add_argument("--target", choices=["picomite", "cmm2"], default="picomite",
+                    help="the board the CSUB is for: picomite (Cortex-M0+ code, the default, which runs on "
+                         "every PicoMite) or cmm2 (the Colour Maximite 2's Cortex-M7, hard-float). A CSUB "
+                         "runs only on the board it was built for")
     ap.add_argument("--mmb2c", help="path to mmb2c.py")
     ap.add_argument("--keep-c", action="store_true",
                     help="also leave the generated .c on disk")
@@ -1167,6 +1184,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="build and report, but leave the source alone")
     args = ap.parse_args()
+    if args.target == "cmm2":
+        CPU_ARGS[:] = ["--cpu", "cortex-m7"]
 
     # A bare filename for --library goes beside the PROGRAM, not into whatever
     # directory the tool happens to be run from - which is where mmb2csub.py
@@ -1293,7 +1312,7 @@ def main():
     out = os.path.join(srcdir, "%s_%s.txt" % (stem, args.sub[0].lower()))
     cmd = [sys.executable, ARMCFGEN, cpath, "--compile",
            "-n", entry, "-e", entry, "-O", args.opt,
-           "-I", FIRMWARE, "-I", HERE, "-o", out]
+           "-I", FIRMWARE, "-I", HERE, "-o", out] + CPU_ARGS
     r = subprocess.run(cmd, capture_output=True, text=True)
     if r.returncode != 0:
         sys.stderr.write(r.stderr)
@@ -1305,7 +1324,8 @@ def main():
 
     block = open(out).read()
     block = block.replace("CSUB " + entry.upper(),
-                          "CSUB %s %s" % (entry, type_list(routine, bodytext, gl, gtab)), 1)
+                          "CSUB %s %s" % (entry, type_list(routine, bodytext, gl, gtab)) +
+                          (CMM2_MARK if CPU_ARGS else ""), 1)
     if args.lean:
         block = repack(block)
     open(out, "w").write(block)

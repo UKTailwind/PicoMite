@@ -305,7 +305,16 @@ static void mmg_box(MMINTEGER bx, MMINTEGER by, MMINTEGER bw, MMINTEGER bh,
 #define log(a) Log(a)
 #define tan(a) Tan(a)
 
-long long __aeabi_d2lz(double a); /* defined below, used by mm_int */
+/* The run-time ABI's helpers take and return a double in core registers (the base procedure call standard), as
+   GCC calls them. On the M7's hard-float build that is not C's own convention, so every declaration of one, and
+   every call to one from C (mm_int and mm_fix below call __aeabi_d2lz), must say so: a declaration without it
+   would pass the double in d0 to a function that reads r0:r1. */
+#if defined(__ARM_FP) && (__ARM_FP & 8)
+#define MMCSUB_RTABI __attribute__((pcs("aapcs")))
+#else
+#define MMCSUB_RTABI
+#endif
+MMCSUB_RTABI long long __aeabi_d2lz(double a); /* defined below, used by mm_int */
 
 /* INT(): MMBasic floors (fun_int is floor(), not a truncation), so a negative
    value goes DOWN. FloatToInt rounds and __aeabi_d2lz truncates toward zero,
@@ -537,6 +546,30 @@ static char *mm_str_i(MMINTEGER v, MMINTEGER m, MMINTEGER n, const char *pad)
  *  papered over here.
  * ------------------------------------------------------------------ */
 
+#if defined(__ARM_FP) && (__ARM_FP & 8)
+/* The CMM2's Cortex-M7 (armcfgen --cpu cortex-m7): its FPU does double arithmetic, comparison, square root and
+   the int32 conversions inline, and the M7 multiplies 64-bit integers and divides 32-bit ones, so none of the M0+
+   helpers below is called. What remains are the int64 <-> double conversions. GCC calls those with the BASE
+   procedure call standard even in a hard-float build (the double in r0:r1, as the run-time ABI says), so they are
+   declared MMCSUB_RTABI (pcs("aapcs")); the firmware's IntToFloat/FloatToInt they call take the double in d0, which the compiler
+   arranges. */
+MMCSUB_RTABI double __aeabi_l2d(long long a) { return IntToFloat(a); }
+MMCSUB_RTABI double __aeabi_ul2d(unsigned long long a) { return IntToFloat((long long)a); }
+/* toward zero, as the M0+ branch below explains */
+MMCSUB_RTABI long long __aeabi_d2lz(double a)
+{
+    long long t = FloatToInt(a);
+    if (a >= 0.0) {
+        if (IntToFloat(t) > a)
+            t -= 1;
+    } else {
+        if (IntToFloat(t) < a)
+            t += 1;
+    }
+    return t;
+}
+MMCSUB_RTABI unsigned long long __aeabi_d2ulz(double a) { return (unsigned long long)__aeabi_d2lz(a); }
+#else
 /* --- double arithmetic --- */
 double __aeabi_dadd(double a, double b) { return FAdd(a, b); }
 double __aeabi_dsub(double a, double b) { return FSub(a, b); }
@@ -585,5 +618,6 @@ unsigned long long __aeabi_llsr(unsigned long long a, int n) { return LLsr(a, n)
 /* --- 32-bit divide (no divider on M0+) --- */
 int __aeabi_idiv(int a, int b) { return IDiv(a, b); }
 unsigned __aeabi_uidiv(unsigned a, unsigned b) { return (unsigned)IDiv((int)a, (int)b); }
+#endif /* the M7 or the M0+ */
 
 #endif /* MMCSUB_H */

@@ -590,6 +590,7 @@ A.2 has the detail.
 | `--no-backup` | do not write `<source>.bak` |
 | `--name NAME` | name the CSUB yourself |
 | `-O LEVEL` | optimisation level (default `s`; prefer it for anything large) |
+| `--target cmm2` | build for the Colour Maximite 2 instead of the PicoMite (§10) |
 
 When nothing needs wrapping, the CSUB **takes the original routine's name** and
 your call sites go straight to it. A wrapper appears only when something must be
@@ -698,6 +699,44 @@ Two things to take from that. The listing, not the profile, tells you what to
 convert. And when a routine is out of reach it is now nearly always about size
 rather than shape — which is a question of where you put the blob, not whether
 the tool can build it.
+
+---
+
+## 10. The Colour Maximite 2
+
+```
+python mmb2csub.py myprogram.bas PlotJulia --target cmm2
+```
+
+`--target cmm2` builds the CSUB for the CMM2's Cortex-M7 (STM32H743) instead of
+the PicoMite's Cortex-M0+. Everything else in this document applies, with these
+differences.
+
+- **The code is M7 code, with the hardware FPU.** Double arithmetic, square
+  root, the int32 conversions, 64-bit multiply and 32-bit divide are single
+  instructions, not calls into the firmware. Only 64-bit divide, the int64 to
+  double conversions and the transcendental functions still go through the
+  CallTable. The CMM2 finds the table the same way, through vector slot 7, with
+  the same offsets, so `PicoCFunctions.h` serves both boards.
+- **A CMM2 CSUB runs only on the CMM2, and a PicoMite CSUB only on the
+  PicoMite.** To tell them apart, the first line of a CMM2 CSUB ends with the
+  comment `' Cortex-M7 (CMM2)`.
+- **The CMM2 has no LIBRARY,** so `--library` is not for it. The CSUB goes in
+  the program, and the CMM2's 512 KB of program memory has room for large ones.
+- **The CMM2 has no `/* */` block comment yet,** so the original routine is
+  kept with an apostrophe on each line instead.
+- **Firmware:** the CMM2's PicoMite-layout CallTable (MMBasic 6.00.00b7, from
+  16 October 2026).
+
+`solar_eclipse.bas` converts the same way as in §9: `sefunc` and the 18 routines
+it carries make a 26 KB blob, 37 KB for the M0+. With the five DIMs of §9 and
+no library:
+
+| | interpreted | with `sefunc` as a CSUB |
+|---|---|---|
+| CMM2 at 480 MHz | 7.8 s | **0.48 s** |
+
+The output is identical to the interpreted run, including the golden JD values.
 
 ---
 

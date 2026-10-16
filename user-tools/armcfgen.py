@@ -52,6 +52,16 @@ CFLAGS = ["-c", "-mcpu=cortex-m0plus", "-mthumb", "-ffreestanding", "-fno-except
           # not in the blob; compare-and-branch instead.
           "-fno-jump-tables"]
 
+# The CMM2's Cortex-M7 (STM32H743), with its double-precision FPU and the firmware's hard-float ABI: doubles go
+# in d0-d7, so a CallTable function that takes or returns one is called the way the firmware expects. GCC emits
+# the double arithmetic, 64-bit multiply and 32-bit divide inline, so mmcsub.h's M0+ helpers drop out. Thumb-2's
+# TBB/TBH are position independent, so jump tables are allowed.
+CFLAGS_M7 = ["-c", "-mcpu=cortex-m7", "-mfpu=fpv5-d16", "-mfloat-abi=hard", "-mthumb",
+             "-ffreestanding", "-fno-exceptions",
+             "-fpie", "-mpic-data-is-text-relative", "-msingle-pic-base",
+             "-ffunction-sections", "-fdata-sections"]
+CPUS = {"cortex-m0plus": CFLAGS, "cortex-m7": CFLAGS_M7}
+
 # Linker script: one resolved .text at 0 holding code AND rodata contiguously, so
 # intra-blob bl's are fixed up, .text.startup/.text.* merge in, and the PC-
 # relative rodata offsets stay correct and are captured by objcopy -j .text.
@@ -202,24 +212,24 @@ def gen_merge(sname, entry, text_addr, text_bytes, funcs,
     return out
 
 
-def compile_c(src, includes=(), opt="0"):
+def compile_c(src, includes=(), opt="0", cpu="cortex-m0plus"):
     """Compile a .c to an object, return its path."""
     obj = tempfile.NamedTemporaryFile(suffix=".o", delete=False).name
     inc = []
     for d in includes:
         inc += ["-I", d]
-    subprocess.run([GCC, *CFLAGS, "-O" + opt, *inc, "-o", obj, src], check=True)
+    subprocess.run([GCC, *CPUS[cpu], "-O" + opt, *inc, "-o", obj, src], check=True)
     return obj
 
 
-def link(objs, entry):
+def link(objs, entry, cpu="cortex-m0plus"):
     """Link relocatable objects into one resolved ELF (single .text at 0)."""
     ld = tempfile.NamedTemporaryFile(suffix=".ld", mode="w", delete=False)
     ld.write(LINK_SCRIPT)
     ld.close()
     elf = tempfile.NamedTemporaryFile(suffix=".elf", delete=False).name
     try:
-        subprocess.run([GCC, "-nostartfiles", "-nostdlib",
+        subprocess.run([GCC, *[f for f in CPUS[cpu] if f.startswith("-m")], "-nostartfiles", "-nostdlib",
                         "-Wl,-T," + ld.name, "-Wl,-e," + entry, "-Wl,--no-warn-rwx-segments",
                         "-Wl,--gc-sections",
                         "-o", elf, *objs], check=True)
@@ -249,6 +259,9 @@ def main():
                     help="optimisation level for --compile (default 0; use s or 2 for "
                          "compute-heavy CSUBs)")
     ap.add_argument("-o", "--output", help="write to file (default stdout)")
+    ap.add_argument("--cpu", choices=sorted(CPUS), default="cortex-m0plus",
+                    help="the processor to compile for: cortex-m0plus (the PicoMite's, the default) or "
+                         "cortex-m7 (the CMM2's, hard-float). A blob runs only on the processor it was built for")
     args = ap.parse_args()
 
     stem = os.path.splitext(os.path.basename(args.input[0]))[0]
@@ -257,11 +270,11 @@ def main():
     tmps = []
     objs = list(args.input)
     if args.compile:
-        objs = [compile_c(s, args.include, args.opt) for s in objs]
+        objs = [compile_c(s, args.include, args.opt, args.cpu) for s in objs]
         tmps += objs
     # link relocatable objects (resolves intra-blob bl, merges .text.* fragments)
     if len(objs) > 1 or any(is_relocatable(o) for o in objs):
-        elf = link(objs, args.entry)
+        elf = link(objs, args.entry, args.cpu)
         tmps.append(elf)
     else:
         elf = objs[0]
