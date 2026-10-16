@@ -293,6 +293,7 @@ static bool psram_check_size(void *base_addr, uint32_t size)
 	return false;
 }
 
+static uint32_t psram_measured = 0; // the part's size as the wrap probe found it, before the PSRAM_PART_MAX cap
 static int psram_init(int pin, bool clear_memory)
 {
 	const struct psram_type_t *chip = psram_chip_types;
@@ -390,6 +391,16 @@ static int psram_init(int pin, bool clear_memory)
 			break;
 		}
 	}
+	psram_measured = actual_size;
+	if (actual_size > PSRAM_PART_MAX)
+	{
+		/* The heap's page map covers PSRAM_PART_MAX less the reserve and no more
+		   (PSRAMHEAPMAX, Memory.h): a bigger part is used as that much, the rest
+		   left unused, and psram_setup() says so. */
+		actual_size = PSRAM_PART_MAX;
+		if (psram_sz > PSRAM_PART_MAX)
+			psram_sz = PSRAM_PART_MAX; // the ID agreed: not a mismatch
+	}
 	if (actual_size != psram_sz)
 	{
 		/* PSRAM size mismatch. Use detected memory size. */
@@ -423,6 +434,13 @@ void psram_setup()
 	else if (res == -4)
 	{
 		MMPrintString("PSRAM: Memory size mismatch!\r\n");
+	}
+	if (psram_measured > PSRAM_PART_MAX)
+	{
+		char buf[64];
+		snprintf(buf, sizeof(buf), "PSRAM: %u MB part, the first %u MB used\r\n",
+				 (unsigned)(psram_measured >> 20), (unsigned)(PSRAM_PART_MAX >> 20));
+		MMPrintString(buf);
 	}
 	/* -5 (not responding) is reported by main() once the console is up */
 #endif

@@ -743,6 +743,10 @@ extern "C"
 #define PSRAM_RESERVE (2 * 1024 * 1024)
 #endif
 #define PSRAMstreamsize (PSRAM_RESERVE - 0x60000 - PSRAMblocksize)
+/* The largest part used in full.  The heap's page map (PSRAMHEAPMAX, Memory.h)
+   covers this less PSRAM_RESERVE and no more, so a bigger part (16 MB) is used
+   as 8 MB and the rest left unused: psram_init() caps the measured size. */
+#define PSRAM_PART_MAX (8 * 1024 * 1024)
 
 #else
 #ifndef PICOMITEWEB

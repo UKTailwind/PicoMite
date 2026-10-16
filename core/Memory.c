@@ -163,6 +163,10 @@ unsigned char *FrameBuf = NULL;
 unsigned int mmap[HEAP_MEMORY_SIZE / PAGESIZE / PAGESPERWORD] = {0};
 #ifdef rp2350
 unsigned int psmap[PSMAPWORDS] = {0};
+#ifdef rp2350
+_Static_assert(PSRAM_PART_MAX - PSRAM_RESERVE <= PSRAMHEAPMAX,
+               "psmap does not cover the heap of the largest PSRAM part used (PSRAM_PART_MAX less PSRAM_RESERVE)");
+#endif
 unsigned int SBitsGet(unsigned char *addr);
 void SBitsSet(unsigned char *addr, int bits);
 #endif
