@@ -113,22 +113,22 @@ void *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsigned ch
 int FindStructBase(unsigned char *basename, int baselen, int *pvindex);
 #endif
 
-struct s_vartbl *g_slotrec[MAXVARS];                                      // the record of each variable number (VREC)
-struct s_varmem g_varmem;                                                 // the globals' record chunks (MMBasic.h)
-static struct s_vartbl g_emptyrec;                                        // every free global slot's record
-static struct s_vartbl g_blockedrec = {.name = "~", .type = T_BLOCKED};   // every blocked one's (see erase)
-int g_varcnt = 0;                                                     // number of variables
-int g_VarIndex;                                                       // Global set by findvar after a variable has been created or found
-int g_Localvarcnt;                                                    // number of LOCAL variables
-int g_Globalvarcnt;                                                   // number of GLOBAL variables
-int g_LocalIndex;                                                     // used to track the level of local variables
-unsigned char OptionExplicit, OptionEscape, OptionConsole;            // used to force the declaration of variables before their use
+struct s_vartbl *g_slotrec[MAXVARS];                                    // the record of each variable number (VREC)
+struct s_varmem g_varmem;                                               // the globals' record chunks (MMBasic.h)
+static struct s_vartbl g_emptyrec;                                      // every free global slot's record
+static struct s_vartbl g_blockedrec = {.name = "~", .type = T_BLOCKED}; // every blocked one's (see erase)
+int g_varcnt = 0;                                                       // number of variables
+int g_VarIndex;                                                         // Global set by findvar after a variable has been created or found
+int g_Localvarcnt;                                                      // number of LOCAL variables
+int g_Globalvarcnt;                                                     // number of GLOBAL variables
+int g_LocalIndex;                                                       // used to track the level of local variables
+unsigned char OptionExplicit, OptionEscape, OptionConsole;              // used to force the declaration of variables before their use
 bool OptionNoCheck = false;
 unsigned char DefaultType; // the default type if a variable is not specifically typed
 int emptyarray = 0;
-int g_FunReturnArrayCount = 0;            // >0 means DefinedSubFun just returned a whole array (element count); consumed by cmd_let's array assignment, an error anywhere else
-int TempStringClearStart;                 // used to prevent clearing of space in an expression that called a FUNCTION
-unsigned char *subfun[MAXSUBFUN];         // table used to locate all subroutines and functions
+int g_FunReturnArrayCount = 0;    // >0 means DefinedSubFun just returned a whole array (element count); consumed by cmd_let's array assignment, an error anywhere else
+int TempStringClearStart;         // used to prevent clearing of space in an expression that called a FUNCTION
+unsigned char *subfun[MAXSUBFUN]; // table used to locate all subroutines and functions
 jmp_buf jmprun;
 jmp_buf mark;                     // longjump to recover from an error and abort
 jmp_buf ErrNext;                  // longjump to recover from an error and continue
@@ -459,11 +459,11 @@ unsigned char *PreprogramErrLine = NULL; // Line pointer where PrepareProgram er
    not the name, which is read from the definition when the rest matches.
    --------------------------------------------------------------------------- */
 static void SetPreprogramError(const char *msg, unsigned char *linePtr);
-#define NK_SUB 1    // a SUB or CSUB: target is its subfun[] index
-#define NK_FUN 2    // a FUNCTION: likewise
-#define NK_LABEL 3  // a label: target is its line's T_NEWLINE
-#define NK_LINE 4   // a line number used as a target: hash16 is the number, len 1 in the
-                    // library, target its T_LINENBR (0 when both modules have the number)
+#define NK_SUB 1   // a SUB or CSUB: target is its subfun[] index
+#define NK_FUN 2   // a FUNCTION: likewise
+#define NK_LABEL 3 // a label: target is its line's T_NEWLINE
+#define NK_LINE 4  // a line number used as a target: hash16 is the number, len 1 in the
+                   // library, target its T_LINENBR (0 when both modules have the number)
 struct s_nameslot
 {
     uint16_t hash16;
@@ -1062,9 +1062,24 @@ int DefinedSubFunLocalIndex; // Records LocalIndex at start of DefinedSubFun in 
    in flash and their address shifts with every unrelated code-size change, which
    moved the interpreter's speed by ~5% between otherwise identical builds. */
 __attribute__((optimize("no-tree-loop-distribute-patterns"), section(".time_critical.strlen")))
-size_t strlen(const char *s) { const char *p = s; while (*p) p++; return (size_t)(p - s); }
-__attribute__((optimize("no-tree-loop-distribute-patterns"), section(".time_critical.strchr")))
-char *strchr(const char *s, int c) { for (;; s++) { if (*s == (char)c) return (char *)s; if (!*s) return NULL; } }
+size_t
+strlen(const char *s)
+{
+    const char *p = s;
+    while (*p)
+        p++;
+    return (size_t)(p - s);
+}
+__attribute__((optimize("no-tree-loop-distribute-patterns"), section(".time_critical.strchr"))) char *strchr(const char *s, int c)
+{
+    for (;; s++)
+    {
+        if (*s == (char)c)
+            return (char *)s;
+        if (!*s)
+            return NULL;
+    }
+}
 
 #if defined(PICOMITEMIN)
 static inline int isnumchar(int c)
@@ -1122,7 +1137,7 @@ int cmdtoken;                                       // Token number of the comma
 unsigned char *cmdline;                             // Command line terminated with a zero unsigned char and trimmed of spaces
 unsigned char *nextstmt;                            // Pointer to the next statement to be executed.
 unsigned char *CurrentLinePtr, *SaveCurrentLinePtr; // Pointer to the current line (used in error reporting)
-unsigned char *CmdTokenPtr;                          // the command token of the statement being run (cmdline may point to a copy of its arguments)
+unsigned char *CmdTokenPtr;                         // the command token of the statement being run (cmdline may point to a copy of its arguments)
 unsigned char *ContinuePoint;                       // Where to continue from if using the continue statement
 
 extern int TraceOn;
@@ -1146,9 +1161,9 @@ static unsigned short cmdDIM, cmdCONST; // (PrepareProgramExt counts the globals
 unsigned short cmdTYPE, cmdEND_TYPE; // Structure type definition commands
 #endif
 uint32_t heapend;
-uint32_t stackwarn;  // heapend + 1K: a stack below this is noted by StackNearLimit
-uint32_t StackLow;   // the lowest stack noted since the last prompt, 0 for none (warned at the prompt)
-int StackLowDepth;   // g_LocalIndex when it was noted
+uint32_t stackwarn; // heapend + 1K: a stack below this is noted by StackNearLimit
+uint32_t StackLow;  // the lowest stack noted since the last prompt, 0 for none (warned at the prompt)
+int StackLowDepth;  // g_LocalIndex when it was noted
 
 #ifdef STRUCTENABLED
 // Calculate the natural alignment needed for a structure (used to pad arrays of structs)
@@ -2380,7 +2395,7 @@ int MIPS16 tokenise(int console)
                 while (isnamechar(*tp))
                     tp++;
                 if (op + (tp - p > 3 ? tp - p : 3) > tknbuf + STRINGSIZE - 3)
-                    goto toolong; // a symbol is at most 3 bytes, the text tp - p
+                    goto toolong;            // a symbol is at most 3 bytes, the text tp - p
                 op = SymName(op, p, tp - p); // the name as a symbol (or text if it cannot be one)
                 p = tp;
             }
@@ -2803,15 +2818,15 @@ union u_argval
 static union u_argval s_argval[MAX_ARG_COUNT];
 static int s_argtype[MAX_ARG_COUNT];
 static int s_argVarIndex[MAX_ARG_COUNT];
-#ifdef STRUCTENABLED
-static int s_argStructIdx[MAX_ARG_COUNT]; // the structure type each argument carries, -1 for none (ValidateStructParam)
-#endif
 static unsigned char s_argbuf1[STRINGSIZE];
 static unsigned char *s_argv1[MAX_ARG_COUNT];
 static unsigned char s_argbuf2[STRINGSIZE];
 static unsigned char *s_argv2[MAX_ARG_COUNT];
 static unsigned char s_argbyref[MAX_ARG_COUNT];
 static bool defsubfun_static_in_use = false;
+#endif
+#ifdef STRUCTENABLED
+static int s_argStructIdx[MAX_ARG_COUNT]; // the structure type each argument carries, -1 for none (ValidateStructParam)
 #endif
 // The argument block of the call whose arguments are being processed (while
 // DefinedSubFunMem is set).  An error there frees it and its string copies.
@@ -2835,7 +2850,7 @@ static union u_argval *DefinedSubFunArgval;
 // flash DefinedSubFun (inlining is free) and the others have RAM to spare
 // but tight flash, so inlining is preferred.
 #ifdef rp2350
-static void __attribute__((noinline)) *FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
+static void __attribute__((noinline)) * FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
 #else
 static void MIPS16 *FunArrayCreate(unsigned char *fun_name, unsigned char *dims, int FunType, int *count)
 #endif
@@ -2880,7 +2895,7 @@ static void MIPS16 *FunArrayCreate(unsigned char *fun_name, unsigned char *dims,
 // would also run the function's side effects before failing.
 // (NOT in RAM for size savings.)
 #ifdef rp2350
-static unsigned char __attribute__((noinline)) *CheckFunArrayDef(unsigned char *p, int FunType, int sanctioned, unsigned char *callerlp)
+static unsigned char __attribute__((noinline)) * CheckFunArrayDef(unsigned char *p, int FunType, int sanctioned, unsigned char *callerlp)
 #else
 static unsigned char MIPS16 *CheckFunArrayDef(unsigned char *p, int FunType, int sanctioned, unsigned char *callerlp)
 #endif
@@ -2905,7 +2920,7 @@ static unsigned char MIPS16 *CheckFunArrayDef(unsigned char *p, int FunType, int
 // what keeps guard code and veneers out of the RAM-resident evaluator paths.
 // (NOT in RAM for size savings.)
 #ifdef rp2350
-static unsigned char __attribute__((noinline)) *FunArrayReturn(void *base, int count)
+static unsigned char __attribute__((noinline)) * FunArrayReturn(void *base, int count)
 #else
 static unsigned char MIPS16 *FunArrayReturn(void *base, int count)
 #endif
@@ -3042,7 +3057,7 @@ static struct s_sublayout MIPS16 *SubLayoutBuild(int index, unsigned char *p, un
             tp = skipvar(q, false); // point to after the variable
             skipspace(tp);
             if (*tp == tokenAS)
-            { // are we using Microsoft syntax (eg, AS INTEGER)?
+            {                                              // are we using Microsoft syntax (eg, AS INTEGER)?
                 CheckIfTypeSpecified(tp + 1, &type, true); // and get the type
                 if (!(type & T_IMPLIED))
                     error("Variable type");
@@ -3414,7 +3429,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     g_current_sub_idx = index; // for trace-cache per-sub opt-in
 #endif
     for (i = 0; i < argc2; i += 2)
-    { // count through the arguments in the definition of the sub/fun
+    {                                // count through the arguments in the definition of the sub/fun
         ArgType = L->p[i >> 1].type; // its AS type, as read on the first call
 #ifdef STRUCTENABLED
         if (ArgType != T_NOTYPE)
@@ -3445,10 +3460,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
             VREC(g_VarIndex)->val.s = argval[i].s; // Point to caller's array data (uses element offset if specified, e.g. array(3) -> &array[3])
             VREC(g_VarIndex)->type |= T_PTR;       // Mark as pointer so we don't free caller's memory
-            for (j = 0; j < MAXDIM; j++)              // copy the dimensions of the supplied variable into our local variable
+            for (j = 0; j < MAXDIM; j++)           // copy the dimensions of the supplied variable into our local variable
                 RAW_DIM((*VREC(g_VarIndex)), j) = RAW_DIM((*VREC(argVarIndex[i])), j);
             VREC(g_VarIndex)->size = VREC(argVarIndex[i])->size; // copy string length for string arrays
-            continue;                                                  // Skip the rest of parameter handling
+            continue;                                            // Skip the rest of parameter handling
         }
 
 #ifdef STRUCTENABLED
@@ -3478,8 +3493,8 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
             {
                 FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s); // free up the local variable's memory if it is a pointer to a string
             }
-            VREC(g_VarIndex)->val.s = argval[i].s;                  // point to the data of the variable supplied as an argument
-            VREC(g_VarIndex)->type |= T_PTR;                        // set the type to a pointer
+            VREC(g_VarIndex)->val.s = argval[i].s;               // point to the data of the variable supplied as an argument
+            VREC(g_VarIndex)->type |= T_PTR;                     // set the type to a pointer
             VREC(g_VarIndex)->size = VREC(argVarIndex[i])->size; // just in case it is a string copy the size
             // this is not a pointer
         }
@@ -3549,7 +3564,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         if (!VAR_INLINE_STR(VREC(g_VarIndex)))
             FreeMemorySafe((void **)&VREC(g_VarIndex)->val.s); // free the memory if it is a string
         VREC(g_VarIndex)->type |= T_PTR;
-        g_LocalIndex--;                                       // allocate the memory at the previous level
+        g_LocalIndex--;                                    // allocate the memory at the previous level
         VREC(g_VarIndex)->val.s = tp = GetTempStrMemory(); // and use our own memory
         g_LocalIndex++;
     }
@@ -5617,33 +5632,33 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     globalifree = -1;
     tmp = -1;
     // what the name's hash gives the search below
-#define FINDVAR_HASHES()                                                    \
-    do                                                                      \
-    {                                                                       \
-        GlobalhashIndex = (hash % maxglobalvars) + maxlocalvars;            \
-        OriginalGlobalHash = GlobalhashIndex - 1;                           \
-        if (OriginalGlobalHash < maxlocalvars)                              \
-            OriginalGlobalHash += maxglobalvars;                            \
-        if (namelen != MAXVARLEN)                                           \
-            *s = 0;                                                         \
+#define FINDVAR_HASHES()                                         \
+    do                                                           \
+    {                                                            \
+        GlobalhashIndex = (hash % maxglobalvars) + maxlocalvars; \
+        OriginalGlobalHash = GlobalhashIndex - 1;                \
+        if (OriginalGlobalHash < maxlocalvars)                   \
+            OriginalGlobalHash += maxglobalvars;                 \
+        if (namelen != MAXVARLEN)                                \
+            *s = 0;                                              \
     } while (0)
     // read a symbol's name into name[] as the text path would
-#define FINDVAR_SYMNAME(sp)                                                 \
-    do                                                                      \
-    {                                                                       \
-        const unsigned char *nv;                                            \
-        int nl;                                                             \
-        NameView(sp, &nv, &nl);                                             \
-        if (nl >= MAXVARLEN)                                                 \
-            error("Variable name too long");                                \
-        while (nl--)                                                        \
-        {                                                                   \
-            u = mytoupper(*nv++);                                           \
-            hash ^= u;                                                      \
-            hash *= FNV_prime;                                              \
-            *s++ = u;                                                       \
-            namelen++;                                                      \
-        }                                                                   \
+#define FINDVAR_SYMNAME(sp)                  \
+    do                                       \
+    {                                        \
+        const unsigned char *nv;             \
+        int nl;                              \
+        NameView(sp, &nv, &nl);              \
+        if (nl >= MAXVARLEN)                 \
+            error("Variable name too long"); \
+        while (nl--)                         \
+        {                                    \
+            u = mytoupper(*nv++);            \
+            hash ^= u;                       \
+            hash *= FNV_prime;               \
+            *s++ = u;                        \
+            namelen++;                       \
+        }                                    \
     } while (0)
 #ifdef STRUCTENABLED
 #define FINDVAR_DOTBLOCKS(k) (g_structcnt > 0 && (SymCold[k].flags & SYMC_DOT))
@@ -5758,10 +5773,10 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                 // Found a valid struct - resolve the member path using helper (NOT in RAM)
                 void *result = ResolveStructMember(
                     VREC(vindex)->val.s, // struct data pointer
-                    struct_idx,             // struct type index
-                    membername,             // member path
-                    &p,                     // parse position (updated)
-                    &member_type            // OUTPUT: member type
+                    struct_idx,          // struct type index
+                    membername,          // member path
+                    &p,                  // parse position (updated)
+                    &member_type         // OUTPUT: member type
                 );
 
                 g_VarIndex = vindex;
@@ -7473,7 +7488,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
         {
             if (!VarRecordReal(VREC(i)))
                 continue; // a free or blocked global slot: a placeholder, nothing of its own
-            // Free memory for strings, arrays, and structs (but not pointers)
+                          // Free memory for strings, arrays, and structs (but not pointers)
 #ifdef STRUCTENABLED
             if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0)) || (VREC(i)->type & T_STRUCT)) && !(VREC(i)->type & T_PTR))
 #else
@@ -7505,7 +7520,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 memset(VREC(i), 0, sizeof(struct s_vartbl)); // (a global's record goes with its chunk)
         }
         VarRecordsReset(); // every global slot free again, the records to be used again
-        SymBindReset();     // every global binding has gone with its variable (see Symbols.h)
+        SymBindReset();    // every global binding has gone with its variable (see Symbols.h)
     }
     // then step through the for...next table and remove any loops at the level or greater
     for (i = 0; i < g_forindex; i++)
@@ -7672,12 +7687,12 @@ uint32_t erase(char *p, bool nofree)
 
         k = j + 1;
         if (k == MAXVARS)
-            k = maxlocalvars; // CHANGED: was MAXVARS/2
+            k = maxlocalvars;                           // CHANGED: was MAXVARS/2
         VarRecordRelease(j, VREC(k)->type != T_NOTYPE); // blocked if a probe may have passed it
         g_Globalvarcnt--;
         g_varcnt = g_Globalvarcnt + g_Localvarcnt; // (CSUBs read it)
-        DoFastForget(j);       // a DO condition that pointed at this variable must evaluate again
-        SymBindForgetSlot(j); // and so must a binding to it (see Symbols.h)
+        DoFastForget(j);                           // a DO condition that pointed at this variable must evaluate again
+        SymBindForgetSlot(j);                      // and so must a binding to it (see Symbols.h)
         break;
     }
     if (j == MAXVARS)
@@ -7744,8 +7759,8 @@ void MIPS16 ClearRuntime(bool all)
     OptionConsole = 3;
     DefaultType = T_NBR;
     SymBindGlobalsChanged(); // what an unsuffixed name may bind to (see Symbols.h)
-    ds18b20Timers = NULL; // InitHeap(true) will recover the memory allocated to this array
-    findlabel(NULL);      // clear the label cache
+    ds18b20Timers = NULL;    // InitHeap(true) will recover the memory allocated to this array
+    findlabel(NULL);         // clear the label cache
     OptionErrorSkip = 0;
     optionangle = 1.0;
     useoptionangle = false;
