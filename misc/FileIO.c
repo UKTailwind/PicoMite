@@ -5780,10 +5780,12 @@ int InitSDCard(void)
         f_chdrive("B:");
         return 1; // if the card is present and has been initialised we have nothing to do
     }
-    for (i = 0; i < MAXOPENFILES; i++)
-        if (FileTable[i].com > MAXCOMPORTS)
-            if (FileTable[i].fptr != NULL)
-                ForceFileClose(i);
+    /* The card is mounted anew, so a file open on it is stale and is closed;
+       a file on A: or C: is not touched.  This closed every open file, the
+       A: drive's included, and skipped file number MAXOPENFILES. */
+    for (i = 1; i <= MAXOPENFILES; i++)
+        if (filesource[i] == FATFSFILE && FileTable[i].fptr->obj.fs == &FatFs)
+            ForceFileClose(i);
     i = f_mount(&FatFs, "B:", 1);
     if (i)
     {
@@ -5806,10 +5808,9 @@ int InitUSBDrive(void)
         f_chdrive("C:");
         return 1; // already initialised
     }
-    for (i = 0; i < MAXOPENFILES; i++)
-        if (FileTable[i].com > MAXCOMPORTS)
-            if (FileTable[i].fptr != NULL)
-                ForceFileClose(i);
+    for (i = 1; i <= MAXOPENFILES; i++) // only the files open on C: (see InitSDCard)
+        if (filesource[i] == FATFSFILE && FileTable[i].fptr->obj.fs == &FatFs_USB)
+            ForceFileClose(i);
     i = f_mount(&FatFs_USB, "C:", 1);
     if (i)
     {
