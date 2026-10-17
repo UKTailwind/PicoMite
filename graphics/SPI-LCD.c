@@ -4042,7 +4042,15 @@ void SPISpeedSet(int device)
 {
 #if PICOMITERP2350
 	if (Option.LCD_CLK && Option.LCD_CLK != Option.SYSTEM_CLK && device > I2C_PANEL && device != TOUCH && device != SLOWTOUCH)
-		return; // Everything is configured so nothing to do
+	{ /* The display has its own SPI, set up once at startup, so there is no
+	     bus to switch: only its clock changes, down for a read of the panel
+	     (SPIReadSpeed, ST7789RSpeed) and back to the display's own speed.
+	     Before this the clock never changed here and a read ran at the
+	     display's write speed, 50 MHz on the ST7365P, which answered one
+	     bit late. */
+		spi_set_baudrate((PinDef[Option.LCD_CLK].mode & SPI0SCK) ? spi0 : spi1, display_details[device].speed);
+		return;
+	}
 #endif
 	if (CurrentSPIDevice != device)
 	{
