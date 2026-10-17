@@ -1617,11 +1617,16 @@ void cmd_framebuffer(void)
             case SCREENMODE3:
                 if (argc == 1)
                     transparents = getint(argv[0], 0, 15);
-                SecondLayer = GetMemory(ScreenSize);
+                /* A layer is read at pixel rate, so it must be in SRAM.
+                   GetSystemMemory takes the SRAM heap without GetMemory's
+                   rule that sends any block over half the heap to PSRAM,
+                   and goes to PSRAM only when the SRAM heap is really full:
+                   that is the one case the check below refuses. */
+                SecondLayer = GetSystemMemory(ScreenSize);
                 if (SecondLayer >= (uint8_t *)PSRAMbase && SecondLayer < (uint8_t *)(PSRAMbase + 1024 * 1024 * 16))
                 {
                     FreeMemory((void *)SecondLayer);
-                    error("Second Layer must be in tightly coupled RAM");
+                    error("Not enough RAM for the second layer (% bytes)", ScreenSize);
                 }
                 colour = transparents | (transparents << 4);
                 break;
@@ -1630,11 +1635,11 @@ void cmd_framebuffer(void)
                 SecondLayer = GetMemory(ScreenSize);
                 break;
             case SCREENMODE5:
-                SecondLayer = GetMemory(ScreenSize);
+                SecondLayer = GetSystemMemory(ScreenSize); // SRAM, as for MODE 3 above
                 if (SecondLayer >= (uint8_t *)PSRAMbase && SecondLayer < (uint8_t *)(PSRAMbase + 1024 * 1024 * 16))
                 {
                     FreeMemory((void *)SecondLayer);
-                    error("Second Layer must be in tightly coupled RAM");
+                    error("Not enough RAM for the second layer (% bytes)", ScreenSize);
                 }
                 if (argc == 1)
                     transparents = getint(argv[0], 0, 255);
@@ -1662,10 +1667,14 @@ void cmd_framebuffer(void)
                 colour = transparent | (transparent << 4);
             case SCREENMODE1:
 #ifdef rp2350
+                /* The layer must be in SRAM (the check after this switch):
+                   GetSystemMemory takes the SRAM heap without GetMemory's
+                   rule that sends any block over half the heap to PSRAM,
+                   and goes to PSRAM only when the SRAM heap is really full. */
                 if (ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
                     LayerBuf = DisplayBuf + ScreenSize;
                 else
-                    LayerBuf = GetMemory(ScreenSize);
+                    LayerBuf = GetSystemMemory(ScreenSize);
 #else
                 LayerBuf = GetMemory(ScreenSize);
 #endif
@@ -1674,12 +1683,12 @@ void cmd_framebuffer(void)
             case SCREENMODE3:
                 if (argc == 1)
                     transparent = getint(argv[0], 0, 15);
-                LayerBuf = GetMemory(ScreenSize);
+                LayerBuf = GetSystemMemory(ScreenSize);
                 colour = transparent | (transparent << 4);
                 break;
 #ifdef HDMI
             case SCREENMODE4:
-                LayerBuf = GetMemory(ScreenSize);
+                LayerBuf = GetSystemMemory(ScreenSize);
                 if (argc == 1)
                     RGBtransparent = RGB555(getColour((char *)argv[0], 0));
                 else
@@ -1689,7 +1698,7 @@ void cmd_framebuffer(void)
                 if (ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
                     LayerBuf = DisplayBuf + ScreenSize;
                 else
-                    LayerBuf = GetMemory(ScreenSize);
+                    LayerBuf = GetSystemMemory(ScreenSize);
                 if (argc == 1)
                     transparent = getint(argv[0], 0, 255);
                 colour = transparent;
@@ -1699,9 +1708,9 @@ void cmd_framebuffer(void)
             }
 #ifdef rp2350
             if (LayerBuf > (uint8_t *)PSRAMbase && LayerBuf < (uint8_t *)(PSRAMbase + 1024 * 1024 * 16))
-            {
+            { // only when the SRAM heap could not hold it (see SCREENMODE1 above)
                 FreeMemory((void *)LayerBuf);
-                error("Layer Buffer must be in tightly coupled RAM");
+                error("Not enough RAM for the layer (% bytes)", ScreenSize);
             }
 #endif
         }
