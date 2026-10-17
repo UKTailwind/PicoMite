@@ -83,7 +83,14 @@
 // NB: requires firmware that publishes slot 7 (it does so at the top of main()).
 // NB: hot loops that call many vectors should cache the base once, e.g.
 //     unsigned int base = BaseAddress;  then use (base + 0x90) etc.
+// A CSUB built for the Colour Maximite 2 (armcfgen --cpu cortex-m7, mmb2csub --target cmm2: the only build with a
+// double-precision FPU) uses slot 8 instead, where the CMM2 keeps its table in the hard-float convention. The CMM2's
+// slot 7 holds the same table in the convention of a CSUB built for the PicoMite, so one of those runs there as well.
+#if defined(__ARM_FP) && (__ARM_FP & 8)
+#define BaseAddress (((unsigned int *)(*(unsigned int *)0xE000ED08))[8])
+#else
 #define BaseAddress (((unsigned int *)(*(unsigned int *)0xE000ED08))[7])
+#endif
 
 #define Vector_uSec (*(unsigned int *)(BaseAddress + 0x00))				   // void uSec(unsigned int us)
 #define Vector_putConsole (*(unsigned int *)(BaseAddress + 0x04))		   // void putConsole(int C))
