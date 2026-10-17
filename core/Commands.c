@@ -989,6 +989,10 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 	int i, t, fnbr;
 	int docrlf; // this is used to suppress the cr/lf if needed
 
+/* The column PRINT keeps for TAB() and POS. A comma writes a tab character,
+   counted to the next 8-column stop as a terminal or a file viewer shows it
+   (#37; it was counted to 14-column zones). The screen pads a tab to
+   OPTION TAB, so it differs while that is not 8. */
 #define ADV_CHARPOS(ch)                                        \
 	do                                                         \
 	{                                                          \
@@ -998,7 +1002,7 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 		}                                                      \
 		else if ((ch) == '\t')                                 \
 		{                                                      \
-			int nexttab = (((charpos - 1) / 14) + 1) * 14 + 1; \
+			int nexttab = (((charpos - 1) / 8) + 1) * 8 + 1;   \
 			charpos = nexttab;                                 \
 		}                                                      \
 		else                                                   \
@@ -1020,6 +1024,7 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 
 	docrlf = true;
 	int charpos = MMCharPos; // Track current column for TAB() function
+	int conpos = MMCharPos;	 // the console's column, put back after a PRINT to a file or COM port
 
 	if (argc > 0 && *argv[0] == '#')
 	{ // check if the first arg is a file number
@@ -1087,6 +1092,11 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 		fnbr = 0; // no file number so default to the standard output
 		i = 0;
 	}
+	/* A file or COM port has a column of its own (#38): TAB() and POS in its
+	   items count from it, and the console's column is left as it was. */
+	int filecol = (fnbr >= 1 && fnbr <= MAXOPENFILES);
+	if (filecol)
+		charpos = FileCharPos[fnbr];
 
 	// Get initial buffer for accumulating output
 	unsigned char *outbuf = GetTempMemory(STRINGSIZE);
@@ -1254,7 +1264,13 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 	if (PrintPixelMode != 0)
 		SSPrintString("\033[m");
 	PrintPixelMode = 0;
-	MMCharPos = charpos; // Final column state after buffered output
+	if (filecol)
+	{ // the file's column waits for its next PRINT; the console's is restored
+		FileCharPos[fnbr] = charpos;
+		MMCharPos = conpos;
+	}
+	else
+		MMCharPos = charpos; // Final column state after buffered output
 
 #undef ADV_CHUNK
 #undef ADV_CHARPOS

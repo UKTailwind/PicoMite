@@ -364,6 +364,7 @@ FATFS FatFs;
 FATFS FatFs_USB;
 #endif
 union uFileTable FileTable[MAXOPENFILES + 1];
+int FileCharPos[MAXOPENFILES + 1]; // PRINT's column for each file or COM port (#38): 1 when it is opened
 volatile BYTE SDCardStat = STA_NOINIT | STA_NODISK;
 #if HAS_USB_MSC
 volatile BYTE USBDriveStat = STA_NOINIT | STA_NODISK;
@@ -5875,6 +5876,7 @@ int BasicFileOpen(char *fname, int fnbr, int mode)
         StandardError(18);
     if (FileTable[fnbr].com != 0)
         error("File number already open");
+    FileCharPos[fnbr] = 1; // a new file starts at column 1
     char q[FF_MAX_LFN] = {0};
     getfullfilename(fname, q);
     if (FatFSFileSystem)
@@ -7480,6 +7482,7 @@ void cmd_open(void)
             fnbr = FindFreeFileNbr();
             GPSfnbr = fnbr;
             FileTable[fnbr].com = fname[3] - '0';
+            FileCharPos[fnbr] = 1;
             GPSchannel = fname[3] - '0'; // 1-2 = UART, 3-6 = USB CDC host, 7 = Bluetooth (is_comport already validated it)
             gpsbuf = gpsbuf1;
             gpscurrent = 0;
@@ -7494,6 +7497,7 @@ void cmd_open(void)
                 StandardError(31);
             SerialOpen((unsigned char *)fname);
             FileTable[fnbr].com = fname[3] - '0';
+            FileCharPos[fnbr] = 1;
         }
     }
 }

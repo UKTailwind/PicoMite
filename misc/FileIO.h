@@ -513,6 +513,7 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
         extern bool SuppressOptionFlash;
         void BuildDefaultOptions(struct option_s *dst);
         extern unsigned char filesource[MAXOPENFILES + 1];
+        extern int FileCharPos[MAXOPENFILES + 1];
 
         /* ============================================================================
          * External variables - Flash and file system
