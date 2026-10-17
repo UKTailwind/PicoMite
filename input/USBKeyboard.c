@@ -2486,6 +2486,16 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 	uint8_t itf_protocol = tuh_hid_interface_protocol(dev_addr, instance);
 	//  PInt(itf_protocol);
 	tuh_vid_pid_get(dev_addr, &vid, &pid);
+	/* A keyboard with media keys can present two boot-keyboard interfaces
+	   (issue #36). In the boot protocol, which every interface is put into
+	   at mount, the second sends nothing: every key arrives on the first.
+	   It would take a HID slot of its own, be polled, and announce a second
+	   keyboard, so an interface whose device already has a keyboard slot
+	   takes none. The unmount finds no slot for it and does nothing. */
+	if (itf_protocol == HID_ITF_PROTOCOL_KEYBOARD)
+		for (int i = 0; i < 4; i++)
+			if (HID[i].active && HID[i].Device_address == dev_addr && HID[i].Device_type == HID_ITF_PROTOCOL_KEYBOARD)
+				return;
 	int slot = FindFreeSlot(itf_protocol);
 	if (slot == -1)
 		return; /* all slots in use by devices we service — skip this

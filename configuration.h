@@ -75,12 +75,12 @@ extern "C"
 #if defined(PICOMITEPC3)
    /* PC3 (branch pc3-all): HDMIWEB + HDMIBTH on the full HDMI pipeline
       (153600-byte pool); docs/PC3_All_In_Build_Design_Review.md.
-      The flash map: firmware to 1728 KB, options, saved variables, three
-      256 KB flash slots and the 256 KB program, ending at 2772 KB under the
+      The flash map: firmware to 1744 KB (1728 until 2026-10-17: the RC2 PC3 had 48 bytes left), options, saved variables, three
+      256 KB flash slots and the 256 KB program, ending at 2788 KB under the
       16 MB fixed map's 3 MB system top.  There is no Route B flash stream
       (RB_STREAM_FLASH_SLOTS below): this build has PSRAM, and the stream
       lives in the PSRAM reserve, which is 2.5 MB here (PSRAM_RESERVE). */
-#define FLASH_TARGET_OFFSET (1728 * 1024)
+#define FLASH_TARGET_OFFSET (1744 * 1024)
    /* 108 KB: the SRAM heap the review's budget gives with the full 153600-byte
       pool (4.2 KB of RAM margin left for the stack); the boot-time resize for
       800x600, 848x480 and 800x480 takes its pool from this, as on HDMIUSB. */
