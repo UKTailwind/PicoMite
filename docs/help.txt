@@ -2334,7 +2334,10 @@ information.
   D     1 if there has been a double click of the left mouse button
   W gives the delta of the wheel position since the last call (PS2 mouse or
   USB mouse with OPTION MOUSE SENSITIVITY set)
-  B   the state of all buttons as a bitmap (USB mouse only)
+  B   the state of all buttons as a bitmap (USB mouse only) Bit 0 is the left
+  button, bit 1 the right and bit 2 the middle; the other bits are the mouse's
+  further buttons in its own order, which need OPTION MOUSE SENSITIVITY to be
+  set
 
 See also: MM.INFO
 

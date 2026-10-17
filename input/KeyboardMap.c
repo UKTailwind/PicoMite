@@ -1385,13 +1385,16 @@ void process_mouse_input(int16_t x_delta,
 
     nunstruct[n].az += wheel_delta;
 
-    /* Edge-detect button changes for the interrupt path. */
-    if (nunstruct[n].x0 != (buttons & 0b111))
+    /* Edge-detect button changes for the interrupt path. The whole bitmap
+       is kept: bits 0-2 are left, right and middle, bits 3 and up the extra
+       buttons a mouse declares (the descriptor parser folds up to eight),
+       which DEVICE(MOUSE n, B) returns. It was masked to three. */
+    if (nunstruct[n].x0 != buttons)
     {
         nunfoundc[n] = 1;
         if (nunInterruptc[n] != NULL) IntSignal();
     }
-    nunstruct[n].x0 = buttons & 0b111;
+    nunstruct[n].x0 = buttons;
 
     /* Character-cell projection, used by the DEVICE(MOUSE) text-grid
        accessors. Falls back gracefully if no font is selected. */
