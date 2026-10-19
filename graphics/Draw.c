@@ -5968,18 +5968,23 @@ void ReadBuffer2(int x1, int y1, int x2, int y2, unsigned char *c)
 #ifdef PICOMITEVGA
             int tile = x / 8 + (y / ytileheight) * X_TILE, back, front;
 #ifdef HDMI
+            /* HDMI's tiles hold RGB555 colours, or RGB332 indices into map256
+               (Draw.c, cmd_tile). Read as RGB121 indices, as VGA's are, every
+               colour but white, cyan and black came back black: SAVE IMAGE of
+               the colour-coded editor lost its numbers, comments and quotes. */
             if (FullColour)
             {
-#endif
-                back = RGB121map[tilebcols[tile] & 0xF];
-                front = RGB121map[tilefcols[tile] & 0xF];
-#ifdef HDMI
+                back = RGB555toRGB888(tilebcols[tile]);
+                front = RGB555toRGB888(tilefcols[tile]);
             }
             else
             {
                 back = RGB555toRGB888(map256[tilebcols_w[tile] & 0xFF]);
-                front = RGB555toRGB888(map256[tilefcols_w[tile] & 0xF]);
+                front = RGB555toRGB888(map256[tilefcols_w[tile] & 0xFF]);
             }
+#else
+            back = RGB121map[tilebcols[tile] & 0xF];
+            front = RGB121map[tilefcols[tile] & 0xF];
 #endif
 #else
             int front = 0xFFFFFF;

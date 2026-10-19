@@ -233,7 +233,12 @@ extern "C"
 #define MagicKey 0xAD01562A
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
-#define FLASH_TARGET_OFFSET (1056 * 1024)
+   /* +16 KB (2026-10-19, Peter "A"): the editor's safe save, import and export
+      (issue #56) and Print Screen went 652 bytes over; 276 bytes were spare.
+      The options, the program and the flash slots move: the first boot after
+      the upgrade resets the options and clears them, and A: is reformatted on
+      a 4 MB board (a 16 MB board keeps it, at its fixed place). */
+#define FLASH_TARGET_OFFSET (1072 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.5 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.5 KB of RAM margin left for the stack. */

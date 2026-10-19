@@ -1779,6 +1779,11 @@ int __not_in_flash_func(MMInkey)(void)
         while (1)
         {
             c = MMgetchar();
+            if (KEY_IS_PRTSCR(c))
+            { // Print Screen: the display saved (ScreenShot, FileIO.c), not a key
+                ScreenShot();
+                continue;
+            }
 
             if (c == TAB)
             {

@@ -4938,6 +4938,11 @@ fm_relaunch:
             if (type_select_active)
                 ShowCursor(1); // the local display's cursor blinks from here, as MMgetchar's does
             c = MMInkey();
+            if (KEY_IS_PRTSCR(c))
+            { // Print Screen: the display saved (ScreenShot, FileIO.c), not a key
+                ScreenShot();
+                c = -1;
+            }
 #if defined(GUICONTROLS) && defined(USBKEYBOARD)
             ProcessTouch();
             if (touch_swipe_dir == 1 && c == -1)
@@ -6419,6 +6424,177 @@ static void editBeautify(int edit_buff_size, int keep_blanks)
    including PICOMITEMIN. */
 static char editor_io_filename[STRINGSIZE + 8];
 
+/* The editor's files - the save, F9's import, the exports - go through FileTry
+   (FileIO.c): a failure, whatever it is, leaves the editor open with its text
+   and is shown on the message line, where error() ended the editor and lost
+   the edits. */
+static char EdMsg[80];
+static bool EdMsgAfterMark; /* mark mode's F10: show EdMsg again after F4's redraw */
+
+static void EdFileMsg(const char *what)
+{
+    snprintf(EdMsg, sizeof(EdMsg), " %s: %s ", what, *MMErrMsg ? MMErrMsg : "failed");
+    if (VWidth > 1 && (int)strlen(EdMsg) > VWidth - 1)
+        EdMsg[VWidth - 1] = 0;
+    editDisplayMsg((unsigned char *)EdMsg);
+}
+
+/* The save: the text is written as name.$$$, then an older name.bak is
+   deleted, the file renamed name.bak and name.$$$ renamed name, so a failure
+   at any point leaves the file or its .bak whole. Every line ends CR LF, the
+   last one too (the load dropped its ending), and with OPTION CONTINUATION
+   LINES the continuation characters the editor added are left out. */
+static bool EdSaveFile(void *arg)
+{
+    char *fname = (char *)arg;
+    char tmp[STRINGSIZE + 8], bak[STRINGSIZE + 8];
+    strcpy(tmp, fname);
+    strcat(tmp, ".$$$");
+    strcpy(bak, fname);
+    strcat(bak, ".bak");
+    int fnbr = FindFreeFileNbr();
+    if (!BasicFileOpen(tmp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
+        return false;
+    for (unsigned char *p = EdBuff; *p && !MMerrno; p++)
+    {
+        if (Option.continuation && *p == Option.continuation && p[1] == '\n')
+        {
+            p++; // step over the continuation characters
+            continue;
+        }
+        if (*p == '\n')
+            FilePutChar('\r', fnbr);
+        FilePutChar(*p, fnbr);
+    }
+    if (*EdBuff && !MMerrno)
+    { // and the last line's ending, which the load dropped
+        FilePutChar('\r', fnbr);
+        FilePutChar('\n', fnbr);
+    }
+    FileClose(fnbr);
+    if (!MMerrno && ExistsFile(fname) > 0)
+    {
+        if (ExistsFile(bak) > 0)
+            FileDelete(bak);
+        if (!MMerrno)
+            FileRename(fname, bak);
+    }
+    if (MMerrno)
+    { // the file is as it was: name.$$$ goes (the error is the one to report)
+        char msg[MAXERRMSG];
+        int err = MMerrno;
+        strcpy(msg, MMErrMsg);
+        FileDelete(tmp);
+        MMerrno = err;
+        strcpy(MMErrMsg, msg);
+        return false;
+    }
+    FileRename(tmp, fname);
+    return MMerrno == 0;
+}
+
+/* A file named at one of the editor's prompts: BasicFileOpen takes the name
+   without its drive, on the drive set here. The file number, or 0. */
+static int EdOpen(char *name, int mode)
+{
+    int waste = 0;
+    FatFSFileSystem = drivecheck(name, &waste) - 1;
+    int fnbr = FindFreeFileNbr();
+    return BasicFileOpen(name + waste, fnbr, mode) ? fnbr : 0;
+}
+
+/* F9: a file inserted at the cursor. */
+typedef struct
+{
+    char *name;
+    char *multi;
+    int edit_buff_size;
+    int count;  /* characters inserted */
+    int status; /* 0 read, 1 not found, 2 too large, 3 the buffer filled */
+} ed_import_t;
+
+static bool EdImportFile(void *arg)
+{
+    ed_import_t *im = (ed_import_t *)arg;
+    if (!ExistsFile(im->name))
+        AppendDefaultExtension(im->name, ".bas"); // no extension given, and no such file
+    if (!ExistsFile(im->name))
+    {
+        im->status = 1;
+        return true;
+    }
+    unsigned char *endp;
+    for (endp = EdBuff; *endp; endp++)
+        ; // find end of current text
+    if ((endp - EdBuff) + FileSize(im->name) >= im->edit_buff_size - 10)
+    {
+        im->status = 2;
+        return true;
+    }
+    int fnbr = EdOpen(im->name, FA_READ);
+    if (!fnbr)
+        return false;
+    while (!FileEOF(fnbr) && !MMerrno)
+    {
+        char ch = FileGetChar(fnbr);
+        if (MMerrno || ch == '\r')
+            continue; // skip carriage returns
+        if (!editInsertChar((unsigned char)ch, im->multi, im->edit_buff_size))
+        {
+            im->status = 3;
+            break;
+        }
+        if (ch == '\n')
+            nbrlines++;
+        im->count++;
+    }
+    FileClose(fnbr);
+    return MMerrno == 0;
+}
+
+/* F10 / Ctrl-B (the clipboard) and mark mode's F10 (the marked text): the
+   text from..to, to a file named at a prompt, with CR LF line endings. */
+typedef struct
+{
+    char *name;
+    unsigned char *from, *to;
+    int count;
+} ed_export_t;
+
+static bool EdExportFile(void *arg)
+{
+    ed_export_t *ex = (ed_export_t *)arg;
+    AppendDefaultExtension(ex->name, ".bas"); // no extension given
+    int fnbr = EdOpen(ex->name, FA_WRITE | FA_CREATE_ALWAYS);
+    if (!fnbr)
+        return false;
+    for (unsigned char *cp = ex->from; cp < ex->to && !MMerrno; cp++)
+    {
+        if (*cp == '\n')
+            FilePutChar('\r', fnbr); // Add CR before LF for proper line endings
+        FilePutChar(*cp, fnbr);
+        ex->count++;
+    }
+    FileClose(fnbr);
+    return MMerrno == 0;
+}
+
+static void EdExport(unsigned char *from, unsigned char *to)
+{
+    GetInputString((unsigned char *)"Export to file: ");
+    if (*inpbuf == 0 || *inpbuf == ESC)
+        return;
+    strcpy(editor_io_filename, (char *)inpbuf);
+    ed_export_t ex = {editor_io_filename, from, to, 0};
+    if (FileTry(EdExportFile, &ex))
+    {
+        sprintf(EdMsg, " EXPORTED %d CHARS ", ex.count);
+        editDisplayMsg((unsigned char *)EdMsg);
+    }
+    else
+        EdFileMsg("EXPORT FAILED");
+}
+
 void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdfile)
 {
     edit_is_bas = (fname == NULL || fstrstr(fname, ".bas") != NULL);
@@ -6612,6 +6788,11 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
 #endif
 
                 c = MMInkey();
+            if (KEY_IS_PRTSCR(c))
+            { // Print Screen: the display saved (ScreenShot, FileIO.c), not a key
+                ScreenShot();
+                c = -1;
+            }
 #if defined(GUICONTROLS) && defined(USBKEYBOARD)
             ProcessTouch();
             if (touch_swipe_dir == 1 && c == -1)
@@ -7197,12 +7378,17 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 //                            }
                 c = buf[0];
 #ifdef MMBASIC_FM
-                /* Capture the exit key now: the file-write loop below reuses
-                 * `c` as the byte being written and ends with c == NUL, which
-                 * loses the F2 / Ctrl-W "save, exit and run" indication that
-                 * FM relies on after edit() returns.                         */
+                /* Capture the exit key now: FM reads the F2 / Ctrl-W "save,
+                 * exit and run" indication after edit() returns.             */
                 int fm_exit_key = c;
 #endif
+                /* A file is saved before the screen is torn down: if it cannot
+                   be, the editor stays open with the text (EdSaveFile). */
+                if (c != ESC && TextChanged && fname && !FileTry(EdSaveFile, fname))
+                {
+                    EdFileMsg("SAVE FAILED");
+                    break;
+                }
                 PrintString("\033[?1000l");        // Tera Term turn off mouse click report in vt200 mode
                 PrintString("\033[?7h");           // restore autowrap (was disabled by setterminal on entry)
                 PrintString("\0338\033[2J\033[H"); // vt100 clear screen and home cursor
@@ -7267,54 +7453,6 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     gui_fcolour = OriginalFC; // *EB*
                     ClearScreen(gui_bcolour); // *EB*
                     SaveToProgMemory();
-                }
-                if (c != ESC && TextChanged && fname)
-                {
-                    int fnbr1;
-                    if (ExistsFile(fname))
-                    {
-                        char backup[STRINGSIZE + 8];
-                        strcpy(backup, fname);
-                        strcat(backup, ".bak");
-                        fnbr1 = FindFreeFileNbr();
-                        BasicFileOpen(fname, fnbr1, FA_READ);
-                        int fnbr2 = FindFreeFileNbr();
-                        BasicFileOpen(backup, fnbr2, FA_WRITE | FA_CREATE_ALWAYS);
-                        while (!FileEOF(fnbr1))
-                        { // while waiting for the end of file
-                            FilePutChar(FileGetChar(fnbr1), fnbr2);
-                        }
-                        FileClose(fnbr1);
-                        FileClose(fnbr2);
-                    }
-                    fnbr1 = FindFreeFileNbr();
-                    BasicFileOpen(fname, fnbr1, FA_WRITE | FA_CREATE_ALWAYS);
-                    p = EdBuff;
-                    if (Option.continuation)
-                    {
-                        unsigned char *q = p;
-                        while (*p)
-                        {
-                            if (*p == Option.continuation && p[1] == '\n')
-                                p += 2; // step over the continuation characters
-                            else
-                                *q++ = *p++;
-                        }
-                        *q = 0;
-                        p = EdBuff;
-                    }
-                    while ((c = *p++))
-                    { // every line ending as CR LF
-                        if (c == '\n')
-                            FilePutChar('\r', fnbr1);
-                        FilePutChar(c, fnbr1);
-                    }
-                    if (*EdBuff)
-                    { // and the last line's, which the load dropped
-                        FilePutChar('\r', fnbr1);
-                        FilePutChar('\n', fnbr1);
-                    }
-                    FileClose(fnbr1);
                 }
                 if (cmdfile == false)
                 {
@@ -7437,6 +7575,11 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     curx = abs_col - edx;
                 }
                 PositionCursor(txtp);
+                if (EdMsgAfterMark)
+                { // mark mode's F10 export: its message, which the redraw covered
+                    EdMsgAfterMark = false;
+                    editDisplayMsg((unsigned char *)EdMsg);
+                }
                 break;
             case SHIFT_F4:
             case F7:
@@ -7486,145 +7629,41 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 GetInputString((unsigned char *)"Import file: ");
                 if (*inpbuf == 0 || *inpbuf == ESC)
                     break;
-
-                // Copy filename to the shared editor I/O buffer
-                char *importfile = editor_io_filename;
-                strcpy(importfile, (char *)inpbuf);
-
-                // Add .bas extension if no extension and file not found
-                if (!ExistsFile(importfile))
-                {
-                    AppendDefaultExtension(importfile, ".bas");
-                }
-
-                // Check file exists and get size
-                if (!ExistsFile(importfile))
-                {
-                    editDisplayMsg((unsigned char *)" FILE NOT FOUND ");
-                    break;
-                }
-
-                int fsize = FileSize(importfile);
-                unsigned char *endp;
-                for (endp = EdBuff; *endp; endp++)
-                    ; // find end of current text
-                int current_size = endp - EdBuff;
-
-                if (current_size + fsize >= edit_buff_size - 10)
-                {
-                    editDisplayMsg((unsigned char *)" FILE TOO LARGE ");
-                    break;
-                }
-
-                // Save current cursor position
+                strcpy(editor_io_filename, (char *)inpbuf);
+                ed_import_t im = {editor_io_filename, &multi, edit_buff_size, 0, 0};
                 unsigned char *saved_txtp = txtp;
-
-                // Pre-process filename same way ExistsFile does
-                // Must set FatFSFileSystem correctly before BasicFileOpen
-                int waste = 0;
-                char *openname = importfile;
-                int t = drivecheck(importfile, &waste);
-                openname += waste;
-                FatFSFileSystem = t - 1;
-
-                // Open the file
-                int fnbr = FindFreeFileNbr();
-                if (!BasicFileOpen(openname, fnbr, FA_READ))
-                {
-                    editDisplayMsg((unsigned char *)" CANNOT OPEN FILE ");
-                    break;
-                }
-
-                // Read file and insert each character
-                char ch;
-                int insert_count = 0;
-                while (!FileEOF(fnbr))
-                {
-                    ch = FileGetChar(fnbr);
-                    if (ch == '\r')
-                        continue; // skip carriage returns
-                    if (ch == '\n')
-                        nbrlines++;
-                    if (!editInsertChar((unsigned char)ch, &multi, edit_buff_size))
-                    {
-                        FileClose(fnbr);
-                        editDisplayMsg((unsigned char *)" OUT OF MEMORY ");
-                        break;
-                    }
-                    insert_count++;
-                }
-                FileClose(fnbr);
-
+                bool ok = FileTry(EdImportFile, &im);
                 // Restore cursor to original position (before inserted text)
                 txtp = saved_txtp;
-
-                TextChanged = true;
+                if (im.count)
+                    TextChanged = true;
                 printScreen();
                 PositionCursor(txtp);
-
-                // Display success message
-                char msg[40];
-                sprintf(msg, " IMPORTED %d CHARS ", insert_count);
-                editDisplayMsg((unsigned char *)msg);
+                if (!ok)
+                    EdFileMsg("IMPORT FAILED"); // (after the characters read)
+                else if (im.status == 1)
+                    editDisplayMsg((unsigned char *)" FILE NOT FOUND ");
+                else if (im.status == 2)
+                    editDisplayMsg((unsigned char *)" FILE TOO LARGE ");
+                else
+                {
+                    sprintf(EdMsg, im.status == 3 ? " OUT OF MEMORY: %d CHARS IMPORTED " : " IMPORTED %d CHARS ", im.count);
+                    editDisplayMsg((unsigned char *)EdMsg);
+                }
             }
             break;
 
             // F10 - Export clipboard to file
             case CTRLKEY('B'):
             case F10:
-            {
                 // Check if clipboard has content
                 if (clipboard[0] == 0)
                 {
                     editDisplayMsg((unsigned char *)" CLIPBOARD IS EMPTY ");
                     break;
                 }
-
-                // Get filename from user
-                GetInputString((unsigned char *)"Export to file: ");
-                if (*inpbuf == 0 || *inpbuf == ESC)
-                    break;
-
-                // Copy filename to the shared editor I/O buffer
-                char *exportfile = editor_io_filename;
-                strcpy(exportfile, (char *)inpbuf);
-
-                // Add .bas extension if no extension specified
-                AppendDefaultExtension(exportfile, ".bas");
-
-                // Pre-process filename same way as F9 - set FatFSFileSystem correctly
-                int waste = 0;
-                char *openname = exportfile;
-                int t = drivecheck(exportfile, &waste);
-                openname += waste;
-                FatFSFileSystem = t - 1;
-
-                // Open file for writing
-                int fnbr = FindFreeFileNbr();
-                if (!BasicFileOpen(openname, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
-                {
-                    editDisplayMsg((unsigned char *)" CANNOT CREATE FILE ");
-                    break;
-                }
-
-                // Write clipboard contents to file
-                int export_count = 0;
-                unsigned char *cp = clipboard;
-                while (*cp)
-                {
-                    if (*cp == '\n')
-                        FilePutChar('\r', fnbr); // Add CR before LF for proper line endings
-                    FilePutChar(*cp++, fnbr);
-                    export_count++;
-                }
-                FileClose(fnbr);
-
-                // Display success message
-                char msg[40];
-                sprintf(msg, " EXPORTED %d CHARS ", export_count);
-                editDisplayMsg((unsigned char *)msg);
-            }
-            break;
+                EdExport(clipboard, clipboard + strlen((char *)clipboard));
+                break;
 
             // F11 - reserved
             case F11:
@@ -7889,6 +7928,11 @@ void MarkMode(unsigned char *cb, unsigned char *buf)
 #endif
 #endif
             c = MMInkey();
+        if (KEY_IS_PRTSCR(c))
+        { // Print Screen (ScreenShot, FileIO.c), not a key
+            ScreenShot();
+            c = -1;
+        }
         if (c != -1)
             EdKeyNow = c;
         if (c != -1 && errmsg)
@@ -8191,54 +8235,10 @@ void MarkMode(unsigned char *cb, unsigned char *buf)
             {
                 // For F10, also export to file before returning
                 if (c == F10)
-                {
-                    // Get filename from user
-                    GetInputString((unsigned char *)"Export to file: ");
-                    if (*inpbuf != 0 && *inpbuf != ESC)
-                    {
-                        // Copy filename to the shared editor I/O buffer
-                        char *exportfile = editor_io_filename;
-                        strcpy(exportfile, (char *)inpbuf);
-
-                        // Add .bas extension if no extension specified
-                        AppendDefaultExtension(exportfile, ".bas");
-
-                        // Pre-process filename - set FatFSFileSystem correctly
-                        int waste = 0;
-                        char *openname = exportfile;
-                        int t = drivecheck(exportfile, &waste);
-                        openname += waste;
-                        FatFSFileSystem = t - 1;
-
-                        // Open file for writing
-                        int fnbr = FindFreeFileNbr();
-                        if (BasicFileOpen(openname, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
-                        {
-                            // Write clipboard contents to file
-                            // Note: cb has been incremented, so use buf parameter which points to original clipboard
-                            int export_count = 0;
-                            unsigned char *cp = buf; // buf points to start of clipboard passed to MarkMode
-                            // Actually we need the original clipboard start - recalculate
-                            cp = (mark <= txtp) ? mark : txtp;
-                            unsigned char *cpend = (mark <= txtp) ? txtp : mark;
-                            while (cp < cpend)
-                            {
-                                if (*cp == '\n')
-                                    FilePutChar('\r', fnbr);
-                                FilePutChar(*cp++, fnbr);
-                                export_count++;
-                            }
-                            FileClose(fnbr);
-
-                            char msg[40];
-                            sprintf(msg, " EXPORTED %d CHARS ", export_count);
-                            editDisplayMsg((unsigned char *)msg);
-                        }
-                        else
-                        {
-                            editDisplayMsg((unsigned char *)" CANNOT CREATE FILE ");
-                        }
-                    }
+                { // the marked text (cb has been advanced: from mark and txtp), its
+                  // message shown again after the redraw that follows (F4's case)
+                    EdExport((mark <= txtp) ? mark : txtp, (mark <= txtp) ? txtp : mark);
+                    EdMsgAfterMark = true;
                 }
                 // Calculate line number of txtp and adjust edy if needed
                 int ln;
@@ -9004,7 +9004,7 @@ void printLine(int ln)
         {
             if (!inmulti || inmulti == 3)
                 SetColour((unsigned char *)p, false); // set the colour for the LCD display only
-            else
+            else if (Option.ColourCode) // (with it off nothing would set the colour back)
                 gui_fcolour = GUI_C_COMMENT;
             MX470PutC(*p++); // print on the MX470 display
             i--;
@@ -9262,8 +9262,10 @@ void PrintStatus(void)
 
     // Redraw the function-key line whenever the legend would change (tier
     // boundary crossed) or the status has shrunk (stale chars from the prior
-    // wider status would otherwise linger on the right of the legend).
-    if (want_funct != g_funct_string || cur_width < g_status_width)
+    // wider status would otherwise linger on the right of the legend) - but
+    // not over a message (editDisplayMsg): the next key redraws the legend.
+    // The periodic status in the idle loop wiped mark mode's export message.
+    if (!drawstatusline && (want_funct != g_funct_string || cur_width < g_status_width))
     {
         PrintFunctKeys(g_funct_typ); // updates g_funct_string / g_status_width
     }
@@ -9340,6 +9342,11 @@ void GetInputString(unsigned char *prompt)
     while (1)
     { // get the input
         unsigned char ch = MMgetchar();
+        if (KEY_IS_PRTSCR(ch))
+        { // Print Screen (ScreenShot, FileIO.c), not a key
+            ScreenShot();
+            continue;
+        }
         if (ch == '\r')
             break;
         if (ch == 0xb3 || ch == F3 || ch == ESC)

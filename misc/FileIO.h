@@ -543,6 +543,18 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
         int MMfeof(int filenbr);
         void MMgetline(int filenbr, char *p);
         int ExistsFile(char *p);
+        bool FileTry(bool (*fn)(void *), void *arg);
+        void FileRename(char *from, char *to);
+#define FileDelete(name) FileRename(name, NULL)
+/* Print Screen's key code (ScreenShot, FileIO.c); not in the PicoMiteRP2040MIN,
+   which has no room for it: there the tests compile to nothing. */
+#ifdef PICOMITEMIN
+#define KEY_IS_PRTSCR(c) 0
+#define ScreenShot() ((void)0)
+#else
+#define KEY_IS_PRTSCR(c) ((c) == 0x9D)
+        void ScreenShot(void);
+#endif
         int ExistsDir(char *p, char *q, int *filesystem);
         int FileSize(char *p);
         extern bool (*linecallback)(int *imagewidth, int *imageheight, uint32_t *linedata, int *linenumber);

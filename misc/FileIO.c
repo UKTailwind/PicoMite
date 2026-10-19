@@ -5968,7 +5968,9 @@ int BasicFileOpen(char *fname, int fnbr, int mode)
         if (mode != LFS_O_RDONLY && ExistsFile(q))
             lfs_removeattr(&lfs, q, 'A');
         FSerror = lfs_file_open(&lfs, FileTable[fnbr].lfsptr, q, lfsmode);
-        if (mode != LFS_O_RDONLY)
+        /* (not after a failed open: the attribute's result replaced the open's
+           error, so a directory opened for writing reported no error) */
+        if (FSerror == 0 && mode != LFS_O_RDONLY)
         {
             int dt = get_fattime();
             FSerror = lfs_setattr(&lfs, q, 'A', &dt, 4);
@@ -8482,4 +8484,111 @@ void SaveOptions(void)
     safe_flash_range_program(FLASH_TARGET_OFFSET, (const uint8_t *)&Option, sizeof(struct option_s));
     enable_interrupts_pico();
 }
+
+/* Run fn(arg) with a file error left in MM.ERRNO and MM.ERRMSG$ rather than
+   thrown (as OPTION FILE ERROR CONTINUE leaves it), and any other error - an
+   SD card not configured, no memory - caught on the ON ERROR SKIP path. For
+   work done inside the full screen editor or the file manager, or by Print
+   Screen, where error() would end it and lose its text or its screen. A file
+   left open by an error is closed. True when fn returned true and nothing went
+   wrong; otherwise MMErrMsg says what (when anything was recorded). */
+bool FileTry(bool (*fn)(void *), void *arg)
+{
+    jmp_buf errnext;
+    bool wasopen[MAXOPENFILES + 1];
+    int skip = OptionErrorSkip, abort = OptionFileErrorAbort;
+    int fs = FatFSFileSystem, fssave = FatFSFileSystemSave;
+    volatile bool ok = false;
+    for (int i = 1; i <= MAXOPENFILES; i++)
+        wasopen[i] = FileTable[i].com != 0;
+    memcpy(errnext, ErrNext, sizeof(jmp_buf));
+    MMerrno = 0;
+    *MMErrMsg = 0;
+    OptionFileErrorAbort = 0;
+    OptionErrorSkip = 1;
+    if (setjmp(ErrNext) == 0)
+        ok = fn(arg) && MMerrno == 0;
+    for (int i = 1; i <= MAXOPENFILES; i++)
+        if (!wasopen[i] && FileTable[i].com != 0)
+            ForceFileClose(i);
+    memcpy(ErrNext, errnext, sizeof(jmp_buf));
+    OptionErrorSkip = skip;
+    OptionFileErrorAbort = abort;
+    FatFSFileSystem = fs;
+    FatFSFileSystemSave = fssave;
+    return ok;
+}
+
+/* NAME (RENAME) - or, with to NULL, KILL (FileDelete) - for C code, on the
+   drive the names give (from and to on the same one). Errors as the
+   commands': thrown, or in MM.ERRNO under FileTry. */
+void FileRename(char *from, char *to)
+{
+    char qold[FF_MAX_LFN] = {0}, qnew[FF_MAX_LFN] = {0};
+    int fs = FatFSFileSystem, waste = 0, t;
+    if (to)
+    {
+        drivecheck(to, &waste);
+        getfullfilename(to + waste, qnew);
+        waste = 0;
+    }
+    t = drivecheck(from, &waste);
+    getfullfilename(from + waste, qold);
+    FatFSFileSystem = t - 1;
+    if (FatFSFileSystem == 0)
+    {
+        FSerror = to ? lfs_rename(&lfs, qold, qnew) : lfs_remove(&lfs, qold);
+        ErrorCheck(0);
+    }
+    else if (InitSDCard())
+    {
+        FSerror = to ? f_rename(qold, qnew) : f_unlink(qold);
+        ErrorCheck(0);
+    }
+    FatFSFileSystem = fs;
+}
+
+/* Print Screen: the key's code, 0x9D (KeyboardMap.c gives it to the Print
+   Screen key, and a serial terminal can send the byte), saves the display at
+   the command prompt, in the editor and in the file manager, as the CMM2 does:
+   SCREENnnn.BMP, the first number not used yet, in the root of the SD card
+   when one is configured and otherwise of A:, written by SAVE IMAGE - so only
+   on a display SAVE IMAGE can read. It prints nothing, and an error (no card,
+   no room, no memory) is caught by FileTry, so the editor and the file manager
+   keep their screens and their text. Not in the PicoMiteRP2040MIN (no room:
+   ScreenShot() is nothing there, FileIO.h). */
+#ifndef PICOMITEMIN
+static char screenshot_cmd[32];
+static bool ScreenShotSave(void *arg)
+{
+    char name[24];
+    int n;
+    (void)arg;
+    cmdline = (unsigned char *)screenshot_cmd; /* (getfullfilename reads *cmdline) */
+    strcpy(screenshot_cmd, " ");
+    for (n = 0; n < 1000; n++)
+    {
+        sprintf(name, "%c:/SCREEN%03d.BMP", SDCardConfigured() ? 'B' : 'A', n);
+        int e = ExistsFile(name);
+        if (e < 0)
+            return false; /* the card cannot be read */
+        if (e == 0)
+            break;
+    }
+    if (n == 1000)
+        return false;
+    sprintf(screenshot_cmd, "IMAGE \"%s\"", name);
+    cmd_save();
+    return true;
+}
+
+void ScreenShot(void)
+{
+    unsigned char *savecmdline = cmdline;
+    if ((void *)ReadBuffer == (void *)DisplayNotSet)
+        return;
+    FileTry(ScreenShotSave, NULL);
+    cmdline = savecmdline;
+}
+#endif
 /*  @endcond */
