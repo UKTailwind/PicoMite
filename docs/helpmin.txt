@@ -1646,8 +1646,10 @@ See also: WS2812
 ~DEVICE(GAMEPAD)
 DEVICE(GAMEPAD channel, funct)
 
-Returns data from a USB PS3 or PS4 controller. 'funct' is a 1 or 2 letter code
-indicating the information to return as follows:
+Returns data from a USB gamepad: a PS3 or PS4 controller, a Nintendo Switch
+Pro Controller, or a gamepad that the firmware supports or GAMEPAD CONFIGURE
+describes. 'funct' is a 1 or 2 letter code indicating the information to
+return as follows:
 
 ~DEVICE(MOUSE)
 DEVICE(MOUSE channel, funct)
@@ -2636,11 +2638,11 @@ controller. The optional parameter 'mask' defines which of the switches will
 trigger the interrupt (defaults to all).
 
 ~GAMEPAD MONITOR
-GAMEPAD MONITOR or GAMEPAD MONITOR SILENT
+GAMEPAD MONITOR or GAMEPAD MONITOR SILENT or GAMEPAD MONITOR OFF
 
 Use GAMEPAD MONITOR before plugging in a gamepad and when plugged in it will
 show the before and after report with each change of buttons. GAMEPAD MONITOR
-SILENT turns the same monitoring on but suppresses the printed report
+SILENT turns the same monitoring on but suppresses the printed report.
 
 ~GETSCANLINE
 GETSCANLINE
@@ -5366,9 +5368,9 @@ MM.INFO(USB n)
 Return the device code for any device connected to channel 'n' which is a
 number from 1 to 4. The returned device code can be: 0=not in use, 1=keyboard,
 2=mouse, 128=ps4, 129=ps3, 130=SNES/Generic, 131=xbox, 132=unknown, 133=touch
-screen, 134=touch screen (pointer mode) By default a connected keyboard will
-be allocated to channel 1, a mouse the channel 2, and gamepads to channel 3
-and then channel 4.
+screen, 134=touch screen (pointer mode), 135=Switch Pro Controller By default
+a connected keyboard will be allocated to channel 1, a mouse the channel 2,
+and gamepads to channel 3 and then channel 4.
 
 ~MM.INFO(VALID CPUSPEED)
 MM.INFO(VALID CPUSPEED speed%)
@@ -7059,8 +7061,8 @@ the OPEN command.
 
 PRINT #GPS, expression  [[,; ]expression] ... etc
 
-Outputs a NMEA string to an opened GPS device. The string must start with a $
-character and end with a * character.
+Outputs a NMEA string to the GPS receiver, opened with OPEN ... AS GPS or set
+up with OPTION GPS.
 
 PRINT @(x [, y]) expression
 or

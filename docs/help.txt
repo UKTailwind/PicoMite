@@ -2283,7 +2283,9 @@ See also: WS2812
 ~DEVICE(GAMEPAD)
 DEVICE(GAMEPAD channel, funct)
 
-Returns data from a USB PS3 or PS4 controller.
+Returns data from a USB gamepad: a PS3 or PS4 controller, a Nintendo Switch
+Pro Controller, or a gamepad that the firmware supports or GAMEPAD CONFIGURE
+describes.
 'funct' is a 1 or 2 letter code indicating the information to return as
 follows:
   LX     the position of the analog left joystick x axis
@@ -4673,7 +4675,11 @@ Use to configure a gamepad that isn't supported by the firmware. Run the
 command before plugging in the gamepad. All 34 parameters are mandatory. In
 each case the i/c parameters define the index into the report and the bit
 number at that index for the data that corresponds to the relevant bit. See
-DEVICE(GAMEPAD n,B) for more information on bit usage (0-15)
+DEVICE(GAMEPAD n,B) for more information on bit usage (0-15).  The code is a
+bit number 0-7 (the button is pressed when that bit is set), 128-135 (pressed
+when bit code-128 is clear), 64 (pressed when the byte is below 64) or 192
+(pressed when it is above 192).  An index of 255 marks a button the gamepad
+does not have.  Any other code is an error
 
 See also: DEVICE
 
@@ -4698,11 +4704,14 @@ trigger the interrupt (defaults to all). 'mask' is a bitmap corresponding to
 the output of the DEVICE(GAMEPAD channel,B) function.
 
 ~GAMEPAD MONITOR
-GAMEPAD MONITOR or GAMEPAD MONITOR SILENT
+GAMEPAD MONITOR or GAMEPAD MONITOR SILENT or GAMEPAD MONITOR OFF
 
 Use GAMEPAD MONITOR before plugging in a gamepad and when plugged in it will
 show the before and after report with each change of buttons.  GAMEPAD MONITOR
-SILENT turns the same monitoring on but suppresses the printed report
+SILENT turns the same monitoring on but suppresses the printed report.
+GAMEPAD MONITOR OFF turns the monitoring off again, so that a supported or
+configured gamepad is decoded as usual (while it is on, every gamepad that is
+not otherwise recognised is only monitored)
 
 ~GETSCANLINE
 GETSCANLINE
@@ -8716,7 +8725,8 @@ MM.INFO(USB n)
 Return the device code for any device connected to channel 'n' which is a
 number from 1 to 4.  The returned device code can be:
 0=not in use, 1=keyboard, 2=mouse, 128=ps4, 129=ps3, 130=SNES/Generic,
-131=xbox, 132=unknown, 133=touch screen, 134=touch screen (pointer mode)
+131=xbox, 132=unknown, 133=touch screen, 134=touch screen (pointer mode),
+135=Switch Pro Controller
 By default a connected keyboard will be allocated to channel 1, a mouse the
 channel 2, and gamepads to channel 3 and then channel 4.  If 2 or more
 keyboards or mice are connected or 3 or more gamepads then the additional
@@ -11733,9 +11743,10 @@ the OPEN command.
 
 PRINT #GPS, expression  [[,; ]expression] ... etc
 
-Outputs a NMEA string to an opened GPS device. The string must start with a $
-character and end with a * character. The checksum is automatically calculated
-and appended to the string together with the CR/LF characters.
+Outputs a NMEA string to the GPS receiver, opened with OPEN ... AS GPS or set
+up with OPTION GPS. The string must start with a $ character and end with a *
+character. The checksum is automatically calculated and appended to the string
+together with the CR/LF characters.
 
 PRINT @(x [, y]) expression
 or

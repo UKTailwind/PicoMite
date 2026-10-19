@@ -289,13 +289,21 @@ typedef struct TU_ATTR_PACKED
 #define SNES 130
 #define XBOX 131
 #define UNKNOWN 132
+#define SWITCHPRO 135 /* (133 and 134 are the touch screens) */
+/* The Nintendo Switch Pro Controller, and the pads that present themselves
+   as one in their Switch mode (an EasySMX 9013 Pro): issue 47 */
+static inline bool is_switch_pro(uint8_t dev_addr)
+{
+	uint16_t vid, pid;
+	tuh_vid_pid_get(dev_addr, &vid, &pid);
+	return vid == 0x057E && pid == 0x2009;
+}
 static inline bool is_xbox(uint8_t dev_addr)
 {
 	uint16_t vid, pid;
 	tuh_vid_pid_get(dev_addr, &vid, &pid);
 	return ((vid == 0x11c0 && pid == 0x5500)	// EasySMX Wireless, u, Android mode (u)
 			|| (vid == 0x11c1 && pid == 0x9101) // EasySMX Wireless, c, PC Mode, D-input, emulation
-												//           || (vid == 0x057e && pid == 0x2009)
 			|| (vid == 0x2F24 && pid == 0x0048));
 }
 /*static inline bool is_specific(uint8_t dev_addr)
@@ -2016,9 +2024,23 @@ void process_specific_gamepad(uint8_t const* report, uint16_t len, uint8_t n){
 		}
 		nunstruct[n].x0=b;
 }*/
+/* GAMEPAD CONFIGURE: one button's report index and code.  The codes are
+   0-7 (that bit set when pressed), 128-135 (bit code-128 clear when pressed),
+   64 (the byte below 64) and 192 (the byte above 192); index 255 is a button
+   the pad does not have.  Any other code is refused here, as checkpush runs
+   in the USB callback, where it cannot raise an error (issue 44). */
+static void padbutton(struct s_Buttons *b, unsigned char *index, unsigned char *code)
+{
+	b->index = getint(index, 0, 255);
+	b->code = getint(code, 0, 255);
+	if (b->index != 255 && !(b->code < 8 || (b->code >= 128 && b->code < 136) || b->code == 64 || b->code == 192))
+		error("Invalid button code %", b->code);
+}
 void checkpush(uint8_t const *report, uint16_t len, struct s_Buttons button, uint16_t set, uint16_t *b)
 {
-	if (button.index == 0xFF)
+	/* (runs inside the USB stack's callback: no error() here - GAMEPAD
+	   CONFIGURE refuses a bad code, and a short report counts as not pressed) */
+	if (button.index == 0xFF || button.index >= len)
 		return;
 	if (button.code == 192)
 	{
@@ -2035,13 +2057,11 @@ void checkpush(uint8_t const *report, uint16_t len, struct s_Buttons button, uin
 		if (report[button.index] & (1 << button.code))
 			*b |= set;
 	}
-	else if (button.code > 128 && button.code < 136)
-	{
-		if ((report[button.index] & (1 << button.code)) == 0)
+	else if (button.code >= 128 && button.code < 136)
+	{ // bit (code - 128), pressed when it is clear (issue 44)
+		if ((report[button.index] & (1 << (button.code - 128))) == 0)
 			*b |= set;
 	}
-	else
-		error("Internal data error");
 }
 void PIntHN(unsigned long long int n, int l)
 {
@@ -2199,20 +2219,13 @@ void process_sony_ds4(uint8_t const *report, uint16_t len, uint8_t n)
 			b |= 1 << 3;
 		if (ds4_report.l1)
 			b |= 1 << 4;
-		if (ds4_report.dpad == 5)
-			b |= 1 << 5;
-		if (ds4_report.dpad == 3)
-			b |= 3 << 5;
-		if (ds4_report.dpad == 2)
-			b |= 1 << 6;
-		if (ds4_report.dpad == 1)
-			b |= 3 << 6;
-		if (ds4_report.dpad == 0)
-			b |= 1 << 7;
-		if (ds4_report.dpad == 6)
-			b |= 1 << 8;
-		if (ds4_report.dpad == 7)
-			b |= ((1 << 8) | (1 << 5));
+		{ /* the hat, 0 = N clockwise to 7 = NW, onto bits 5-8: down, right, up, left
+		     (down-left and up-left were wrong: issue 43) */
+			static const uint16_t dpad[8] = {1 << 7, (1 << 7) | (1 << 6), 1 << 6, (1 << 5) | (1 << 6),
+											 1 << 5, (1 << 5) | (1 << 8), 1 << 8, (1 << 7) | (1 << 8)};
+			if (ds4_report.dpad < 8)
+				b |= dpad[ds4_report.dpad];
+		}
 		if (ds4_report.r2)
 			b |= 1 << 9;
 		if (ds4_report.triangle)
@@ -2227,8 +2240,6 @@ void process_sony_ds4(uint8_t const *report, uint16_t len, uint8_t n)
 			b |= 1 << 14;
 		if (ds4_report.tpad)
 			b |= 1 << 15;
-		if (ds4_report.dpad == 4)
-			b |= 1 << 5;
 		nunstruct[n].ax = ds4_report.x;
 		nunstruct[n].ay = ds4_report.y;
 		nunstruct[n].Z = ds4_report.z;
@@ -2326,6 +2337,102 @@ void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t instance,
    panels actually revert after the one-shot bring-up). 1 = re-assert every 2 s. */
 #define TOUCH_KEEPALIVE 0
 
+/* A Switch Pro Controller, as Linux's hid-nintendo drives one on USB (and the
+   CMM2's port of this file).  At connection it is sent output report 0x80
+   with the commands 02 (handshake), 03 (3 Mbit), 02 and 04 (no timeout:
+   without it the pad drops off the bus and comes back every few seconds,
+   still waiting for a host on its Bluetooth link), then subcommand 03 with
+   30 (the full input report, 0x30, about every 15 ms) and subcommand 30 with
+   01 (player 1's light).  One step per 100 ms (hid_app_task); the replies
+   (reports 0x81 and 0x21) are read but not waited for.  Report 0x30: the
+   buttons in bytes 3-5, the sticks 12 bits each in bytes 6-8 and 9-11.
+   Mapped by position as every pad is: X the top face button (bit 10), A the
+   right (11), Y the left (12), B the bottom (13); + START, - SELECT, HOME,
+   Capture as the touchpad (15); ZL and ZR are L2 and R2 and read 255 or 0 as
+   the analogue L and R.  The sticks 0-255, up and left 0, as the others. */
+static uint8_t swpro_step[4];	/* the next set-up step, 1-6; 0 when done */
+static uint8_t swpro_packet[4]; /* the subcommands' packet number */
+static uint64_t swpro_time[4];	/* when the last step went */
+static void process_switch_pro(uint8_t const *report, uint16_t len, uint8_t n)
+{
+	if (len < 12 || report[0] != 0x30)
+		return;
+	uint8_t r = report[3], s = report[4], l = report[5];
+	uint16_t b = 0;
+	if (r & 0x40)
+		b |= 1; // R
+	if (s & 0x02)
+		b |= 1 << 1; // +
+	if (s & 0x10)
+		b |= 1 << 2; // HOME
+	if (s & 0x01)
+		b |= 1 << 3; // -
+	if (l & 0x40)
+		b |= 1 << 4; // L
+	if (l & 0x01)
+		b |= 1 << 5; // down
+	if (l & 0x04)
+		b |= 1 << 6; // right
+	if (l & 0x02)
+		b |= 1 << 7; // up
+	if (l & 0x08)
+		b |= 1 << 8; // left
+	if (r & 0x80)
+		b |= 1 << 9; // ZR
+	if (r & 0x02)
+		b |= 1 << 10; // X
+	if (r & 0x08)
+		b |= 1 << 11; // A
+	if (r & 0x01)
+		b |= 1 << 12; // Y
+	if (r & 0x04)
+		b |= 1 << 13; // B
+	if (l & 0x80)
+		b |= 1 << 14; // ZL
+	if (s & 0x20)
+		b |= 1 << 15; // Capture
+	nunstruct[n].ax = (report[6] | ((report[7] & 0x0F) << 8)) >> 4;
+	nunstruct[n].ay = 255 - ((((report[7] >> 4) | (report[8] << 4)) >> 4) & 0xFF);
+	nunstruct[n].Z = (report[9] | ((report[10] & 0x0F) << 8)) >> 4;
+	nunstruct[n].C = 255 - ((((report[10] >> 4) | (report[11] << 4)) >> 4) & 0xFF);
+	nunstruct[n].L = (l & 0x80) ? 255 : 0;
+	nunstruct[n].R = (r & 0x80) ? 255 : 0;
+	{ /* the d-pad as a hat for DEVICE(GAMEPAD n, H): 0-7 = N clockwise to NW, 0xFF none */
+		static const uint8_t hat[16] = {0xFF, 0, 2, 1, 4, 0xFF, 3, 0xFF, 6, 7, 0xFF, 0xFF, 5, 0xFF, 0xFF, 0xFF}; // by up|right<<1|down<<2|left<<3
+		nunstruct[n].y0 = hat[((l >> 1) & 1) | (((l >> 2) & 1) << 1) | ((l & 1) << 2) | (((l >> 3) & 1) << 3)];
+	}
+	nunstruct[n].type = SWITCHPRO;
+	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
+	{
+		nunfoundc[n] = 1;
+		if (nunInterruptc[n] != NULL)
+			IntSignal();
+	}
+	nunstruct[n].x0 = b;
+}
+
+static void switch_pro_step(int slot, uint64_t timenow)
+{
+	uint8_t a = HID[slot].Device_address, i = HID[slot].Device_instance;
+	static const uint8_t usbcmd[4] = {0x02, 0x03, 0x02, 0x04}; // handshake, 3 Mbit, handshake, no timeout
+	if (swpro_step[slot] >= 1 && swpro_step[slot] <= 4)
+	{
+		if (!tuh_hid_send_report(a, i, 0x80, &usbcmd[swpro_step[slot] - 1], 1))
+			return; // (busy: next time)
+	}
+	else if (swpro_step[slot] == 5 || swpro_step[slot] == 6)
+	{ // output report 1: a packet number, a neutral rumble, the subcommand and its argument
+		uint8_t sub[11] = {0, 0x00, 0x01, 0x40, 0x40, 0x00, 0x01, 0x40, 0x40, 0, 0};
+		sub[0] = swpro_packet[slot]++ & 0x0F;
+		sub[9] = swpro_step[slot] == 5 ? 0x03 : 0x30;  // the input report mode, the player lights
+		sub[10] = swpro_step[slot] == 5 ? 0x30 : 0x01; // the full report, player 1
+		if (!tuh_hid_send_report(a, i, 0x01, sub, sizeof(sub)))
+			return;
+	}
+	swpro_step[slot] = swpro_step[slot] >= 6 ? 0 : swpro_step[slot] + 1;
+	swpro_time[slot] = timenow;
+}
+
 void hid_app_task(void)
 {
 	static uint64_t timer;
@@ -2347,6 +2454,13 @@ void hid_app_task(void)
 	{
 		if (HID[i].active == false)
 			continue;
+		/* A Switch Pro Controller's USB set-up, a step per 100 ms.  Ahead of the
+		   report_requested test below: until it is set up the pad sends no
+		   report, so its slot is always waiting for one, and a step there never
+		   went - the pad timed out and dropped off the bus every few seconds. */
+		if (HID[i].Device_type == SWITCHPRO && swpro_step[i] && timenow - swpro_time[i] >= 100000 &&
+			tuh_hid_send_ready(HID[i].Device_address, HID[i].Device_instance))
+			switch_pro_step(i, timenow);
 		/* Keep-alive: some panels (ILI2132) were seen to stay in digitizer
 		   mode only a few seconds after the bring-up handshake, then revert.
 		   Re-asserting the handshake every 2 s prevents that. Currently
@@ -2744,6 +2858,25 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			HID[slot].active = true;
 			HID[slot].report_requested = false;
 		}
+		else if (is_switch_pro(dev_addr))
+		{
+			if (!CurrentLinePtr)
+			{
+				MMPrintString("Switch Pro Controller Connected on channel ");
+				PInt(slot + 1);
+				MMPrintString("\r\n> ");
+			}
+			HID[slot].Device_address = dev_addr;
+			HID[slot].Device_instance = instance;
+			HID[slot].Device_type = SWITCHPRO;
+			HID[slot].report_rate = 8;	/* read from the start: it answers each set-up command with a */
+			HID[slot].report_timer = 8; /* report, and drops off the bus about 2 s after connecting if */
+			HID[slot].active = true;	/* they are not read; then the full reports come every 15 ms */
+			HID[slot].report_requested = false;
+			swpro_step[slot] = 1; /* its USB set-up (hid_app_task) */
+			swpro_packet[slot] = 0;
+			swpro_time[slot] = time_us_64(); /* the first step 100 ms after connection, as on the CMM2 */
+		}
 		else if (is_xbox(dev_addr))
 		{
 			if (!CurrentLinePtr)
@@ -2774,7 +2907,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			}
 			if (!CurrentLinePtr)
 				MMPrintString("\r\n> ");
-			else
+			else if (monitor) // (only after the message: issue 46)
 				PRet();
 			HID[slot].Device_address = dev_addr;
 			HID[slot].Device_instance = instance;
@@ -2800,6 +2933,18 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 }
 
 // Invoked when device with hid interface is un-mounted
+/* A gamepad has gone: DEVICE(GAMEPAD n, ...) reads nothing pressed and no
+   type, as it would had none been plugged in, rather than the last report
+   (issue 45).  Its interrupt and mask stay, so one plugged back in carries on. */
+static void GamepadDetached(int n)
+{
+	nunstruct[n].ax = nunstruct[n].ay = nunstruct[n].Z = nunstruct[n].C = 0;
+	nunstruct[n].L = nunstruct[n].R = 0;
+	nunstruct[n].x0 = nunstruct[n].y0 = nunstruct[n].z0 = 0;
+	nunstruct[n].type = 0;
+	memset((void *)nunstruct[n].gyro, 0, sizeof(nunstruct[n].gyro));
+	memset((void *)nunstruct[n].accs, 0, sizeof(nunstruct[n].accs));
+}
 void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 {
 	__dsb();
@@ -2837,6 +2982,13 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 				MMPrintString("XBox Controller Disconnected\r\n> ");
 			break;
 		}
+		else if (instance == HID[i].Device_instance && dev_addr == HID[i].Device_address && HID[i].Device_type == SWITCHPRO)
+		{
+			if (!CurrentLinePtr)
+				MMPrintString("Switch Pro Controller Disconnected\r\n> ");
+			swpro_step[i] = 0;
+			break;
+		}
 		else if (instance == HID[i].Device_instance && dev_addr == HID[i].Device_address && HID[i].Device_type == SNES)
 		{
 			if (!CurrentLinePtr)
@@ -2871,6 +3023,9 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 	if (i < 4)
 	{
 		USBSoundFlag = -1; /* deferred chime */
+		if (HID[i].Device_type == PS4 || HID[i].Device_type == PS3 || HID[i].Device_type == XBOX || HID[i].Device_type == SNES ||
+			HID[i].Device_type == SWITCHPRO)
+			GamepadDetached(i + 1);
 		memset((void *)&HID[i], 0, sizeof(struct s_HID));
 		HID[i].report_requested = true;
 		Current_USB_devices--;
@@ -2927,6 +3082,10 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 		else if (is_sony_ds3(dev_addr))
 		{
 			process_sony_ds3(report, len, n + 1);
+		}
+		else if (is_switch_pro(dev_addr))
+		{
+			process_switch_pro(report, len, n + 1);
 		}
 		else if (is_xbox(dev_addr))
 		{
@@ -3062,6 +3221,11 @@ void cmd_gamepad(void)
 			nunstruct[n].x1 = getint(argv[4], 0, 0b1111111111111111);
 		return;
 	}
+	else if ((tp = checkstring(cmdline, (unsigned char *)"MONITOR OFF")))
+	{ // generic pads are decoded again (issue 46)
+		monitor = false;
+		nooutput = false;
+	}
 	else if ((tp = checkstring(cmdline, (unsigned char *)"MONITOR SILENT")))
 	{
 		monitor = true;
@@ -3079,38 +3243,22 @@ void cmd_gamepad(void)
 		;
 		MyGamepad.vid = getint(argv[0], 0, 0xFFFF);
 		MyGamepad.pid = getint(argv[2], 0, 0xFFFF);
-		MyGamepad.b_R.index = getint(argv[4], 0, 255);
-		MyGamepad.b_R.code = getint(argv[6], 0, 255);
-		MyGamepad.b_START.index = getint(argv[8], 0, 255);
-		MyGamepad.b_START.code = getint(argv[10], 0, 255);
-		MyGamepad.b_HOME.index = getint(argv[12], 0, 255);
-		MyGamepad.b_HOME.code = getint(argv[14], 0, 255);
-		MyGamepad.b_SELECT.index = getint(argv[16], 0, 255);
-		MyGamepad.b_SELECT.code = getint(argv[18], 0, 255);
-		MyGamepad.b_L.index = getint(argv[20], 0, 255);
-		MyGamepad.b_L.code = getint(argv[22], 0, 255);
-		MyGamepad.b_DOWN.index = getint(argv[24], 0, 255);
-		MyGamepad.b_DOWN.code = getint(argv[26], 0, 255);
-		MyGamepad.b_RIGHT.index = getint(argv[28], 0, 255);
-		MyGamepad.b_RIGHT.code = getint(argv[30], 0, 255);
-		MyGamepad.b_UP.index = getint(argv[32], 0, 255);
-		MyGamepad.b_UP.code = getint(argv[34], 0, 255);
-		MyGamepad.b_LEFT.index = getint(argv[36], 0, 255);
-		MyGamepad.b_LEFT.code = getint(argv[38], 0, 255);
-		MyGamepad.b_R2.index = getint(argv[40], 0, 255);
-		MyGamepad.b_R2.code = getint(argv[42], 0, 255);
-		MyGamepad.b_X.index = getint(argv[44], 0, 255);
-		MyGamepad.b_X.code = getint(argv[46], 0, 255);
-		MyGamepad.b_A.index = getint(argv[48], 0, 255);
-		MyGamepad.b_A.code = getint(argv[50], 0, 255);
-		MyGamepad.b_Y.index = getint(argv[52], 0, 255);
-		MyGamepad.b_Y.code = getint(argv[54], 0, 255);
-		MyGamepad.b_B.index = getint(argv[56], 0, 255);
-		MyGamepad.b_B.code = getint(argv[58], 0, 255);
-		MyGamepad.b_L2.index = getint(argv[60], 0, 255);
-		MyGamepad.b_L2.code = getint(argv[62], 0, 255);
-		MyGamepad.b_TOUCH.index = getint(argv[64], 0, 255);
-		MyGamepad.b_TOUCH.code = getint(argv[66], 0, 255);
+		padbutton(&MyGamepad.b_R, argv[4], argv[6]);
+		padbutton(&MyGamepad.b_START, argv[8], argv[10]);
+		padbutton(&MyGamepad.b_HOME, argv[12], argv[14]);
+		padbutton(&MyGamepad.b_SELECT, argv[16], argv[18]);
+		padbutton(&MyGamepad.b_L, argv[20], argv[22]);
+		padbutton(&MyGamepad.b_DOWN, argv[24], argv[26]);
+		padbutton(&MyGamepad.b_RIGHT, argv[28], argv[30]);
+		padbutton(&MyGamepad.b_UP, argv[32], argv[34]);
+		padbutton(&MyGamepad.b_LEFT, argv[36], argv[38]);
+		padbutton(&MyGamepad.b_R2, argv[40], argv[42]);
+		padbutton(&MyGamepad.b_X, argv[44], argv[46]);
+		padbutton(&MyGamepad.b_A, argv[48], argv[50]);
+		padbutton(&MyGamepad.b_Y, argv[52], argv[54]);
+		padbutton(&MyGamepad.b_B, argv[56], argv[58]);
+		padbutton(&MyGamepad.b_L2, argv[60], argv[62]);
+		padbutton(&MyGamepad.b_TOUCH, argv[64], argv[66]);
 	}
 	else if ((tp = checkstring(cmdline, (unsigned char *)"HAPTIC")))
 	{
