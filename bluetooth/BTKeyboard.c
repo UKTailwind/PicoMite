@@ -2322,6 +2322,13 @@ bool bt_keyboard_ready(void)
 {
     return state == BTK_READY;
 }
+
+/* The connected device's report map has a mouse (a mouse, or a keyboard's
+   trackpad): its reports move DEVICE(MOUSE 2). */
+bool bt_keyboard_has_pointer(void)
+{
+    return state == BTK_READY && mouse_info.report_bits != 0;
+}
 /*
  * Generic HID Gamepad descriptor extraction + report decoder
  *

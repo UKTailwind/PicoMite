@@ -42,6 +42,10 @@ void bt_notice(const char *msg);
 /* True once HCI has reached HCI_STATE_WORKING. */
 bool bt_keyboard_ready(void);
 
+/* The BLE device is connected and has a pointer (a mouse, or a keyboard's
+   trackpad) moving DEVICE(MOUSE 2): GUI CURSOR LINK MOUSE. */
+bool bt_keyboard_has_pointer(void);
+
 /* BTAudio.c calls this (btstack context) when a speaker stream starts or
    stops, so a running LE scan picks up the matching duty cycle. */
 void bt_keyboard_scan_duty_changed(void);

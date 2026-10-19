@@ -132,6 +132,14 @@ bool bt_ckbd_cod_is_keyboard(uint32_t cod)
     return ((cod >> 8) & 0x1F) == 0x05 && (cod & 0x40) != 0;
 }
 
+/* The keyboard is connected and its pointer reports are decoded: its
+   layout has a pointer (a touchpad), or there is no layout and the boot
+   protocol's mouse report (ID 2) is. They move DEVICE(MOUSE 2). */
+bool bt_ckbd_has_pointer(void)
+{
+    return ck_state == CK_CONNECTED && (!ck_have_layout || ck_layout.x_size != 0);
+}
+
 bool bt_ckbd_is_remembered(const uint8_t *addr)
 {
     return ck_have_remembered && memcmp(addr, ck_remembered, sizeof(bd_addr_t)) == 0;

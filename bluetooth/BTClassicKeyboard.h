@@ -27,6 +27,10 @@ bool bt_ckbd_cod_is_keyboard(uint32_t cod);
 /* True for the remembered Classic keyboard's address. */
 bool bt_ckbd_is_remembered(const uint8_t *addr);
 
+/* The Classic keyboard is connected and has a pointer (a touchpad) moving
+   DEVICE(MOUSE 2): GUI CURSOR LINK MOUSE. */
+bool bt_ckbd_has_pointer(void);
+
 /* BLUETOOTH CONNECT on a keyboard: connects and pairs it, printing the
    passkey to type. Interpreter context; reports failure with error(). */
 void bt_ckbd_connect(const uint8_t *addr);

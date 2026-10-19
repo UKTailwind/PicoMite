@@ -38,6 +38,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include <limits.h>
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+#include "BTKeyboard.h"        /* bt_keyboard_has_pointer() */
+#include "BTClassicKeyboard.h" /* bt_ckbd_has_pointer() */
+#endif
 #include "Memory.h"
 #include "DrawInternal.h"
 
@@ -537,12 +541,17 @@ static inline void cursor_sync_mouse_to_cursor(void)
 }
 
 /* Is some kind of mouse currently attached/active?
+   - Bluetooth (the BTH builds and the PicoMitePC3): a BLE mouse, or a BLE
+     or Classic keyboard's trackpad - they move channel 2 as well.
    - USB HID: HID[1].Device_type == 2 (set by USBKeyboard.c / KeyboardMap.c
      when a HID mouse descriptor is enumerated).
-   - PS/2: mouse0 (set by initMouse0 in mouse.c on a successful reset).
-   PICOMITEBTH (BLE HID host) isn't a PICOMITEVGA variant, so not handled. */
+   - PS/2: mouse0 (set by initMouse0 in mouse.c on a successful reset). */
 static bool cursor_have_mouse(void)
 {
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    if (bt_keyboard_has_pointer() || bt_ckbd_has_pointer())
+        return true;
+#endif
 #ifdef USBKEYBOARD
     return (HID[1].Device_type == 2);
 #else
