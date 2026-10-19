@@ -4621,9 +4621,15 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
     getfullfilename(p, q);
     int CurrentFileSystem = FatFSFileSystem;
     FatFSFileSystem = FatFSFileSystemSave;
+    /* Release the records' chunks before the file is opened.  ClearRuntime
+       seeded them at the top of the emptied heap, so a file opened first puts
+       its descriptor and sector buffer below them, and freeing them afterwards
+       leaves those blocks in the middle of the heap: the free run below them
+       is then one page short of the buffer on an RP2350 with no PSRAM and no
+       display (WebMite, LOAD from B:: 16 pages of records + 5 of FAT file). */
+    HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     if (!BasicFileOpen(p, fnbr, FA_READ))
         return false;
-    HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     p = buf = GetTempMemory(EDIT_BUFFER_SIZE - 2048); // get all the memory while leaving space for the couple of buffers defined and the file handle
     *p++ = '\'';
     *p++ = '#';
@@ -5129,9 +5135,15 @@ int MemLoadProgram(unsigned char *fname, unsigned char *ram)
     getfullfilename(p, q);
     int CurrentFileSystem = FatFSFileSystem;
     FatFSFileSystem = FatFSFileSystemSave;
+    /* Release the records' chunks before the file is opened.  ClearRuntime
+       seeded them at the top of the emptied heap, so a file opened first puts
+       its descriptor and sector buffer below them, and freeing them afterwards
+       leaves those blocks in the middle of the heap: the free run below them
+       is then one page short of the buffer on an RP2350 with no PSRAM and no
+       display (WebMite, LOAD from B:: 16 pages of records + 5 of FAT file). */
+    HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     if (!BasicFileOpen(p, fnbr, FA_READ))
         return false;
-    HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     p = buf = GetTempMemory(EDIT_BUFFER_SIZE - 2048); // get all the memory while leaving space for the couple of buffers defined and the file handle
     *p++ = '\'';
     *p++ = '#';
