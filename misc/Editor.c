@@ -7538,7 +7538,25 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 edy = y - VHeight / 2; // edy is the line displayed at the top
                 if (edy < 0)
                     edy = 0; // compensate if we are near the start
-                printScreen();
+                {
+                    /* A match past the right edge is scrolled into view, whole:
+                       the screen is drawn left-justified and the match's line
+                       alone scrolled, as F4's return does (edx is one for every
+                       line). It stayed off the screen (issue #57). */
+                    int abs_col = 0;
+                    for (unsigned char *q = txtp; q > EdBuff && q[-1] != '\n'; q--)
+                        abs_col++;
+                    edx = 0;
+                    printScreen();
+                    if (abs_col + i > VWidth - 1 - SCROLLCHARS)
+                    {
+                        edx = abs_col + i - (VWidth - 1 - SCROLLCHARS);
+                        if (edx > abs_col)
+                            edx = abs_col; // (a match wider than the screen: its start)
+                        SCursor(0, y - edy);
+                        printLine(y);
+                    }
+                }
                 PositionCursor(txtp);
                 foundit = true;
                 // SCursor(x, y);
@@ -9350,11 +9368,12 @@ void GetInputString(unsigned char *prompt)
         if (ch == '\r')
             break;
         if (ch == 0xb3 || ch == F3 || ch == ESC)
-        {
-            if (len < maxlen)
-                inpbuf[len++] = ch;
+        { // return if it is SHIFT-F3, F3 or ESC - alone: the callers test the
+          // first character, so after typed text Esc did not cancel (issue #57)
+            len = 0;
+            inpbuf[len++] = ch;
             break;
-        } // return if it is SHIFT-F3, F3 or ESC
+        }
         if (ch == '\b')
         {
             if (len > 0)
