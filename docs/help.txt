@@ -4492,7 +4492,8 @@ modes where automatic layer application is not supported a layer buffer acts
 as another framebuffer. If framebuffer "2" already occupies the pre-allocated
 video memory the layer is allocated from variable memory instead, and if that
 would place it in PSRAM the command fails because PSRAM is too slow for the
-display driver.
+display driver.  On the PicoMitePC3 this rules out the layer in some modes:
+see the MODE command.
 
 ~FRAMEBUFFER LAYER TOP
 FRAMEBUFFER LAYER TOP [colour]
@@ -9064,6 +9065,14 @@ OPTION RESOLUTION 800 x 480 (NB: reduces heap memory available)
   800x600, 848x480 and 800x480 - MODE 1 and MODE 2 only, as listed above for
   these resolutions.  The reduced framebuffer cannot hold MODE 3 or MODE 5.
   1024x600 - MODE 1, MODE 2, MODE 3 and MODE 5, exactly as listed above.
+  PicoMitePC3: this version has all the modes and resolutions listed above,
+  but its SRAM heap is 108 KB (less at 800x600, 848x480 and 800x480), and a
+  layer buffer that is not in the pre-allocated video memory must come from
+  that heap because PSRAM is too slow for the display.  So no layer buffer can
+  be created in MODE 3 at 640x480, 720x400, 1280x720, 800x600, 848x480 or
+  800x480, in MODE 5 at 800x600, 848x480 or 800x480, or as the layer (L) in
+  MODE 4.  In MODE 3 at 1024x600 and in MODE 5 at 640x480 one of the two
+  layers can be created if the program leaves enough of the heap free.
 
 MODE 400
 or
