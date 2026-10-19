@@ -5808,10 +5808,11 @@ int find_longest_line_length(const char *text, int *linein)
         ptr++;
     }
 
-    // Final check in case the last line was the longest
+    // Final check in case the last line was the longest (it has no '\n' to count)
     if (current_length > max_length)
     {
         max_length = current_length;
+        *linein = line + 1;
     }
 
     return max_length;
@@ -7663,6 +7664,12 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 }
                 editBeautify(edit_buff_size, keep_blanks);
                 TextChanged = true;
+                /* It adds a blank line after END SUB / END FUNCTION and may
+                   drop others: count the lines again (the last has no '\n') */
+                nbrlines = 1;
+                for (unsigned char *lp = EdBuff; *lp; lp++)
+                    if (*lp == '\n')
+                        nbrlines++;
                 /* After buffer rewrite, restore cursor to start of buffer */
                 txtp = EdBuff;
                 edx = edy = curx = cury = 0;
