@@ -332,6 +332,9 @@
             testcount = 0;
             cyw43_arch_poll();
         }
+        if (WebScanActive)
+            return; /* WEB SCAN: only the poll, so that nothing stops the scan with
+                       an error before it has put the radio back (see cmd_web) */
         web_async_check_error();
         testcount++;
         if (testcount == 100)
@@ -509,6 +512,24 @@ void setwifi(unsigned char *tp)
     SaveOptions();
 }
 
+#ifdef PICOMITEPC3
+/* The radio chip's Bluetooth/WiFi coexistence mode (btc_mode, a bit mask:
+   0 off, 1 time-division - the chip's default, 3 Bluetooth pre-empts WiFi;
+   see BTAudio.c).  set: write *v; else read it into *v.  The driver's ioctl
+   is a blocking exchange with the chip: main thread only. */
+static int btc_mode_rw(int set, uint32_t *v)
+{
+        uint8_t buf[16];
+        memset(buf, 0, sizeof(buf));
+        memcpy(buf, "btc_mode", 9);
+        if (set)
+                memcpy(buf + 9, v, 4);
+        int rc = cyw43_ioctl(&cyw43_state, set ? CYW43_IOCTL_SET_VAR : CYW43_IOCTL_GET_VAR, 13, buf, CYW43_ITF_STA);
+        if (!set && rc == 0)
+                memcpy(v, buf, 4);
+        return rc;
+}
+#endif
 char *scan_dest = NULL;
 volatile char *scan_dups = NULL;
 volatile int scan_size;
@@ -671,14 +692,24 @@ void cmd_web(void)
                                 StandardError(35);
                 }
                 scan_dups = GetMemory(32 * 100 + 1);
+                /* The banner first: printing it after the scan had started let
+                   the first results, which the console's output can poll in,
+                   come out ahead of it. */
+                MMPrintString("\nPerforming wifi scan\r\n");
+#ifdef PICOMITEPC3
+                /* With Bluetooth on, the chip shares the radio between it and
+                   WiFi (btc_mode 1), and the scan reported networks at rssi 0,
+                   found fewer and read them weaker than with Bluetooth off.
+                   Coexistence is off for the scan, so WiFi has the radio as on
+                   a WebMite, and the mode it had is put back after it.  A
+                   Bluetooth link waits meanwhile (a speaker's stream stops). */
+                uint32_t btc_saved = 1, btc_off = 0;
+                int btc_changed = PC3_BT_ON && btc_mode_rw(0, &btc_saved) == 0 && btc_mode_rw(1, &btc_off) == 0;
+#endif
                 WebScanActive = 1; // ProcessWeb must poll for the results even with no connection
                 cyw43_wifi_scan_options_t scan_options = {0};
                 int err = cyw43_wifi_scan(&cyw43_state, &scan_options, NULL, scan_result);
-                if (err == 0)
-                {
-                        MMPrintString("\nPerforming wifi scan\r\n");
-                }
-                else
+                if (err != 0)
                 {
                         char buff[STRINGSIZE] = {0};
                         sprintf(buff, "Failed to start scan: %d\r\n", err);
@@ -689,6 +720,10 @@ void cmd_web(void)
                         if (startupcomplete)
                                 ProcessWeb(0);
                 WebScanActive = 0;
+#ifdef PICOMITEPC3
+                if (btc_changed)
+                        btc_mode_rw(1, &btc_saved);
+#endif
                 if (scan_dest)
                 {
                         uint64_t *p = (uint64_t *)scan_dest;
@@ -696,6 +731,7 @@ void cmd_web(void)
                 }
                 scan_dest = NULL;
                 FreeMemorySafe((void **)&scan_dups);
+                web_async_check_error(); // (one held back while the scan ran)
                 return;
         }
         if (!(WIFIconnected && cyw43_tcpip_link_status(&cyw43_state, CYW43_ITF_STA) == CYW43_LINK_UP))

@@ -1008,7 +1008,7 @@ void bt_audio_service(void)
     {
         static int coex_mode = 1;
         int want = (spk_state == SPK_STREAMING) ? 3 : 1;
-        if (want != coex_mode)
+        if (want != coex_mode && !WebScanActive) /* (WEB SCAN has it off: net/WiFi.c) */
         {
             uint8_t buf[16];
             uint32_t v = (uint32_t)want;

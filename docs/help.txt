@@ -15398,8 +15398,12 @@ WEB SCAN [array%()]
 
 Scans for all available wifi connections. If 'array%()' is specified the
 output will be stored in a Longstring, otherwise output will be to the
-console. The command can be used whether ot not an network connection is
-already active.
+console. The command can be used whether or not a network connection is
+already active.  On the PicoMitePC3 with Bluetooth on (OPTION RADIO BOTH) the
+radio is given to the WiFi for the few seconds the scan takes, as otherwise
+Bluetooth's share of it makes the scan miss networks and report wrong signal
+strengths: meanwhile a Bluetooth speaker's sound stops and other Bluetooth
+links wait.
 
 ~WEB TCP CLIENT READ
 WEB TCP CLIENT READ buff%() [,timeout]
