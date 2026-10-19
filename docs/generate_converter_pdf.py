@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Generate CONVERTER.pdf from badapple/CONVERTER.md (matches the docs/ house style)."""
+"""Generate CONVERTER.pdf from docs/CONVERTER.md (matches the docs/ house style)."""
 
 import os
 import re
 from fpdf import FPDF
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.normpath(os.path.join(HERE, '..', 'badapple', 'CONVERTER.md'))
-OUT = os.path.normpath(os.path.join(HERE, '..', 'badapple', 'CONVERTER.pdf'))
+SRC = os.path.join(HERE, 'CONVERTER.md')
+OUT = os.path.join(HERE, 'CONVERTER.pdf')
 
 
 class PDF(FPDF):
@@ -45,11 +45,18 @@ class PDF(FPDF):
             '→': '->', '←': '<-',
             '…': '...', '×': 'x', '≤': '<=', '≥': '>=',
             '⚠': '(!)', '️': '', '\U0001f4a1': '(tip)',
-            '•': '-',
+            '•': '-', '\u2011': '-', '\u2260': '!=',
         }
         for src, dst in replacements.items():
             text = text.replace(src, dst)
         return text.encode('latin-1', errors='replace').decode('latin-1')
+
+    @staticmethod
+    def _plain(text):
+        """Render inline markdown plain: *italic*, `code` and **bold** keep only their text."""
+        text = re.sub(r'(?<![\w*`])\*([^*`\s][^*`]*?)\*(?![\w*`])', r'\1', text)
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        return text.replace('**', '')
 
     def body_text(self, text):
         self.set_font('Helvetica', '', 10)
@@ -73,21 +80,9 @@ class PDF(FPDF):
 
     def _count_wrapped_lines(self, text, cell_width, font_style, font_size):
         self.set_font('Helvetica', font_style, font_size)
-        effective = cell_width - 2
-        if not text.strip():
-            return 1
-        lines, line_w = 1, 0.0
-        sp = self.get_string_width(' ')
-        for word in text.split(' '):
-            ww = self.get_string_width(word)
-            if line_w == 0.0:
-                line_w = ww
-            elif line_w + sp + ww > effective:
-                lines += 1
-                line_w = ww
-            else:
-                line_w += sp + ww
-        return lines
+        # Ask multi_cell itself, at the width table_row gives it: it keeps its own
+        # margin inside that width and splits words too long for the column
+        return max(1, len(self.multi_cell(cell_width - 2, 5, text, split_only=True)))
 
     def table_row(self, cells, header=False, col_widths=None):
         font_style = 'B' if header else ''
@@ -96,10 +91,7 @@ class PDF(FPDF):
 
         cleaned = []
         for cell in cells:
-            cell = self._sanitize(cell)
-            cell = re.sub(r'`([^`]+)`', r'\1', cell)
-            cell = cell.replace('**', '')
-            cleaned.append(cell)
+            cleaned.append(self._plain(self._sanitize(cell)))
 
         line_height = 5
         max_lines = 1
@@ -120,9 +112,13 @@ class PDF(FPDF):
         x_start, y_start = self.get_x(), self.get_y()
         for idx in range(len(cleaned)):
             self.rect(x_start + sum(col_widths[:idx]), y_start, col_widths[idx], row_height, 'DF')
+        # No automatic page break while the cells are drawn, so the row stays together
+        auto_break = self.auto_page_break
+        self.set_auto_page_break(False, self.b_margin)
         for idx, cell in enumerate(cleaned):
             self.set_xy(x_start + sum(col_widths[:idx]) + 1, y_start + 1)
             self.multi_cell(col_widths[idx] - 2, line_height, cell, border=0, align='L')
+        self.set_auto_page_break(auto_break, self.b_margin)
         self.set_xy(x_start, y_start + row_height)
 
 
@@ -166,8 +162,8 @@ def main():
             in_table = False
 
     for line in lines:
-        # code fences
-        if line.startswith('```'):
+        # code fences (a fence inside a list item is indented)
+        if line.lstrip().startswith('```'):
             if in_code:
                 pdf.code_block('\n'.join(code_buf))
                 code_buf = []
@@ -175,9 +171,10 @@ def main():
             else:
                 flush_table()
                 in_code = True
+                fence_indent = len(line) - len(line.lstrip())
             continue
         if in_code:
-            code_buf.append(line)
+            code_buf.append(line[fence_indent:] if line[:fence_indent].isspace() else line)
             continue
 
         # tables
@@ -208,8 +205,7 @@ def main():
             continue
 
         # inline cleanups
-        text = re.sub(r'`([^`]+)`', r'\1', stripped)
-        text = text.replace('**', '')
+        text = PDF._plain(stripped)
 
         if text.startswith('> '):
             pdf.note_text(text[2:])

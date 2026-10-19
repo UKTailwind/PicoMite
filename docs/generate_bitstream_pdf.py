@@ -71,37 +71,48 @@ class PDF(FPDF):
         for cell in cells:
             cell = cell.replace('\u2013', '-').replace('\u00b2', '2')
             cell = cell.replace('\u03a9', 'Ohm').replace('\u2126', 'Ohm')
-            cell = cell.replace('<br>', ' ')
+            cell = cell.replace('<br>', '\n')
+            # Inline markdown renders plain, as in body text
+            cell = cell.replace('**', '')
+            cell = re.sub(r'`([^`]+)`', r'\1', cell)
             cleaned_cells.append(cell)
         
-        # Calculate required height for each cell
+        # Calculate required height for each cell: ask multi_cell how it will wrap
         line_height = 5
         max_lines = 1
         for i, cell in enumerate(cleaned_cells):
-            # Estimate characters per line based on column width and font
-            chars_per_line = int(col_widths[i] / 2.2)  # Approximate
-            if chars_per_line > 0:
-                lines = (len(cell) // chars_per_line) + 1
-                if lines > max_lines:
-                    max_lines = lines
-        
-        row_height = line_height * max_lines
-        
+            lines = len(self.multi_cell(col_widths[i] - 2, line_height, cell, split_only=True))
+            if lines > max_lines:
+                max_lines = lines
+
+        # Text starts 1mm below the top of the row; keep 1mm clear below it too
+        row_height = line_height * max_lines + 2
+
+        # Start a new page if the whole row will not fit on this one
+        if self.get_y() + row_height > self.h - self.b_margin:
+            self.add_page()
+
         # Save position for multi-line cells
         x_start = self.get_x()
         y_start = self.get_y()
-        
+
+        # No automatic page break while the cells are drawn, so the row stays together
+        auto_break = self.auto_page_break
+        self.set_auto_page_break(False, self.b_margin)
+
         # Draw cells
         for i, cell in enumerate(cleaned_cells):
             # Draw cell border and fill
             self.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], row_height, 'DF' if header else 'D')
-            
+
             # Position for text
             self.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 1)
-            
+
             # Use multi_cell for text wrapping
             self.multi_cell(col_widths[i] - 2, line_height, cell, border=0, align='L')
-        
+
+        self.set_auto_page_break(auto_break, self.b_margin)
+
         # Move to next row
         self.set_xy(x_start, y_start + row_height)
 

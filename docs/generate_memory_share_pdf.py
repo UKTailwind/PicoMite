@@ -47,6 +47,24 @@ class PDF(FPDF):
         self.set_text_color(0, 0, 0)
         self.ln(1)
 
+    @staticmethod
+    def _inline(text):
+        """Inline markdown as plain text: the **bold** and `code` markers go."""
+        text = text.replace('**', '')
+        return re.sub(r'`([^`]+)`', r'\1', text)
+
+    def _lines_needed(self, text, width):
+        """The lines multi_cell will take for text in this width (its word wrap)."""
+        n, line_w = 1, 0.0
+        for word in text.split(' '):
+            w = self.get_string_width(word + ' ')
+            if line_w + w > width and line_w > 0:
+                n += 1
+                line_w = w
+            else:
+                line_w += w
+        return n
+
     def body_text(self, text):
         self.set_font('Helvetica', '', 10)
         self.multi_cell(0, 5, self._sanitize(text))
@@ -77,28 +95,35 @@ class PDF(FPDF):
 
         cleaned_cells = []
         for cell in cells:
-            cell = self._sanitize(cell)
+            cell = self._inline(self._sanitize(cell))
             cell = cell.replace('<br>', ' ')
             cleaned_cells.append(cell)
 
+        # The row's height from multi_cell's own word wrap (a character count
+        # under- or over-estimated it), and a 1 mm margin below the text.
         line_height = 5
         max_lines = 1
         for i, cell in enumerate(cleaned_cells):
-            chars_per_line = int(col_widths[i] / 2.2)
-            if chars_per_line > 0:
-                lines = (len(cell) // chars_per_line) + 1
-                if lines > max_lines:
-                    max_lines = lines
+            max_lines = max(max_lines, self._lines_needed(cell, col_widths[i] - 2))
 
-        row_height = line_height * max_lines
+        row_height = line_height * max_lines + 1
 
         x_start = self.get_x()
         y_start = self.get_y()
+        # The whole row on one page: with no check, a row near the bottom
+        # margin set off fpdf's automatic page break inside a cell, and the
+        # cells after it, placed by coordinates, came out one per page.
+        if y_start + row_height + 1 > self.h - self.b_margin:
+            self.add_page()
+            y_start = self.get_y()
 
+        auto, margin = self.auto_page_break, self.b_margin
+        self.set_auto_page_break(False)  # (the row fits: no break inside it)
         for i, cell in enumerate(cleaned_cells):
             self.rect(x_start + sum(col_widths[:i]), y_start, col_widths[i], row_height, 'DF' if header else 'D')
             self.set_xy(x_start + sum(col_widths[:i]) + 1, y_start + 1)
             self.multi_cell(col_widths[i] - 2, line_height, cell, border=0, align='L')
+        self.set_auto_page_break(auto, margin)
 
         self.set_xy(x_start, y_start + row_height)
 

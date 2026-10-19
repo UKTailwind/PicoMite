@@ -55,10 +55,22 @@ def sanitize(text):
 
 
 def inline(text):
-    """Strip inline markdown emphasis/code for flowed text."""
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'`([^`]*)`', r'\1', text)
-    return sanitize(text)
+    """Strip inline markdown emphasis/code for flowed text and table cells.
+
+    Each source line is drawn on its own, so a **bold** or `code` span that the
+    .md wraps over two lines leaves a lone marker on each; drop those too. Code
+    spans are split out first so a C '*' or '**' inside one is kept."""
+    out = []
+    for part in re.split(r'(`[^`]*`)', text):
+        if len(part) >= 2 and part[0] == part[-1] == '`':
+            out.append(part[1:-1])
+        else:
+            part = re.sub(r'\*\*(.+?)\*\*', r'\1', part)
+            part = part.replace('**', '').replace('`', '')
+            # *italic*: a '*' hard against a word on the inside, not on the outside
+            part = re.sub(r'(?<![\w*])\*(?=[^\s*])(.+?)(?<=[^\s*])\*(?![\w*])', r'\1', part)
+            out.append(part)
+    return sanitize(''.join(out))
 
 
 def add_section(pdf, title, level=1):
@@ -129,7 +141,7 @@ def add_table(pdf, headers, rows):
     maxw = []
     for i in range(ncols):
         cells = [headers[i]] + [r[i] if i < len(r) else '' for r in rows]
-        maxw.append(max(pdf.get_string_width(sanitize(c)) for c in cells) or 1)
+        maxw.append(max(pdf.get_string_width(inline(c)) for c in cells) or 1)
     total = sum(maxw)
     widths = [max(16, PAGE_WIDTH * w / total) for w in maxw]
     scale = PAGE_WIDTH / sum(widths)
@@ -149,7 +161,7 @@ def add_table(pdf, headers, rows):
 
     def wrap_all(cells, style):
         pdf.set_font('Helvetica', style, 9)
-        return [wrap_cell(pdf, sanitize(cells[i] if i < len(cells) else ''), widths[i])
+        return [wrap_cell(pdf, inline(cells[i] if i < len(cells) else ''), widths[i])
                 for i in range(ncols)]
 
     def draw_row(cells, style):

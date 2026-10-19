@@ -241,12 +241,18 @@ def render_table(pdf, table_lines):
         x_start = pdf.get_x()
         y_start = pdf.get_y()
 
-        # Check page break
-        if y_start + row_h > pdf.h - pdf.b_margin:
+        # Check page break: the whole row must fit, the 0.5 mm the text
+        # starts below the border included.  Without it a row that only just
+        # fitted passed, and the first cell's text set off fpdf's automatic
+        # page break; each later cell, placed by coordinates, set off
+        # another, so the row came out one cell per page.
+        if y_start + row_h + 0.5 > pdf.h - pdf.b_margin:
             pdf.add_page()
             y_start = pdf.get_y()
 
         pdf.set_font('Helvetica', font_style, 9)
+        auto, margin = pdf.auto_page_break, pdf.b_margin
+        pdf.set_auto_page_break(False)  # (the row fits: no break inside it)
         for j, t in enumerate(cells_text):
             x = x_start + sum(col_widths[:j])
             # Draw cell border
@@ -254,6 +260,7 @@ def render_table(pdf, table_lines):
             # Draw text inside
             pdf.set_xy(x + 1, y_start + 0.5)
             pdf.multi_cell(col_widths[j] - 2, line_h, t, 0, align or 'L')
+        pdf.set_auto_page_break(auto, margin)
 
         pdf.set_xy(x_start, y_start + row_h)
 

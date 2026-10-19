@@ -23,6 +23,20 @@ def parse_markdown(filename):
         content = f.read()
     return content
 
+# A markdown table separator row: |---|:---:| ...
+TABLE_SEP = re.compile(r'^\|(\s*:?-+:?\s*\|)+$')
+
+def clean_inline(text):
+    """Strip inline markdown: `code` and **bold** render as plain text."""
+    # Set inline code aside first, so a * inside `...` is not taken for bold
+    codes = []
+    def keep_code(m):
+        codes.append(m.group(1))
+        return '\x00%d\x00' % (len(codes) - 1)
+    text = re.sub(r'`([^`]+)`', keep_code, text)
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    return re.sub(r'\x00(\d+)\x00', lambda m: codes[int(m.group(1))], text)
+
 def add_section(pdf, title, level=1):
     """Add a section title."""
     if level == 1:
@@ -34,14 +48,14 @@ def add_section(pdf, title, level=1):
     else:
         pdf.set_font('Helvetica', 'B', 11)
         pdf.ln(2)
-    pdf.multi_cell(0, 6, title)
+    pdf.multi_cell(0, 6, clean_inline(title))
     pdf.ln(2)
 
 def add_text(pdf, text):
     """Add regular text."""
     pdf.set_font('Helvetica', '', 10)
-    # Handle inline code
-    text = text.replace('`', '"')
+    # Handle inline code and bold
+    text = clean_inline(text)
     # Replace Unicode characters that can't be encoded in latin-1
     text = text.replace('→', '->')
     text = text.replace('\\x1e', '<RS>')
@@ -63,6 +77,8 @@ def add_code(pdf, code):
 
 def add_table(pdf, headers, rows):
     """Add a table."""
+    headers = [clean_inline(h) for h in headers]
+    rows = [[clean_inline(c) for c in row] for row in rows]
     pdf.set_font('Helvetica', 'B', 9)
     
     # Calculate column widths based on number of columns and content
@@ -94,25 +110,40 @@ def add_table(pdf, headers, rows):
         col_widths = [page_width // num_cols] * num_cols
     
     # Headers - replace Unicode characters
-    for i, header in enumerate(headers):
-        header = header.replace('→', '->').replace('\\x1e', '<RS>')
-        w = col_widths[i] if i < len(col_widths) else 40
-        pdf.cell(w, 6, header, 1, 0, 'C')
-    pdf.ln()
-    
-    # Rows
+    cells = [h.replace('→', '->').replace('\\x1e', '<RS>') for h in headers]
+    table_row(pdf, col_widths, cells, 6, 'C')
+
+    # Rows - every cell word-wraps inside its column, nothing is cut short
     pdf.set_font('Helvetica', '', 9)
     for row in rows:
-        for i, cell in enumerate(row):
-            # Replace Unicode characters
-            cell = cell.replace('→', '->').replace('\\x1e', '<RS>')
-            w = col_widths[i] if i < len(col_widths) else 40
-            # Truncate if too long - allow more characters per unit width
-            max_chars = int(w * 0.45)  # Approximately 0.45 chars per mm
-            display = cell[:max_chars] + '...' if len(cell) > max_chars else cell
-            pdf.cell(w, 5, display, 1, 0, 'L')
-        pdf.ln()
+        # Replace Unicode characters; pad a short row out to the header
+        cells = [c.replace('→', '->').replace('\\x1e', '<RS>') for c in row]
+        cells += [''] * (num_cols - len(cells))
+        table_row(pdf, col_widths, cells, 5, 'L')
     pdf.ln(3)
+
+def table_row(pdf, col_widths, cells, h, align):
+    """Draw one table row, each cell word-wrapped inside its border.
+    The row is measured first and the page turned if the whole row does
+    not fit; auto page break is off while its cells are drawn, so a row
+    near the bottom margin can never spill one cell per page."""
+    widths = [col_widths[i] if i < len(col_widths) else 40
+              for i in range(len(cells))]
+    lines = max(len(pdf.multi_cell(w, h, c, split_only=True))
+                for w, c in zip(widths, cells))
+    row_h = lines * h
+    if pdf.get_y() + row_h > pdf.page_break_trigger:
+        pdf.add_page()
+    x, y = pdf.l_margin, pdf.get_y()
+    auto = pdf.auto_page_break
+    pdf.set_auto_page_break(False, pdf.b_margin)
+    for w, c in zip(widths, cells):
+        pdf.rect(x, y, w, row_h)
+        pdf.set_xy(x, y)
+        pdf.multi_cell(w, h, c, 0, align)
+        x += w
+    pdf.set_auto_page_break(auto, pdf.b_margin)
+    pdf.set_xy(pdf.l_margin, y + row_h)
 
 def process_markdown(pdf, content):
     """Process markdown content and add to PDF."""
@@ -143,28 +174,27 @@ def process_markdown(pdf, content):
             i += 1
             continue
         
-        # Tables
-        if '|' in line and not line.strip().startswith('|--'):
-            cells = [c.strip() for c in line.split('|')[1:-1]]
+        # Tables (a \| inside a cell is a literal |, not a column break)
+        if line.strip().startswith('|') and not TABLE_SEP.match(line.strip()):
+            cells = [c.strip().replace('\\|', '|')
+                     for c in re.split(r'(?<!\\)\|', line.strip())[1:-1]]
             if cells:
                 if not in_table:
                     table_headers = cells
                     in_table = True
-                elif line.strip().startswith('|--') or line.strip().startswith('|-'):
-                    pass  # Skip separator
                 else:
                     table_rows.append(cells)
             i += 1
             continue
-        elif in_table and '|' not in line:
+        elif in_table and not line.strip().startswith('|'):
             if table_headers and table_rows:
                 add_table(pdf, table_headers, table_rows)
             table_headers = []
             table_rows = []
             in_table = False
-        
+
         # Skip table separators
-        if line.strip().startswith('|--') or line.strip().startswith('|-'):
+        if TABLE_SEP.match(line.strip()):
             i += 1
             continue
         
@@ -183,16 +213,16 @@ def process_markdown(pdf, content):
         elif line.strip().startswith('**') and line.strip().endswith('**'):
             pdf.set_font('Helvetica', 'B', 10)
             pdf.ln(2)
-            pdf.multi_cell(0, 5, line.strip().replace('**', ''))
+            pdf.multi_cell(0, 5, clean_inline(line.strip()))
         # List items
         elif line.strip().startswith('- '):
             pdf.set_font('Helvetica', '', 10)
-            text = line.strip()[2:].replace('`', '"')
+            text = clean_inline(line.strip()[2:])
             pdf.multi_cell(0, 5, '  - ' + text)
         # Numbered items
         elif re.match(r'^\d+\.', line.strip()):
             pdf.set_font('Helvetica', '', 10)
-            text = line.strip().replace('`', '"')
+            text = clean_inline(line.strip())
             pdf.multi_cell(0, 5, '  ' + text)
         # Regular text
         elif line.strip():

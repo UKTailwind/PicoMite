@@ -120,63 +120,68 @@ class PDF(FPDF):
             w = int(page_w / col_count)
             col_widths = [w] * col_count
 
-        for ri, row in enumerate(rows):
-            is_header = (ri == 0)
-            if is_header:
+        lh = 5
+        pad = 1                     # text offset from the top (and bottom) of a row
+
+        def set_style(ri):
+            if ri == 0:
                 self.set_font('Helvetica', 'B', 9)
                 self.set_fill_color(200, 215, 235)
             else:
                 self.set_font('Helvetica', '', 9)
                 self.set_fill_color(255, 255, 255) if ri % 2 == 0 else self.set_fill_color(248, 248, 248)
 
-            x0 = self.get_x()
-            y0 = self.get_y()
-            lh = 5
-            # Measure max height
-            max_h = lh
+        def row_h(row):
+            # Real wrapped line count in the current font: multi_cell's own
+            # split, so the rect always holds every line drawn into it.
+            n = 1
             for ci, cell in enumerate(row):
                 cw = col_widths[ci] if ci < len(col_widths) else col_widths[-1]
-                approx_lines = max(1, len(clean(cell)) // max(1, int(cw / 2.1)) + 1)
-                max_h = max(max_h, approx_lines * lh)
+                n = max(n, len(self.multi_cell(cw - 2, lh, clean(cell), split_only=True)))
+            return n * lh + 2 * pad
 
-            # Manual page break: rects/multi_cell below would otherwise render
-            # off the page bottom and leave the cursor past the margin, which
-            # later triggers a fresh page break for every subsequent paragraph.
-            if y0 + max_h > self.h - self.b_margin:
+        def draw(row, x0, y0, h):
+            for ci, cell in enumerate(row):
+                cw = col_widths[ci] if ci < len(col_widths) else col_widths[-1]
+                self.rect(x0 + sum(col_widths[:ci]), y0, cw, h, 'DF')
+                self.set_xy(x0 + sum(col_widths[:ci]) + 1, y0 + pad)
+                self.multi_cell(cw - 2, lh, clean(cell), border=0)
+
+        # Paginate here, with auto page break off while rows are drawn: with it
+        # on, a row near the bottom margin spills its cells over several pages.
+        # set_auto_page_break(False) also zeroes b_margin, so save both first.
+        saved_auto, saved_bmargin = self.auto_page_break, self.b_margin
+        bottom = self.h - saved_bmargin
+        self.set_auto_page_break(False)
+
+        for ri, row in enumerate(rows):
+            set_style(ri)
+            x0 = self.get_x()
+            y0 = self.get_y()
+            max_h = row_h(row)
+            need = max_h
+            if ri == 0 and len(rows) > 1:       # keep the header with the first row
+                set_style(1)
+                need += row_h(rows[1])
+                set_style(0)
+
+            # The whole row (text offset included) must fit, or it goes to a
+            # new page, headed by a repeat of the header row.
+            if y0 + need > bottom:
                 self.add_page()
                 x0 = self.get_x()
                 y0 = self.get_y()
-                # Re-emit the header row at the top of the new page so split
-                # tables stay readable.
-                if not is_header and len(rows) > 1:
-                    saved_font = ('Helvetica', 'B', 9)
-                    self.set_font(*saved_font)
-                    self.set_fill_color(200, 215, 235)
-                    hdr = rows[0]
-                    hdr_h = lh
-                    for ci, cell in enumerate(hdr):
-                        cw = col_widths[ci] if ci < len(col_widths) else col_widths[-1]
-                        approx_lines = max(1, len(clean(cell)) // max(1, int(cw / 2.1)) + 1)
-                        hdr_h = max(hdr_h, approx_lines * lh)
-                    for ci, cell in enumerate(hdr):
-                        cw = col_widths[ci] if ci < len(col_widths) else col_widths[-1]
-                        self.rect(x0 + sum(col_widths[:ci]), y0, cw, hdr_h, 'DF')
-                        self.set_xy(x0 + sum(col_widths[:ci]) + 1, y0 + 1)
-                        self.multi_cell(cw - 2, lh, clean(cell), border=0)
+                if ri != 0:
+                    set_style(0)
+                    hdr_h = row_h(rows[0])
+                    draw(rows[0], x0, y0, hdr_h)
                     y0 += hdr_h
-                    self.set_xy(x0, y0)
-                    # Restore the body-row font/fill for the actual row about to draw
-                    self.set_font('Helvetica', '', 9)
-                    self.set_fill_color(255, 255, 255) if ri % 2 == 0 else self.set_fill_color(248, 248, 248)
+                    set_style(ri)
 
-            for ci, cell in enumerate(row):
-                cw = col_widths[ci] if ci < len(col_widths) else col_widths[-1]
-                self.rect(x0 + sum(col_widths[:ci]), y0, cw, max_h, 'DF')
-                self.set_xy(x0 + sum(col_widths[:ci]) + 1, y0 + 1)
-                self.multi_cell(cw - 2, lh, clean(cell), border=0)
-
+            draw(row, x0, y0, max_h)
             self.set_xy(x0, y0 + max_h)
 
+        self.set_auto_page_break(saved_auto, saved_bmargin)
         self.ln(3)
 
 
@@ -267,7 +272,10 @@ def parse_and_render(md_path, pdf):
             i += 1
             continue
 
-        # Headers
+        # Headers (bold/inline-code markers stripped, as in body text)
+        if line.startswith('#'):
+            line = re.sub(r'\*\*([^*]+)\*\*', r'\1', line)
+            line = re.sub(r'`([^`]+)`', r'\1', line)
         if line.startswith('# '):
             # Top-level title — skip (already in PDF header), unless it's a section
             i += 1

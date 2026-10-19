@@ -55,6 +55,7 @@ UNICODE_REPLACEMENTS = {
     '\u2192': '->',  # →
     '\u00d7': 'x',   # ×
     '\u2248': '~',   # ≈
+    '\u2212': '-',   # −
 }
 
 def sanitize(text):
@@ -70,6 +71,10 @@ def sanitize(text):
         except UnicodeEncodeError:
             result.append('?')
     return ''.join(result)
+
+def plain(text):
+    """Render inline markdown plain: **bold** and `code` keep only their text."""
+    return re.sub(r'`([^`]+)`', r'\1', text.replace('**', ''))
 
 def add_section(pdf, title, level=1):
     """Add a section title."""
@@ -89,7 +94,7 @@ def add_section(pdf, title, level=1):
 def add_text(pdf, text):
     """Add regular text."""
     pdf.set_font('Helvetica', '', 10)
-    text = sanitize(text.replace('`', '"'))
+    text = sanitize(text.replace('`', '"').replace('**', ''))
     pdf.multi_cell(0, 5, text)
 
 def add_code(pdf, code):
@@ -107,6 +112,8 @@ def add_code(pdf, code):
 def add_table(pdf, headers, rows):
     """Add a table."""
     pdf.set_font('Helvetica', 'B', 9)
+    headers = [plain(h) for h in headers]
+    rows = [[plain(c) for c in r] for r in rows]
 
     num_cols = len(headers)
     page_width = 190
@@ -129,22 +136,37 @@ def add_table(pdf, headers, rows):
     else:
         col_widths = [page_width // num_cols] * num_cols
 
-    for i, header in enumerate(headers):
-        header = sanitize(header)
-        w = col_widths[i] if i < len(col_widths) else 40
-        pdf.cell(w, 6, header, 1, 0, 'C')
-    pdf.ln()
-
-    pdf.set_font('Helvetica', '', 9)
+    add_table_row(pdf, headers, col_widths, 'B', 6, 'C')
     for row in rows:
-        for i, cell in enumerate(row):
-            cell = sanitize(cell)
-            w = col_widths[i] if i < len(col_widths) else 40
-            max_chars = int(w * 0.45)
-            display = cell[:max_chars] + '...' if len(cell) > max_chars else cell
-            pdf.cell(w, 5, display, 1, 0, 'L')
-        pdf.ln()
+        add_table_row(pdf, row, col_widths, '', 5, 'L')
     pdf.ln(3)
+
+def add_table_row(pdf, cells, col_widths, style, line_h, align):
+    """Add one table row, every cell word-wrapped to its full text; the row never splits across pages."""
+    pdf.set_font('Helvetica', style, 9)
+    cells = [sanitize(c) for c in cells]
+    widths = [col_widths[i] if i < len(col_widths) else 40 for i in range(len(cells))]
+
+    # Row height from the tallest cell, as multi_cell will wrap it
+    lines = max(len(pdf.multi_cell(w, line_h, c, split_only=True)) for w, c in zip(widths, cells))
+    row_h = line_h * lines
+
+    # Start a new page if the whole row will not fit on this one
+    if pdf.get_y() + row_h > pdf.h - pdf.b_margin:
+        pdf.add_page()
+
+    # No automatic page break while the cells are drawn, so the row stays together
+    auto_break = pdf.auto_page_break
+    pdf.set_auto_page_break(False, pdf.b_margin)
+    x_start, y = pdf.get_x(), pdf.get_y()
+    x = x_start
+    for w, c in zip(widths, cells):
+        pdf.rect(x, y, w, row_h)
+        pdf.set_xy(x, y)
+        pdf.multi_cell(w, line_h, c, 0, align)
+        x += w
+    pdf.set_auto_page_break(auto_break, pdf.b_margin)
+    pdf.set_xy(x_start, y + row_h)
 
 def process_markdown(pdf, content):
     """Process markdown content and add to PDF."""
@@ -227,12 +249,12 @@ def process_markdown(pdf, content):
         # List items
         elif line.strip().startswith('- '):
             pdf.set_font('Helvetica', '', 10)
-            text = sanitize(line.strip()[2:].replace('`', '"'))
+            text = sanitize(line.strip()[2:].replace('`', '"').replace('**', ''))
             pdf.multi_cell(0, 5, '  - ' + text)
         # Numbered items
         elif re.match(r'^\d+\.', line.strip()):
             pdf.set_font('Helvetica', '', 10)
-            text = sanitize(line.strip().replace('`', '"'))
+            text = sanitize(line.strip().replace('`', '"').replace('**', ''))
             pdf.multi_cell(0, 5, '  ' + text)
         # Regular text
         elif line.strip():

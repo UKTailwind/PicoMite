@@ -1,29 +1,42 @@
 #!/usr/bin/env python3
-"""Generate CONVERTER.docx from badapple/CONVERTER.md."""
+"""Generate CONVERTER.docx from docs/CONVERTER.md.
 
-import os, re
+Usage: generate_converter_docx.py [OUTPUT.docx]   (default: docs/CONVERTER.docx)"""
+
+import os, re, sys
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.normpath(os.path.join(HERE, '..', 'badapple', 'CONVERTER.md'))
-OUT = os.path.normpath(os.path.join(HERE, '..', 'badapple', 'CONVERTER.docx'))
+SRC = os.path.join(HERE, 'CONVERTER.md')
+OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, 'CONVERTER.docx')
 
 
 def add_inline(p, text):
-    """Render **bold** and `code` spans into paragraph p."""
-    for tok in re.split(r'(\*\*.+?\*\*|`[^`]+`)', text):
-        if not tok:
+    """Render `code` spans as monospace runs and **bold** / *italic* as bold / italic runs
+    into paragraph p. Code spans are literal; bold and italic may enclose code."""
+    toks = [t for t in re.split(r'(`[^`]+`|\*\*|\*)', text) if t]
+    # A ** or * with no partner on the line is literal text, not a marker
+    paired = {m: toks.count(m) % 2 == 0 for m in ('**', '*')}
+    bold = italic = False
+    for tok in toks:
+        if tok in paired and paired[tok]:
+            if tok == '**':
+                bold = not bold
+            else:
+                italic = not italic
             continue
-        if tok.startswith('**') and tok.endswith('**'):
-            p.add_run(tok[2:-2]).bold = True
-        elif tok.startswith('`') and tok.endswith('`'):
+        if re.fullmatch(r'`[^`]+`', tok):
             r = p.add_run(tok[1:-1])
             r.font.name = 'Consolas'
             r.font.size = Pt(9)
         else:
-            p.add_run(tok)
+            r = p.add_run(tok)
+        if bold:
+            r.bold = True
+        if italic:
+            r.italic = True
 
 
 def emit_table(doc, rows):
@@ -75,16 +88,18 @@ def main():
             doc.add_paragraph()
 
     for line in lines:
-        if line.startswith('```'):
+        # code fences (a fence inside a list item is indented)
+        if line.lstrip().startswith('```'):
             if in_code:
                 flush_code()
                 in_code = False
             else:
                 flush_table()
                 in_code = True
+                fence_indent = len(line) - len(line.lstrip())
             continue
         if in_code:
-            code_buf.append(line)
+            code_buf.append(line[fence_indent:] if line[:fence_indent].isspace() else line)
             continue
 
         # tables

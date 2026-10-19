@@ -40,6 +40,11 @@ def sanitize(text):
     return text
 
 
+def plain(text):
+    """Drop inline **bold** and `code` markers; a cell cannot switch font mid-text."""
+    return text.replace('**', '').replace('`', '')
+
+
 def add_section(pdf, title, level=1):
     if level == 1:
         pdf.set_font('Helvetica', 'B', 14)
@@ -56,7 +61,7 @@ def add_section(pdf, title, level=1):
 
 def add_text(pdf, text):
     pdf.set_font('Helvetica', '', 10)
-    text = sanitize(text.replace('`', '"'))
+    text = sanitize(plain(text.replace('`', '"')))
     pdf.multi_cell(0, 5, text)
 
 
@@ -70,6 +75,31 @@ def add_code(pdf, code):
         else:
             pdf.cell(0, 4, '', 0, 1, fill=True)
     pdf.ln(2)
+
+
+def wrap_cell(pdf, text, w):
+    """Wrap one cell's text to width w (current font), breaking over-long words."""
+    avail = w - 2
+    lines, cur = [], ''
+    for word in text.split(' '):
+        while pdf.get_string_width(word) > avail and len(word) > 1:
+            cut = len(word)
+            while cut > 1 and pdf.get_string_width(word[:cut]) > avail:
+                cut -= 1
+            if cur:
+                lines.append(cur)
+                cur = ''
+            lines.append(word[:cut])
+            word = word[cut:]
+        trial = (cur + ' ' + word).strip()
+        if pdf.get_string_width(trial) <= avail:
+            cur = trial
+        else:
+            if cur:
+                lines.append(cur)
+            cur = word
+    lines.append(cur)
+    return lines
 
 
 def add_table(pdf, headers, rows):
@@ -97,21 +127,56 @@ def add_table(pdf, headers, rows):
     else:
         col_widths = [page_width // num_cols] * num_cols
 
-    for i, header in enumerate(headers):
-        header = sanitize(header)
-        w = col_widths[i] if i < len(col_widths) else 40
-        pdf.cell(w, 6, header, 1, 0, 'C')
-    pdf.ln()
+    widths = [col_widths[i] if i < len(col_widths) else 40 for i in range(num_cols)]
+    line_h = 4.5
+    pad = 0.5                                   # text offset from the top of the row
+    x0 = pdf.l_margin
 
-    pdf.set_font('Helvetica', '', 9)
+    # Rows are word-wrapped, never cut short, and paginated here: auto page
+    # break is off while a table is drawn, or a row near the bottom margin
+    # spills its cells over several pages. set_auto_page_break(False) also
+    # zeroes b_margin, so both are saved first and restored after.
+    saved_auto, saved_bmargin = pdf.auto_page_break, pdf.b_margin
+    bottom = pdf.h - saved_bmargin
+    pdf.set_auto_page_break(False)
+
+    def wrap_row(cells, style):
+        pdf.set_font('Helvetica', style, 9)
+        return [wrap_cell(pdf, sanitize(cells[i] if i < len(cells) else ''), widths[i])
+                for i in range(num_cols)]
+
+    def row_height(wrapped):
+        return line_h * max(len(w) for w in wrapped) + 2 * pad
+
+    def draw_row(cells, style, align):
+        wrapped = wrap_row(cells, style)
+        rh = row_height(wrapped)
+        y0 = pdf.get_y()
+        x = x0
+        for i in range(num_cols):
+            pdf.rect(x, y0, widths[i], rh)
+            yy = y0 + pad
+            for ln in wrapped[i]:
+                pdf.set_xy(x + 1, yy)
+                pdf.cell(widths[i] - 2, line_h, ln, 0, 0, align)
+                yy += line_h
+            x += widths[i]
+        pdf.set_xy(x0, y0 + rh)
+
+    head_h = row_height(wrap_row(headers, 'B'))
+    first_h = row_height(wrap_row(rows[0], '')) if rows else 0
+    if pdf.get_y() + head_h + first_h > bottom:     # header + first row must fit
+        pdf.add_page()
+    pdf.set_x(x0)
+    draw_row(headers, 'B', 'C')
     for row in rows:
-        for i, cell in enumerate(row):
-            cell = sanitize(cell)
-            w = col_widths[i] if i < len(col_widths) else 40
-            max_chars = int(w * 0.45)
-            display = cell[:max_chars] + '...' if len(cell) > max_chars else cell
-            pdf.cell(w, 5, display, 1, 0, 'L')
-        pdf.ln()
+        if pdf.get_y() + row_height(wrap_row(row, '')) > bottom:
+            pdf.add_page()                          # whole row on the next page
+            pdf.set_x(x0)
+            draw_row(headers, 'B', 'C')             # repeat the header there
+        draw_row(row, '', 'L')
+
+    pdf.set_auto_page_break(saved_auto, saved_bmargin)
     pdf.ln(3)
 
 
@@ -143,12 +208,12 @@ def process_markdown(pdf, content):
             continue
 
         if '|' in line and not line.strip().startswith('|--'):
-            cells = [c.strip() for c in line.split('|')[1:-1]]
+            cells = [plain(c.strip()) for c in line.split('|')[1:-1]]
             if cells:
                 if not in_table:
                     table_headers = cells
                     in_table = True
-                elif line.strip().startswith('|--') or line.strip().startswith('|-'):
+                elif re.match(r'^\|[\s:|-]+\|?$', line.strip()):  # | :--- | separator row
                     pass
                 else:
                     table_rows.append(cells)
@@ -180,11 +245,11 @@ def process_markdown(pdf, content):
             pdf.multi_cell(0, 5, sanitize(line.strip().replace('**', '')))
         elif line.strip().startswith('- '):
             pdf.set_font('Helvetica', '', 10)
-            text = sanitize(line.strip()[2:].replace('`', '"'))
+            text = sanitize(plain(line.strip()[2:].replace('`', '"')))
             pdf.multi_cell(0, 5, '  - ' + text)
         elif re.match(r'^\d+\.', line.strip()):
             pdf.set_font('Helvetica', '', 10)
-            text = sanitize(line.strip().replace('`', '"'))
+            text = sanitize(plain(line.strip().replace('`', '"')))
             pdf.multi_cell(0, 5, '  ' + text)
         elif line.strip():
             add_text(pdf, line.strip())

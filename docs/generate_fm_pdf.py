@@ -45,6 +45,7 @@ class PDF(FPDF):
             '\u201c': '"', '\u201d': '"',
             '\u2192': '->', '\u2190': '<-',
             '\u2026': '...',
+            '\u2264': '<=', '\u2265': '>=',
             # Box-drawing characters -> ASCII
             '\u250c': '+', '\u2510': '+', '\u2514': '+', '\u2518': '+',
             '\u251c': '+', '\u2524': '+', '\u252c': '+', '\u2534': '+',
@@ -59,6 +60,13 @@ class PDF(FPDF):
             text = text.replace(src, dst)
         # Replace any remaining non-Latin-1 characters
         return text.encode('latin-1', errors='replace').decode('latin-1')
+
+    @staticmethod
+    def _plain(text):
+        """Render inline markdown plain: **bold**, `code` and [text](#link) keep only their text."""
+        text = text.replace('**', '')
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        return re.sub(r'\[([^\]]+)\]\([^)]*\)', r'\1', text)
 
     def body_text(self, text):
         self.set_font('Helvetica', '', 10)
@@ -78,23 +86,9 @@ class PDF(FPDF):
     def _count_wrapped_lines(self, text, cell_width, font_style='', font_size=9):
         """Count how many lines text will occupy in a cell of given width."""
         self.set_font('Helvetica', font_style, font_size)
-        effective = cell_width - 2  # 1mm padding each side
-        if not text.strip():
-            return 1
-        words = text.split(' ')
-        lines = 1
-        line_w = 0.0
-        sp = self.get_string_width(' ')
-        for word in words:
-            ww = self.get_string_width(word)
-            if line_w == 0.0:
-                line_w = ww
-            elif line_w + sp + ww > effective:
-                lines += 1
-                line_w = ww
-            else:
-                line_w += sp + ww
-        return lines
+        # Ask multi_cell itself, at the width table_row gives it: it keeps its own
+        # 1mm margin inside that width and splits words too long for the column
+        return max(1, len(self.multi_cell(cell_width - 2, 5, text, split_only=True)))
 
     def table_row(self, cells, header=False, col_widths=None):
         font_style = 'B' if header else ''
@@ -104,9 +98,7 @@ class PDF(FPDF):
 
         cleaned_cells = []
         for cell in cells:
-            cell = self._sanitize(cell)
-            cell = re.sub(r'`([^`]+)`', r'\1', cell)
-            cell = cell.replace('**', '')
+            cell = self._plain(self._sanitize(cell))
             cleaned_cells.append(cell)
 
         line_height = 5
@@ -136,10 +128,14 @@ class PDF(FPDF):
         for idx in range(len(cleaned_cells)):
             self.rect(x_start + sum(col_widths[:idx]), y_start, col_widths[idx], row_height, 'DF')
 
-        # Then draw cell text on top of the fills
+        # Then draw cell text on top of the fills, with no automatic page break
+        # so the row stays together
+        auto_break = self.auto_page_break
+        self.set_auto_page_break(False, self.b_margin)
         for idx, cell in enumerate(cleaned_cells):
             self.set_xy(x_start + sum(col_widths[:idx]) + 1, y_start + 1)
             self.multi_cell(col_widths[idx] - 2, line_height, cell, border=0, align='L')
+        self.set_auto_page_break(auto_break, self.b_margin)
 
         self.set_xy(x_start, y_start + row_height)
 
@@ -222,25 +218,23 @@ def main():
 
         # Section headings
         if line.startswith('#### '):
-            pdf.subsubsection_title(line[5:])
+            pdf.subsubsection_title(PDF._plain(line[5:]))
             i += 1
             continue
 
         if line.startswith('### '):
-            pdf.subsection_title(line[4:])
+            pdf.subsection_title(PDF._plain(line[4:]))
             i += 1
             continue
 
         if line.startswith('## '):
-            pdf.section_title(line[3:])
+            pdf.section_title(PDF._plain(line[3:]))
             i += 1
             continue
 
         # Non-empty body text
         if line.strip():
-            text = PDF._sanitize(line)
-            text = text.replace('**', '')
-            text = re.sub(r'`([^`]+)`', r'\1', text)
+            text = PDF._plain(PDF._sanitize(line))
             if text.startswith('- '):
                 text = '  - ' + text[2:]
             elif re.match(r'^\d+\. ', text):
