@@ -4991,7 +4991,9 @@ GUI CURSOR UNLINK MOUSE
 GUI CURSOR LINK MOUSE links the cursor to the mouse so that it automatically
 tracks the mouse movement.  GUI CURSOR UNLINK MOUSE breaks the link.  A mouse
 must be connected (USB) or configured (PS2 - see the MOUSE OPEN command)
-before the cursor can be linked.
+before the cursor can be linked.  On the PicoMiteRP2350BTH, PicoMiteHDMIBTH
+and PicoMitePC3 versions a connected Bluetooth mouse, or the trackpad of a
+connected Bluetooth keyboard, can also be linked.
 
 ~GUI CURSOR LOAD
 GUI CURSOR LOAD fname$
