@@ -476,6 +476,89 @@ bool modmode = false;
 int oldfont;
 int oldmode;
 #define MAXCLIP 1024
+/* Esc followed by [ M is Tera Term reporting a mouse click or wheel (three more
+   bytes follow).  The two keys read to check are given back when they are not
+   [ M, so a key typed straight after Esc - the Y of a quick Esc Y - is kept. */
+static int EdMouseReport(void)
+{
+    int a = MMInkey(), b;
+    if (a != '[')
+    {
+        MMInkeyUnget(a);
+        return 0;
+    }
+    b = MMInkey();
+    if (b != 'M')
+    {
+        MMInkeyUnget(b);
+        MMInkeyUnget(a);
+        return 0;
+    }
+    return 1;
+}
+static int EdKeyNow = -1; // the key being handled (-1 until the first: EdDropHeldRepeats)
+// the byte at *pos in the console queue, left there; -1 at the end
+static int EdQueueByte(int *pos, int head)
+{
+    if (*pos == head)
+        return -1;
+    int c = (unsigned char)ConsoleRxBuf[*pos];
+    *pos = (*pos + 1) % CONSOLE_RX_BUF_SIZE;
+    return c;
+}
+/* The key at *pos in the console queue, decoded as MMInkey decodes it but left
+   in the queue; *pos moves past it.  -2 for an escape sequence this does not
+   decode, or one that has not all arrived. */
+static int EdPeekKey(int *pos, int head)
+{
+    int c = EdQueueByte(pos, head);
+    if (c != ESC)
+        return c;
+    c = EdQueueByte(pos, head);
+    if (c == 'O')
+    {
+        c = EdQueueByte(pos, head);
+        return (c >= 'P' && c <= 'T') ? F1 + (c - 'P') : -2;
+    }
+    if (c != '[')
+        return -2;
+    c = EdQueueByte(pos, head);
+    if (c >= 'A' && c <= 'D')
+    {
+        static const int arrow_keys[] = {UP, DOWN, RIGHT, LEFT};
+        return arrow_keys[c - 'A'];
+    }
+    if (c >= '1' && c <= '6' && EdQueueByte(pos, head) == '~')
+    {
+        static const int four_char_keys[] = {HOME, INSERT, DEL, END, PUP, PDOWN};
+        return four_char_keys[c - '1'];
+    }
+    return -2;
+}
+/* After a redraw: the keys that arrived meanwhile are dropped only when every
+   one of them is the key that caused it - a held key repeating, which would
+   otherwise run on after it is let go.  Anything else, typing or a paste, is
+   kept.  Before the first key (the screen's first draw) everything queued was
+   typed for the command line, and is dropped. */
+static void EdDropHeldRepeats(void)
+{
+    int head = ConsoleRxBufHead, pos = ConsoleRxBufTail, n = 0;
+    if (EdKeyNow == -1)
+    {
+        while (getConsole() != -1)
+            ;
+        return;
+    }
+    while (pos != head)
+    {
+        int start = pos;
+        if (EdPeekKey(&pos, head) != EdKeyNow)
+            return;
+        n += (pos - start + CONSOLE_RX_BUF_SIZE) % CONSOLE_RX_BUF_SIZE;
+    }
+    while (n--)
+        getConsole();
+}
 // edit command:
 //  EDIT              Will run the full screen editor on the current program memory, if run after an error will place the cursor on the error line
 void edit(unsigned char *cmdline, bool cmdfile)
@@ -638,6 +721,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
     cleanserver();
 #endif
     multilinecomment = false;
+    EdKeyNow = -1;
     /* Editing a file (cmdfile false) can be reached from FM, which still holds
        its panel cache on the MMBasic heap; the buffer is one contiguous
        bottom-up allocation, so ask for FM_HEAP_RESERVE less or it fails with
@@ -727,6 +811,8 @@ void edit(unsigned char *cmdline, bool cmdfile)
         }
         if (!fstrstr(filename, ".bas"))
             Option.ColourCode = 0;
+        p = EdBuff; // (a file that does not exist yet starts empty)
+        nbrlines = 0;
         if (ExistsFile(filename))
         {
             int fnbr1;
@@ -735,11 +821,20 @@ void edit(unsigned char *cmdline, bool cmdfile)
             BasicFileOpen(filename, fnbr1, FA_READ);
             if (fsize > edit_buff_size - 10)
                 StandardError(29);
-            p = EdBuff;
             char *q = (char *)EdBuff;
-            do
-            { // while waiting for the end of file
-                c = FileGetChar(fnbr1);
+            /* Every line goes into the buffer ending in '\n', as a program's
+               do above, and the last one's is erased below: a last line with
+               no line ending of its own is given one here. */
+            while (1)
+            {
+                if (FileEOF(fnbr1))
+                {
+                    if (p == EdBuff || p[-1] == '\n')
+                        break;
+                    c = '\n';
+                }
+                else
+                    c = FileGetChar(fnbr1);
                 if (c == '\n')
                 {
                     nbrlines++;
@@ -755,8 +850,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
                 if (c == '\r')
                     continue;
                 *p++ = c;
-            } while (!FileEOF(fnbr1));
-            p++;
+            }
             FileClose(fnbr1);
         }
         txtp = EdBuff;
@@ -6583,6 +6677,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 PrintStatus();
         } while (c == -1);
         ShowCursor(false);
+        EdKeyNow = c;
 
         if (drawstatusline)
             PrintFunctKeys(EDIT);
@@ -7029,7 +7124,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
             case ESC:
                 uSec(50000); // wait 50ms to see if anything more is coming
                 routinechecks();
-                if (MMInkey() == '[' && MMInkey() == 'M')
+                if (EdMouseReport())
                 {
                     // received escape code for Tera Term reporting a mouse click or scroll wheel movement
                     int c, x, y;
@@ -7086,14 +7181,17 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                      // fflush(stdout);
                 tud_cdc_write_flush();
 #endif
-                int line = 0;
-                int i = find_longest_line_length((char *)EdBuff, &line);
-                if (i > 255 && (fname == NULL || fstrstr(fname, ".bas")))
-                {
-                    char buff[20] = {};
-                    sprintf(buff, " LINE %d TOO LONG", line);
-                    editDisplayMsg((unsigned char *)buff);
-                    break;
+                if (buf[0] != ESC)
+                { // (Esc discards the changes: a long line is no reason to refuse that)
+                    int line = 0;
+                    int i = find_longest_line_length((char *)EdBuff, &line);
+                    if (i > 255 && (fname == NULL || fstrstr(fname, ".bas")))
+                    {
+                        char buff[20] = {};
+                        sprintf(buff, " LINE %d TOO LONG", line);
+                        editDisplayMsg((unsigned char *)buff);
+                        break;
+                    }
                 }
                 //                            }
                 c = buf[0];
@@ -7204,13 +7302,17 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                         *q = 0;
                         p = EdBuff;
                     }
-                    do
-                    { // while waiting for the end of file
-                        c = *p++;
+                    while ((c = *p++))
+                    { // every line ending as CR LF
                         if (c == '\n')
                             FilePutChar('\r', fnbr1);
                         FilePutChar(c, fnbr1);
-                    } while (*p);
+                    }
+                    if (*EdBuff)
+                    { // and the last line's, which the load dropped
+                        FilePutChar('\r', fnbr1);
+                        FilePutChar('\n', fnbr1);
+                    }
                     FileClose(fnbr1);
                 }
                 if (cmdfile == false)
@@ -7780,6 +7882,8 @@ void MarkMode(unsigned char *cb, unsigned char *buf)
 #endif
 #endif
             c = MMInkey();
+        if (c != -1)
+            EdKeyNow = c;
         if (c != -1 && errmsg)
         {
             PrintFunctKeys(MARK);
@@ -7789,7 +7893,7 @@ void MarkMode(unsigned char *cb, unsigned char *buf)
         {
         case ESC:
             uSec(50000); // wait 50ms to see if anything more is coming
-            if (MMInkey() == '[' && MMInkey() == 'M')
+            if (EdMouseReport())
             {
                 // received escape code for Tera Term reporting a mouse click.  in mark mode we ignore it
                 MMInkey();
@@ -8992,8 +9096,7 @@ void printScreen(void)
         curx = 0;
         cury = i + 1;
     }
-    while (getConsole() != -1)
-        ; // consume any keystrokes accumulated while redrawing the screen
+    EdDropHeldRepeats(); // (a held key's repeats queued while redrawing the screen)
 }
 
 // position the cursor on the screen
@@ -9277,8 +9380,7 @@ void Scroll(void)
     PrintFunctKeys(EDIT);
     printLine(VHeight - 1 + edy);
     PositionCursor(txtp);
-    while (getConsole() != -1)
-        ; // consume any keystrokes accumulated while redrawing the screen
+    EdDropHeldRepeats(); // (a held key's repeats queued while redrawing the screen)
 }
 
 // scroll down the video screen
@@ -9293,10 +9395,7 @@ void ScrollDown(void)
     printLine(edy);
     PrintFunctKeys(EDIT);
     PositionCursor(txtp);
-
-    while (getConsole() != -1)
-        routinechecks();
-    ; // consume any keystrokes accumulated while redrawing the screen
+    EdDropHeldRepeats(); // (a held key's repeats queued while redrawing the screen)
 }
 
 #endif

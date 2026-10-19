@@ -777,6 +777,7 @@ void bt_console_flush(void);
  * Function declarations - Keyboard input
  * ============================================================================ */
 int MMInkey(void);
+void MMInkeyUnget(int c);
 int MMgetchar(void);
 char MMputchar(char c, int flush);
 extern volatile int keytimer;

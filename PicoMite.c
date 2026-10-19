@@ -1397,6 +1397,17 @@ uint8_t PSRAMpin;
             i += CONSOLE_RX_BUF_SIZE;
         return i;
     }
+    /* Keys given back with MMInkeyUnget, returned by MMInkey before anything
+       else: a reader that looks ahead for a sequence and finds something else
+       (the editor's check for a Tera Term mouse report after Esc) puts back
+       what it read, so a key typed straight after it is not lost. */
+    static int InkeyUngot[2];
+    static int InkeyNbrUngot = 0;
+    void MMInkeyUnget(int c)
+    {
+        if (c != -1 && InkeyNbrUngot < 2)
+            InkeyUngot[InkeyNbrUngot++] = c;
+    }
 // check if there is a keystroke waiting in the buffer and, if so, return with the char
 // returns -1 if no char waiting
 // the main work is to check for vt100 escape code sequences and map to Maximite codes
@@ -1413,6 +1424,9 @@ int __not_in_flash_func(MMInkey)(void)
         static unsigned int c2 = -1;
         static unsigned int c3 = -1;
         static unsigned int c4 = -1;
+
+        if (InkeyNbrUngot)
+            return InkeyUngot[--InkeyNbrUngot]; // a key given back (MMInkeyUnget)
 
         // Fast path: return queued characters
         if (c1 != -1)
