@@ -1044,8 +1044,8 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 					SyntaxError();
 				;
 			}
-			if (!GPSchannel)
-				error("GPS not activated");
+			if (!GPSchannel && !(PinDef[Option.GPSTX].mode & UART0TX || PinDef[Option.GPSTX].mode & UART1TX))
+				error("GPS not activated"); // (neither OPEN ... AS GPS nor OPTION GPS: issue 41)
 			if (argc != 3)
 				error("Only a single string parameter allowed");
 			p = argv[2];
@@ -1059,7 +1059,7 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 				error("GPS command must start with dollar and end with star");
 			for (i = 1; i <= ss[0]; i++)
 			{
-				SerialPutchar(GPSchannel, s[i]);
+				GPSPutchar(s[i]);
 				if (s[i] == '$')
 					xsum = 0; // the checksum covers the characters between $ and *
 				else if (s[i] != '*')
@@ -1068,15 +1068,15 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 			i = xsum / 16;
 			i = i + '0';
 			if (i > '9')
-				i = i - '0' + 'A';
-			SerialPutchar(GPSchannel, i);
+				i = i - '0' - 10 + 'A'; // (a digit of 10-15: A-F - issue 40)
+			GPSPutchar(i);
 			i = xsum % 16;
 			i = i + '0';
 			if (i > '9')
-				i = i - '0' + 'A';
-			SerialPutchar(GPSchannel, i);
-			SerialPutchar(GPSchannel, 13);
-			SerialPutchar(GPSchannel, 10);
+				i = i - '0' - 10 + 'A'; // (a digit of 10-15: A-F - issue 40)
+			GPSPutchar(i);
+			GPSPutchar(13);
+			GPSPutchar(10);
 			return;
 		}
 		else
@@ -5644,7 +5644,9 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 	// the LOOP or WEND stmt and this will eventually result in a stack overflow
 	for (i = 0; i < g_doindex; i++)
 	{
-		if (g_dostack[i].doptr == nextstmt)
+		/* (at this SUB level only: a recursive call reaches the same DO while
+		   its caller's loop is still running - issue 33) */
+		if (g_dostack[i].doptr == nextstmt && g_dostack[i].level == g_LocalIndex)
 		{
 			while (i < g_doindex - 1)
 			{
@@ -5742,8 +5744,9 @@ void MIPS16 __not_in_flash_func(cmd_loop)(void)
 	int tst = 0; // initialise tst to stop the compiler from complaining
 	int i;
 
-	// search the do table looking for an entry with the same program position as this LOOP statement
-	for (i = 0; i < g_doindex; i++)
+	// search the do table looking for an entry with the same program position as this LOOP statement,
+	// the most recent first: in a recursive SUB or FUNCTION that is the current call's (issue 33)
+	for (i = g_doindex - 1; i >= 0; i--)
 	{
 		p = g_dostack[i].loopptr + sizeof(CommandToken);
 		skipspace(p);
@@ -8654,6 +8657,7 @@ void cmd_on(void)
 				OptionErrorSkip = 2;
 			else
 				OptionErrorSkip = getint(p, 1, 10000) + 1;
+			ErrorSkipDepth = ExecDepth; // the count is used up at this depth (see ExecuteProgram)
 			return;
 		}
 

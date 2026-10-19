@@ -255,6 +255,7 @@ extern volatile int gpscurrent;
 extern volatile char *gpsready;
 extern volatile int gpsmonitor;
 extern int GPSchannel;
+void GPSPutchar(int c);
 
 /* ============================================================================
  * External variables - GPS data

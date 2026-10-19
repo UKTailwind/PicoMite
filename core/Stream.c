@@ -3987,8 +3987,11 @@ static int RBHouseN;  // statements the chain runs before it next looks
 static int RBRAM(RBTail)(unsigned char *here)
 {
     nextstmt = here;
-    if (OptionErrorSkip > 0 && OptionErrorSkip < 100000)
+    if (OptionErrorSkip > 0 && OptionErrorSkip < 100000 && ExecDepth <= ErrorSkipDepth)
+    { // (as the text loop counts it: see ExecuteProgram)
         OptionErrorSkip--;
+        ErrorSkipDepth = ExecDepth;
+    }
     if (g_TempMemoryIsChanged)
         ClearTempMemory();
 #ifndef PICOMITEWEB
@@ -4747,8 +4750,8 @@ static __attribute__((noinline)) void RBDoPush(unsigned char *doptr, unsigned ch
     struct s_dostack *ds;
     int i;
     for (i = 0; i < g_doindex; i++)
-        if (g_dostack[i].doptr == doptr)
-        { // this loop is already in the stack: remove it
+        if (g_dostack[i].doptr == doptr && g_dostack[i].level == g_LocalIndex)
+        { // this loop is already in the stack (at this SUB level: see cmd_do): remove it
             while (i < g_doindex - 1)
             {
                 g_dostack[i] = g_dostack[i + 1];
@@ -5351,14 +5354,14 @@ again:
     L_LOOPF: // cmd_loop's search for its entry
         {
             unsigned char *cl = e + (nw & 0xFF), *q; // cmd_loop's cmdline
-            for (loopi = 0; loopi < g_doindex; loopi++)
+            for (loopi = g_doindex - 1; loopi >= 0; loopi--) // the most recent first (see cmd_loop)
             {
                 q = g_dostack[loopi].loopptr + sizeof(CommandToken);
                 skipspace(q);
                 if (q == cl)
                     break;
             }
-            if (loopi == g_doindex)
+            if (loopi < 0)
                 goto fail; // "LOOP without a matching DO": the fallback raises it
             RBNEXT();
         }
@@ -5543,10 +5546,11 @@ fail:
 // level the text path nests, and this is its copy for the rare case.
 static __attribute__((noinline)) unsigned char *RBExecSkip(const uint16_t *r, unsigned char *e)
 {
-    int save = g_LocalIndex;
+    int save = g_LocalIndex, depth = ExecDepth;
     if (setjmp(ErrNext) == 0)
         return RBExec(r, e);
     g_LocalIndex = save; // clean up after the error, as the text loop does
+    ExecDepth = depth;
     ClearTempMemory();
     return e + ((r[3] & 0xFF) == RB_OP_CMD ? r[5] >> 8 : r[4] >> 8);
 }

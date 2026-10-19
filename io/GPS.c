@@ -50,6 +50,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include <math.h>
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#include "hardware/uart.h"
 
 /* ************************************************************************** */
 /* ************************************************************************** */
@@ -80,6 +81,16 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  */
 // int global_data;
 int GPSchannel = 0;
+/* PRINT #GPS: one character to the receiver, through the serial port that
+   OPEN ... AS GPS opened, or with OPTION GPS straight to its UART, which has
+   no transmit buffer (it only receives into the GPS buffers): issue 41. */
+void GPSPutchar(int c)
+{
+  if (GPSchannel)
+    SerialPutchar(GPSchannel, c);
+  else
+    uart_putc_raw((PinDef[Option.GPSTX].mode & UART0TX) ? uart0 : uart1, (char)c);
+}
 volatile char gpsbuf1[128];
 volatile char gpsbuf2[128];
 volatile char *volatile gpsbuf;
@@ -102,6 +113,9 @@ MMFLOAT GPSaltitude = 0;
 MMFLOAT GPSgeoid = 0;
 int GPSfix = 0;
 int GPSadjust = 0;
+/* the UT date and time of the last dated RMC sentence (day, month, year, hour, minute, second), before the
+   time offset of OPEN ... AS GPS: STAR's sidereal time needs UT (issue 42) */
+static int GPSut[6];
 #ifdef rp2350
 int locateday = 0;
 int locatemonth = 0;
@@ -798,6 +812,12 @@ void GPS_parse(char *nmea)
       day = fulldate / 10000;
       month = (fulldate % 10000) / 100;
       year = (fulldate % 100);
+      GPSut[0] = day;
+      GPSut[1] = month;
+      GPSut[2] = year + 2000;
+      GPSut[3] = hour;
+      GPSut[4] = minute;
+      GPSut[5] = seconds;
       GPStime[0] = 8;
       tm->tm_year = year + 100;
       tm->tm_mon = month - 1;
@@ -1811,13 +1831,8 @@ void cmd_star(void)
   {
     if (!GPSvalid)
       error("GPS data not valid");
-    int day = (GPSdate[1] - 48) * 10 + (GPSdate[2] - 48);
-    int month = (GPSdate[4] - 48) * 10 + (GPSdate[5] - 48);
-    int year = 2000 + (GPSdate[9] - 48) * 10 + (GPSdate[10] - 48);
-    int hour = (GPStime[1] - 48) * 10 + (GPStime[2] - 48);
-    int minute = (GPStime[4] - 48) * 10 + (GPStime[5] - 48);
-    int second = (GPStime[7] - 48) * 10 + (GPStime[8] - 48);
-    cmd_exec_star(day, month, year, hour, minute, second, GPSlongitude, GPSlatitude, cmdline);
+    /* UT, not GPSdate/GPStime: those carry OPEN ... AS GPS's time offset */
+    cmd_exec_star(GPSut[0], GPSut[1], GPSut[2], GPSut[3], GPSut[4], GPSut[5], GPSlongitude, GPSlatitude, cmdline);
   }
   else
   { // cmd_astro was used in which case use the location and time specified

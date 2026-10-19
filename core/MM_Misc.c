@@ -214,6 +214,7 @@ bool optionlogging = false;
 volatile bool CSubComplete = false;
 uint64_t timeroffset = 0;
 int SaveOptionErrorSkip = 0;
+static int SaveErrorSkipDepth;
 char SaveErrorMessage[MAXERRMSG] = {0};
 int Saveerrno = 0;
 int Saveerrline = 0;
@@ -1908,8 +1909,9 @@ void cmd_ireturn(void)
         DelayedDrawListbox = false;
     }
 #endif
-    if (SaveOptionErrorSkip > 0)
-        OptionErrorSkip = SaveOptionErrorSkip + 1;
+    ErrorSkipDepth = SaveErrorSkipDepth;
+    if (SaveOptionErrorSkip > 0) // (+ 1 for IRETURN itself, where it is counted: see ExecuteProgram)
+        OptionErrorSkip = SaveOptionErrorSkip + (ExecDepth <= ErrorSkipDepth ? 1 : 0);
     else if (SaveOptionErrorSkip < 0)
         OptionErrorSkip = SaveOptionErrorSkip; // Restore ON ERROR IGNORE (-1)
     strcpy(MMErrMsg, SaveErrorMessage);
@@ -9301,7 +9303,7 @@ void MIPS16 fun_info(void)
                 // (e.g. HDMI-reserved, CYW43-reserved, or genuinely invalid)
                 // are caught here instead of aborting. The raw pin number is
                 // preserved in g_pinarg_result for subsequent range checks.
-                int saved = OptionErrorSkip;
+                int saved = OptionErrorSkip, depth = ExecDepth;
                 OptionErrorSkip = 1;
                 if (setjmp(ErrNext) == 0)
                 {
@@ -9311,6 +9313,7 @@ void MIPS16 fun_info(void)
                 {
                     pin = g_pinarg_result; // retrieve the raw pin before validation failed
                     MMerrno = 0;           // clear the error since we handled it
+                    ExecDepth = depth;     // (the error may have come from a FUNCTION in the expression)
                 }
                 OptionErrorSkip = saved;
             }
@@ -10860,6 +10863,7 @@ GotAnInterrupt:
         SaveOptionErrorSkip = OptionErrorSkip;
     else
         SaveOptionErrorSkip = 0;
+    SaveErrorSkipDepth = ErrorSkipDepth;
     OptionErrorSkip = 0;
     strcpy(SaveErrorMessage, MMErrMsg);
     Saveerrno = MMerrno;

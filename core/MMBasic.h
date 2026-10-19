@@ -474,6 +474,7 @@ extern "C"
     extern bool OptionNoCheck;
     extern unsigned char DefaultType;
     extern int OptionErrorSkip;
+    extern int ExecDepth, ErrorSkipDepth; // (ON ERROR SKIP's count: see ExecuteProgram)
 
     /* ============================================================================
      * External variables - Token tables

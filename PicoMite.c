@@ -4439,6 +4439,8 @@ uint32_t testPSRAM(void)
         {
             // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
             FlashLoad = 0;
+            ExecDepth = 0; // (see ExecuteProgram)
+            OptionErrorSkip = 0; // the prompt has no ON ERROR of the program's (issue 35)
             clearrepeat();
             ScrewUpTimer = 0;
             ProgMemory = (uint8_t *)flash_progmemory;
@@ -4842,6 +4844,7 @@ uint32_t testPSRAM(void)
                 i = 1;
             if (setjmp(jmprun) != 0)
             {
+                ExecDepth = 0; // (see ExecuteProgram)
                 PrepareProgram(false); // Don't abort on error
                 CurrentLinePtr = 0;
             }

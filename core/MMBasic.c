@@ -2578,9 +2578,17 @@ static double __not_in_flash_func(fast_strtod)(const char *s)
 // run a program
 // this will continuously execute a program until the end (marked by TWO zero chars)
 // the argument p must point to the first line to be executed
+/* ON ERROR SKIP's count is used up by the statements of the ExecuteProgram
+   that ran it, not by those of a FUNCTION one of them calls (its body runs in
+   an ExecuteProgram of its own, one deeper): issue 34.  A SUB's body runs in
+   its caller's loop, so its statements count, as before.  ExecDepth is the
+   current depth (0 at the prompt), ErrorSkipDepth the depth the count is
+   used up at. */
+int ExecDepth, ErrorSkipDepth;
 void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
 {
     int i, SaveLocalIndex = 0;
+    int MyDepth = ++ExecDepth;
     jmp_buf SaveErrNext;
     unsigned char *line_start = NULL;              // start of current line (T_NEWLINE byte) - Phase B
     unsigned char line_skip = 0;                   // skip byte for current line - Phase B
@@ -2711,11 +2719,15 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
                 else
                 {
                     g_LocalIndex = SaveLocalIndex; // restore so that we can clean up any memory leaks
+                    ExecDepth = MyDepth;           // (the error may have come from a deeper call)
                     ClearTempMemory();
                 }
 #undef EXEC_ONE_STATEMENT
-                if (OptionErrorSkip > 0 && OptionErrorSkip < 100000)
+                if (OptionErrorSkip > 0 && OptionErrorSkip < 100000 && ExecDepth <= ErrorSkipDepth)
+                {
                     OptionErrorSkip--; // if OPTION ERROR SKIP decrement the count - we do not error if it is greater than zero
+                    ErrorSkipDepth = ExecDepth; // (a count left when a FUNCTION returns goes on in its caller)
+                }
                 if (g_TempMemoryIsChanged)
                     ClearTempMemory(); // at the end of each command we need to clear any temporary string vars
 #ifndef PICOMITEWEB
@@ -2734,6 +2746,7 @@ void __not_in_flash_func(ExecuteProgram)(unsigned char *p)
             break; // the end of the program is marked by TWO zero chars, empty flash by two 0xff
     }
     memcpy(ErrNext, SaveErrNext, sizeof(jmp_buf)); // restore old jump buffer
+    ExecDepth = MyDepth - 1;
 }
 
 // searches the subfun[] table to locate a defined sub or fun
