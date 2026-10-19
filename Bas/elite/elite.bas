@@ -3954,10 +3954,10 @@ IF kBomb THEN EnergyBomb
 IF kHop THEN InSystemJump
 IF kGal THEN GalacticJump
 IF kChart > 0 THEN
-tStage = TIMER
+tStage = TIMER : IF ecmActive > 0 THEN Sfx SFX_ECMOFF
 InfoScreen kChart
 t0 = t0 + TIMER - tStage
-ResetTick
+ResetTick : IF ecmActive > 0 THEN Sfx SFX_ECM
 ENDIF
 IF tickWhole THEN
 IF lasTimer > 0 THEN lasTimer = lasTimer - 1

@@ -78,10 +78,12 @@ SUB RunFlight
     IF kChart > 0 THEN
       ' The information screens stop the clock as well as the universe,
       ' so the time spent reading one is not counted as time flying.
-      tStage = TIMER
+      ' The E.C.M. hum pauses with them: its countdown only runs in
+      ' flight, so left on it hummed through the screen (issue 39).
+      tStage = TIMER : IF ecmActive > 0 THEN Sfx SFX_ECMOFF
       InfoScreen kChart
       t0 = t0 + TIMER - tStage
-      ResetTick
+      ResetTick : IF ecmActive > 0 THEN Sfx SFX_ECM
     ENDIF
     IF tickWhole THEN
       IF lasTimer > 0 THEN lasTimer = lasTimer - 1
