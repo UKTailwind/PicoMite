@@ -1487,7 +1487,17 @@ static inline void TestStackOverflow(void)
 // This pre processing speeds up the program when using defined subroutines and functions
 // this routine also looks for embedded fonts and adds them to the font table
 // Returns: 0 = success, 1 = error (error message in PreprogramErrMsg)
+static int MIPS16 PrepareProgramWalk(int ErrAbort);
+// SymPreparing tells SymDamaged that a damaged image met here is to be
+// discarded (error() clears it too, for an error that leaves through it)
 int MIPS16 PrepareProgram(int ErrAbort)
+{
+    SymPreparing = 1;
+    int r = PrepareProgramWalk(ErrAbort);
+    SymPreparing = 0;
+    return r;
+}
+static int MIPS16 PrepareProgramWalk(int ErrAbort)
 {
     int i, NbrFuncts;
 
@@ -6811,6 +6821,7 @@ void MIPS16 error(char *msg, ...)
     // say) would print with the interrupts off: USB stops and core 0 hangs
     if (irqs_off_pico)
         enable_interrupts_pico();
+    SymPreparing = 0; // (see PrepareProgram)
     ScrewUpTimer = 0;
     // first build the error message in the global string MMErrMsg
     if (MMerrno == 0)

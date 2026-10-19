@@ -87,9 +87,19 @@ static inline const unsigned char *SymLookup(const unsigned char *p, int *len)
     return n + 1;
 }
 
-// A symbol that its table cannot supply (see SymSpelling() in Symbols.h)
-void SymDamaged(void)
+// A symbol that its table cannot supply (see SymSpelling() in Symbols.h).
+// lib: it is a library symbol.  While PrepareProgram walks the images the
+// damaged one is discarded first: PrepareProgram runs at boot and at every
+// prompt, so an image left as it is stops each of them, and the board loops
+// on this error for ever (a LOAD that overflowed the slot in RC2 left one).
+int SymPreparing;
+void SymDamaged(int lib)
 {
+    if (SymPreparing)
+    {
+        SymPreparing = 0;
+        DiscardDamagedImage(lib);
+    }
     error("Program damaged: symbol table");
 }
 

@@ -4261,6 +4261,44 @@ static int MIPS16 lib_scan(int fnbr, uint32_t *hash, unsigned char *text, uint32
    The walk deliberately mirrors PrepareProgramExt's: the tokenised text, then
    the zero padding, then the 0xff that marks the start of the binaries, then
    the chain of records, each of which must fit inside the slot. */
+/* PrepareProgram met a symbol that its image's table cannot supply (see
+   SymDamaged): the image cannot be prepared, and as PrepareProgram runs at
+   boot and at every prompt it would stop each of them.  The program in flash
+   is erased as NEW leaves it; a library in flash is discarded as the boot
+   check above does.  A RAM image, or a flash slot being run, is left alone:
+   the prompt does not prepare it again. */
+void DiscardDamagedImage(int lib)
+{
+    if (lib)
+    {
+#ifdef rp2350
+        if (RamLibMemory != NULL)
+            return; // a RAM library: it goes at END (RamLibRelease)
+#endif
+        if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
+            return;
+        FlashWriteInit(LIBRARY_FLASH);
+        safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
+        enable_interrupts_pico();
+        Option.LIBRARY_FLASH_SIZE = 0;
+        Option.LIBRARY_HASH = 0;
+        SaveOptions();
+        MMPrintString("Library was damaged and has been discarded\r\n");
+        CurrentLinePtr = NULL; // (the error that follows shows no line: it has gone)
+    }
+    else if (ProgMemory == (unsigned char *)flash_progmemory)
+    {
+        FlashWriteInit(PROGRAM_FLASH);
+        safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
+        FlashWriteByte(0);
+        FlashWriteByte(0);
+        FlashWriteByte(0); // an empty program, as NEW leaves it
+        FlashWriteClose();
+        MMPrintString("Program was damaged and has been erased\r\n");
+        CurrentLinePtr = NULL;
+    }
+}
+
 int LibraryImageValid(const unsigned char *lib)
 {
     const unsigned char *p = lib;
@@ -5100,13 +5138,14 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     SymSetProgram(ProgMemory);
     return;
 
-// we only get here in an error situation while writing the program to flash
+// we only get here in an error situation while writing the program to RAM
 exiterror:
     SymEnd();
-    MemWriteByte(0);
-    MemWriteByte(0);
-    MemWriteByte(0); // terminate the program in flash
     MemWriteClose();
+    /* An empty program, not the part written so far: that is in symbols
+       with no table after it (see SaveProgramToFlash's exiterror). */
+    memset(ram, 0xFF, MAX_PROG_SIZE);
+    ram[0] = ram[1] = ram[2] = 0;
     if (toolong)
         error("Line is too long");
     StandardError(29);

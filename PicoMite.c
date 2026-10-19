@@ -5325,9 +5325,18 @@ uint32_t testPSRAM(void)
     // we only get here in an error situation while writing the program to flash
     exiterror:
         SymEnd();
+        /* What is in the slot is the part of the program written so far, its
+           text already in symbols and no table after it (the table comes
+           last).  Kept, it could never be prepared: PrepareProgram runs at
+           boot and at every prompt, and each time it stopped with "Program
+           damaged: symbol table", which looped for ever.  Leave the slot as
+           NEW does instead. */
+        FlashWriteClose();
+        FlashWriteInit(region);
+        safe_flash_range_erase(realflashpointer, MAX_PROG_SIZE);
         FlashWriteByte(0);
         FlashWriteByte(0);
-        FlashWriteByte(0); // terminate the program in flash
+        FlashWriteByte(0); // an empty program
         FlashWriteClose();
         if (toolong)
             error("Line is too long");

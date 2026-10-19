@@ -99,7 +99,9 @@ extern int SymLongest;  // the longest spelling in the program's and the library
 extern int SymLibSave;  // a library is being saved: its names become library symbols
 
 void SymInit(void);
-void SymDamaged(void);
+void SymDamaged(int lib);
+extern int SymPreparing;            // PrepareProgram is walking the images (see SymDamaged)
+void DiscardDamagedImage(int lib);  // (FileIO.c)
 const symtab_t *SymFindTable(const unsigned char *image);
 void SymSetProgram(const unsigned char *image);
 void SymSetLibrary(const unsigned char *image);
@@ -131,7 +133,7 @@ static inline __attribute__((always_inline)) const unsigned char *SymSpellingInl
     if (!(p[0] & 1))
         id = SYM_NSHORT + id * SYM_NSHORT + symdigit[p[2] & 0x7f];
     if (__builtin_expect(t == NULL || id >= t->count, 0))
-        SymDamaged();
+        SymDamaged(p[0] & 2);
     const unsigned char *n = (const unsigned char *)t + t->names + ((const uint16_t *)(t + 1))[id];
     *len = n[0];
     return n + 1;
