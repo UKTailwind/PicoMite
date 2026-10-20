@@ -10409,7 +10409,7 @@ void fun_format(void)
     }
     if (inspec != 2)
         error("Format specification not found");
-    sret = GetTempStrMemory(); // this will last for the life of the command
+    sret = GetTempMainMemory(2 * STRINGSIZE); // literal text (up to 253) + the field (up to 250): CtoM then refuses over 255
     // Render the value with the in-built FloatToStr rather than pico printf,
     // whose float conversions are broken (wrong normalisation at powers of ten).
     format_float((char *)sret, fmt, getnumber(argv[0]));
