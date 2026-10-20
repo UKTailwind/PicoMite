@@ -1030,7 +1030,7 @@ static int RtcWriteRegister(uint8_t reg, uint8_t value)
 
 void RtcGetTime(int noerror)
 {
-  char *buff = GetTempStrMemory();
+  char buff[16]; // the time registers (7 bytes); routinechecks calls this hourly at the prompt, where temporary memory is not freed
   clocktimer = (1000 * 60 * 60);
 
   // Detect which RTC is connected

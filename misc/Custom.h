@@ -132,6 +132,11 @@ typedef struct TCP_SERVER_T_
    volatile int telnet_init_sent;
 } TCP_SERVER_T;
 
+/* A server slot whose idle connection the housekeeping closed (WiFi.c) is kept from reuse for a while
+   with this mark in it: it holds no connection. pcb_live() is true only for a real connection. */
+#define PCB_TIMED_OUT ((struct tcp_pcb *)44)
+#define pcb_live(p) ((p) != NULL && (p) != PCB_TIMED_OUT)
+
 /* NTP structure */
 typedef struct NTP_T_
 {
@@ -194,6 +199,7 @@ int cmd_tcpclient(void);
 int cmd_tcpserver(void);
 void cleanserver(void);
 err_t tcp_server_close(void *arg, int pcb);
+void tcp_server_forget(TCP_SERVER_T *state, int pcb);
 err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, int pcb);
 void checksent(void *arg, int fn, int pcb);
 void starttelnet(struct tcp_pcb *client_pcb, int pcb, void *arg);

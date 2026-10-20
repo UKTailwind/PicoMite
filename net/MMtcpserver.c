@@ -54,6 +54,8 @@ err_t tcp_server_close(void *arg, int pcb)
                 return ERR_OK;
         TCP_SERVER_T *state = (TCP_SERVER_T *)arg;
         err_t err = ERR_OK;
+        if (state->client_pcb[pcb] == PCB_TIMED_OUT) // closed already: only the mark is left
+                state->client_pcb[pcb] = NULL;
         if (state->client_pcb[pcb] != 0)
         {
                 tcp_arg(state->client_pcb[pcb], NULL);
@@ -82,6 +84,17 @@ err_t tcp_server_close(void *arg, int pcb)
                 FreeMemorySafe((void **)&state->buffer_recv[pcb]);
         }
         return err;
+}
+
+/* The connection in this slot has gone. lwIP calls a pcb's error callback after freeing it (ERR_ABRT) or
+   just before (ERR_RST), so the callback must not close it: it only forgets it. */
+void tcp_server_forget(TCP_SERVER_T *state, int pcb)
+{
+        if (pcb == 99)
+                return;
+        state->recv_len[pcb] = 0;
+        state->client_pcb[pcb] = NULL;
+        FreeMemorySafe((void **)&state->buffer_recv[pcb]);
 }
 
 static err_t tcp_server_result(void *arg, int status)
@@ -140,23 +153,28 @@ err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, int pcb)
         // cyw43_arch_lwip_begin IS needed
         int t;
         err_t err;
+        if (!pcb_live(tpcb)) // the connection has gone (closed, reset or timed out)
+                return ERR_OK;
         uint64_t timestart = time_us_64() + 5000000;
         while ((t = tcp_sndqueuelen(tpcb)) > 6 && time_us_64() < timestart)
         {
                 // DEBUG_printf("Send queue %u\r\n", t);
                 if (startupcomplete)
                         cyw43_arch_poll();
+                if (state->client_pcb[pcb] != tpcb) // reset or aborted while we waited: tpcb is freed
+                        return ERR_OK;
         }
         state->pcbopentime[pcb] = time_us_64();
         if (time_us_64() < timestart)
         {
-                err = tcp_write(tpcb, state->buffer_sent[pcb], state->to_send[pcb], 0);
+                // telnet's buffer is refilled at once, so lwIP gets a copy; the other senders keep theirs until sent
+                err = tcp_write(tpcb, state->buffer_sent[pcb], state->to_send[pcb], pcb == state->telnet_pcb_no ? TCP_WRITE_FLAG_COPY : 0);
         }
         else
                 err = 1;
         if (err != ERR_OK)
         {
-                tcp_server_close(state, pcb);
+                return tcp_server_close(state, pcb); // ERR_ABRT if it had to abort the pcb
         }
         return ERR_OK;
 }
@@ -167,8 +185,7 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
         if (!p)
         {
                 /* Remote sent FIN — close the PCB so it doesn't sit in CLOSE_WAIT */
-                tcp_server_close(state, pcb);
-                return ERR_OK;
+                return tcp_server_close(state, pcb); // ERR_ABRT if it had to abort the pcb: lwIP must not touch it again
         }
         // this method is callback from lwIP, so cyw43_arch_lwip_begin is not required, however you
         // can use this method to cause an assertion in debug mode, if this method is called when
@@ -185,11 +202,16 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                         state->sent_len[pcb] = 0;
                         state->to_send[pcb] = state->total_sent[pcb] = strlen(httpheadersfail);
                         state->buffer_sent[pcb] = (unsigned char *)httpheadersfail;
-                        if (state->client_pcb[pcb])
+                        if (pcb_live(state->client_pcb[pcb]))
                         {
-                                tcp_server_send_data(state, state->client_pcb[pcb], pcb);
-                                checksent(state, 0, pcb);
-                                tcp_server_close(state, pcb);
+                                /* Queue the reply and close: lwIP sends it before the FIN. No waiting for it here -
+                                   checksent polls the radio, which would run lwIP again inside its own callback. */
+                                if (tcp_server_send_data(state, state->client_pcb[pcb], pcb) == ERR_ABRT ||
+                                    tcp_server_close(state, pcb) == ERR_ABRT)
+                                {
+                                        pbuf_free(p);
+                                        return ERR_ABRT;
+                                }
                         }
                 }
                 else
@@ -257,11 +279,9 @@ err_t tcp_server_recv7(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t er
 
 static void tcp_server_err(void *arg, err_t err, int pcb)
 {
-        if (err != ERR_ABRT)
-        {
-                // DEBUG_printf("tcp_client_err_fn %d\r\n", err);
-                tcp_server_close(arg, pcb);
-        }
+        // DEBUG_printf("tcp_client_err_fn %d\r\n", err);
+        if (arg) // the pcb is freed (ERR_ABRT) or about to be (ERR_RST): forget it, never close it
+                tcp_server_forget((TCP_SERVER_T *)arg, pcb);
 }
 static void tcp_server_err0(void *arg, err_t err)
 {
@@ -466,8 +486,8 @@ void checksent(void *arg, int fn, int pcb)
         TCP_SERVER_T *state = (TCP_SERVER_T *)arg;
         int loopcount = 1000000;
 
-        while (state->sent_len[pcb] != state->total_sent[pcb] && loopcount)
-        {
+        while (state->sent_len[pcb] != state->total_sent[pcb] && loopcount && pcb_live(state->client_pcb[pcb]))
+        { // (stops if the connection goes: nothing more will be acknowledged)
                 loopcount--;
                 CheckAbort();
         }
@@ -515,7 +535,7 @@ void cmd_transmit(unsigned char *cmd)
                 state->sent_len[pcb] = 0;
                 state->buffer_sent[pcb] = (unsigned char *)httpheaders;
                 state->total_sent[pcb] = strlen(httpheaders);
-                if (state->client_pcb[pcb])
+                if (pcb_live(state->client_pcb[pcb]))
                 {
                         tcp_server_send_data(state, state->client_pcb[pcb], pcb);
                         checksent(state, 0, pcb);

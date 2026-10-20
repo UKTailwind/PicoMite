@@ -999,6 +999,7 @@ void PlayMemWav(const unsigned char *data, unsigned int len)
 		return;
 	drwav_allocation_callbacks allocationCallbacks = {NULL, my_malloc, NULL, my_free};
 	mywav = GetMemory(sizeof(drwav));
+	WAV_fnbr = 0; // no file: at the end audio_checks must not close the last WAV file's number (now maybe the user's)
 	if (!drwav_init_memory(mywav, data, len, &allocationCallbacks))
 	{
 		FreeMemorySafe((void **)&mywav);
@@ -3763,7 +3764,7 @@ void audio_checks(void)
 			}
 			else
 				StopAudio();
-			if (wasPlaying != P_ARRAY && wasPlaying != P_SAMPLE && wasPlaying != P_TONE && wasPlaying != P_SOUND && wasPlaying != P_BBC)
+			if (wasPlaying != P_ARRAY && wasPlaying != P_SAMPLE && wasPlaying != P_TONE && wasPlaying != P_SOUND && wasPlaying != P_BBC && WAV_fnbr)
 				FileClose(WAV_fnbr);
 			WAVcomplete = true;
 			if (WAVInterrupt != NULL) IntSignal();

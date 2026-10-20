@@ -81,12 +81,12 @@ void __not_in_flash_func(TelnetPutC)(int c, int flush)
                         Telnetpos++;
                 }
         }
-        if (Telnetpos >= sizeof(Telnetbuff - 4) || (flush == -1 && Telnetpos))
+        if (Telnetpos >= sizeof(Telnetbuff) - 4 || (flush == -1 && Telnetpos))
         {
                 int pcb = state->telnet_pcb_no;
                 state->to_send[pcb] = Telnetpos;
                 state->buffer_sent[state->telnet_pcb_no] = (uint8_t *)Telnetbuff;
-                if (state->client_pcb[pcb])
+                if (pcb_live(state->client_pcb[pcb]))
                 {
                         //                        cyw43_arch_lwip_check();
                         tcp_server_send_data(state, state->client_pcb[pcb], pcb);
@@ -100,7 +100,15 @@ err_t tcp_telnet_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
         //        TCP_SERVER_T *state = (TCP_SERVER_T*)arg;
         //        int pcb=state->telnet_pcb_no;
         if (!p)
-        {
+        { // the client has closed: close our side too and free its slot
+                TCP_SERVER_T *state = (TCP_SERVER_T *)arg;
+                for (int i = 0; state && i < MaxPcb; i++)
+                        if (state->client_pcb[i] == tpcb)
+                        {
+                                if (i == state->telnet_pcb_no)
+                                        state->telnet_pcb_no = 99;
+                                return tcp_server_close(state, i); // ERR_ABRT if it had to abort the pcb
+                        }
                 return ERR_OK;
         }
         //        cyw43_arch_lwip_check();
@@ -157,7 +165,9 @@ void tcp_telnet_err(void *arg, err_t err)
         //    if (err != ERR_ABRT) {
         //        char buff[STRINGSIZE]={0};
         //        DEBUG_printf("Telnet disconnected %d\r\n", err);
-        tcp_server_close(arg, state->telnet_pcb_no);
+        if (!state)
+                return;
+        tcp_server_forget(state, state->telnet_pcb_no); // the pcb is freed or about to be: forget it, never close it
         state->telnet_pcb_no = 99;
         //        if(!CurrentLinePtr) longjmp(mark, 1);
         //        else longjmp(ErrNext,1) ;

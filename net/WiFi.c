@@ -342,6 +342,8 @@
         if (timenow < nexthousekeeping)
             return;
         nexthousekeeping = timenow + 1000;
+        timenow = time_us_64(); /* again: the poll's callbacks (accept, sent) stamp pcbopentime later than the
+                                   time taken above, and timenow - pcbopentime would wrap, closing that connection */
         TCP_SERVER_T *state = (TCP_SERVER_T *)TCPstate;
         if (!state)
             return;
@@ -352,7 +354,7 @@
             {
                 t++;
             }
-            else if (state->client_pcb[i] == (struct tcp_pcb *)44)
+            else if (state->client_pcb[i] == PCB_TIMED_OUT)
             {
                 if (timenow - state->pcbopentime[i] > 1000 * (uint32_t)Option.ServerResponceTime + 20000000 && !state->keepalive[i])
                 {
@@ -372,7 +374,7 @@
                         //                            printf("Warning: No response to request from connection no. %d\r\n",i+1);
                     }
                     tcp_server_close(state, i);
-                    state->client_pcb[i] = (struct tcp_pcb *)44;
+                    state->client_pcb[i] = PCB_TIMED_OUT; // kept from reuse for a while (tcp_server_close clears it)
                 }
             }
         }
