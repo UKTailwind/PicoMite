@@ -6553,6 +6553,8 @@ void __not_in_flash_func(MakeCommaSeparatedArgs)(unsigned char **p, int maxargs,
     while (op - 1 > argbuf && *(op - 1) == ' ')
         --op; // trim any trailing spaces on the last argument
     *op = 0;  // terminate the last argument
+    if (*argc < maxargs) // after a trailing delimiter, argc > k && *argv[k + 1] reads this entry: "", not stack
+        argv[*argc] = op;
 }
 #endif
 /********************************************************************************************************************************************
@@ -6711,6 +6713,8 @@ void MIPS16 __not_in_flash_func(makeargs)(unsigned char **p, int maxargs, unsign
     while (op - 1 > argbuf && *(op - 1) == ' ')
         --op; // trim any trailing spaces on the last argument
     *op = 0;  // terminate the last argument
+    if (*argc < maxargs) // after a trailing delimiter, argc > k && *argv[k + 1] reads this entry: "", not stack
+        argv[*argc] = op;
 }
 
 static void MIPS16 display_string(const char *s, bool fill)
