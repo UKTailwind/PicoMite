@@ -494,9 +494,9 @@ uint8_t crc8(uint8_t *array, uint16_t length, const uint8_t polynome,
 			}
 		}
 	}
-	crc ^= endmask;
-	if (reverseOut)
+	if (reverseOut) // reflect, then XOR, as CRC12 and CRC16 do (the usual RefOut, XorOut order)
 		crc = reverse8(crc);
+	crc ^= endmask;
 	return crc;
 }
 
@@ -602,9 +602,9 @@ uint32_t crc32(const uint8_t *array, uint16_t length, const uint32_t polynome,
 			}
 		}
 	}
-	crc ^= endmask;
-	if (reverseOut)
+	if (reverseOut) // reflect, then XOR, as CRC12 and CRC16 do (the usual RefOut, XorOut order)
 		crc = reverse32(crc);
+	crc ^= endmask;
 	return crc;
 }
 
