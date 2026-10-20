@@ -919,12 +919,12 @@ void MIPS16 loadsprite(unsigned char *p)
         if (height == 0)
             height = width;
         bnbr = startsprite;
-        if (number + startsprite > MAXBLITBUF)
+        if (number + startsprite - 1 > MAXBLITBUF) // the last is number + startsprite - 1
         {
             FileClose(fnbr);
             error((char *)"Maximum of % sprites", MAXBLITBUF);
         }
-        while (!MMfeof(fnbr) && bnbr <= number + startsprite)
+        while (!MMfeof(fnbr) && bnbr < number + startsprite)
         { // while waiting for the end of file
             if (newsprite)
             {
@@ -939,8 +939,26 @@ void MIPS16 loadsprite(unsigned char *p)
                     char *combined = (char *)GetMemory(bufsize * 2);
                     spritebuff[bnbr]->spritebuffptr = combined;
                     spritebuff[bnbr]->blitstoreptr = combined + bufsize;
+                    initSpriteBuff(bnbr, width, height);
                 }
-                initSpriteBuff(bnbr, width, height);
+                else
+                { // an existing sprite, as SPRITE READ: the image must fit its buffer, and a copy's or a master's state stays
+                    if (spritebuff[bnbr]->mymaster != -1)
+                    {
+                        FileClose(fnbr);
+                        error((char *)"Can't read into a copy");
+                    }
+                    if (spritebuff[bnbr]->master > 0)
+                    {
+                        FileClose(fnbr);
+                        error((char *)"Copies exist");
+                    }
+                    if (!(spritebuff[bnbr]->w == width && spritebuff[bnbr]->h == height))
+                    {
+                        FileClose(fnbr);
+                        error((char *)"Existing buffer is incorrect size");
+                    }
+                }
                 q = spritebuff[bnbr]->spritebuffptr;
                 lc = height;
             }
