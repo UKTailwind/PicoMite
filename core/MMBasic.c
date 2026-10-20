@@ -8089,7 +8089,7 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
 
     if (VREC(g_VarIndex)->type & T_STR)
     {
-        if (len < 1 || len > 255)
+        if (len < 1 || len > VREC(g_VarIndex)->size) // the string's LENGTH, not just 255
             StandardError(21);
         if (DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0)))
             StandardError(6);

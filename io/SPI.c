@@ -319,7 +319,7 @@ unsigned int *GetSendDataList(unsigned char *p, unsigned int *nbr)
 unsigned int *GetReceiveDataBuffer(unsigned char *p, unsigned int *nbr, CommsRxDest *dest)
 {
     getcsargs(&p, MAX_ARG_COUNT);
-    if (!(argc & 1))
+    if (argc < 3 || !(argc & 1))
         SyntaxError();
     *nbr = getinteger(argv[0]);
     if ((int)*nbr < 1)
