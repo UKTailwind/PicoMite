@@ -2730,9 +2730,9 @@ void cmd_line(void)
             int y = ys - g_OptionBase;
             for (i = 0; i < (nc - 1); i++)
             {
-                if (y >= nc)
+                if (y >= n) // y indexes the array: its bound is the array's size, not the point count
                     break;
-                if (y + yinc >= nc)
+                if (y + yinc >= n)
                     break;
                 x1 = xs + i * xinc;
                 y1 = (y1fptr == NULL ? STRIDE_INT(y1ptr, y, y1stride) : (int)STRIDE_FLOAT(y1fptr, y, y1stride));
