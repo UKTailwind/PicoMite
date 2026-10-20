@@ -339,6 +339,8 @@ void fun_str2bin(void)
 	char *p;
 	p = (char *)getstring(argv[2]);
 	int len = p[0];
+	if (len > 8) // map holds 8 bytes: no type takes more, so check before copying
+		StandardError(14);
 	map.l = 0;
 	for (j = 0; j < len; j++)
 		map.c[j] = p[j + 1];
