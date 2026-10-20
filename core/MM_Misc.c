@@ -830,14 +830,14 @@ void MIPS16 cmd_longString(void)
         getcsargs(&tp, 5);
         if (argc != 5)
             StandardError(2);
-        int64_t nbr = getinteger(argv[2]);
-        i = nbr;
+        int64_t nbr = getint(argv[2], 0, 0x7FFFFFFF);
         j = parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1;
         q = (char *)&dest[1];
         dest[0] = 0;
         p = (char *)getstring(argv[4]);
         if (nbr > *p)
             nbr = *p;
+        i = nbr; // the count cut to the string's length
         p++;
         if (j * 8 < dest[0] + nbr)
             error("Integer array too small");
@@ -860,7 +860,7 @@ void MIPS16 cmd_longString(void)
         q = (char *)&dest[1];
         parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
         p = (char *)&src[1];
-        nbr = i = getinteger(argv[4]);
+        nbr = i = getint(argv[4], 0, 0x7FFFFFFF);
         if (nbr > src[0])
             nbr = i = src[0];
         if (j * 8 < i)
@@ -884,7 +884,7 @@ void MIPS16 cmd_longString(void)
         q = (char *)&dest[1];
         parseintegerarray(argv[2], &src, 2, 1, NULL, false, NULL);
         p = (char *)&src[1];
-        nbr = i = getinteger(argv[4]);
+        nbr = i = getint(argv[4], 0, 0x7FFFFFFF);
         if (nbr > src[0])
         {
             nbr = i = src[0];
@@ -914,11 +914,11 @@ void MIPS16 cmd_longString(void)
         p = (char *)&src[1];
         start = getint(argv[4], 1, src[0]);
         if (argc == 7)
-            nbr = getinteger(argv[6]);
+            nbr = getint(argv[6], 0, 0x7FFFFFFF);
         else
             nbr = src[0];
         p += start - 1;
-        if (nbr + start > src[0])
+        if (nbr > src[0] - start + 1) // (nbr + start could overflow)
         {
             nbr = src[0] - start + 1;
         }
