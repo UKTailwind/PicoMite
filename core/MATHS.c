@@ -1658,12 +1658,14 @@ void cmd_math(void)
 			array_slice(tp);
 			return;
 		}
+#ifndef PICOMITEMIN /* (no room in the PicoMiteRP2040MIN) */
 		tp = checkstring(cmdline, (unsigned char *)"SENSORFUSION");
 		if (tp)
 		{
 			cmd_SensorFusion((char *)tp);
 			return;
 		}
+#endif
 	}
 	else if (mytoupper(*cmdline) == 'C')
 	{
@@ -4136,6 +4138,7 @@ void cmd_FFT(unsigned char *pp)
 	//    fft((MMFLOAT *)a2cplx,size+1);
 	Fft_transformRadix2(a2cplx, card1, 0);
 }
+#ifndef PICOMITEMIN /* MATH SENSORFUSION: not in the PicoMiteRP2040MIN, which has no room for it */
 void cmd_SensorFusion(char *passcmdline)
 {
 	unsigned char *p;
@@ -4528,6 +4531,7 @@ void MahonyQuaternionUpdate(MMFLOAT ax, MMFLOAT ay, MMFLOAT az, MMFLOAT gx, MMFL
 	MMFLOAT t4 = +1.0 - 2.0 * (ysqr + q4 * q4);
 	*yaw = atan2(t3, t4) * optionangle;
 }
+#endif /* !PICOMITEMIN */
 
 /*Finding transpose of cofactor of matrix*/
 void transpose(MMFLOAT **matrix, MMFLOAT **matrix_cofactor, MMFLOAT **newmatrix, int size)
