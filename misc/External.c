@@ -2324,7 +2324,8 @@ int CheckPin(int pin, int action)
 // for the equals sign and step over it, evaluate the rest of the command and set the pins accordingly
 void cmd_port(void)
 {
-    int pin, nbr, value, code, pincode;
+    int pin, nbr, code, pincode;
+    uint64_t value; // one bit a pin, up to 64 (as an int, bit 31 repeated into the pins after the 32nd)
     int i;
     getcsargs(&cmdline, NBRPINS * 4);
 
@@ -2433,7 +2434,8 @@ void fun_distance(void)
 // this is invoked as a function (ie, x = port(10,8) )
 void fun_port(void)
 {
-    int pin, nbr, i, value = 0, code, pincode;
+    int pin, nbr, i, code, pincode;
+    uint64_t value = 0; // one bit a pin, up to 64
 
     getcsargs(&ep, NBRPINS * 4);
     if ((argc & 0b11) != 0b11)
