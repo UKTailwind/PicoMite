@@ -97,7 +97,7 @@ void docompressed(char *fc, int x1, int y1, int w, int h, int8_t blank)
     { // direct to screen
         if (blank == -1)
         {
-            char tobuff[w / 2], *to;
+            char tobuff[(w + 1) / 2], *to; // (an odd width's last pixel takes a byte of its own)
             int ww = w;
             int xx1 = x1;
             if (x1 < 0)
@@ -144,7 +144,7 @@ void docompressed(char *fc, int x1, int y1, int w, int h, int8_t blank)
         }
         else
         {
-            char tobuff[w / 2], *to;
+            char tobuff[(w + 1) / 2], *to; // (an odd width's last pixel takes a byte of its own)
             getnextnibble(&fc, 1); // reset the decoder
             for (int y = y1; y < y1 + h; y++)
             {
@@ -316,7 +316,7 @@ void cmd_blitmemory(void)
             if (blank == -1)
             {
                 char *fc = from;
-                char tobuff[w / 2], *to;
+                char tobuff[(w + 1) / 2], *to; // (an odd width's last pixel takes a byte of its own)
                 int ww = w;
                 int xx1 = x1;
                 if (x1 < 0)
@@ -364,7 +364,7 @@ void cmd_blitmemory(void)
             else
             {
                 char *fc = from;
-                char tobuff[w / 2], *to;
+                char tobuff[(w + 1) / 2], *to; // (an odd width's last pixel takes a byte of its own)
                 getnextuncompressednibble(&fc, 1); // reset the decoder
                 for (int y = y1; y < y1 + h; y++)
                 {
@@ -989,7 +989,7 @@ int blitother(void)
             {
                 if (screen320 && Option.DISPLAY_TYPE != SSD1963_4_16)
                     x2 *= 2;
-                char tobuff[w / 2], *to;
+                char tobuff[(w + 1) / 2], *to; // (an odd width's last pixel takes a byte of its own)
                 for (int y = y1, yo = y2; y < y1 + h; y++, yo++)
                 {
                     char *fc = (char *)s + y * HRes / 2 + x1 / 2;
