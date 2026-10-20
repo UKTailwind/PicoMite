@@ -5752,9 +5752,7 @@ void MIPS16 CloseAllFiles(void)
     int i;
     closeallsprites();
     closeallstobjects();
-#ifndef PICOMITEMIN
-    tilemap_closeall();
-#endif
+    tilemap_closeall(); /* (the PicoMiteRP2040MIN has TILEMAP too: skipping this left its maps pointing into the old heap) */
 #if !defined(PICOMITEWEB) || defined(PICOMITEHDMIWEB)
     closeall3d();
 #ifdef RAYCASTER

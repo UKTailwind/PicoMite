@@ -38,7 +38,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "Hardware_Includes.h"
 #include "Memory.h"
 
-// #ifndef PICOMITEMIN
 /* ============================================================================
  * TILEMAP subsystem
  *
@@ -1043,6 +1042,5 @@ void MIPS16 fun_tilemap(void)
         SyntaxError();
     }
 }
-// #endif
 
 /*  @endcond */
