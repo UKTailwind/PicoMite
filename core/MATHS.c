@@ -132,7 +132,7 @@ inline static void m_seedRand(MTRand *rand, unsigned long seed)
 	 * from Line 25 of Table 1 in: Donald Knuth, "The Art of Computer
 	 * Programming," Vol. 2 (2nd Ed.) pp.102.
 	 */
-	rand->mt[0] = seed & 0xffffffff;
+	rand->mt[0] = (seed & 0xffffffff) ? (seed & 0xffffffff) : 4357; // an all-zero state stays zero: 0 seeds as genRandLong's default
 	for (rand->index = 1; rand->index < STATE_VECTOR_LENGTH; rand->index++)
 	{
 		rand->mt[rand->index] = (6069 * rand->mt[rand->index - 1]) & 0xffffffff;
@@ -310,7 +310,7 @@ unsigned int b64_decode(const unsigned char *in, unsigned int in_len, unsigned c
  */
 MMFLOAT genRand(MTRand *rand)
 {
-	return ((MMFLOAT)genRandLong(rand) / (unsigned long)0xffffffff);
+	return ((MMFLOAT)genRandLong(rand) / 4294967296.0); // 0 <= n < 1 (dividing by 0xffffffff gave 1.0)
 }
 
 MMFLOAT determinant(MMFLOAT **matrix, int size);
@@ -2730,14 +2730,12 @@ void cmd_math(void)
 		tp = checkstring(cmdline, (unsigned char *)"RANDOMIZE");
 		if (tp)
 		{
-			int i;
+			long long i; // the generator takes a 32-bit seed: 0 to 4294967295
 			getcsargs(&tp, 1);
 			if (argc == 1)
-				i = getinteger(argv[0]);
+				i = getint(argv[0], 0, 0xFFFFFFFFLL);
 			else
 				i = time_us_32() & 0x7FFFFFFF; // the counter passes 2^31 after 35.8 minutes: keep the seed positive
-			if (i < 0)
-				StandardError(21);
 			if (g_myrand == NULL)
 				g_myrand = (struct tagMTRand *)GetMemory(sizeof(struct tagMTRand));
 			seedRand(i);
