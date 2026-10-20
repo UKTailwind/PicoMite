@@ -1591,7 +1591,9 @@ void cmd_sprite(void)
         mymaster = spritebuff[rbnbr]->mymaster;
         spritebuff[rbnbr]->master = spritebuff[bnbr]->master;
         spritebuff[rbnbr]->mymaster = spritebuff[bnbr]->mymaster;
-        spritebuff[rbnbr]->blitstoreptr = spritebuff[bnbr]->blitstoreptr;
+        // the new sprite takes over the background stored under the old one: copied into its own store (each store
+        // is part of its sprite's block, so sharing the pointer put two sprites on one store, freed with the old one)
+        memcpy(spritebuff[rbnbr]->blitstoreptr, spritebuff[bnbr]->blitstoreptr, (spritebuff[bnbr]->w * spritebuff[bnbr]->h + 1) >> 1);
         spritebuff[rbnbr]->x = spritebuff[bnbr]->x;
         spritebuff[rbnbr]->y = spritebuff[bnbr]->y;
         spritebuff[rbnbr]->layer = spritebuff[bnbr]->layer;
