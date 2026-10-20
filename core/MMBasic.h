@@ -534,6 +534,7 @@ extern "C"
     extern unsigned char *NextDataLine;
     extern unsigned char *CurrentLinePtr, *SaveCurrentLinePtr;
     extern unsigned char *ContinuePoint;
+    extern bool ProgramRunStarted; // RUN started a program (do_run): its running off the end is an implied END
     extern int ProgramChanged;
 
     extern unsigned char *LibMemory;

@@ -2492,6 +2492,7 @@ void ListProgramPaged(unsigned char *prog)
 	}
 }
 
+bool ProgramRunStarted = false; // set where do_run starts the program; the prompt runs MM.END when it runs off its end
 void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 {
 	extern void ResetPerfCounters(void);
@@ -2580,6 +2581,7 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 	if (mouse0 == false && Option.MOUSE_CLOCK)
 		initMouse0(0); // see if there is a mouse to initialise
 #endif
+	ProgramRunStarted = true;
 	nextstmt = ProgMemory;
 }
 /** @endcond */

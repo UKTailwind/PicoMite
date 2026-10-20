@@ -4861,6 +4861,7 @@ uint32_t testPSRAM(void)
             CommandToken tkn = commandtbl_decode(tknbuf);
             if (tkn == GetCommandValue((unsigned char *)"RUN") || tkn == GetCommandValue((unsigned char *)"EDIT") || tkn == GetCommandValue((unsigned char *)"AUTOSAVE"))
                 i = 1;
+            ProgramRunStarted = false;
             if (setjmp(jmprun) != 0)
             {
                 ExecDepth = 0; // (see ExecuteProgram)
@@ -4885,8 +4886,16 @@ uint32_t testPSRAM(void)
 #endif
             if (i)
             {
-                cmdline = NULL;
-                do_end(false);
+                if (ProgramRunStarted)
+                { // the program ran off its last line: an implied END, which runs MM.END (do_end parses cmdline)
+                    cmdline = (unsigned char *)"";
+                    do_end(true);
+                }
+                else
+                {
+                    cmdline = NULL;
+                    do_end(false);
+                }
                 longjmp(mark, 1); // jump back to the input prompt
             }
             else
