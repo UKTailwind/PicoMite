@@ -2920,7 +2920,7 @@ void fun_math(void)
 					fret *= optionangle;
 				targ = T_NBR;
 			}
-			else if ((tp = checkstring(&ep[2], (unsigned char *)"CARG")))
+			else if ((tp = checkstring(&ep[2], (unsigned char *)"ARG")) || (tp = checkstring(&ep[2], (unsigned char *)"CARG"))) // C_ARG (the manual), C_CARG
 			{
 				fret = (MMFLOAT)cargf(getComplex(tp));
 				targ = T_NBR;
