@@ -1501,11 +1501,11 @@ void array_insert(unsigned char *tp)
 	}
 	if (t & T_STR)
 	{
-		parsestringarray(argv[i * 2 + 2], &a2str, i + 1, 1, dims, true, &size2);
+		parsestringarray(argv[i * 2 + 2], &a2str, i + 2, 1, dims, true, &size2); // argv[i * 2 + 2] is argument i + 2
 	}
 	else
 	{
-		parsenumberarray(argv[i * 2 + 2], &a2float, &a2int, i + 1, 1, dims, true, NULL);
+		parsenumberarray(argv[i * 2 + 2], &a2float, &a2int, i + 2, 1, dims, true, NULL);
 	}
 	if (target == -1)
 		error("One index must be omitted"); // the omitted one is the dimension inserted into
@@ -1615,11 +1615,11 @@ void array_slice(unsigned char *tp)
 		error("One index must be omitted"); // the omitted one is the dimension sliced
 	if (t & T_STR)
 	{
-		toarray = parsestringarray(argv[i * 2 + 2], &a2str, i + 1, 1, dims, true, &size2) - 1;
+		toarray = parsestringarray(argv[i * 2 + 2], &a2str, i + 2, 1, dims, true, &size2) - 1; // argument i + 2
 	}
 	else
 	{
-		toarray = parsenumberarray(argv[i * 2 + 2], &a2float, &a2int, i + 1, 1, dims, true, NULL) - 1;
+		toarray = parsenumberarray(argv[i * 2 + 2], &a2float, &a2int, i + 2, 1, dims, true, NULL) - 1;
 	}
 	if (dim[target] != toarray)
 		error("Size mismatch between slice and target array");
