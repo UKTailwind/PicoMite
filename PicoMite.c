@@ -4990,7 +4990,7 @@ uint32_t testPSRAM(void)
                     {
                         *p++ = ' ';
                         if ((p - inpbuf) >= MAXSTRLEN)
-                            goto exiterror;
+                            { toolong = true; goto exiterror; } // (reported as "Line is too long")
                     } while ((p - inpbuf) % 2);
                 }
                 else
@@ -4999,7 +4999,7 @@ uint32_t testPSRAM(void)
                     {
                         *p++ = *pm;
                         if ((p - inpbuf) >= MAXSTRLEN)
-                            goto exiterror;
+                            { toolong = true; goto exiterror; } // (reported as "Line is too long")
                     }
                 }
                 prevchar = *pm++;

@@ -4800,7 +4800,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                 {
                     *p++ = ' ';
                     if ((p - inpbuf) >= MAXSTRLEN)
-                        goto exiterror;
+                        { toolong = true; goto exiterror; } // (reported as "Line is too long")
                 } while ((p - inpbuf) % 2);
             }
             else
@@ -4809,7 +4809,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                 {
                     *p++ = *pm;
                     if ((p - inpbuf) >= MAXSTRLEN)
-                        goto exiterror;
+                        { toolong = true; goto exiterror; } // (reported as "Line is too long")
                 }
             }
             prevchar = *pm++;
