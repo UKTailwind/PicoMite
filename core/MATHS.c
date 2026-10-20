@@ -2946,7 +2946,9 @@ void fun_math(void)
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"DIV")))
 			{
 				getcsargs(&tp, 3);
-				fcplx x = getComplex(argv[0]) / getComplex(argv[2]);
+				/* in double, then rounded: as libgcc's __divsc3 does it (inline by
+				   -fcx-fortran-rules, CMakeLists.txt, a float division could be 1 ulp out) */
+				fcplx x = (fcplx)((cplx)getComplex(argv[0]) / (cplx)getComplex(argv[2]));
 				retComplex(x);
 			}
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"POW")))

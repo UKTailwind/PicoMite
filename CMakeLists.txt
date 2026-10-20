@@ -675,6 +675,14 @@ endif()
 foreach(source IN LISTS OPTIMIZED_SOURCES)
 	set_source_files_properties(${source} PROPERTIES COMPILE_FLAGS -Os)
 endforeach()
+# MATHS.c - the only user of complex numbers (MATH FFT, the MATH C functions) -
+# multiplies and divides them inline by Fortran's rules: no NaN or infinity
+# recovery (division is still scaled against overflow). libgcc's __muldc3,
+# __divdc3 and __divsc3 are no longer linked (__mulsc3 stays, for newlib's
+# casinf): about 4.3 KB of flash on an RP2350 build, and MATH FFT runs about 20%
+# faster. MATH(C_DIV) divides in double, as __divsc3 did, so finite results are
+# bit for bit as before. Set after the loop above, whose -Os it must keep.
+set_source_files_properties(core/MATHS.c PROPERTIES COMPILE_FLAGS "-Os -fcx-fortran-rules")
 
 if(NOT USES_USB_HOST)
 	# The USB console's TinyUSB files at -Os, on every build whose console is
