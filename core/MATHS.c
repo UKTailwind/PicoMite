@@ -1151,6 +1151,8 @@ int parseany(unsigned char *tp, MMFLOAT **a1float, int64_t **a1int, unsigned cha
 	;
 	return *length;
 }
+static int aes_outmax = 255; // the output string's size (its LENGTH), set by parseAES / parseB64 for returnAES
+
 unsigned char *parseAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int64_t **outint, unsigned char **outstr, MMFLOAT **outfloat, int *card2)
 {
 	int64_t *a1int = NULL, *a2int = NULL, *a3int = NULL, *a4int = NULL;
@@ -1182,6 +1184,7 @@ unsigned char *parseAES(uint8_t *p, int ivadd, uint8_t *keyx, uint8_t *ivx, int6
 	unsigned char *inx = (unsigned char *)GetTempMemory(*card2 + 16);
 	length = 0;
 	card3 = parseany(argv[4], &a3float, &a3int, &a3str, &length, false);
+	aes_outmax = a3str ? FoundSize() : 255; // a LENGTH string is shorter (a short one lives in its variable record)
 	if (card3 != *card2 + ivadd && a3str == NULL)
 		error("Array size mismatch");
 	if (argc == 7)
@@ -1295,6 +1298,7 @@ unsigned char *parseB64(uint8_t *p, int64_t **outint, unsigned char **outstr, MM
 	*card1 = parseany(argv[0], &a1float, &a1int, &a1str, &length, false);
 	length = 0;
 	*card2 = parseany(argv[2], &a3float, &a3int, &a3str, &length, false);
+	aes_outmax = a3str ? FoundSize() : 255; // a LENGTH string is shorter (a short one lives in its variable record)
 	unsigned char *keyx = (unsigned char *)GetTempMemory(b64e_size(*card1) + 1);
 	if (a1int != NULL)
 	{
@@ -1383,7 +1387,7 @@ void returnAES(int64_t *outint, MMFLOAT *outflt, uint8_t *outstr, uint8_t *inx, 
 	{
 		if (iv)
 		{
-			if (card + 16 >= 256)
+			if (card + 16 > aes_outmax)
 				error("Too many elements for string output");
 			memcpy(&outstr[1], iv, 16);
 			memcpy(&outstr[17], inx, card);
@@ -1391,7 +1395,7 @@ void returnAES(int64_t *outint, MMFLOAT *outflt, uint8_t *outstr, uint8_t *inx, 
 		}
 		else
 		{
-			if (card >= 256)
+			if (card > aes_outmax)
 				error("Too many elements for string output");
 			memcpy(&outstr[1], inx, card);
 			*outstr = card;
