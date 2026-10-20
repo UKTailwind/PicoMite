@@ -4132,10 +4132,10 @@ convert between.
 MATH SENSORFUSION type ax, ay, az, gx, gy, gz, [mx, my, mz, ] pitch, roll, yaw
 [,p1] [,p2]
 
-Type can be MAHONY or MADGWICK Ax, ay, and az are the accelerations in the
-three directions and should be specified in units of standard gravitational
-acceleration. Gx, gy, and gz are the instantaneous values of  rotational speed
-which should be specified in radians per second.
+NOT PICOMITEMIN Type can be MAHONY or MADGWICK Ax, ay, and az are the
+accelerations in the three directions and should be specified in units of
+standard gravitational acceleration. Gx, gy, and gz are the instantaneous
+values of  rotational speed which should be specified in radians per second.
 
 ~MATH SET
 MATH SET nbr, array()
