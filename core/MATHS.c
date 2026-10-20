@@ -1551,7 +1551,8 @@ void cmd_math(void)
 			if (m == n)
 				sinc_filter(a1float, a2float, n, a3float, a4float, frequency, window);
 			else
-				sinc_filter_interpolate(a1float, a2float, n, m, a3float, a4float, frequency, window);
+				if (sinc_filter_interpolate(a1float, a2float, n, m, a3float, a4float, frequency, window) < 0) // (only n < 2 reaches its -1)
+					error("Interpolation needs at least 2 input points");
 			return;
 		}
 
@@ -1631,6 +1632,8 @@ void cmd_math(void)
 			getcsargs(&tp, 7);
 			if (!(argc == 5 || argc == 7))
 				StandardError(2);
+			if (argc == 7 && !checkstring(argv[6], (unsigned char *)"U")) // the 4th argument can only be U (anything else was ignored)
+				SyntaxError();
 			card1 = parseintegerarray(argv[0], &a1int, 1, 0, dims, false, NULL);
 			evaluate(argv[2], &f, &i64, &s, &t, false);
 			int shift = getint(argv[2], -63, 63);
@@ -1907,10 +1910,10 @@ void cmd_math(void)
 			parsefloatarray(argv[0], &a1float, 1, 2, dims, false, NULL);
 			numcols = DimUpper(dims[0]) - g_OptionBase;
 			numrows = DimUpper(dims[1]) - g_OptionBase;
-			parsefloatarray(argv[2], &a2float, 1, 1, dims, false, NULL);
+			parsefloatarray(argv[2], &a2float, 2, 1, dims, false, NULL);
 			if ((DimUpper(dims[0]) - g_OptionBase) != numcols)
 				StandardError(16);
-			parsefloatarray(argv[4], &a3float, 1, 1, dims, true, NULL);
+			parsefloatarray(argv[4], &a3float, 3, 1, dims, true, NULL);
 			if ((DimUpper(dims[0]) - g_OptionBase) != numrows)
 				StandardError(16);
 			if (a3float == a1float || a3float == a2float)
@@ -2683,7 +2686,7 @@ void cmd_math(void)
 				if (!(scale_vtype & (T_NBR | T_INT)))
 					StandardError(6);
 				if (scale_vtype & T_INT)
-					*(long long int *)ptr1 = (long long int)inmin;
+					*(long long int *)ptr1 = FloatToInt64(inmin); // rounded, as an assignment to an integer is
 				else
 					*(MMFLOAT *)ptr1 = inmin;
 				void *ptr2 = findvar(argv[10], V_FIND);
@@ -2697,7 +2700,7 @@ void cmd_math(void)
 				if (!(scale_vtype & (T_NBR | T_INT)))
 					StandardError(6);
 				if (scale_vtype & T_INT)
-					*(long long int *)ptr2 = (long long int)inmax;
+					*(long long int *)ptr2 = FloatToInt64(inmax);
 				else
 					*(MMFLOAT *)ptr2 = inmax;
 			}
