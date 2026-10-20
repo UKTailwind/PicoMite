@@ -1273,7 +1273,7 @@ void MIPS16 cmd_3D(void)
             error("Valid is -32766 to 32766");
         if (argc >= 7 && *argv[6])
             camera[n].y = getnumber(argv[6]);
-        if (camera[n].y > 32766 || camera[n].x < -32766)
+        if (camera[n].y > 32766 || camera[n].y < -32766)
             error("Valid is -32766 to 32766");
         if (argc >= 9 && *argv[8])
             camera[n].panx = getint(argv[8], -32766 - camera[n].x, 32766 - camera[n].x);
