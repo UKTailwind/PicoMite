@@ -3494,6 +3494,16 @@ void MIPS16 cmd_save(void)
  */
 #ifdef rp2350
 #define loadbuffsize EDIT_BUFFER_SIZE - sizeof(a_dlist) * MAXDEFINES - 4096
+// "#COMMENT END" in any case: checked before the line's spaces are collapsed, so any number of them between the words
+static bool IsCommentEnd(const char *s)
+{
+    if (*s++ != '#' || strncasecmp(s, "COMMENT", 7) != 0 || s[7] != ' ')
+        return false;
+    for (s += 7; *s == ' '; s++)
+        ;
+    return strncasecmp(s, "END", 3) == 0;
+}
+
 int cmpstr(char *s1, char *s2)
 {
     unsigned char *p1 = (unsigned char *)s1;
@@ -3632,7 +3642,7 @@ void importfile(char *pp, char *tp, char **p, uint32_t buf, int convertdebug, bo
             sbuff++;
             len--;
         }
-        if (ignore && sbuff[0] != '#')
+        if (ignore && !IsCommentEnd(sbuff)) // inside a #COMMENT block # lines are comments too: no #DEFINE or #INCLUDE
             *sbuff = '\'';
         if (strncasecmp(sbuff, "rem ", 4) == 0 || (len == 3 && strncasecmp(sbuff, "rem", 3) == 0))
         {
@@ -3842,7 +3852,7 @@ int FileLoadCMM2Program(char *fname, bool message)
             sbuff++;
             len--;
         }
-        if (ignore && sbuff[0] != '#')
+        if (ignore && !IsCommentEnd(sbuff)) // inside a #COMMENT block # lines are comments too: no #DEFINE or #INCLUDE
             *sbuff = '\'';
         if (strncasecmp(sbuff, "rem ", 4) == 0 || (len == 3 && strncasecmp(sbuff, "rem", 3) == 0))
         {
@@ -3850,7 +3860,7 @@ int FileLoadCMM2Program(char *fname, bool message)
             *sbuff = '\'';
             continue;
         }
-        if (strncasecmp(sbuff, "mmdebug ", 7) == 0 && convertdebug == 1)
+        if (strncasecmp(sbuff, "mmdebug", 7) == 0 && !isnamechar(sbuff[7]) && convertdebug == 1) // the word, not MMDEBUGGER
         {
             sbuff += 6;
             *sbuff = '\'';
