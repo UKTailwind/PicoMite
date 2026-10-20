@@ -2928,24 +2928,32 @@ void fun_math(void)
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"ADD")))
 			{
 				getcsargs(&tp, 3);
+				if (argc != 3) // the second argument is not optional: argv[2] would be unset
+					StandardError(2);
 				fcplx x = getComplex(argv[0]) + getComplex(argv[2]);
 				retComplex(x);
 			}
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"MUL")))
 			{
 				getcsargs(&tp, 3);
+				if (argc != 3) // the second argument is not optional: argv[2] would be unset
+					StandardError(2);
 				fcplx x = getComplex(argv[0]) * getComplex(argv[2]);
 				retComplex(x);
 			}
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"SUB")))
 			{
 				getcsargs(&tp, 3);
+				if (argc != 3) // the second argument is not optional: argv[2] would be unset
+					StandardError(2);
 				fcplx x = getComplex(argv[0]) - getComplex(argv[2]);
 				retComplex(x);
 			}
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"DIV")))
 			{
 				getcsargs(&tp, 3);
+				if (argc != 3) // the second argument is not optional: argv[2] would be unset
+					StandardError(2);
 				/* in double, then rounded: as libgcc's __divsc3 does it (inline by
 				   -fcx-fortran-rules, CMakeLists.txt, a float division could be 1 ulp out) */
 				fcplx x = (fcplx)((cplx)getComplex(argv[0]) / (cplx)getComplex(argv[2]));
@@ -2954,6 +2962,8 @@ void fun_math(void)
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"POW")))
 			{
 				getcsargs(&tp, 3);
+				if (argc != 3) // the second argument is not optional: argv[2] would be unset
+					StandardError(2);
 				fcplx x = cpowf(getComplex(argv[0]), getComplex(argv[2]));
 				retComplex(x);
 			}
@@ -3050,12 +3060,16 @@ void fun_math(void)
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"CPLX")))
 			{
 				getcsargs(&tp, 3);
+				if (argc != 3) // the second argument is not optional: argv[2] would be unset
+					StandardError(2);
 				fcplx x = (float)(getnumber(argv[0])) + (float)(getnumber(argv[2])) * I;
 				retComplex(x);
 			}
 			else if ((tp = checkstring(&ep[2], (unsigned char *)"POLAR")))
 			{
 				getcsargs(&tp, 3);
+				if (argc != 3) // the second argument is not optional: argv[2] would be unset
+					StandardError(2);
 				MMFLOAT r = getnumber(argv[0]);
 				MMFLOAT theta = getnumber(argv[2]) / optionangle;
 				MMFLOAT stheta = sin(theta) * r;
@@ -4034,6 +4048,8 @@ void cmd_FFT(unsigned char *pp)
 	if (tp)
 	{
 		getcsargs(&tp, 3);
+		if (argc != 3)
+			StandardError(2);
 		card1 = parsefloatarray(argv[0], &a3float, 1, 1, dims, false, NULL);
 		card2 = parsefloatarray(argv[2], &a4float, 2, 1, dims, true, NULL);
 		if (card1 != card2)
@@ -4062,6 +4078,8 @@ void cmd_FFT(unsigned char *pp)
 	if (tp)
 	{
 		getcsargs(&tp, 3);
+		if (argc != 3)
+			StandardError(2);
 		card1 = parsefloatarray(argv[0], &a3float, 1, 1, dims, false, NULL);
 		card2 = parsefloatarray(argv[2], &a4float, 2, 1, dims, true, NULL);
 		if (card1 != card2)
@@ -4090,6 +4108,8 @@ void cmd_FFT(unsigned char *pp)
 	if (tp)
 	{
 		getcsargs(&tp, 3);
+		if (argc != 3)
+			StandardError(2);
 		card1 = parsefloatarray(argv[0], &a4float, 1, 2, dims, false, NULL);
 		if (DimElements(dims[0]) != 2)
 			error("Argument 1 must be a 2 x n array"); // real and imaginary per element
@@ -4118,6 +4138,8 @@ void cmd_FFT(unsigned char *pp)
 		return;
 	}
 	getcsargs(&pp, 3);
+	if (argc != 3)
+		StandardError(2);
 	card1 = parsefloatarray(argv[0], &a3float, 1, 1, dims, false, NULL);
 	card2 = parsefloatarray(argv[2], &a4float, 2, 2, dims, true, NULL);
 	if (DimElements(dims[0]) != 2)
