@@ -1506,6 +1506,16 @@ void fun_LInstr(void)
         // &str[start+8] is only src[0] bytes long with no terminator. Copy the
         // searchable tail into terminated temp memory so re_match can't run off the
         // end of the array (a hard-fault once the buffer lives in PSRAM).
+        if (start < 0 || start > src[0])
+        { // a start outside the string finds nothing, as in the plain form (a negative one read before the array)
+            iret = 0;
+            if (tempf)
+                *tempf = 0.0;
+            else
+                *tempi = 0;
+            targ = T_INT;
+            return;
+        }
         int hay_len = (int)src[0] - (int)start;
         if (hay_len < 0)
             hay_len = 0;
