@@ -449,7 +449,7 @@ enum
     RF_SGNF,
     RF_SGNI,
     RF_RND, // no argument: RndVal() replaces the cell pushed for it
-    RF_CHOOSE, // float in, integer out: CHOICE's condition, made an int as fun_ternary's C does it
+    RF_CHOOSE, // float in, integer out: CHOICE's condition, 1 when it is not 0, as fun_ternary tests it
 };
 #define RK_LT 0 // RC_CMPF, RC_CMPI: op_lt
 #define RK_LTE 1
@@ -1333,9 +1333,9 @@ static int RBFnSplice(rbcx_t *x, unsigned char **pp, int *op)
 }
 
 /* CHOICE(condition, a, b), as fun_ternary does it: the condition as getnumber
-   gives it, made an int by C's conversion (CHOICE(0.5, a, b) is b: RF_CHOOSE; an
-   integer condition is tested as it is, as no nonzero integer converts to a
-   float that converts back to 0), and then only the branch it picks.  Both
+   gives it, true when it is not 0 (CHOICE(0.5, a, b) is a: RF_CHOOSE tests a
+   float condition; an integer one is tested as it is), and then only the
+   branch it picks.  Both
    branches must compile to the same type, since the answer is the picked
    branch's own; three arguments, none empty, as getcsargs gives them. */
 static int RBJump(rbcx_t *x, int op, int cells);
@@ -4413,12 +4413,9 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
     case RF_RND:
         v->f = RndVal();
         break;
-    case RF_CHOOSE:
-    { // fun_ternary's "int which = getnumber(argv[0])": the same conversion
-        int which = v->f;
-        v->i = which;
+    case RF_CHOOSE: // fun_ternary's getnumber(argv[0]) != 0: any value but 0 is true, 0.5 too (issue #61)
+        v->i = (v->f != 0);
         break;
-    }
     default: // RF_SGNI: fun_sgn's integer case
         v->i = (v->i > 0LL) - (v->i < 0LL);
     }
