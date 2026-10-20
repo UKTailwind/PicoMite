@@ -905,7 +905,7 @@ void fun_trim(void)
 			where = 'B';
 		else
 		{
-			where = (char)*getCstring(argv[4]);
+			where = (char)mytoupper(*getCstring(argv[4])); // "r" as well as "R", as the bare letters
 			if (!(where == 'L' || where == 'R' || where == 'B'))
 				SyntaxError();
 			;
