@@ -8070,10 +8070,11 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
                 StandardError(22);
             if (emptyarray) // a whole array is not a valid single list item
                 StandardError(6);
-            if (!(VREC(g_VarIndex)->type & (T_NBR | T_INT)))
+            int t = FoundType(); // a structure member's own type
+            if (!(t & (T_NBR | T_INT)))
                 StandardError(6);
             dest->list[i].ptr = vp;
-            dest->list[i].isint = (VREC(g_VarIndex)->type & T_INT) ? 1 : 0;
+            dest->list[i].isint = (t & T_INT) ? 1 : 0;
         }
         dest->kind = COMMS_RXD_LIST;
         return;
@@ -8086,10 +8087,11 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
     if (ptr == NULL)
         StandardError(6);
     CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
+    int t = FoundType();         // a structure member's own type
 
-    if (VREC(g_VarIndex)->type & T_STR)
+    if (t & T_STR)
     {
-        if (len < 1 || len > VREC(g_VarIndex)->size) // the string's LENGTH, not just 255
+        if (len < 1 || len > FoundSize()) // the string's LENGTH, not just 255
             StandardError(21);
         if (DimIsAllocated(RAW_DIM((*VREC(g_VarIndex)), 0)))
             StandardError(6);
@@ -8097,7 +8099,7 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
         dest->kind = COMMS_RXD_STRING;
         dest->ptr = (char *)ptr + 1; // skip the length byte
     }
-    else if (VREC(g_VarIndex)->type & T_NBR)
+    else if (t & T_NBR)
     {
         if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
             StandardError(6);
@@ -8114,7 +8116,7 @@ void GetCommsRxDest(unsigned char *argv[], int argc, int dataidx, int len, Comms
         dest->kind = COMMS_RXD_FLOAT;
         dest->ptr = ptr;
     }
-    else if (VREC(g_VarIndex)->type & T_INT)
+    else if (t & T_INT)
     {
         if (!DimIsEnd(RAW_DIM((*VREC(g_VarIndex)), 1)))
             StandardError(6);

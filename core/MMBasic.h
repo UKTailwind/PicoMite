@@ -138,6 +138,15 @@ extern "C"
 #define CHECK_STRUCT_MEMBER_ARRAY() ((void)0)
 #endif
 
+/* The type and string size of what findvar() last found: a structure member's own, else the variable's. */
+#ifdef STRUCTENABLED
+#define FoundType() (g_StructMemberType ? g_StructMemberType : VREC(g_VarIndex)->type)
+#define FoundSize() ((g_StructMemberType & T_STR) ? g_StructMemberSize : VREC(g_VarIndex)->size)
+#else
+#define FoundType() (VREC(g_VarIndex)->type)
+#define FoundSize() (VREC(g_VarIndex)->size)
+#endif
+
 /* ============================================================================
  * Expression evaluation flags
  * ============================================================================ */
