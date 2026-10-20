@@ -1973,7 +1973,7 @@ void __not_in_flash_func(fun_ternary)(void)
 	if (argc != 5)
 		SyntaxError();
 	;
-	int which = getnumber(argv[0]);
+	int which = (getnumber(argv[0]) != 0); // any non-zero value is true, 0.5 too
 	if (which)
 	{
 		evaluate(argv[2], &f, &i64, &s, &t, false);
