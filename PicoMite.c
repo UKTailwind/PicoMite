@@ -3995,7 +3995,7 @@ uint32_t testPSRAM(void)
 #endif
 
 #endif
-#ifdef PICOMITE
+#if defined(PICOMITE) || (defined(PICOMITEWEB) && !defined(PICOMITEVGA)) // every build that offers the virtual panels
         if (IS_VIRTUAL_DISPLAY(Option.DISPLAY_TYPE))
         {
             int framebuffersize = 320 * 240 / 2;
