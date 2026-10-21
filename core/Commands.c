@@ -9617,9 +9617,8 @@ void MIPS16 cmd_struct(void)
 		if (FileTable[fnbr].com <= MAXCOMPORTS)
 			error("Not a disk file");
 
-		// Skip past file number to comma
-		while (*p && *p != ',')
-			p++;
+		// Skip past file number to comma (over its brackets and strings: issue #106)
+		p = skipexpression(p);
 		if (*p != ',')
 			error("Expected comma");
 		p++;
@@ -9698,9 +9697,8 @@ void MIPS16 cmd_struct(void)
 		if (FileTable[fnbr].com <= MAXCOMPORTS)
 			error("Not a disk file");
 
-		// Skip past file number to comma
-		while (*p && *p != ',')
-			p++;
+		// Skip past file number to comma (over its brackets and strings: issue #106)
+		p = skipexpression(p);
 		if (*p != ',')
 			error("Expected comma");
 		p++;

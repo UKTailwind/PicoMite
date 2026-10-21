@@ -4924,23 +4924,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
         // Check if p has array index followed by dot (e.g., nested(1).x)
         if (!more_to_resolve && m_type == T_STRUCT && m_dims[0] != 0 && *p == '(')
         {
-            unsigned char *check = p;
-            int depth = 0;
-            while (*check)
-            {
-                if (*check == '(')
-                    depth++;
-                else if (*check == ')')
-                {
-                    depth--;
-                    if (depth == 0)
-                    {
-                        check++;
-                        break;
-                    }
-                }
-                check++;
-            }
+            unsigned char *check = getclosebracket(p) + 1; // (strings and function tokens: issue #106)
             skipspace(check);
             if (*check == '.')
                 more_to_resolve = 1;
@@ -4969,23 +4953,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
 
                 // Find closing paren
                 unsigned char *pstart = p;
-                int paren_depth = 0;
-                unsigned char *pend = p;
-                while (*pend)
-                {
-                    if (*pend == '(')
-                        paren_depth++;
-                    else if (*pend == ')')
-                    {
-                        paren_depth--;
-                        if (paren_depth == 0)
-                        {
-                            pend++;
-                            break;
-                        }
-                    }
-                    pend++;
-                }
+                unsigned char *pend = getclosebracket(p) + 1; // (strings and function tokens: issue #106)
 
                 // Copy to local buffer and parse
                 unsigned char idx_buf[128];
@@ -5091,23 +5059,7 @@ void MIPS16 *ResolveStructMember(unsigned char *struct_ptr, int struct_idx, unsi
             }
 
             unsigned char *pstart = p;
-            int paren_depth = 0;
-            unsigned char *pend = p;
-            while (*pend)
-            {
-                if (*pend == '(')
-                    paren_depth++;
-                else if (*pend == ')')
-                {
-                    paren_depth--;
-                    if (paren_depth == 0)
-                    {
-                        pend++;
-                        break;
-                    }
-                }
-                pend++;
-            }
+            unsigned char *pend = getclosebracket(p) + 1; // (strings and function tokens: issue #106)
 
             unsigned char idx_buf[128];
             int blen = pend - pstart;
