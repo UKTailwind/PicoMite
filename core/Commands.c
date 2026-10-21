@@ -7873,10 +7873,10 @@ void MIPS16 fun_frame(void)
 }
 #endif
 #ifdef rp2350
-void parse_and_strip(char *string, int *dims)
+void parse_and_strip(char *string, int *dims, char *bounds)
 {
 #else
-void parse_and_strip(char *string, short *dims)
+void parse_and_strip(char *string, short *dims, char *bounds)
 {
 #endif
 	// Initialize dims to zero
@@ -7885,50 +7885,30 @@ void parse_and_strip(char *string, short *dims)
 		dims[i] = 0;
 	}
 	char *open = strchr(string, '(');
-	char *close = strchr(string, ')');
 
-	if (open && close && close > open)
+	strcpy(bounds, string);
+	if (open)
 	{
-		// Parse dimension expressions inside parentheses
-		char buffer[256];
-		strncpy(buffer, open + 1, close - open - 1);
-		buffer[close - open - 1] = '\0';
-
-		// Parse comma-separated expressions directly using getinteger
-		// This evaluates BASIC expressions like variables
-		unsigned char *p = (unsigned char *)buffer;
-		int idx = 0;
-		while (*p && idx < MAXDIM)
-		{
-			skipspace(p);
-			if (*p == 0)
-				break;
-			// Find end of this expression (comma or end of string)
-			unsigned char *start = p;
-			int paren_depth = 0;
-			while (*p && !(*p == ',' && paren_depth == 0))
-			{
-				if (*p == '(')
-					paren_depth++;
-				else if (*p == ')')
-					paren_depth--;
-				p++;
-			}
-			// Temporarily terminate this expression
-			unsigned char saved = *p;
-			*p = 0;
-			// Evaluate the expression
-			long long int dv = getinteger(start);
-			dims[idx++] = DimEncode(dv);
-			// Restore and skip comma
-			*p = saved;
-			if (*p == ',')
-				p++;
+		// split the bracketed list with makeargs(), which steps over nested brackets, function
+		// tokens and strings (finding the first ')' and splitting at every comma did not - issue #105)
+		unsigned char *tp = (unsigned char *)open;
+		int n = open - string + 1;
+		getargs(&tp, MAXDIM * 2, (unsigned char *)"(,");
+		if ((argc & 1) == 0)
+			SyntaxError();
+		for (int i = 0; i < argc; i += 2)
+		{ // each bound is evaluated once: bounds gets the name with them as numbers, to make the new array from
+			long long int b = getinteger(argv[i]);
+			dims[i / 2] = DimEncode(b);
+			if (i)
+				bounds[n++] = ',';
+			IntToStr(bounds + n, b, 10);
+			n += strlen(bounds + n);
 		}
+		strcpy(bounds + n, ")");
 
 		// Replace with name()
-		*(open + 1) = '\0';	   // truncate after '('
-		strcpy(open + 1, ")"); // append ')'
+		strcpy(open + 1, ")");
 	}
 }
 #ifdef rp2350
@@ -7984,7 +7964,8 @@ void cmd_redim(void)
 	int structIdx = -1;
 #endif
 	unsigned char *tp;
-	unsigned char old[STRINGSIZE]; // a whole argument: the name and its dimension expressions
+	unsigned char old[STRINGSIZE];	  // a whole argument: the name and its dimension expressions
+	unsigned char bounds[STRINGSIZE]; // the name with its new bounds as numbers (issue #105)
 	int preserve = ((tp = checkstring(cmdline, (unsigned char *)"PRESERVE")) ? 1 : 0);
 	if (tp == NULL)
 		tp = cmdline;
@@ -7993,7 +7974,7 @@ void cmd_redim(void)
 		for (int i = 0; i < argc; i += 2)
 		{ // step through the arguments
 			strcpy((char *)old, (char *)argv[i]); // argv[i] is shorter than a line
-			parse_and_strip((char *)old, newdims);
+			parse_and_strip((char *)old, newdims, (char *)bounds);
 			findvar(old, V_FIND | V_NOFIND_ERR | V_EMPTY_OK);
 			if (VREC(g_VarIndex)->type & T_STR)
 				length = VREC(g_VarIndex)->size;
@@ -8019,7 +8000,7 @@ void cmd_redim(void)
 			if (type & T_STR)
 			{
 				unsigned char *newstring = GetTempStrMemory();
-				strcpy((char *)newstring, (char *)argv[i]);
+				strcpy((char *)newstring, (char *)bounds);
 				strcat((char *)newstring, " LENGTH ");
 				IntToStr((char *)&newstring[strlen((char *)newstring)], length, 10);
 				// T_IMPLIED is required: TypeMask() strips it, and without it findvar
@@ -8031,7 +8012,7 @@ void cmd_redim(void)
 			{
 				// Strip "AS structtype" from the argument - find and terminate at AS token
 				unsigned char *vararg = GetTempStrMemory();
-				strcpy((char *)vararg, (char *)argv[i]);
+				strcpy((char *)vararg, (char *)bounds);
 				unsigned char *asp = skipvar(vararg, false);
 				while (*asp && *asp != tokenAS)
 					asp++;
@@ -8046,7 +8027,7 @@ void cmd_redim(void)
 				// Ditto: "a(5)" has no suffix, so without T_IMPLIED findvar recreates
 				// the array as DefaultType (float) whatever it was declared as. An
 				// INTEGER array then reads its preserved bits back as doubles.
-				findvar(argv[i], type | T_IMPLIED | V_FIND | V_DIM_VAR);
+				findvar(bounds, type | T_IMPLIED | V_FIND | V_DIM_VAR);
 			newmemory = VREC(g_VarIndex)->val.s;
 			newsize = MemSize(VREC(g_VarIndex)->val.s);
 			if (preserve)
