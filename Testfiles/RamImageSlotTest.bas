@@ -33,7 +33,7 @@ MakeTileset
 ' Flash slots already in use are left alone (they may hold someone's game).
 fslot = 0
 For i = 1 To 2
-  If fslot = 0 And Peek(WORD MM.Info(FLASH ADDRESS i)) = -1 Then fslot = i
+  If fslot = 0 And Peek(WORD MM.Info(FLASH ADDRESS i)) = &HFFFFFFFF Then fslot = i
 Next i
 If fslot = 0 Then Print "no free flash slot: flash-vs-RAM comparisons skipped"
 RAM ERASE RAMSLOT - 3
