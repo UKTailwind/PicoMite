@@ -453,170 +453,89 @@ void checklimits(int bnbr, int *n)
     else
         sb->edges &= ~8;
 }
-void ProcessCollisions(int bnbr)
+// may sprites k and kk collide: both showing, and on the same layer or either on layer 0 (which meets every layer)
+static inline int SpritesMeet(int k, int kk)
 {
-    int k, j = 1, n = 1, bcol = 1;
-    // We know that any collision is caused by movement of sprite bnbr
-    //  a value of zero indicates that we are processing movement of layer 0 and any
-    //  sprites on that layer
-    CollisionFound = false;
-    sprite_which_collided = -1;
-    uint64_t mask, mymask = (uint64_t)1 << ((uint64_t)bnbr - (uint64_t)1);
-    struct spritebuffer *sb = spritebuff[bnbr]; // Cache pointer for performance
-    memset(spritebuff[0]->collisions, 0, MAXCOLLISIONS);
-    if (bnbr != 0)
-    {                                             // a specific sprite has moved
-        memset(sb->collisions, 0, MAXCOLLISIONS); // clear our previous collisions
-        if (sb->layer != 0)
+    struct spritebuffer *a = spritebuff[k], *b = spritebuff[kk];
+    return kk != k && b != NULL && b->active && (a->layer == 0 || b->layer == 0 || a->layer == b->layer);
+}
+// do their rectangles overlap (touching counts, as it always has)
+static inline int SpritesOverlap(int k, int kk)
+{
+    struct spritebuffer *a = spritebuff[k], *b = spritebuff[kk];
+    return !(b->x + b->w < a->x || b->x > a->x + a->w || b->y + b->h < a->y || b->y > a->y + a->h);
+}
+// sprite k's collisions that have begun into its list from collisions[1] (its lastcollisions bit kk - 1 is kept
+// while one lasts, so that it is reported once), then the screen edges and static objects it has reached; returns
+// the number of entries + 1.  both: k's bit in each other sprite's mask too (a sprite that moved alone: the meeting
+// is not news to the other either)
+static int SpriteCollisions(int k, int both)
+{
+    struct spritebuffer *sb = spritebuff[k];
+    uint64_t mine = (uint64_t)1 << (k - 1);
+    int kk, n = 1;
+    memset(sb->collisions, 0, sizeof(sb->collisions));
+    for (kk = 1; kk <= MAXBLITBUF; kk++)
+    {
+        struct spritebuffer *sk = spritebuff[kk];
+        uint64_t bit = (uint64_t)1 << (kk - 1);
+        if (kk == k || sk == NULL)
+            continue;
+        if (SpritesMeet(k, kk) && SpritesOverlap(k, kk))
         {
-            if (layer_in_use[sb->layer] + layer_in_use[0] > 1)
-            { // other sprites in this layer
-                for (k = 1; k <= MAXBLITBUF; k++)
-                {
-                    struct spritebuffer *sk = spritebuff[k]; // Cache inner loop pointer
-                    if (sk == NULL)
-                        continue;
-                    mask = (uint64_t)1 << ((uint64_t)k - (uint64_t)1);
-                    if (!(sk->active))
-                    {
-                        sb->lastcollisions &= ~mask;
-                        continue;
-                    }
-                    if (k == bnbr)
-                        continue;
-                    if (j == layer_in_use[sb->layer] + layer_in_use[0])
-                        break; // nothing left to process
-                    if ((sk->layer == sb->layer || sk->layer == 0))
-                    {
-                        j++;
-                        if (!(sk->x + sk->w < sb->x ||
-                              sk->x > sb->x + sb->w ||
-                              sk->y + sk->h < sb->y ||
-                              sk->y > sb->y + sb->h))
-                        {
-                            if (n < MAXCOLLISIONS && !(sb->lastcollisions & mask))
-                                sb->collisions[n++] = k;
-                            sb->lastcollisions |= mask;
-                            sk->lastcollisions |= mymask;
-                        }
-                        else
-                        {
-                            sb->lastcollisions &= ~mask;
-                            sk->lastcollisions &= ~mymask;
-                        }
-                    }
-                }
-            }
+            if (n < MAXCOLLISIONS && !(sb->lastcollisions & bit))
+                sb->collisions[n++] = kk;
+            sb->lastcollisions |= bit;
+            if (both)
+                sk->lastcollisions |= mine;
         }
         else
         {
-            for (k = 1; k <= MAXBLITBUF; k++)
-            {
-                struct spritebuffer *sk = spritebuff[k]; // Cache inner loop pointer
-                if (sk == NULL)
-                    continue;
-                if (j == sprites_in_use)
-                    break; // nothing left to process
-                if (k == bnbr)
-                    continue;
-                mask = (uint64_t)1 << ((uint64_t)k - (uint64_t)1);
-                if (!(sk->active))
-                {
-                    sb->lastcollisions &= ~mask;
-                    continue;
-                }
-                else
-                    j++;
-                if (!(sk->x + sk->w < sb->x ||
-                      sk->x > sb->x + sb->w ||
-                      sk->y + sk->h < sb->y ||
-                      sk->y > sb->y + sb->h))
-                {
-                    if (n < MAXCOLLISIONS && !(sb->lastcollisions & mask))
-                        sb->collisions[n++] = k;
-                    sb->lastcollisions |= mask;
-                    sk->lastcollisions |= mymask;
-                }
-                else
-                {
-                    sb->lastcollisions &= ~mask;
-                    sk->lastcollisions &= ~mymask;
-                }
-            }
+            sb->lastcollisions &= ~bit;
+            if (both)
+                sk->lastcollisions &= ~mine;
         }
-        // now look for collisions with the edge of the screen
-        checklimits(bnbr, &n);
-        // now look for collisions with static objects
-        CheckSTCollisions(bnbr, &n);
-        if (n > 1)
+    }
+    checklimits(k, &n);
+    CheckSTCollisions(k, &n);
+    if (n > 1)
+        sb->collisions[0] = n - 1;
+    return n;
+}
+// after sprite bnbr has been shown, or (bnbr 0) after MOVE, SCROLL or RESTORE has moved everything: the collisions
+// found, SPRITE(C ...) and SPRITE(S) for them, and the collision interrupt.  After a whole-scene check the sprites
+// that collided are spritebuff[0]'s list.  CollisionFound stays set until its interrupt has run (check_interrupt).
+void ProcessCollisions(int bnbr)
+{
+    int k, bcol = 1;
+    if (COLLISIONInterrupt == NULL)
+        CollisionFound = false;
+    sprite_which_collided = -1;
+    memset(spritebuff[0]->collisions, 0, sizeof(spritebuff[0]->collisions));
+    if (bnbr != 0)
+    { // one sprite has moved
+        if (SpriteCollisions(bnbr, 1) > 1)
         {
             CollisionFound = true;
-            if (COLLISIONInterrupt != NULL) IntSignal();
+            if (COLLISIONInterrupt != NULL)
+                IntSignal();
             sprite_which_collided = bnbr;
-            spritebuff[bnbr]->collisions[0] = n - 1;
         }
     }
     else
-    { // the background layer has moved
-        j = 0;
+    { // everything has moved
         for (k = 1; k <= MAXBLITBUF; k++)
-        {                                            // loop through all sprites
-            struct spritebuffer *sk = spritebuff[k]; // Cache pointer for performance
-            if (sk == NULL)
+        {
+            if (spritebuff[k] == NULL || !spritebuff[k]->active)
                 continue;
-            mask = (uint64_t)1 << ((uint64_t)k - (uint64_t)1);
-            n = 1;
-            int kk, jj = 1;
-            if (j == sprites_in_use)
-                break; // nothing left to process
-            if (sk->active)
-            { // sprite found
-                memset(sk->collisions, 0, MAXCOLLISIONS);
-                j++;
-                if (layer_in_use[sk->layer] + layer_in_use[0] > 1)
-                { // other sprites in this layer
-                    for (kk = 1; kk <= MAXBLITBUF; kk++)
-                    {
-                        struct spritebuffer *skk = spritebuff[kk]; // Cache inner loop pointer
-                        if (skk == NULL)
-                            continue;
-                        if (kk == k)
-                            continue;
-                        if (jj == layer_in_use[sk->layer] + layer_in_use[0])
-                            break; // nothing left to process
-                        if ((skk->layer == sk->layer || skk->layer == 0))
-                        {
-                            jj++;
-                            if (!(skk->x + skk->w < sk->x ||
-                                  skk->x > sk->x + sk->w ||
-                                  skk->y + skk->h < sk->y ||
-                                  skk->y > sk->y + sk->h))
-                            {
-                                if (n < MAXCOLLISIONS && !(sk->lastcollisions & mask))
-                                    sk->collisions[n++] = kk;
-                                sk->lastcollisions |= mask;
-                            }
-                            else
-                            {
-                                sk->lastcollisions &= ~mask;
-                            }
-                        }
-                    }
-                }
-                checklimits(k, &n);
-                CheckSTCollisions(k, &n);
-                if (n > 1 && n < MAXCOLLISIONS && bcol < MAXCOLLISIONS)
-                {
-                    spritebuff[0]->collisions[bcol] = k;
-                    bcol++;
-                    sk->collisions[0] = n - 1;
-                }
-            }
+            if (SpriteCollisions(k, 0) > 1 && bcol < MAXCOLLISIONS)
+                spritebuff[0]->collisions[bcol++] = k;
         }
         if (bcol > 1)
         {
             CollisionFound = true;
-            if (COLLISIONInterrupt != NULL) IntSignal();
+            if (COLLISIONInterrupt != NULL)
+                IntSignal();
             sprite_which_collided = 0;
             spritebuff[0]->collisions[0] = bcol - 1;
         }
