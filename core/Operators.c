@@ -183,7 +183,7 @@ static inline long long int(compare)(void)
             r = 0;
     }
     else if (targ & T_INT)
-        r = iarg1 - iarg2;
+        r = (iarg1 > iarg2) - (iarg1 < iarg2); // not iarg1 - iarg2: it overflows for values far apart
     else
         r = Mstrcmp(sarg1, sarg2);
     targ = T_INT; // always return an float, even if the args are string

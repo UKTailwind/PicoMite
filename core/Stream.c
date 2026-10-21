@@ -5081,14 +5081,11 @@ again:
             m = (unsigned long long)d.i & 0x7FFFFFFFFFFFFFFFULL;
             r = (m == 0 || m > (unsigned long long)RB_INF) ? 0 : (d.i < 0 ? -1 : 1);
             goto cmp;
-    L_CMPI: // compare() on integers: the difference, as op_ne and op_equal test them
+    L_CMPI: // compare() on integers: their order (a difference overflows when they are far apart)
             if ((w >> 8) >= RK_EQ)
                 r = sp[-2].i != sp[-1].i;
             else
-            {
-                long long diff = sp[-2].i - sp[-1].i;
-                r = diff < 0 ? -1 : diff > 0;
-            }
+                r = (sp[-2].i > sp[-1].i) - (sp[-2].i < sp[-1].i);
             if ((w >> 8) == RK_EQ)
             {
                 sp[-2].i = !r;

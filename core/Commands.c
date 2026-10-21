@@ -5583,7 +5583,7 @@ static inline int __attribute__((always_inline)) DoFastTest(struct s_dostack *ds
 			return v == l;
 		if (ds->fast_op == DOFAST_NE)
 			return v != l;
-		r = (ds->fast_flags & DOFAST_LITFIRST) ? l - v : v - l;
+		r = (ds->fast_flags & DOFAST_LITFIRST) ? (l > v) - (l < v) : (v > l) - (v < l); // (a difference overflows far apart)
 	}
 	else
 	{
