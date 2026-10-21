@@ -135,7 +135,7 @@ inline static void m_seedRand(MTRand *rand, unsigned long seed)
 	rand->mt[0] = (seed & 0xffffffff) ? (seed & 0xffffffff) : 4357; // an all-zero state stays zero: 0 seeds as genRandLong's default
 	for (rand->index = 1; rand->index < STATE_VECTOR_LENGTH; rand->index++)
 	{
-		rand->mt[rand->index] = (6069 * rand->mt[rand->index - 1]) & 0xffffffff;
+		rand->mt[rand->index] = (69069 * rand->mt[rand->index - 1]) & 0xffffffff; // Knuth's multiplier (6069 was a typo)
 	}
 }
 
