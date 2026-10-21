@@ -40,6 +40,14 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "Hardware_Includes.h"
 #include "Memory.h"
 #include "DrawInternal.h"
+
+// a bare buffer letter (FRAMEBUFFER WRITE F) is the whole argument, perhaps with a comment: checkstring() alone takes
+// l$ or f(1) for the letter, whatever they hold, and those belong to the string form (issue #112)
+static int BufferLetter(unsigned char *p, const char *letter)
+{
+    unsigned char *tp = checkstring(p, (unsigned char *)letter);
+    return tp != NULL && (*tp == 0 || *tp == '\'');
+}
 #ifndef PICOMITEWEB
 #include "pico/multicore.h"
 extern mutex_t frameBufferMutex;
@@ -1076,7 +1084,7 @@ void cmd_framebuffer(void)
            leak old pixels onto the new buffer. */
         CursorHide();
 #endif
-        if (checkstring(p, (unsigned char *)"N"))
+        if (BufferLetter(p, "N"))
         {
 #ifdef PICOMITE
             if (mergerunning)
@@ -1085,7 +1093,7 @@ void cmd_framebuffer(void)
             restorepanel();
             return;
         }
-        else if (checkstring(p, (unsigned char *)"L"))
+        else if (BufferLetter(p, "L"))
         {
             if (!LayerBuf)
                 error("Layer buffer not created");
@@ -1093,7 +1101,7 @@ void cmd_framebuffer(void)
             setframebuffer();
             return;
         }
-        else if (checkstring(p, (unsigned char *)"F"))
+        else if (BufferLetter(p, "F"))
         {
             if (!FrameBuf)
                 StandardError(38);
@@ -1759,29 +1767,29 @@ void cmd_framebuffer(void)
            the wrong pixels on the new buffer. */
         CursorHide();
 #endif
-        if (checkstring(p, (unsigned char *)"N"))
+        if (BufferLetter(p, "N"))
             WriteBuf = DisplayBuf;
-        else if (checkstring(p, (unsigned char *)"L"))
+        else if (BufferLetter(p, "L"))
         {
             if (LayerBuf == DisplayBuf)
                 error("Layer not created");
             WriteBuf = LayerBuf;
         }
 #ifdef rp2350
-        else if (checkstring(p, (unsigned char *)"T"))
+        else if (BufferLetter(p, "T"))
         {
             if (SecondLayer == DisplayBuf)
                 error("Layer 2 not created");
             WriteBuf = SecondLayer;
         }
-        else if (checkstring(p, (unsigned char *)"2"))
+        else if (BufferLetter(p, "2"))
         {
             if (SecondFrame == DisplayBuf)
                 error("Frame 2 not created");
             WriteBuf = SecondFrame;
         }
 #endif
-        else if (checkstring(p, (unsigned char *)"F"))
+        else if (BufferLetter(p, "F"))
         {
             if (FrameBuf == DisplayBuf)
                 StandardError(38);

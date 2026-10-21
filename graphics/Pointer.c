@@ -1461,11 +1461,16 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
             int new_pin = getpinarg(argv[0]);
             bool new_inv = false;
             if (argc == 3)
-            {
-                if (checkstring(argv[2], (unsigned char *)"INV"))
-                    new_inv = true;
-                else
+            { // INV is an operator: the tokeniser stored its token, never the text (issue #112)
+                unsigned char *q = argv[2];
+                skipspace(q);
+                if (*q != GetTokenValue((unsigned char *)"INV"))
                     SyntaxError();
+                q++;
+                skipspace(q);
+                if (*q)
+                    SyntaxError();
+                new_inv = true;
             }
 
             /* Refuse to steal a pin already configured for something

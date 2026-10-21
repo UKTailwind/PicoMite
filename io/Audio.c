@@ -1479,6 +1479,14 @@ int PlayAlbumTrack(int n)
 	return 1;
 }
 
+// a bare option letter (PLAY SOUND 1, L, S, 440) is the whole argument: checkstring() alone takes s$ or l(1)
+// for the letter, whatever they hold (issue #112)
+static int OptionLetter(unsigned char *p, const char *letter)
+{
+	unsigned char *tp = checkstring(p, (unsigned char *)letter);
+	return tp != NULL && *tp == 0;
+}
+
 void MIPS16 cmd_play(void)
 {
 	unsigned char *tp;
@@ -2044,15 +2052,15 @@ void MIPS16 cmd_play(void)
 		channel = getint(argv[0], 1, MAXSOUNDS) - 1;
 		lastleft = local_sound_mode_left = (uint16_t *)sound_mode_left[channel];
 		lastright = local_sound_mode_right = (uint16_t *)sound_mode_right[channel];
-		if (checkstring(argv[2], (unsigned char *)"L") != NULL)
+		if (OptionLetter(argv[2], "L"))
 		{
 			left = 1;
 		}
-		else if (checkstring(argv[2], (unsigned char *)"R") != NULL)
+		else if (OptionLetter(argv[2], "R"))
 		{
 			right = 1;
 		}
-		else if (checkstring(argv[2], (unsigned char *)"B") != NULL)
+		else if (OptionLetter(argv[2], "B"))
 		{
 			right = 1;
 			left = 1;
@@ -2083,84 +2091,84 @@ void MIPS16 cmd_play(void)
 		}
 		if (!(CurrentlyPlaying == P_NOTHING || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_PAUSE_SOUND || CurrentlyPlaying == P_STOP || CurrentlyPlaying == P_WAVOPEN))
 			error("Sound output in use for $", PlayingStr[CurrentlyPlaying]);
-		if (checkstring(argv[4], (unsigned char *)"O") != NULL && left)
+		if (OptionLetter(argv[4], "O") && left)
 		{
 			lset = 1;
 			local_sound_mode_left = (uint16_t *)nulltable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"O") != NULL && right)
+		if (OptionLetter(argv[4], "O") && right)
 		{
 			rset = 1;
 			local_sound_mode_right = (uint16_t *)nulltable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"Q") != NULL && left)
+		if (OptionLetter(argv[4], "Q") && left)
 		{
 			lset = 1;
 			local_sound_mode_left = (uint16_t *)squaretable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"Q") != NULL && right)
+		if (OptionLetter(argv[4], "Q") && right)
 		{
 			rset = 1;
 			local_sound_mode_right = (uint16_t *)squaretable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"T") != NULL && left)
+		if (OptionLetter(argv[4], "T") && left)
 		{
 			lset = 1;
 			local_sound_mode_left = (uint16_t *)triangletable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"T") != NULL && right)
+		if (OptionLetter(argv[4], "T") && right)
 		{
 			rset = 1;
 			local_sound_mode_right = (uint16_t *)triangletable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"W") != NULL && left)
+		if (OptionLetter(argv[4], "W") && left)
 		{
 			lset = 1;
 			local_sound_mode_left = (uint16_t *)sawtable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"W") != NULL && right)
+		if (OptionLetter(argv[4], "W") && right)
 		{
 			rset = 1;
 			local_sound_mode_right = (uint16_t *)sawtable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"S") != NULL && left)
+		if (OptionLetter(argv[4], "S") && left)
 		{
 			lset = 1;
 			local_sound_mode_left = (uint16_t *)SineTable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"S") != NULL && right)
+		if (OptionLetter(argv[4], "S") && right)
 		{
 			rset = 1;
 			local_sound_mode_right = (uint16_t *)SineTable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"P") != NULL && left)
+		if (OptionLetter(argv[4], "P") && left)
 		{
 			lset = 1;
 			setnoise();
 			local_sound_mode_left = (uint16_t *)noisetable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"P") != NULL && right)
+		if (OptionLetter(argv[4], "P") && right)
 		{
 			rset = 1;
 			setnoise();
 			local_sound_mode_right = (uint16_t *)noisetable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"N") != NULL && left)
+		if (OptionLetter(argv[4], "N") && left)
 		{
 			lset = 1;
 			local_sound_mode_left = (uint16_t *)whitenoise;
 		}
-		if (checkstring(argv[4], (unsigned char *)"N") != NULL && right)
+		if (OptionLetter(argv[4], "N") && right)
 		{
 			rset = 1;
 			local_sound_mode_right = (uint16_t *)whitenoise;
 		}
-		if (checkstring(argv[4], (unsigned char *)"U") != NULL && left)
+		if (OptionLetter(argv[4], "U") && left)
 		{
 			lset = 1;
 			local_sound_mode_left = (uint16_t *)usertable;
 		}
-		if (checkstring(argv[4], (unsigned char *)"U") != NULL && right)
+		if (OptionLetter(argv[4], "U") && right)
 		{
 			rset = 1;
 			local_sound_mode_right = (uint16_t *)usertable;

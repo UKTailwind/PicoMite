@@ -322,38 +322,44 @@ int GetCtrlParams(int type, unsigned char *p)
             //                     1 to 24 = 2hHh       0 to 179 = 1dLd9d
             // A separator is in brackets.  Eg (:)   or   (' )
             // Special chars: A = AM/PM    N = N/S    E = E/W
-            if (checkstring(argv[a], (unsigned char *)"DATE1"))
-                Ctrl[r].fmt = (unsigned char *)"3dDd(/)1mMm(/)9y9y";
-            if (checkstring(argv[a], (unsigned char *)"DATE2"))
-                Ctrl[r].fmt = (unsigned char *)"1mMm(/)3dDd(/)9y9y";
-            if (checkstring(argv[a], (unsigned char *)"DATE3"))
-                Ctrl[r].fmt = (unsigned char *)"9y9y9y9y(/)1mMm(/)3dDd";
-            if (checkstring(argv[a], (unsigned char *)"TIME1"))
-                Ctrl[r].fmt = (unsigned char *)"2hHh(:)5m9m";
-            if (checkstring(argv[a], (unsigned char *)"TIME2"))
-                Ctrl[r].fmt = (unsigned char *)"2hHh(:)5m9m(:)5s9s";
-            if (checkstring(argv[a], (unsigned char *)"TIME3"))
-                Ctrl[r].fmt = (unsigned char *)"1hMh(:)5m9m( )A";
-            if (checkstring(argv[a], (unsigned char *)"TIME4"))
-                Ctrl[r].fmt = (unsigned char *)"1hMh(:)5m9m(:)5s9s( )A";
-            if (checkstring(argv[a], (unsigned char *)"DATETIME1"))
-                Ctrl[r].fmt = (unsigned char *)"3dDd(/)1mMm(/)9y9y( )1hMh(:)5m9m( )A";
-            if (checkstring(argv[a], (unsigned char *)"DATETIME2"))
-                Ctrl[r].fmt = (unsigned char *)"3dDd(/)1mMm(/)9y9y( )2hHh(:)5m9m";
-            if (checkstring(argv[a], (unsigned char *)"DATETIME3"))
-                Ctrl[r].fmt = (unsigned char *)"1mMm(/)3dDd(/)9y9y( )1hMh(:)5m9m( )A";
-            if (checkstring(argv[a], (unsigned char *)"DATETIME4"))
-                Ctrl[r].fmt = (unsigned char *)"1mMm(/)3dDd(/)9y9y( )2hHh(:)5m9m";
-            if (checkstring(argv[a], (unsigned char *)"LAT1"))
-                Ctrl[r].fmt = (unsigned char *)"8d9d(` )5m9m(' )5s9s(\" )N";
-            if (checkstring(argv[a], (unsigned char *)"LAT2"))
-                Ctrl[r].fmt = (unsigned char *)"8d9d(` )5m9m(' )5s9s(.)9s(\" )N";
-            if (checkstring(argv[a], (unsigned char *)"LONG1"))
-                Ctrl[r].fmt = (unsigned char *)"1dLd9d(` )5m9m(' )5s9s(\" )E";
-            if (checkstring(argv[a], (unsigned char *)"LONG2"))
-                Ctrl[r].fmt = (unsigned char *)"1dLd9d(` )5m9m(' )5s9s(.)9s(\" )E";
-            if (checkstring(argv[a], (unsigned char *)"ANGLE1"))
-                Ctrl[r].fmt = (unsigned char *)"9d9d9d(` )5m9m(')";
+            static const char *const fmtkeyword[][2] = {
+                {"DATE1", "3dDd(/)1mMm(/)9y9y"},
+                {"DATE2", "1mMm(/)3dDd(/)9y9y"},
+                {"DATE3", "9y9y9y9y(/)1mMm(/)3dDd"},
+                {"TIME1", "2hHh(:)5m9m"},
+                {"TIME2", "2hHh(:)5m9m(:)5s9s"},
+                {"TIME3", "1hMh(:)5m9m( )A"},
+                {"TIME4", "1hMh(:)5m9m(:)5s9s( )A"},
+                {"DATETIME1", "3dDd(/)1mMm(/)9y9y( )1hMh(:)5m9m( )A"},
+                {"DATETIME2", "3dDd(/)1mMm(/)9y9y( )2hHh(:)5m9m"},
+                {"DATETIME3", "1mMm(/)3dDd(/)9y9y( )1hMh(:)5m9m( )A"},
+                {"DATETIME4", "1mMm(/)3dDd(/)9y9y( )2hHh(:)5m9m"},
+                {"LAT1", "8d9d(` )5m9m(' )5s9s(\" )N"},
+                {"LAT2", "8d9d(` )5m9m(' )5s9s(.)9s(\" )N"},
+                {"LONG1", "1dLd9d(` )5m9m(' )5s9s(\" )E"},
+                {"LONG2", "1dLd9d(` )5m9m(' )5s9s(.)9s(\" )E"},
+                {"ANGLE1", "9d9d9d(` )5m9m(')"},
+            };
+            // a keyword is the whole argument (date1$ is a string variable, not DATE1); anything else is a
+            // format string in an expression, as the quoted form takes one - it was ignored (issue #112)
+            Ctrl[r].fmt = NULL;
+            for (int k = 0; k < (int)(sizeof(fmtkeyword) / sizeof(fmtkeyword[0])); k++)
+            {
+                unsigned char *tp = checkstring(argv[a], (unsigned char *)fmtkeyword[k][0]);
+                if (tp != NULL && *tp == 0)
+                {
+                    Ctrl[r].fmt = (unsigned char *)fmtkeyword[k][1];
+                    break;
+                }
+            }
+            if (Ctrl[r].fmt == NULL)
+            {
+                unsigned char *s = getCstring(argv[a]);
+                if (*s == 0)
+                    error("Format");
+                Ctrl[r].fmt = GetMemory(MAXSTRLEN);
+                strcpy((char *)Ctrl[r].fmt, (char *)s);
+            }
         }
     }
 

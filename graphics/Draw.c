@@ -2325,7 +2325,8 @@ void cmd_circle(void)
             SyntaxError();
         if (*argv[0] != '(')
             error("Expected opening bracket");
-        if (mytoupper(*argv[argc - 1]) == 'F')
+        unsigned char *fp = checkstring(argv[argc - 1], (unsigned char *)"F");
+        if (fp != NULL && *fp == 0) // the flag F alone, not any argument starting with F, such as a colour fcol (issue #112)
         {
             argc -= 2;
             fill = true;
