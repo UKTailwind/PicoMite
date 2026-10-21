@@ -3446,6 +3446,12 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     // now we step through the parameters in the definition of the sub/fun
     // for each one we create the local variable and compare its type to that supplied in the callers list
     CurrentLinePtr = SubLinePtr; // any errors must be at the definition
+    if (CallersLinePtr == NULL && g_LocalIndex == 0 && g_hashlistpointer)
+    { // a call typed at the prompt, over the locals an error or a break left in a SUB or FUNCTION on the level this
+      // call takes ("Local variable already declared"): that call is over. (Not at the prompt itself: CONTINUE
+      // after a break needs them, and its loops)
+        ClearVars(1, true);
+    }
     g_LocalIndex++;
 #ifdef SUBPROFILE
     EnterLocalFrame();         // open a new local-variable frame for this sub/fun
