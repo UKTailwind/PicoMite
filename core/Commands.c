@@ -4641,8 +4641,12 @@ void MIPS16 do_chain(unsigned char *cmdline)
 	OSK_OnRunStart();
 #endif
 	unsigned char *filename = (unsigned char *)"", *cmd_args = (unsigned char *)"";
-	unsigned char *cmdbuf = GetMemory(256);
-	memcpy(cmdbuf, cmdline, STRINGSIZE);
+	unsigned char *cmdbuf = GetMemory(STRINGSIZE);
+	int cmdlen = strlen((char *)cmdline);
+	if (cmdlen > STRINGSIZE - 1)
+		cmdlen = STRINGSIZE - 1;
+	memcpy(cmdbuf, cmdline, cmdlen); // the statement only, not 256 bytes whatever its length
+	cmdbuf[cmdlen] = 0;
 	getcsargs(&cmdbuf, 3);
 	switch (argc)
 	{
@@ -4671,7 +4675,8 @@ void MIPS16 do_chain(unsigned char *cmdline)
 	}
 	FreeMemory(cmdbuf);
 	unsigned char *pcmd_args = buf + strlen((char *)filename) + 3; // *** THW 16/4/23
-	*cmdline = 0;
+	// (no *cmdline = 0: cmdline is the program itself, which a RAM slot runs in place - the zero
+	// stayed and the next run CHAINed to no file, issue #109)
 	do_end(false);
 	SaveContext();
 	ClearVars(0, false);
