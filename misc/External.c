@@ -3679,6 +3679,8 @@ void cmd_keyscan(void)
                 ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
                 // break;
             }
+            else if (PrtScrTake(key))
+                ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
             else
             {
                 if (!(key == 255))

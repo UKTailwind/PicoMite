@@ -136,6 +136,8 @@ err_t tcp_telnet_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                                         MMAbort = true;                      // set the flag for the interpreter to see
                                         ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
                                 }
+                                else if (PrtScrTake(ConsoleRxBuf[ConsoleRxBufHead]))
+                                        ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
                                 else if (ConsoleRxBuf[ConsoleRxBufHead] == keyselect && KeyInterrupt != NULL)
                                 {
                                         Keycomplete = 1;

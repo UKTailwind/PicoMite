@@ -1132,6 +1132,8 @@ void processcode(unsigned char Code)
       ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
                                            // break;
     }
+    else if (PrtScrTake(c))
+      ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
     else
     {
       if (!(justset && c == '3'))

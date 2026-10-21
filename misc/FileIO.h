@@ -546,14 +546,22 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
         bool FileTry(bool (*fn)(void *), void *arg);
         void FileRename(char *from, char *to);
 #define FileDelete(name) FileRename(name, NULL)
-/* Print Screen's key code (ScreenShot, FileIO.c); not in the PicoMiteRP2040MIN,
-   which has no room for it: there the tests compile to nothing. */
+/* Print Screen's key code, 0x9D, and Ctrl-\ (0x1C, which any terminal can send)
+   (ScreenShot, FileIO.c); not in the PicoMiteRP2040MIN, which has no room for
+   it: there the tests compile to nothing.  PrtScrTake(c) is each console
+   producer's test for OPTION PRINTSCREEN ON: such a key is taken, not queued,
+   and the running program saves the screen (PrintScreenNow). */
 #ifdef PICOMITEMIN
 #define KEY_IS_PRTSCR(c) 0
 #define ScreenShot() ((void)0)
+#define PrtScrTake(c) 0
 #else
-#define KEY_IS_PRTSCR(c) ((c) == 0x9D)
+#define KEY_IS_PRTSCR(c) ((c) == 0x9D || (c) == 0x1C)
         void ScreenShot(void);
+        extern volatile bool PrintScreenOn, PrintScreenPending;
+        bool PrtScrTakeKey(int c);
+        void PrintScreenNow(void);
+#define PrtScrTake(c) (PrintScreenOn && PrtScrTakeKey(c))
 #endif
         int ExistsDir(char *p, char *q, int *filesystem);
         int FileSize(char *p);

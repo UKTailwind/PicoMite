@@ -8598,5 +8598,33 @@ void ScreenShot(void)
     FileTry(ScreenShotSave, NULL);
     cmdline = savecmdline;
 }
+
+/* OPTION PRINTSCREEN ON, a temporary option (off at RUN and at the prompt):
+   while a program runs, Print Screen and Ctrl-\ save the screen too.  Each
+   console producer takes the key where it arrives (PrtScrTake, in its
+   interrupt or poll), so the program never reads it, and the screen is saved
+   where the program can stop for it: after a statement and in a PAUSE
+   (check_interrupt), and in INPUT's wait (MMgetline). */
+volatile bool PrintScreenOn, PrintScreenPending;
+bool PrtScrTakeKey(int c)
+{
+    if (!KEY_IS_PRTSCR(c))
+        return false;
+    PrintScreenPending = true;
+    IntSignal(); // so that check_interrupt looks after this statement
+    return true;
+}
+
+// the save, keeping the program's MM.ERRNO and MM.ERRMSG$ (FileTry clears them)
+void PrintScreenNow(void)
+{
+    char msg[MAXERRMSG];
+    int e = MMerrno;
+    PrintScreenPending = false;
+    strcpy(msg, MMErrMsg);
+    ScreenShot();
+    MMerrno = e;
+    strcpy(MMErrMsg, msg);
+}
 #endif
 /*  @endcond */

@@ -5374,6 +5374,20 @@ void MIPS16 cmd_option(void)
     }
 #endif
 
+#ifndef PICOMITEMIN
+    tp = checkstring(cmdline, (unsigned char *)"PRINTSCREEN");
+    if (tp)
+    { // temporary: a running program's Print Screen and Ctrl-\ save the screen too (FileIO.c); off at RUN and at the prompt
+        if (checkstring(tp, (unsigned char *)"ON"))
+            PrintScreenOn = true;
+        else if (checkstring(tp, (unsigned char *)"OFF"))
+            PrintScreenOn = PrintScreenPending = false;
+        else
+            SyntaxError();
+        return;
+    }
+#endif
+
     tp = checkstring(cmdline, (unsigned char *)"BASE");
     if (tp)
     {
@@ -10940,6 +10954,10 @@ int __not_in_flash_func(check_interrupt)(void)
        when no program is running. */
     if (!IntReady.any)
         return 0; // quick exit: nothing signalled and nothing to poll
+#ifndef PICOMITEMIN
+    if (PrintScreenPending)
+        PrintScreenNow(); // OPTION PRINTSCREEN: Print Screen or Ctrl-\ while the program runs (FileIO.c)
+#endif
     if (InterruptReturn != NULL || CurrentLinePtr == NULL)
         return 0; // skip if we are in an interrupt or in immediate mode
     if (IntReady.count)

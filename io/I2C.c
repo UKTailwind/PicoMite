@@ -680,6 +680,8 @@ void CheckI2CKeyboard(int noerror, int read)
         ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
         // break;
       }
+      else if (PrtScrTake(c))
+        ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
       else
       {
         ConsoleRxBuf[ConsoleRxBufHead] = c; // store the byte in the ring buffer
@@ -4287,6 +4289,8 @@ static void MIPS16 PicoCalcKeyEvent(uint16_t buff)
       ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
                                            // break;
     }
+    else if (PrtScrTake(c))
+      ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
     else
     {
       ConsoleRxBuf[ConsoleRxBufHead] = c; // store the byte in the ring buffer

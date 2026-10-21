@@ -386,6 +386,8 @@ void on_uart_irq0()
 				MMAbort = true;						 // set the flag for the interpreter to see
 				ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
 			}
+			else if (PrtScrTake(cc))
+				; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
 			else if (cc == keyselect && KeyInterrupt != NULL)
 			{
 				Keycomplete = true; // ON KEY k: signal the interrupt, don't buffer the key
@@ -469,6 +471,8 @@ void on_uart_irq1()
 				MMAbort = true;						 // set the flag for the interpreter to see
 				ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
 			}
+			else if (PrtScrTake(cc))
+				; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
 			else if (cc == keyselect && KeyInterrupt != NULL)
 			{
 				Keycomplete = true; // ON KEY k: signal the interrupt, don't buffer the key

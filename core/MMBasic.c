@@ -7823,6 +7823,9 @@ void MIPS16 ClearRuntime(bool all)
     findlabel(NULL);         // clear the label cache
     OptionErrorSkip = 0;
     optionangle = 1.0;
+#ifndef PICOMITEMIN
+    PrintScreenOn = PrintScreenPending = false; // OPTION PRINTSCREEN is set by the program itself
+#endif
     useoptionangle = false;
     optionfulltime = false;
     optionfastaudio = 0;

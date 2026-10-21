@@ -1033,6 +1033,8 @@ uint8_t PSRAMpin;
                     ConsoleRxBufHead = ConsoleRxBufTail;
                     break;
                 }
+                else if (PrtScrTake(c))
+                    ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
                 else if (c == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
@@ -1087,6 +1089,8 @@ uint8_t PSRAMpin;
                     ConsoleRxBufHead = ConsoleRxBufTail; // Flush buffer
                     break;                               // Exit loop after abort
                 }
+                else if (PrtScrTake(c))
+                    ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
                 // Check for key interrupt (signal only, don't buffer)
                 else if (c == keyselect && KeyInterrupt != NULL)
                 {
@@ -1243,6 +1247,8 @@ uint8_t PSRAMpin;
                     ConsoleRxBufHead = ConsoleRxBufTail;
                     break;
                 }
+                else if (PrtScrTake(b))
+                    ; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
                 else if (b == keyselect && KeyInterrupt != NULL)
                 {
                     Keycomplete = true;
@@ -1597,6 +1603,10 @@ int __not_in_flash_func(MMInkey)(void)
         while (1)
         {
             CheckAbort();
+#ifndef PICOMITEMIN
+            if (filenbr == 0 && PrintScreenPending)
+                PrintScreenNow(); // OPTION PRINTSCREEN: Print Screen or Ctrl-\ in INPUT (FileIO.c)
+#endif
             if (FileTable[filenbr].com > MAXCOMPORTS && FileEOF(filenbr))
                 break;
             c = MMfgetc(filenbr);
@@ -4741,6 +4751,9 @@ uint32_t testPSRAM(void)
             }
             if (_excep_code != POSSIBLE_WATCHDOG)
                 _excep_code = 0;
+#ifndef PICOMITEMIN
+            PrintScreenOn = PrintScreenPending = false; // OPTION PRINTSCREEN ends with the program
+#endif
             PrepareProgram(false); // Don't abort on error - just silently skip bad definitions
             if (ProgramValid && !ErrorInPrompt && FindSubFun((unsigned char *)"MM.PROMPT", 0) >= 0)
             {

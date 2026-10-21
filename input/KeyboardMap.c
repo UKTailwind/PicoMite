@@ -1075,6 +1075,8 @@ void USR_KEYBRD_ProcessData(uint8_t data)
 		ConsoleRxBufHead = ConsoleRxBufTail; // empty the buffer
 											 // break;
 	}
+	if (PrtScrTake(data))
+		return; // OPTION PRINTSCREEN ON: the running program's screenshot (FileIO.c), not a key
 	if (data == '\n')
 	{
 		if (sendCRLF == 3)
