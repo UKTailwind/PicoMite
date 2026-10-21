@@ -11168,7 +11168,9 @@ void execute(char *mycmd)
 	// we have to fool the tokeniser into thinking that it is processing a program line entered at the console
 	skipspace(mycmd);
 	strcpy((char *)inpbuf, (const char *)getCstring((unsigned char *)mycmd)); // then copy the argument
-	if (!(mytoupper(inpbuf[0]) == 'R' && mytoupper(inpbuf[1]) == 'U' && mytoupper(inpbuf[2]) == 'N'))
+	// the word RUN, not any text that starts with R, U, N (runs = 5, running = 1: issue #108)
+	unsigned char *rp = checkstring(inpbuf, (unsigned char *)"RUN");
+	if (rp == NULL)
 	{ // convert the string to upper case
 		while (inpbuf[i])
 		{
@@ -11204,23 +11206,13 @@ void execute(char *mycmd)
 	}
 	else
 	{
-		unsigned char *p = inpbuf;
-		//		char* q;
-		//		char fn[STRINGSIZE] = { 0 };
+		// the RUN token, then the text after the word (fixed offsets assumed "RUN" and one space:
+		// a bare RUN had strlen - 4 = (size_t)-1 bytes moved)
 		unsigned short tkn = GetCommandValue((unsigned char *)"RUN");
 		tknbuf[0] = (tkn & 0x7f) + C_BASETOKEN;
 		tknbuf[1] = (tkn >> 7) + C_BASETOKEN; // tokens can be 14-bit
-		p[0] = (tkn & 0x7f) + C_BASETOKEN;
-		p[1] = (tkn >> 7) + C_BASETOKEN; // tokens can be 14-bit
-		memmove(&p[2], &p[4], strlen((char *)p) - 4);
-		/*		if ((q = strchr((char *)p, ':'))) {
-					q--;
-					*q = '0';
-				}*/
-		p[strlen((char *)p) - 2] = 0;
-		//		MMPrintString(fn); PRet();
-		//		CloseAudio(1);
-		strcpy((char *)tknbuf, (char *)inpbuf);
+		strcpy((char *)tknbuf + 2, (char *)rp);
+		tknbuf[strlen((char *)tknbuf) + 1] = 0;
 		if (CurrentlyPlaying != P_NOTHING)
 			CloseAudio(1);
 		longjmp(jmprun, 1);
