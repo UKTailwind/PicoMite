@@ -2402,9 +2402,13 @@ static int RBNamesLocal(unsigned char *p, unsigned char *end, unsigned char *ent
             continue;
         }
         sz = symbolsize(*p);
+        int canon = SymCanonAt(p); // Count and count are two symbols of one name
         for (j = 0; j < n; j++)
-            if (symbolsize(entry[off[2 * j]]) == sz && memcmp(entry + off[2 * j], p, sz) == 0)
+        {
+            unsigned char *nm = entry + off[2 * j];
+            if (canon >= 0 ? (issymbol(*nm) && SymCanonAt(nm) == canon) : (symbolsize(*nm) == sz && memcmp(nm, p, sz) == 0))
                 return 1;
+        }
         p += sz;
     }
     return 0;
