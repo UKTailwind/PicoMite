@@ -709,7 +709,7 @@ static void ray_cmd_map(unsigned char *p)
 {
     getcsargs(&p, 5);
     if (argc < 5)
-        error("Expected: RAY MAP w, h, map%() or map$()");
+        error("Expected: RAY MAP w, h, map@() or map@()", '%', '$'); // error()'s codes as text go in as @ arguments (issue #111)
 
     int w = getint(argv[0], 1, RAY_MAX_MAP_W);
     int h = getint(argv[2], 1, RAY_MAX_MAP_H);

@@ -10793,7 +10793,7 @@ void MIPS16 fun_struct(void)
 		// Parse remaining arguments: typename$, element$
 		getcsargs(&p, 3); // typename$, element$ = 3 tokens
 		if (argc != 3)
-			error("Syntax: STRUCT(OFFSET typename$, element$)");
+			error("Syntax: STRUCT(OFFSET typename@, element@)", '$', '$'); // error()'s codes as text go in as @ arguments (issue #111)
 
 		// Get the structure type name (argv[0])
 		typename_str = getstring(argv[0]);
@@ -10830,7 +10830,7 @@ void MIPS16 fun_struct(void)
 		// Parse remaining argument: typename$
 		getcsargs(&p, 1); // typename$ = 1 token
 		if (argc != 1)
-			error("Syntax: STRUCT(SIZEOF typename$)");
+			error("Syntax: STRUCT(SIZEOF typename@)", '$'); // error()'s codes as text go in as @ arguments (issue #111)
 
 		// Get the structure type name (argv[0])
 		typename_str = getstring(argv[0]);
@@ -10861,7 +10861,7 @@ void MIPS16 fun_struct(void)
 		// Parse remaining arguments: typename$, element$
 		getcsargs(&p, 3); // typename$, element$ = 3 tokens
 		if (argc != 3)
-			error("Syntax: STRUCT(TYPE typename$, element$)");
+			error("Syntax: STRUCT(TYPE typename@, element@)", '$', '$'); // error()'s codes as text go in as @ arguments (issue #111)
 
 		// Get the structure type name (argv[0])
 		typename_str = getstring(argv[0]);

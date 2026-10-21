@@ -790,7 +790,7 @@ int getGPpin(unsigned char *pinarg, int pio, int base)
             || ExtCurrentConfig[pin] == EXT_BOOT_RESERVED)
                 error("Pin in use");
         if (PinDef[pin].GPno < base || PinDef[pin].GPno > base + 31)
-                error("Pin out of range for base %");
+                error("Pin out of range for base %", base); // (the base was missing: issue #111)
         return PinDef[pin].GPno;
 }
 

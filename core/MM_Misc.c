@@ -6759,7 +6759,7 @@ void MIPS16 cmd_option(void)
         else if (checkstring(tp, (unsigned char *)"NONE"))
             radio = RADIO_WIFI_OFF | RADIO_BT_OFF;
         else
-            error("Syntax: OPTION RADIO BOTH | WEB | BLUETOOTH | NONE");
+            error("Syntax: OPTION RADIO BOTH @ WEB @ BLUETOOTH @ NONE", '|', '|', '|'); // error()'s codes as text go in as @ arguments (issue #111)
         if ((radio & RADIO_BT_OFF) && AUDIO_BLUETOOTH)
             error("Audio is on Bluetooth (OPTION AUDIO)");
         Option.Radio = radio;
@@ -10414,7 +10414,7 @@ void fun_format(void)
         {
             inspec++;
             if (inspec > 1)
-                error("Only one format specifier (%) allowed");
+                error("Only one format specifier (@) allowed", '%'); // error()'s codes as text go in as @ arguments (issue #111)
             continue;
         }
 
