@@ -5728,6 +5728,8 @@ void MIPS16 cmd_option(void)
         {
             if (checkstring((unsigned char *)p, (unsigned char *)"GAMEMITE"))
                 strcpy((char *)Option.platform, "Game*Mite");
+            else if (strcasecmp(p, "PicoCalc") == 0) // in OPTION RESET PICOCALC's case: the PicoCalc checks are strcmp()s (issue #114)
+                strcpy((char *)Option.platform, "PicoCalc");
             else
                 strcpy((char *)Option.platform, p);
         }
