@@ -947,6 +947,7 @@ static int RBEvaluate(rbcx_t *x, unsigned char **pp);
 static int RBEvaluateS(rbcx_t *x, unsigned char **pp);
 static int RBFcall(rbcx_t *x, unsigned char **pp, int *op);
 static unsigned char *RBArgEnd(unsigned char *p, int close);
+static int RBHasEqual(unsigned char *s, unsigned char *e, int top);
 
 /* P4a: an element of a numeric array, name(i [, j ...]) as findvar reads it
    (a bracket straight after the name and its suffix, not a FUNCTION's): its
@@ -1683,6 +1684,8 @@ static unsigned char *RBLetInto(rbcx_t *x, unsigned char *p, int stop)
         q = p;
         if ((ttype = RBElement(x, &q, RC_ADEL, 1)) == 0)
             return NULL;
+        if (RBHasEqual(p, q, 0))
+            return NULL; // cmd_let's = is the first one, in the index here: its Syntax error
         tgt = -1;
     }
     else
@@ -1879,6 +1882,31 @@ static unsigned char *RBArgEnd(unsigned char *p, int close)
             break;
     }
     return p;
+}
+
+// An = token from s to e (outside quotes and symbols; at bracket depth 0 only, if top):
+// cmd_let takes the first = in a statement for the assignment and cmd_for splits
+// its parts at a top-level one, so a statement with one there is the text path's
+// error, not a comparison to compile
+static int RBHasEqual(unsigned char *s, unsigned char *e, int top)
+{
+    int depth = 0, quote = 0;
+    for (; s < e; s++)
+    {
+        if (*s == '"')
+            quote = !quote;
+        else if (quote)
+            continue;
+        else if (issymbol(*s))
+            s += symbolsize(*s) - 1;
+        else if (*s == '(' || (*s >= C_BASETOKEN && (tokentype(*s) & (T_FUN | T_FNA)) == T_FUN)) // (a function's bracket is in its token)
+            depth++;
+        else if (*s == ')')
+            depth--;
+        else if (*s == tokenEQUAL && (!top || depth == 0))
+            return 1;
+    }
+    return 0;
 }
 
 // An argument that is an array element alone, name(i [, j]) and not a
