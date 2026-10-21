@@ -5835,7 +5835,7 @@ void cmd_error(void)
 	{
 		s = getCstring(cmdline);
 		// CurrentLinePtr = NULL;                                      // suppress printing the line that caused the issue
-		error((char *)s);
+		error("$", (char *)s); // the text as the argument: as the format its %, @, $, | ... read arguments there are none of (issue #110)
 	}
 	else
 		error("");
