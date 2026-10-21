@@ -385,7 +385,7 @@ SPRITE SCROLL x, y [, fill_color]
 | Parameter | Description |
 |-----------|-------------|
 | `x` | Horizontal scroll amount (positive = right) |
-| `y` | Vertical scroll amount (positive = down) |
+| `y` | Vertical scroll amount (positive = up) |
 | `fill_color` | Color to fill exposed areas, or -1 for no fill, or -2 (default) for wrap-around |
 
 **Notes:**

@@ -2006,6 +2006,8 @@ void cmd_sprite(void)
         if (!(x == 0 && y == 0))
         {
             scroll_bpp_t bpp = scroll_get_bpp();
+            if (bpp == SCROLL_BPP_1)
+                bpp = SCROLL_BPP_4; // the wrap strip is ReadBufferFast's: a nibble a pixel in MODE 1 too (ReadBuffer2Fast)
             int ay = (y > 0 ? y : -y);
             int ax = (x > 0 ? x : -x);
             m = scroll_rect_bytes(maxW, ay, bpp);
@@ -2397,7 +2399,6 @@ void fun_sprite(void)
                 int sprite_transparent2 = sprite_transparent << 4;
                 int sh = sp->h;
                 int sw = sp->w;
-                int rowbytes = (sw + 1) >> 1; // bytes per row in packed 4-bit format
 
                 // Cache backgroundcollision array pointer
                 short *bgc = sp->backgroundcollision;
@@ -2431,23 +2432,16 @@ void fun_sprite(void)
                 // Scan all pixels in the background store
                 for (int py = 0; py < sh; ++py)
                 {
-                    char *rowptr = bstore + py * rowbytes;
-
                     for (int px = 0; px < sw; ++px)
                     {
-                        // Check if background pixel at (px, py) is non-transparent
-                        int bytepos = px >> 1;
+                        // Check if background pixel at (px, py) is non-transparent: the store is one stream of
+                        // w*h nibbles, so with an odd width a row does not start a byte
+                        int nib = py * sw + px;
                         int is_transparent;
-                        if (px & 1)
-                        {
-                            // Odd x - upper nibble
-                            is_transparent = ((rowptr[bytepos] & 0xf0) == sprite_transparent2);
-                        }
+                        if (nib & 1)
+                            is_transparent = ((bstore[nib >> 1] & 0xf0) == sprite_transparent2); // upper nibble
                         else
-                        {
-                            // Even x - lower nibble
-                            is_transparent = ((rowptr[bytepos] & 0x0f) == sprite_transparent);
-                        }
+                            is_transparent = ((bstore[nib >> 1] & 0x0f) == sprite_transparent); // lower nibble
 
                         if (is_transparent)
                             continue;
@@ -2550,11 +2544,17 @@ void fun_sprite(void)
                     }
                 }
             }
+            else
+            { // not showing: nothing (the result was left from the last function)
+                iret = 0;
+                if (sp != NULL)
+                    memset(sp->backgroundcollision, 0, sizeof(sp->backgroundcollision));
+            }
         }
         else if (argc == 5)
         {
             int side = (int)getint(argv[4], 0, 7);
-            iret = sp->backgroundcollision[side];
+            iret = sp != NULL ? sp->backgroundcollision[side] : 0; // (a sprite never made has none)
         }
         else
             SyntaxError();

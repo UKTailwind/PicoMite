@@ -243,7 +243,7 @@ pdf.body_text("Scrolls the background and layer 0 sprites.")
 pdf.code_block("SPRITE SCROLL x, y [, fill_color]")
 pdf.table_row('Parameter', 'Description', header=True)
 pdf.table_row('x', 'Horizontal scroll amount (positive = right)')
-pdf.table_row('y', 'Vertical scroll amount (positive = down)')
+pdf.table_row('y', 'Vertical scroll amount (positive = up)')
 pdf.table_row('fill_color', 'Color for exposed areas, -1 no fill, -2 wrap-around (default)')
 pdf.body_text("Layer 0 sprites scroll with the background. Layers 1-4 remain stationary. Static objects also scroll.")
 
