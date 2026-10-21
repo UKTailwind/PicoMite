@@ -778,8 +778,8 @@ static void ray_cmd_map(unsigned char *p)
             int v = (int)arr[i];
             if (v < 0)
                 v = 0;
-            if (v > NUM_PATTERNS)
-                v = NUM_PATTERNS;
+            if (v >= RAY_MAX_WALLDEFS)
+                v = RAY_MAX_WALLDEFS - 1; // the last wall type, as the string form (NUM_PATTERNS, 32, read past walldefs[])
             rstate->map[i] = (uint8_t)v;
         }
     }
