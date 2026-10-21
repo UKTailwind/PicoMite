@@ -241,7 +241,7 @@ typedef struct
 struct spritebuffer
 {
     // 8-byte aligned fields first (16 bytes)
-    int64_t master;          // Bitmask of which sprites are copies
+    int64_t master;          // How many copies of this sprite are open (-1: it is a copy)
     uint64_t lastcollisions; // Previous collision state
     // 4-byte aligned pointers (24 bytes)
     char *spritebuffptr; // Points to the sprite image, NULL if not in use

@@ -384,74 +384,27 @@ void CheckSTCollisions(int bnbr, int *n)
     }
 }
 
+// an edge of the screen as a collision (0xF1 left, 0xF2 top, 0xF4 right, 0xF8 bottom), while there is room in
+// collisions[]: an edge left out is reported by a later move, as its bit in edges stays clear
+static void edgecollision(struct spritebuffer *sb, int *n, int out, int bit)
+{
+    if (!out)
+        sb->edges &= ~bit;
+    else if (!(sb->edges & bit) && *n < MAXCOLLISIONS)
+    {
+        sb->edges |= bit;
+        sb->collisions[(*n)++] = (char)(0xF0 | bit);
+    }
+}
 void checklimits(int bnbr, int *n)
 {
-    int maxW = HRes;
-    int maxH = VRes;
     struct spritebuffer *sb = spritebuff[bnbr]; // Cache pointer for performance
-    sb->collisions[*n] = 0;
-    if (sb->x < 0)
-    {
-        if (!(sb->edges & 1))
-        {
-            sb->edges |= 1;
-            sb->collisions[*n] = (char)0xF1;
-            (*n)++;
-        }
-    }
-    else
-        sb->edges &= ~1;
-
-    if (sb->y < 0)
-    {
-        if (!(sb->edges & 2))
-        {
-            sb->edges |= 2;
-            if (sb->collisions[*n] & 0xF0)
-                sb->collisions[*n] |= 0xF2;
-            else
-            {
-                sb->collisions[*n] = (char)0xF2;
-                (*n)++;
-            }
-        }
-    }
-    else
-        sb->edges &= ~2;
-
-    if (sb->x + sb->w > maxW)
-    {
-        if (!(sb->edges & 4))
-        {
-            sb->edges |= 4;
-            if (sb->collisions[*n] & 0xF0)
-                sb->collisions[*n] |= 0xF4;
-            else
-            {
-                sb->collisions[*n] = (char)0xF4;
-                (*n)++;
-            }
-        }
-    }
-    else
-        sb->edges &= ~4;
-
-    if (sb->y + sb->h > maxH)
-    {
-        if (!(sb->edges & 8))
-        {
-            sb->edges |= 8;
-            if (sb->collisions[*n] & 0xF0)
-                sb->collisions[*n] |= 0xF8;
-            else
-            {
-                sb->collisions[*n] = (char)0xF8;
-                (*n)++;
-            }
-        }
-    }
-    else
-        sb->edges &= ~8;
+    if (*n <= MAXCOLLISIONS)
+        sb->collisions[*n] = 0;
+    edgecollision(sb, n, sb->x < 0, 1);
+    edgecollision(sb, n, sb->y < 0, 2);
+    edgecollision(sb, n, sb->x + sb->w > HRes, 4);
+    edgecollision(sb, n, sb->y + sb->h > VRes, 8);
 }
 // may sprites k and kk collide: both showing, and on the same layer or either on layer 0 (which meets every layer)
 static inline int SpritesMeet(int k, int kk)
@@ -844,6 +797,11 @@ void MIPS16 loadsprite(unsigned char *p)
             height = getinteger(argv[4]);
         if (height == 0)
             height = width;
+        if (width < 1 || width > MAXSTRLEN || height < 1 || number < 1)
+        { // (a line of the file is at most MAXSTRLEN characters, read into buff)
+            FileClose(fnbr);
+            error((char *)"Invalid sprite file");
+        }
         bnbr = startsprite;
         if (number + startsprite - 1 > MAXBLITBUF) // the last is number + startsprite - 1
         {
@@ -886,6 +844,7 @@ void MIPS16 loadsprite(unsigned char *p)
                     }
                 }
                 q = spritebuff[bnbr]->spritebuffptr;
+                toggle = 0; // (each sprite's first pixel is the low nibble of its first byte)
                 lc = height;
             }
             while (lc--)
@@ -1588,7 +1547,7 @@ void cmd_sprite(void)
             if (*argv[2] == '#')
                 argv[2]++;
             c1 = cpy = (int)getint(argv[2], 1, MAXBLITBUF);
-            n1 = nbr = (int)getint(argv[4], 1, MAXBLITBUF - 1);
+            n1 = nbr = (int)getint(argv[4], 1, MAXBLITBUF + 1 - cpy); // (the last is MAXBLITBUF)
 
             while (n1)
             {
@@ -1617,7 +1576,7 @@ void cmd_sprite(void)
                 spritebuff[cpy]->mymaster = bnbr;
                 spritebuff[cpy]->master = -1;
                 spritebuff[cpy]->edges = 0;
-                spritebuff[bnbr]->master |= ((int64_t)1 << (int64_t)cpy);
+                spritebuff[bnbr]->master++; // its copies (a mask of them shifted 1 by 64 for copy 64)
                 spritebuff[bnbr]->lastcollisions = 0;
                 spritebuff[cpy]->active = false;
                 spritebuff[cpy]->boundsleft = spritebuff[bnbr]->boundsleft;
@@ -1739,7 +1698,8 @@ void cmd_sprite(void)
             else
             {
                 // Copy sprite: only blitstoreptr is allocated separately
-                spritebuff[spritebuff[bnbr]->mymaster]->master &= ~(1 << bnbr);
+                if (spritebuff[spritebuff[bnbr]->mymaster]->master > 0)
+                    spritebuff[spritebuff[bnbr]->mymaster]->master--; // one copy fewer
                 FreeMemorySafe((void **)&spritebuff[bnbr]->blitstoreptr);
             }
             spritebuff[bnbr]->spritebuffptr = NULL;
