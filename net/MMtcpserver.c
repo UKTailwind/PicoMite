@@ -645,7 +645,7 @@ void cmd_transmit(unsigned char *cmd)
                 int t;
                 char *fname;
                 char c;
-                char vartest[MAXVARLEN];
+                char vartest[STRINGSIZE]; // an {expression} (the manual), not just a name: up to STRINGSIZE - 3 with "r=" (issue #115)
                 int vartestp;
                 int Size;
                 int buffersize = 4096;
@@ -686,11 +686,23 @@ void cmd_transmit(unsigned char *cmd)
                                         vartestp = 0;
                                         while (c != '}')
                                         {
+                                                if (FileEOF(fn))
+                                                { // FileGetChar() has no end-of-file value: it would go on with junk
+                                                        FileClose(fn);
+                                                        error("Missing } in page");
+                                                }
                                                 c = FileGetChar(fn);
                                                 if (vartestp == 0 && c == '{')
                                                         break;
                                                 if (c != '}')
+                                                {
+                                                        if (vartestp >= STRINGSIZE - 3) // it goes into inpbuf after "r="
+                                                        {
+                                                                FileClose(fn);
+                                                                error("Expression too long in page");
+                                                        }
                                                         vartest[vartestp++] = c;
+                                                }
                                         }
                                         if (c == '{')
                                                 SocketOut[SocketOutPointer++] = c;
