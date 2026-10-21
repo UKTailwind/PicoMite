@@ -1920,10 +1920,9 @@ void cmd_ireturn(void)
     }
 #endif
     ErrorSkipDepth = SaveErrorSkipDepth;
-    if (SaveOptionErrorSkip > 0) // (+ 1 for IRETURN itself, where it is counted: see ExecuteProgram)
-        OptionErrorSkip = SaveOptionErrorSkip + (ExecDepth <= ErrorSkipDepth ? 1 : 0);
-    else if (SaveOptionErrorSkip < 0)
-        OptionErrorSkip = SaveOptionErrorSkip; // Restore ON ERROR IGNORE (-1)
+    OptionErrorSkip = SaveOptionErrorSkip; // the interrupted code's ON ERROR, none (0) too: the handler's own ends here
+    if (OptionErrorSkip > 0 && OptionErrorSkip < 100000 && ExecDepth <= ErrorSkipDepth)
+        OptionErrorSkip++; // a SKIP count: + 1 for IRETURN itself, where it is counted (see ExecuteProgram)
     strcpy(MMErrMsg, SaveErrorMessage);
     MMerrno = Saveerrno;
     MMerrline = Saveerrline;
