@@ -135,6 +135,7 @@ static void cleanupAndError(char *message, RGBQUAD **palette, uint8_t **rowBuffe
                 }
                 FreeMemorySafe((void **)lineTable);
         }
+        ForceFileClose(BMPfnbr); // the file decoded: its callers' FileClose after decodeBMP is not reached
         error(message);
         // This function never returns
 }
@@ -1509,6 +1510,7 @@ int ReadAndDisplayBMP(int fnbr, int dither_mode, int img_x_offset,
 
         if (width == 0 || height == 0)
         {
+                ForceFileClose(fnbr);
                 error("BMP: Invalid file signature (not a BMP file)");
                 return -2;
         }
@@ -1516,6 +1518,7 @@ int ReadAndDisplayBMP(int fnbr, int dither_mode, int img_x_offset,
         // Check size limits
         if (width > 3840 || height > 2160)
         {
+                ForceFileClose(fnbr);
                 error("BMP: Image dimensions invalid or exceed 3840x2160");
                 return -6;
         }
@@ -1526,23 +1529,12 @@ int ReadAndDisplayBMP(int fnbr, int dither_mode, int img_x_offset,
                 int dither_method = DITHER_METHOD(dither_mode);
                 int dither_format = DITHER_FORMAT(dither_mode);
 
-                // Allocate buffers for dithering error diffusion
+                // Allocate buffers for dithering error diffusion: temporary, so that an error in decodeBMP (which
+                // does not come back here) frees them with the statement's other temporaries
                 int error_lines = (dither_method == METHOD_ATKINSON) ? 3 : 2;
-                state.error_buffer_r = (int16_t *)GetMemory(width * error_lines * sizeof(int16_t));
-                state.error_buffer_g = (int16_t *)GetMemory(width * error_lines * sizeof(int16_t));
-                state.error_buffer_b = (int16_t *)GetMemory(width * error_lines * sizeof(int16_t));
-
-                if (!state.error_buffer_r || !state.error_buffer_g || !state.error_buffer_b)
-                {
-                        if (state.error_buffer_r)
-                                FreeMemory((void *)state.error_buffer_r);
-                        if (state.error_buffer_g)
-                                FreeMemory((void *)state.error_buffer_g);
-                        if (state.error_buffer_b)
-                                FreeMemory((void *)state.error_buffer_b);
-                        error("BMP: Failed to allocate error buffers");
-                        return -8;
-                }
+                state.error_buffer_r = (int16_t *)GetTempMemory(width * error_lines * sizeof(int16_t));
+                state.error_buffer_g = (int16_t *)GetTempMemory(width * error_lines * sizeof(int16_t));
+                state.error_buffer_b = (int16_t *)GetTempMemory(width * error_lines * sizeof(int16_t));
 
                 // Initialize error buffers to zero
                 memset(state.error_buffer_r, 0, width * error_lines * sizeof(int16_t));
@@ -1566,18 +1558,7 @@ int ReadAndDisplayBMP(int fnbr, int dither_mode, int img_x_offset,
 
         // Allocate output buffer for visible portion
         int max_visible_width = (HRes < width) ? HRes : width;
-        state.output_buffer = (uint8_t *)GetMemory(max_visible_width * 3);
-        if (!state.output_buffer)
-        {
-                if (use_dithering)
-                {
-                        FreeMemory((void *)state.error_buffer_r);
-                        FreeMemory((void *)state.error_buffer_g);
-                        FreeMemory((void *)state.error_buffer_b);
-                }
-                error("BMP: Failed to allocate output buffer");
-                return -10;
-        }
+        state.output_buffer = (uint8_t *)GetTempMemory(max_visible_width * 3); // (temporary too)
 
         // Initialize state
         state.buffer_width = width;
@@ -1606,15 +1587,7 @@ int ReadAndDisplayBMP(int fnbr, int dither_mode, int img_x_offset,
                 result = decodeBMP(false);
         }
 
-        // Cleanup
-        FreeMemory((void *)state.output_buffer);
-        if (use_dithering)
-        {
-                FreeMemory((void *)state.error_buffer_r);
-                FreeMemory((void *)state.error_buffer_g);
-                FreeMemory((void *)state.error_buffer_b);
-        }
-
+        // (the buffers are temporary: they go with the statement)
         g_display_state = NULL;
         linecallback = NULL;
 

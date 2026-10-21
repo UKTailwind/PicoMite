@@ -194,6 +194,7 @@ void FreeMemory(void *addr);
 void FreeMemorySafe(void **addr);
 void ClearTempMemory(void);
 void ClearSpecificTempMemory(void *addr);
+bool KeepTempMemory(void *addr);
 void MemoryShareStop(void);
 
 /* ============================================================================

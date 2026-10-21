@@ -1251,20 +1251,31 @@ void cmd_blit(void)
         if (!BasicFileOpen((char *)p, BMPfnbr, FA_READ))
             return;
         decodeBMPheader(&state.image_width, &state.image_height);
+        if (state.image_width < 1 || state.image_height < 1)
+        { // (not a BMP file: decodeBMP would say so after the checks below had let it through as 0 x 0)
+            ForceFileClose(BMPfnbr);
+            error("Invalid BMP file");
+        }
         if (state.width == -1)
             state.width = state.image_width - state.img_x_offset;
         if (state.height == -1)
             state.height = state.image_height - state.img_y_offset;
-        if (state.width + state.img_x_offset > state.image_width || state.height + state.img_y_offset > state.image_height)
+        if (state.width < 1 || state.height < 1 || state.width + state.img_x_offset > state.image_width || state.height + state.img_y_offset > state.image_height)
+        {
+            ForceFileClose(BMPfnbr);
             StandardError(34);
-        blitbuff[bnbr].blitbuffptr = GetMemory(state.width * state.height * 3 + 4);
-        memset(blitbuff[bnbr].blitbuffptr, 0xFF, state.width * state.height * 3 + 4);
-        state.output_buffer = (uint8_t *)blitbuff[bnbr].blitbuffptr;
+        }
+        // decoded into a temporary block, which an error frees with the statement's others (given to the buffer
+        // first, it was left in use with no size), and kept as the buffer once the file has decoded
+        state.output_buffer = (uint8_t *)GetTempMainMemory(state.width * state.height * 3 + 4);
+        memset(state.output_buffer, 0xFF, state.width * state.height * 3 + 4);
         linecallback = loadBMPlinecallback;
         decodeBMP(0);
+        FileClose(BMPfnbr);
+        KeepTempMemory(state.output_buffer);
+        blitbuff[bnbr].blitbuffptr = (char *)state.output_buffer;
         blitbuff[bnbr].w = state.width;
         blitbuff[bnbr].h = state.height;
-        FileClose(BMPfnbr);
         return;
     }
 #ifndef PICOMITEVGA

@@ -1086,6 +1086,12 @@ void writetoflash(uint8_t *buffer, int length)
 }
 
 // External line callback function
+// FLASH LOAD IMAGE's first pass: every line decoded, none kept
+static bool checkBMPlinecallback(int *imagewidth, int *imageheight, uint32_t *linedata, int *linenumber)
+{
+    return true;
+}
+
 bool writetoflashcallback(int *imagewidth, int *imageheight, uint32_t *linedata, int *linenumber)
 {
     static uint8_t *writebuf = NULL;
@@ -1296,6 +1302,11 @@ void MIPS16 cmd_flash(void)
             FileClose(BMPfnbr);
             error("Image too large for slot");
         }
+        // the whole file decoded once with nothing kept, so that one decodeBMP refuses (a header it does not
+        // take, RLE data that ends early...) leaves the slot as it was: erased and written only after that
+        linecallback = checkBMPlinecallback;
+        decodeBMP(1);
+        onBMPSeek(0, 0);
         if (!CurrentLinePtr)
         {
             MMPrintString("Saving ");

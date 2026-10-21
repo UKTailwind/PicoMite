@@ -1989,14 +1989,15 @@ void __not_in_flash_func(ClearTempMemory)(void)
     g_TempMemoryIsChanged = false;
 }
 
-void MIPS16 ClearSpecificTempMemory(void *addr)
+// a temporary block taken off the list, so that it lasts until it is freed as an ordinary one (BLIT LOAD's buffer,
+// once its file has decoded: until then an error frees it with the other temporaries).  false if it is not on it.
+bool MIPS16 KeepTempMemory(void *addr)
 {
     int i;
     for (i = 0; i < g_StrTmpIndex; i++)
     {
         if (g_StrTmp[i] == addr)
         {
-            FreeMemory(addr);
             g_StrTmpIndex--;
             while (i < g_StrTmpIndex)
             {
@@ -2005,9 +2006,16 @@ void MIPS16 ClearSpecificTempMemory(void *addr)
                 i++;
             }
             g_StrTmp[i] = NULL; // Clear the stale entry at end
-            return;
+            return true;
         }
     }
+    return false;
+}
+
+void MIPS16 ClearSpecificTempMemory(void *addr)
+{
+    if (KeepTempMemory(addr))
+        FreeMemory(addr);
 }
 #ifdef RP2350
 void MIPS64 __not_in_flash_func(FreeMemory)(void *addr)

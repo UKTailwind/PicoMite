@@ -1894,14 +1894,26 @@ void cmd_sprite(void)
         if (!BasicFileOpen((char *)pp, BMPfnbr, FA_READ))
             return;
         decodeBMPheader(&state.image_width, &state.image_height); //        BDEC_bReadHeader(&BmpDec, fnbr);
+        if (state.image_width < 1 || state.image_height < 1)
+        { // (not a BMP file: decodeBMP would say so after the checks below had let it through as 0 x 0)
+            ForceFileClose(BMPfnbr);
+            error("Invalid BMP file");
+        }
         if (state.width == -1)
             state.width = state.image_width - state.img_x_offset;
         if (state.height == -1)
             state.height = state.image_height - state.img_y_offset;
-        if (state.width + state.img_x_offset > state.image_width || state.height + state.img_y_offset > state.image_height)
+        if (state.width < 1 || state.height < 1 || state.width + state.img_x_offset > state.image_width || state.height + state.img_y_offset > state.image_height)
+        {
+            ForceFileClose(BMPfnbr);
             StandardError(34);
+        }
         state.output_buffer = GetTempMainMemory(state.width * state.height * 3);
-        // Allocate sprite structure if needed
+        memset(state.output_buffer, 0xFF, state.width * state.height * 3);
+        linecallback = loadBMPlinecallback;
+        decodeBMP(0); // (an error closes the file, and the temporary buffer goes with the statement)
+        FileClose(BMPfnbr);
+        // the sprite and its buffers only now: given before the decode, an error left them in use with no size
         if (spritebuff[bnbr] == NULL)
             allocSpriteBuff(bnbr);
         // Allocate both buffers in one block to save memory pages
@@ -1911,10 +1923,6 @@ void cmd_sprite(void)
             spritebuff[bnbr]->spritebuffptr = combined;
             spritebuff[bnbr]->blitstoreptr = combined + bufsize;
         }
-        memset(state.output_buffer, 0xFF, state.width * state.height * 3);
-        linecallback = loadBMPlinecallback;
-        decodeBMP(0);
-        FileClose(BMPfnbr);
         initSpriteBuff(bnbr, state.width, state.height);
         char *t = spritebuff[bnbr]->spritebuffptr;
         int i = state.width * state.height;
