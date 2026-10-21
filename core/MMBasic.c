@@ -1139,6 +1139,7 @@ unsigned char *nextstmt;                            // Pointer to the next state
 unsigned char *CurrentLinePtr, *SaveCurrentLinePtr; // Pointer to the current line (used in error reporting)
 unsigned char *CmdTokenPtr;                         // the command token of the statement being run (cmdline may point to a copy of its arguments)
 unsigned char *ContinuePoint;                       // Where to continue from if using the continue statement
+int ContinueLocalIndex;                             // and the SUB/FUNCTION level it was at (a break in a SUB)
 
 extern int TraceOn;
 extern unsigned char *TraceBuff[TRACE_BUFF_SIZE];
@@ -7920,6 +7921,7 @@ void MIPS16 ClearRuntime(bool all)
     g_flag = 0;
     g_varcnt = 0;
     CurrentLinePtr = ContinuePoint = NULL;
+    ContinueLocalIndex = 0;
     for (i = 0; i < MAXSUBFUN; i++)
         subfun[i] = NULL;
 #ifdef GUICONTROLS

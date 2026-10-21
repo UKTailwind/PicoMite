@@ -4411,6 +4411,7 @@ uint32_t testPSRAM(void)
             _excep_code = 0;
         *tknbuf = 0;
         ContinuePoint = nextstmt; // in case the user wants to use the continue command
+        ContinueLocalIndex = 0;
         clearrepeat();
 #ifdef USBKEYBOARD
         for (int i = 0; i < 4; i++)
@@ -4474,6 +4475,7 @@ uint32_t testPSRAM(void)
             ScrewUpTimer = 0;
             ProgMemory = (uint8_t *)flash_progmemory;
             ContinuePoint = nextstmt; // in case the user wants to use the continue command
+            ContinueLocalIndex = g_LocalIndex; // and its level: a break in a SUB goes on in it (the prompt runs at 0)
             *tknbuf = 0;              // we do not want to run whatever is in the token buffer
             {
                 /* a call whose arguments were being processed (a CTRL-C in them) is gone:

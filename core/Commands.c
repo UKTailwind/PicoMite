@@ -3222,6 +3222,7 @@ void MIPS16 cmd_continue(void)
 	if (ContinuePoint == NULL)
 		error("Cannot continue");
 	//    IgnorePIN = false;
+	g_LocalIndex = ContinueLocalIndex; // a break in a SUB: its locals, and its END SUB clears its level, not level 0 (every variable)
 	nextstmt = ContinuePoint;
 }
 
