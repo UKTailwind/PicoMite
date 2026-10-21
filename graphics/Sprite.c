@@ -637,7 +637,9 @@ void BlitShowBuffer(int bnbr, int x1, int y1, int mode)
         }
         sb->x = x1;
         sb->y = y1;
-        if (!(mode == 2))
+        if (mode == 2) // SWAP: the background under the old image first, so that none of it stays where the new one is transparent
+            DrawBufferFast(x1, y1, x1 + w - 1, y1 + h - 1, -1, (unsigned char *)current);
+        else
             ReadBufferFast(x1, y1, x1 + w - 1, y1 + h - 1, (unsigned char *)current);
         // we now have the old screen image stored together with the coordinates
         if (rotation)
@@ -1482,8 +1484,6 @@ void cmd_sprite(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"SWAP")))
     {
         int rbnbr = 0, mode = 2;
-        int64_t master;
-        signed char mymaster;
         getcsargs(&p, 5);
         if (argc < 3)
             SyntaxError();
@@ -1505,11 +1505,7 @@ void cmd_sprite(void)
         //        if (spritebuff[rbnbr]->master == -1)error((char *)"Can't swap a copy");
         if (!(spritebuff[rbnbr]->w == spritebuff[bnbr]->w && spritebuff[rbnbr]->h == spritebuff[bnbr]->h))
             error((char *)"Size mismatch");
-        // copy the relevant data
-        master = spritebuff[rbnbr]->master;
-        mymaster = spritebuff[rbnbr]->mymaster;
-        spritebuff[rbnbr]->master = spritebuff[bnbr]->master;
-        spritebuff[rbnbr]->mymaster = spritebuff[bnbr]->mymaster;
+        // copy the relevant data (master, mymaster and the bounds describe each sprite's own image, which stays its own)
         // the new sprite takes over the background stored under the old one: copied into its own store (each store
         // is part of its sprite's block, so sharing the pointer put two sprites on one store, freed with the old one)
         memcpy(spritebuff[rbnbr]->blitstoreptr, spritebuff[bnbr]->blitstoreptr, (spritebuff[bnbr]->w * spritebuff[bnbr]->h + 1) >> 1);
@@ -1517,17 +1513,11 @@ void cmd_sprite(void)
         spritebuff[rbnbr]->y = spritebuff[bnbr]->y;
         spritebuff[rbnbr]->layer = spritebuff[bnbr]->layer;
         spritebuff[rbnbr]->lastcollisions = spritebuff[bnbr]->lastcollisions;
-        spritebuff[rbnbr]->boundsleft = spritebuff[bnbr]->boundsleft;
-        spritebuff[rbnbr]->boundsright = spritebuff[bnbr]->boundsright;
-        spritebuff[rbnbr]->boundstop = spritebuff[bnbr]->boundstop;
-        spritebuff[rbnbr]->boundsbottom = spritebuff[bnbr]->boundsbottom;
         if (spritebuff[rbnbr]->layer == 0)
             zeroLIFOswap(bnbr, rbnbr);
         else
             LIFOswap(bnbr, rbnbr);
         // "Hide" the old sprite
-        spritebuff[bnbr]->master = master;
-        spritebuff[bnbr]->mymaster = mymaster;
         spritebuff[bnbr]->x = SPRITE_POS_INACTIVE;
         spritebuff[bnbr]->y = SPRITE_POS_INACTIVE;
         spritebuff[bnbr]->layer = -1;
