@@ -8005,8 +8005,11 @@ void GetCommsTxData(unsigned char *argv[], int argc, int dataidx, int len, unsig
 
     // A single data argument may be a string variable or a whole array referenced with empty
     // brackets.  Anything else (a list, a single expression, a single array element) is handled
-    // as a list of expressions below.
-    if (argc == dataidx + 1 && isnamestart(*argv[dataidx]))
+    // as a list of expressions below.  Only the whole argument as a bare name or a name with ()
+    // is probed: not an expression that starts with a name (a$ + b$ was sent as a$), nor a
+    // FUNCTION's call, whose arguments findvar would evaluate as indices (issue #102)
+    unsigned char *e = (argc == dataidx + 1 && isnamestart(*argv[dataidx])) ? skipvar(argv[dataidx], true) : NULL;
+    if (e != NULL && *e == 0 && (e[-1] != ')' || e[-2] == '(') && FindSubFun(argv[dataidx], 1) < 0)
     {
         ptr = findvar(argv[dataidx], V_NOFIND_NULL | V_EMPTY_OK);
         if (ptr != NULL)

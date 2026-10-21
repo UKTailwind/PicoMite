@@ -802,7 +802,7 @@ int cmd_tcpclient(void)
             SyntaxError();
         ;
         char *request = (char *)getstring(argv[0]);
-        if (isnamestartsym((uint8_t)*argv[0]) && *skipvar(argv[0], true) == 0)
+        if (isnamestartsym((uint8_t)*argv[0]) && *skipvar(argv[0], true) == 0 && FindSubFun(argv[0], 1) < 0) // (a FUNCTION's call is no variable: issue #102)
         { /* a string variable: request points at its own data, which lwIP sends
              without copying and keeps until the server acknowledges it, after
              STREAM has returned (an expression's is temporary memory) */

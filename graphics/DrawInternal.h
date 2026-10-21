@@ -121,8 +121,8 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
         *stride = sizeof(MMFLOAT); // Default stride for normal arrays (8 bytes)
     char pp[STRINGSIZE] = {0};
     strcpy(pp, (char *)p);
-    if (!isnamestartsym(pp[0]))
-    { // found a literal
+    if (!isnamestartsym(pp[0]) || FindSubFun((unsigned char *)pp, 1) >= 0)
+    { // found a literal, or a user FUNCTION's call: findvar would evaluate its arguments as indices (issue #102)
         *n = 1;
         return;
     }
