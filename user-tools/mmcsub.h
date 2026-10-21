@@ -429,7 +429,16 @@ static void mm_pr_f(MMFLOAT v)
                                ? ((const unsigned char *)(s))[1] : 0))
 #define mm_scmp(a, b) Mstrcmp((const unsigned char *)(a), (const unsigned char *)(b))
 #define mm_sset(d, s) Mstrcpy((unsigned char *)(d), (unsigned char *)(s))
-#define mm_ssetm(d, cap, s) Mstrcpy((unsigned char *)(d), (unsigned char *)(s))
+/* A string with a LENGTH - an element of a string array declared with one, a
+   STRING member of a TYPE - is cap characters: a longer value is the
+   interpreter's "String too long" (cmd_let), as in mmb2c's own runtime. The
+   copy alone ran into the next element, or past the array. */
+static void mm_ssetm(void *d, int cap, const void *s)
+{
+    if (((const unsigned char *)s)[0] > cap)
+        error((char *)"String too long");
+    Mstrcpy((unsigned char *)d, (unsigned char *)s);
+}
 
 /* A destination for a string FUNCTION's result, and a by-value copy of a
    string argument. Both are scratch temporaries, so they live until the
