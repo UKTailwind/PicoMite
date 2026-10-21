@@ -2487,13 +2487,12 @@ int CheckEmpty(char *p)
 {
     int emptyarray = 0;
     char *pp = strchr((char *)p, '(');
-    if (pp)
-    {
-        pp++;
-        skipspace(pp);
-        if (*pp == ')')
-            emptyarray = 1;
-    }
+    if (pp == NULL)
+        return 0; // an address: an expression with no '(' (PEEK(...)'s is its token) - the scan below went from NULL into the boot ROM (issue #116)
+    pp++;
+    skipspace(pp);
+    if (*pp == ')')
+        emptyarray = 1;
     while (*(++pp))
     {
         if (*pp == '(')
