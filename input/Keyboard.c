@@ -776,6 +776,11 @@ void processcode(unsigned char Code)
       c = '/'; // another special case, this time the keypad forward slash
     else if (KeyE0 && Code == 0x5A)
       c = NUM_ENT; // yet another special case, this time the keypad enter key
+    else if (KeyE0 && Code == 0x7C)
+    {             // Print Screen (E0 12 E0 7C): 0x9D, as the USB keyboard gives it; the keypad table had it as '*' (the keypad's * is 7C alone)
+      LShift = 0; // its E0 12 is a fake left shift (as before a keypad code): left set, it makes the code 0xBD
+      c = 0x9D;
+    }
     else if ((KeyE0 || !NumLock) && Code >= 104 && Code < 0x80 && !AltGrDown)
     {             // a keycode from the numeric keypad
       LShift = 0; // when num lock LED is on codes are preceeded by left shift
