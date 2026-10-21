@@ -1358,8 +1358,8 @@ static int RBChoice(rbcx_t *x, unsigned char **pp, int *op)
     p = ae + 1;
     ae = RBArgEnd(p, ')');
     skipspace(p);
-    if (*ae != ',' || p == ae || (ta = RBEvaluateS(x, &p)) == 0)
-        return 0;
+    if (*ae != ',' || p == ae || (ta = RBEvaluateS(x, &p)) == 0 || ta == T_STR)
+        return 0; // (strings: fun_ternary copies the one it picks; compiled, a FUNCTION later in the expression could change it)
     skipspace(p);
     if (p != ae)
         return 0;
