@@ -3427,7 +3427,7 @@ static void RBEmitPart(unsigned char *base, uint32_t libbit, unsigned char *entr
     if (*p == 0 || *p == '\'')
         return;
     tok = p;
-    if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+    if (commandtbl_is_cmd(p)) // (not the byte test alone: ^^ passes it and decodes past commandtbl)
     {
         cmdl = next = p + sizeof(CommandToken);
         cmd = 1;
@@ -3642,7 +3642,7 @@ static void RBWalk(unsigned char *base, uint32_t libbit)
                 cmdl = next = p + 1;
                 cmd = -1;
             }
-            else if (p[0] >= C_BASETOKEN && p[1] >= C_BASETOKEN)
+            else if (commandtbl_is_cmd(p)) // (not the byte test alone: ^^ passes it and decodes past commandtbl)
             {
                 cmdl = next = p + sizeof(CommandToken);
                 cmd = 1;
