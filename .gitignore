@@ -106,3 +106,5 @@ Bas/sandglass_tools/art.idx
 Bas/sandglass_tools/convert.log
 # test and benchmark output (the reference files already committed stay tracked)
 Bas/bench/results/
+# Peter's articles: kept beside the source, not part of it
+Articles/
