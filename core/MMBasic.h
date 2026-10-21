@@ -719,6 +719,7 @@ long long int FloatToInt64(MMFLOAT x);
      * ============================================================================ */
     unsigned char *findline(int, int);
     unsigned char *findlabel(unsigned char *labelptr);
+    unsigned char *LabelFind(unsigned char *labelptr);
     unsigned char *GetNextCommand(unsigned char *p, unsigned char **CLine, unsigned char *EOFMsg);
     int GetLineLength(unsigned char *p);
     int CountLines(unsigned char *target);

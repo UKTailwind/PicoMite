@@ -8449,36 +8449,31 @@ void MIPS16 cmd_restore(void)
 		}
 		else
 		{
-			/* Variable argument — target changes at run time; never cache.   */
-			void *ptr = findvar(cmdline, V_NOFIND_NULL);
-			if (ptr)
+			/* A bare name is a label, or else a variable; anything else is an expression: a string is a
+			   label, a number a line (issue #103).  The target changes at run time; never cache.  (findvar
+			   cannot be used to probe: it raises on a function's token, an array without its index...) */
+			unsigned char *e = skipvar(cmdline, true), *q = e, *lp = NULL;
+			skipspace(q);
+			int bare = isnamestart(*cmdline) && isnamechar(e[-1]) && (*q == 0 || *q == '\'');
+			if (bare && (lp = LabelFind(cmdline)) != NULL)
+				NextDataLine = lp;
+			else if (bare && findvar(cmdline, V_NOFIND_NULL) == NULL)
+				NextDataLine = findlabel(cmdline); // neither: "Cannot find label"
+			else
 			{
-				if (VREC(g_VarIndex)->type & T_NBR)
+				MMFLOAT f = 0;
+				long long int i64 = 0;
+				unsigned char *s = NULL;
+				int t = T_NOTYPE;
+				evaluate(cmdline, &f, &i64, &s, &t, false);
+				if (t & T_STR)
 				{
-					if (DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
-					{ // Not an array
-						SyntaxError();
-						;
-					}
-					NextDataLine = findline(getinteger(cmdline), true);
-				}
-				else if (VREC(g_VarIndex)->type & T_INT)
-				{
-					if (DimIsRealArray(RAW_DIM((*VREC(g_VarIndex)), 0)))
-					{ // Not an array
-						SyntaxError();
-						;
-					}
-					NextDataLine = findline(getinteger(cmdline), true);
+					unsigned char label[MAXSTRLEN + 1];
+					Mstrcpy(label, s);
+					NextDataLine = findlabel(MtoC(label));
 				}
 				else
-				{
-					NextDataLine = findlabel(getCstring(cmdline)); // must be a label
-				}
-			}
-			else if (isnamestart(*cmdline))
-			{
-				NextDataLine = findlabel(cmdline); // must be a label
+					NextDataLine = findline((t & T_NBR) ? FloatToInt64(f) : i64, true);
 			}
 			NextData = 0;
 		}

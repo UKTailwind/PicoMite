@@ -4650,7 +4650,7 @@ unsigned char __not_in_flash_func (*findline)(int nbr, int mustfind)
 // The line (its T_NEWLINE) of the label at labelptr (a symbol or text), from the
 // name index; an error if there is none.  A label is global: one name, one line,
 // in the library or the program.
-static unsigned char *findlabel_text(unsigned char *labelptr)
+static unsigned char *findlabel_text(unsigned char *labelptr, int noerror)
 {
     unsigned char name[MAXVARLEN];
     const unsigned char *lv;
@@ -4665,12 +4665,26 @@ static unsigned char *findlabel_text(unsigned char *labelptr)
         ll = 1;
     }
     if (ll >= MAXVARLEN) // a label is at most 31 characters (the manual)
+    {
+        if (noerror)
+            return NULL;
         error("Label too long");
+    }
     for (i = 0; i < ll; i++)
         name[i] = mytoupper(lv[i]);
     if ((s = NameFind(name, ll, NameHash(name, ll), 1 << NK_LABEL)) == NULL)
+    {
+        if (noerror)
+            return NULL;
         error("Cannot find label");
+    }
     return (unsigned char *)s->target;
+}
+
+// the line of a label, or NULL when there is no label of that name (findlabel() raises "Cannot find label")
+unsigned char *LabelFind(unsigned char *labelptr)
+{
+    return findlabel_text(labelptr, true);
 }
 
 // A symbol remembers the label of its name (see Symbols.h)
@@ -4680,10 +4694,10 @@ unsigned char *findlabel(unsigned char *labelptr)
     if (labelptr != NULL && issymbol(*labelptr) && (k = SymCanonAt(labelptr)) >= 0)
     {
         if (SymCold[k].labind == NULL)
-            SymCold[k].labind = findlabel_text(labelptr); // (an error if there is no such label)
+            SymCold[k].labind = findlabel_text(labelptr, false); // (an error if there is no such label)
         return SymCold[k].labind;
     }
-    return findlabel_text(labelptr);
+    return findlabel_text(labelptr, false);
 }
 
 // count the number of lines up to and including the line pointed to by the argument
