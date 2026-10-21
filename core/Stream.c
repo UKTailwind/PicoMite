@@ -3063,6 +3063,8 @@ static int RBForPart(rbcx_t *x, unsigned char **pp, int vt)
     ex = p;
     if (ex - x->entry > 255 || (t = RBEvaluate(x, &p)) == 0)
         return 0;
+    if (RBHasEqual(ex, p, 1))
+        return 0; // cmd_for splits at a top-level =: FOR with misplaced = or TO
     if (t != vt)
     {
         if (vt == T_NBR)
