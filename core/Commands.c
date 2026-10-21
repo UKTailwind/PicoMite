@@ -8847,8 +8847,22 @@ void MIPS16 cmd_dim(void)
 			type = ImpliedType;			 // each name has the type before the names, or its own AS type (set back
 										 // only after making a variable, a STATIC whose global existed kept the one before)
 			p = skipvar(argv[i], false); // point to after the variable
-			while (!(*p == 0 || *p == tokenAS || *p == (unsigned char)'\'' || *p == tokenEQUAL))
-				p++; // skip over a LENGTH keyword if there and see if we can find "AS"
+			// skip over a LENGTH keyword if there and see if we can find "AS": not inside the LENGTH
+			// expression's brackets or strings (a comparison is '=', a string may hold a ' - issue #104)
+			for (int depth = 0; *p && !(depth == 0 && (*p == tokenAS || *p == (unsigned char)'\'' || *p == tokenEQUAL)); p++)
+			{
+				if (*p == '"')
+				{
+					while (p[1] && p[1] != '"')
+						p++;
+					if (p[1])
+						p++; // to the closing quote
+				}
+				else if (*p == '(' || (tokentype(*p) & T_FUN))
+					depth++;
+				else if (*p == ')')
+					depth--;
+			}
 			chSave = *p;
 			chPosit = p;
 			*p = 0; // save the char then terminate the string so that LENGTH is evaluated correctly

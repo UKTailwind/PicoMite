@@ -5931,7 +5931,14 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
                 int depth = 1;
                 while (depth > 0 && *ptemp)
                 {
-                    if (*ptemp == '(' || (tokentype(*ptemp) & T_FUN))
+                    if (*ptemp == '"')
+                    { // a string's brackets do not count (issue #104)
+                        while (ptemp[1] && ptemp[1] != '"')
+                            ptemp++;
+                        if (ptemp[1])
+                            ptemp++;
+                    }
+                    else if (*ptemp == '(' || (tokentype(*ptemp) & T_FUN))
                         depth++;
                     else if (*ptemp == ')')
                         depth--;
@@ -6267,14 +6274,19 @@ findvar_found:
             {
                 do
                 {
-                    if (*p == '(')
+                    if (*p == '"')
+                    { // a string's brackets do not count (issue #104)
+                        while (p[1] && p[1] != '"')
+                            p++;
+                        if (p[1])
+                            p++;
+                    }
+                    else if (*p == '(' || (tokentype(*p) & T_FUN))
                         i++;
-                    if (tokentype(*p) & T_FUN)
-                        i++;
-                    if (*p == ')')
+                    else if (*p == ')')
                         i--;
                     p++;
-                } while (i);
+                } while (i && *p);
             }
             skipspace(p);
             if ((s = checkstring(p, (unsigned char *)"LENGTH")) != NULL)
