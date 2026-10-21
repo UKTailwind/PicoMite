@@ -1210,7 +1210,7 @@ static void print_padded(const char *s, int width)
 static void bta_scan(unsigned char *tp)
 {
     int seconds = 10;
-    if (*tp)
+    if (*tp && *tp != '\'') // (a ' comment is no argument: issue #113)
         seconds = getint(tp, 2, 60);
     bta_require_ready();
     if (inquiry_active || name_request_active)
@@ -1556,7 +1556,7 @@ static void bta_forget(unsigned char *tp)
 {
     bd_addr_t addr;
     bool one = false;
-    if (*tp)
+    if (*tp && *tp != '\'') // (a ' comment is no argument: issue #113)
     {
         if (sscanf_bd_addr((char *)getCstring(tp), addr) == 0)
             error("Invalid Bluetooth address");

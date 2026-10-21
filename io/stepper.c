@@ -5017,8 +5017,8 @@ void cmd_stepper(void)
             while (*s == ' ' || *s == '\t' || *s == ',')
                 s++;
 
-            // End-of-line or comment
-            if (*s == 0 || *s == '\r' || *s == '\n' || *s == ';')
+            // End-of-line or comment (G-code's ';', and BASIC's ' after STEPPER GC: issue #113)
+            if (*s == 0 || *s == '\r' || *s == '\n' || *s == ';' || *s == '\'')
                 break;
 
             // Parentheses comment

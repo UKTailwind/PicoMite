@@ -1108,7 +1108,7 @@ void MIPS16 cmd_mandelbrot(void)
     if ((p = checkstring(cmdline, (unsigned char *)"DRAW")))
     {
         /* MANDELBROT DRAW [maxiter] */
-        if (*p)
+        if (*p && *p != '\'') // (a ' comment is no argument: issue #113)
         {
             mb_maxiter = getint(p, 1, 10000);
         }
@@ -1165,7 +1165,7 @@ void MIPS16 cmd_mandelbrot(void)
     else
     {
         /* Bare MANDELBROT with no subcommand - just draw */
-        if (*cmdline)
+        if (*cmdline && *cmdline != '\'') // (a ' comment is no argument: issue #113)
         {
             mb_maxiter = getint(cmdline, 1, 10000);
         }

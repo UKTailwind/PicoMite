@@ -654,7 +654,7 @@ void cmd_web(void)
         tp = checkstring(cmdline, (unsigned char *)"CONNECT");
         if (tp)
         {
-                if (*tp)
+                if (*tp && *tp != '\'') // (a ' comment is no argument: issue #113)
                 {
                         setwifi(tp);
                         WebConnect();
@@ -672,7 +672,7 @@ void cmd_web(void)
         if (tp)
         {
                 void *ptr1 = NULL;
-                if (*tp)
+                if (*tp && *tp != '\'') // (a ' comment is no argument: issue #113)
                 {
                         ptr1 = findvar(tp, V_FIND | V_EMPTY_OK);
                         CHECK_STRUCT_MEMBER_ARRAY(); // Struct member arrays not supported here
