@@ -178,6 +178,27 @@ result = p.x + p.y
 distance = Sqr(p.x * p.x + p.y * p.y)
 ```
 
+### Reading Data Into Members
+
+`I2C READ`, `SPI READ` and `ONEWIRE READ` (and their second-channel and slave
+forms) can receive into a structure member: a string member, up to its own
+`LENGTH`, or a number member, alone or in a list. Here two values are read
+into two members, then eight bytes into a string member:
+
+```basic
+Type Reading
+  v As Integer
+  f As Integer
+  tag As String Length 8
+End Type
+Dim r As Reading
+SPI READ 2, r.v, r.f
+I2C READ &H50, 0, 8, r.tag
+```
+
+A whole structure, or a member of an element of a structure array given
+alone, is refused. Not on the PicoMiteRP2040MIN, which has no structures.
+
 ## Arrays of Structures
 
 You can create arrays where each element is a structure:
