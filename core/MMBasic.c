@@ -1153,6 +1153,7 @@ extern long long int CallCFunction(unsigned char *CmdPtr, unsigned char *ArgList
 // void checktype(int *, int);
 unsigned char *getvalue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *oo, int *ta);
 unsigned char tokenTHEN, tokenELSE, tokenGOTO, tokenEQUAL, tokenTO, tokenSTEP, tokenWHILE, tokenUNTIL, tokenGOSUB, tokenAS, tokenFOR;
+int opPOWER = E_END; // ^'s operator index (getvalue's ro), for a unary minus's powers (issue #96)
 unsigned short cmdIF, cmdENDIF, cmdEND_IF, cmdELSEIF, cmdELSE_IF, cmdELSE, cmdSELECT_CASE, cmdFOR, cmdNEXT, cmdWHILE, cmdENDSUB, cmdENDFUNCTION, cmdLOCAL, cmdSTATIC, cmdCASE, cmdDO, cmdLOOP, cmdCASE_ELSE, cmdEND_SELECT;
 unsigned short cmdSUB, cmdFUN, cmdCFUN, cmdCSUB, cmdIRET, cmdComment, cmdEndComment;
 #ifdef rp2350
@@ -1410,6 +1411,7 @@ void MIPS16 InitBasic(void)
     tokenELSE = GetTokenValue((unsigned char *)"Else");
     tokenGOTO = GetTokenValue((unsigned char *)"GoTo");
     tokenEQUAL = GetTokenValue((unsigned char *)"=");
+    opPOWER = GetTokenValue((unsigned char *)"^") - C_BASETOKEN;
     tokenTO = GetTokenValue((unsigned char *)"To");
     tokenSTEP = GetTokenValue((unsigned char *)"Step");
     tokenWHILE = GetTokenValue((unsigned char *)"While");
@@ -4105,6 +4107,14 @@ unsigned MIPS16 char __not_in_flash_func (*doexpr)(unsigned char *p, MMFLOAT *fa
             p = doexpr(p, &fa2, &ia2, &sa2, &o2, &t2);
     }
 }
+// a unary minus's value raised by the powers that follow it, left to right as doexpr applies them, before it is
+// negated: -2^2 is -(2^2), as in mathematics and most languages (issue #96).
+static unsigned char *__attribute__((noinline)) NegPowers(unsigned char *p, MMFLOAT *f, long long int *i64, unsigned char **s, int *ro, int *t)
+{
+    while (*ro == opPOWER)
+        p = doexpr(p, f, i64, s, ro, t);
+    return p;
+}
 // Inline macro to save results - eliminates repeated code
 #define SAVE_RESULTS() \
     do                 \
@@ -4180,6 +4190,8 @@ unsigned char MIPS16 __not_in_flash_func (*getvalue)(unsigned char *p, MMFLOAT *
                 }
                 else if (op_type == op_subtract)
                 {
+                    if (ro == opPOWER)
+                        p = NegPowers(p, &f, &i64, &s, &ro, &t); // -2^2 is -(2^2)
                     if (t & T_NBR)
                         f = -f;
                     else if (t & T_INT)

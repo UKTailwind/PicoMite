@@ -1006,6 +1006,7 @@ static int RBElement(rbcx_t *x, unsigned char **pp, int op, int target)
    type, or 0: another function, or an argument that does not end at the
    closing bracket (a second argument), stays text. */
 static int RBValue(rbcx_t *x, unsigned char **pp, int *op);
+static int RBDoExpr(rbcx_t *x, unsigned char **pp, int *t1, int *o1);
 static void RBCvif(rbcx_t *x);
 static int RBEvaluateS(rbcx_t *x, unsigned char **pp);
 
@@ -1472,6 +1473,10 @@ static int RBValue(rbcx_t *x, unsigned char **pp, int *op)
         p++;
         if ((t = RBValue(x, &p, op)) == 0 || t == T_STR)
             return 0; // (on a string: getvalue's error)
+        if (fn == op_subtract)
+            while (*op != E_END && tokentbl[*op].fptr == op_exp)
+                if (!RBDoExpr(x, &p, &t, op)) // the powers after a unary minus first, as getvalue: -2^2 is -(2^2)
+                    return 0;
         if (fn == op_not)
             RBOp(x, t == T_NBR ? RC_NOTF : RC_NOTI, 0);
         else if (fn == op_inv)
