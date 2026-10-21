@@ -493,23 +493,23 @@ PEEK(BYTE)
 ~OPTIONS
 OPTION settings
 
-OPTION                         OPTION LCDPANEL USER
-OPTION ANGLE                   OPTION LEGACY ON
-OPTION AUDIO                   OPTION LIST
-OPTION AUDIO BLUETOOTH         OPTION LOCAL KEYBOARD ON
-OPTION AUDIO I2S               OPTION LOCAL VARIABLES
-OPTION AUDIO SPI               OPTION LOGGING ON
-OPTION AUDIO VS1053            OPTION MILLISECONDS
-OPTION AUTOREFRESH             OPTION MODBUFF
-OPTION AUTORUN ON              OPTION MOUSE
-OPTION BACKLIGHT KBD           OPTION MOUSE DISABLE
-OPTION BASE                    OPTION MOUSE SENSITIVITY
-OPTION BAUDRATE                OPTION NOCHECK
-OPTION BREAK                   OPTION PICO
-OPTION CASE                    OPTION PICO PLUS
-OPTION CDC POLL RATE           OPTION PIN
-OPTION COLOURCODE ON           OPTION PLATFORM
-OPTION COMPILE ON              OPTION POWER
+OPTION                         OPTION LEGACY ON
+OPTION ANGLE                   OPTION LIST
+OPTION AUDIO                   OPTION LOCAL KEYBOARD ON
+OPTION AUDIO BLUETOOTH         OPTION LOCAL VARIABLES
+OPTION AUDIO I2S               OPTION LOGGING ON
+OPTION AUDIO SPI               OPTION MILLISECONDS
+OPTION AUDIO VS1053            OPTION MODBUFF
+OPTION AUTOREFRESH             OPTION MOUSE
+OPTION AUTORUN ON              OPTION MOUSE DISABLE
+OPTION BACKLIGHT KBD           OPTION MOUSE SENSITIVITY
+OPTION BASE                    OPTION NOCHECK
+OPTION BAUDRATE                OPTION PICO
+OPTION BREAK                   OPTION PICO PLUS
+OPTION CASE                    OPTION PIN
+OPTION CDC POLL RATE           OPTION PLATFORM
+OPTION COLOURCODE ON           OPTION POWER
+OPTION COMPILE ON              OPTION PRINTSCREEN
 OPTION CONSOLE                 OPTION PROFILING ON
 OPTION CONTINUATION LINES      OPTION PS2 PINS
 OPTION COUNT                   OPTION PSRAM PIN
@@ -536,6 +536,7 @@ OPTION LCD320                  OPTION VCC
 OPTION LCDPANEL                OPTION VGA PINS
 OPTION LCDPANEL CONSOLE        OPTION WEB MESSAGES
 OPTION LCDPANEL NOCONSOLE      OPTION WIFI
+OPTION LCDPANEL USER
 
 ~VARIABLES
 Predefined read-only variables
@@ -10156,6 +10157,19 @@ mode regardless of this setting.
 Not available on the WiFi and Bluetooth versions while GP23 is the wireless
 chip's power-on pin, as it is on the Pico W and Pico 2 W (on the WebMiteRP2040
 it always is).
+
+~OPTION PRINTSCREEN
+OPTION PRINTSCREEN ON | OFF
+
+NOT PICOMITEMIN While a program is running, the Print Screen key and Ctrl-\
+normally reach it as ordinary keys (codes 9D and 1C hex). With OPTION
+PRINTSCREEN ON they save the display instead, as they do at the command prompt
+(see Appendix I): after the statement that is running when the key is pressed,
+or at once during PAUSE and INPUT. While it is on, the program does not
+receive those two keys.
+The option must be in the program: RUN and the end of the program turn it off,
+as does OPTION PRINTSCREEN OFF. Saving the display does not change MM.ERRNO or
+MM.ERRMSG$.
 
 ~OPTION PROFILING
 OPTION PROFILING counts how often each command and each subroutine or function
