@@ -4616,21 +4616,25 @@ static __attribute__((noinline)) const uint16_t *RBStatic(unsigned char *e, unsi
 static __attribute__((noinline)) void RBLocalV(unsigned char *e, const uint16_t *off, union cell *sp)
 {
     sp[0].i = (uint32_t)RBLocalMake(e, off[0], off[1]);
-    sp[1].i = TypeMask(VREC(g_VarIndex)->type);
+    sp[1].i = TypeMask(VREC(g_VarIndex)->type) | ((long long)VREC(g_VarIndex)->size << 16); // its type, and a string's LENGTH
 }
 
 // RC_LOCALSET: SetValue's store of the value (type vt) in c[2] into the
 // variable whose data and type are c[0] and c[1], with evaluate's checks
 static __attribute__((noinline)) void RBLocalSet(union cell *c, int vt)
 {
-    int t = (int)c[1].i;
+    int t = (int)(c[1].i & 0xFFFF), size = (int)(c[1].i >> 16);
     void *v = (void *)(uint32_t)c[0].i;
     if ((t & (T_NBR | T_INT)) && vt == T_STR)
         StandardError(20);
     if ((t & T_STR) && vt != T_STR)
         error("Expected a string");
     if (t & T_STR)
+    {
+        if (*(unsigned char *)(uint32_t)c[2].i > size) // its LENGTH, as SetValue checks it
+            error("String too long");
         Mstrcpy(v, (unsigned char *)(uint32_t)c[2].i);
+    }
     else if (t & T_NBR)
         *(MMFLOAT *)v = vt == T_INT ? (MMFLOAT)c[2].i : c[2].f;
     else
