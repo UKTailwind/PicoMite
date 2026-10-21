@@ -624,7 +624,9 @@ void BlitShowBuffer(int bnbr, int x1, int y1, int mode)
     char *current;
     int x, xx, y, yy, rotation, fullmode = mode;
     mode &= 7;
-    rotation = sb->rotation;
+    rotation = sb->rotation & 3;
+    if (sb->rotation & 4)
+        fullmode |= 8; // orientations 4-7: every pixel, the transparent colour too (kept with the sprite: every redraw)
     current = sb->blitstoreptr;
     int w, h;
     if (sb->spritebuffptr != NULL)
@@ -635,11 +637,14 @@ void BlitShowBuffer(int bnbr, int x1, int y1, int mode)
         {
             DrawBufferFast(sb->x, sb->y, sb->x + w - 1, sb->y + h - 1, -1, (unsigned char *)current);
         }
-        sb->x = x1;
-        sb->y = y1;
+        if (!(mode & 4))
+        { // (WRITE draws a copy: a sprite showing keeps its place and its saved background)
+            sb->x = x1;
+            sb->y = y1;
+        }
         if (mode == 2) // SWAP: the background under the old image first, so that none of it stays where the new one is transparent
             DrawBufferFast(x1, y1, x1 + w - 1, y1 + h - 1, -1, (unsigned char *)current);
-        else
+        else if (!(mode & 4))
             ReadBufferFast(x1, y1, x1 + w - 1, y1 + h - 1, (unsigned char *)current);
         // we now have the old screen image stored together with the coordinates
         if (rotation)
@@ -1268,12 +1273,7 @@ void cmd_sprite(void)
             if (argc >= 9 && *argv[8])
                 spritebuff[bnbr]->rotation = (char)getint(argv[8], 0, 7);
             else
-                spritebuff[bnbr]->rotation = 0;
-            if (spritebuff[bnbr]->rotation > 3)
-            {
-                mode |= 8;
-                spritebuff[bnbr]->rotation &= 3;
-            }
+                spritebuff[bnbr]->rotation = 0; // (4-7 opaque: BlitShowBuffer)
             if (argc == 11 && *argv[10])
             {
                 newb = (int)getint(argv[10], 0, 1);
@@ -1283,7 +1283,16 @@ void cmd_sprite(void)
             h = spritebuff[bnbr]->h;
             if (spritebuff[bnbr]->active)
             {
-                if (newb)
+                // a new layer (it was ignored): within layers 1 to MAXLAYER, one list, the sprite keeps its place;
+                // to or from layer 0, the other list, it goes on top, as with newbuf
+                int old = spritebuff[bnbr]->layer;
+                if (!newb && layer != old && old != 0 && layer != 0)
+                {
+                    layer_in_use[old]--;
+                    layer_in_use[layer]++;
+                    spritebuff[bnbr]->layer = layer;
+                }
+                if (newb || (layer != old && (old == 0 || layer == 0)))
                 {
                     hidesafe(bnbr);
                     spritebuff[bnbr]->layer = layer;
@@ -1341,12 +1350,7 @@ void cmd_sprite(void)
             if (argc == 9)
                 spritebuff[bnbr]->rotation = (int)getint(argv[8], 0, 7);
             else
-                spritebuff[bnbr]->rotation = 0;
-            if (spritebuff[bnbr]->rotation > 3)
-            {
-                mode |= 8;
-                spritebuff[bnbr]->rotation &= 3;
-            }
+                spritebuff[bnbr]->rotation = 0; // (4-7 opaque: BlitShowBuffer)
             w = spritebuff[bnbr]->w;
             h = spritebuff[bnbr]->h;
             if (spritebuff[bnbr]->active)
@@ -1528,12 +1532,7 @@ void cmd_sprite(void)
         if (argc == 5)
             spritebuff[rbnbr]->rotation = (int)getint(argv[4], 0, 7);
         else
-            spritebuff[rbnbr]->rotation = 0;
-        if (spritebuff[rbnbr]->rotation > 3)
-        {
-            mode |= 8;
-            spritebuff[rbnbr]->rotation &= 3;
-        }
+            spritebuff[rbnbr]->rotation = 0; // (4-7 opaque: BlitShowBuffer)
         BlitShowBuffer(rbnbr, spritebuff[rbnbr]->x, spritebuff[rbnbr]->y, mode);
         if (sprites_in_use != LIFOpointer + zeroLIFOpointer || sprites_in_use != sumlayer())
             error((char *)"sprite internal error");
@@ -1797,17 +1796,14 @@ void cmd_sprite(void)
         {
             x1 = (int)getint(argv[2], -spritebuff[bnbr]->w + 1, maxW);
             y1 = (int)getint(argv[4], -spritebuff[bnbr]->h + 1, maxH);
-            if (argc == 7)
-                spritebuff[bnbr]->rotation = (char)getint(argv[6], 0, 7);
-            else
-                spritebuff[bnbr]->rotation = 4;
-            if ((spritebuff[bnbr]->rotation & 4) == 0)
-                mode |= 8;
-            spritebuff[bnbr]->rotation &= 3;
+            // WRITE's orientations 0-3 draw every pixel and 4-7 (the default) leave the transparent ones, the other
+            // way round from SHOW's; a sprite showing keeps its own orientation
+            int o = argc == 7 ? (int)getint(argv[6], 0, 7) : 4, keep = spritebuff[bnbr]->rotation;
+            spritebuff[bnbr]->rotation = (o & 3) | ((o & 4) ? 0 : 4);
             w = spritebuff[bnbr]->w;
             h = spritebuff[bnbr]->h;
-            //            int cursorhidden = 0;
             BlitShowBuffer(bnbr, x1, y1, mode);
+            spritebuff[bnbr]->rotation = keep;
         }
         else
             error((char *)"Buffer not in use");
@@ -2470,7 +2466,7 @@ void fun_sprite(void)
                 // Bounds arrays are calculated from original sprite orientation
                 // but sprite may be displayed flipped, so we need to transform
                 // the background pixel coordinates to match original orientation
-                int rotation = sp->rotation;
+                int rotation = sp->rotation & 3; // (bit 2 is the opaque flag)
 
                 // Scan all pixels in the background store
                 for (int py = 0; py < sh; ++py)
