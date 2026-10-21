@@ -1029,21 +1029,10 @@ void MIPS16 __not_in_flash_func(cmd_print)(void)
 	if (argc > 0 && *argv[0] == '#')
 	{ // check if the first arg is a file number
 		argv[0]++;
-		if ((*argv[0] == 'G') || (*argv[0] == 'g') || (issymbol(*argv[0]) && SymNameEqual(argv[0], "GPS")))
+		// the word GPS, as text or a symbol (see Symbols.h): not any name that starts with G (issue #107)
+		unsigned char *gp = checkstring(argv[0], (unsigned char *)"GPS");
+		if (gp != NULL && *gp == 0)
 		{
-			if (issymbol(*argv[0]))
-				argv[0] += symbolsize(*argv[0]); // GPS as a symbol (see Symbols.h)
-			else
-			{
-				argv[0]++;
-				if (!((*argv[0] == 'P') || (*argv[0] == 'p')))
-					SyntaxError();
-				;
-				argv[0]++;
-				if (!((*argv[0] == 'S') || (*argv[0] == 's')))
-					SyntaxError();
-				;
-			}
 			if (!GPSchannel && !(PinDef[Option.GPSTX].mode & UART0TX || PinDef[Option.GPSTX].mode & UART1TX))
 				error("GPS not activated"); // (neither OPEN ... AS GPS nor OPTION GPS: issue 41)
 			if (argc != 3)

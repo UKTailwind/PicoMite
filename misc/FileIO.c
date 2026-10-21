@@ -7530,17 +7530,10 @@ void cmd_open(void)
         }
         if (!is_comport)
             error("Invalid COM port");
-        if ((*argv[2] == 'G') || (*argv[2] == 'g'))
+        unsigned char *gp = checkstring(argv[2], (unsigned char *)"GPS");
+        if (gp != NULL && *gp == 0) // the word GPS, not any name that starts with G (issue #107)
         {
             MMFLOAT timeadjust = 0.0;
-            argv[2]++;
-            if (!((*argv[2] == 'P') || (*argv[2] == 'p')))
-                SyntaxError();
-            ;
-            argv[2]++;
-            if (!((*argv[2] == 'S') || (*argv[2] == 's')))
-                SyntaxError();
-            ;
             if (argc >= 5)
                 timeadjust = getnumber(argv[4]);
             if (timeadjust < -12.0 || timeadjust > 14.0)
@@ -7739,16 +7732,9 @@ void cmd_close(void)
     ;
     for (i = 0; i < argc; i += 2)
     {
-        if ((*argv[i] == 'G') || (*argv[i] == 'g'))
+        unsigned char *gp = checkstring(argv[i], (unsigned char *)"GPS");
+        if (gp != NULL && *gp == 0) // the word GPS, not any name that starts with G (issue #107)
         {
-            argv[i]++;
-            if (!((*argv[i] == 'P') || (*argv[i] == 'p')))
-                SyntaxError();
-            ;
-            argv[i]++;
-            if (!((*argv[i] == 'S') || (*argv[i] == 's')))
-                SyntaxError();
-            ;
             if (!GPSfnbr)
                 error("Not open");
             SerialClose(FileTable[GPSfnbr].com);
