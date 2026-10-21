@@ -1816,19 +1816,20 @@ void MIPS16 __not_in_flash_func(cmd_let)(void)
 	unsigned char *p1, *p2;
 	int vartype; // effective type (may differ for struct members)
 
-	p1 = cmdline;
-	// search through the line looking for the equals sign
-	while (*p1 && tokenfunction(*p1) != op_equal)
-		p1++;
-	if (!*p1)
-		StandardError(36);
-
-	// check that we have a straight forward variable
-	p2 = skipvar(cmdline, false);
-	skipspace(p2);
-	if (p1 != p2)
+	// the equals sign must follow the variable: skipvar() steps over its indices (a comparison
+	// inside them is the same token, so the first '=' in the line is no use - issue #101)
+	p1 = skipvar(cmdline, true);
+	skipspace(p1);
+	if (tokenfunction(*p1) != op_equal)
+	{ // the errors as before: no '=' at all is an unknown command, then skipvar's own, then syntax
+		p1 = cmdline;
+		while (*p1 && tokenfunction(*p1) != op_equal)
+			p1++;
+		if (!*p1)
+			StandardError(36);
+		skipvar(cmdline, false);
 		SyntaxError();
-	;
+	}
 
 	// whole-array assignment (eg, a() = b()) is handled out of line.
 	// detect it with an O(1) backward peek from the equals sign: only
@@ -5971,15 +5972,7 @@ void cmd_mid(void)
 		num = getint(argv[4], 0, sourcestring[0]);
 	if (start + (num < 0 ? 0 : num - 1) > sourcestring[0])
 		error("Selection exceeds length of string");
-	while (*cmdline && tokenfunction(*cmdline) != op_equal)
-		cmdline++;
-	if (!*cmdline)
-		SyntaxError();
-	;
-	++cmdline;
-	if (!*cmdline)
-		SyntaxError();
-	;
+	cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
 	char *value = (char *)getstring(cmdline);
 	if (num == -1)
 		num = value[0];
@@ -6012,15 +6005,7 @@ void cmd_byte(void)
 		error("Not a string");
 	unsigned char *sourcestring = (unsigned char *)getstring(argv[0]);
 	int start = getint(argv[2], 1, sourcestring[0]);
-	while (*cmdline && tokenfunction(*cmdline) != op_equal)
-		cmdline++;
-	if (!*cmdline)
-		SyntaxError();
-	;
-	++cmdline;
-	if (!*cmdline)
-		SyntaxError();
-	;
+	cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
 	int value = getint(cmdline, 0, 255);
 	sourcestring[start] = value;
 }
@@ -6039,15 +6024,7 @@ void cmd_bit(void)
 	if (!(bit_vtype & T_INT))
 		error("Not an integer");
 	uint64_t bit = (uint64_t)1 << (uint64_t)getint(argv[2], 0, 63);
-	while (*cmdline && tokenfunction(*cmdline) != op_equal)
-		cmdline++;
-	if (!*cmdline)
-		SyntaxError();
-	;
-	++cmdline;
-	if (!*cmdline)
-		SyntaxError();
-	;
+	cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
 	int value = getint(cmdline, 0, 1);
 	if (value)
 		*source |= bit;
@@ -6068,15 +6045,7 @@ void cmd_flag(void)
 {
 	getcsargs(&cmdline, 1);
 	uint64_t bit = (uint64_t)1 << (uint64_t)getint(argv[0], 0, 63);
-	while (*cmdline && tokenfunction(*cmdline) != op_equal)
-		cmdline++;
-	if (!*cmdline)
-		SyntaxError();
-	;
-	++cmdline;
-	if (!*cmdline)
-		SyntaxError();
-	;
+	cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
 	int value = getint(cmdline, 0, 1);
 	if (value)
 		g_flag |= bit;

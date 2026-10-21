@@ -3375,10 +3375,7 @@ void cmd_map(void)
 		if (Option.DISPLAY_TYPE == ILI9488BUFF || Option.DISPLAY_TYPE == ILI9488PBUFF || (Option.DISPLAY_TYPE & 0xFC) == SSD1963_5_12BUFF || (Option.DISPLAY_TYPE & 0xFC) == SSD1963_5_BUFF)
 			init_RGB332_to_RGB888_LUT();
 		else
-		{
-			MMPrintString("Here\r\n");
 			init_RGB332_to_RGB565_LUT();
-		}
 	}
 	else if ((p = checkstring(cmdline, (unsigned char *)"SET")))
 	{
@@ -3396,14 +3393,8 @@ void cmd_map(void)
 			char rgbbytes[4];
 			unsigned int rgb;
 		} c;
-		int cl = getinteger(cmdline);
-		while (*cmdline && tokenfunction(*cmdline) != op_equal)
-			cmdline++;
-		if (!*cmdline)
-			SyntaxError();
-		++cmdline;
-		if (!*cmdline)
-			SyntaxError();
+		int cl = getint(cmdline, 0, 255);	 // remap_LUT[] has 256 entries
+		cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
 		c.rgb = getColour((char *)cmdline, 0);
 		if (Option.DISPLAY_TYPE == ILI9488BUFF || Option.DISPLAY_TYPE == ILI9488PBUFF || (Option.DISPLAY_TYPE & 0xFC) == SSD1963_5_12BUFF || (Option.DISPLAY_TYPE & 0xFC) == SSD1963_5_BUFF)
 		{

@@ -8512,6 +8512,43 @@ unsigned char __not_in_flash_func (*getclosebracket)(unsigned char *p)
 
     return p - 1;
 }
+
+// for an assignment written NAME(args) = value whose command token carries the '(' (MID$(, PIN(, MAP( ...):
+// p is just after that '('.  Step over the arguments to the ')' that closes them (a string is skipped, a function
+// token opens a bracket, as in getclosebracket) and return the value's text after the '=' that must follow it.
+// The first '=' in the statement is no use: a comparison inside the brackets is the same token (issue #101)
+unsigned char *GetAssignedValue(unsigned char *p)
+{
+    int depth = 1;
+    for (;;)
+    {
+        if (*p == 0)
+            SyntaxError();
+        if (*p == '"')
+        {
+            while (*++p != '"')
+                if (*p == 0)
+                    SyntaxError();
+        }
+        else if (*p == ')')
+        {
+            if (--depth == 0)
+                break;
+        }
+        else if (*p == '(' || (tokentype(*p) & T_FUN))
+            depth++;
+        p++;
+    }
+    p++;
+    skipspace(p);
+    if (tokenfunction(*p) != op_equal)
+        SyntaxError();
+    p++;
+    skipspace(p);
+    if (*p == 0)
+        SyntaxError();
+    return p;
+}
 // check that there is no excess text following an element
 // will skip spaces and abort if a zero char is not found
 void __not_in_flash_func(checkend)(unsigned char *p)

@@ -1244,16 +1244,8 @@ void cmd_lmid(void)
         num = getint(argv[4], 0, currentlength);
     if (start + (num < 0 ? 0 : num - 1) > currentlength) // as MID$: the section must lie within the string
         error("Selection exceeds length of string");
-    start--; // position 1 is the array position 0
-    while (*cmdline && tokenfunction(*cmdline) != op_equal)
-        cmdline++;
-    if (!*cmdline)
-        SyntaxError();
-    ;
-    ++cmdline;
-    if (!*cmdline)
-        SyntaxError();
-    ;
+    start--;                             // position 1 is the array position 0
+    cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
     char *value = (char *)getstring(cmdline);
     if (num == -1)
         num = value[0];

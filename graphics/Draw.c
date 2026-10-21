@@ -4068,14 +4068,8 @@ void cmd_map(void)
     else
     {
         static bool first = true;
-        int cl = getinteger(cmdline);
-        while (*cmdline && tokenfunction(*cmdline) != op_equal)
-            cmdline++;
-        if (!*cmdline)
-            SyntaxError();
-        ++cmdline;
-        if (!*cmdline)
-            SyntaxError();
+        int cl = getint(cmdline, 0, 255);    // remap[] has 256 entries
+        cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
         int col = getColour((char *)cmdline, 0);
         if (first)
         {
@@ -4910,13 +4904,7 @@ void cmd_map(void)
         int cl = getint(cmdline, 0, 255);
         if (DISPLAY_TYPE != SCREENMODE5 && cl > 15)
             error("Mode supports 16 colours (0-15)");
-        while (*cmdline && tokenfunction(*cmdline) != op_equal)
-            cmdline++;
-        if (!*cmdline)
-            SyntaxError();
-        ++cmdline;
-        if (!*cmdline)
-            SyntaxError();
+        cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
         int col = getColour((char *)cmdline, 0);
         remap256[cl] = RGB555(col);
         SetMapRGB(cl, col);

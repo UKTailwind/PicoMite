@@ -4754,14 +4754,8 @@ void cmd_ctrlval(void)
     r = getint(cmdline, 1, Option.MaxCtrls);
     if (Ctrl[r].type == 0)
         error("Control #% does not exist", r);
-    while (*cmdline && tokenfunction(*cmdline) != op_equal)
-        cmdline++; // search for the = symbol
-    if (!*cmdline)
-        SyntaxError();
-    ;
-    ++cmdline; // step over the = symbol
-    skipspace(cmdline);
-    if (!*cmdline || *cmdline == '\'')
+    cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
+    if (*cmdline == '\'')
         SyntaxError();
     ;
     switch (Ctrl[r].type)

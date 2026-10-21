@@ -670,13 +670,7 @@ void cmd_pin(void)
 {
     int pin, value;
     pin = getpinarg(cmdline);
-    while (*cmdline && tokenfunction(*cmdline) != op_equal)
-        cmdline++;
-    if (!*cmdline)
-        SyntaxError();
-    ++cmdline;
-    if (!*cmdline)
-        SyntaxError();
+    cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
     value = getinteger(cmdline);
     ExtSet(pin, value);
 }
@@ -2335,13 +2329,7 @@ void cmd_port(void)
         SyntaxError();
     ;
     // step over the equals sign and get the value for the assignment
-    while (*cmdline && tokenfunction(*cmdline) != op_equal)
-        cmdline++;
-    if (!*cmdline)
-        SyntaxError();
-    ++cmdline;
-    if (!*cmdline)
-        SyntaxError();
+    cmdline = GetAssignedValue(cmdline); // the '=' after the closing bracket (issue #101)
     value = getinteger(cmdline);
     uint64_t mask = 0, setmask = 0, readmask;
 
