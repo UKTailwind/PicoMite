@@ -560,6 +560,15 @@ void set_time_epoch(int64_t epoch, bool zero_ms)
     TimeOffsetToUptime = epoch - (int64_t)((now - TimeSubSecondUs) / 1000000);
 }
 
+// Set the clock to read epoch_us (microseconds since 1970, positive) now: WEB NTP, to the network's precision
+void set_time_epoch_us(int64_t epoch_us)
+{
+    const uint64_t now = time_us_64();
+    const uint32_t sub = (uint32_t)(epoch_us % 1000000);
+    TimeSubSecondUs = (uint32_t)((now % 1000000 + 1000000 - sub) % 1000000); // so that (now - phase) % 1000000 == sub
+    TimeOffsetToUptime = epoch_us / 1000000 - (int64_t)((now - TimeSubSecondUs) / 1000000);
+}
+
 uint64_t gettimefromepoch(int *year, int *month, int *day, int *hour, int *minute, int *second)
 {
     struct tm *tm;

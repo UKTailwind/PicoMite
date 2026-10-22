@@ -32,14 +32,28 @@ NTP_T *NTPstate = NULL;
 #define NTP_TEST_TIME (30 * 1000)
 #define NTP_RESEND_TIME (10 * 1000)
 volatile time_t timeadjust = 0;
-volatile uint8_t seconds_buf[4] = {0};
-// Called with results of operation
-static void ntp_result(NTP_T *state, int status, time_t *result)
+// The reply's receive and transmit timestamps (16 bytes from offset 32: seconds since 1900 and a 32-bit fraction
+// each), and when the request went out and the reply came in on the uptime clock
+volatile uint8_t ntp_stamps[16] = {0};
+static volatile uint64_t ntp_sent_us, ntp_recv_us;
+
+// An NTP timestamp (seconds since 1900, 32-bit fraction, big-endian) in microseconds
+static int64_t ntp_stamp_us(const volatile uint8_t *s)
 {
-    if (status == 0 && result)
+    const uint32_t secs = (uint32_t)s[0] << 24 | (uint32_t)s[1] << 16 | (uint32_t)s[2] << 8 | s[3];
+    const uint32_t frac = (uint32_t)s[4] << 24 | (uint32_t)s[5] << 16 | (uint32_t)s[6] << 8 | s[7];
+    return (int64_t)secs * 1000000 + (int64_t)(((uint64_t)frac * 1000000) >> 32);
+}
+
+// Called with results of operation: epoch_us is UTC now, in microseconds since 1970
+static void ntp_result(NTP_T *state, int status, int64_t epoch_us)
+{
+    if (status == 0)
     {
         int year, month, day, hour, minute, second;
-        *result = *result + timeadjust;
+        epoch_us += (int64_t)timeadjust * 1000000;
+        time_t secs = (time_t)(epoch_us / 1000000);
+        time_t *result = &secs;
         struct tm *utc = gmtime(result);
         char buff[STRINGSIZE] = {0};
         sprintf(buff, "got ntp response: %02d/%02d/%04d %02d:%02d:%02d\r\n", utc->tm_mday, utc->tm_mon + 1, utc->tm_year + 1900,
@@ -57,7 +71,7 @@ static void ntp_result(NTP_T *state, int status, time_t *result)
         month = utc->tm_mon + 1;
         day = utc->tm_mday;
         //        mT4IntEnable(1);
-        set_time_epoch(get_epoch(year, month, day, hour, minute, second), true); // milliseconds start at 0
+        set_time_epoch_us(epoch_us); // milliseconds and all
     }
 }
 
@@ -74,6 +88,7 @@ static void ntp_request(NTP_T *state)
     uint8_t *req = (uint8_t *)p->payload;
     memset(req, 0, NTP_MSG_LEN);
     req[0] = 0x1b;
+    ntp_sent_us = time_us_64();
     udp_sendto(state->ntp_pcb, p, &state->ntp_server_address, NTP_PORT);
     pbuf_free(p);
 }
@@ -114,7 +129,8 @@ static void ntp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, const ip_ad
     if (ip_addr_cmp(addr, &state->ntp_server_address) && port == NTP_PORT && p->tot_len == NTP_MSG_LEN &&
         mode == 0x4 && stratum != 0)
     {
-        pbuf_copy_partial(p, (void *)seconds_buf, sizeof(seconds_buf), 40);
+        ntp_recv_us = time_us_64();
+        pbuf_copy_partial(p, (void *)ntp_stamps, sizeof(ntp_stamps), 32); // receive and transmit timestamps
         //        uSec(200);
         state->complete = 1;
     }
@@ -196,7 +212,7 @@ void cmd_ntp(unsigned char *tp)
     sprintf(buff, "ntp address %s\r\n", ip4addr_ntoa(&state->ntp_server_address));
     if (!optionsuppressstatus)
         MMPrintString(buff);
-    memset((void *)seconds_buf, 0, sizeof(seconds_buf));
+    memset((void *)ntp_stamps, 0, sizeof(ntp_stamps));
     state->ntp_pcb = udp_new_ip_type(IPADDR_TYPE_ANY);
     if (!state->ntp_pcb)
     {
@@ -222,12 +238,16 @@ void cmd_ntp(unsigned char *tp)
             error("NTP timeout");
         }
     }
-    uint32_t seconds_since_1900 = seconds_buf[0] << 24 | seconds_buf[1] << 16 | seconds_buf[2] << 8 | seconds_buf[3];
-    if (seconds_since_1900)
+    const int64_t server_rx = ntp_stamp_us(ntp_stamps), server_tx = ntp_stamp_us(ntp_stamps + 8);
+    if (server_tx)
     {
-        uint32_t seconds_since_1970 = seconds_since_1900 - NTP_DELTA;
-        time_t epoch = seconds_since_1970;
-        ntp_result(state, 0, &epoch);
+        // RFC 4330: the reply took half the round trip less the time the server held the request; then add the
+        // time since it arrived
+        int64_t back = ((int64_t)(ntp_recv_us - ntp_sent_us) - (server_tx - server_rx)) / 2;
+        if (back < 0)
+            back = 0;
+        const int64_t epoch_us = server_tx - (int64_t)NTP_DELTA * 1000000 + back + (int64_t)(time_us_64() - ntp_recv_us);
+        ntp_result(state, 0, epoch_us);
     }
     udp_remove(NTPstate->ntp_pcb);
     NTP_T *to_free = NTPstate;
