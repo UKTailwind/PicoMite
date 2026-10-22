@@ -16,7 +16,20 @@
      #define HAS_STOP_EPX_ON_NAK
    #endif
  
-@@ -38,6 +44,18 @@
+@@ -33,11 +39,30 @@
+ //--------------------------------------------------------------------+
+ 
+ // Host mode uses one shared endpoint register for non-interrupt endpoint
+-static hw_endpoint_t  ep_pool[USB_MAX_ENDPOINTS];
++/* PicoMite: one entry per open endpoint of every device, EP0s included.  Only interrupt endpoints need
++   one of the controller's 15 hardware slots; control and bulk endpoints share EPX and are software state
++   here, so the pool need not be USB_MAX_ENDPOINTS (16) long.  16 left 15 entries for everything: a hub (2),
++   a CDC adapter (4), a keyboard with a media-keys interface (3), a two-interface mouse (3) and a flash
++   drive (3) fill it, and one more interface made the last device's driver fail to open - the Colour
++   Maximite 2's DWC2 host ran out the same way with that set.  20 bytes an entry. */
++#define PM_HCD_EP_POOL 32
++static hw_endpoint_t  ep_pool[PM_HCD_EP_POOL];
+ static hw_endpoint_t *epx = &ep_pool[0]; // current active endpoint
  
    #ifndef HAS_STOP_EPX_ON_NAK
  static volatile bool epx_switch_request = false;
@@ -35,7 +48,7 @@
    #endif
  
  enum {
-@@ -137,7 +155,8 @@
+@@ -137,7 +162,8 @@
  //   OUT completed: FULL cleared to 0 in STATUS phase (was 1 when armed)
  //   IN  completed: FULL set to 1 in STATUS phase (was 0 when armed)
  // So undo when: AVAIL=1 (never started), or (OUT: FULL=1) or (IN: FULL=0)
@@ -45,7 +58,7 @@
    uint32_t   buf_ctrl = usbh_dpram->epx_buf_ctrl;
    const bool is_out   = (tu_edpt_dir(ep->ep_addr) == TUSB_DIR_OUT);
  
-@@ -162,7 +181,10 @@
+@@ -162,7 +188,10 @@
        buf_ctrl = 0;
      }
    } while (buf_ctrl > 0);
@@ -56,7 +69,7 @@
    usbh_dpram->epx_buf_ctrl = 0;
  
    ep->state = EPSTATE_PENDING;
-@@ -225,6 +247,29 @@
+@@ -225,6 +254,29 @@
    return NULL;
  }
  
@@ -86,7 +99,7 @@
  // Release an unfinished EPX transfer's buffers: a STALL or RX timeout leaves one AVAILABLE, and a buffer completed
  // before it leaves BUFF_STATUS pending, which the ISR would otherwise apply to the next transfer
  static void __tusb_irq_path_func(epx_drop_buffers)(void) {
-@@ -238,6 +283,12 @@
+@@ -238,6 +290,12 @@
  // ISR cannot apply it to the next transfer. Caller holds the critical section and starts the next pending ep.
  static void epx_retire(hw_endpoint_t *ep) {
    if (ep == epx && ep->state == EPSTATE_ACTIVE) {
@@ -99,7 +112,7 @@
      const bool is_setup = (usb_hw->sie_ctrl & USB_SIE_CTRL_SEND_SETUP_BITS) != 0;
      sie_stop_xfer();
      if (!is_setup) {
-@@ -270,13 +321,36 @@
+@@ -270,13 +328,37 @@
  //--------------------------------------------------------------------+
  // Interrupt handlers
  //--------------------------------------------------------------------+
@@ -110,6 +123,7 @@
 +/* PicoMite: USB host fault record - rp2040_usb.c (patched). */
 +void pm_usb_fault_note(uint8_t code, uint16_t info);
 +#define PM_USB_FAULT_DATA_SEQ 1u
++#define PM_USB_FAULT_EP_FULL  4u
 +
  static void __tusb_irq_path_func(xfer_complete_isr)(hw_endpoint_t *ep, xfer_result_t xfer_result, bool is_more) {
 +  if (tu_edpt_number(ep->ep_addr) == 0)
@@ -136,7 +150,7 @@
    rp2usb_reset_transfer(ep);
    hcd_event_xfer_complete(ep->dev_addr, ep->ep_addr, xferred_len, xfer_result, true);
  
-@@ -379,12 +453,38 @@
+@@ -379,12 +461,38 @@
    }
  
    if (epx->state == EPSTATE_ACTIVE) {
@@ -178,7 +192,7 @@
      } else {
        epx_switch_request = true;
      }
-@@ -422,6 +522,9 @@
+@@ -422,6 +530,9 @@
  
  static void __tusb_irq_path_func(hcd_rp2040_irq)(void) {
    const uint32_t status = usb_hw->ints;
@@ -188,7 +202,7 @@
  
    if (status & USB_INTS_HOST_CONN_DIS_BITS) {
      uint8_t speed = dev_speed();
-@@ -446,6 +549,20 @@
+@@ -446,6 +557,20 @@
    if (status & USB_INTS_ERROR_RX_TIMEOUT_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_RX_TIMEOUT_BITS;
  
@@ -209,7 +223,7 @@
      const uint32_t sie_ctrl = (usb_hw->sie_ctrl & SIE_CTRL_BASE_MASK) | USB_SIE_CTRL_STOP_TRANS_BITS;
      usb_hw->sie_ctrl        = sie_ctrl;
      // while (usb_hw->sie_ctrl & USB_SIE_CTRL_STOP_TRANS_BITS) {}
-@@ -455,6 +572,7 @@
+@@ -455,6 +580,7 @@
      if (epx->state == EPSTATE_ACTIVE) {
        xfer_complete_isr(epx, XFER_RESULT_FAILED, false);
      }
@@ -217,7 +231,7 @@
    }
  
    if (status & USB_INTS_TRANS_COMPLETE_BITS) {
-@@ -496,7 +614,15 @@
+@@ -496,7 +622,15 @@
  
    if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
@@ -234,3 +248,28 @@
    }
  }
  
+@@ -645,7 +779,10 @@
+   } else {
+     ep = edpt_alloc();
+   }
+-  TU_ASSERT(ep);
++  if (ep == NULL) { /* PicoMite: say so - the device's driver gets no endpoint and the device stays half-mounted */
++    pm_usb_fault_note(PM_USB_FAULT_EP_FULL, (uint16_t)(ep_desc->bEndpointAddress | ((uint16_t)dev_addr << 8)));
++    return false;
++  }
+ 
+   const uint8_t  ep_addr         = ep_desc->bEndpointAddress;
+   const uint16_t max_packet_size = tu_edpt_packet_size(ep_desc);
+@@ -672,7 +809,11 @@
+         break;
+       }
+     }
+-    assert(int_idx < USB_HOST_INTERRUPT_ENDPOINTS);
++    if (int_idx >= USB_HOST_INTERRUPT_ENDPOINTS) { /* PicoMite: all 15 hardware slots in use */
++      ep->max_packet_size = 0;                      // give the pool entry back
++      pm_usb_fault_note(PM_USB_FAULT_EP_FULL, (uint16_t)(ep_addr | ((uint16_t)dev_addr << 8)));
++      return false;
++    }
+     assert(ep_desc->bInterval > 0);
+ 
+     //------------- dpram buf -------------//

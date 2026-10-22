@@ -1843,7 +1843,9 @@ void USB_sound_service(void)
    being cut in half if anything re-enters us mid-print.
      DATA_SEQ  = data-toggle mismatch on the wire
      BUFCTRL32 = EPX (control/bulk) buffer re-armed while still available
-     BUFCTRL16 = interrupt-endpoint buffer re-armed while still available */
+     BUFCTRL16 = interrupt-endpoint buffer re-armed while still available
+     EP_FULL   = an endpoint could not be opened: no free host endpoint entry
+                 or interrupt slot, so that device's driver did not start */
 extern volatile unsigned short pm_usb_fault_n[];
 extern volatile unsigned short pm_usb_fault_ep[];
 extern volatile unsigned short pm_usb_fault_total;
@@ -1862,10 +1864,10 @@ void USB_fault_service(void)
 		return; /* stay quiet after the first few */
 	lines++;
 	busy = 1;
-	static const char *const fault_name[4] = {"", " DATA_SEQ ", " BUFCTRL32 ", " BUFCTRL16 "};
+	static const char *const fault_name[5] = {"", " DATA_SEQ ", " BUFCTRL32 ", " BUFCTRL16 ", " EP_FULL "};
 	char buff[16];
 	MMPrintString("\r\n[USB");
-	for (int c = 1; c <= 3; c++)
+	for (int c = 1; c <= 4; c++)
 	{
 		unsigned short v = pm_usb_fault_n[c];
 		if (v == 0)
@@ -1877,7 +1879,7 @@ void USB_fault_service(void)
 		   of the buffer-control register - 80 = EPX (control/bulk), 88 = the
 		   first interrupt endpoint, 90 the second, +8 each - which is the
 		   only way to tell a control-pipe fault from an interrupt-endpoint
-		   one.  For DATA_SEQ it is ep_addr | dev_addr<<8. */
+		   one.  For DATA_SEQ and EP_FULL it is ep_addr | dev_addr<<8. */
 		MMPrintString(" @");
 		IntToStr(buff, pm_usb_fault_ep[c], 16);
 		MMPrintString(buff);
