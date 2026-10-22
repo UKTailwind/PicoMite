@@ -1458,6 +1458,10 @@ static void ray_cmd_render(unsigned char *p)
 {
     if (WriteBuf == NULL)
         error("No framebuffer: use FRAMEBUFFER CREATE first");
+#ifdef PICOMITEVGA
+    if (DISPLAY_TYPE == SCREENMODE1) // RAY renders 4 bits a pixel; MODE 1's buffers are 1 bit a pixel
+        error("Not available in mode 1");
+#endif
 
     int hres = HRes;
     int vres = VRes;

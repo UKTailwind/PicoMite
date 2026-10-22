@@ -727,6 +727,10 @@ int blitother(void)
             StandardError(21);
         if (argc == 17)
             blank = getint(argv[16], -1, 15);
+#ifdef PICOMITEVGA
+        if (DISPLAY_TYPE == SCREENMODE1) // the image is written 4 bits a pixel; MODE 1's buffers are 1 bit a pixel
+            error("Not available in mode 1");
+#endif
         blit121(s, d, x1, y1, w, h, x2, y2, blank);
         return 1;
     }
