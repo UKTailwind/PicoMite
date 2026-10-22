@@ -757,7 +757,7 @@ static void ray_cmd_map(unsigned char *p)
             {
                 int v = ray_decode_map_char(elem[1 + col]);
                 if (v < 0)
-                    error("Invalid map character '%c' at row %, col %",
+                    error("Invalid map character '@' at row %, col %", // error()'s own codes, not printf's (issue #99)
                           (int)elem[1 + col], row, col);
                 if (v >= RAY_MAX_WALLDEFS)
                     v = RAY_MAX_WALLDEFS - 1;
@@ -1215,7 +1215,7 @@ static void ray_cmd_sprite(unsigned char *p)
     int id = getint(argv[0], 0, RAY_MAX_SPRITES - 1);
     int snum = getint(argv[2], 1, MAXBLITBUF);
     if (spritebuff[snum] == NULL || spritebuff[snum]->spritebuffptr == NULL)
-        error("Sprite buffer %d not loaded", snum);
+        error("Sprite buffer % not loaded", snum); // (issue #99)
 
     RaySprite *sp = &rstate->sprites[id];
     sp->spritenum = snum;
@@ -1443,7 +1443,7 @@ static void ray_cmd_door(unsigned char *p)
             return;
         }
     }
-    error("Maximum %d active doors exceeded", RAY_MAX_DOORS);
+    error("Maximum % active doors exceeded", RAY_MAX_DOORS); // (issue #99)
 }
 
 /* ============================================================================
