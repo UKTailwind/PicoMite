@@ -142,7 +142,7 @@ void initMouse0(int sensitivity)
   ReadReturn(5);
   if (sensitivity)
   {
-    int scaling;
+    int scaling = 0; // 2:1 scaling for a sensitivity of 5 to 8 only
     if (sensitivity > 4)
     {
       scaling = 1;
