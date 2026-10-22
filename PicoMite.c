@@ -3810,6 +3810,9 @@ uint32_t testPSRAM(void)
        silently undid OPTION RESOLUTION 640,378000 on the reboot. */
     if (!((Option.Resolution == R640x480x8 && (Option.CPU_Speed == Freq252P || Option.CPU_Speed == Freq480P || Option.CPU_Speed == Freq378P)) ||
           (Option.Resolution == R720x400x8 && Option.CPU_Speed == Freq400) ||
+          (Option.Resolution == R800x600 && Option.CPU_Speed == FreqSVGA) ||
+          (Option.Resolution == R848x480 && Option.CPU_Speed == Freq848) ||
+          (Option.Resolution == R800x480 && Option.CPU_Speed == FreqY) ||
           (Option.Resolution == R1024x600 && Option.CPU_Speed == FreqX)))
     {
         Option.Resolution = R640x480x8; // factory display defaults
