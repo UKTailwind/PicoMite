@@ -1627,8 +1627,7 @@ void cmd_framebuffer(void)
                     SecondLayer = GetMemory(ScreenSize);
                 break;
             case SCREENMODE1:
-                SecondLayer = GetMemory(ScreenSize);
-                break;
+                StandardError(40); // no MODE 1 scanout shows a top layer
             case SCREENMODE3:
                 if (argc == 1)
                     transparents = getint(argv[0], 0, 15);
