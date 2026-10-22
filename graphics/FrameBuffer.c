@@ -40,13 +40,6 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "Hardware_Includes.h"
 #include "Memory.h"
 #include "DrawInternal.h"
-#ifdef HDMI
-/* MODE 1 at the HDMI resolutions with RGB332 tiles keeps the tile colours right after the screen (settiles()), where
-   pool slot 1 would start: framebuffer 2 and the layer take the heap instead */
-#define MODE1_TILES_IN_SLOT1 (DISPLAY_TYPE == SCREENMODE1 && !FullColour)
-#else
-#define MODE1_TILES_IN_SLOT1 0
-#endif
 
 // a bare buffer letter (FRAMEBUFFER WRITE F) is the whole argument, perhaps with a comment: checkstring() alone takes
 // l$ or f(1) for the letter, whatever they hold, and those belong to the string form (issue #112)
@@ -1442,6 +1435,20 @@ static void freeframebuffer(unsigned char *p)
     if (p < FRAMEBUFFER || p >= FRAMEBUFFER + framebuffersize)
         FreeMemory((void *)p);
 }
+#ifdef rp2350
+/* The pool slot framebuffer 2 and the layer share, whichever is created first, or NULL when the pool has no room for
+   it. It is slot 1, except in MODE 1 at the HDMI resolutions with RGB332 tiles: settiles() keeps the tile colours at
+   the start of slot 1 there, so it is slot 3, the top layer's, which MODE 1 refuses. Slot 3 fits only where the pool
+   holds four MODE 1 screens: 800x600, 848x480 and 800x480 on the full HDMI builds. */
+static unsigned char *shared_slot(void)
+{
+#ifdef HDMI
+    if (DISPLAY_TYPE == SCREENMODE1 && !FullColour)
+        return 4 * ScreenSize <= framebuffersize ? DisplayBuf + 3 * ScreenSize : NULL;
+#endif
+    return ScreenSize < framebuffersize / 2 ? DisplayBuf + ScreenSize : NULL;
+}
+#endif
 
 void closeframebuffer(char layer)
 {
@@ -1540,8 +1547,8 @@ void cmd_framebuffer(void)
             getcsargs(&p, 1);
             switch (DISPLAY_TYPE)
             {
-            /* Framebuffer 2 and the layer share pool slot 1 (DisplayBuf +
-               ScreenSize): MERGE is the alternative to a live layer, so
+            /* Framebuffer 2 and the layer share a pool slot
+               (shared_slot()): MERGE is the alternative to a live layer, so
                whichever is created first takes the slot and the other one
                falls back to the heap. A layer that then lands in PSRAM is
                refused by LAYER's own check below. */
@@ -1550,8 +1557,8 @@ void cmd_framebuffer(void)
 #ifdef HDMI
             case SCREENMODE5:
 #endif
-                if (!MODE1_TILES_IN_SLOT1 && ScreenSize < framebuffersize / 2 && LayerBuf != DisplayBuf + ScreenSize)
-                    SecondFrame = DisplayBuf + ScreenSize;
+                if (shared_slot() && LayerBuf != shared_slot())
+                    SecondFrame = shared_slot();
                 else
                     SecondFrame = GetMemory(ScreenSize);
                 break;
@@ -1685,8 +1692,8 @@ void cmd_framebuffer(void)
                    GetSystemMemory takes the SRAM heap without GetMemory's
                    rule that sends any block over half the heap to PSRAM,
                    and goes to PSRAM only when the SRAM heap is really full. */
-                if (!MODE1_TILES_IN_SLOT1 && ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
-                    LayerBuf = DisplayBuf + ScreenSize;
+                if (shared_slot() && SecondFrame != shared_slot())
+                    LayerBuf = shared_slot();
                 else
                     LayerBuf = GetSystemMemory(ScreenSize);
 #else
@@ -1709,8 +1716,8 @@ void cmd_framebuffer(void)
                     RGBtransparent = 0;
                 break;
             case SCREENMODE5:
-                if (!MODE1_TILES_IN_SLOT1 && ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
-                    LayerBuf = DisplayBuf + ScreenSize;
+                if (shared_slot() && SecondFrame != shared_slot())
+                    LayerBuf = shared_slot();
                 else
                     LayerBuf = GetSystemMemory(ScreenSize);
                 if (argc == 1)
