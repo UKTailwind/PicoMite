@@ -57,7 +57,7 @@
 #ifdef PICOMITEWEB_TLS
     /* TimeOffsetToUptime (int64_t, declared in MM_Misc.h) is set by WEB NTP
        to the offset in seconds such that:
-           unix_time_seconds = TimeOffsetToUptime + time_us_64() / 1000000
+           unix_time_seconds = TimeOffsetToUptime + (time_us_64() - TimeSubSecondUs) / 1000000
        When zero (no NTP run), the formula reduces to uptime in seconds —
        usable for TLS session freshness but NOT for X.509 cert validity
        (every cert will look like it expired in 1970). For CA-verified TLS,
@@ -68,7 +68,7 @@
        long long to match MBEDTLS_PLATFORM_TIME_TYPE_MACRO. */
     long long picomite_mbedtls_time(long long *tp)
     {
-        long long t = (long long)TimeOffsetToUptime + (long long)(time_us_64() / 1000000);
+        long long t = (long long)TimeOffsetToUptime + (long long)((time_us_64() - TimeSubSecondUs) / 1000000);
         if (tp)
             *tp = t;
         return t;
@@ -78,7 +78,7 @@
     mbedtls_ms_time_t mbedtls_ms_time(void)
     {
         if (TimeOffsetToUptime != 0)
-            return (mbedtls_ms_time_t)((int64_t)TimeOffsetToUptime * 1000 + (int64_t)(time_us_64() / 1000));
+            return (mbedtls_ms_time_t)((int64_t)TimeOffsetToUptime * 1000 + (int64_t)((time_us_64() - TimeSubSecondUs) / 1000));
         return (mbedtls_ms_time_t)(time_us_64() / 1000);
     }
 

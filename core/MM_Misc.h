@@ -136,6 +136,8 @@ extern bool optionfulltime;
  * External variables - Time and date
  * ============================================================================ */
 extern int64_t TimeOffsetToUptime;
+extern uint32_t TimeSubSecondUs;
+void set_time_epoch(int64_t epoch, bool zero_ms);
 
 /* ============================================================================
  * External variables - Persistent storage

@@ -1051,7 +1051,7 @@ void RtcGetTime(int noerror)
   int year, month, day, hour, minute, second;
   RtcDecodeTime(buff, &year, &month, &day, &hour, &minute, &second);
 
-  TimeOffsetToUptime = get_epoch(year, month, day, hour, minute, second) - time_us_64() / 1000000;
+  set_time_epoch(get_epoch(year, month, day, hour, minute, second), true); // milliseconds start at 0
   return;
 
 error_exit:

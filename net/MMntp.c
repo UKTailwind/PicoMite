@@ -57,7 +57,7 @@ static void ntp_result(NTP_T *state, int status, time_t *result)
         month = utc->tm_mon + 1;
         day = utc->tm_mday;
         //        mT4IntEnable(1);
-        TimeOffsetToUptime = get_epoch(year, month, day, hour, minute, second) - time_us_64() / 1000000;
+        set_time_epoch(get_epoch(year, month, day, hour, minute, second), true); // milliseconds start at 0
     }
 }
 

@@ -93,6 +93,9 @@ extern volatile char CapsLock;
 extern volatile char NumLock;
 #endif
 int64_t TimeOffsetToUptime = 1704067200;
+// The clock is time_us_64() - TimeSubSecondUs plus TimeOffsetToUptime seconds: TimeSubSecondUs is the uptime's
+// sub-second phase when the time was last set, so a new time starts its milliseconds (OPTION MILLISECONDS) at 0
+uint32_t TimeSubSecondUs = 0;
 extern int last_adc;
 extern char banner[];
 extern char *pinsearch(int pin);
@@ -547,12 +550,22 @@ void __not_in_flash_func(fun_timer)(void)
     fret = TimerVal();
     targ = T_NBR;
 }
+// Set the clock to read epoch seconds now. A new time (TIME$ = "hh:mm:ss", WEB NTP, RTC GETTIME) starts its
+// milliseconds at 0; DATE$ = and TIME$ = n only move the clock, so they keep them (zero_ms false).
+void set_time_epoch(int64_t epoch, bool zero_ms)
+{
+    const uint64_t now = time_us_64();
+    if (zero_ms)
+        TimeSubSecondUs = (uint32_t)(now % 1000000);
+    TimeOffsetToUptime = epoch - (int64_t)((now - TimeSubSecondUs) / 1000000);
+}
+
 uint64_t gettimefromepoch(int *year, int *month, int *day, int *hour, int *minute, int *second)
 {
     struct tm *tm;
     struct tm tma;
     tm = &tma;
-    uint64_t fulltime = time_us_64();
+    uint64_t fulltime = time_us_64() - TimeSubSecondUs;
     time_t epochnow = fulltime / 1000000 + TimeOffsetToUptime;
     tm = gmtime(&epochnow);
     *year = tm->tm_year + 1900;
@@ -1704,7 +1717,7 @@ void cmd_date(void)
         day_of_week = tm->tm_wday;
         if (day_of_week == 0)
             day_of_week = 7;
-        TimeOffsetToUptime = get_epoch(year, month, day, hour, minute, second) - time_us_64() / 1000000;
+        set_time_epoch(get_epoch(year, month, day, hour, minute, second), false);
         //		update_clock();
         //		mT4IntEnable(1);       										// enable interrupt
     }
@@ -1860,7 +1873,7 @@ void cmd_time(void)
         //		update_clock();
         //    	mT4IntEnable(1);       										// enable interrupt
     }
-    TimeOffsetToUptime = get_epoch(year, month, day, hour, minute, second) - time_us_64() / 1000000;
+    set_time_epoch(get_epoch(year, month, day, hour, minute, second), (t & T_STR) != 0);
 }
 
 // this is invoked as a function
