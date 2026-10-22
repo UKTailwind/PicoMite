@@ -1,10 +1,11 @@
 --- a/src/portable/raspberrypi/rp2040/hcd_rp2040.c
 +++ b/src/portable/raspberrypi/rp2040/hcd_rp2040.c
-@@ -11,8 +11,14 @@
+@@ -11,8 +11,15 @@
  #if CFG_TUH_ENABLED && (CFG_TUSB_MCU == OPT_MCU_RP2040) && !CFG_TUH_RPI_PIO_USB && !CFG_TUH_MAX3421
  
    #include "pico.h"
 +  #include "hardware/timer.h" /* PicoMite: time_us_32 for the RX-timeout grace window */
++  #include "hardware/sync.h"  /* PicoMite: save_and_disable_interrupts for a thread-context hcd_int_handler() */
  
 -  #if defined(PICO_RP2350) && PICO_RP2350 == 1
 +  /* PicoMite: PM_FORCE_EPX_SOF makes an RP2350 build take the RP2040 EPX
@@ -16,7 +17,7 @@
      #define HAS_STOP_EPX_ON_NAK
    #endif
  
-@@ -33,11 +39,30 @@
+@@ -33,11 +40,30 @@
  //--------------------------------------------------------------------+
  
  // Host mode uses one shared endpoint register for non-interrupt endpoint
@@ -48,7 +49,7 @@
    #endif
  
  enum {
-@@ -137,7 +162,8 @@
+@@ -137,7 +163,8 @@
  //   OUT completed: FULL cleared to 0 in STATUS phase (was 1 when armed)
  //   IN  completed: FULL set to 1 in STATUS phase (was 0 when armed)
  // So undo when: AVAIL=1 (never started), or (OUT: FULL=1) or (IN: FULL=0)
@@ -58,7 +59,7 @@
    uint32_t   buf_ctrl = usbh_dpram->epx_buf_ctrl;
    const bool is_out   = (tu_edpt_dir(ep->ep_addr) == TUSB_DIR_OUT);
  
-@@ -162,7 +188,10 @@
+@@ -162,7 +189,10 @@
        buf_ctrl = 0;
      }
    } while (buf_ctrl > 0);
@@ -69,7 +70,7 @@
    usbh_dpram->epx_buf_ctrl = 0;
  
    ep->state = EPSTATE_PENDING;
-@@ -225,6 +254,29 @@
+@@ -225,6 +255,29 @@
    return NULL;
  }
  
@@ -99,7 +100,7 @@
  // Release an unfinished EPX transfer's buffers: a STALL or RX timeout leaves one AVAILABLE, and a buffer completed
  // before it leaves BUFF_STATUS pending, which the ISR would otherwise apply to the next transfer
  static void __tusb_irq_path_func(epx_drop_buffers)(void) {
-@@ -238,6 +290,12 @@
+@@ -238,6 +291,12 @@
  // ISR cannot apply it to the next transfer. Caller holds the critical section and starts the next pending ep.
  static void epx_retire(hw_endpoint_t *ep) {
    if (ep == epx && ep->state == EPSTATE_ACTIVE) {
@@ -112,7 +113,7 @@
      const bool is_setup = (usb_hw->sie_ctrl & USB_SIE_CTRL_SEND_SETUP_BITS) != 0;
      sie_stop_xfer();
      if (!is_setup) {
-@@ -270,13 +328,37 @@
+@@ -270,13 +329,37 @@
  //--------------------------------------------------------------------+
  // Interrupt handlers
  //--------------------------------------------------------------------+
@@ -150,7 +151,7 @@
    rp2usb_reset_transfer(ep);
    hcd_event_xfer_complete(ep->dev_addr, ep->ep_addr, xferred_len, xfer_result, true);
  
-@@ -379,12 +461,38 @@
+@@ -379,12 +462,38 @@
    }
  
    if (epx->state == EPSTATE_ACTIVE) {
@@ -192,7 +193,7 @@
      } else {
        epx_switch_request = true;
      }
-@@ -422,6 +530,9 @@
+@@ -422,6 +531,9 @@
  
  static void __tusb_irq_path_func(hcd_rp2040_irq)(void) {
    const uint32_t status = usb_hw->ints;
@@ -202,7 +203,7 @@
  
    if (status & USB_INTS_HOST_CONN_DIS_BITS) {
      uint8_t speed = dev_speed();
-@@ -446,6 +557,20 @@
+@@ -446,6 +558,20 @@
    if (status & USB_INTS_ERROR_RX_TIMEOUT_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_RX_TIMEOUT_BITS;
  
@@ -223,7 +224,7 @@
      const uint32_t sie_ctrl = (usb_hw->sie_ctrl & SIE_CTRL_BASE_MASK) | USB_SIE_CTRL_STOP_TRANS_BITS;
      usb_hw->sie_ctrl        = sie_ctrl;
      // while (usb_hw->sie_ctrl & USB_SIE_CTRL_STOP_TRANS_BITS) {}
-@@ -455,6 +580,7 @@
+@@ -455,6 +581,7 @@
      if (epx->state == EPSTATE_ACTIVE) {
        xfer_complete_isr(epx, XFER_RESULT_FAILED, false);
      }
@@ -231,7 +232,7 @@
    }
  
    if (status & USB_INTS_TRANS_COMPLETE_BITS) {
-@@ -496,7 +622,15 @@
+@@ -496,14 +623,34 @@
  
    if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
@@ -248,7 +249,28 @@
    }
  }
  
-@@ -645,7 +779,10 @@
+ void __tusb_irq_path_func(hcd_int_handler)(uint8_t rhport, bool in_isr) {
+   (void)rhport;
+-  (void)in_isr;
+-  hcd_rp2040_irq();
++  if (in_isr) {
++    hcd_rp2040_irq();
++  } else {
++    /* PicoMite: a call from thread context - the application polling the controller, as MMBasic's C: drive does while
++       it waits for a transfer - must not be preempted by the USB interrupt running this same handler. Both saw one
++       EPX_STOPPED_ON_NAK and both switched EPX: the second switch re-armed EPX for another endpoint while the
++       controller was already running the first switch's transaction, so a flash drive's data packet landed in a CDC
++       receive's buffer (DATA_SEQ, corrupt reads) and a write lost a packet (the drive then NAKed its CSW for ever:
++       "A hard error occurred in the low level disk I/O layer"). Seen with a USB serial adapter receiving while
++       COPY ran from C:. 0.20 never switched EPX mid-transfer, so the same polling did no harm there. */
++    const uint32_t save = save_and_disable_interrupts();
++    hcd_rp2040_irq();
++    restore_interrupts(save);
++  }
+ }
+ 
+ //--------------------------------------------------------------------+
+@@ -645,7 +792,10 @@
    } else {
      ep = edpt_alloc();
    }
@@ -260,7 +282,7 @@
  
    const uint8_t  ep_addr         = ep_desc->bEndpointAddress;
    const uint16_t max_packet_size = tu_edpt_packet_size(ep_desc);
-@@ -672,7 +809,11 @@
+@@ -672,7 +822,11 @@
          break;
        }
      }
