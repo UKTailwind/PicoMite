@@ -4864,7 +4864,7 @@ fm_relaunch:
 
             // Local display uses targeted redraw to avoid unnecessary flashing.
             fm_skip_serial_output = 1;
-            fm_draw_panel_entries(p, active == 1 ? 0 : 1,
+            fm_draw_panel_entries(p, 1, // p is the active panel
                                   active == 0 ? 0 : right_x,
                                   active == 0 ? left_width : right_width,
                                   list_top, list_rows,
