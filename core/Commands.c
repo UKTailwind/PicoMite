@@ -11217,6 +11217,13 @@ void execute(char *mycmd)
 		tknbuf[0] = (tkn & 0x7f) + C_BASETOKEN;
 		tknbuf[1] = (tkn >> 7) + C_BASETOKEN; // tokens can be 14-bit
 		strcpy((char *)tknbuf + 2, (char *)rp);
+		// this line is not tokenised, and tokenise() is what closes a string left open at the end of a
+		// line: the evaluator's string constant needs the closing quote (it copied from NULL - issue #117)
+		int quotes = 0;
+		for (unsigned char *q = tknbuf + 2; *q; q++)
+			quotes += (*q == '"');
+		if (quotes & 1)
+			strcat((char *)tknbuf, "\""); // (the RUN token's two bytes are never 0)
 		tknbuf[strlen((char *)tknbuf) + 1] = 0;
 		if (CurrentlyPlaying != P_NOTHING)
 			CloseAudio(1);
