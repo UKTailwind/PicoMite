@@ -1,6 +1,14 @@
 --- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
 +++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
-@@ -29,6 +29,92 @@
+@@ -12,6 +12,7 @@
+ 
+   #include <stdlib.h>
+   #include "rp2040_usb.h"
++  #include "hardware/timer.h" /* PicoMite: busy_wait_us_32 for a low-speed device's control packets */
+ 
+   #include "device/dcd.h"
+   #include "host/hcd.h"
+@@ -29,6 +30,92 @@
  
  critical_section_t rp2usb_lock;
  
@@ -93,7 +101,7 @@
  //--------------------------------------------------------------------+
  // Implementation
  //--------------------------------------------------------------------+
-@@ -103,7 +189,13 @@
+@@ -103,7 +190,13 @@
    const uint32_t current    = *buf_reg;
    const uint32_t avail_mask = USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16);
    if (current & value & avail_mask) {
@@ -108,7 +116,7 @@
    }
    *buf_reg = value & ~(USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16)); // write other bits first
  
-@@ -121,7 +213,9 @@
+@@ -121,7 +214,9 @@
  void __tusb_irq_path_func(bufctrl_write16)(io_rw_16 *buf_reg16, uint16_t value) {
    const uint16_t current = *buf_reg16;
    if (current & value & USB_BUF_CTRL_AVAIL) {
@@ -119,7 +127,7 @@
    }
    *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
  
-@@ -186,7 +280,15 @@
+@@ -186,7 +281,15 @@
      // double-buffered bulk path is unaffected.)
      const bool is_iso = (((ep_ctrl >> EP_CTRL_BUFFER_TYPE_LSB) & 0x3u) == TUSB_XFER_ISOCHRONOUS);
    #if CFG_TUH_ENABLED
@@ -136,7 +144,7 @@
    #else
      const bool force_single = is_iso;
    #endif
-@@ -220,6 +322,9 @@
+@@ -220,6 +323,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -146,7 +154,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -346,6 +451,16 @@
+@@ -346,6 +452,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;
@@ -163,3 +171,24 @@
  
    // Short packet on rx with double buffer: abort the other half (if not last) and reset the buffer control.
    // The other buffer may be: (a) still AVAIL, (b) in-progress (controller receiving), or (c) already completed.
+@@ -416,6 +532,20 @@
+   #endif
+     {
+       // ping-pong: arm the completed buffer with new data
++  #if CFG_TUH_ENABLED
++      /* PicoMite: a low-speed device behind hubs needs time before its next packet. The buffer-done interrupt
++         comes as soon as the data packet has arrived; re-armed at once, the controller sent the next request
++         while the outer hub was still relaying the host's low-speed handshake, the reply came back garbled
++         (BIT_STUFF) and the controller locked up - every USB device stopped until a restart. Seen on a PC3 with a
++         low-speed mouse behind the Raspberry Pi keyboard's hub, reading an 88-byte string at enumeration
++         (6.03.01, with TinyUSB 0.20, enumerates it). Measured: a 10 us wait still
++         failed, 25 and 50 us passed, but with a second CDC adapter and a gamepad as well 50 us failed and 100 us
++         passed 3 times of 3. Only multi-packet control transfers to a low-speed device take
++         this path, at enumeration and little else. */
++      if (is_host && ep->need_pre && tu_edpt_number(ep->ep_addr) == 0) {
++        busy_wait_us_32(100);
++      }
++  #endif
+       const uint16_t buf_ctrl16_new = bufctrl_prepare16(ep, dpram_buf, is_rx);
+       bufctrl_write16(buf_reg16 + buf_id, buf_ctrl16_new);
+     }
