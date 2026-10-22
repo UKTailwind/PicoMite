@@ -534,10 +534,14 @@ static void ray_render_to_buffer(uint8_t *buf, int hres, int vres)
                 ceil_row[bx] = (c_col1 << 4) | c_col;
             }
         }
-        /* Fill the horizon line itself with ceiling colour */
+        /* Fill the horizon line itself with ceiling colour, and the row above it, which the mirrored
+           ceiling (rows vres - 2 - half_vres down to 0) never reaches: past a wall vres/2 cells away
+           no wall covers it, and it kept the previous frame (issue #98) */
         {
             uint8_t ceil_pair = (c_fg << 4) | c_fg;
             memset(buf + half_vres * half_hres, ceil_pair, half_hres);
+            if (half_vres > 0)
+                memset(buf + (half_vres - 1) * half_hres, ceil_pair, half_hres);
         }
     }
 
