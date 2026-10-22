@@ -249,7 +249,7 @@
    }
  
    if (status & USB_INTS_TRANS_COMPLETE_BITS) {
-@@ -479,6 +611,12 @@
+@@ -479,7 +611,20 @@
      // epx may have been retired above (RX timeout) in the same interrupt: never restart or re-queue it
      if (epx->state == EPSTATE_ACTIVE) {
        hw_endpoint_t *next_ep = epx_next_pending(epx);
@@ -260,9 +260,17 @@
 +                    ((uint32_t)epx->xferred_len << 16), usbh_dpram->epx_buf_ctrl, epx->next_pid | ((uint32_t)epx->remaining_len << 16));
 +#endif
        if (next_ep != NULL) {
++        /* PicoMite: confirm the stop with STOP_TRANS before EPX is re-armed for another endpoint, as the RP2040's
++           SOF round-robin does. Re-armed straight after EPX_STOPPED_ON_NAK, with a low-speed device on the bus (a
++           mouse, polled through the hub), the next transfers went wrong: a USB serial adapter receiving kept EPX
++           switching on every NAK, and a flash drive's write lost data, after which the drive NAKed the rest of it
++           for good. With the stop confirmed, 3 of 3 runs passed with some 66,000 switches; no EPX completion ever
++           arrived after it, so what the controller kept was state, not a transaction in flight (2026-10-22). */
++        sie_stop_xfer();
          epx_save_context(epx);
          epx_switch_ep(next_ep);
-@@ -496,14 +634,34 @@
+       } else {
+@@ -496,14 +641,34 @@
  
    if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
@@ -300,7 +308,7 @@
  }
  
  //--------------------------------------------------------------------+
-@@ -645,7 +803,10 @@
+@@ -645,7 +810,10 @@
    } else {
      ep = edpt_alloc();
    }
@@ -312,7 +320,7 @@
  
    const uint8_t  ep_addr         = ep_desc->bEndpointAddress;
    const uint16_t max_packet_size = tu_edpt_packet_size(ep_desc);
-@@ -672,7 +833,11 @@
+@@ -672,7 +840,11 @@
          break;
        }
      }
@@ -325,7 +333,7 @@
      assert(ep_desc->bInterval > 0);
  
      //------------- dpram buf -------------//
-@@ -837,6 +1002,12 @@
+@@ -837,6 +1009,12 @@
    ep->ep_addr       = 0; // setup is OUT
    ep->remaining_len = 8;
    ep->xferred_len   = 0;
