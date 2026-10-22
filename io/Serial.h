@@ -134,10 +134,16 @@ int SerialRxStatus(int comnbr);
 
 /**
  * Check transmit buffer status
- * @param comnbr COM port number (1 or 2)
- * @return Number of free spaces in transmit buffer
+ * @param comnbr COM port number (1 to 7)
+ * @return Number of characters still waiting to be sent
  */
 int SerialTxStatus(int comnbr);
+
+/**
+ * @param comnbr COM port number (1 to 7)
+ * @return Size of that port's transmit buffer (LOF)
+ */
+int SerialTxBufferSize(int comnbr);
 
 /**
  * Get a character from the serial port

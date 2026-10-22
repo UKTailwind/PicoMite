@@ -7642,7 +7642,7 @@ void cmd_flush(void)
         }
         else
         {
-            while (SerialTxStatus(FileTable[fnbr].com))
+            while (SerialTxStatus(FileTable[fnbr].com) && !MMAbort)
             {
             }
         }
@@ -7718,7 +7718,7 @@ void fun_lof(void)
             }
         }
         else
-            iret = (TX_BUFFER_SIZE - SerialTxStatus(FileTable[fnbr].com));
+            iret = (SerialTxBufferSize(FileTable[fnbr].com) - SerialTxStatus(FileTable[fnbr].com));
     }
     targ = T_INT;
 }

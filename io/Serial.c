@@ -1051,8 +1051,15 @@ int SerialTxStatus(int comnbr)
 #ifdef USBKEYBOARD
 	else if (comnbr >= 3 && comnbr <= 6)
 	{
-		// CDC host TX is written directly via TinyUSB, no local buffer
-		i = 0;
+		// What TinyUSB's CDC host still holds to send (SerialPutchar() queues there). CLOSE and FLUSH wait for this
+		// to reach 0: keep USB sending meanwhile. The packet already handed to the bulk OUT has left the FIFO and
+		// is not counted (issue #119).
+		int idx = comnbr - 3;
+		if (tuh_cdc_mounted(idx))
+		{
+			tuh_task();
+			i = CFG_TUH_CDC_TX_BUFSIZE - (int)tuh_cdc_write_available(idx);
+		}
 	}
 #endif // USBKEYBOARD
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
@@ -1063,6 +1070,16 @@ int SerialTxStatus(int comnbr)
 	}
 #endif
 	return i;
+}
+
+// The size of a COM port's transmit buffer, for LOF(): TinyUSB's CDC FIFO on COM3-COM6, TX_BUFFER_SIZE on the others
+int SerialTxBufferSize(int comnbr)
+{
+#ifdef USBKEYBOARD
+	if (comnbr >= 3 && comnbr <= 6)
+		return CFG_TUH_CDC_TX_BUFSIZE;
+#endif
+	return TX_BUFFER_SIZE;
 }
 
 /***************************************************************************************************
