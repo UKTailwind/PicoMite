@@ -1,6 +1,64 @@
 --- a/src/class/cdc/cdc_host.c
 +++ b/src/class/cdc/cdc_host.c
-@@ -669,7 +669,24 @@ void cdch_close(uint8_t daddr) {
+@@ -47,6 +47,7 @@ typedef struct {
+   uint8_t ep_notif;
+   uint8_t serial_drid; // Serial Driver ID
+   bool mounted;        // Enumeration is complete
++  bool rx_on;          // PicoMite: the bulk IN is armed only while the application receives (tuh_cdc_rx_enable)
+ 
+   struct {
+     TU_ATTR_ALIGNED(4) cdc_line_coding_t coding; // Baudrate, stop bits, parity, data width
+@@ -484,6 +485,7 @@ uint32_t tuh_cdc_write_available(uint8_t
+ uint32_t tuh_cdc_read (uint8_t idx, void * buffer, uint32_t bufsize) {
+   cdch_interface_t * p_cdc = get_itf(idx);
+   TU_VERIFY(p_cdc);
++  TU_VERIFY(p_cdc->rx_on, 0); // PicoMite: tu_edpt_stream_read() would re-arm the IN
+   return tu_edpt_stream_read(&p_cdc->stream.rx, buffer, bufsize);
+ }
+ 
+@@ -504,7 +506,32 @@ bool tuh_cdc_read_clear (uint8_t idx) {
+   TU_VERIFY(p_cdc);
+ 
+   tu_edpt_stream_clear(&p_cdc->stream.rx);
+-  (void)tu_edpt_stream_read_xfer(&p_cdc->stream.rx);
++  if (p_cdc->rx_on) {
++    (void)tu_edpt_stream_read_xfer(&p_cdc->stream.rx);
++  }
++  return true;
++}
++
++/* PicoMite: receive only on request.  Stock cdc_host arms the bulk IN at mount and re-arms it for good, so an
++   adapter that nothing reads (a CH340 with a loopback) keeps an IN transfer pending for as long as it is plugged in.
++   On the RP2 host every bulk and control transfer shares EPX, and while another transfer is pending the controller
++   stops on each NAK and EPX is switched: that idle IN took a turn after every NAK of a flash drive's transfer or of
++   an enumeration.  The application turns receiving on while it has the port open (MMBasic: OPEN "COMn:" .. CLOSE);
++   off aborts the IN, which releases the endpoint and gives the data toggle back, and empties the receive FIFO. */
++bool tuh_cdc_rx_enable(uint8_t idx, bool enable) {
++  cdch_interface_t * p_cdc = get_itf(idx);
++  TU_VERIFY(p_cdc && p_cdc->daddr != 0);
++  if (enable == p_cdc->rx_on) {
++    return true;
++  }
++  p_cdc->rx_on = enable;
++  if (enable) {
++    tu_edpt_stream_clear(&p_cdc->stream.rx);
++    (void)tu_edpt_stream_read_xfer(&p_cdc->stream.rx);
++  } else {
++    (void)tuh_edpt_abort_xfer(p_cdc->daddr, p_cdc->stream.rx.ep_addr); // false when no IN was pending
++    tu_edpt_stream_clear(&p_cdc->stream.rx);
++  }
+   return true;
+ }
+ 
+@@ -661,6 +688,7 @@ void cdch_close(uint8_t daddr) {
+       p_cdc->daddr            = 0;
+       p_cdc->bInterfaceNumber = 0;
+       p_cdc->mounted = false;
++      p_cdc->rx_on   = false; // PicoMite: the next device here starts with receiving off (tuh_cdc_mount_cb decides)
+       tu_edpt_stream_close(&p_cdc->stream.tx);
+       tu_edpt_stream_close(&p_cdc->stream.rx);
+     }
+@@ -669,7 +697,24 @@ void cdch_close(uint8_t daddr) {
  
  bool cdch_xfer_cb(uint8_t daddr, uint8_t ep_addr, xfer_result_t event, uint32_t xferred_bytes) {
    // TODO handle stall response, retry failed transfer ...
@@ -17,7 +75,7 @@
 +    if (event == XFER_RESULT_FAILED) {
 +      uint8_t const fidx = get_idx_by_ep_addr(daddr, ep_addr);
 +      cdch_interface_t *p_fcdc = (fidx < CFG_TUH_CDC) ? get_itf(fidx) : NULL;
-+      if (p_fcdc != NULL && ep_addr == p_fcdc->stream.rx.ep_addr) {
++      if (p_fcdc != NULL && ep_addr == p_fcdc->stream.rx.ep_addr && p_fcdc->rx_on) {
 +        (void)tu_edpt_stream_read_xfer(&p_fcdc->stream.rx);
 +      }
 +    }
@@ -26,3 +84,41 @@
  
    uint8_t const idx = get_idx_by_ep_addr(daddr, ep_addr);
    cdch_interface_t *p_cdc = get_itf(idx);
+@@ -701,7 +746,9 @@ bool cdch_xfer_cb(uint8_t daddr, uint8_t
+     }
+ 
+     // prepare for next transfer if needed
+-    tu_edpt_stream_read_xfer(&p_cdc->stream.rx);
++    if (p_cdc->rx_on) { // PicoMite: only while receiving is on
++      tu_edpt_stream_read_xfer(&p_cdc->stream.rx);
++    }
+   } else if (ep_addr == p_cdc->ep_notif) {
+     // TODO handle notification endpoint
+   } else {
+@@ -767,9 +814,11 @@ static void set_config_complete(cdch_int
+   if (success) {
+     const uint8_t idx = get_idx_by_ptr(p_cdc);
+     p_cdc->mounted    = true;
+-    tuh_cdc_mount_cb(idx);
+-    // Prepare for incoming data
+-    tu_edpt_stream_read_xfer(&p_cdc->stream.rx);
++    tuh_cdc_mount_cb(idx); // (PicoMite: which turns receiving on if the application's port is already open)
++    // Prepare for incoming data - PicoMite: only once the application has turned receiving on
++    if (p_cdc->rx_on) {
++      tu_edpt_stream_read_xfer(&p_cdc->stream.rx);
++    }
+   } else {
+     // clear the interface entry
+     p_cdc->daddr            = 0;
+--- a/src/class/cdc/cdc_host.h
++++ b/src/class/cdc/cdc_host.h
+@@ -117,6 +117,9 @@ bool tuh_cdc_peek(uint8_t idx, uint8_t *
+ // Clear the received FIFO
+ bool tuh_cdc_read_clear(uint8_t idx);
+ 
++// PicoMite: arm the bulk IN only while receiving is on (off at mount); off aborts it and empties the FIFO
++bool tuh_cdc_rx_enable(uint8_t idx, bool enable);
++
+ //--------------------------------------------------------------------+
+ // Control Request API
+ // Each Function will make a USB control transfer request to/from device

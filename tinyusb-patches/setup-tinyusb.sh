@@ -40,16 +40,17 @@ git -C "$DEST" fetch -q --depth 1 origin "$COMMIT"
 git -C "$DEST" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
 echo "Applying PicoMite patches (patch -p1):"
-apply() {  # $1 = patch basename, $2 = target file relative to the tree root
-  echo "  - $1.patch"
-  # Normalize the target to LF first: TinyUSB's .gitattributes can force a CRLF
+apply() {  # $1 = patch basename, $2... = its target files relative to the tree root
+  local name="$1"; shift
+  echo "  - $name.patch"
+  # Normalize the targets to LF first: TinyUSB's .gitattributes can force a CRLF
   # checkout, and the patches are LF, so this makes the apply deterministic.
-  sed -i 's/\r$//' "$DEST/$2"
-  patch -p1 -d "$DEST" < "$HERE/$1.patch"
+  for f in "$@"; do sed -i 's/\r$//' "$DEST/$f"; done
+  patch -p1 -d "$DEST" < "$HERE/$name.patch"
 }
 apply hcd_rp2040 src/portable/raspberrypi/rp2040/hcd_rp2040.c
 apply rp2040_usb src/portable/raspberrypi/rp2040/rp2040_usb.c
-apply cdc_host   src/class/cdc/cdc_host.c
+apply cdc_host   src/class/cdc/cdc_host.c src/class/cdc/cdc_host.h
 
 echo
 echo "Done. ../tinyusb-master is ready; PicoMite builds against it via PICO_TINYUSB_PATH."

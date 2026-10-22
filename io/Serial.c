@@ -257,6 +257,7 @@ void tuh_cdc_mount_cb(uint8_t idx)
 		if (!tuh_cdc_set_line_coding(idx, &coding, NULL, 0))
 			tuh_cdc_set_baudrate(idx, cdc_baud[idx], NULL, 0); // fallback for FTDI/CP210x
 		tuh_cdc_set_control_line_state(idx, CDC_CONTROL_LINE_STATE_DTR | CDC_CONTROL_LINE_STATE_RTS, NULL, 0);
+		tuh_cdc_rx_enable(idx, true); // receiving is off at mount (see the OPEN below)
 	}
 }
 
@@ -790,6 +791,10 @@ void MIPS16 SerialOpen(unsigned char *spec)
 		tuh_cdc_set_control_line_state(cdc_idx, CDC_CONTROL_LINE_STATE_DTR | CDC_CONTROL_LINE_STATE_RTS, NULL, (uintptr_t)&res);
 		if (res != XFER_RESULT_INVALID && res != XFER_RESULT_SUCCESS)
 			cdc_open_failed(comnbr, "DTR/RTS");
+
+		// Receive only while the port is open: cdc_host no longer keeps an IN transfer pending on every adapter,
+		// so one that is not open takes no turns on the pipe the RP2 host shares between bulk and control transfers.
+		tuh_cdc_rx_enable(cdc_idx, true);
 	}
 #endif // USBKEYBOARD
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
@@ -868,7 +873,10 @@ void MIPS16 SerialClose(int comnbr)
 		if (*cdc_com_flag[cdc_idx])
 		{
 			if (tuh_cdc_mounted(cdc_idx))
+			{
 				tuh_cdc_set_control_line_state(cdc_idx, 0, NULL, 0);
+				tuh_cdc_rx_enable(cdc_idx, false); // no IN transfer pending while the port is closed
+			}
 			*cdc_com_flag[cdc_idx] = false;
 			*cdc_interrupt[cdc_idx] = NULL;
 			if (*cdc_rx_buf[cdc_idx] != NULL)
