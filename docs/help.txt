@@ -6894,6 +6894,9 @@ MAP( n ) = rgb%
 
 This will assign the 24-bit colour 'rgb% to all pixels with the 4 or 8-bit
 colour value of 'n'.  The change is activated after the MAP SET command.
+In MODE 5 (8-bit colour) the map is used only at 640x480 and 720x400, and not
+at all on the PicoMiteHDMIBTH or PicoMiteHDMIWEB.  At the other resolutions
+MODE 5 shows each pixel's 8-bit value directly as an RGB332 colour.
 
 MAP
 
