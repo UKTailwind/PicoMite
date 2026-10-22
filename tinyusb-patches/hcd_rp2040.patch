@@ -59,7 +59,7 @@
    uint32_t   buf_ctrl = usbh_dpram->epx_buf_ctrl;
    const bool is_out   = (tu_edpt_dir(ep->ep_addr) == TUSB_DIR_OUT);
  
-@@ -162,7 +189,10 @@
+@@ -162,12 +189,19 @@
        buf_ctrl = 0;
      }
    } while (buf_ctrl > 0);
@@ -70,7 +70,28 @@
    usbh_dpram->epx_buf_ctrl = 0;
  
    ep->state = EPSTATE_PENDING;
-@@ -225,6 +255,29 @@
+ }
+ 
++#ifdef PC3_USB_EVLOG
++void pc3_evlog_add(uint32_t tag, uint32_t a, uint32_t b, uint32_t c); /* rp2040_usb.c (patched) */
++#endif
++
+ // switch epx to new endpoint and start the transfer
+ static void __tusb_irq_path_func(epx_switch_ep)(hw_endpoint_t *ep) {
+   const bool is_setup = (ep->state == EPSTATE_PENDING_SETUP);
+@@ -190,6 +224,11 @@
+     usb_hw->dev_addr_ctrl = (uint32_t)(ep->dev_addr | (tu_edpt_number(ep->ep_addr) << USB_ADDR_ENDP_ENDPOINT_LSB));
+     sie_start_xfer(is_setup, is_rx, ep->need_pre);
+   }
++#ifdef PC3_USB_EVLOG
++  /* 'W' EPX switch: pool index | dev_addr<<8 | ep_addr<<16 | setup<<24, EPX buffer control, next_pid | remaining<<16 */
++  pc3_evlog_add('W', (uint32_t)(ep - ep_pool) | ((uint32_t)ep->dev_addr << 8) | ((uint32_t)ep->ep_addr << 16) | ((uint32_t)is_setup << 24),
++                usbh_dpram->epx_buf_ctrl, ep->next_pid | ((uint32_t)ep->remaining_len << 16));
++#endif
+ }
+ 
+ TU_ATTR_ALWAYS_INLINE static inline bool epx_is_pending(const hw_endpoint_t *ep) {
+@@ -225,6 +264,29 @@
    return NULL;
  }
  
@@ -100,7 +121,7 @@
  // Release an unfinished EPX transfer's buffers: a STALL or RX timeout leaves one AVAILABLE, and a buffer completed
  // before it leaves BUFF_STATUS pending, which the ISR would otherwise apply to the next transfer
  static void __tusb_irq_path_func(epx_drop_buffers)(void) {
-@@ -238,6 +291,12 @@
+@@ -238,6 +300,12 @@
  // ISR cannot apply it to the next transfer. Caller holds the critical section and starts the next pending ep.
  static void epx_retire(hw_endpoint_t *ep) {
    if (ep == epx && ep->state == EPSTATE_ACTIVE) {
@@ -113,14 +134,10 @@
      const bool is_setup = (usb_hw->sie_ctrl & USB_SIE_CTRL_SEND_SETUP_BITS) != 0;
      sie_stop_xfer();
      if (!is_setup) {
-@@ -270,13 +329,37 @@
+@@ -270,13 +338,33 @@
  //--------------------------------------------------------------------+
  // Interrupt handlers
  //--------------------------------------------------------------------+
-+#ifdef PC3_USB_EVLOG
-+void pc3_evlog_add(uint32_t tag, uint32_t a, uint32_t b, uint32_t c); /* rp2040_usb.c (patched) */
-+#endif
-+
 +/* PicoMite: USB host fault record - rp2040_usb.c (patched). */
 +void pm_usb_fault_note(uint8_t code, uint16_t info);
 +#define PM_USB_FAULT_DATA_SEQ 1u
@@ -151,7 +168,7 @@
    rp2usb_reset_transfer(ep);
    hcd_event_xfer_complete(ep->dev_addr, ep->ep_addr, xferred_len, xfer_result, true);
  
-@@ -379,12 +462,38 @@
+@@ -379,12 +467,38 @@
    }
  
    if (epx->state == EPSTATE_ACTIVE) {
@@ -193,7 +210,7 @@
      } else {
        epx_switch_request = true;
      }
-@@ -422,6 +531,9 @@
+@@ -422,6 +536,9 @@
  
  static void __tusb_irq_path_func(hcd_rp2040_irq)(void) {
    const uint32_t status = usb_hw->ints;
@@ -203,7 +220,7 @@
  
    if (status & USB_INTS_HOST_CONN_DIS_BITS) {
      uint8_t speed = dev_speed();
-@@ -446,6 +558,20 @@
+@@ -446,6 +563,20 @@
    if (status & USB_INTS_ERROR_RX_TIMEOUT_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_RX_TIMEOUT_BITS;
  
@@ -224,7 +241,7 @@
      const uint32_t sie_ctrl = (usb_hw->sie_ctrl & SIE_CTRL_BASE_MASK) | USB_SIE_CTRL_STOP_TRANS_BITS;
      usb_hw->sie_ctrl        = sie_ctrl;
      // while (usb_hw->sie_ctrl & USB_SIE_CTRL_STOP_TRANS_BITS) {}
-@@ -455,6 +581,7 @@
+@@ -455,6 +586,7 @@
      if (epx->state == EPSTATE_ACTIVE) {
        xfer_complete_isr(epx, XFER_RESULT_FAILED, false);
      }
@@ -232,7 +249,20 @@
    }
  
    if (status & USB_INTS_TRANS_COMPLETE_BITS) {
-@@ -496,14 +623,34 @@
+@@ -479,6 +611,12 @@
+     // epx may have been retired above (RX timeout) in the same interrupt: never restart or re-queue it
+     if (epx->state == EPSTATE_ACTIVE) {
+       hw_endpoint_t *next_ep = epx_next_pending(epx);
++#ifdef PC3_USB_EVLOG
++      /* 'N' stop on NAK: from | to<<8 (FF = restart in place) | from's xferred_len<<16, EPX buffer control,
++         from's next_pid | remaining_len<<16 - all before the unwind */
++      pc3_evlog_add('N', (uint32_t)(epx - ep_pool) | ((next_ep ? (uint32_t)(next_ep - ep_pool) : 0xFFu) << 8) |
++                    ((uint32_t)epx->xferred_len << 16), usbh_dpram->epx_buf_ctrl, epx->next_pid | ((uint32_t)epx->remaining_len << 16));
++#endif
+       if (next_ep != NULL) {
+         epx_save_context(epx);
+         epx_switch_ep(next_ep);
+@@ -496,14 +634,34 @@
  
    if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
@@ -270,7 +300,7 @@
  }
  
  //--------------------------------------------------------------------+
-@@ -645,7 +792,10 @@
+@@ -645,7 +803,10 @@
    } else {
      ep = edpt_alloc();
    }
@@ -282,7 +312,7 @@
  
    const uint8_t  ep_addr         = ep_desc->bEndpointAddress;
    const uint16_t max_packet_size = tu_edpt_packet_size(ep_desc);
-@@ -672,7 +822,11 @@
+@@ -672,7 +833,11 @@
          break;
        }
      }
@@ -295,3 +325,16 @@
      assert(ep_desc->bInterval > 0);
  
      //------------- dpram buf -------------//
+@@ -837,6 +1002,12 @@
+   ep->ep_addr       = 0; // setup is OUT
+   ep->remaining_len = 8;
+   ep->xferred_len   = 0;
++#ifdef PC3_USB_EVLOG
++  /* 'U' SETUP: dev_addr | need_pre<<8 | queued-behind-EPX<<9, bmRequestType..wValue (bytes 0-3), wIndex..wLength */
++  pc3_evlog_add('U', dev_addr | ((uint32_t)ep->need_pre << 8) | ((uint32_t)(epx->state == EPSTATE_ACTIVE) << 9),
++                setup_packet[0] | ((uint32_t)setup_packet[1] << 8) | ((uint32_t)setup_packet[2] << 16) | ((uint32_t)setup_packet[3] << 24),
++                setup_packet[4] | ((uint32_t)setup_packet[5] << 8) | ((uint32_t)setup_packet[6] << 16) | ((uint32_t)setup_packet[7] << 24));
++#endif
+ 
+   // If EPX is busy, mark as pending setup (DPRAM already has the packet)
+   if (epx->state == EPSTATE_ACTIVE) {

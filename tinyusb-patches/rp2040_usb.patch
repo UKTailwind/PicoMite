@@ -1,6 +1,6 @@
 --- a/src/portable/raspberrypi/rp2040/rp2040_usb.c
 +++ b/src/portable/raspberrypi/rp2040/rp2040_usb.c
-@@ -29,6 +29,81 @@
+@@ -29,6 +29,92 @@
  
  critical_section_t rp2usb_lock;
  
@@ -53,8 +53,9 @@
 + * stores per event, read back over the REPL from Python (address from the
 + * ELF's pc3_evlog symbol).  Tags: 'S' transfer start (ep_addr|dev_addr<<8,
 + * total_len, 0), 'C' buffer completion (buf_id|is_double<<8|is_done<<16,
-+ * bc32, xact|remaining<<16), 'I' hcd interrupt (ints, sie_status, 0),
-+ * 'X' transfer complete to the stack (ep_addr|dev_addr<<8, result, len). */
++ * bc32, xact|remaining<<16), 'I' hcd interrupt (ints, sie_status, buf_status),
++ * 'X' transfer complete to the stack (ep_addr|dev_addr<<8, result, len);
++ * hcd_rp2040.c adds 'U' SETUP, 'N' stop on NAK and 'W' EPX switch. */
 +typedef struct { uint32_t t; uint32_t tag; uint32_t a; uint32_t b; uint32_t c; } pc3_ev_t;
 +#ifndef PC3_EVLOG_N /* PicoMite: overridable - HDMIUSB has ~2.7 KB BSS headroom, 256*20B does not fit */
 +#define PC3_EVLOG_N 256
@@ -69,6 +70,16 @@
 +volatile int32_t pc3_evlog_freeze = -1;
 +void pc3_evlog_add(uint32_t tag, uint32_t a, uint32_t b, uint32_t c) {
 +    if (pc3_evlog_freeze == 0) return;
++    /* a repeat of one of the last 8 events only counts, in tag bits 8-31: a NAK ping-pong between two pending
++       transfers would otherwise flush the lead-up to a failure out of the ring in a millisecond */
++    uint32_t n0 = pc3_evlog_n;
++    for (uint32_t k = 1; k <= 8 && k <= n0; k++) {
++        volatile pc3_ev_t *p = &pc3_evlog[(n0 - k) % PC3_EVLOG_N];
++        if ((p->tag & 0xFFu) == tag && p->a == a && p->b == b && p->c == c) {
++            if ((p->tag >> 8) < 0xFFFFFFu) p->tag += 0x100u;
++            return;
++        }
++    }
 +    if (pc3_evlog_freeze > 0) pc3_evlog_freeze--;
 +    uint32_t i = pc3_evlog_n++;
 +    volatile pc3_ev_t *e = &pc3_evlog[i % PC3_EVLOG_N];
@@ -82,7 +93,7 @@
  //--------------------------------------------------------------------+
  // Implementation
  //--------------------------------------------------------------------+
-@@ -103,7 +178,13 @@
+@@ -103,7 +189,13 @@
    const uint32_t current    = *buf_reg;
    const uint32_t avail_mask = USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16);
    if (current & value & avail_mask) {
@@ -97,7 +108,7 @@
    }
    *buf_reg = value & ~(USB_BUF_CTRL_AVAIL | (USB_BUF_CTRL_AVAIL << 16)); // write other bits first
  
-@@ -121,7 +202,9 @@
+@@ -121,7 +213,9 @@
  void __tusb_irq_path_func(bufctrl_write16)(io_rw_16 *buf_reg16, uint16_t value) {
    const uint16_t current = *buf_reg16;
    if (current & value & USB_BUF_CTRL_AVAIL) {
@@ -108,7 +119,7 @@
    }
    *buf_reg16 = value & (uint16_t)~USB_BUF_CTRL_AVAIL; // write other bits first
  
-@@ -186,7 +269,15 @@
+@@ -186,7 +280,15 @@
      // double-buffered bulk path is unaffected.)
      const bool is_iso = (((ep_ctrl >> EP_CTRL_BUFFER_TYPE_LSB) & 0x3u) == TUSB_XFER_ISOCHRONOUS);
    #if CFG_TUH_ENABLED
@@ -125,7 +136,7 @@
    #else
      const bool force_single = is_iso;
    #endif
-@@ -220,6 +311,9 @@
+@@ -220,6 +322,9 @@
    ep->remaining_len = total_len;
    ep->xferred_len   = 0;
    ep->state         = EPSTATE_ACTIVE;
@@ -135,7 +146,7 @@
  
    #if CFG_TUD_EDPT_DEDICATED_HWFIFO
    if (ff != NULL) {
-@@ -346,6 +440,16 @@
+@@ -346,6 +451,16 @@
    const bool     is_last    = buf_ctrl16 & USB_BUF_CTRL_LAST;
    const bool     is_short   = xact_bytes < ep->max_packet_size;
    const bool     is_done    = is_short || is_last;
