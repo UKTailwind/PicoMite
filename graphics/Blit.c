@@ -1204,6 +1204,39 @@ int blitother(void)
 }
 /*  @endcond */
 
+#ifdef PICOMITEVGA
+/* MODE 1: an area that lines up with the tiles (x and width in 8s, y and height in tile rows) takes its tile colours
+   with it. The copy starts from the far end when the area moves down or right, so an overlap is read before it is
+   overwritten. At the HDMI resolutions with RGB332 tiles the colours are in tilefcols_w/tilebcols_w. */
+static void mode1_blit_tiles(int x1, int y1, int x2, int y2, int w, int h)
+{
+    if ((x1 % 8) || (x2 % 8) || (w % 8) || (y1 % ytileheight) || (y2 % ytileheight) || (h % ytileheight))
+        return;
+    int tx1 = x1 / 8, ty1 = y1 / ytileheight, tx2 = x2 / 8, ty2 = y2 / ytileheight;
+    int xc = w / 8, yc = h / ytileheight;
+    for (int i = 0; i < yc; i++)
+    {
+        int y = (ty2 > ty1) ? yc - 1 - i : i;
+        for (int j = 0; j < xc; j++)
+        {
+            int x = (tx2 > tx1) ? xc - 1 - j : j;
+            int s = (y + ty1) * X_TILE + x + tx1;
+            int d = (y + ty2) * X_TILE + x + tx2;
+#ifdef HDMI
+            if (!FullColour)
+            {
+                tilefcols_w[d] = tilefcols_w[s];
+                tilebcols_w[d] = tilebcols_w[s];
+                continue;
+            }
+#endif
+            tilefcols[d] = tilefcols[s];
+            tilebcols[d] = tilebcols[s];
+        }
+    }
+}
+#endif
+
 void cmd_blit(void)
 {
     int x1, y1, x2, y2, w, h, bnbr;
@@ -1878,6 +1911,7 @@ void cmd_blit(void)
             unsigned char *buff = NULL;
             int max_x, ww;
             ww = w;
+            const int ox1 = x1, ox2 = x2; // the column loop below moves x1 and x2 on
             if (x1 >= x2)
             {
                 max_x = 1;
@@ -1893,25 +1927,7 @@ void cmd_blit(void)
                 ReadBufferFast(x1, y1, x1 + w - 1, y1 + h - 1, buff);
                 DrawBufferFast(x2, y2, x2 + w - 1, y2 + h - 1, -1, buff);
                 FreeMemory(buff);
-                if ((x1 % 8 == 0) && (x2 % 8 == 0) && (y1 % ytileheight == 0) && (y2 % ytileheight == 0) && (ww % 8 == 0) && (h % ytileheight == 0))
-                {
-                    int tx1 = x1 / 8;
-                    int xc = ww / 8;
-                    int ty1 = y1 / ytileheight;
-                    int yc = h / ytileheight;
-                    int tx2 = x2 / 8;
-                    int ty2 = y2 / ytileheight;
-                    for (int x = 0; x < xc; x++)
-                    {
-                        for (int y = 0; y < yc; y++)
-                        {
-                            int s = (y + ty1) * X_TILE + x + tx1;
-                            int d = (y + ty2) * X_TILE + x + tx2;
-                            tilefcols[d] = tilefcols[s];
-                            tilebcols[d] = tilebcols[s];
-                        }
-                    }
-                }
+                mode1_blit_tiles(ox1, y1, ox2, y2, ww, h);
                 return;
             }
             if (x1 < x2)
@@ -1932,25 +1948,7 @@ void cmd_blit(void)
                 ReadBufferFast(x1, y1, x1 + w - 1, y1 + h - 1, buff);
                 DrawBufferFast(x2, y2, x2 + w - 1, y2 + h - 1, -1, buff);
                 FreeMemory(buff);
-                if ((x1 % 8 == 0) && (x2 % 8 == 0) && (y1 % ytileheight == 0) && (y2 % ytileheight == 0) && (ww % 8 == 0) && (h % ytileheight == 0))
-                {
-                    int tx1 = x1 / 8;
-                    int xc = ww / 8;
-                    int ty1 = y1 / ytileheight;
-                    int yc = h / ytileheight;
-                    int tx2 = x2 / 8;
-                    int ty2 = y2 / ytileheight;
-                    for (int x = xc - 1; x >= 0; x--)
-                    {
-                        for (int y = 0; y < yc; y++)
-                        {
-                            int s = (y + ty1) * X_TILE + x + tx1;
-                            int d = (y + ty2) * X_TILE + x + tx2;
-                            tilefcols[d] = tilefcols[s];
-                            tilebcols[d] = tilebcols[s];
-                        }
-                    }
-                }
+                mode1_blit_tiles(ox1, y1, ox2, y2, ww, h);
                 return;
             }
         }
