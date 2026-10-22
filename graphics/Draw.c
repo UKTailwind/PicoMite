@@ -4120,8 +4120,8 @@ void cmd_tile(void)
         if (argc < 5)
             SyntaxError();
         ;
-        int x = getint(argv[0], 0, X_TILE);
-        int y = getint(argv[2], 0, Y_TILE);
+        int x = getint(argv[0], 0, X_TILE - 1);
+        int y = getint(argv[2], 0, Y_TILE - 1);
         int tilebcolour, tilefcolour;
         if (*argv[4])
         {
