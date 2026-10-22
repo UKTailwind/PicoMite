@@ -40,6 +40,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "Hardware_Includes.h"
 #include "Memory.h"
 #include "DrawInternal.h"
+#ifdef HDMI
+/* MODE 1 at the HDMI resolutions with RGB332 tiles keeps the tile colours right after the screen (settiles()), where
+   pool slot 1 would start: framebuffer 2 and the layer take the heap instead */
+#define MODE1_TILES_IN_SLOT1 (DISPLAY_TYPE == SCREENMODE1 && !FullColour)
+#else
+#define MODE1_TILES_IN_SLOT1 0
+#endif
 
 // a bare buffer letter (FRAMEBUFFER WRITE F) is the whole argument, perhaps with a comment: checkstring() alone takes
 // l$ or f(1) for the letter, whatever they hold, and those belong to the string form (issue #112)
@@ -1543,7 +1550,7 @@ void cmd_framebuffer(void)
 #ifdef HDMI
             case SCREENMODE5:
 #endif
-                if (ScreenSize < framebuffersize / 2 && LayerBuf != DisplayBuf + ScreenSize)
+                if (!MODE1_TILES_IN_SLOT1 && ScreenSize < framebuffersize / 2 && LayerBuf != DisplayBuf + ScreenSize)
                     SecondFrame = DisplayBuf + ScreenSize;
                 else
                     SecondFrame = GetMemory(ScreenSize);
@@ -1679,7 +1686,7 @@ void cmd_framebuffer(void)
                    GetSystemMemory takes the SRAM heap without GetMemory's
                    rule that sends any block over half the heap to PSRAM,
                    and goes to PSRAM only when the SRAM heap is really full. */
-                if (ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
+                if (!MODE1_TILES_IN_SLOT1 && ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
                     LayerBuf = DisplayBuf + ScreenSize;
                 else
                     LayerBuf = GetSystemMemory(ScreenSize);
@@ -1703,7 +1710,7 @@ void cmd_framebuffer(void)
                     RGBtransparent = 0;
                 break;
             case SCREENMODE5:
-                if (ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
+                if (!MODE1_TILES_IN_SLOT1 && ScreenSize < framebuffersize / 2 && SecondFrame != DisplayBuf + ScreenSize)
                     LayerBuf = DisplayBuf + ScreenSize;
                 else
                     LayerBuf = GetSystemMemory(ScreenSize);
