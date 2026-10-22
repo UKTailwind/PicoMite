@@ -569,6 +569,7 @@ void MIPS16 setupuart(int uart, int s2, int parity, int b7, int baud, int inv)
 static void cdc_open_failed(int comnbr, const char *what)
 {
 	int cdc_idx = comnbr - 3;
+	tuh_cdc_rx_enable(cdc_idx, false); // the port is not opened: no IN transfer left armed
 	*cdc_com_flag[cdc_idx] = false;
 	*cdc_interrupt[cdc_idx] = NULL;
 	if (*cdc_rx_buf[cdc_idx] != NULL)
@@ -772,6 +773,12 @@ void MIPS16 SerialOpen(unsigned char *spec)
 
 		*cdc_com_flag[cdc_idx] = true;
 
+		// Receive only while the port is open: cdc_host no longer keeps an IN transfer pending on every adapter,
+		// so one that is not open takes no turns on the pipe the RP2 host shares between bulk and control transfers.
+		// Turned on first: what the device held while the port was closed (a CH340 keeps 64 bytes) comes in during
+		// the requests below and is thrown away at the end, so the port starts empty, as COM1 and COM2 do.
+		tuh_cdc_rx_enable(cdc_idx, true);
+
 		// Both requests below block, and res gets the outcome of each one actually sent. One never
 		// sent (an ACM device that declares no line-state support) leaves res at XFER_RESULT_INVALID
 		// and is not an error. One the device failed, stalled or never answered is: without DTR a
@@ -792,9 +799,13 @@ void MIPS16 SerialOpen(unsigned char *spec)
 		if (res != XFER_RESULT_INVALID && res != XFER_RESULT_SUCCESS)
 			cdc_open_failed(comnbr, "DTR/RTS");
 
-		// Receive only while the port is open: cdc_host no longer keeps an IN transfer pending on every adapter,
-		// so one that is not open takes no turns on the pipe the RP2 host shares between bulk and control transfers.
-		tuh_cdc_rx_enable(cdc_idx, true);
+		// The device can hand over what it held in more than one transfer: keep USB running 5 ms (five frames) for
+		// the rest of it (on the Colour Maximite 2, 1 open in 40 still got old bytes without this; none in 120 with
+		// it), then throw it all away (issue #118).
+		for (uint32_t t0 = time_us_32(); time_us_32() - t0 < 5000;)
+			tuh_task();
+		tuh_cdc_read_clear(cdc_idx);
+		*cdc_rx_head[cdc_idx] = *cdc_rx_tail[cdc_idx] = 0;
 	}
 #endif // USBKEYBOARD
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
