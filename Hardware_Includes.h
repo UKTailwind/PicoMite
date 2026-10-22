@@ -430,6 +430,8 @@ extern volatile unsigned int IntPauseTimer;
 extern volatile unsigned int Timer1, Timer2, Timer3, Timer4, Timer5;
 extern volatile unsigned int diskchecktimer;
 extern volatile unsigned int clocktimer;
+// OPTION RTC AUTO ENABLE: the RTC is read at boot and then once a day; WEB NTP restarts the day
+#define RTC_REREAD_MS (1000u * 60u * 60u * 24u)
 extern volatile int ds18b20Timer;
 extern volatile int CursorTimer;
 extern volatile unsigned int SecondsTimer;

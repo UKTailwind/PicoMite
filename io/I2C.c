@@ -1032,8 +1032,8 @@ static int RtcWriteRegister(uint8_t reg, uint8_t value)
 
 void RtcGetTime(int noerror)
 {
-  char buff[16]; // the time registers (7 bytes); routinechecks calls this hourly at the prompt, where temporary memory is not freed
-  clocktimer = (1000 * 60 * 60);
+  char buff[16]; // the time registers (7 bytes); routinechecks calls this daily at the prompt, where temporary memory is not freed
+  clocktimer = (1000 * 60 * 60); // a read that fails is retried in an hour
 
   // Detect which RTC is connected
   if (!RtcDetect())
@@ -1052,6 +1052,7 @@ void RtcGetTime(int noerror)
   RtcDecodeTime(buff, &year, &month, &day, &hour, &minute, &second);
 
   set_time_epoch(get_epoch(year, month, day, hour, minute, second), true); // milliseconds start at 0
+  clocktimer = RTC_REREAD_MS; // the Pico's clock keeps good time: read the RTC again in a day
   return;
 
 error_exit:

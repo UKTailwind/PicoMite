@@ -72,6 +72,7 @@ static void ntp_result(NTP_T *state, int status, int64_t epoch_us)
         day = utc->tm_mday;
         //        mT4IntEnable(1);
         set_time_epoch_us(epoch_us); // milliseconds and all
+        clocktimer = RTC_REREAD_MS; // OPTION RTC AUTO: the RTC's time does not replace this one for a day
     }
 }
 
