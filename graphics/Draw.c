@@ -5550,7 +5550,8 @@ void DrawBitmap2(int x1, int y1, int width, int height, int scale, int fc, int b
                     for (int xx = xt; xx < endx; xx++)
                     {
                         tilefcols[yy * X_TILE + xx] = (uint16_t)fcolour;
-                        tilebcols[yy * X_TILE + xx] = (uint16_t)bcolour;
+                        if (bc >= 0) // a transparent background (-1) keeps the tile's own
+                            tilebcols[yy * X_TILE + xx] = (uint16_t)bcolour;
                     }
                 }
 #ifdef HDMI
@@ -5562,7 +5563,8 @@ void DrawBitmap2(int x1, int y1, int width, int height, int scale, int fc, int b
                     for (int xx = xt; xx < endx; xx++)
                     {
                         tilefcols_w[yy * X_TILE + xx] = (uint8_t)fcolour;
-                        tilebcols_w[yy * X_TILE + xx] = (uint8_t)bcolour;
+                        if (bc >= 0) // a transparent background (-1) keeps the tile's own
+                            tilebcols_w[yy * X_TILE + xx] = (uint8_t)bcolour;
                     }
                 }
             }
