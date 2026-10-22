@@ -6054,7 +6054,8 @@ OPTION MILLISECONDS ON|OFF
 
 This enables or disables a millisecond output in the TIME$ function. Ie,
 HH:MM:SS.mmm The milliseconds counter is set to zero whenever the time is
-updated using the TIME command, WEB NTP command or RTC GETTIME command.
+updated using the TIME command or RTC GETTIME command, and set from the time
+server by the WEB NTP command.
 
 ~OPTION MODBUFF
 OPTION MODBUFF ENABLE/DISABLE [sizeinK]
@@ -6206,8 +6207,9 @@ See also: RESOLUTION
 ~OPTION RTC AUTO
 OPTION RTC AUTO ENABLE | DISABLE
 
-Enable auto-load time$ & date$ from RTC on boot & every hour. If enabled and
-the RTC does not respond then any running program will abort with an error.
+Enable auto-load time$ & date$ from RTC on boot & every 24 hours (WEB NTP
+restarts the 24 hours). If enabled and the RTC does not respond then any
+running program will abort with an error.
 
 ~OPTION SCREEN KEYBOARD
 OPTION SCREEN KEYBOARD nn [, M]
