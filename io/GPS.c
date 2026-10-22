@@ -1436,23 +1436,16 @@ static unsigned char *findStringExprEnd(unsigned char *p)
       p++;
     return p;
   }
+  // in a tokenised line a function is one token that carries its '(' (MID$(...)): getclosebracket()
+  // counts those and skips strings (issue #100)
+  if (tokentype(*p) & T_FUN)
+    return getclosebracket(p) + 1;
   while (isnamechar(*p))
     p++;
   if (*p == '$' || *p == '%' || *p == '!')
     p++;
   if (*p == '(')
-  {
-    int depth = 1;
-    p++;
-    while (*p && depth > 0)
-    {
-      if      (*p == '(') depth++;
-      else if (*p == ')') { if (--depth == 0) break; }
-      else if (*p == '"') { p++; while (*p && *p != '"') p++; }
-      p++;
-    }
-    if (*p == ')') p++;
-  }
+    return getclosebracket(p) + 1;
   return p;
 }
 
@@ -1479,7 +1472,9 @@ static int tryGetStringArg(unsigned char *cmd, char *nameBuf, int nameBufLen, un
   {
     // Declared string variable without '$' suffix (DIM s AS STRING).
     // V_NOFIND_NULL is safe on plain keywords — returns NULL without auto-creating.
-    if (findvar(p, V_NOFIND_NULL) != NULL && (VREC(g_VarIndex)->type & T_STR))
+    // Only a name is probed: findvar raises "Variable name" on a function's token, and would evaluate a
+    // FUNCTION's arguments as indices (issue #100).
+    if (isnamestart(*p) && FindSubFun(p, 1) < 0 && findvar(p, V_NOFIND_NULL) != NULL && (VREC(g_VarIndex)->type & T_STR))
       isStrExpr = 1;
   }
 
@@ -1491,7 +1486,13 @@ static int tryGetStringArg(unsigned char *cmd, char *nameBuf, int nameBufLen, un
     int depth = 0;
     while (*q)
     {
-      if      (*q == '(')                  depth++;
+      if (tokentype(*q) & T_FUN)
+      { // a function's token carries its '(': MID$( at depth 0 is a string expression (issue #100)
+        if (depth == 0 && (tokentype(*q) & T_STR)) { isStrExpr = 1; break; }
+        depth++;
+      }
+      else if (*q == '"')                { q++; while (*q && *q != '"') q++; if (!*q) break; }
+      else if (*q == '(')                  depth++;
       else if (*q == ')')                  depth--;
       else if (*q == '$' && depth == 0)  { isStrExpr = 1; break; }
       else if (*q == ',' && depth == 0)    break;
@@ -1519,16 +1520,18 @@ static int tryGetStringArg(unsigned char *cmd, char *nameBuf, int nameBufLen, un
   if (!*after)
     return 0; // nothing follows; at least alt and az are required
 
-  unsigned char saved = *exprEnd;
-  *exprEnd = '\0'; // isolate the expression for evaluate()
+  // isolate the expression for evaluate() in a copy: cmd is the statement's text, often the program itself
+  // (issue #100)
+  unsigned char *expr = GetTempMemory(STRINGSIZE);
+  int exprLen = exprEnd - p < STRINGSIZE - 1 ? exprEnd - p : STRINGSIZE - 1;
+  memcpy(expr, p, exprLen);
+  expr[exprLen] = 0;
 
   MMFLOAT f = 0;
   long long int i64 = 0;
   unsigned char *s = NULL;
   int type = T_NOTYPE;
-  evaluate(p, &f, &i64, &s, &type, false);
-
-  *exprEnd = saved;
+  evaluate(expr, &f, &i64, &s, &type, false);
 
   if (!(type & T_STR) || s == NULL)
     return 0;
@@ -1803,7 +1806,7 @@ manual_entry:
     MMFLOAT dec0 = getnumber(argv[6]); // Dec in degrees (J2000)
     MMFLOAT pm_ra = 0.0;
     MMFLOAT pm_dec = 0.0;
-    if (argc == 11)
+    if (argc >= 11) // (with RA/Dec out too: issue #100)
     {
       pm_ra = getnumber(argv[8]);   // Proper motion in RA (arcsec/yr)
       pm_dec = getnumber(argv[10]); // Proper motion in Dec (arcsec/yr)
