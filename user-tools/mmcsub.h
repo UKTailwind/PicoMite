@@ -755,7 +755,12 @@ static char *mm_valfmt(const char *s, int fl, MMINTEGER m, MMINTEGER n,
    - mm_ixp and mm_ixend. They come only with mm_ix's checked subscripts
      (findvar's order with two or more subscripts, FUZIX #26), which mmb2c
      emits only in a program that traps errors with ON ERROR. A CSUB has
-     none of that machinery, so such a routine is refused already. */
+     none of that machinery, so such a routine is refused already.
+   - mm_undecl and the __mm_ud* statics (FUZIX #25, #34). Under OPTION
+     EXPLICIT a name that is never declared, in a FOR, an IF or a CASE
+     that may never run, is a file static standing in for it, behind
+     "NAME is not declared". A CSUB has no writable static data, so the
+     routine stays BASIC - and it is one with an error in it anyway. */
 
 /* ------------------------------------------------------------------ *
  *  Compiler-emitted helpers, routed to the firmware's routines.
