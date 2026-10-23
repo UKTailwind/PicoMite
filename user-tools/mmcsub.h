@@ -640,19 +640,14 @@ static MMINTEGER mm_vali(const char *s)
    PRINT and STR$ show it: 2000000 or 2e+06 (FUZIX issues #2 and #3). mmb2c
    emits mm_vals for a PRINTed VAL(...) - PRINT's text, sign column and all,
    handed to mm_pr_s as mm_ipows is - and mm_vstr for STR$(VAL(...)). */
-static char *mm_val_text(const char *s, int lead)
+static char *mm_num_text(int isf, MMFLOAT f, long long i, int lead)
 {
-    unsigned char *u = mm_tmpstr();
     unsigned char *t = mm_tmpstr();
     char *c = (char *)t + 1;
-    MMFLOAT f;
-    long long i;
     unsigned n;
 
-    Mstrcpy(u, (unsigned char *)s);
-    MtoC(u);
     c[0] = ' ';
-    if (StrVal(u, &f, &i))
+    if (isf)
         FloatToStr(c + 1, f, 0, MM_AUTO_PRECISION, ' ');
     else
         IntToStr(c + 1, i, 10);
@@ -663,6 +658,19 @@ static char *mm_val_text(const char *s, int lead)
     for (t[0] = 0; t[0] < n; t[0]++)
         t[1 + t[0]] = (unsigned char)c[t[0]];
     return (char *)t;
+}
+
+static char *mm_val_text(const char *s, int lead)
+{
+    unsigned char *u = mm_tmpstr();
+    MMFLOAT f;
+    long long i;
+    int isf;
+
+    Mstrcpy(u, (unsigned char *)s);
+    MtoC(u);
+    isf = StrVal(u, &f, &i);
+    return mm_num_text(isf, f, i, lead);
 }
 #define mm_vals(s) mm_val_text((s), 1)
 #define mm_vstr(s) mm_val_text((s), 0)
@@ -690,6 +698,44 @@ static char *mm_str_i(MMINTEGER v, MMINTEGER m, MMINTEGER n, const char *pad)
     return (char *)StrFormat(mm_tmpstr(), 0.0, v, 1, (int)m, (int)n,
                              pad && pad[0] ? (unsigned char)pad[1] : ' ');
 }
+
+/* VAL in its own type where brackets or a unary minus stand round it -
+   op_neg leaves an integer an integer - and STR$(VAL(...)) with its other
+   arguments, StrFormat's integer path for an integer: STR$(VAL("2000000"),
+   10) is "   2000000", not "         2e+06" (FUZIX #28). fl 1 negates; fl 2
+   is PRINT's form, the sign column in front as mm_vals has it, which mmb2c
+   only ever emits with m 0, n MM_AUTO_PRECISION and a space. */
+static char *mm_valfmt(const char *s, int fl, MMINTEGER m, MMINTEGER n,
+                       const char *pad)
+{
+    unsigned char *u = mm_tmpstr();
+    MMFLOAT f;
+    long long i;
+    int isf;
+
+    Mstrcpy(u, (unsigned char *)s);
+    MtoC(u);
+    isf = StrVal(u, &f, &i);
+    if (fl & 1)
+    {
+        if (isf)
+            f = -f;
+        else
+            i = (long long)(0 - (unsigned long long)i);
+    }
+    if (fl & 2)
+        return mm_num_text(isf, f, i, 1);
+    return isf ? mm_str_f(f, m, n, pad) : mm_str_i(i, m, n, pad);
+}
+
+/* Deliberately absent, from mmb2c's newer output:
+   - mm_load_data and mm_save_data (LOAD DATA, SAVE DATA). They read and
+     write a file, and the CallTable has no filesystem slot, so a routine
+     that uses them stays BASIC.
+   - mm_ixp and mm_ixend. They come only with mm_ix's checked subscripts
+     (findvar's order with two or more subscripts, FUZIX #26), which mmb2c
+     emits only in a program that traps errors with ON ERROR. A CSUB has
+     none of that machinery, so such a routine is refused already. */
 
 /* ------------------------------------------------------------------ *
  *  Compiler-emitted helpers, routed to the firmware's routines.
