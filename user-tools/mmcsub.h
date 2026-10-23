@@ -625,6 +625,37 @@ static MMINTEGER mm_vali(const char *s)
     return StrVal(t, &f, &i) ? FloatToInt(f) : i;
 }
 
+/* VAL's answer has the type StrVal gives it, and that type decides how
+   PRINT and STR$ show it: 2000000 or 2e+06 (FUZIX issues #2 and #3). mmb2c
+   emits mm_vals for a PRINTed VAL(...) - PRINT's text, sign column and all,
+   handed to mm_pr_s as mm_ipows is - and mm_vstr for STR$(VAL(...)). */
+static char *mm_val_text(const char *s, int lead)
+{
+    unsigned char *u = mm_tmpstr();
+    unsigned char *t = mm_tmpstr();
+    char *c = (char *)t + 1;
+    MMFLOAT f;
+    long long i;
+    unsigned n;
+
+    Mstrcpy(u, (unsigned char *)s);
+    MtoC(u);
+    c[0] = ' ';
+    if (StrVal(u, &f, &i))
+        FloatToStr(c + 1, f, 0, MM_AUTO_PRECISION, ' ');
+    else
+        IntToStr(c + 1, i, 10);
+    if (!lead || c[1] == '-')
+        c++; /* STR$ has no sign column, nor does a negative */
+    for (n = 0; c[n]; n++)
+        ;
+    for (t[0] = 0; t[0] < n; t[0]++)
+        t[1 + t[0]] = (unsigned char)c[t[0]];
+    return (char *)t;
+}
+#define mm_vals(s) mm_val_text((s), 1)
+#define mm_vstr(s) mm_val_text((s), 0)
+
 /* TIMER = n */
 #define mm_timer_set(ms) TimerSet(FloatToInt(ms))
 
