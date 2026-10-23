@@ -482,9 +482,11 @@ colour names), `MM.HRES` and `MM.VRES`, `PRINT`, and the drawing statements
 `PIXEL`, `LINE`, `BOX`, `CIRCLE` and `TRIANGLE`; and `PIN(n)` and `PIN(n) = v`
 for reading and driving a pin.
 
-`RGB` costs nothing at all: the translator works it out where it stands, so
-`RGB(red)` becomes a constant and `RGB(r, g, b)` becomes the shift-and-or it
-always was. The drawing statements call the same firmware routines the
+`RGB` of a colour name, or of three literal components, costs nothing at all:
+the translator works it out where it stands and it becomes a constant.
+`RGB(r, g, b)` of anything else checks each component is 0 to 255, as the
+interpreter's `RGB` does, before the shift-and-or. The drawing statements call
+the same firmware routines the
 interpreter calls, so what you get on screen is identical — a converted
 routine and the original produce the same image byte for byte.
 
@@ -794,11 +796,20 @@ write CSUBs by hand, because it applies to those identically.
 
 ---
 
-### A.2 No error path
+### A.2 Errors: some, not all
 
-`error()` in the firmware does a `longjmp`. A CSUB cannot call it: the jump
-would abandon the CSUB's own stack frame. So a CSUB has no way to stop with a
-message, and that has three consequences worth taking seriously.
+`error()` in the firmware does a `longjmp` back to the interpreter. A
+converted routine holds nothing that has to be unwound on the way: its strings
+live in the interpreter's temporary memory, its `LOCAL`s on the C stack, and
+every call starts its scratch arena afresh. That is why the break key can
+already stop a converted loop - `CheckAbort` jumps out the same way. So the
+errors the translator itself checks for stop the program with the
+interpreter's message, exactly as the BASIC would: `RGB(r, g, b)` with a
+component outside 0 to 255, and `BOUND()` past an array's rank. (`END` in a
+converted routine stops too, with "END in a CSUB".)
+
+What a CSUB cannot do is everything the *interpreter* checks and plain C does
+not, and that has consequences worth taking seriously.
 
 **`ON ERROR` is refused.** Nothing to add — the tool tells you.
 
@@ -821,12 +832,12 @@ array was measured both ways: MMBasic stopped it cleanly at depth 9 with
 reset the board somewhere before 150, with no message. Deep or unbounded
 recursion is the wrong thing to convert.
 
-**Arguments are not range-checked either.** `RGB(r, g, b)` is the one you
-are most likely to meet: MMBasic rejects a component outside 0 to 255 with an
-error, while the converted code simply keeps the low eight bits, so an
-out-of-range value silently becomes a different colour. This only bites code
-that was already erroring in the interpreter, which is the general shape of
-the problem — convert code that works.
+**Most arguments are not range-checked.** `RGB` and `BOUND` are, as above;
+the string functions are not. They run on the same cores as the interpreter,
+which clamp rather than raise, so a position the interpreter would refuse
+gives a clamped answer instead. This only bites code that was already
+erroring in the interpreter, which is the general shape of the problem —
+convert code that works.
 
 The general rule: a CSUB fails the way C fails, not the way BASIC fails.
 
