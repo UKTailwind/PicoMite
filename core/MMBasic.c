@@ -3483,6 +3483,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
         if (DimIsEmptyParam(RAW_DIM((*VREC(g_VarIndex)), 0)))
         {
             int j;
+            // no argument for an array parameter: argtype, argVarIndex and argv1 are not set for it (the first loop
+            // fills them only for what the caller gave), and argv1 can still hold an earlier call's text (#131)
+            if (i >= argc1 || !*argv1[i])
+                error("Incompatible type: ");
             if (DimIsScalar(RAW_DIM((*VREC(argVarIndex[i])), 0)))
                 error("Expected an array");
             if (TypeMask(VREC(g_VarIndex)->type) != TypeMask(argtype[i]))
