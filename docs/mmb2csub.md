@@ -513,9 +513,8 @@ rather than the pin.
 
 Anything else — a pin assigned to a UART, SPI, I2C, PWM or an `INT`, a
 heartbeat, a pin number that does not exist on the board — is where the
-difference from BASIC shows. A CSUB cannot raise an error, because the error
-would longjmp out of the middle of it, so instead a read gives 0 and a write
-does nothing. Check the mode in BASIC before you call, or read
+difference from BASIC shows. The converted code does not stop with the
+interpreter's error there: a read gives 0 and a write does nothing. Check the mode in BASIC before you call, or read
 `ExtCurrentConfig[]` from the CSUB if you want to branch on it.
 
 `PIN(TEMP)` and `PIN(BOOTSEL)` do not convert. They are keywords rather than
@@ -571,9 +570,9 @@ your converted routine is now *one* statement. The tool puts a break check
 inside every loop so `Ctrl-C` still works; without that a long CSUB makes the
 board stop answering.
 
-**No range checks, no clean stop.** A CSUB cannot reach the interpreter's
-error handling, so an out-of-range subscript writes to memory instead of
-reporting `Index out of bounds`. Convert code that already works. Appendix
+**No subscript checks.** The converted code does not check what the
+interpreter checks for you, so an out-of-range subscript writes to memory
+instead of reporting `Index out of bounds`. Convert code that already works. Appendix
 A.2 has the detail.
 
 ---
@@ -805,8 +804,13 @@ every call starts its scratch arena afresh. That is why the break key can
 already stop a converted loop - `CheckAbort` jumps out the same way. So the
 errors the translator itself checks for stop the program with the
 interpreter's message, exactly as the BASIC would: `RGB(r, g, b)` with a
-component outside 0 to 255, and `BOUND()` past an array's rank. (`END` in a
-converted routine stops too, with "END in a CSUB".)
+component outside 0 to 255. (`END` in a converted routine stops too, with "END
+in a CSUB".)
+
+**`BOUND()` of an array passed in as a parameter is not reliable.** The
+wrapper hands the CSUB only the array's first bound, so `BOUND()` of such an
+array can give a wrong value, a wrong error, or no error where BASIC stops. Find
+the bound in BASIC and pass it in as an argument.
 
 What a CSUB cannot do is everything the *interpreter* checks and plain C does
 not, and that has consequences worth taking seriously.
@@ -832,7 +836,7 @@ array was measured both ways: MMBasic stopped it cleanly at depth 9 with
 reset the board somewhere before 150, with no message. Deep or unbounded
 recursion is the wrong thing to convert.
 
-**Most arguments are not range-checked.** `RGB` and `BOUND` are, as above;
+**Most arguments are not range-checked.** `RGB` is, as above;
 the string functions are not. They run on the same cores as the interpreter,
 which clamp rather than raise, so a position the interpreter would refuse
 gives a clamped answer instead. This only bites code that was already
