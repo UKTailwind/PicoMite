@@ -2073,6 +2073,12 @@ int MIPS16 tokenise(int console)
     labelvalid = true;
     tp = p;
     skipspace(tp);
+    // /* and */ are commands: the first thing on a line, with a space or the end of the line after them (the
+    // manual). A line that breaks that is refused here, as it is read, so nothing later has to make sense of it:
+    // /*word ran as an expression, and */word ended a block here but never when the program ran. Inside a block
+    // only */ is a command; a /* there is comment text.
+    if (((tp[0] == '/' && tp[1] == '*' && !multi) || (tp[0] == '*' && tp[1] == '/')) && tp[2] != ' ' && tp[2] != 0)
+        error("/* and */ must be followed by a space or end of line");
     if (*tp == '.')
     {
         if (!strncasecmp((char *)tp, ".SIDE SET ", 10) ||
