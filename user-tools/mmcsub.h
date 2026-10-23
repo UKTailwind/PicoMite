@@ -185,6 +185,57 @@ static void *mm_zeroed(void *p, unsigned long n)
 #define mm_toint(a) FloatToInt(a)     /* rounds, as MMBasic does */
 #define mm_pow(a, b) Power((a), (b))  /* ^ */
 
+/* Integer ^ integer is an INTEGER, as op_exp has it: by squaring in unsigned
+   arithmetic, so an overflow wraps exactly as the interpreter's does.  A
+   negative exponent is pow()'s float there; mmb2c types this call as an
+   integer, so here that float is made one, as an integer assignment would.
+   Where the translator wants the float itself it calls mm_ipowf, and for
+   PRINT mm_ipows, which is the text PRINT shows. */
+static MMINTEGER mm_ipow(MMINTEGER a, MMINTEGER b)
+{
+    unsigned long long r = 1, x = (unsigned long long)a;
+    unsigned long long e = (unsigned long long)b;
+
+    if (b < 0)
+        return FloatToInt(Power((MMFLOAT)a, (MMFLOAT)b));
+    while (e)
+    {
+        if (e & 1)
+            r *= x;
+        x *= x;
+        e >>= 1;
+    }
+    return (MMINTEGER)r;
+}
+
+static MMFLOAT mm_ipowf(MMINTEGER a, MMINTEGER b)
+{
+    return b < 0 ? Power((MMFLOAT)a, (MMFLOAT)b) : (MMFLOAT)mm_ipow(a, b);
+}
+
+/* As an MMBasic string (length byte first), with PRINT's sign column: the
+   text mm_pr_i or mm_pr_f would print.  The translator hands it to
+   mm_pr_s. */
+static char *mm_ipows(MMINTEGER a, MMINTEGER b)
+{
+    unsigned char *t = mm_tmpstr();
+    char *c = (char *)t + 1;
+    unsigned n;
+
+    c[0] = ' ';
+    if (b < 0)
+        FloatToStr(c + 1, Power((MMFLOAT)a, (MMFLOAT)b), 0, MM_AUTO_PRECISION, ' ');
+    else
+        IntToStr(c + 1, mm_ipow(a, b), 10);
+    if (c[1] == '-')
+        c++; /* no sign column for a negative */
+    for (n = 0; c[n]; n++)
+        ;
+    for (t[0] = 0; t[0] < n; t[0]++)
+        t[1 + t[0]] = (unsigned char)c[t[0]];
+    return (char *)t;
+}
+
 /* ------------------------------------------------------------------ *
  *  Graphics with a CallTable slot
  * ------------------------------------------------------------------ */
@@ -210,6 +261,25 @@ static void *mm_zeroed(void *p, unsigned long n)
 
 #define mm_hres() ((MMINTEGER)HRes)
 #define mm_vres() ((MMINTEGER)VRes)
+
+/* error() with arguments.  The firmware's error is variadic - a % in the
+   message takes an int argument, a $ a string - but PicoCFunctions.h's error
+   macro passes the message alone, so this calls the same CallTable vector as
+   the variadic function it is. */
+#define mmcsub_error(...) ((void (*)(char *, ...))Vector_error)(__VA_ARGS__)
+
+/* RGB(r, g, b) of anything but three literals (which mmb2c folds): each
+   argument getint(..., 0, 255), as fun_rgb checks them. */
+static MMINTEGER mm_rgb(MMINTEGER r, MMINTEGER g, MMINTEGER b)
+{
+    if (r < 0 || r > 255)
+        mmcsub_error((char *)"% is invalid (valid is 0 to 255)", (int)r);
+    if (g < 0 || g > 255)
+        mmcsub_error((char *)"% is invalid (valid is 0 to 255)", (int)g);
+    if (b < 0 || b > 255)
+        mmcsub_error((char *)"% is invalid (valid is 0 to 255)", (int)b);
+    return (r << 16) | (g << 8) | b;
+}
 
 /* LINE x1,y1,x2,y2 [,width] [,colour]. The firmware's DrawLine takes the
    width, and mmb2c only emits this form when the width is 1 - a wider line
@@ -352,6 +422,27 @@ static MMFLOAT mmcsub_acos(MMFLOAT v) { return Atan2(Sqrt(1.0 - v * v), v); }
  * a result the program has just declared meaningless.
  */
 #define mm_end() error((char *)"END in a CSUB")
+
+/* A raise with a message the translator worked out - RGB(NOSUCH), BOUND past
+   an array's rank, a FUNCTION used as a command, a GOTO to no label.  Passed
+   as error()'s "$" argument, never as its format: a message can carry the
+   program's own text, and a $ or % in it would be taken as a substitution. */
+#define mm_error(m) mmcsub_error((char *)"$", (char *)(m))
+
+/* BOUND(a(), k) of an array parameter when k is worked out as the program
+   runs: fun_bound's getint(k, 0, MAXDIM), then "Dimensions" past the rank.
+   The table is mmb2c's { rank, ub1, ... }; 0 for k = 0, and the translator
+   adds the base. */
+static MMINTEGER mm_bnd(const MMINTEGER *tab, MMINTEGER k)
+{
+    if (k < 0 || k > MAXDIM)
+        mmcsub_error((char *)"% is invalid (valid is 0 to %)", (int)k, (int)MAXDIM);
+    if (k == 0)
+        return 0;
+    if (k > tab[0])
+        error((char *)"Dimensions");
+    return tab[k];
+}
 
 /* SGN(): -1, 0 or +1 */
 static MMINTEGER mm_sgn(MMFLOAT v) { return (v > 0.0) - (v < 0.0); }
@@ -519,6 +610,20 @@ static MMFLOAT mm_val(const char *s)
     return StrVal(t, &f, &i) ? f : IntToFloat(i);
 }
 #define mm_atof(s) mm_val(s)
+
+/* VAL() where an integer is wanted: fun_val's integer exactly, and a float
+   string made an integer as an integer assignment makes it (FUZIX
+   b05e85cd8 - VAL of "9007199254740993" lost its last digit through the
+   float). */
+static MMINTEGER mm_vali(const char *s)
+{
+    unsigned char *t = mm_tmpstr();
+    MMFLOAT f;
+    long long i;
+    Mstrcpy(t, (unsigned char *)s);
+    MtoC(t);
+    return StrVal(t, &f, &i) ? FloatToInt(f) : i;
+}
 
 /* TIMER = n */
 #define mm_timer_set(ms) TimerSet(FloatToInt(ms))
