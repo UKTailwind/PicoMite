@@ -899,7 +899,13 @@ extern "C"
  * ============================================================================ */
 #define QVGA_DMA_CB 0  // DMA control block of base layer
 #define QVGA_DMA_PIO 1 // DMA copy data to PIO (raises IRQ0 on quiet)
+#ifdef rp2350
+/* Not 2: on the HDMI wireless builds (HDMIWEB, HDMIBTH, PC3) the scanout holds 0 and 1, so the radio's driver
+   claims 2 and 3 (dma_claim_unused_channel), and ADC RUN would share the radio's transmit channel */
+#define ADC_DMA 12
+#else
 #define ADC_DMA 2
+#endif
 #define PIO_TX_DMA 4
 #define PIO_TX_DMA2 5
 #define PIO_TX_DMA3 6
