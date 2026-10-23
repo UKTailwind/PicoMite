@@ -7503,9 +7503,9 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 hashcurrent = g_hashlist[i].hash;
                 // Free memory for strings, arrays, and structs (but not pointers to caller's data)
 #ifdef STRUCTENABLED
-                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap) && !VAR_INLINE_STR(VREC(hashcurrent)))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s >= (uint32_t)MMHeap) && !VAR_INLINE_STR(VREC(hashcurrent)))
 #else
-                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)MMHeap) && !VAR_INLINE_STR(VREC(hashcurrent)))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s < (uint32_t)MMHeap + heap_memory_size) && ((uint32_t)VREC(hashcurrent)->val.s >= (uint32_t)MMHeap) && !VAR_INLINE_STR(VREC(hashcurrent)))
 #endif
                 {
                     FreeMemorySafe((void **)&VREC(hashcurrent)->val.s);
@@ -7513,9 +7513,9 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 }
 #ifdef rp2350
 #ifdef STRUCTENABLED
-                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)PSRAMbase && (uint32_t)VREC(hashcurrent)->val.s < (uint32_t)PSRAMbase + PSRAMsize))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0)) || (VREC(hashcurrent)->type & T_STRUCT)) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s >= (uint32_t)PSRAMbase && (uint32_t)VREC(hashcurrent)->val.s < (uint32_t)PSRAMbase + PSRAMsize))
 #else
-                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s > (uint32_t)PSRAMbase && (uint32_t)VREC(hashcurrent)->val.s < (uint32_t)PSRAMbase + PSRAMsize))
+                if (((VREC(hashcurrent)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(hashcurrent)), 0))) && !(VREC(hashcurrent)->type & T_PTR) && ((uint32_t)VREC(hashcurrent)->val.s >= (uint32_t)PSRAMbase && (uint32_t)VREC(hashcurrent)->val.s < (uint32_t)PSRAMbase + PSRAMsize))
 #endif
                 {
                     FreeMemorySafe((void **)&VREC(hashcurrent)->val.s); // free any memory (if allocated)
@@ -7550,7 +7550,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
             if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0))) && !(VREC(i)->type & T_PTR))
 #endif
             {
-                if ((uint32_t)VREC(i)->val.s > (uint32_t)MMHeap && (uint32_t)VREC(i)->val.s < (uint32_t)MMHeap + heap_memory_size && !VAR_INLINE_STR(VREC(i)))
+                if ((uint32_t)VREC(i)->val.s >= (uint32_t)MMHeap && (uint32_t)VREC(i)->val.s < (uint32_t)MMHeap + heap_memory_size && !VAR_INLINE_STR(VREC(i)))
                 {
                     FreeMemorySafe((void **)&VREC(i)->val.s); // free any memory (if allocated)
                 }
@@ -7564,7 +7564,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
                 if (((VREC(i)->type & T_STR) || DimIsAllocated(RAW_DIM((*VREC(i)), 0))) && !(VREC(i)->type & T_PTR))
 #endif
                 {
-                    if ((uint32_t)VREC(i)->val.s > (uint32_t)PSRAMbase && (uint32_t)VREC(i)->val.s < (uint32_t)PSRAMbase + PSRAMsize)
+                    if ((uint32_t)VREC(i)->val.s >= (uint32_t)PSRAMbase && (uint32_t)VREC(i)->val.s < (uint32_t)PSRAMbase + PSRAMsize)
                     {
                         FreeMemorySafe((void **)&VREC(i)->val.s); // free any memory (if allocated)
                     }
@@ -7725,13 +7725,13 @@ uint32_t erase(char *p, bool nofree)
             if (!nofree)
             {
                 // Check if in heap
-                if (addr > (uint32_t)MMHeap && addr < (uint32_t)MMHeap + heap_memory_size && !VAR_INLINE_STR(VREC(j)))
+                if (addr >= (uint32_t)MMHeap && addr < (uint32_t)MMHeap + heap_memory_size && !VAR_INLINE_STR(VREC(j)))
                 {
                     FreeMemorySafe((void **)&VREC(j)->val.s);
                 }
 #ifdef rp2350
                 // BUG FIX: Add PSRAM support for RP2350
-                else if (addr > (uint32_t)PSRAMbase && addr < (uint32_t)PSRAMbase + PSRAMsize)
+                else if (addr >= (uint32_t)PSRAMbase && addr < (uint32_t)PSRAMbase + PSRAMsize)
                 {
                     FreeMemorySafe((void **)&VREC(j)->val.s);
                 }

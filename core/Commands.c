@@ -8030,12 +8030,12 @@ void cmd_redim(void)
 					oldsize = newsize;
 				memcpy(newmemory, oldmemory, oldsize);
 				// Check if in heap
-				if (addr > (uint32_t)MMHeap && addr < (uint32_t)MMHeap + heap_memory_size)
+				if (addr >= (uint32_t)MMHeap && addr < (uint32_t)MMHeap + heap_memory_size)
 				{
 					FreeMemorySafe((void **)&addr);
 				}
 #ifdef rp2350
-				else if (addr > (uint32_t)PSRAMbase && addr < (uint32_t)PSRAMbase + PSRAMsize)
+				else if (addr >= (uint32_t)PSRAMbase && addr < (uint32_t)PSRAMbase + PSRAMsize)
 				{
 					FreeMemorySafe((void **)&addr);
 				}

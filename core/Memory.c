@@ -2029,7 +2029,7 @@ void MIPS32 __not_in_flash_func(FreeMemory)(void *addr)
     int bits;
     if (PSRAMsize)
     {
-        if ((unsigned char *)addr > (unsigned char *)PSRAMbase && (unsigned char *)addr < (unsigned char *)(PSRAMbase + PSRAMsize))
+        if ((unsigned char *)addr >= (unsigned char *)PSRAMbase && (unsigned char *)addr < (unsigned char *)(PSRAMbase + PSRAMsize))
         {
             // Validate the address is actually allocated before freeing
             bits = SBitsGet((unsigned char *)addr);
@@ -2594,7 +2594,7 @@ int MemSize(void *addr)
     int i = 0;
     int bits;
 #ifdef rp2350
-    if (addr > (void *)PSRAMbase && addr < (void *)(PSRAMbase + PSRAMsize))
+    if (addr >= (void *)PSRAMbase && addr < (void *)(PSRAMbase + PSRAMsize))
     {
         if (addr >= (void *)PSRAMbase && addr < (void *)(PSRAMbase + PSRAMsize))
         {

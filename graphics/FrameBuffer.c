@@ -1728,7 +1728,7 @@ void cmd_framebuffer(void)
 #endif
             }
 #ifdef rp2350
-            if (LayerBuf > (uint8_t *)PSRAMbase && LayerBuf < (uint8_t *)(PSRAMbase + 1024 * 1024 * 16))
+            if (LayerBuf >= (uint8_t *)PSRAMbase && LayerBuf < (uint8_t *)(PSRAMbase + 1024 * 1024 * 16))
             { // only when the SRAM heap could not hold it (see SCREENMODE1 above)
                 FreeMemory((void *)LayerBuf);
                 error("Not enough RAM for the layer (% bytes)", ScreenSize);
