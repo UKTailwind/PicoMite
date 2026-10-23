@@ -366,6 +366,15 @@ static void mmg_box(MMINTEGER bx, MMINTEGER by, MMINTEGER bw, MMINTEGER bh,
 #define mm_rnd() RndVal()
 #define mm_timer() TimerVal()
 
+/* MATH RANDOMIZE.  The Mersenne Twister behind MATH(RAND) has no CallTable slot, so a CSUB cannot reseed it.
+   Without a seed the statement only reseeds from the clock, and a converted routine skips it, as it did before
+   the V7 sync.  With a seed the program depends on that exact sequence, so the call is left to the function a
+   CSUB does not have and the routine is refused, "needs mmg_mt_randomize".  mmb2c emits the second argument as
+   a literal 0 or 1, which the paste relies on; the inner mmg_mt_randomize is not expanded again. */
+#define mmg_mt_randomize(seed, given) mmg_mt_randomize_##given(seed)
+#define mmg_mt_randomize_0(seed) ((void)0)
+#define mmg_mt_randomize_1(seed) mmg_mt_randomize(seed, 1)
+
 /* The generator emits these by their C library names, not as mm_ helpers. */
 #define sin(a) Sine(a)
 #define cos(a) Cosine(a)
