@@ -577,6 +577,8 @@ static char *mm_right(const char *s, MMINTEGER n)
 
 static char *mm_mid(const char *s, MMINTEGER pos, MMINTEGER n)
 {
+    if (n < 0) /* MID$(s$, p): mmb2c passes -1 for "to the end", fun_mid MAXSTRLEN; StrMid makes 0 or less "" */
+        n = MAXSTRLEN;
     return (char *)StrMid(mm_tmpstr(), (const unsigned char *)s, (int)pos, (int)n);
 }
 
