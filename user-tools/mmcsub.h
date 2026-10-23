@@ -685,18 +685,38 @@ static MMINTEGER mm_instr(MMINTEGER start, const char *hay, const char *needle)
                     (int)start - 1);
 }
 
-/* STR$ of a float and of an integer. The pad argument arrives as an MMBasic
-   string, so its character is at [1]. */
+/* STR$'s other arguments as fun_str takes them, in its order: getint(m,
+   -128, 128), getint(n, -20, 20) when the program gave n (MM_AUTO_PRECISION
+   is its absence, so an explicit 999 is taken as that), and a padding
+   string that is not empty, its first character to seven bits. StrFormat
+   writes into a full string, and a width past these would run off it
+   (FUZIX #37). The pad arrives as an MMBasic string, its character at [1]. */
+static int mmcsub_strpad(MMINTEGER m, MMINTEGER n, const char *pad)
+{
+    if (m < -128 || m > 128)
+        mmcsub_error((char *)"% is invalid (valid is % to %)", (int)m, -128, 128);
+    if (n != MM_AUTO_PRECISION && (n < -20 || n > 20))
+        mmcsub_error((char *)"% is invalid (valid is % to %)", (int)n, -20, 20);
+    if (pad == 0)
+        return ' ';
+    if (pad[0] == 0)
+        error((char *)"Zero length argument");
+    return (unsigned char)pad[1] & 0x7f;
+}
+
+/* STR$ of a float and of an integer. */
 static char *mm_str_f(MMFLOAT v, MMINTEGER m, MMINTEGER n, const char *pad)
 {
-    return (char *)StrFormat(mm_tmpstr(), v, 0, 0, (int)m, (int)n,
-                             pad && pad[0] ? (unsigned char)pad[1] : ' ');
+    int ch = mmcsub_strpad(m, n, pad);
+
+    return (char *)StrFormat(mm_tmpstr(), v, 0, 0, (int)m, (int)n, ch);
 }
 
 static char *mm_str_i(MMINTEGER v, MMINTEGER m, MMINTEGER n, const char *pad)
 {
-    return (char *)StrFormat(mm_tmpstr(), 0.0, v, 1, (int)m, (int)n,
-                             pad && pad[0] ? (unsigned char)pad[1] : ' ');
+    int ch = mmcsub_strpad(m, n, pad);
+
+    return (char *)StrFormat(mm_tmpstr(), 0.0, v, 1, (int)m, (int)n, ch);
 }
 
 /* VAL in its own type where brackets or a unary minus stand round it -
