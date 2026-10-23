@@ -50,7 +50,6 @@ static void ntp_result(NTP_T *state, int status, int64_t epoch_us)
 {
     if (status == 0)
     {
-        int year, month, day, hour, minute, second;
         epoch_us += (int64_t)timeadjust * 1000000;
         time_t secs = (time_t)(epoch_us / 1000000);
         time_t *result = &secs;
@@ -61,15 +60,9 @@ static void ntp_result(NTP_T *state, int status, int64_t epoch_us)
         if (!optionsuppressstatus)
             MMPrintString(buff);
         //        mT4IntEnable(0);
-        hour = utc->tm_hour;
-        minute = utc->tm_min;
-        second = utc->tm_sec;
         day_of_week = utc->tm_wday;
         if (day_of_week == 0)
             day_of_week = 7;
-        year = utc->tm_year + 1900;
-        month = utc->tm_mon + 1;
-        day = utc->tm_mday;
         //        mT4IntEnable(1);
         set_time_epoch_us(epoch_us); // milliseconds and all
         clocktimer = RTC_REREAD_MS; // OPTION RTC AUTO: the RTC's time does not replace this one for a day
