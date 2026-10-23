@@ -97,7 +97,15 @@ def convert_program(mmb2c, path):
                 break
             lines.append(ln)
 
+    # mmb2c works on this very list, and pass_fonts blanks in it what it cannot
+    # translate: CSUB and DefineFont blocks and '#' lines. The program is
+    # written back from this copy instead, or converting one routine would erase
+    # every CSUB already in it - an earlier routine's of this same command too.
+    # Lines are blanked, never added or removed, so a span found in conv.lines
+    # fits source_lines.
+    source_lines = list(lines)
     conv = mmb2c.Conv(lines, path)
+    conv.source_lines = source_lines
     conv.lenient = True
     conv.pass_fonts()
     conv.pass_routine_names()
@@ -1084,7 +1092,7 @@ def rewrite_source(path, conv, routine, subname, wrapper, block, ctext,
     span = find_routine_text(conv, routine)
     if span is None:
         sys.exit("error: could not locate '%s' in the source text" % subname)
-    lines = [ln if ln.endswith("\n") else ln + "\n" for ln in conv.lines]
+    lines = [ln if ln.endswith("\n") else ln + "\n" for ln in conv.source_lines]
     if not allow_converted and any(MARKER in ln for ln in lines):
         sys.exit("error: %s already holds a mmb2csub conversion. Restore it from "
                  "the .bak before converting again." % path)
@@ -1220,7 +1228,7 @@ def main():
         if not args.no_backup:
             with open(args.source + ".bak", "w") as f:
                 f.writelines(ln if ln.endswith("\n") else ln + "\n"
-                             for ln in conv.lines)
+                             for ln in conv.source_lines)
             print("original saved as %s.bak" % args.source)
         # Each conversion leaves its marker behind, and the next would read
         # that as "already converted" - which is the right answer for a second
