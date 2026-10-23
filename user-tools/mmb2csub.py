@@ -783,9 +783,16 @@ def adapter_sub(name, routine, entry, passed, gl=(), gtab=False, base=0):
         # and is used verbatim: adding a suffix the original did not have
         # breaks every existing call site with "Inconsistent type suffix".
         fn = name
+        # With no suffix the type came from AS (or OPTION DEFAULT), and the
+        # wrapper must declare it again: left out, an AS STRING function became
+        # the default FLOAT and failed at "= __r$", and an AS INTEGER one handed
+        # back a float. "As Float" costs nothing under the default and is
+        # required under OPTION DEFAULT NONE.
+        astype = "" if fn[-1:] in ("!", "%", "$") else \
+            " As " + {"f": "Float", "i": "Integer", "s": "String"}[routine.ty]
         rn = SFX[routine.ty]("__r", False)     # the local DOES need its type
-        return ("Function %s(%s)\n  Local %s\n%s  %s %s\n  %s = %s\nEnd Function\n"
-                % (fn, ", ".join(ps), rn, body, entry, ", ".join(passed), fn, rn))
+        return ("Function %s(%s)%s\n  Local %s\n%s  %s %s\n  %s = %s\nEnd Function\n"
+                % (fn, ", ".join(ps), astype, rn, body, entry, ", ".join(passed), fn, rn))
     if not pre and list(ps) == list(passed):
         return None
     return ("Sub %s%s\n%s  %s %s\nEnd Sub\n"
