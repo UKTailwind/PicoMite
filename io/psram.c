@@ -87,6 +87,7 @@ static const struct psram_type_t psram_chip_types[] = {
 
 static size_t psram_sz = 0;
 static psram_id_t psram_id = {0};
+static const struct psram_type_t *psram_chip = NULL; /* the part psram_init found, for psram_retime */
 
 /* PicoMite: the two direct-mode waits below used to spin for ever.  They run
    inside the 1 s clock-speed watchdog window at boot, so a QMI or PSRAM that
@@ -194,9 +195,35 @@ static void __no_inline_not_in_flash_func(psram_read_id)(uint8_t csr_clkdiv, uin
 	restore_interrupts(saved_ints);
 }
 
-static void __no_inline_not_in_flash_func(psram_qmi_setup)(uint8_t clkdiv, uint8_t csr_clkdiv,
-														   uint8_t max_select, uint8_t min_deselect,
-														   uint8_t rxdelay)
+/* M1_TIMING for this part. The clock divider, the read delay and the minimum deselect time are worked out for a
+   clk_sys of fast_hz, the maximum select time (tCEM, the part's refresh limit) for slow_hz, so the one value holds at
+   both clocks while CPUSpeedRuntime moves clk_sys between them; at boot both are the boot clock. */
+static uint32_t psram_timing(const struct psram_type_t *chip, uint32_t fast_hz, uint32_t slow_hz)
+{
+	uint32_t fast_fs = 1000000000000000ll / fast_hz;
+	uint32_t slow_fs = 1000000000000000ll / slow_hz;
+
+	/* Calculate clock divider to get as close as possible to the max supported clock speed */
+	uint8_t clkdiv = (fast_hz + chip->max_clk - 1) / chip->max_clk;
+
+	/* Calculate PSRAM timings */
+	uint8_t max_select = (chip->max_select_fs >> 6) / slow_fs;
+	uint8_t min_deselect = (chip->min_deselect_fs + fast_fs - 1) / fast_fs;
+	if (chip->min_deselect_cs >= 0)
+		min_deselect = chip->min_deselect_cs;
+	uint8_t rxdelay = 1 + (fast_hz > 150000000 ? clkdiv : 1);
+
+	return (1 << QMI_M1_TIMING_COOLDOWN_LSB |
+			QMI_M1_TIMING_PAGEBREAK_VALUE_1024 << QMI_M1_TIMING_PAGEBREAK_LSB |
+			0 << QMI_M1_TIMING_SELECT_SETUP_LSB |
+			3 << QMI_M1_TIMING_SELECT_HOLD_LSB |
+			max_select << QMI_M1_TIMING_MAX_SELECT_LSB |
+			min_deselect << QMI_M1_TIMING_MIN_DESELECT_LSB |
+			rxdelay << QMI_M1_TIMING_RXDELAY_LSB |
+			clkdiv << QMI_M1_TIMING_CLKDIV_LSB);
+}
+
+static void __no_inline_not_in_flash_func(psram_qmi_setup)(uint32_t timing, uint8_t csr_clkdiv)
 {
 	uint32_t saved_ints = save_and_disable_interrupts();
 
@@ -211,14 +238,7 @@ static void __no_inline_not_in_flash_func(psram_qmi_setup)(uint8_t clkdiv, uint8
 	/* Configure QSPI Memory Interface */
 
 	/* Set M1_TIMING register */
-	qmi_hw->m[1].timing = (1 << QMI_M1_TIMING_COOLDOWN_LSB |
-						   QMI_M1_TIMING_PAGEBREAK_VALUE_1024 << QMI_M1_TIMING_PAGEBREAK_LSB |
-						   0 << QMI_M1_TIMING_SELECT_SETUP_LSB |
-						   3 << QMI_M1_TIMING_SELECT_HOLD_LSB |
-						   max_select << QMI_M1_TIMING_MAX_SELECT_LSB |
-						   min_deselect << QMI_M1_TIMING_MIN_DESELECT_LSB |
-						   rxdelay << QMI_M1_TIMING_RXDELAY_LSB |
-						   clkdiv << QMI_M1_TIMING_CLKDIV_LSB);
+	qmi_hw->m[1].timing = timing;
 
 	/* Set M1_RFMT / M1_RCMD registers */
 	qmi_hw->m[1].rfmt = (0 << QMI_M1_RFMT_DTR_LSB |
@@ -298,11 +318,11 @@ static int psram_init(int pin, bool clear_memory)
 {
 	const struct psram_type_t *chip = psram_chip_types;
 	uint32_t sys_clk = clock_get_hz(clk_sys);
-	uint32_t clock_period_fs = 1000000000000000ll / sys_clk;
 	uint8_t csr_clkdiv = (sys_clk + PSRAM_MAX_CSR_CLK - 1) / PSRAM_MAX_CSR_CLK;
 	int ret = 0;
 
 	psram_sz = 0;
+	psram_chip = NULL;
 	psram_timed_out = false;
 	if (pin < 0)
 		return -1;
@@ -355,23 +375,14 @@ static int psram_init(int pin, bool clear_memory)
 	/* Convert size from megabytes to bytes */
 	psram_sz <<= 20;
 
-	/* Calculate clock divider to get as close as possible to the max supported clock speed */
-	uint8_t clkdiv = (sys_clk + chip->max_clk - 1) / chip->max_clk;
-
-	/* Calculate PSRAM timings */
-	uint8_t max_select = (chip->max_select_fs >> 6) / clock_period_fs;
-	uint8_t min_deselect = (chip->min_deselect_fs + clock_period_fs - 1) / clock_period_fs;
-	if (chip->min_deselect_cs >= 0)
-		min_deselect = chip->min_deselect_cs;
-	uint8_t rxdelay = 1 + (sys_clk > 150000000 ? clkdiv : 1);
-
 	/* Enable PSRAM */
-	psram_qmi_setup(clkdiv, csr_clkdiv, max_select, min_deselect, rxdelay);
+	psram_qmi_setup(psram_timing(chip, sys_clk, sys_clk), csr_clkdiv);
 	if (psram_timed_out)
 	{
 		psram_sz = 0;
 		return -5;
 	}
+	psram_chip = chip;
 
 	/* Test that we can write to PSRAM */
 	if (!psram_is_writable((void *)PSRAM_NOCACHE_BASE))
@@ -420,6 +431,17 @@ static int psram_init(int pin, bool clear_memory)
 	}
 
 	return ret;
+}
+
+/* psram_init times M1 for the clock it boots at, but clk_sys can move later: CPU SPEED, and on the HDMI builds a
+   RESOLUTION that changes the speed, both through CPUSpeedRuntime. That calls this beside its flash (M0) timing: before
+   the switch with the higher clock as fast_hz and the lower as slow_hz, a timing that holds at both, and after it with
+   the new clock as both. Without it the PSRAM kept the boot divider: 105 MHz at 315 MHz became 126 MHz at 378, for a
+   109 MHz part, and a lower clock stretched the select time past the part's refresh limit. */
+void psram_retime(uint32_t fast_hz, uint32_t slow_hz)
+{
+	if (psram_chip && psram_sz)
+		qmi_hw->m[1].timing = psram_timing(psram_chip, fast_hz, slow_hz);
 }
 #endif
 

@@ -3562,6 +3562,9 @@ uint32_t testPSRAM(void)
             qmi_hw->m[0].timing = 0x40006202; // CLKDIV=2
         else
             qmi_hw->m[0].timing = 0x40006204; // CLKDIV=4
+        /* The PSRAM (M1) likewise: divider and deselect for the faster clock,
+           the select-time limit for the slower one, so it holds at both. */
+        psram_retime(preswitch * 1000, ((old < speed) ? old : speed) * 1000);
         busy_wait_us(2);
 #endif
         set_sys_clock_khz(speed, false);
@@ -3578,6 +3581,7 @@ uint32_t testPSRAM(void)
             qmi_hw->m[0].timing = 0x40006202;
         else
             qmi_hw->m[0].timing = 0x40006204;
+        psram_retime(speed * 1000, speed * 1000);
         busy_wait_us(2);
 #endif
 
