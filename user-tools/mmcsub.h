@@ -752,12 +752,6 @@ static char *mm_valfmt(const char *s, int fl, MMINTEGER m, MMINTEGER n,
    - mm_load_data and mm_save_data (LOAD DATA, SAVE DATA). They read and
      write a file, and the CallTable has no filesystem slot, so a routine
      that uses them stays BASIC.
-   - mm_ixp, mm_ixpf, mm_ixf, mm_ixend and the mm_ix_st notes. They come
-     only with mm_ix's checked subscripts (findvar's order with two or more
-     subscripts, and a float subscript's "Number too large", FUZIX #26,
-     #35), which mmb2c emits only in a program that traps errors with ON
-     ERROR. A CSUB has none of that machinery, so such a routine is
-     refused already.
    - mm_undecl and the __mm_ud* statics (FUZIX #25, #34). Under OPTION
      EXPLICIT a name that is never declared, in a FOR, an IF or a CASE
      that may never run, is a file static standing in for it, behind
