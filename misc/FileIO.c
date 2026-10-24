@@ -533,12 +533,24 @@ void ErrorThrow(int e, int type)
     if (type == FLASHFILE)
         strcpy(MMErrMsg, (char *)LFSErrorMsg[-e]);
     if (e == 1)
-    {
-        BYTE s;
-        s = SDCardStat;
-        s |= (STA_NODISK | STA_NOINIT);
-        SDCardStat = s;
-        memset(&FatFs, 0, sizeof(FatFs));
+    { // a disk error: the drive that had it is mounted again at its next use
+#if HAS_USB_MSC
+        if (type == USBFILE) // C: - this reset the SD card's state, and an open B: file with it
+        {
+            BYTE s = USBDriveStat;
+            s |= (STA_NODISK | STA_NOINIT);
+            USBDriveStat = s;
+            memset(&FatFs_USB, 0, sizeof(FatFs_USB));
+        }
+        else
+#endif
+        {
+            BYTE s;
+            s = SDCardStat;
+            s |= (STA_NODISK | STA_NOINIT);
+            SDCardStat = s;
+            memset(&FatFs, 0, sizeof(FatFs));
+        }
     }
     if (e && OptionFileErrorAbort)
         error(MMErrMsg);
@@ -1785,14 +1797,27 @@ void MIPS16 cmd_flash(void)
  * The following section will be excluded from the documentation.
  */
 
+// FATFSFILE, or USBFILE when a FatFs error belongs to C:: the open file's own drive, else the
+// drive the command is working on. Every FatFs error was B:'s, so a disk error on C: reset B:
+static int FatFsErrorType(int fnbr)
+{
+#if HAS_USB_MSC
+    if (fnbr > 0 && fnbr <= MAXOPENFILES && filesource[fnbr] == FATFSFILE && FileTable[fnbr].fptr != NULL)
+        return FileTable[fnbr].fptr->obj.fs == &FatFs_USB ? USBFILE : FATFSFILE;
+    return FatFSFileSystem == 2 ? USBFILE : FATFSFILE;
+#else
+    return FATFSFILE;
+#endif
+}
 void ErrorCheck(int fnbr)
 { // checks for an error, if fnbr is specified frees up the filehandle before sending error
-    int e;
+    int e, type;
     e = (int)FSerror;
+    type = FatFsErrorType(fnbr); // before the file is closed
     if (fnbr != 0 && e != 0)
         ForceFileClose(fnbr);
     if (e >= 1 && e <= 19)
-        ErrorThrow(e, FATFSFILE);
+        ErrorThrow(e, type);
     if (e < 0 && e >= -84)
         ErrorThrow(e, FLASHFILE);
     return;
@@ -5734,8 +5759,9 @@ int MMfeof(int fnbr)
 //  it will generate an error if needed
 void FileClose(int fnbr)
 {
+    int fattype = FatFsErrorType(fnbr); // before the file is closed
     int type = ForceFileClose(fnbr);
-    ErrorThrow(FSerror, type);
+    ErrorThrow(FSerror, type == FATFSFILE ? fattype : type);
 }
 
 // close the file and free up the file handle
