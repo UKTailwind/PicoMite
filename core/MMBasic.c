@@ -436,6 +436,7 @@ void RamLibRelease(void)
 #endif
 int multi = false;
 const char *tokenise_refusal = NULL; // why tokenise refused a program line, for its writer to report (else NULL)
+int tokenise_insub = false;          // the program line being saved is in a SUB or FUNCTION (the /* rule)
 unsigned char *ProgMemory; // program memory, this is where the program is stored
 int PSize;                 // the size of the program stored in ProgMemory[]
 
@@ -2081,6 +2082,7 @@ int MIPS16 tokenise(int console)
     }
 
     // process the rest of the line
+    unsigned char *firstop = op; // where the statements start, after any line number
     firstnonwhite = true;
     labelvalid = true;
     tp = p;
@@ -2266,6 +2268,23 @@ int MIPS16 tokenise(int console)
             if (match_i > -1)
             {
                 // we have found a command
+                if (match_i == cmdComment || match_i == cmdEndComment)
+                { // the manual: /* and */ are the first thing on their line, and there is no /* in a SUB or
+                  // FUNCTION. After THEN, ELSE, a colon or a label a /* opened a block as the line was read,
+                  // but the block was skipped only if the /* ran: after IF 0 THEN /* its lines ran as raw
+                  // text ("Unknown command")
+                    unsigned char *q = firstop;
+                    while (q < op && *q == ' ')
+                        q++;
+                    if (q < op)
+                        REFUSE("/* and */ must be at the start of a line");
+                    if (match_i == cmdComment && tokenise_insub && !console)
+                        REFUSE("/* cannot be used inside a SUB or FUNCTION");
+                }
+                if (!console && (match_i == cmdSUB || match_i == cmdFUN))
+                    tokenise_insub = true;
+                else if (!console && (match_i == cmdENDSUB || match_i == cmdENDFUNCTION))
+                    tokenise_insub = false;
                 //                *op++ = match_i + C_BASETOKEN;                      // insert the token found
                 TKNPUT((match_i & 0x7f) + C_BASETOKEN);
                 TKNPUT((match_i >> 7) + C_BASETOKEN); // tokens can be 14-bit

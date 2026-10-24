@@ -877,6 +877,7 @@ void SymCount(unsigned char *pm)
     unsigned char *p, prevchar = 0;
     int continuation = false, n;
     multi = false;
+    tokenise_insub = false;
     SymRawBlock = false;
     while (*pm)
     {

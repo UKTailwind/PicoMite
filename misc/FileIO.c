@@ -4515,6 +4515,7 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
         do
         {
             multi = false;
+            tokenise_insub = false;
             prevchar = 0;
             for (src = pm; LibSourceLine(&src, &prevchar);)
                 tokenise(false); /* (a line too long is reported when it is written) */
@@ -4541,6 +4542,7 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
     }
 
     multi = false;
+    tokenise_insub = false;
     SymRawBlock = 0;
     for (src = pm; LibSourceLine(&src, &prevchar);)
     {
@@ -4786,6 +4788,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     int nbr, i, n, SaveSizeAddr, toolong = false;
     const char *refusal = NULL; // a line tokenise refused, and why
     multi = false;
+    tokenise_insub = false;
     uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realmemsave;
     initFonts();
     clearrepeat();
@@ -4805,6 +4808,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
         SymRank();
     }
     multi = false;
+    tokenise_insub = false;
     // this is used to count the number of bytes written to ram
     while (*pm)
     {

@@ -584,6 +584,7 @@ extern "C"
      * ============================================================================ */
     extern int multi;
     extern const char *tokenise_refusal;
+    extern int tokenise_insub;
     extern int emptyarray;
     extern int g_FunReturnArrayCount;
     extern int TempStringClearStart;

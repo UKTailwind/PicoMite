@@ -4963,6 +4963,7 @@ uint32_t testPSRAM(void)
         bool continuation = false, toolong = false;
         const char *refusal = NULL; // a line tokenise refused, and why
         multi = false;
+        tokenise_insub = false;
         uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realflashsave;
         const uint8_t *scanbase = (region == LIBRARY_FLASH) ? flash_libmemory : flash_progmemory;
         uint32_t writebase = (region == LIBRARY_FLASH) ? (uint32_t)(PROGSTART - MAX_PROG_SIZE) : (uint32_t)PROGSTART;
@@ -4994,6 +4995,7 @@ uint32_t testPSRAM(void)
             SymRank();
         }
         multi = false;
+        tokenise_insub = false;
         // this is used to count the number of bytes written to flash
         while (*pm)
         {
