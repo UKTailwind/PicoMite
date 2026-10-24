@@ -8871,6 +8871,26 @@ void MIPS16 fun_info(void)
         return;
     }
 #endif
+    else if (checkstring(ep, (unsigned char *)"USBDRIVE"))
+    { // the C: drive, as SDCARD reports B:
+#if HAS_USB_MSC
+        int i = OptionFileErrorAbort;
+        OptionFileErrorAbort = 0;
+        FatFSFileSystemSave = FatFSFileSystem;
+        FatFSFileSystem = 2;
+        if (!InitSDCard())
+            strcpy((char *)sret, "Not present");
+        else
+            strcpy((char *)sret, "Ready");
+        OptionFileErrorAbort = i;
+        FatFSFileSystem = FatFSFileSystemSave;
+#else
+        strcpy((char *)sret, "Not Configured"); // this build has no C: drive
+#endif
+        CtoM(sret);
+        targ = T_STR;
+        return;
+    }
 #ifdef USBKEYBOARD
     else if ((tp = checkstring(ep, (unsigned char *)"USB VID")))
     {
