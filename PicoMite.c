@@ -3597,12 +3597,8 @@ uint32_t testPSRAM(void)
            mid-flight). I2S audio shares that PIO on its own SM with its own
            divider (ResetAudioRate() re-derives it below), so only the radio's
            SM is retuned: the one the SDK claimed that isn't the I2S one. */
-#if defined(PICOMITEBT)
-        uint32_t cyw43_div = (speed + 79999) / 80000;
-#elif defined(PICOMITEWEB) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
-        uint32_t cyw43_div = (speed + 99999) / 100000;
-#endif
 #if defined(PICOMITEBT) || defined(PICOMITEWEB) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+        uint32_t cyw43_div = (speed + 79999) / 80000; // gSPI at most 40 MHz on every build, as at boot
         if (cyw43_div < 2)
             cyw43_div = 2;
         cyw43_set_pio_clkdiv_int_frac8(cyw43_div, 0); // keep the stored value coherent
@@ -4190,7 +4186,7 @@ uint32_t testPSRAM(void)
 #endif
         /* Same PIO clock divider scaling as PICOMITEBT / WEB. */
         {
-            uint32_t cyw43_div = (Option.CPU_Speed + 99999) / 100000;
+            uint32_t cyw43_div = (Option.CPU_Speed + 79999) / 80000;
             if (cyw43_div < 2)
                 cyw43_div = 2;
             cyw43_set_pio_clkdiv_int_frac8(cyw43_div, 0);
@@ -4544,7 +4540,10 @@ uint32_t testPSRAM(void)
 #endif
             if (cyw43_arch_init_with_country(wifi_country_to_cyw43(Option.wifi_country_code)) == 0)
             {
-                uint32_t cyw43_div = (Option.CPU_Speed + 99999) / 100000;
+                /* gSPI SCK = clk_sys / (2 * div), at most 40 MHz as on every radio build: at
+                   ceil(clk_sys / 100 MHz) a clock that is a multiple of 100 MHz (the WebMite's
+                   200 MHz default) ran the CYW43439 at its 50 MHz maximum with no margin */
+                uint32_t cyw43_div = (Option.CPU_Speed + 79999) / 80000;
                 if (cyw43_div < 2)
                     cyw43_div = 2;
                 cyw43_set_pio_clkdiv_int_frac8(cyw43_div, 0);
