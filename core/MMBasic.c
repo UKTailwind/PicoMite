@@ -3338,6 +3338,16 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     skipspace(tp);
     skipspace(p);
 
+    // a SUB or CSUB called with its arguments in brackets, MySub(a, b): nothing may follow the
+    // closing bracket. MySub (a - b) \ 8 - 1 passed a - b and dropped the rest without a word, as
+    // MySub (a), b dropped b. (A FUNCTION's bracket is followed by the rest of its expression.)
+    if (!isfun && *tp == '(')
+    {
+        CurrentLinePtr = CallersLinePtr; // the error is the caller's
+        checkend(getclosebracket(tp) + 1);
+        CurrentLinePtr = SubLinePtr;
+    }
+
     // similar if this is a CSUB
     CommandToken tkn = commandtbl_decode(SubLinePtr);
     if (tkn == cmdCSUB)
