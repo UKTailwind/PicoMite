@@ -618,18 +618,19 @@ MM.INFO$(SPI SPEED)        MM.INFO(UPTIME)
 MM.INFO$(STACK)            MM.INFO(USB PID)
 MM.INFO$(SYSTEM HEAP)      MM.INFO(USB VID)
 MM.INFO$(SYSTEM I2C)       MM.INFO(USB)
-MM.INFO$(SYSTICK)          MM.INFO(VALID CPUSPEED)
-MM.INFO$(TCP PORT)         MM.INFO(VARCNT)
-MM.INFO$(TCP REQUEST)      MM.INFO(VERSION)
-MM.INFO$(TCPIP STATUS)     MM.INFO(WRITEBUFF)
-MM.INFO$(TELNET)           MM.MESSAGE$
-MM.INFO$(TILE HEIGHT)      MM.ONEWIRE
-MM.INFO$(TOUCH)            MM.PERSISTENT
-MM.INFO$(TRACK)            MM.PS2
-MM.INFO$(UPTIME)           MM.SUPPLY
-MM.INFO$(USB PID)          MM.TOPIC$
-MM.INFO$(USB VID)          MM.USB
-MM.INFO$(USB)              MM.VER
+MM.INFO$(SYSTICK)          MM.INFO(USBDRIVE)
+MM.INFO$(TCP PORT)         MM.INFO(VALID CPUSPEED)
+MM.INFO$(TCP REQUEST)      MM.INFO(VARCNT)
+MM.INFO$(TCPIP STATUS)     MM.INFO(VERSION)
+MM.INFO$(TELNET)           MM.INFO(WRITEBUFF)
+MM.INFO$(TILE HEIGHT)      MM.MESSAGE$
+MM.INFO$(TOUCH)            MM.ONEWIRE
+MM.INFO$(TRACK)            MM.PERSISTENT
+MM.INFO$(UPTIME)           MM.PS2
+MM.INFO$(USB PID)          MM.SUPPLY
+MM.INFO$(USB VID)          MM.TOPIC$
+MM.INFO$(USB)              MM.USB
+MM.INFO$(USBDRIVE)         MM.VER
 MM.INFO$(VALID CPUSPEED)   MM.WATCHDOG
 MM.INFO$(VARCNT)
 
@@ -8165,7 +8166,8 @@ Described with the rest of its family:  HELP MM.INFO(SCROLL)
 MM.INFO$(SDCARD)
 
 Returns the status of the SD Card. Valid returns are:
-DISABLED, NOT PRESENT, READY, and UNUSED
+"Ready", "Not present" (no card, or one that cannot be read) and "Not
+Configured" (OPTION SDCARD has not been set)
 
 ~MM.INFO$(SOUND)
 MM.INFO$(SOUND)
@@ -8260,6 +8262,14 @@ Described with the rest of its family:  HELP MM.INFO(USB VID)
 MM.INFO$(USB)
 
 Described with the rest of its family:  HELP MM.INFO(USB)
+
+~MM.INFO$(USBDRIVE)
+MM.INFO$(USBDRIVE)
+
+Returns the status of the USB flash drive (C:). Valid returns are:
+"Ready", "Not present" (no drive, or one that cannot be read) and "Not
+Configured" (versions without a C: drive).  It never stops with an error, so a
+program can test it before it uses C:.
 
 ~MM.INFO$(VALID CPUSPEED)
 MM.INFO$(VALID CPUSPEED)
@@ -8737,6 +8747,11 @@ By default a connected keyboard will be allocated to channel 1, a mouse the
 channel 2, and gamepads to channel 3 and then channel 4.  If 2 or more
 keyboards or mice are connected or 3 or more gamepads then the additional
 devices will be allocated to the highest available channel.
+
+~MM.INFO(USBDRIVE)
+MM.INFO(USBDRIVE)
+
+Described with the rest of its family:  HELP MM.INFO$(USBDRIVE)
 
 ~MM.INFO(VALID CPUSPEED)
 MM.INFO(VALID CPUSPEED speed%)
