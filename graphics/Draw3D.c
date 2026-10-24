@@ -440,10 +440,6 @@ void display3d(int n, FLOAT3D x, FLOAT3D y, FLOAT3D z, int clear, int nonormals,
         ray.y = p1.y - camera[struct3d[n]->camera].y;
         ray.z = p1.z - camera[struct3d[n]->camera].z;
         normalise(&ray);
-        lighting.x = p1.x - struct3d[n]->light.x;
-        lighting.y = p1.y - struct3d[n]->light.y;
-        lighting.z = p1.z - struct3d[n]->light.z;
-        normalise(&lighting);
         struct3d[n]->dots[f] = ray.x * struct3d[n]->normals[f].x + ray.y * struct3d[n]->normals[f].y + ray.z * struct3d[n]->normals[f].z;
         if (depthmode == 0)
         {
@@ -673,6 +669,13 @@ void display3d(int n, FLOAT3D x, FLOAT3D y, FLOAT3D z, int clear, int nonormals,
                             struct3d[n]->fill[sortindex] = 0xFF0000;
                         if (struct3d[n]->flags[sortindex] & 8)
                         {
+                            // from the light to this face (the vertex its normal's p1 is): DRAW3D LIGHT sets the
+                            // position of a light source. It was the last face's direction for every face (#133)
+                            int lv = struct3d[n]->face_x_vert[vp + 1];
+                            lighting.x = struct3d[n]->r_vertices[lv].x * struct3d[n]->r_vertices[lv].m + x - struct3d[n]->light.x;
+                            lighting.y = struct3d[n]->r_vertices[lv].y * struct3d[n]->r_vertices[lv].m + y - struct3d[n]->light.y;
+                            lighting.z = struct3d[n]->r_vertices[lv].z * struct3d[n]->r_vertices[lv].m + z - struct3d[n]->light.z;
+                            normalise(&lighting);
                             FLOAT3D lightratio = fabs3d(lighting.x * struct3d[n]->normals[sortindex].x + lighting.y * struct3d[n]->normals[sortindex].y + lighting.z * struct3d[n]->normals[sortindex].z);
                             lightratio = (lightratio * struct3d[n]->ambient) + struct3d[n]->ambient;
                             int red = (struct3d[n]->fill[sortindex] & 0xFF0000) >> 16;
@@ -939,6 +942,11 @@ void MIPS16 cmd_3D(void)
                 Free3DMemory(n);
                 error("Vertex count less than 3 for face %", f + g_OptionBase);
             }
+            if (struct3d[n]->facecount[f] > MAX_3D_POLYGON_VERTICES) // display3d's coordinate arrays (#134)
+            {
+                Free3DMemory(n);
+                error("Vertex count more than % for face %", MAX_3D_POLYGON_VERTICES, f + g_OptionBase);
+            }
             if (struct3d[n]->facecount[f] > struct3d[n]->vmax)
                 struct3d[n]->vmax = struct3d[n]->facecount[f];
             struct3d[n]->facestart[f] = struct3d[n]->tot_face_x_vert;
@@ -953,7 +961,13 @@ void MIPS16 cmd_3D(void)
         }
         for (f = 0; f < struct3d[n]->tot_face_x_vert; f++)
         {
-            struct3d[n]->face_x_vert[f] = *faces++;
+            long long int fv = *faces++;
+            if (fv < 0 || fv >= struct3d[n]->nv) // display3d indexes r_vertices with it (#135)
+            {
+                Free3DMemory(n);
+                error("Vertex % does not exist (face/vertex array element %)", (int)fv, f + g_OptionBase);
+            }
+            struct3d[n]->face_x_vert[f] = fv;
         }
         for (f = 0; f < struct3d[n]->nf; f++)
         {
@@ -1103,7 +1117,7 @@ void MIPS16 cmd_3D(void)
         s_quaternion q1;
         MMFLOAT *q = NULL;
         getcsargs(&p, (MAX_ARG_COUNT * 2) - 1); // macro must be the first executable stmt in a block
-        if ((argc & 0x01 || argc < 3) == 0)
+        if (argc < 3) // the quaternion and an object at least (#136)
             StandardError(2);
         if (parsefloatarray(argv[0], &q, 1, 1, NULL, true, NULL) != 5)
             StandardErrorParam(41, 1);
@@ -1148,7 +1162,7 @@ void MIPS16 cmd_3D(void)
         int i, n;
         int v, f;
         getcsargs(&p, (MAX_ARG_COUNT * 2) - 1); // macro must be the first executable stmt in a block
-        if ((argc & 0x01 || argc < 3) == 0)
+        if (argc < 1) // an object at least (#136)
             StandardError(2);
         for (i = 0; i < argc; i += 2)
         {
@@ -1170,7 +1184,7 @@ void MIPS16 cmd_3D(void)
     {
         int i, n;
         getcsargs(&p, (MAX_ARG_COUNT * 2) - 1); // macro must be the first executable stmt in a block
-        if ((argc & 0x01 || argc < 3) == 0)
+        if (argc < 1) // an object at least (#136)
             StandardError(2);
         for (i = 0; i < argc; i += 2)
         {
@@ -1178,7 +1192,7 @@ void MIPS16 cmd_3D(void)
             if (struct3d[n] == NULL)
                 StandardErrorParam(7, n);
             if (struct3d[n]->xmin == 32767)
-                return;
+                continue; // already hidden: on to the next object (#132)
             DrawRectangle(struct3d[n]->xmin, struct3d[n]->ymin, struct3d[n]->xmax, struct3d[n]->ymax, 0);
             struct3d[n]->xmin = 32767;
             struct3d[n]->ymin = 32767;
@@ -1191,7 +1205,7 @@ void MIPS16 cmd_3D(void)
     {
         int i, n;
         getcsargs(&p, (MAX_ARG_COUNT * 2) - 1); // macro must be the first executable stmt in a block
-        if ((argc & 0x01 || argc < 3) == 0)
+        if (argc < 1) // an object at least (#136)
             StandardError(2);
         for (i = 0; i < argc; i += 2)
         {
@@ -1242,7 +1256,7 @@ void MIPS16 cmd_3D(void)
     {
         int i, n;
         getcsargs(&p, (MAX_ARG_COUNT * 2) - 1); // macro must be the first executable stmt in a block
-        if ((argc & 0x01 || argc < 3) == 0)
+        if (argc < 1) // an object at least (#136)
             StandardError(2);
         for (i = 0; i < argc; i += 2)
         {
