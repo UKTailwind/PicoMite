@@ -4549,7 +4549,7 @@ void MIPS16 SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t bin
             SymEnd();
             if (!w)
                 FlashWriteClose(); /* turns interrupts back on */
-            error("Line is too long");
+            error(tokenise_refusal ? (char *)tokenise_refusal : "Line is too long");
         }
         p = tknbuf;
         while (!(p[0] == 0 && p[1] == 0))
@@ -4784,6 +4784,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     unsigned char *p, fontnbr, prevchar = 0, buf[STRINGSIZE];
     unsigned short endtoken, tkn;
     int nbr, i, n, SaveSizeAddr, toolong = false;
+    const char *refusal = NULL; // a line tokenise refused, and why
     multi = false;
     uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realmemsave;
     initFonts();
@@ -4839,7 +4840,8 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
 
         if (tokenise(false)) // turn into executable code
         {
-            toolong = true; // it does not fit in tknbuf
+            toolong = true; // it does not fit in tknbuf, or breaks a rule
+            refusal = tokenise_refusal;
             goto exiterror;
         }
         p = tknbuf;
@@ -5172,6 +5174,8 @@ exiterror:
        with no table after it (see SaveProgramToFlash's exiterror). */
     memset(ram, 0xFF, MAX_PROG_SIZE);
     ram[0] = ram[1] = ram[2] = 0;
+    if (refusal)
+        error((char *)refusal);
     if (toolong)
         error("Line is too long");
     StandardError(29);

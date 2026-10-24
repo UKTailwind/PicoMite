@@ -435,6 +435,7 @@ void RamLibRelease(void)
 }
 #endif
 int multi = false;
+const char *tokenise_refusal = NULL; // why tokenise refused a program line, for its writer to report (else NULL)
 unsigned char *ProgMemory; // program memory, this is where the program is stored
 int PSize;                 // the size of the program stored in ProgMemory[]
 
@@ -1950,7 +1951,9 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
 // a line whose tokenised form will not fit in tknbuf (with its three terminating
 // zeros) is refused rather than written over the variables that follow tknbuf:
 // from the console that is the error "Line is too long"; otherwise tokenise returns
-// 1 and leaves the error to the caller, which may have a flash write to close first
+// 1 and leaves the error to the caller, which may have a flash write to close first.
+// A line that breaks a rule of the language as it is read (REFUSE: the /* rules) is
+// refused the same way, with the reason in tokenise_refusal for the caller's error
 
 #define TKNPUT(c)                          \
     do                                     \
@@ -1958,6 +1961,14 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
         if (op >= tknbuf + STRINGSIZE - 3) \
             goto toolong;                  \
         *op++ = (c);                       \
+    } while (0)
+#define REFUSE(msg)                \
+    do                             \
+    {                              \
+        if (console)               \
+            error(msg);            \
+        tokenise_refusal = (msg);  \
+        goto toolong;              \
     } while (0)
 
 int MIPS16 tokenise(int console)
@@ -1983,6 +1994,7 @@ int MIPS16 tokenise(int console)
         tkTILDE = GetTokenValue((unsigned char *)"~(");
     }
 
+    tokenise_refusal = NULL;
     // first, make sure that only printable characters are in the line
     p = inpbuf;
     while (*p)
@@ -2078,7 +2090,7 @@ int MIPS16 tokenise(int console)
     // /*word ran as an expression, and */word ended a block here but never when the program ran. Inside a block
     // only */ is a command; a /* there is comment text.
     if (((tp[0] == '/' && tp[1] == '*' && !multi) || (tp[0] == '*' && tp[1] == '/')) && tp[2] != ' ' && tp[2] != 0)
-        error("/* and */ must be followed by a space or end of line");
+        REFUSE("/* and */ must be followed by a space or end of line"); // (error() here left a half-written slot)
     if (*tp == '.')
     {
         if (!strncasecmp((char *)tp, ".SIDE SET ", 10) ||

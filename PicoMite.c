@@ -4961,6 +4961,7 @@ uint32_t testPSRAM(void)
         unsigned short endtoken, tkn;
         int nbr, i, j, n, SaveSizeAddr;
         bool continuation = false, toolong = false;
+        const char *refusal = NULL; // a line tokenise refused, and why
         multi = false;
         uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realflashsave;
         const uint8_t *scanbase = (region == LIBRARY_FLASH) ? flash_libmemory : flash_progmemory;
@@ -5040,7 +5041,8 @@ uint32_t testPSRAM(void)
             }
             if (tokenise(false)) // turn into executable code
             {
-                toolong = true; // it does not fit in tknbuf
+                toolong = true; // it does not fit in tknbuf, or breaks a rule
+                refusal = tokenise_refusal;
                 goto exiterror;
             }
             p = tknbuf;
@@ -5391,6 +5393,8 @@ uint32_t testPSRAM(void)
         FlashWriteByte(0);
         FlashWriteByte(0); // an empty program
         FlashWriteClose();
+        if (refusal)
+            error((char *)refusal);
         if (toolong)
             error("Line is too long");
         StandardError(29);

@@ -583,6 +583,7 @@ extern "C"
      * External variables - Miscellaneous
      * ============================================================================ */
     extern int multi;
+    extern const char *tokenise_refusal;
     extern int emptyarray;
     extern int g_FunReturnArrayCount;
     extern int TempStringClearStart;
