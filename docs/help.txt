@@ -1247,8 +1247,8 @@ BLUETOOTH DISCONNECT  BLUETOOTH SCAN
 List them all with:  HELP BLUETOOTH*
 
 ~BLUETOOTH CONNECT
-BLUETOOTH CONNECT name$ [, pin$]
-BLUETOOTH CONNECT addr$ [, pin$]
+BLUETOOTH CONNECT [SPEAKER | SERIAL | KEYBOARD] name$ [, pin$]
+BLUETOOTH CONNECT [SPEAKER | SERIAL | KEYBOARD] addr$ [, pin$]
 
 BLUETOOTH HOST VERSIONS ONLY
 Pairs with and connects to a Bluetooth speaker or headphones, a Bluetooth
@@ -1258,6 +1258,18 @@ device as listed by the last BLUETOOTH SCAN (upper and lower case are treated
 as the same).  'addr$' is its address in the form "AA:BB:CC:DD:EE:FF", which
 can be used without a scan.  If the scan found two devices with the same name
 the address must be used.
+Without a word in front of the name the device's Class of Device decides what
+it is connected as.  A word says it for a device that is more than one thing,
+or one whose Class of Device does not say what it is:  SPEAKER connects it as
+a speaker without asking it for a serial port, SERIAL connects its serial port
+as COM7 (or stops with "The device has no serial port") and KEYBOARD connects
+a Bluetooth Classic keyboard whose Class of Device does not say it is one (a
+device that is not a keyboard refuses the connection and an error is
+reported).  CONNECT SPEAKER and CONNECT SERIAL to the same device give both at
+once, for example for an RN52 module, which is a speaker with a serial port.
+A Bluetooth LE device cannot be a speaker, and a BLE keyboard pairs by itself
+without this command.  A string variable called serial$ or speaker$ is still
+taken as the name.
 'pin$' is the PIN for a speaker or a Bluetooth Classic serial device that asks
 for one when it pairs (the older way of pairing, from before Bluetooth 2.1).
 It is 1 to 16 characters long and is needed only when the device does not

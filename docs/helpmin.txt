@@ -982,8 +982,8 @@ BLUETOOTH DISCONNECT  BLUETOOTH SCAN
 List them all with:  HELP BLUETOOTH*
 
 ~BLUETOOTH CONNECT
-BLUETOOTH CONNECT name$ [, pin$]
-BLUETOOTH CONNECT addr$ [, pin$]
+BLUETOOTH CONNECT [SPEAKER | SERIAL | KEYBOARD] name$ [, pin$]
+BLUETOOTH CONNECT [SPEAKER | SERIAL | KEYBOARD] addr$ [, pin$]
 
 BLUETOOTH HOST VERSIONS ONLY Pairs with and connects to a Bluetooth speaker or
 headphones, a Bluetooth Classic keyboard (one that BLUETOOTH SCAN marked
