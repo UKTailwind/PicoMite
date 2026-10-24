@@ -726,8 +726,13 @@ int ExistsDir(char *p, char *q, int *filesystem)
     *filesystem = FatFSFileSystem;
     if (strcmp(q, "/") == 0 || strcmp(q, "/.") == 0 || strcmp(q, "/..") == 0)
     {
+        // A:'s root is always there; B:'s and C:'s only when the drive mounts, checked as for any
+        // other path (InitSDCard errors when there is no card or USB drive): it answered 1 regardless
+        if (FatFSFileSystem != 0 && !InitSDCard())
+            ireturn = -1;
+        else
+            ireturn = 1;
         FatFSFileSystem = localfilesystemsave;
-        ireturn = 1;
         return ireturn;
     }
     if (FatFSFileSystem == 0)
