@@ -5769,12 +5769,21 @@ void RBStatus(char *out)
     }
     else
     {
+        // STMTS and SIZE come from the slot's header, and only when it is this program's stream (the
+        // stamp RBPrepare checks): a slot that never held one read as garbage, and one left by another
+        // program described that program, so both are 0 then
+        const rbheader_t *h = (const rbheader_t *)RBSlotBase();
+        if (!(h->magic == RB_MAGIC && h->version == RB_VERSION && h->size == sizeof(rbheader_t) &&
+              h->build == RBBuildId() && h->progcrc == RBImageCrc(ProgMemory) &&
+              h->libcrc == (LibPresent() ? RBImageCrc(LibMemory) : 0) &&
+              h->hdrcrc == lfs_crc(0xffffffff, h, offsetof(rbheader_t, hdrcrc))))
+            h = NULL;
         strcpy(out, RBLive ? "COMPILED " : "NONE ");
         IntToStr(out + strlen(out), RBCompiles, 10);
         strcat(out, " REUSED ");
         IntToStr(out + strlen(out), RBReused, 10);
         strcat(out, " STMTS ");
-        IntToStr(out + strlen(out), ((const rbheader_t *)RBSlotBase())->stmts, 10);
+        IntToStr(out + strlen(out), h ? h->stmts : 0, 10);
         strcat(out, " RAN ");
         IntToStr(out + strlen(out), RBRan + RBCode, 10);
         strcat(out, " MISS ");
@@ -5782,7 +5791,7 @@ void RBStatus(char *out)
         strcat(out, " CODE ");
         IntToStr(out + strlen(out), RBCode, 10);
         strcat(out, " SIZE "); // the stream's bytes, of the slot's
-        IntToStr(out + strlen(out), ((const rbheader_t *)RBSlotBase())->codeoff + ((const rbheader_t *)RBSlotBase())->codelen, 10);
+        IntToStr(out + strlen(out), h ? h->codeoff + h->codelen : 0, 10);
         strcat(out, " OF ");
         IntToStr(out + strlen(out), RBSlotSize(), 10);
     }
