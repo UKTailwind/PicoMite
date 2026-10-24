@@ -528,8 +528,8 @@ void ErrorThrow(int e, int type)
     FatFSFileSystem = FatFSFileSystemSave;
     MMerrno = e;
     FSerror = e;
-    if (type == FATFSFILE)
-        strcpy(MMErrMsg, (char *)FErrorMsg[e]);
+    if (type == FATFSFILE || type == USBFILE) // C: is FatFs too: without this its error was a bare "Error"
+        strcpy(MMErrMsg, (type == USBFILE && e == FR_NOT_READY) ? "USB drive not found" : (char *)FErrorMsg[e]);
     if (type == FLASHFILE)
         strcpy(MMErrMsg, (char *)LFSErrorMsg[-e]);
     if (e == 1)
