@@ -674,6 +674,8 @@ void CheckI2CKeyboard(int noerror, int read)
         c = F4;
       if (c >= 'a' && c <= 'z' && ctrlheld)
         c = c - 'a' + 1;
+      else if (c == '\\' && ctrlheld)
+        c = CTRLKEY('\\'); // Ctrl-\: Print Screen's other key, which every keyboard must be able to type
       if (c == BreakKey)
       {                                      // if the user wants to stop the progran
         MMAbort = true;                      // set the flag for the interpreter to see
@@ -4278,6 +4280,8 @@ static void MIPS16 PicoCalcKeyEvent(uint16_t buff)
 
     if (c >= 'a' && c <= 'z' && ctrlheld)
       c = c - 'a' + 1;
+    else if (c == '\\' && ctrlheld)
+      c = CTRLKEY('\\'); // Ctrl-\: Print Screen's other key, which every keyboard must be able to type
 #if PICOCALC_KEYDOWN
     PicoCalcKeyDownAdd(raw, c);   // idempotent - a repeat just refreshes the slot
     PicoCalcModEvent(raw, state); // Alt is both a character and a modifier

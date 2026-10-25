@@ -934,7 +934,7 @@ typedef enum
 	// 0xE8-0xFFFF reserved
 } USB_HID_KEYBOARD_KEYPAD;
 
-uint8_t APP_MapKeyToUsage(uint8_t keyCode, int modifier)
+static uint8_t MapKeyToChar(uint8_t keyCode, int modifier)
 {
 	if (keyCode == USB_HID_KEYBOARD_KEYPAD_KEYBOARD_CAPS_LOCK || keyCode == USB_HID_KEYBOARD_KEYPAD_KEYBOARD_SCROLL_LOCK || keyCode == USB_HID_KEYBOARD_KEYPAD_KEYPAD_NUM_LOCK_AND_CLEAR)
 		return 0;
@@ -1057,6 +1057,16 @@ uint8_t APP_MapKeyToUsage(uint8_t keyCode, int modifier)
 		}
 	}
 	return 0;
+}
+// The character a key gives: MapKeyToChar's, and Ctrl-\ (0x1C), which every keyboard must be able to type (it is
+// Print Screen's other key, KEY_IS_PRTSCR). Ctrl was applied to the letters only; '\' is tested after the layout has
+// made it, so it works whichever key gives '\' (AltGr on a German keyboard, the key by Z on a UK one).
+uint8_t APP_MapKeyToUsage(uint8_t keyCode, int modifier)
+{
+	uint8_t c = MapKeyToChar(keyCode, modifier);
+	if (c == '\\' && (modifier & (KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_RIGHTCTRL)))
+		c = CTRLKEY('\\');
+	return c;
 }
 void USR_KEYBRD_ProcessData(uint8_t data)
 {
