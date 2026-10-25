@@ -57,6 +57,8 @@ static inline uint32_t stepper_dwell_ms_to_ticks(double ms);
 #define HOMING_SWITCH_DEBOUNCE_SAMPLES 5
 #define HOMING_SWITCH_DEBOUNCE_US 1000
 #define HOMING_HIT_DWELL_US 250000
+#define HOMING_STEP_PULSE_US 10 // G28 STEP high time, matching the ~10us pulse emitted by the ISR
+#define HOMING_DIR_SETUP_US 10  // G28 DIR settle time before the first STEP edge
 
 // Planner position state (separate from ISR-updated current_pos)
 // These track where the next planned move will start
@@ -289,6 +291,11 @@ static inline void stepper_pack_runtime_block(stepper_runtime_block_t *dst, cons
     dst->unit_x = src->unit_x;
     dst->unit_y = src->unit_y;
     dst->unit_z = src->unit_z;
+    dst->exit_unit_x = src->exit_unit_x;
+    dst->exit_unit_y = src->exit_unit_y;
+    dst->exit_unit_z = src->exit_unit_z;
+    dst->entry_steps_per_mm = src->entry_steps_per_mm;
+    dst->exit_steps_per_mm = src->exit_steps_per_mm;
     dst->virtual_steps_per_mm = src->virtual_steps_per_mm;
     dst->min_accel = src->min_accel;
     dst->distance = src->distance;
@@ -335,6 +342,11 @@ static inline void stepper_unpack_runtime_block(gcode_block_t *dst, const steppe
     dst->unit_x = src->unit_x;
     dst->unit_y = src->unit_y;
     dst->unit_z = src->unit_z;
+    dst->exit_unit_x = src->exit_unit_x;
+    dst->exit_unit_y = src->exit_unit_y;
+    dst->exit_unit_z = src->exit_unit_z;
+    dst->entry_steps_per_mm = src->entry_steps_per_mm;
+    dst->exit_steps_per_mm = src->exit_steps_per_mm;
     dst->virtual_steps_per_mm = src->virtual_steps_per_mm;
     dst->min_accel = src->min_accel;
     dst->distance = src->distance;
@@ -455,6 +467,11 @@ static void compute_profile_for_block(gcode_block_t *block)
     if (block->min_accel < 0.001f)
         block->min_accel = 0.001f;
 
+    // Path length in the block's virtual units: equal to distance for a line, shorter for an
+    // arc, whose step rate is planned against its densest segment. Phase lengths are turned
+    // into steps at virtual_steps_per_mm, so feasibility must be judged on this length.
+    float length = (float)block->major_steps / block->virtual_steps_per_mm;
+
     float rate_to_vel = block->virtual_steps_per_mm * (float)RATE_SCALE;
     float v_entry = (rate_to_vel > 0.0f) ? ((float)block->entry_rate / rate_to_vel) : 0.0f;
     float v_exit = (rate_to_vel > 0.0f) ? ((float)block->exit_rate / rate_to_vel) : 0.0f;
@@ -476,10 +493,10 @@ static void compute_profile_for_block(gcode_block_t *block)
     // Default cruise rate for requested max velocity
     block->cruise_rate = (int32_t)(v_max * rate_to_vel);
 
-    if (accel_dist + decel_dist > block->distance)
+    if (accel_dist + decel_dist > length)
     {
         // Triangle profile: compute peak velocity
-        float v_peak_sq = block->min_accel * block->distance + 0.5f * (v_entry * v_entry + v_exit * v_exit);
+        float v_peak_sq = block->min_accel * length + 0.5f * (v_entry * v_entry + v_exit * v_exit);
         if (v_peak_sq < 0.0f)
             v_peak_sq = 0.0f;
         float v_peak = sqrtf(v_peak_sq);
@@ -821,6 +838,17 @@ static void recompute_profile_for_block(gcode_block_t *block)
     compute_profile_for_block(block);
 }
 
+static inline bool block_is_arc(const gcode_block_t *block)
+{
+    return block->type == GCODE_CW_ARC || block->type == GCODE_CCW_ARC;
+}
+
+// Lines, rapids and bundled arcs can be blended; dwells and anything else stop the machine.
+static inline bool block_can_blend(const gcode_block_t *block)
+{
+    return block->type == GCODE_LINEAR_MOVE || block->type == GCODE_RAPID_MOVE || block_is_arc(block);
+}
+
 // Minimal corner blending: set previous block exit_rate and this block entry_rate
 // based on turn angle and accel limit, then recompute both trapezoids.
 static inline void stepper_reset_accumulator_carry(void);
@@ -828,7 +856,7 @@ static void try_apply_junction_blend(gcode_block_t *next_block)
 {
     if (!next_block->is_planned)
         return;
-    if (!(next_block->type == GCODE_LINEAR_MOVE || next_block->type == GCODE_RAPID_MOVE))
+    if (!block_can_blend(next_block))
         return;
     if (next_block->major_steps <= 0 || next_block->virtual_steps_per_mm <= 0.0f)
         return;
@@ -846,7 +874,7 @@ static void try_apply_junction_blend(gcode_block_t *next_block)
     stepper_unpack_runtime_block(&prev, &prev_rt);
 
     if (!prev.is_planned ||
-        !(prev.type == GCODE_LINEAR_MOVE || prev.type == GCODE_RAPID_MOVE) ||
+        !block_can_blend(&prev) ||
         prev.major_steps <= 0 || prev.virtual_steps_per_mm <= 0.0f ||
         prev.exit_rate != 0 || next_block->entry_rate != 0)
     {
@@ -854,8 +882,19 @@ static void try_apply_junction_blend(gcode_block_t *next_block)
         return;
     }
 
+    // Direction of travel and steps per mm of travel where the two blocks meet. A line is
+    // uniform; an arc's step rate is shared by segments of differing step density, so its
+    // end segments decide the step rate that corresponds to a given speed at the junction.
+    const bool prev_arc = block_is_arc(&prev);
+    const bool next_arc = block_is_arc(next_block);
+    float prev_ux = prev_arc ? prev.exit_unit_x : prev.unit_x;
+    float prev_uy = prev_arc ? prev.exit_unit_y : prev.unit_y;
+    float prev_uz = prev_arc ? prev.exit_unit_z : prev.unit_z;
+    float prev_spm = (prev_arc && prev.exit_steps_per_mm > 0.0f) ? prev.exit_steps_per_mm : prev.virtual_steps_per_mm;
+    float next_spm = (next_arc && next_block->entry_steps_per_mm > 0.0f) ? next_block->entry_steps_per_mm : next_block->virtual_steps_per_mm;
+
     // Compute turn angle
-    float dot = prev.unit_x * next_block->unit_x + prev.unit_y * next_block->unit_y + prev.unit_z * next_block->unit_z;
+    float dot = prev_ux * next_block->unit_x + prev_uy * next_block->unit_y + prev_uz * next_block->unit_z;
     if (dot > 1.0f)
         dot = 1.0f;
     if (dot < -1.0f)
@@ -876,38 +915,53 @@ static void try_apply_junction_blend(gcode_block_t *next_block)
     }
     else
     {
-        float sin_theta_d2 = sqrtf(0.5f * (1.0f - dot));
-        if (sin_theta_d2 < 1e-6f)
-        {
+        // Grbl junction deviation. Its theta is the angle between the reversed incoming
+        // direction and the outgoing one, so sin(theta/2) = cos(turn/2) = sqrt((1 + dot) / 2):
+        // a gentle turn is taken fast and a sharp one slowly.
+        float sin_theta_d2 = sqrtf(0.5f * (1.0f + dot));
+        float a = prev.min_accel;
+        if (next_block->min_accel < a)
+            a = next_block->min_accel;
+        float denom = (1.0f - sin_theta_d2);
+        if (denom < 1e-6f)
+            denom = 1e-6f;
+        float r = DEFAULT_JUNCTION_DEVIATION_MM * sin_theta_d2 / denom;
+        junction_v = sqrtf(a * r);
+        if (junction_v > prev.max_velocity)
             junction_v = prev.max_velocity;
-            if (next_block->max_velocity < junction_v)
-                junction_v = next_block->max_velocity;
-        }
-        else
-        {
-            float a = prev.min_accel;
-            if (next_block->min_accel < a)
-                a = next_block->min_accel;
-            float denom = (1.0f - sin_theta_d2);
-            if (denom < 1e-6f)
-                denom = 1e-6f;
-            float r = DEFAULT_JUNCTION_DEVIATION_MM * sin_theta_d2 / denom;
-            if (r < 0.0f)
-                r = 0.0f;
-            junction_v = sqrtf(a * r);
-            if (junction_v > prev.max_velocity)
-                junction_v = prev.max_velocity;
-            if (junction_v > next_block->max_velocity)
-                junction_v = next_block->max_velocity;
-        }
+        if (junction_v > next_block->max_velocity)
+            junction_v = next_block->max_velocity;
     }
 
-    int32_t prev_exit = (int32_t)(junction_v * prev.virtual_steps_per_mm * (float)RATE_SCALE);
-    int32_t next_entry = (int32_t)(junction_v * next_block->virtual_steps_per_mm * (float)RATE_SCALE);
-    if (prev_exit > prev.cruise_rate)
-        prev_exit = prev.cruise_rate;
-    if (next_entry > next_block->cruise_rate)
-        next_entry = next_block->cruise_rate;
+    // The previous block must be able to reach the junction speed from its own entry speed,
+    // and the new block - which ends at rest until another block is blended onto it - must
+    // be able to stop from it. Profiles work in each block's virtual units (step rate over
+    // virtual_steps_per_mm, along major_steps / virtual_steps_per_mm), so scale those limits
+    // to travel speed at the junction. The 0.98 leaves margin for step rounding.
+    if (junction_v > 0.0f)
+    {
+        float v_prev_entry = (float)prev.entry_rate / (prev.virtual_steps_per_mm * (float)RATE_SCALE);
+        float prev_len = (float)prev.major_steps / prev.virtual_steps_per_mm;
+        float v_reach = 0.98f * sqrtf(v_prev_entry * v_prev_entry + 2.0f * prev.min_accel * prev_len) *
+                        prev.virtual_steps_per_mm / prev_spm;
+        if (junction_v > v_reach)
+            junction_v = v_reach;
+
+        float next_len = (float)next_block->major_steps / next_block->virtual_steps_per_mm;
+        float v_stop = 0.98f * sqrtf(2.0f * next_block->min_accel * next_len) *
+                       next_block->virtual_steps_per_mm / next_spm;
+        if (junction_v > v_stop)
+            junction_v = v_stop;
+    }
+
+    int32_t prev_exit = (int32_t)(junction_v * prev_spm * (float)RATE_SCALE);
+    int32_t next_entry = (int32_t)(junction_v * next_spm * (float)RATE_SCALE);
+    int32_t prev_cap = (int32_t)(prev.max_velocity * prev.virtual_steps_per_mm * (float)RATE_SCALE);
+    int32_t next_cap = (int32_t)(next_block->max_velocity * next_block->virtual_steps_per_mm * (float)RATE_SCALE);
+    if (prev_exit > prev_cap)
+        prev_exit = prev_cap;
+    if (next_entry > next_cap)
+        next_entry = next_cap;
 
     prev.exit_rate = prev_exit;
     next_block->entry_rate = next_entry;
@@ -1130,6 +1184,7 @@ static volatile bool stepper_armed = false;
 static volatile uint16_t stepper_axis_min_step_ticks[4] = {1, 1, 1, 1};
 static volatile uint32_t stepper_axis_last_step_tick[4] = {0, 0, 0, 0};
 static uint64_t stepper_pending_step_mask = 0; // step pins asserted last tick, cleared at next ISR entry
+static bool stepper_pending_dir_update = false; // arc-segment DIR change held until the step pulse is deasserted
 
 typedef struct
 {
@@ -1472,7 +1527,14 @@ static bool stepper_load_arc_segment(uint16_t index)
         current_move.y_error = seg->major_steps / 2;
         current_move.z_error = seg->major_steps / 2;
         current_move.a_error = seg->major_steps / 2;
-        stepper_apply_direction_pins();
+        // Mid-arc this runs in the same tick that has just asserted the step pins, so writing
+        // DIR now would change it while STEP is still high. Hold the change until the pulse is
+        // deasserted at the next ISR entry; the 50 kHz cap then keeps the next rising edge at
+        // least one full ISR period after the DIR change.
+        if (stepper_pending_step_mask)
+            stepper_pending_dir_update = true;
+        else
+            stepper_apply_direction_pins();
         return true;
     }
 
@@ -1784,6 +1846,25 @@ static bool plan_arc_move(float start_x, float start_y, float start_z,
     float arc_xy_length = fabsf(angular_travel) * r_start;
     float z_travel = target_z - start_z;
 
+    // Unit tangents at the start and end of the arc (helical Z included), used to blend the
+    // arc with the moves either side of it. Travel is r * (-sin, cos) per radian in the
+    // direction of angular_travel, plus z_travel / |angular_travel| per radian along Z.
+    float turn_sign = (angular_travel < 0.0f) ? -1.0f : 1.0f;
+    float z_per_rad = z_travel / fabsf(angular_travel);
+    float tangent_len = sqrtf(r_start * r_start + z_per_rad * z_per_rad);
+    float start_tx = 0.0f, start_ty = 0.0f, start_tz = 0.0f;
+    float end_tx = 0.0f, end_ty = 0.0f, end_tz = 0.0f;
+    if (tangent_len > 1e-6f)
+    {
+        float finish_angle = start_angle + angular_travel;
+        start_tx = -turn_sign * r_start * sinf(start_angle) / tangent_len;
+        start_ty = turn_sign * r_start * cosf(start_angle) / tangent_len;
+        start_tz = z_per_rad / tangent_len;
+        end_tx = -turn_sign * r_start * sinf(finish_angle) / tangent_len;
+        end_ty = turn_sign * r_start * cosf(finish_angle) / tangent_len;
+        end_tz = start_tz;
+    }
+
     // Calculate number of segments
     float tol = stepper_arc_tolerance_mm;
     if (tol < 0.001f)
@@ -1987,6 +2068,8 @@ static bool plan_arc_move(float start_x, float start_y, float start_z,
     float block_velocity_cap = v_cap;
     float block_min_accel = arc_a_t;
     float max_segment_step_density = 0.0f; // Track maximum steps/mm for any segment
+    float first_step_density = 0.0f;       // steps/mm of the first and last executed segments,
+    float last_step_density = 0.0f;        // which set the step rates at the arc's junctions
 
     arc_segment_runtime_t *runtime_segments = (arc_segment_runtime_t *)GetMemory((size_t)segments * sizeof(arc_segment_runtime_t));
     uint16_t runtime_count = 0;
@@ -2113,6 +2196,9 @@ static bool plan_arc_move(float start_x, float start_y, float start_z,
             float segment_density = (float)major / segs[i].ds;
             if (segment_density > max_segment_step_density)
                 max_segment_step_density = segment_density;
+            if (first_step_density <= 0.0f)
+                first_step_density = segment_density;
+            last_step_density = segment_density;
         }
     }
 
@@ -2161,9 +2247,14 @@ static bool plan_arc_move(float start_x, float start_y, float start_z,
     block.allow_accumulator_carry = false;
     block.distance = executed_distance;
     block.virtual_steps_per_mm = virtual_steps_per_mm;
-    block.unit_x = 0.0f;
-    block.unit_y = 0.0f;
-    block.unit_z = 0.0f;
+    block.unit_x = start_tx;
+    block.unit_y = start_ty;
+    block.unit_z = start_tz;
+    block.exit_unit_x = end_tx;
+    block.exit_unit_y = end_ty;
+    block.exit_unit_z = end_tz;
+    block.entry_steps_per_mm = (first_step_density > 0.0f) ? first_step_density : virtual_steps_per_mm;
+    block.exit_steps_per_mm = (last_step_density > 0.0f) ? last_step_density : virtual_steps_per_mm;
     block.max_velocity = block_velocity_cap;
     block.min_accel = block_min_accel;
 
@@ -2206,6 +2297,11 @@ static bool plan_arc_move(float start_x, float start_y, float start_z,
         tight_loop_contents();
     }
 
+    // Blend with the previous move now that there is room to queue this one immediately:
+    // the previous block's raised exit speed relies on this block following it.
+    if (!gcode_buffer.exact_stop_mode)
+        try_apply_junction_blend(&block);
+
     if (!gcode_buffer_add(&gcode_buffer, &block))
     {
         FreeMemorySafe((void **)&runtime_segments);
@@ -2221,6 +2317,18 @@ static inline int32_t mm_to_steps_rounded(float hw_mm, float steps_per_mm)
 {
     float s = hw_mm * steps_per_mm;
     return (s >= 0.0f) ? (int32_t)(s + 0.5f) : (int32_t)(s - 0.5f);
+}
+
+// Step count for one axis of a straight move between two workspace positions. Taken as the
+// difference of the rounded absolute positions (as the arc planner does) so that rounding
+// cannot accumulate over a run of moves. Sets *dir to the direction of travel.
+static inline int32_t axis_move_steps(float start_ws, float target_ws, float g92_offset,
+                                      float steps_per_mm, bool *dir)
+{
+    int32_t delta = mm_to_steps_rounded(target_ws - g92_offset, steps_per_mm) -
+                    mm_to_steps_rounded(start_ws - g92_offset, steps_per_mm);
+    *dir = (delta >= 0);
+    return (delta >= 0) ? delta : -delta;
 }
 
 static inline uint8_t compute_major_axis_mask(int32_t major_steps,
@@ -2273,20 +2381,20 @@ __attribute__((unused)) static bool plan_and_add_linear_move(float target_x, flo
     if (block.has_x)
     {
         dx_mm = target_x - planner_x;
-        block.x_dir = (dx_mm >= 0.0f);
-        block.x_steps_planned = (int32_t)(fabsf(dx_mm) * stepper_system.x.steps_per_mm);
+        block.x_steps_planned = axis_move_steps(planner_x, target_x, stepper_system.x_g92_offset,
+                                                stepper_system.x.steps_per_mm, &block.x_dir);
     }
     if (block.has_y)
     {
         dy_mm = target_y - planner_y;
-        block.y_dir = (dy_mm >= 0.0f);
-        block.y_steps_planned = (int32_t)(fabsf(dy_mm) * stepper_system.y.steps_per_mm);
+        block.y_steps_planned = axis_move_steps(planner_y, target_y, stepper_system.y_g92_offset,
+                                                stepper_system.y.steps_per_mm, &block.y_dir);
     }
     if (block.has_z)
     {
         dz_mm = target_z - planner_z;
-        block.z_dir = (dz_mm >= 0.0f);
-        block.z_steps_planned = (int32_t)(fabsf(dz_mm) * stepper_system.z.steps_per_mm);
+        block.z_steps_planned = axis_move_steps(planner_z, target_z, stepper_system.z_g92_offset,
+                                                stepper_system.z.steps_per_mm, &block.z_dir);
     }
 
     // Find major axis
@@ -2400,6 +2508,14 @@ void __not_in_flash_func(stepper_timer_isr)(void)
     {
         gpio_clr_mask64(stepper_pending_step_mask);
         stepper_pending_step_mask = 0;
+    }
+
+    // Apply an arc-segment DIR change deferred from the previous tick now that STEP is low.
+    // prev_tick_stepped is necessarily true here, so no step can be emitted this tick.
+    if (stepper_pending_dir_update)
+    {
+        stepper_pending_dir_update = false;
+        stepper_apply_direction_pins();
     }
 
     // Increment tick counter
@@ -3586,6 +3702,16 @@ static void stepper_warn_if_velocity_unreachable(const stepper_axis_t *axis, cha
     MMPrintString(buf);
 }
 
+// Low time to wait after a homing STEP pulse so that the step period is period_us.
+// Never shorter than the pulse itself, matching the ISR's 50 kHz limit (one full tick
+// high, one full tick low).
+static inline uint32_t homing_step_low_us(uint32_t period_us)
+{
+    if (period_us < 2u * HOMING_STEP_PULSE_US)
+        return HOMING_STEP_PULSE_US;
+    return period_us - HOMING_STEP_PULSE_US;
+}
+
 // G28 homing implementation - homes one axis at a time in negative direction
 // Two-phase approach: fast approach at 50% speed, then slow backoff at 5% speed.
 static void cmd_stepper_home_axes(int argc, unsigned char **argv)
@@ -3694,7 +3820,16 @@ static void cmd_stepper_home_axes(int argc, unsigned char **argv)
 
         // Simplified move: directly control axis at fixed speed
         // This bypasses the G-code buffer for direct control during homing
-        uint32_t delay_us = (uint32_t)(1000000.0f / (fast_speed * axis->steps_per_mm));
+        uint32_t delay_us = homing_step_low_us((uint32_t)(1000000.0f / (fast_speed * axis->steps_per_mm)));
+
+        // Set DIR (negative) once and let it settle before the first STEP edge
+        {
+            bool dir_level = false; // Negative direction
+            if (axis->dir_invert)
+                dir_level = !dir_level;
+            gpio_put(axis->dir_pin, dir_level);
+            busy_wait_us(HOMING_DIR_SETUP_US);
+        }
 
         while (axis->current_pos > target_steps && !limit_hit)
         {
@@ -3711,14 +3846,8 @@ static void cmd_stepper_home_axes(int argc, unsigned char **argv)
             }
 
             // Take one step in negative direction
-            bool dir_level = false; // Negative direction
-            if (axis->dir_invert)
-                dir_level = !dir_level;
-            gpio_put(axis->dir_pin, dir_level);
-            busy_wait_us(2);
-
             gpio_put(axis->step_pin, 1);
-            busy_wait_us(2);
+            busy_wait_us(HOMING_STEP_PULSE_US);
             gpio_put(axis->step_pin, 0);
 
             axis->current_pos--;
@@ -3734,14 +3863,14 @@ static void cmd_stepper_home_axes(int argc, unsigned char **argv)
         float slow_speed = axis->max_velocity * stepper_system.homing_slow_rate;
         if (slow_speed <= 0.0f)
             stepper_error("Invalid axis configuration for homing");
-        uint32_t slow_delay_us = (uint32_t)(1000000.0f / (slow_speed * axis->steps_per_mm));
+        uint32_t slow_delay_us = homing_step_low_us((uint32_t)(1000000.0f / (slow_speed * axis->steps_per_mm)));
 
         // Back off slowly until limit clears (debounced)
         bool dir_level = true; // Positive direction
         if (axis->dir_invert)
             dir_level = !dir_level;
         gpio_put(axis->dir_pin, dir_level);
-        busy_wait_us(10);
+        busy_wait_us(HOMING_DIR_SETUP_US);
 
         int backoff_steps = (int)(axis->steps_per_mm * axis->homing_backoff_mm + 0.5f);
         if (backoff_steps < 1)
@@ -3762,7 +3891,7 @@ static void cmd_stepper_home_axes(int argc, unsigned char **argv)
             }
 
             gpio_put(axis->step_pin, 1);
-            busy_wait_us(2);
+            busy_wait_us(HOMING_STEP_PULSE_US);
             gpio_put(axis->step_pin, 0);
             axis->current_pos++;
             busy_wait_us(slow_delay_us);
@@ -3971,10 +4100,9 @@ void cmd_stepper(void)
         if (estop_pin_cfg != 0)
         {
             stepper_system.estop_pin = PinDef[estop_pin_cfg].GPno;
-            gpio_init(stepper_system.estop_pin);
-            gpio_set_dir(stepper_system.estop_pin, GPIO_IN);
-            gpio_pull_up(stepper_system.estop_pin);
-            ExtCfg(estop_pin_cfg, EXT_DIG_IN, 0);
+            // Active-low input with pull-up. ExtCfg resets the pad (pulls included) before
+            // applying the config, so the pull-up is passed as its option.
+            ExtCfg(estop_pin_cfg, EXT_DIG_IN, CNPUSET);
         }
 
         stepper_system.estop_keep_enabled = (estop_keep_en != 0);
@@ -4775,13 +4903,9 @@ void cmd_stepper(void)
                 continue;
 
             bool active_high = (invert_mask & limit_setup[i].invert_bit) != 0;
-            gpio_init(gp);
-            gpio_set_dir(gp, GPIO_IN);
-            if (active_high)
-                gpio_pull_down(gp);
-            else
-                gpio_pull_up(gp);
-            ExtCfg(limit_setup[i].basic_pin, EXT_DIG_IN, 0);
+            // ExtCfg resets the pad (pulls included) before applying the config, so the
+            // pull is passed as its option rather than set beforehand.
+            ExtCfg(limit_setup[i].basic_pin, EXT_DIG_IN, active_high ? CNPDSET : CNPUSET);
 
             mask |= ((uint64_t)1 << gp);
             if (active_high)
@@ -5542,26 +5666,26 @@ void cmd_stepper(void)
         if (axis_is_configured(&stepper_system.x))
         {
             dx_mm = target_x - start_x;
-            block.x_dir = (dx_mm >= 0.0f);
-            block.x_steps_planned = (int32_t)(fabsf(dx_mm) * stepper_system.x.steps_per_mm);
+            block.x_steps_planned = axis_move_steps(start_x, target_x, stepper_system.x_g92_offset,
+                                                    stepper_system.x.steps_per_mm, &block.x_dir);
         }
         if (axis_is_configured(&stepper_system.y))
         {
             dy_mm = target_y - start_y;
-            block.y_dir = (dy_mm >= 0.0f);
-            block.y_steps_planned = (int32_t)(fabsf(dy_mm) * stepper_system.y.steps_per_mm);
+            block.y_steps_planned = axis_move_steps(start_y, target_y, stepper_system.y_g92_offset,
+                                                    stepper_system.y.steps_per_mm, &block.y_dir);
         }
         if (axis_is_configured(&stepper_system.z))
         {
             dz_mm = target_z - start_z;
-            block.z_dir = (dz_mm >= 0.0f);
-            block.z_steps_planned = (int32_t)(fabsf(dz_mm) * stepper_system.z.steps_per_mm);
+            block.z_steps_planned = axis_move_steps(start_z, target_z, stepper_system.z_g92_offset,
+                                                    stepper_system.z.steps_per_mm, &block.z_dir);
         }
         if (axis_is_configured(&stepper_system.a))
         {
             da_units = target_a - start_a;
-            block.a_dir = (da_units >= 0.0f);
-            block.a_steps_planned = (int32_t)(fabsf(da_units) * stepper_system.a.steps_per_mm);
+            block.a_steps_planned = axis_move_steps(start_a, target_a, stepper_system.a_g92_offset,
+                                                    stepper_system.a.steps_per_mm, &block.a_dir);
         }
 
         block.major_steps = block.x_steps_planned;
@@ -6206,26 +6330,26 @@ void cmd_stepper(void)
         if (axis_is_configured(&stepper_system.x))
         {
             dx_mm = target_x - start_x;
-            block.x_dir = (dx_mm >= 0.0f);
-            block.x_steps_planned = (int32_t)(fabsf(dx_mm) * stepper_system.x.steps_per_mm);
+            block.x_steps_planned = axis_move_steps(start_x, target_x, stepper_system.x_g92_offset,
+                                                    stepper_system.x.steps_per_mm, &block.x_dir);
         }
         if (axis_is_configured(&stepper_system.y))
         {
             dy_mm = target_y - start_y;
-            block.y_dir = (dy_mm >= 0.0f);
-            block.y_steps_planned = (int32_t)(fabsf(dy_mm) * stepper_system.y.steps_per_mm);
+            block.y_steps_planned = axis_move_steps(start_y, target_y, stepper_system.y_g92_offset,
+                                                    stepper_system.y.steps_per_mm, &block.y_dir);
         }
         if (axis_is_configured(&stepper_system.z))
         {
             dz_mm = target_z - start_z;
-            block.z_dir = (dz_mm >= 0.0f);
-            block.z_steps_planned = (int32_t)(fabsf(dz_mm) * stepper_system.z.steps_per_mm);
+            block.z_steps_planned = axis_move_steps(start_z, target_z, stepper_system.z_g92_offset,
+                                                    stepper_system.z.steps_per_mm, &block.z_dir);
         }
         if (axis_is_configured(&stepper_system.a))
         {
             da_units = target_a - start_a;
-            block.a_dir = (da_units >= 0.0f);
-            block.a_steps_planned = (int32_t)(fabsf(da_units) * stepper_system.a.steps_per_mm);
+            block.a_steps_planned = axis_move_steps(start_a, target_a, stepper_system.a_g92_offset,
+                                                    stepper_system.a.steps_per_mm, &block.a_dir);
         }
 
         // Find major axis (most steps) - this drives the timing

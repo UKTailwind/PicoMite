@@ -565,9 +565,17 @@ typedef struct
 
     // Geometry for junction speed estimation (unit direction vector + scaling)
     // Note: A axis is excluded from the unit vector (treated as a slave for junction math).
+    // For a bundled arc, unit_x/y/z is the start tangent and exit_unit_x/y/z the end tangent;
+    // entry/exit_steps_per_mm are the step densities of its first and last segments.
+    // Lines leave the exit_ and entry_ fields unused (both ends match unit_x/y/z).
     float unit_x;
     float unit_y;
     float unit_z;
+    float exit_unit_x;
+    float exit_unit_y;
+    float exit_unit_z;
+    float entry_steps_per_mm;
+    float exit_steps_per_mm;
     float virtual_steps_per_mm; // major_steps / move_length_mm
     float min_accel;            // Effective accel limit along this path (mm/s^2)
 
@@ -625,6 +633,11 @@ typedef struct
     float unit_x;
     float unit_y;
     float unit_z;
+    float exit_unit_x;
+    float exit_unit_y;
+    float exit_unit_z;
+    float entry_steps_per_mm;
+    float exit_steps_per_mm;
     float virtual_steps_per_mm;
     float min_accel;
     float distance;
