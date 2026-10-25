@@ -2,7 +2,6 @@
 ' reporting time and end position against the expected target.
 ' X: STEP GP2, DIR GP3.  Y: STEP GP4, DIR GP5.  No motors or wiring needed.
 ' Correct junction speeds slow each 170 degree turn to about 1.5 mm/s: about 1.95 s in total.
-' STEPPER INIT will not start alongside I2S audio: use OPTION AUDIO DISABLE first if set.
 Option Explicit
 Option Default Float
 Dim t%, k%, rep%, x, y, a, md$

@@ -2,7 +2,6 @@
 ' chords, against the ideal time at the requested feed. Short moves only run near full speed
 ' when consecutive moves (including arcs) blend at their junctions.
 ' X: STEP GP2, DIR GP3.  Y: STEP GP4, DIR GP5.  No motors or wiring needed.
-' STEPPER INIT will not start alongside I2S audio: use OPTION AUDIO DISABLE first if set.
 ' Times run from queueing to PEEK(STEPPER ACTIVE) = 0, so they include planning.
 Option Explicit
 Option Default Float

@@ -4328,8 +4328,10 @@ void cmd_stepper(void)
                     stepper_error("Axis enable pin conflicts with spindle pin");
                 gpio_init(axis->enable_pin);
                 gpio_set_dir(axis->enable_pin, GPIO_OUT);
-                gpio_put(axis->enable_pin, 1); // Typically active low, so disable by default
                 ExtCfg(enable_pin, EXT_DIG_OUT, 0);
+                // Typically active low, so disable by default. Set after ExtCfg, whose
+                // gpio_init clears the output and would otherwise leave the drivers enabled.
+                gpio_put(axis->enable_pin, 1);
                 reserve_enable_pin = enable_pin;
             }
         }
@@ -4749,8 +4751,10 @@ void cmd_stepper(void)
 
         gpio_init(stepper_system.spindle_pin);
         gpio_set_dir(stepper_system.spindle_pin, GPIO_OUT);
-        stepper_spindle_off();
         ExtCfg(spindle_pin, EXT_DIG_OUT, 0);
+        // Set the off level after ExtCfg, whose gpio_init clears the output: left low, an
+        // inverted (active-low) spindle would start as soon as it was configured.
+        stepper_spindle_off();
         ExtCfg(spindle_pin, EXT_COM_RESERVED, 0);
         return;
     }

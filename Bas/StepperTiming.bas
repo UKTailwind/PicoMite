@@ -2,7 +2,6 @@
 ' PIO reads the GPIO pads the stepper code drives as SIO outputs.
 ' X: STEP GP2, DIR GP3.  Y: STEP GP4, DIR GP5.  Min limits GP0, GP1, GP26 (unconnected).
 ' PIO clock 10 MHz; the timing loops are 2 instructions, so 1 count = 0.2 us.
-' STEPPER INIT will not start alongside I2S audio: use OPTION AUDIO DISABLE first if set.
 Option Explicit
 Option Default Integer
 Const P = 1, FK = 10000000   ' PIO clock in Hz (10 MHz)
