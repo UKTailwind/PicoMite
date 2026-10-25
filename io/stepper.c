@@ -3952,10 +3952,6 @@ void cmd_stepper(void)
 {
     unsigned char *tp;
 
-    // Block stepper command if I2S audio is configured (shares PWM resources)
-    if (Option.audio_i2s_bclk)
-        stepper_error("Stepper incompatible with I2S audio");
-
     stepper_reclaim_retired(); // free arc buffers the ISR has finished with
 
     if (stepper_report_latched_trips())
