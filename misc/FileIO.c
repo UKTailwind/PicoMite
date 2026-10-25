@@ -8609,31 +8609,41 @@ void FileRename(char *from, char *to)
 /* Print Screen: the key's code, 0x9D (KeyboardMap.c gives it to the Print
    Screen key, and a serial terminal can send the byte), saves the display at
    the command prompt, in the editor and in the file manager, as the CMM2 does:
-   SCREENnnn.BMP, the first number not used yet, in the root of the SD card
-   when one is configured and otherwise of A:, written by SAVE IMAGE - so only
-   on a display SAVE IMAGE can read. It prints nothing, and an error (no card,
-   no room, no memory) is caught by FileTry, so the editor and the file manager
-   keep their screens and their text. Not in the PicoMiteRP2040MIN (no room:
-   ScreenShot() is nothing there, FileIO.h). */
+   SCREEN_yyyymmdd_hhmmss.BMP, from the date and time, in the root of the SD
+   card when one is configured and otherwise of A:, written by SAVE IMAGE - so
+   only on a display SAVE IMAGE can read. The name is not searched for (that
+   was up to 1000 file lookups before the save began): a name already taken,
+   by two saves in one second or a clock set back (without an RTC it starts
+   again at every boot), gets _1, _2 ... rather than being overwritten. It
+   prints nothing, and an error (no card, no room, no memory) is caught by
+   FileTry, so the editor and the file manager keep their screens and their
+   text. Not in the PicoMiteRP2040MIN (no room: ScreenShot() is nothing there,
+   FileIO.h). */
 #ifndef PICOMITEMIN
-static char screenshot_cmd[32];
+static char screenshot_cmd[48];
 static bool ScreenShotSave(void *arg)
 {
-    char name[24];
-    int n;
+    char name[40];
+    int year, month, day, hour, minute, second, len, n;
     (void)arg;
     cmdline = (unsigned char *)screenshot_cmd; /* (getfullfilename reads *cmdline) */
     strcpy(screenshot_cmd, " ");
-    for (n = 0; n < 1000; n++)
+    gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
+    len = sprintf(name, "%c:/SCREEN_%04d%02d%02d_%02d%02d%02d", SDCardConfigured() ? 'B' : 'A',
+                  year, month, day, hour, minute, second);
+    for (n = 0; n < 100; n++)
     {
-        sprintf(name, "%c:/SCREEN%03d.BMP", SDCardConfigured() ? 'B' : 'A', n);
+        if (n == 0)
+            strcpy(name + len, ".BMP");
+        else
+            sprintf(name + len, "_%d.BMP", n);
         int e = ExistsFile(name);
         if (e < 0)
             return false; /* the card cannot be read */
         if (e == 0)
             break;
     }
-    if (n == 1000)
+    if (n == 100)
         return false;
     sprintf(screenshot_cmd, "IMAGE \"%s\"", name);
     cmd_save();
