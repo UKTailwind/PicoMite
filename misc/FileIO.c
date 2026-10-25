@@ -3103,6 +3103,23 @@ void MIPS16 cmd_name(void)
     }
 }
 extern uint64_t __uninitialized_ram(_persistent);
+/* SAVE IMAGE writes the picture a row at a time and calls routinechecks() before each row, where neither the file
+   nor the display is part way through a transfer, so that USB (a USB touch controller was dropped during a long
+   save), audio and the keyboards are serviced. The GUI cursor is held still while the rows are read: its refresh
+   would draw it into the picture, and with the layer read with the frame (mergedread, VGA/HDMI) it would save
+   those pixels as the ones under it and later put them back into the frame. error() releases both if a write
+   error stops the save part way. */
+static void SaveImageRows(bool start, bool merged)
+{
+    (void)start;
+    (void)merged;
+#ifdef PICOMITEVGA
+    mergedread = start && merged;
+#endif
+#if defined(PICOMITEVGA) || defined(GUICONTROLS)
+    CursorSuspend = start;
+#endif
+}
 void MIPS16 cmd_save(void)
 {
     int fnbr;
@@ -3244,11 +3261,10 @@ void MIPS16 cmd_save(void)
         flinebuf = GetTempMainMemory(maxW * 4);
         outbuf = GetTempMainMemory(maxW / 2);
         char *foutbuf = GetTempMainMemory(maxW);
-#ifdef PICOMITEVGA
-        mergedread = 1;
-#endif
+        SaveImageRows(true, true);
         for (i = y + h - 1; i >= y; i--)
         {
+            routinechecks();
             ReadBuffer(x, i, x + w - 1, i, flinebuf);
             p = flinebuf;
             pp = outbuf;
@@ -3291,9 +3307,7 @@ void MIPS16 cmd_save(void)
             count += 2;
             FilePutData((char *)foutbuf, fnbr, count);
         }
-#ifdef PICOMITEVGA
-        mergedread = 0;
-#endif
+        SaveImageRows(false, false);
         foutbuf[0] = 0;
         foutbuf[1] = 1;
         FilePutData((char *)foutbuf, fnbr, 2);
@@ -3406,11 +3420,10 @@ void MIPS16 cmd_save(void)
             FilePutData((char *)bmpcolourpallette, fnbr, 64);
             flinebuf = GetTempMainMemory(maxW * 4);
             outbuf = GetTempMainMemory(maxW / 2);
-#ifdef PICOMITEVGA
-            mergedread = 1;
-#endif
+            SaveImageRows(true, true);
             for (i = y + h - 1; i >= y; i--)
             {
+                routinechecks();
                 ReadBuffer(x, i, x + w - 1, i, flinebuf);
                 p = flinebuf;
                 pp = outbuf;
@@ -3436,9 +3449,7 @@ void MIPS16 cmd_save(void)
                     FilePutData((char *)bmppad, fnbr, 4 - ((w / 2) % 4));
                 }
             }
-#ifdef PICOMITEVGA
-            mergedread = 0;
-#endif
+            SaveImageRows(false, false);
             FileClose(fnbr);
             return;
         }
@@ -3490,8 +3501,10 @@ void MIPS16 cmd_save(void)
         FilePutData((char *)bmpfileheader, fnbr, 14);
         FilePutData((char *)bmpinfoheader, fnbr, 40);
         flinebuf = GetTempMainMemory(maxW * 4);
+        SaveImageRows(true, false);
         for (i = y + h - 1; i >= y; i--)
         {
+            routinechecks();
             ReadBuffer(x, i, x + w - 1, i, flinebuf);
             FilePutData((char *)flinebuf, fnbr, w * 3);
             if ((w * 3) % 4 != 0)
@@ -3499,6 +3512,7 @@ void MIPS16 cmd_save(void)
                 FilePutData((char *)bmppad, fnbr, 4 - ((w * 3) % 4));
             }
         }
+        SaveImageRows(false, false);
         FileClose(fnbr);
         return;
     }

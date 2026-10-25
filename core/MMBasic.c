@@ -6892,6 +6892,9 @@ void MIPS16 error(char *msg, ...)
     // (a full or missing drive) left it on, and every later read of a VGA/HDMI display with a layer had the layer too
     mergedread = 0;
 #endif
+#if defined(PICOMITEVGA) || defined(GUICONTROLS)
+    CursorSuspend = false; // as the GUI cursor, which SAVE IMAGE (and a GUI control's redraw) holds still
+#endif
     // first build the error message in the global string MMErrMsg
     if (MMerrno == 0)
         MMerrno = 16; // indicate an error
