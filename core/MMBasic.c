@@ -6887,6 +6887,11 @@ void MIPS16 error(char *msg, ...)
         enable_interrupts_pico();
     SymPreparing = 0; // (see PrepareProgram)
     ScrewUpTimer = 0;
+#ifdef PICOMITEVGA
+    // SAVE IMAGE reads the layer with the frame while it writes the rows (FileIO.c): a write error part way
+    // (a full or missing drive) left it on, and every later read of a VGA/HDMI display with a layer had the layer too
+    mergedread = 0;
+#endif
     // first build the error message in the global string MMErrMsg
     if (MMerrno == 0)
         MMerrno = 16; // indicate an error
