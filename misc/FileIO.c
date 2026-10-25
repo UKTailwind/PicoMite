@@ -8670,7 +8670,8 @@ void FileRename(char *from, char *to)
    the command prompt, in the editor and in the file manager, as the CMM2 does:
    SCREEN_yyyymmdd_hhmmss.BMP, from the date and time, in the root of the SD
    card when one is configured and otherwise of A:, written by SAVE IMAGE - so
-   only on a display SAVE IMAGE can read. The name is not searched for (that
+   only on a display SAVE IMAGE can read; .PNG by SAVE PNG under OPTION
+   PRINTSCREEN FORMAT PNG (RP2350). The name is not searched for (that
    was up to 1000 file lookups before the save began): a name already taken,
    by two saves in one second or a clock set back (without an RTC it starts
    again at every boot), gets _1, _2 ... rather than being overwritten. It
@@ -8685,6 +8686,11 @@ static bool ScreenShotSave(void *arg)
     char name[40];
     int year, month, day, hour, minute, second, len, n;
     (void)arg;
+#ifdef rp2350
+    bool png = Option.PrintScreenFormat == 1; /* OPTION PRINTSCREEN FORMAT PNG: SAVE PNG instead of SAVE IMAGE */
+#else
+    bool png = false;
+#endif
     cmdline = (unsigned char *)screenshot_cmd; /* (getfullfilename reads *cmdline) */
     strcpy(screenshot_cmd, " ");
     gettimefromepoch(&year, &month, &day, &hour, &minute, &second);
@@ -8693,9 +8699,9 @@ static bool ScreenShotSave(void *arg)
     for (n = 0; n < 100; n++)
     {
         if (n == 0)
-            strcpy(name + len, ".BMP");
+            strcpy(name + len, png ? ".PNG" : ".BMP");
         else
-            sprintf(name + len, "_%d.BMP", n);
+            sprintf(name + len, png ? "_%d.PNG" : "_%d.BMP", n);
         int e = ExistsFile(name);
         if (e < 0)
             return false; /* the card cannot be read */
@@ -8704,7 +8710,7 @@ static bool ScreenShotSave(void *arg)
     }
     if (n == 100)
         return false;
-    sprintf(screenshot_cmd, "IMAGE \"%s\"", name);
+    sprintf(screenshot_cmd, "%s \"%s\"", png ? "PNG" : "IMAGE", name);
     cmd_save();
     return true;
 }

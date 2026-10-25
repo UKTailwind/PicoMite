@@ -3502,6 +3502,8 @@ void MIPS16 printoptions(void)
 #ifdef rp2350
     if (Option.Compile == RB_ON || Option.Compile == RB_SHADOW)
         PO2Str("COMPILE", Option.Compile == RB_ON ? "ON" : "SHADOW");
+    if (Option.PrintScreenFormat == 1)
+        PO2Str("PRINTSCREEN FORMAT", "PNG");
 #endif
     if (Option.modbuff && !FixedFlashMap)
     {
@@ -5037,6 +5039,7 @@ static const struct optmap_s OptionMap[] = {
     OPT(Resolution, OPT_U8),
     OPT(Multi, OPT_U8),
     OPT(Compile, OPT_U8),
+    OPT(PrintScreenFormat, OPT_U8),
 #ifdef PICOMITEHDMIWEB
     OPT(mousespeed, OPT_FLT), // HDMIWEB (and the PC3) keep it here, not in the network overlay
 #endif
@@ -5391,6 +5394,21 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"PRINTSCREEN");
     if (tp)
     { // temporary: a running program's Print Screen and Ctrl-\ save the screen too (FileIO.c); off at RUN and at the prompt
+#ifdef rp2350
+        unsigned char *fp = checkstring(tp, (unsigned char *)"FORMAT");
+        if (fp)
+        { // permanent: the file Print Screen and Ctrl-\ save, a BMP (SAVE IMAGE) or a PNG (SAVE PNG)
+            int png = checkstring(fp, (unsigned char *)"PNG") != NULL;
+            if (!png && !checkstring(fp, (unsigned char *)"BMP"))
+                SyntaxError();
+            if (Option.PrintScreenFormat != png)
+            {
+                Option.PrintScreenFormat = png;
+                SaveOptions();
+            }
+            return;
+        }
+#endif
         if (checkstring(tp, (unsigned char *)"ON"))
             PrintScreenOn = true;
         else if (checkstring(tp, (unsigned char *)"OFF"))

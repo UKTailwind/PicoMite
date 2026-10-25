@@ -379,13 +379,17 @@ extern "C"
                    (RADIO_BT_OFF) leaves the Bluetooth host out, so every saved
                    option set from before reads as BOTH and the MagicKey stands. */
                 uint8_t Radio;
-                unsigned char extensions[57]; // (58 before Radio)
+                unsigned char extensions[56]; // (57 before PrintScreenFormat, 58 before Radio)
 #else
-                unsigned char extensions[58]; // (63 before Compile, 62 before CYW43_ON..CYW43_CLK)
+                unsigned char extensions[57]; // (58 before PrintScreenFormat, 63 before Compile, 62 before CYW43_ON..CYW43_CLK)
 #endif
 #else
-        unsigned char extensions[66]; // 896 bytes == 7 XMODEM blocks (71 before Compile, 70 before CYW43_ON..CYW43_CLK)
+        unsigned char extensions[65]; // 896 bytes == 7 XMODEM blocks (66 before PrintScreenFormat, 71 before Compile, 70 before CYW43_ON..CYW43_CLK)
 #endif
+                /* OPTION PRINTSCREEN FORMAT (RP2350): 1 = Print Screen and Ctrl-\ save a PNG, anything else
+                   a BMP. Taken from the end of extensions[] in each arm above, so nothing that already
+                   exists moves, and every option set saved before reads as BMP (extensions[] is zeroed). */
+                uint8_t PrintScreenFormat;
                 /* OPTION CYW43 PINS (RP2350 wireless builds): the radio's WL_ON,
                    WL_D, WL_CS and WL_CLK as pin numbers, all 0 for the board's own
                    (GP23, GP24, GP25, GP29). Taken from the end of extensions[] in
