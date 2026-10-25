@@ -196,7 +196,8 @@ extern "C"
 #else
 #define MagicKey 0xDDE229A1
    /* +48 KB (2026-09-29): Route B (P1-P5) went 29.4 KB over. */
-#define FLASH_TARGET_OFFSET (1088 * 1024)
+   /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 164 bytes over. */
+#define FLASH_TARGET_OFFSET (1104 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 1144 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -233,7 +234,8 @@ extern "C"
 #define MagicKey 0xAD01562A
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
-#define FLASH_TARGET_OFFSET (1056 * 1024)
+   /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 1.1 KB over. */
+#define FLASH_TARGET_OFFSET (1072 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.5 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.5 KB of RAM margin left for the stack. */

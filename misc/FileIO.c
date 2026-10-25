@@ -171,6 +171,11 @@ char filepath[HAS_USB_MSC ? 3 : 2][FF_MAX_LFN] = {
 char fullpathname[HAS_USB_MSC ? 3 : 2][FF_MAX_LFN];
 char fullfilepathname[FF_MAX_LFN];
 extern BYTE BMP_bDecode(int x, int y, int fnbr);
+#ifdef rp2350
+extern void PngBegin(int fnbr, int width, int height); // SAVE PNG (graphics/PngEncoder.c)
+extern void PngRow(const uint8_t *bgr);
+extern void PngEnd(void);
+#endif
 bool (*linecallback)(int *imagewidth, int *imageheight, uint32_t *linedata, int *linenumber) = NULL;
 #define RoundUp(a) (((a) + (sizeof(int) - 1)) & (~(sizeof(int) - 1))) // round up to the nearest integer size      [position 27:9]
 int resolve_path(char *path, char *result, char *pos);
@@ -3315,6 +3320,60 @@ void MIPS16 cmd_save(void)
             FileClose(fnbr);
         return;
     }
+#ifdef rp2350
+    // SAVE PNG fname$ [, x, y, w, h]: as SAVE IMAGE, as an 8-bit RGB PNG whatever the display (PngEncoder.c)
+    if ((p = checkstring(cmdline, (unsigned char *)"PNG")) != NULL)
+    {
+        int i, x, y, w, h;
+        getcsargs(&p, 9);
+        if ((void *)ReadBuffer == (void *)DisplayNotSet)
+            error("SAVE PNG not available on this display");
+        pp = getFstring(argv[0]);
+        if (argc != 1 && argc != 9)
+            SyntaxError();
+        AppendDefaultExtension((char *)pp, ".png");
+        if (argc == 1)
+        {
+            x = 0;
+            y = 0;
+            h = maxH;
+            w = maxW;
+        }
+        else
+        {
+            x = getint(argv[2], 0, maxW - 1);
+            y = getint(argv[4], 0, maxH - 1);
+            w = getint(argv[6], 1, maxW - x);
+            h = getint(argv[8], 1, maxH - y);
+        }
+        if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
+            return;
+        // a 16-colour display shows each colour through MAP (MapRGB), as SAVE IMAGE's palette does, while
+        // ReadBuffer gives the colour before it
+        bool mapped = MapRGBValid && (ReadBuffer == ReadBuffer16 || ReadBuffer == ReadBuffer2);
+        flinebuf = GetTempMainMemory(maxW * 4);
+        PngBegin(fnbr, w, h);
+        SaveImageRows(true, true);
+        for (i = y; i < y + h; i++)
+        {
+            routinechecks();
+            ReadBuffer(x, i, x + w - 1, i, flinebuf);
+            if (mapped)
+                for (int k = 0; k < w * 3; k += 3) // blue, green, red
+                {
+                    uint32_t c = MapRGB[RGB121(flinebuf[k + 2] << 16 | flinebuf[k + 1] << 8 | flinebuf[k])];
+                    flinebuf[k] = c;
+                    flinebuf[k + 1] = c >> 8;
+                    flinebuf[k + 2] = c >> 16;
+                }
+            PngRow(flinebuf);
+        }
+        SaveImageRows(false, false);
+        PngEnd();
+        FileClose(fnbr);
+        return;
+    }
+#endif
     if ((p = checkstring(cmdline, (unsigned char *)"IMAGE")) != NULL)
     {
         if (ReadBuffer == ReadBuffer16 || ReadBuffer == ReadBuffer2)

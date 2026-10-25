@@ -119,6 +119,7 @@ set(OPTIMIZED_SOURCES
 	third_party_mod/ff.c
 	graphics/GUI.c
 	graphics/BmpDecoder.c
+	graphics/PngEncoder.c
 	graphics/Draw.c
 	graphics/Draw3D.c
 	graphics/DrawFill.c
@@ -646,7 +647,8 @@ else()
 endif()
 
 if(USES_UPNG)
-	target_sources(PicoMite PRIVATE third_party_mod/upng.c)
+	# PngEncoder.c (SAVE PNG) shares upng.c's deflate tables
+	target_sources(PicoMite PRIVATE third_party_mod/upng.c graphics/PngEncoder.c)
 endif()
 
 if(USES_TURTLE)
