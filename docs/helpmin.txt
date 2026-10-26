@@ -8116,7 +8116,7 @@ STEPPER INIT.
 STEPPER GC <gcode> [words...]
 
 Executes a standard G-code command string. Supported codes: G0, G1, G2, G3,
-G4, G28, G90, G91, G92, M3, M5.
+G4, G28, G61, G64, G90, G91, G92, M3, M5.
 
 ~STEPPER GC G28
 STEPPER GC G28                       ' run the homing cycle
@@ -8127,8 +8127,8 @@ followed by a slow refine pass; the slow pass will be below TCOOLTHRS and DIAG
 will not fire on it.
 
 ~STEPPER GCODE
-STEPPER GCODE G0|G1|G2|G3|G4|G28|G90|G91|G92|M3|M5 [, X, x] [, Y, y] [, Z, z]
-[, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]
+STEPPER GCODE G0|G1|G2|G3|G4|G28|G61|G64|G90|G91|G92|M3|M5 [, X, x] [, Y, y]
+[, Z, z] [, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]
 
 Alternative syntax for adding motion commands to the buffer. All parameters
 must be comma separated.

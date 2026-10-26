@@ -4693,8 +4693,8 @@ STEPPER GC <gcode> [words...]
 STEPPER GC G28                       ' run the homing cycle
 
 ~STEPPER GCODE
-STEPPER GCODE G0|G1|G2|G3|G4|G28|G90|G91|G92|M3|M5 [, X, x] [, Y, y] [, Z, z]
-[, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]
+STEPPER GCODE G0|G1|G2|G3|G4|G28|G61|G64|G90|G91|G92|M3|M5 [, X, x] [, Y, y]
+[, Z, z] [, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]
 
 ~STEPPER GS
 STEPPER GS string$

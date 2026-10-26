@@ -13868,7 +13868,9 @@ steps_per_unit] [, max_vel] [, max_accel] [, home_backoff_mm]
 Configures a specific axis (X, Y, Z, or A).
 - axis: X, Y, Z, or A. A is a rotary slave axis (units are degrees).
 - step_pin/dir_pin: GPIO pins for Step and Direction signals.
-- enable_pin: (Optional) GPIO pin for Enable signal (active low).
+- enable_pin: (Optional) GPIO pin for Enable signal (active low). It starts
+inactive (high): the driver is off until STEPPER RUN or STEPPER ENABLE turns
+it on.
 - dir_invert: (Optional) 1 to invert direction, 0 otherwise.
 - steps_per_unit: (Optional) Steps required to move 1mm (X/Y/Z) or 1 degree
 (A).
@@ -13876,6 +13878,9 @@ Configures a specific axis (X, Y, Z, or A).
 - max_accel: (Optional) Maximum acceleration in mm/s^2 (X/Y/Z) or deg/s^2 (A).
 - home_backoff_mm: (Optional) Homing switch clear/backoff distance in mm
 (X/Y/Z only; ignored for A).
+A pin is given by its pin number or by its GP name (eg, GP2).
+Step pulses: a STEP pulse is high for one tick of the stepper's timer, about
+10 us, which suits every common driver.
 Step-rate limit: the emitted step rate is capped at 50 kHz - one step every
 two 100 kHz ISR ticks, so the low interval between pulses is always a full ISR
 period. If max_vel x steps_per_unit exceeds 50000 steps/s the axis cannot
@@ -13935,6 +13940,9 @@ spindle off. Drivers are disabled unless estop_keep_enabled was set to 1 in
 STEPPER INIT.
 If an INIT estop_pin is configured, hardware E-STOP is monitored in ISR and
 terminates processing immediately under all circumstances (including homing).
+A hardware E-STOP or limit trip is reported on the console (and by
+PEEK(STEPPER STATUS)); clear the switch, re-home (G28) or set the position,
+then STEPPER RUN.
 
 Full details: Stepper_Reference.pdf
 
@@ -13942,7 +13950,7 @@ Full details: Stepper_Reference.pdf
 STEPPER GC <gcode> [words...]
 
 Executes a standard G-code command string.
-Supported codes: G0, G1, G2, G3, G4, G28, G90, G91, G92, M3, M5.
+Supported codes: G0, G1, G2, G3, G4, G28, G61, G64, G90, G91, G92, M3, M5.
 Supported words: X, Y, Z, A, F, I, J, K, R, P.
 M3/M5 and G4 are buffered and executed in-order with motion blocks.
 G28 homes specified X/Y/Z axes (A axis is not homed). The A word is ignored on
@@ -14006,8 +14014,8 @@ is enough.
 Full details: Stepper_Reference.pdf
 
 ~STEPPER GCODE
-STEPPER GCODE G0|G1|G2|G3|G4|G28|G90|G91|G92|M3|M5 [, X, x] [, Y, y] [, Z, z]
-[, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]
+STEPPER GCODE G0|G1|G2|G3|G4|G28|G61|G64|G90|G91|G92|M3|M5 [, X, x] [, Y, y]
+[, Z, z] [, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]
 
 Alternative syntax for adding motion commands to the buffer. All parameters
 must be comma separated. The A axis is rotary; A units are degrees and the A
@@ -14015,6 +14023,32 @@ word is ignored on G2/G3 arcs.
 G4 uses P in milliseconds (for example: STEPPER GCODE G4, P, 500).
 Example: STEPPER GCODE G1, X, 10, Y, 5, F, 500
 Example: STEPPER GCODE G1, A, 90, F, 360
+G61 selects exact-stop mode: every move comes to a stop before the next one
+starts.
+G64, the default, selects continuous mode: consecutive moves are blended at
+their junctions, so that a path of short moves runs near the requested feed
+instead of stopping at every corner. Lines (G0/G1) and arcs (G2/G3) blend with
+each other: an arc records the directions it starts and ends in. The speed
+through a junction follows Grbl's junction-deviation formula (deviation 0.05
+mm, which takes cos of half the turn: a gentle corner is taken fast and a
+sharp one slowly), and is also held to what the previous move can reach and
+what the next move can stop from.
+For example, a circle drawn as 36 short G2 arcs runs at 73-98% of the feed
+with G64, and drawn as 36 G1 chords at 80-97%.
+Each move's step counts are the difference between the rounded absolute
+positions of its start and end (to the nearest step), for lines as for arcs,
+so a series of moves - absolute (G90) or relative (G91) - never drifts: ten
+G91 moves of 0.4358 mm at 80 steps/mm end on step 349, the nearest to 4.358
+mm.
+G28 homes the X, Y and Z axes named (all the configured ones if none is named)
+to their minimum limit switches, which must be configured with STEPPER
+HWLIMITS. Each axis makes a fast approach at 50% of its maximum speed, pauses
+250 ms, then backs off slowly (5%) until the debounced switch clears, by
+home_backoff_mm. The hardware position is then zero and the G92 offsets are
+cleared. The A axis is not homed.
+G28 drives the steps itself, not through the timer: its STEP pulses are 10 us
+long with 10 us of DIR set-up before the first. If a switch is not reached G28
+stops with 'Homing failed - limit not reached'.
 
 Full details: Stepper_Reference.pdf
 
@@ -14025,7 +14059,7 @@ Executes a G-code command supplied as a string expression. Accepts any MMBasic
 string variable, literal, or expression and passes it to the same G-code
 parser as STEPPER GC.
 This is useful when G-code lines are constructed dynamically at runtime.
-Supported codes: G0, G1, G2, G3, G4, G28, G90, G91, G92, M3, M5.
+Supported codes: G0, G1, G2, G3, G4, G28, G61, G64, G90, G91, G92, M3, M5.
 Supported words: X, Y, Z, A, F, I, J, K, R, P.
 Example: STEPPER GS "G1 X" + STR$(x_pos) + " Y" + STR$(y_pos) + " F500"
 Example: STEPPER GS gcode$
@@ -14062,12 +14096,19 @@ STEPPER INIT [arc_tolerance] [,buffer_size] [,estop_pin] [,estop_keep_enabled]
 Initializes the stepper subsystem. Must be called before any other STEPPER
 commands.
 - arc_tolerance: (Optional) Tolerance for arc segmentation in mm (default:
-0.05).
+0.5; see STEPPER ARC).
 - buffer_size: (Optional) Size of the G-code lookahead buffer (default: 32,
 max: 1024).
-- estop_pin: (Optional) Hardware emergency-stop input pin (active low).
+- estop_pin: (Optional) Hardware emergency-stop input pin (active low). It is
+given a pull-up, so an unconnected or open E-STOP input reads as released.
 - estop_keep_enabled: (Optional) 0 (default) = disable drivers on E-STOP, 1 =
 keep drivers enabled on E-STOP.
+The first two may be given in either order: a value between 0 and 1 is the arc
+tolerance, and a whole number of 16 or more is the buffer size.
+The stepper's timer is PWM slice 10, so STEPPER INIT gives 'Stepper timer
+slice in use' when that slice is used for PWM audio, the backlight or the
+camera, or by a PWM10 pin, and 'Stepper incompatible with FAST TIMER' when the
+fast timer input is set up. I2S audio can be used with the stepper.
 
 Full details: Stepper_Reference.pdf
 
@@ -14162,7 +14203,9 @@ Full details: Stepper_Reference.pdf
 STEPPER SPINDLE pin [,invert]
 
 Configures a spindle control pin used by buffered M3/M5 commands. Pin must not
-conflict with AXIS/HWLIMITS/E-STOP pins.
+conflict with AXIS/HWLIMITS/E-STOP pins. With invert = 1 the output is
+active-low. It starts off (at its inactive level, whichever the polarity)
+until an M3.
 
 Full details: Stepper_Reference.pdf
 

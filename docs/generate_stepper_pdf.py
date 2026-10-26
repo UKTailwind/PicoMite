@@ -35,7 +35,7 @@ pdf.chapter_title('1.', 'Overview')
 pdf.chapter_body(
     "The STEPPER command provides a comprehensive system for controlling up to 4 stepper motor axes (X, Y, Z, and a rotary A axis) "
     "with support for G-code execution, acceleration planning, and hardware limit switches. "
-    "It uses a dedicated 100kHz interrupt timer for smooth pulse generation."
+    "It uses a dedicated 100kHz interrupt timer for smooth pulse generation. It is in the RP2350 versions only."
 )
 
 # 2. Initialization & Configuration
@@ -47,10 +47,16 @@ pdf.code_block("STEPPER INIT [arc_tolerance] [,buffer_size] [,estop_pin] [,estop
 pdf.set_font('Helvetica', '', 11)
 pdf.multi_cell(0, 5, 
     "Initializes the stepper subsystem. Must be called before any other STEPPER commands.\n"
-    "- arc_tolerance: (Optional) Tolerance for arc segmentation in mm (default: 0.05).\n"
+    "- arc_tolerance: (Optional) Tolerance for arc segmentation in mm (default: 0.5; see STEPPER ARC).\n"
     "- buffer_size: (Optional) Size of the G-code lookahead buffer (default: 32, max: 1024).\n"
-    "- estop_pin: (Optional) Hardware emergency-stop input pin (active low).\n"
-    "- estop_keep_enabled: (Optional) 0 (default) = disable drivers on E-STOP, 1 = keep drivers enabled on E-STOP."
+    "- estop_pin: (Optional) Hardware emergency-stop input pin (active low). It is given a pull-up, so an "
+    "unconnected or open E-STOP input reads as released.\n"
+    "- estop_keep_enabled: (Optional) 0 (default) = disable drivers on E-STOP, 1 = keep drivers enabled on E-STOP.\n"
+    "The first two may be given in either order: a value between 0 and 1 is the arc tolerance, and a whole "
+    "number of 16 or more is the buffer size.\n"
+    "The stepper's timer is PWM slice 10, so STEPPER INIT gives 'Stepper timer slice in use' when that slice "
+    "is used for PWM audio, the backlight or the camera, or by a PWM10 pin, and 'Stepper incompatible with "
+    "FAST TIMER' when the fast timer input is set up. I2S audio can be used with the stepper."
 )
 pdf.ln(2)
 
@@ -62,16 +68,20 @@ pdf.multi_cell(0, 5,
     "Configures a specific axis (X, Y, Z, or A).\n"
     "- axis: X, Y, Z, or A. A is a rotary slave axis (units are degrees).\n"
     "- step_pin/dir_pin: GPIO pins for Step and Direction signals.\n"
-    "- enable_pin: (Optional) GPIO pin for Enable signal (active low).\n"
+    "- enable_pin: (Optional) GPIO pin for Enable signal (active low). It starts inactive (high): the driver "
+    "is off until STEPPER RUN or STEPPER ENABLE turns it on.\n"
     "- dir_invert: (Optional) 1 to invert direction, 0 otherwise.\n"
     "- steps_per_unit: (Optional) Steps required to move 1mm (X/Y/Z) or 1 degree (A).\n"
     "- max_vel: (Optional) Maximum velocity in mm/min (X/Y/Z) or deg/min (A).\n"
     "- max_accel: (Optional) Maximum acceleration in mm/s^2 (X/Y/Z) or deg/s^2 (A).\n"
-    "- home_backoff_mm: (Optional) Homing switch clear/backoff distance in mm (X/Y/Z only; ignored for A)."
+    "- home_backoff_mm: (Optional) Homing switch clear/backoff distance in mm (X/Y/Z only; ignored for A).\n"
+    "A pin is given by its pin number or by its GP name (eg, GP2)."
 )
 pdf.ln(2)
 pdf.set_font('Helvetica', '', 11)
 pdf.multi_cell(0, 5,
+    "Step pulses: a STEP pulse is high for one tick of the stepper's timer, about 10 us, which suits every "
+    "common driver.\n"
     "Step-rate limit: the emitted step rate is capped at 50 kHz - one step every two 100 kHz "
     "ISR ticks, so the low interval between pulses is always a full ISR period. If "
     "max_vel x steps_per_unit exceeds 50000 steps/s the axis cannot reach the requested speed. "
@@ -141,7 +151,7 @@ pdf.ln(2)
 
 pdf.code_block("STEPPER ESTOP")
 pdf.set_font('Helvetica', '', 11)
-pdf.multi_cell(0, 5, "Software emergency stop: halts motion immediately, clears buffer, and turns spindle off. Drivers are disabled unless estop_keep_enabled was set to 1 in STEPPER INIT.\nIf an INIT estop_pin is configured, hardware E-STOP is monitored in ISR and terminates processing immediately under all circumstances (including homing).")
+pdf.multi_cell(0, 5, "Software emergency stop: halts motion immediately, clears buffer, and turns spindle off. Drivers are disabled unless estop_keep_enabled was set to 1 in STEPPER INIT.\nIf an INIT estop_pin is configured, hardware E-STOP is monitored in ISR and terminates processing immediately under all circumstances (including homing). A hardware E-STOP or limit trip is reported on the console (and by PEEK(STEPPER STATUS)); clear the switch, re-home (G28) or set the position, then STEPPER RUN.")
 pdf.ln(2)
 
 pdf.code_block("STEPPER ENABLE X|Y|Z|A|ALL [, 0|1]")
@@ -185,7 +195,7 @@ pdf.code_block("STEPPER GC <gcode> [words...]")
 pdf.set_font('Helvetica', '', 11)
 pdf.multi_cell(0, 5,
     "Executes a standard G-code command string.\n"
-    "Supported codes: G0, G1, G2, G3, G4, G28, G90, G91, G92, M3, M5.\n"
+    "Supported codes: G0, G1, G2, G3, G4, G28, G61, G64, G90, G91, G92, M3, M5.\n"
     "Supported words: X, Y, Z, A, F, I, J, K, R, P.\n"
     "M3/M5 and G4 are buffered and executed in-order with motion blocks.\n"
     "G28 homes specified X/Y/Z axes (A axis is not homed). The A word is ignored on G2/G3 arcs.\n"
@@ -202,14 +212,14 @@ pdf.multi_cell(0, 5,
     "Executes a G-code command supplied as a string expression. Accepts any MMBasic string "
     "variable, literal, or expression and passes it to the same G-code parser as STEPPER GC.\n"
     "This is useful when G-code lines are constructed dynamically at runtime.\n"
-    "Supported codes: G0, G1, G2, G3, G4, G28, G90, G91, G92, M3, M5.\n"
+    "Supported codes: G0, G1, G2, G3, G4, G28, G61, G64, G90, G91, G92, M3, M5.\n"
     "Supported words: X, Y, Z, A, F, I, J, K, R, P.\n"
     "Example: STEPPER GS \"G1 X\" + STR$(x_pos) + \" Y\" + STR$(y_pos) + \" F500\"\n"
     "Example: STEPPER GS gcode$"
 )
 pdf.ln(2)
 
-pdf.code_block("STEPPER GCODE G0|G1|G2|G3|G4|G28|G90|G91|G92|M3|M5 [, X, x] [, Y, y] [, Z, z] [, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]")
+pdf.code_block("STEPPER GCODE G0|G1|G2|G3|G4|G28|G61|G64|G90|G91|G92|M3|M5 [, X, x] [, Y, y] [, Z, z] [, A, a] [, F, feed] [, I, i] [, J, j] [, K, k] [, R, r] [, P, ms]")
 pdf.set_font('Helvetica', '', 11)
 pdf.multi_cell(0, 5, 
     "Alternative syntax for adding motion commands to the buffer. "
@@ -221,7 +231,48 @@ pdf.multi_cell(0, 5,
 pdf.ln(2)
 
 pdf.set_font('Helvetica', 'B', 11)
-pdf.cell(0, 10, '3.2 Manual Positioning', 0, 1)
+pdf.cell(0, 10, '3.2 Corner Blending (G61 / G64)', 0, 1)
+pdf.set_font('Helvetica', '', 11)
+pdf.multi_cell(0, 5,
+    "G61 selects exact-stop mode: every move comes to a stop before the next one starts.\n"
+    "G64, the default, selects continuous mode: consecutive moves are blended at their junctions, so that a path of short "
+    "moves runs near the requested feed instead of stopping at every corner. Lines (G0/G1) and arcs (G2/G3) "
+    "blend with each other: an arc records the directions it starts and ends in. The speed through a "
+    "junction follows Grbl's junction-deviation formula (deviation 0.05 mm, which takes cos of half the turn: "
+    "a gentle corner is taken fast and a sharp one slowly), and is also held to what the previous move can "
+    "reach and what the next move can stop from.\n"
+    "For example, a circle drawn as 36 short G2 arcs runs at 73-98% of the feed with G64, and drawn as 36 G1 "
+    "chords at 80-97%."
+)
+pdf.ln(2)
+
+pdf.set_font('Helvetica', 'B', 11)
+pdf.cell(0, 10, '3.3 Positions and Steps', 0, 1)
+pdf.set_font('Helvetica', '', 11)
+pdf.multi_cell(0, 5,
+    "Each move's step counts are the difference between the rounded absolute positions of its start and end "
+    "(to the nearest step), for lines as for arcs, so a series of moves - absolute (G90) or relative (G91) - "
+    "never drifts: ten G91 moves of 0.4358 mm at 80 steps/mm end on step 349, the nearest to 4.358 mm."
+)
+pdf.ln(2)
+
+pdf.set_font('Helvetica', 'B', 11)
+pdf.cell(0, 10, '3.4 Homing (G28)', 0, 1)
+pdf.set_font('Helvetica', '', 11)
+pdf.multi_cell(0, 5,
+    "G28 homes the X, Y and Z axes named (all the configured ones if none is named) to their minimum limit "
+    "switches, which must be configured with STEPPER HWLIMITS. Each axis makes a fast approach at 50% of its "
+    "maximum speed, pauses 250 ms, then backs off slowly (5%) until the debounced switch clears, by "
+    "home_backoff_mm. The hardware position is then zero and the G92 offsets are cleared. The A axis is not "
+    "homed.\n"
+    "G28 drives the steps itself, not through the timer: its STEP pulses are 10 us long with 10 us of DIR "
+    "set-up before the first. If a switch is not reached G28 stops with "
+    "'Homing failed - limit not reached'."
+)
+pdf.ln(2)
+
+pdf.set_font('Helvetica', 'B', 11)
+pdf.cell(0, 10, '3.5 Manual Positioning', 0, 1)
 pdf.code_block("STEPPER POSITION HOME")
 pdf.set_font('Helvetica', '', 11)
 pdf.multi_cell(0, 5, "Sets all axes to position 0 and clears G92 offsets.")
@@ -247,7 +298,7 @@ pdf.ln(2)
 
 pdf.code_block("STEPPER SPINDLE pin [,invert]")
 pdf.set_font('Helvetica', '', 11)
-pdf.multi_cell(0, 5, "Configures a spindle control pin used by buffered M3/M5 commands. Pin must not conflict with AXIS/HWLIMITS/E-STOP pins.")
+pdf.multi_cell(0, 5, "Configures a spindle control pin used by buffered M3/M5 commands. Pin must not conflict with AXIS/HWLIMITS/E-STOP pins. With invert = 1 the output is active-low. It starts off (at its inactive level, whichever the polarity) until an M3.")
 pdf.ln(2)
 
 pdf.code_block("STEPPER ARC\nSTEPPER ARC tolerance [, angle_deg [, max_segments]]")
@@ -344,6 +395,13 @@ pdf.multi_cell(0, 5,
     "BUFFER returns the number of free slots in the G-code circular buffer. "
     "This can be used to throttle G-code submission and avoid overflowing the buffer."
 )
+pdf.ln(2)
+pdf.code_block("MM.CODE")
+pdf.set_font('Helvetica', '', 11)
+pdf.multi_cell(0, 5,
+    "The number of free slots in the G-code buffer, as PEEK(STEPPER BUFFER) gives it. A program can check it "
+    "before STEPPER GCODE to avoid the error 'G-code buffer full', eg: DO WHILE MM.CODE = 0 : LOOP."
+)
 
 pdf.ln(5)
 pdf.chapter_title('6.', 'Rotary A Axis')
@@ -386,7 +444,8 @@ pdf.multi_cell(0, 5,
     "Parameters:\n"
     "- tx_pin: GPIO pin number connected via a 1 k-ohm resistor to the PDN_UART pin of the driver module. "
     "The pin is driven as a bit-banged UART transmitter at 115200 baud and is reserved until TMC22xx CLOSE "
-    "is called.\n"
+    "is called. Interrupts are off while each 8-byte datagram is sent (about 0.7 ms), which holds the "
+    "stepper's timer off too, so set the drivers up while the axes are stationary.\n"
     "- chip_type: Driver chip model - either 2208 (TMC2208) or 2209 (TMC2209).\n"
     "- slave_addr: UART slave address. Must be 0 for the TMC2208. For the TMC2209, may be 0, 1, 2, or 3 "
     "to match the MS1/MS2 pin strapping on the module.\n"
