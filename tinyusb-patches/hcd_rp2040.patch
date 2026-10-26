@@ -308,7 +308,21 @@
  }
  
  //--------------------------------------------------------------------+
-@@ -645,7 +810,10 @@
+@@ -531,9 +696,10 @@
+   // Enable in host mode with SOF / Keep alive on
+   usb_hw->main_ctrl = USB_MAIN_CTRL_CONTROLLER_EN_BITS | USB_MAIN_CTRL_HOST_NDEVICE_BITS;
+   usb_hw->sie_ctrl  = SIE_CTRL_BASE;
+-  usb_hw->inte      = USB_INTE_BUFF_STATUS_BITS | USB_INTE_HOST_CONN_DIS_BITS | USB_INTE_HOST_RESUME_BITS |
+-                 USB_INTE_STALL_BITS | USB_INTE_TRANS_COMPLETE_BITS | USB_INTE_ERROR_RX_TIMEOUT_BITS |
+-                 USB_INTE_ERROR_DATA_SEQ_BITS;
++  // HOST_RESUME stays off: no host suspend support, and nothing would clear SIE_STATUS.RESUME
++  // (PicoMite: upstream 51fe6d9 / #4181, the answer to our #4174; drop this hunk with the next pin update)
++  usb_hw->inte      = USB_INTE_BUFF_STATUS_BITS | USB_INTE_HOST_CONN_DIS_BITS | USB_INTE_STALL_BITS |
++                 USB_INTE_TRANS_COMPLETE_BITS | USB_INTE_ERROR_RX_TIMEOUT_BITS | USB_INTE_ERROR_DATA_SEQ_BITS;
+ 
+   #ifdef HAS_STOP_EPX_ON_NAK
+   usb_hw_set->inte = USB_INTE_EPX_STOPPED_ON_NAK_BITS;
+@@ -645,7 +811,10 @@
    } else {
      ep = edpt_alloc();
    }
@@ -320,7 +334,7 @@
  
    const uint8_t  ep_addr         = ep_desc->bEndpointAddress;
    const uint16_t max_packet_size = tu_edpt_packet_size(ep_desc);
-@@ -672,7 +840,11 @@
+@@ -672,7 +841,11 @@
          break;
        }
      }
@@ -333,7 +347,7 @@
      assert(ep_desc->bInterval > 0);
  
      //------------- dpram buf -------------//
-@@ -837,6 +1009,12 @@
+@@ -837,6 +1010,12 @@
    ep->ep_addr       = 0; // setup is OUT
    ep->remaining_len = 8;
    ep->xferred_len   = 0;
