@@ -4258,6 +4258,14 @@ uint32_t testPSRAM(void)
         bus_ctrl_hw->priority = 0x100;
         multicore_launch_core1_with_stack(QVgaCore, core1stack, 512);
         core1stack[0] = 0x12345678;
+        // QVgaInit on core1 sets MODE1SIZE etc, which ResetDisplay() below needs to place the
+        // tile colours; the first frame means it has finished (bounded in case core1 never starts)
+        {
+            uint64_t t = time_us_64();
+            while (QVgaFrame == 0 && time_us_64() - t < 200000)
+            {
+            }
+        }
         memset((void *)WriteBuf, 0, 38400);
 #endif
         ResetDisplay();

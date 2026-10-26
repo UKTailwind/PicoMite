@@ -26,5 +26,9 @@ extern int QVGA_HACT, QVGA_VACT, QVGA_VFRONT, QVGA_VSYNC, QVGA_VBACK, QVGA_VTOT;
 /* I2S PIO program offset, set in PicoMite.c. */
 extern uint I2SOff;
 
+/* Frame counter, advanced by the core1 scanout once QVgaInit has finished;
+   core0 waits for the first frame before using MODE1SIZE etc. */
+extern volatile uint32_t QVgaFrame;
+
 #endif // PICOMITEVGA && !HDMI
 #endif // VGA_H
