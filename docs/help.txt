@@ -10208,8 +10208,8 @@ OPTION PRINTSCREEN FORMAT BMP | PNG
 RP2350 VERSIONS ONLY Sets the file that the Print Screen key and Ctrl-\ save
 (see Appendix I and OPTION PRINTSCREEN ON): BMP, the default, saves it as SAVE
 IMAGE does, and PNG as SAVE PNG does.
-The file is named SCREEN_yyyymmdd_hhmmss.BMP or SCREEN_yyyymmdd_hhmmss.PNG.  A
-PNG file is typically ten to fifty times smaller.  This is a permanent option.
+The file is named SCREEN_yyyymmdd_hhmmss.BMP or SCREEN_yyyymmdd_hhmmss.PNG.
+This is a permanent option.
 eg. OPTION PRINTSCREEN FORMAT PNG
 
 ~OPTION PROFILING
@@ -12731,13 +12731,14 @@ Save the current image on the video output or LCD panel as a BMP file.  Any
 LCD panel must be capable of being read, for example, a ILI9341 based panel or
 a VIRTUAL_M or VIRTUAL_C  panel.
 'file$' is the name of the file.  If an extension is not specified ".BMP" will
-be added to the file name.  The image is saved as a true colour 24-bit image.
+be added to the file name.  An image of 16 colours or fewer is saved as a
+4-bit BMP and one of up to 256 colours as an 8-bit BMP, each with its palette
+and RLE compression, and an image of more colours as a true colour 24-bit BMP.
+The colours saved are the ones shown, after any MAP.
 'x', 'y', 'w' and 'h' are optional and are the coordinates ('x' and 'y' are
 the top left coordinate) and dimensions (width and height) of the area to be
-saved.  If not specified, the whole screen will be saved.  Note that 'width',
-if used, must be  a multiple of 2.
-SAVE COMPRESSED IMAGE will work the same except that RLE compression will be
-used to reduce the file size..
+saved.  If not specified, the whole screen will be saved.
+SAVE COMPRESSED IMAGE is the same command, kept for older programs.
 
 ~SAVE PERSISTENT
 SAVE PERSISTENT n%
@@ -12755,9 +12756,8 @@ RP2350 VERSIONS ONLY Save the current image on the video output or LCD panel
 as a PNG file.  Any LCD panel must be capable of being read, as for SAVE
 IMAGE.
 'file$' is the name of the file.  If an extension is not specified ".PNG" will
-be added to the file name.  The image is saved in true colour (8-bit RGB) and
-compressed: a screen of text and graphics is typically ten to fifty times
-smaller than the BMP file saved by SAVE IMAGE.
+be added to the file name.  The image is saved in true colour (8-bit RGB),
+compressed.
 'x', 'y', 'w' and 'h' are optional and are the coordinates ('x' and 'y' are
 the top left coordinate) and dimensions (width and height) of the area to be
 saved.  If not specified, the whole screen will be saved.  The width can be

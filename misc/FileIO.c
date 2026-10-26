@@ -3125,6 +3125,186 @@ static void SaveImageRows(bool start, bool merged)
     CursorSuspend = start;
 #endif
 }
+/* SAVE IMAGE, and SAVE COMPRESSED IMAGE, which is the same command now (as on the Colour Maximite 2, 26 Oct 2026):
+   the area's colours are counted first, and 16 or fewer make a 4-bit BMP and up to 256 an 8-bit one, each with its
+   palette and RLE compression (BI_RLE4, BI_RLE8: LOAD BMP reads both); an area of more colours is saved 24 bits a
+   pixel, as it always was. The colours are the ones the screen shows (see SaveImageRow). */
+#define SAVEPAL_SLOTS 512
+typedef struct
+{
+    uint32_t pal[256];           // the colours, 0xRRGGBB
+    int16_t slot[SAVEPAL_SLOTS]; // their hash table: an index into pal, -1 for none
+    int n;
+} savepal_t;
+
+// colour c's index in the palette, added if it is new (add); -1 when it is not there and cannot be (256 already)
+static int SavePalIndex(savepal_t *sp, uint32_t c, bool add)
+{
+    unsigned h = (c * 2654435761u) >> 23;
+    while (sp->slot[h] >= 0)
+    {
+        if (sp->pal[sp->slot[h]] == c)
+            return sp->slot[h];
+        h = (h + 1) & (SAVEPAL_SLOTS - 1);
+    }
+    if (!add || sp->n == 256)
+        return -1;
+    sp->pal[sp->n] = c;
+    sp->slot[h] = sp->n;
+    return sp->n++;
+}
+
+// row i of the area as w colours, three bytes each (blue, green, red), as the screen shows them: a 16-colour display
+// shows each colour through MAP (MapRGB), and ReadBuffer gives the colour before it (mapped)
+static void SaveImageRow(int x, int i, int w, unsigned char *buf, bool mapped)
+{
+    ReadBuffer(x, i, x + w - 1, i, buf);
+    if (mapped)
+        for (int k = 0; k < w * 3; k += 3)
+        {
+            uint32_t c = MapRGB[RGB121(buf[k + 2] << 16 | buf[k + 1] << 8 | buf[k])];
+            buf[k] = c;
+            buf[k + 1] = c >> 8;
+            buf[k + 2] = c >> 16;
+        }
+}
+
+/* a row of palette indices as BMP RLE: a run of one index as its count and the index (RLE4: the index in both
+   nibbles), three or more that are not a run as 0, n and the indices (absolute mode, padded to a word), and 0, 0 at
+   the end of the row */
+static int SaveRleRow(const uint8_t *ix, int w, uint8_t *o, int bits)
+{
+    int i = 0, n = 0;
+    while (i < w)
+    {
+        int run = 1, s = i, k = 0;
+        while (i + run < w && run < 255 && ix[i + run] == ix[i])
+            run++;
+        if (run >= 2)
+        {
+            o[n++] = run;
+            o[n++] = bits == 4 ? (ix[i] << 4 | ix[i]) : ix[i];
+            i += run;
+            continue;
+        }
+        while (i < w && k < 255 && !(i + 2 < w && ix[i] == ix[i + 1] && ix[i] == ix[i + 2])) // up to a run of 3
+        {
+            i++;
+            k++;
+        }
+        if (bits == 4 && k >= 3 && (k & 1)) // RLE4: an even number, whole bytes (Pillow before 13.0 reads no
+        {                                   // other), the last pixel then a run
+            i--;
+            k--;
+        }
+        if (k < 3) // too few for absolute mode: a run of one each
+        {
+            while (s < i)
+            {
+                o[n++] = 1;
+                o[n++] = bits == 4 ? ix[s] << 4 : ix[s];
+                s++;
+            }
+            continue;
+        }
+        o[n++] = 0;
+        o[n++] = k;
+        if (bits == 4)
+        {
+            for (int b = 0; b < k / 2; b++)
+                o[n++] = ix[s + 2 * b] << 4 | ix[s + 2 * b + 1];
+            if ((k / 2) & 1)
+                o[n++] = 0;
+        }
+        else
+        {
+            while (s < i)
+                o[n++] = ix[s++];
+            if (k & 1)
+                o[n++] = 0;
+        }
+    }
+    o[n++] = 0;
+    o[n++] = 0;
+    return n;
+}
+
+static void SaveImagePut32(uint8_t *p, uint32_t v)
+{
+    p[0] = v;
+    p[1] = v >> 8;
+    p[2] = v >> 16;
+    p[3] = v >> 24;
+}
+
+/* the area x, y, w, h as a BMP with a palette and RLE, when it has 256 colours or fewer; false, with nothing written,
+   when it has more. The screen is read twice, for the colours and then for the rows (a colour drawn in between is
+   saved as the first); the file's size and the pixels' are written last, when they are known */
+static bool SaveImageRLE(int fnbr, int x, int y, int w, int h, unsigned char *line, bool mapped)
+{
+    savepal_t *sp = GetTempMainMemory(sizeof(savepal_t));
+    uint8_t *ix, *o, hdr[54], q[4];
+    int i, k, bits, size;
+    memset(sp->slot, 0xFF, sizeof(sp->slot));
+    sp->n = 0;
+    for (i = y; i < y + h; i++) // the colours: given up at the 257th
+    {
+        routinechecks();
+        SaveImageRow(x, i, w, line, mapped);
+        for (k = 0; k < w * 3; k += 3)
+            if (SavePalIndex(sp, line[k] | line[k + 1] << 8 | (uint32_t)line[k + 2] << 16, true) < 0)
+                return false;
+    }
+    bits = sp->n <= 16 ? 4 : 8;
+    ix = GetTempMainMemory(w);
+    o = GetTempMainMemory(w * 2 + 16);
+    memset(hdr, 0, sizeof(hdr));
+    hdr[0] = 'B';
+    hdr[1] = 'M';
+    SaveImagePut32(hdr + 10, 54 + 4 * sp->n); // where the pixels start
+    hdr[14] = 40;
+    SaveImagePut32(hdr + 18, w);
+    SaveImagePut32(hdr + 22, h);
+    hdr[26] = 1; // planes
+    hdr[28] = bits;
+    hdr[30] = bits == 4 ? 2 : 1;                    // BI_RLE4, BI_RLE8
+    hdr[38] = hdr[42] = 0x13;                       // 2835 pixels a metre (72 dpi), as before
+    hdr[39] = hdr[43] = 0x0B;
+    SaveImagePut32(hdr + 46, sp->n);                // the colours used
+    FilePutData((char *)hdr, fnbr, 54);             // (the sizes are written at the end)
+    for (i = 0; i < sp->n; i++)
+    {
+        SaveImagePut32(q, sp->pal[i]); // blue, green, red, 0
+        FilePutData((char *)q, fnbr, 4);
+    }
+    size = 0;
+    for (i = y + h - 1; i >= y; i--) // a BMP's rows from the bottom
+    {
+        int n, c;
+        routinechecks();
+        SaveImageRow(x, i, w, line, mapped);
+        for (k = 0; k < w; k++)
+        {
+            c = SavePalIndex(sp, line[3 * k] | line[3 * k + 1] << 8 | (uint32_t)line[3 * k + 2] << 16, false);
+            ix[k] = c < 0 ? 0 : c;
+        }
+        n = SaveRleRow(ix, w, o, bits);
+        if (i == y) // the end of the picture
+        {
+            o[n++] = 0;
+            o[n++] = 1;
+        }
+        FilePutData((char *)o, fnbr, n);
+        size += n;
+    }
+    SaveImagePut32(q, 54 + 4 * sp->n + size); // the file's size
+    positionfile(fnbr, 2, true);
+    FilePutData((char *)q, fnbr, 4);
+    SaveImagePut32(q, size); // the pixels'
+    positionfile(fnbr, 34, true);
+    FilePutData((char *)q, fnbr, 4);
+    return true;
+}
 void MIPS16 cmd_save(void)
 {
     int fnbr;
@@ -3159,167 +3339,6 @@ void MIPS16 cmd_save(void)
         FileClose(fnbr);
         return;
     }
-    if ((p = checkstring(cmdline, (unsigned char *)"COMPRESSED IMAGE")) != NULL)
-    {
-        if (!(ReadBuffer == ReadBuffer16 || ReadBuffer == ReadBuffer2))
-            error("Invalid for this display");
-        int i, x, y, w, h, filesize;
-        union colourmap
-        {
-            char rgbbytes[4];
-            unsigned int rgb;
-        } c;
-        unsigned char fcolour;
-        unsigned char bmpfileheader[14] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 0x76, 0, 0, 0};
-        unsigned char bmpinfoheader[40] = {40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 0,
-                                           2, 0, 0, 0, 0, 0, 0, 0, 0x13, 0xb, 0, 0, 0x13, 0xb, 0, 0,
-                                           16, 0, 0, 0, 16, 0, 0, 0};
-        unsigned char bmpcolourpallette[16 * 4] = {
-            0, 0, 0, 0,
-            0, 0, 255, 0,
-            0, 64, 0, 0,
-            0, 64, 255, 0,
-            0, 128, 0, 0,
-            0, 128, 255, 0,
-            0, 255, 0, 0,
-            0, 255, 255, 0,
-            255, 0, 0, 0,
-            255, 0, 255, 0,
-            255, 64, 0, 0,
-            255, 64, 255, 0,
-            255, 128, 0, 0,
-            255, 128, 255, 0,
-            255, 255, 0, 0,
-            255, 255, 255, 0};
-        /* The palette a saved picture carries has to be the colours the screen
-           is actually showing.  These sixteen are only the ones the mode starts
-           with: MAP can change any of them, the display applies that at
-           scanout, and a BMP written with the starting colours then does not
-           look like the screen it came from.  The pixel indices below are
-           recovered through the same default map, so only the palette needs
-           correcting - and a BMP palette entry is blue, green, red, so the
-           three bytes go in the opposite order to MapRGB's packing. */
-        if (MapRGBValid)
-            for (int m = 0; m < 16; m++)
-            {
-                /* The index written for a pixel is its RGB121 value with the red and
-                   blue bits exchanged - that is the byte order ReadBuffer hands back.
-                   The default table above is already written that way round, so the
-                   map has to be read through the same exchange. */
-                int s = (m & 0x6) | ((m & 1) << 3) | ((m >> 3) & 1);
-                bmpcolourpallette[m * 4 + 0] = (unsigned char)(MapRGB[s]);       /* blue  */
-                bmpcolourpallette[m * 4 + 1] = (unsigned char)(MapRGB[s] >> 8);  /* green */
-                bmpcolourpallette[m * 4 + 2] = (unsigned char)(MapRGB[s] >> 16); /* red   */
-                bmpcolourpallette[m * 4 + 3] = 0;
-            }
-
-        //        unsigned char bmppad[3] = {0, 0, 0};
-        getcsargs(&p, 9);
-        if (!InitSDCard())
-            return;
-        if ((void *)ReadBuffer == (void *)DisplayNotSet)
-            error("SAVE IMAGE not available on this display");
-        pp = getFstring(argv[0]);
-        if (argc != 1 && argc != 9)
-            SyntaxError();
-        ;
-        AppendDefaultExtension((char *)pp, ".bmp");
-        if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
-            return;
-        if (argc == 1)
-        {
-            x = 0;
-            y = 0;
-            h = maxH;
-            w = maxW;
-        }
-        else
-        {
-            x = getint(argv[2], 0, maxW - 1);
-            y = getint(argv[4], 0, maxH - 1);
-            w = getint(argv[6], 1, maxW - x);
-            h = getint(argv[8], 1, maxH - y);
-        }
-        if (w & 1)
-            error("Width must be a multiple of 2 for compressed image save");
-        filesize = 54 + 16 * 4 + w * h / 2;
-        bmpfileheader[2] = (unsigned char)(filesize);
-        bmpfileheader[3] = (unsigned char)(filesize >> 8);
-        bmpfileheader[4] = (unsigned char)(filesize >> 16);
-        bmpfileheader[5] = (unsigned char)(filesize >> 24);
-
-        bmpinfoheader[4] = (unsigned char)(w);
-        bmpinfoheader[5] = (unsigned char)(w >> 8);
-        bmpinfoheader[6] = (unsigned char)(w >> 16);
-        bmpinfoheader[7] = (unsigned char)(w >> 24);
-        bmpinfoheader[8] = (unsigned char)(h);
-        bmpinfoheader[9] = (unsigned char)(h >> 8);
-        bmpinfoheader[10] = (unsigned char)(h >> 16);
-        bmpinfoheader[11] = (unsigned char)(h >> 24);
-        bmpinfoheader[20] = (unsigned char)(h * w / 2);
-        bmpinfoheader[21] = (unsigned char)((h * w / 2) >> 8);
-        bmpinfoheader[22] = (unsigned char)((h * w / 2) >> 16);
-        bmpinfoheader[23] = (unsigned char)((h * w / 2) >> 24);
-        FilePutData((char *)bmpfileheader, fnbr, 14);
-        FilePutData((char *)bmpinfoheader, fnbr, 40);
-        FilePutData((char *)bmpcolourpallette, fnbr, 64);
-        flinebuf = GetTempMainMemory(maxW * 4);
-        outbuf = GetTempMainMemory(maxW / 2);
-        char *foutbuf = GetTempMainMemory(maxW);
-        SaveImageRows(true, true);
-        for (i = y + h - 1; i >= y; i--)
-        {
-            routinechecks();
-            ReadBuffer(x, i, x + w - 1, i, flinebuf);
-            p = flinebuf;
-            pp = outbuf;
-            for (int k = 0; k < w; k++)
-            {
-                c.rgbbytes[2] = *p++; // this order swaps the bytes to match the .BMP file
-                c.rgbbytes[1] = *p++;
-                c.rgbbytes[0] = *p++;
-                fcolour = RGB121(c.rgb);
-                if (k & 1)
-                {
-                    *pp |= fcolour;
-                    pp++;
-                }
-                else
-                {
-                    *pp = fcolour << 4;
-                }
-            }
-            unsigned char *ppp = (unsigned char *)foutbuf;
-            unsigned char *q = outbuf;
-            int count = 0;
-            int k = w;
-            while (k)
-            {
-                ppp[0] = 2;
-                ppp[1] = *q++;
-                count += 2;
-                k -= 2;
-                while (*q == ppp[1] && ppp[0] < 254 && k)
-                {
-                    ppp[0] += 2;
-                    q++;
-                    k -= 2;
-                }
-                ppp += 2;
-            }
-            *ppp++ = 0;
-            *ppp++ = 0;
-            count += 2;
-            FilePutData((char *)foutbuf, fnbr, count);
-        }
-        SaveImageRows(false, false);
-        foutbuf[0] = 0;
-        foutbuf[1] = 1;
-        FilePutData((char *)foutbuf, fnbr, 2);
-        if (filesource[fnbr] == FATFSFILE)
-            FileClose(fnbr);
-        return;
-    }
 #ifdef rp2350
     // SAVE PNG fname$ [, x, y, w, h]: as SAVE IMAGE, as an 8-bit RGB PNG whatever the display (PngEncoder.c)
     if ((p = checkstring(cmdline, (unsigned char *)"PNG")) != NULL)
@@ -3348,24 +3367,14 @@ void MIPS16 cmd_save(void)
         }
         if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
             return;
-        // a 16-colour display shows each colour through MAP (MapRGB), as SAVE IMAGE's palette does, while
-        // ReadBuffer gives the colour before it
-        bool mapped = MapRGBValid && (ReadBuffer == ReadBuffer16 || ReadBuffer == ReadBuffer2);
+        bool mapped = MapRGBValid && (ReadBuffer == ReadBuffer16 || ReadBuffer == ReadBuffer2); // (SaveImageRow)
         flinebuf = GetTempMainMemory(maxW * 4);
         PngBegin(fnbr, w, h);
         SaveImageRows(true, true);
         for (i = y; i < y + h; i++)
         {
             routinechecks();
-            ReadBuffer(x, i, x + w - 1, i, flinebuf);
-            if (mapped)
-                for (int k = 0; k < w * 3; k += 3) // blue, green, red
-                {
-                    uint32_t c = MapRGB[RGB121(flinebuf[k + 2] << 16 | flinebuf[k + 1] << 8 | flinebuf[k])];
-                    flinebuf[k] = c;
-                    flinebuf[k + 1] = c >> 8;
-                    flinebuf[k + 2] = c >> 16;
-                }
+            SaveImageRow(x, i, w, flinebuf, mapped);
             PngRow(flinebuf);
         }
         SaveImageRows(false, false);
@@ -3374,161 +3383,21 @@ void MIPS16 cmd_save(void)
         return;
     }
 #endif
-    if ((p = checkstring(cmdline, (unsigned char *)"IMAGE")) != NULL)
+    // SAVE IMAGE fname$ [, x, y, w, h], and SAVE COMPRESSED IMAGE, the same command now (see SaveImageRLE)
+    if ((p = checkstring(cmdline, (unsigned char *)"IMAGE")) != NULL ||
+        (p = checkstring(cmdline, (unsigned char *)"COMPRESSED IMAGE")) != NULL)
     {
-        if (ReadBuffer == ReadBuffer16 || ReadBuffer == ReadBuffer2)
-        {
-            int i, x, y, w, h, filesize;
-            union colourmap
-            {
-                char rgbbytes[4];
-                unsigned int rgb;
-            } c;
-            unsigned char fcolour;
-            unsigned char bmpfileheader[14] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 0x76, 0, 0, 0};
-            unsigned char bmpinfoheader[40] = {40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 4, 0,
-                                               0, 0, 0, 0, 0, 0, 0, 0, 0x13, 0xb, 0, 0, 0x13, 0xb, 0, 0,
-                                               16, 0, 0, 0, 16, 0, 0, 0};
-            unsigned char bmpcolourpallette[16 * 4] = {
-                0, 0, 0, 0,
-                0, 0, 255, 0,
-                0, 64, 0, 0,
-                0, 64, 255, 0,
-                0, 128, 0, 0,
-                0, 128, 255, 0,
-                0, 255, 0, 0,
-                0, 255, 255, 0,
-                255, 0, 0, 0,
-                255, 0, 255, 0,
-                255, 64, 0, 0,
-                255, 64, 255, 0,
-                255, 128, 0, 0,
-                255, 128, 255, 0,
-                255, 255, 0, 0,
-                255, 255, 255, 0};
-            /* The palette a saved picture carries has to be the colours the screen
-               is actually showing.  These sixteen are only the ones the mode starts
-               with: MAP can change any of them, the display applies that at
-               scanout, and a BMP written with the starting colours then does not
-               look like the screen it came from.  The pixel indices below are
-               recovered through the same default map, so only the palette needs
-               correcting - and a BMP palette entry is blue, green, red, so the
-               three bytes go in the opposite order to MapRGB's packing. */
-            if (MapRGBValid)
-                for (int m = 0; m < 16; m++)
-                {
-                    /* The index written for a pixel is its RGB121 value with the red and
-                       blue bits exchanged - that is the byte order ReadBuffer hands back.
-                       The default table above is already written that way round, so the
-                       map has to be read through the same exchange. */
-                    int s = (m & 0x6) | ((m & 1) << 3) | ((m >> 3) & 1);
-                    bmpcolourpallette[m * 4 + 0] = (unsigned char)(MapRGB[s]);       /* blue  */
-                    bmpcolourpallette[m * 4 + 1] = (unsigned char)(MapRGB[s] >> 8);  /* green */
-                    bmpcolourpallette[m * 4 + 2] = (unsigned char)(MapRGB[s] >> 16); /* red   */
-                    bmpcolourpallette[m * 4 + 3] = 0;
-                }
-
-            unsigned char bmppad[3] = {0, 0, 0};
-            getcsargs(&p, 9);
-            if (!InitSDCard())
-                return;
-            if ((void *)ReadBuffer == (void *)DisplayNotSet)
-                error("SAVE IMAGE not available on this display");
-            pp = getFstring(argv[0]);
-            if (argc != 1 && argc != 9)
-                SyntaxError();
-            ;
-            AppendDefaultExtension((char *)pp, ".bmp");
-            if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
-                return;
-            if (argc == 1)
-            {
-                x = 0;
-                y = 0;
-                h = maxH;
-                w = maxW;
-            }
-            else
-            {
-                x = getint(argv[2], 0, maxW - 1);
-                y = getint(argv[4], 0, maxH - 1);
-                w = getint(argv[6], 1, maxW - x);
-                h = getint(argv[8], 1, maxH - y);
-            }
-            filesize = 54 + 16 * 4 + w * h / 2;
-            bmpfileheader[2] = (unsigned char)(filesize);
-            bmpfileheader[3] = (unsigned char)(filesize >> 8);
-            bmpfileheader[4] = (unsigned char)(filesize >> 16);
-            bmpfileheader[5] = (unsigned char)(filesize >> 24);
-
-            bmpinfoheader[4] = (unsigned char)(w);
-            bmpinfoheader[5] = (unsigned char)(w >> 8);
-            bmpinfoheader[6] = (unsigned char)(w >> 16);
-            bmpinfoheader[7] = (unsigned char)(w >> 24);
-            bmpinfoheader[8] = (unsigned char)(h);
-            bmpinfoheader[9] = (unsigned char)(h >> 8);
-            bmpinfoheader[10] = (unsigned char)(h >> 16);
-            bmpinfoheader[11] = (unsigned char)(h >> 24);
-            bmpinfoheader[20] = (unsigned char)(h * w / 2);
-            bmpinfoheader[21] = (unsigned char)((h * w / 2) >> 8);
-            bmpinfoheader[22] = (unsigned char)((h * w / 2) >> 16);
-            bmpinfoheader[23] = (unsigned char)((h * w / 2) >> 24);
-
-            FilePutData((char *)bmpfileheader, fnbr, 14);
-            FilePutData((char *)bmpinfoheader, fnbr, 40);
-            FilePutData((char *)bmpcolourpallette, fnbr, 64);
-            flinebuf = GetTempMainMemory(maxW * 4);
-            outbuf = GetTempMainMemory(maxW / 2);
-            SaveImageRows(true, true);
-            for (i = y + h - 1; i >= y; i--)
-            {
-                routinechecks();
-                ReadBuffer(x, i, x + w - 1, i, flinebuf);
-                p = flinebuf;
-                pp = outbuf;
-                for (int k = 0; k < w; k++)
-                {
-                    c.rgbbytes[2] = *p++; // this order swaps the bytes to match the .BMP file
-                    c.rgbbytes[1] = *p++;
-                    c.rgbbytes[0] = *p++;
-                    fcolour = RGB121(c.rgb);
-                    if (k & 1)
-                    {
-                        *pp |= (fcolour);
-                        pp++;
-                    }
-                    else
-                    {
-                        *pp = fcolour << 4;
-                    }
-                }
-                FilePutData((char *)outbuf, fnbr, w / 2);
-                if ((w / 2) % 4 != 0)
-                {
-                    FilePutData((char *)bmppad, fnbr, 4 - ((w / 2) % 4));
-                }
-            }
-            SaveImageRows(false, false);
-            FileClose(fnbr);
-            return;
-        }
-
-        int i, x, y, w, h, filesize;
+        int i, x, y, w, h;
         unsigned char bmpfileheader[14] = {'B', 'M', 0, 0, 0, 0, 0, 0, 0, 0, 54, 0, 0, 0};
         unsigned char bmpinfoheader[40] = {40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 24, 0};
         unsigned char bmppad[3] = {0, 0, 0};
         getcsargs(&p, 9);
-        if (!InitSDCard())
-            return;
         if ((void *)ReadBuffer == (void *)DisplayNotSet)
             error("SAVE IMAGE not available on this display");
         pp = getFstring(argv[0]);
         if (argc != 1 && argc != 9)
             SyntaxError();
-        ;
         AppendDefaultExtension((char *)pp, ".bmp");
-        if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
-            return;
         if (argc == 1)
         {
             x = 0;
@@ -3543,32 +3412,26 @@ void MIPS16 cmd_save(void)
             w = getint(argv[6], 1, maxW - x);
             h = getint(argv[8], 1, maxH - y);
         }
-        filesize = 54 + 3 * w * h;
-        bmpfileheader[2] = (unsigned char)(filesize);
-        bmpfileheader[3] = (unsigned char)(filesize >> 8);
-        bmpfileheader[4] = (unsigned char)(filesize >> 16);
-        bmpfileheader[5] = (unsigned char)(filesize >> 24);
-
-        bmpinfoheader[4] = (unsigned char)(w);
-        bmpinfoheader[5] = (unsigned char)(w >> 8);
-        bmpinfoheader[6] = (unsigned char)(w >> 16);
-        bmpinfoheader[7] = (unsigned char)(w >> 24);
-        bmpinfoheader[8] = (unsigned char)(h);
-        bmpinfoheader[9] = (unsigned char)(h >> 8);
-        bmpinfoheader[10] = (unsigned char)(h >> 16);
-        bmpinfoheader[11] = (unsigned char)(h >> 24);
-        FilePutData((char *)bmpfileheader, fnbr, 14);
-        FilePutData((char *)bmpinfoheader, fnbr, 40);
+        if (!BasicFileOpen((char *)pp, fnbr, FA_WRITE | FA_CREATE_ALWAYS))
+            return;
+        bool mapped = MapRGBValid && (ReadBuffer == ReadBuffer16 || ReadBuffer == ReadBuffer2); // (SaveImageRow)
         flinebuf = GetTempMainMemory(maxW * 4);
-        SaveImageRows(true, false);
-        for (i = y + h - 1; i >= y; i--)
-        {
-            routinechecks();
-            ReadBuffer(x, i, x + w - 1, i, flinebuf);
-            FilePutData((char *)flinebuf, fnbr, w * 3);
-            if ((w * 3) % 4 != 0)
+        SaveImageRows(true, true);
+        if (!SaveImageRLE(fnbr, x, y, w, h, flinebuf, mapped))
+        { // more than 256 colours: 24 bits a pixel, each row padded to a whole number of words
+            int row = (w * 3 + 3) & ~3;
+            SaveImagePut32(bmpfileheader + 2, 54 + row * h);
+            SaveImagePut32(bmpinfoheader + 4, w);
+            SaveImagePut32(bmpinfoheader + 8, h);
+            FilePutData((char *)bmpfileheader, fnbr, 14);
+            FilePutData((char *)bmpinfoheader, fnbr, 40);
+            for (i = y + h - 1; i >= y; i--)
             {
-                FilePutData((char *)bmppad, fnbr, 4 - ((w * 3) % 4));
+                routinechecks();
+                SaveImageRow(x, i, w, flinebuf, mapped);
+                FilePutData((char *)flinebuf, fnbr, w * 3);
+                if (row != w * 3)
+                    FilePutData((char *)bmppad, fnbr, row - w * 3);
             }
         }
         SaveImageRows(false, false);
