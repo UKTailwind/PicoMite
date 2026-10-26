@@ -448,6 +448,7 @@ void ShowCursor(int show);
 void setmode(int mode, bool clear);
 #ifdef HDMI
 void restartHDMI(int newres);
+uint32_t Mode5Colour(uint32_t rgb); // MODE 5 on a 16-bit resolution: the colour shown for ReadBuffer's colour
 #endif
 
 /* ============================================================================

@@ -3611,6 +3611,17 @@ void MIPS16 fun_at(void)
 
 // these three functions were written by Peter Mather (matherp on the Back Shed forum)
 // read the contents of a PIXEL out of screen memory
+#ifdef HDMI
+/* MODE 5 at a 16-bit resolution (FullColour, scanned out by HDMIloop0) shows each pixel's byte through map256 - MAP's
+   table, by default the full-range MAP256DEF - as RGB555, while ReadBuffer gives the byte as RGB332 (white as 224, 224,
+   192). The colour shown, 0xRRGGBB, for the colour ReadBuffer gave, each channel to 8 bits as ReadBuffer555 does.
+   PIXEL() and the saves (SaveImageRow, FileIO.c) use it; the 8-bit resolutions show the RGB332 byte itself. */
+uint32_t Mode5Colour(uint32_t rgb)
+{
+    uint16_t c = map256[RGB332(rgb)];
+    return (uint32_t)((c >> 10) & 0x1F) << 19 | (uint32_t)((c >> 5) & 0x1F) << 11 | (uint32_t)(c & 0x1F) << 3;
+}
+#endif
 void fun_pixel(void)
 {
     if ((void *)ReadBuffer == (void *)DisplayNotSet)
@@ -3624,6 +3635,10 @@ void fun_pixel(void)
     y = getinteger(argv[2]);
     ReadBuffer(x, y, x, y, (unsigned char *)&p);
     iret = p & 0xFFFFFF;
+#ifdef HDMI
+    if (DISPLAY_TYPE == SCREENMODE5 && FullColour) // the colour shown, MAP included
+        iret = Mode5Colour(iret);
+#endif
     targ = T_INT;
 }
 

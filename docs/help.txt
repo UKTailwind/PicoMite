@@ -11249,7 +11249,10 @@ colours and graphics coordinates.
 PIXEL( x, y)
 
 Returns the colour of a pixel on the video output or LCD display.  'x' is the
-horizontal coordinate and 'y' is the vertical coordinate of the pixel.
+horizontal coordinate and 'y' is the vertical coordinate of the pixel.  In
+MODE 5 on the HDMI versions at 640x480 and 720x400 it is the colour shown,
+after any MAP, with each of red, green and blue to the nearest 8 below it
+(white is &HF8F8F8).
 If an LCD display is used it must use one of the SSD1963, ILI9341, ILI9488, or
 ST7789_320 controllers.
 
