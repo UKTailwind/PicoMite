@@ -550,8 +550,9 @@ void __not_in_flash_func(fun_timer)(void)
     fret = TimerVal();
     targ = T_NBR;
 }
-// Set the clock to read epoch seconds now. A new time (TIME$ = "hh:mm:ss", WEB NTP, RTC GETTIME) starts its
-// milliseconds at 0; DATE$ = and TIME$ = n only move the clock, so they keep them (zero_ms false).
+// Set the clock to read epoch seconds now. A new time (TIME$ = "hh:mm:ss" or TIME$ = n, WEB NTP, RTC GETTIME)
+// starts its milliseconds at 0 - TIME$ = 0 is how a program syncs the second to an external pulse; DATE$ = only
+// changes the day, so it keeps them (zero_ms false).
 void set_time_epoch(int64_t epoch, bool zero_ms)
 {
     const uint64_t now = time_us_64();
@@ -1882,7 +1883,7 @@ void cmd_time(void)
         //		update_clock();
         //    	mT4IntEnable(1);       										// enable interrupt
     }
-    set_time_epoch(get_epoch(year, month, day, hour, minute, second), (t & T_STR) != 0);
+    set_time_epoch(get_epoch(year, month, day, hour, minute, second), true);
 }
 
 // this is invoked as a function

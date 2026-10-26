@@ -15022,10 +15022,18 @@ or
 TIME$ = "HH:MM"
 or
 TIME$ = "HH"
+or
+TIME$ = n
 
 Sets the time of the internal clock.  MM and SS are optional and will default
 to zero if not specified.  For example TIME$ = "14:30" will set the clock to
 14:30 with zero seconds.
+TIME$ = n moves the clock by n seconds (back when n is negative).  Setting the
+time either way starts the milliseconds (OPTION MILLISECONDS) at zero, so
+TIME$ = 0 at a pulse from an external source, such as a GPS receiver's one
+pulse per second output, lines the clock's seconds up with it without changing
+the time.  It keeps the current second: if the clock is slow and still reads
+the second before the one the pulse marks, it ends up a second behind.
 With OPTION RTC AUTO ENABLE the PicoMite firmware starts with the TIME$
 programmed in RTC.  Without OPTION RTC AUTO ENABLE the firmware starts with
 TIME$="00:00:00"

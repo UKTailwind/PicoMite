@@ -4903,6 +4903,8 @@ or
 TIME$ = "HH:MM"
 or
 TIME$ = "HH"
+or
+TIME$ = n
 TIME$
 
 ~TIMER

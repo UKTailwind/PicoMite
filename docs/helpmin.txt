@@ -8533,6 +8533,8 @@ or
 TIME$ = "HH:MM"
 or
 TIME$ = "HH"
+or
+TIME$ = n
 
 Sets the time of the internal clock. MM and SS are optional and will default
 to zero if not specified.
