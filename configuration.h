@@ -458,7 +458,9 @@ extern "C"
    /* -4 KB (2026-10-09, Peter): Bluetooth Classic keyboards - a third HCI
       connection (2.3 KB), the HID descriptor buffer and the HID host took
       the margin to 1.1 KB. MAX_PROG_SIZE is pinned, so nothing in flash moves. */
-#define HEAP_MEMORY_SIZE (320 * 1024)
+   /* -4 KB (2026-10-26, Peter): the STEPPER changes of 25 Oct (69faf14..37c5d1c) took the RAM margin
+      to -8 bytes; ~4 KB of RAM margin left for the stack. MAX_PROG_SIZE is pinned. */
+#define HEAP_MEMORY_SIZE (316 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #else
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */
