@@ -1700,17 +1700,15 @@ static void touch_reassemble(uint8_t dev_addr, uint8_t instance,
 	}
 }
 
-/* TOUCH Device_type — same numbering scheme as PS4/PS3/SNES/XBOX/UNKNOWN. */
-#ifndef TOUCH
-#define TOUCH 133
-#endif
-/* TOUCHMOUSE: a standalone absolute-pointer interface (e.g. a composite
+/* USB_TOUCH: a multi-touch screen's Device_type, in the numbering MM.INFO(USB n) reports with PS4/PS3/SNES/XBOX/UNKNOWN
+   (133, as the manual gives it). Not TOUCH: SPI-LCD.h defines that as an SPI device code (25) in every build, so an
+   #ifndef TOUCH here never applied and MM.INFO(USB n) said 25 for a touch screen. */
+#define USB_TOUCH 133
+/* USB_TOUCHMOUSE: a standalone absolute-pointer interface (e.g. a composite
    touch monitor's "mouse" interface that reports touch as absolute X/Y).
-   Processed exactly like TOUCH (report routed through process_pointer_report)
+   Processed exactly like USB_TOUCH (report routed through process_pointer_report)
    but kept a distinct type so its connect/disconnect messages are its own. */
-#ifndef TOUCHMOUSE
-#define TOUCHMOUSE 134
-#endif
+#define USB_TOUCHMOUSE 134
 
 /* process_kbd_report is declared in KeyboardMap.h. */
 
@@ -2271,7 +2269,7 @@ void tuh_hid_get_report_complete_cb(uint8_t dev_addr, uint8_t instance,
 	for (int i = 0; i < 4; i++)
 	{
 		if (HID[i].Device_address == dev_addr && HID[i].Device_instance == instance &&
-			HID[i].Device_type == TOUCH)
+			HID[i].Device_type == USB_TOUCH)
 		{
 #ifdef TOUCH_DEBUG
 			/* Dump the raw read value BEFORE we modify it. */
@@ -2317,7 +2315,7 @@ void tuh_hid_set_report_complete_cb(uint8_t dev_addr, uint8_t instance,
 	for (int i = 0; i < 4; i++)
 	{
 		if (HID[i].Device_address == dev_addr && HID[i].Device_instance == instance &&
-			HID[i].Device_type == TOUCH && HID[i].touch_init_step == 11)
+			HID[i].Device_type == USB_TOUCH && HID[i].touch_init_step == 11)
 		{
 			HID[i].touch_init_step = 0; /* Input Mode write done */
 #ifdef TOUCH_DEBUG
@@ -2470,7 +2468,7 @@ void hid_app_task(void)
 		   hid_app_task) to re-enable. If the panel turns out to revert, the
 		   preferred fix is a reactive version (re-assert only on a stall). */
 #if TOUCH_KEEPALIVE
-		if (HID[i].Device_type == TOUCH && HID[i].touch_init_step == 0 &&
+		if (HID[i].Device_type == USB_TOUCH && HID[i].touch_init_step == 0 &&
 			(HID[i].touch_info.has_input_mode || HID[i].touch_info.has_pointer_fallback) &&
 			(timenow - HID[i].touch_init_us) > 2000000ULL)
 		{
@@ -2492,7 +2490,7 @@ void hid_app_task(void)
 		   we retry next time; in-flight steps (2/4/11/12) are cleared only by
 		   the completion callbacks. A panel that STALLs the request simply
 		   stops here without affecting report polling below. */
-		if (HID[i].Device_type == TOUCH && HID[i].touch_init_step == 10)
+		if (HID[i].Device_type == USB_TOUCH && HID[i].touch_init_step == 10)
 		{
 			/* Read the current Input Mode feature ([Device Mode, Device
 			   Identifier]) into the buffer; the GET completion forces
@@ -2502,7 +2500,7 @@ void hid_app_task(void)
 								   HID_REPORT_TYPE_FEATURE, touch_feature_buf, 2))
 				HID[i].touch_init_step = 12; /* GET in-flight */
 		}
-		else if (HID[i].Device_type == TOUCH && HID[i].touch_init_step == 13)
+		else if (HID[i].Device_type == USB_TOUCH && HID[i].touch_init_step == 13)
 		{
 			/* Write the modified Input Mode (Device Mode = 0x02, identifier
 			   preserved by the GET completion). */
@@ -2511,7 +2509,7 @@ void hid_app_task(void)
 								   HID_REPORT_TYPE_FEATURE, touch_feature_buf, 2))
 				HID[i].touch_init_step = 11; /* SET in-flight */
 		}
-		else if (HID[i].Device_type == TOUCH &&
+		else if (HID[i].Device_type == USB_TOUCH &&
 				 (HID[i].touch_init_step == 1 || HID[i].touch_init_step == 3))
 		{
 			/* step 1 -> cert blob, step 3 -> contact-count-max; report IDs
@@ -2736,7 +2734,7 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 				int touch_slot = (HID[3].active && slot != 3) ? slot : 3;
 				HID[touch_slot].Device_address = dev_addr;
 				HID[touch_slot].Device_instance = instance;
-				HID[touch_slot].Device_type = TOUCH;
+				HID[touch_slot].Device_type = USB_TOUCH;
 				memcpy((void *)&HID[touch_slot].touch_info, &tinfo,
 					   sizeof(touch_info_t));
 				memset((void *)&HID[touch_slot].touch_report, 0,
@@ -2789,13 +2787,13 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			   analyze_touch_descriptor() returned false (no Finger
 			   collections) but still captured the pointer layout. Route it
 			   into the touch pipeline as a single-touch source: report
-			   processing reuses process_pointer_report() via TOUCHMOUSE. */
+			   processing reuses process_pointer_report() via USB_TOUCHMOUSE. */
 			if (desc_report && desc_len > 0 && tinfo.has_pointer_fallback)
 			{
 				tinfo.valid = true; /* pointer-only, but a usable touch source */
 				HID[slot].Device_address = dev_addr;
 				HID[slot].Device_instance = instance;
-				HID[slot].Device_type = TOUCHMOUSE;
+				HID[slot].Device_type = USB_TOUCHMOUSE;
 				memcpy((void *)&HID[slot].touch_info, &tinfo, sizeof(touch_info_t));
 				memset((void *)&HID[slot].touch_report, 0, sizeof(touch_report_t));
 				dump_touch_descriptor(desc_report, desc_len, &tinfo);
@@ -2997,7 +2995,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 				MMPrintString("Generic Gamepad Disconnected\r\n> ");
 			break;
 		}
-		else if (instance == HID[i].Device_instance && dev_addr == HID[i].Device_address && HID[i].Device_type == TOUCH)
+		else if (instance == HID[i].Device_instance && dev_addr == HID[i].Device_address && HID[i].Device_type == USB_TOUCH)
 		{
 			usb_touch_present = false;
 			usb_touch_active = false;
@@ -3006,7 +3004,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 				MMPrintString("Multi-touch Disconnected\r\n> ");
 			break;
 		}
-		else if (instance == HID[i].Device_instance && dev_addr == HID[i].Device_address && HID[i].Device_type == TOUCHMOUSE)
+		else if (instance == HID[i].Device_instance && dev_addr == HID[i].Device_address && HID[i].Device_type == USB_TOUCHMOUSE)
 		{
 			usb_touch_present = false;
 			usb_touch_active = false;
@@ -3063,7 +3061,7 @@ void tuh_hid_report_received_cb(uint8_t dev_addr, uint8_t instance, uint8_t cons
 
 	default:
 		//		MMPrintString("HID receive boot gamepad report\r\n");
-		if (HID[n].Device_type == TOUCH || HID[n].Device_type == TOUCHMOUSE)
+		if (HID[n].Device_type == USB_TOUCH || HID[n].Device_type == USB_TOUCHMOUSE)
 		{
 			/* Reassembles fragmented reports, then decodes + dumps the
 			   complete report (the host hands up one 64-byte packet per
