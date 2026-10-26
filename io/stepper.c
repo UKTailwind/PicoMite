@@ -3954,8 +3954,11 @@ void cmd_stepper(void)
 
     stepper_reclaim_retired(); // free arc buffers the ISR has finished with
 
-    if (stepper_report_latched_trips())
-        return;
+    // A trip the ISR latched is reported here in a program (getConsole reports it at the prompt), and the command
+    // then runs: the ISR has already stopped, disarmed and cleared everything, and STEPPER RUN refuses until the
+    // E-STOP is cleared and the axes re-homed, so returning only lost the command - a STEPPER POSITION, or a CLOSE
+    // that left the pins held (issue #137)
+    (void)stepper_report_latched_trips();
 
     // STEPPER INIT [arc_tolerance] [,buffer_size] [,estop_pin] [,estop_keep_enabled] - Initialize stepper system, G-code buffer, and 100KHz timer interrupt
     if ((tp = checkstring(cmdline, (unsigned char *)"INIT")) != NULL)
