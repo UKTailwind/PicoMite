@@ -3167,6 +3167,19 @@ static void SaveImageRow(int x, int i, int w, unsigned char *buf, bool mapped)
             buf[k + 1] = c >> 8;
             buf[k + 2] = c >> 16;
         }
+#ifdef HDMI
+    // MODE 5 at a 16-bit resolution (HDMIloop0) shows each pixel's byte through map256 (MAP, and by default the
+    // full-range MAP256DEF) as RGB555, while ReadBuffer gives the byte as RGB332: white was saved as 224, 224, 192.
+    // Each channel to 8 bits as MODE 4's ReadBuffer555 does. The 8-bit resolutions show the RGB332 byte itself.
+    else if (DISPLAY_TYPE == SCREENMODE5 && FullColour)
+        for (int k = 0; k < w * 3; k += 3)
+        {
+            uint16_t c = map256[RGB332(buf[k + 2] << 16 | buf[k + 1] << 8 | buf[k])];
+            buf[k] = (c & 0x1F) << 3;
+            buf[k + 1] = ((c >> 5) & 0x1F) << 3;
+            buf[k + 2] = ((c >> 10) & 0x1F) << 3;
+        }
+#endif
 }
 
 /* a row of palette indices as BMP RLE: a run of one index as its count and the index (RLE4: the index in both
