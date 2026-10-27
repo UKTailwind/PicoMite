@@ -3596,7 +3596,8 @@ LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut] [,ximage] [,yimage]
 
 RP2350 VERSIONS ONLY Loads and displays a png file 'fname' If no extension is
 specified .png will be automatically added to the filename. The file must be
-in RGBA8888 format, which is the normal default, or an indexed (palette)
+in RGBA8888 format, which is the normal default, RGB888 format (as written by
+SAVE PNG), 8-bit greyscale with or without alpha, or an indexed (palette)
 format; interlaced files are not supported.
 
 ~LOC

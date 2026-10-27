@@ -624,7 +624,7 @@ static void unfilter_scanline(upng_t *upng, unsigned char *recon, const unsigned
 
 
 /* a scanline is complete in the window: unfilter it against the one before,
-   expand an indexed one through the palette and hand it over */
+   expand an indexed, RGB or grey one to RGBA and hand it over */
 static void emit_row(upng_t *upng, png_out *out)
 {
 	unsigned long src = out->rowstart;
@@ -654,6 +654,27 @@ static void emit_row(upng_t *upng, png_out *out)
 				idx = 0;
 			}
 			memcpy(out->rgba + i * 4, upng->palette[idx], 4);
+		}
+		pixels = out->rgba;
+	}
+	else if (upng->color_type != UPNG_RGBA)
+	{ /* 8-bit RGB, grey and grey with alpha, expanded to RGBA (as the CMM2) */
+		const unsigned char *s = out->cur;
+		unsigned char *d = out->rgba;
+		for (i = 0; i < upng->width; i++, d += 4)
+		{
+			if (upng->color_type == UPNG_RGB)
+			{
+				d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = 255; s += 3;
+			}
+			else if (upng->color_type == UPNG_LUM)
+			{
+				d[0] = d[1] = d[2] = s[0]; d[3] = 255; s += 1;
+			}
+			else
+			{
+				d[0] = d[1] = d[2] = s[0]; d[3] = s[1]; s += 2;
+			}
 		}
 		pixels = out->rgba;
 	}
@@ -921,9 +942,9 @@ upng_error upng_header(upng_t *upng)
 	upng->color_depth = h[24];
 	upng->color_type = (upng_color)h[25];
 
-	/* determine our color format: indexed rows are expanded through the palette */
+	/* determine our color format: indexed rows are expanded through the palette, RGB and grey rows to RGBA */
 	upng->format = determine_format(upng);
-	if (upng->format == UPNG_INDEXED8)
+	if (upng->format == UPNG_INDEXED8 || upng->format == UPNG_RGB8 || upng->format == UPNG_LUMINANCE8 || upng->format == UPNG_LUMINANCE_ALPHA8)
 	{
 		upng->format = UPNG_RGBA8;
 	}
@@ -1036,7 +1057,7 @@ upng_error upng_decode_rows(upng_t *upng, upng_row_fn row, void *ctx)
 		winsize <<= 1;
 	}
 	out.mask = winsize - 1;
-	upng->buffer = (unsigned char *)GetMemory(winsize + 2 * out.linebytes + (upng->color_type == UPNG_PLT ? upng->width * 4 : 0));
+	upng->buffer = (unsigned char *)GetMemory(winsize + 2 * out.linebytes + (upng->color_type != UPNG_RGBA ? upng->width * 4 : 0));
 	out.win = upng->buffer;
 	out.cur = out.win + winsize;
 	out.prev = out.cur + out.linebytes;
@@ -1094,7 +1115,7 @@ void upng_error_check(upng_t *upng)
 	upng_free(upng);
 	if (err == UPNG_EUNFORMAT)
 	{
-		error("Invalid format, must be RGBA8888 or indexed PNG");
+		error("Invalid format, must be 8-bit RGB, RGBA, grey or indexed PNG");
 	}
 	error(err == UPNG_EUNINTERLACED ? "Interlaced PNG not supported" : "Invalid or damaged PNG file");
 }

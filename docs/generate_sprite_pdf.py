@@ -113,7 +113,7 @@ pdf.table_row('y_offset', 'Y offset within image (default: 0)')
 pdf.table_row('width', 'Width to load (default: the rest of the image)')
 pdf.table_row('height', 'Height to load (default: the rest of the image)')
 pdf.ln(2)
-pdf.body_text("PNG must be in RGBA8888 or indexed (palette) format; interlaced files are not supported. "
+pdf.body_text("PNG must be in RGBA8888, RGB888 (as written by SAVE PNG), 8-bit grey (with or without alpha) or indexed (palette) format; interlaced files are not supported. "
               "The part loaded must fit on the screen, but the image it comes from can be any size: "
               "it is decoded a line at a time, so a large image needs little memory.")
 

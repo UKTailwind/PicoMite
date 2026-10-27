@@ -6640,7 +6640,8 @@ LOAD PNG fname$ [, x] [, y] [,transparent] [,alphacut] [,ximage] [,yimage]
 RP2350 VERSIONS ONLY
 Loads and displays a png file 'fname'
 If no extension is specified .png will be automatically added to the filename.
-The file must be in RGBA8888 format, which is the normal default, or an
+The file must be in RGBA8888 format, which is the normal default, RGB888
+format (as written by SAVE PNG), 8-bit greyscale with or without alpha, or an
 indexed (palette) format; interlaced files are not supported. If specified 'x'
 and 'y' indicate where on the display or framebuffer the image will appear.
 The optional parameter 'transparent' (defaults to 0) specifies one of the
@@ -13352,10 +13353,11 @@ Parameters:
   width  Width to load (default: the rest of the image)
   height  Height to load (default: the rest of the image)
 
-Note: PNG must be in RGBA8888 or indexed (palette) format; interlaced files
-are not supported. The part loaded must fit on the screen, but the image it
-comes from can be any size: it is decoded a line at a time, so a large image
-needs little memory.
+Note: PNG must be in RGBA8888, RGB888 (as written by SAVE PNG), 8-bit grey
+(with or without alpha) or indexed (palette) format; interlaced files are not
+supported. The part loaded must fit on the screen, but the image it comes from
+can be any size: it is decoded a line at a time, so a large image needs little
+memory.
 
 ---
 

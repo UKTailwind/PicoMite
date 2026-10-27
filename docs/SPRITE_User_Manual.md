@@ -95,7 +95,7 @@ SPRITE LOADPNG #n, filename$ [, transparent] [, cutoff] [, x_offset] [, y_offset
 | `width` | Width to load (default: the rest of the image) |
 | `height` | Height to load (default: the rest of the image) |
 
-**Note:** PNG must be in RGBA8888 or indexed (palette) format; interlaced files are not supported. The part loaded must fit on the screen, but the image it comes from can be any size: it is decoded a line at a time, so a large image needs little memory.
+**Note:** PNG must be in RGBA8888, RGB888 (as written by SAVE PNG), 8-bit grey (with or without alpha) or indexed (palette) format; interlaced files are not supported. The part loaded must fit on the screen, but the image it comes from can be any size: it is decoded a line at a time, so a large image needs little memory.
 
 ---
 
