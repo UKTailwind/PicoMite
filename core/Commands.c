@@ -4088,6 +4088,8 @@ void do_end(bool ecmd)
 	}
 	IntReady.any = 0;
 	InterruptReturn = NULL;
+	KeyInterrupt = NULL; // ON KEY k ends with the program, as SETTICK does: left armed, the prompt swallowed key k
+	Keycomplete = false;
 	memset(inpbuf, 0, STRINGSIZE);
 	CloseAudio(1);
 	CloseAllFiles();
