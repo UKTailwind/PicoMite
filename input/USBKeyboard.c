@@ -1135,6 +1135,26 @@ static void touch_publish(touch_report_t *out)
 	   Stamp the timestamp on EVERY report (including count=0 releases) so
 	   the watchdog only fires when reports actually stop arriving. */
 	usb_touch_last_us = time_us_64();
+	/* Keep contacts 0 and 1 on the same fingers while they stay down (issue
+	   #144). The contacts arrive in the panel's slot order, and some panels
+	   (WingCoolTouch/WCH 27C0:0859) put a newly landed finger in the first
+	   slot, so contact 0 jumped to it. A finger that was contact 0 or 1 in the
+	   last report is moved back to its place by its contact ID; new fingers
+	   fill the places left. With no Contact ID field every id is 0 and the
+	   slot order is kept. */
+	{
+		static uint8_t prev_id[2] = {0xFF, 0xFF};
+		for (int p = 0; p < 2; p++)
+			for (int k = p + 1; k < out->count; k++)
+				if (out->contacts[k].id == prev_id[p] && out->contacts[p].id != prev_id[p])
+				{
+					touch_contact_t t = out->contacts[p];
+					out->contacts[p] = out->contacts[k];
+					out->contacts[k] = t;
+				}
+		prev_id[0] = out->count > 0 ? out->contacts[0].id : 0xFF;
+		prev_id[1] = out->count > 1 ? out->contacts[1].id : 0xFF;
+	}
 	if (out->count > 0 && out->contacts[0].tip)
 	{
 		usb_touch_x = out->contacts[0].x;
