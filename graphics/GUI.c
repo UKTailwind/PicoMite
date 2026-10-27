@@ -4032,7 +4032,7 @@ void OSK_SetProgramActive(bool on)
         OSK_ScrollForStrip();
         OSK_RestoreReserved();
         if (!OptionVResreserved)
-            error("Set OPTION SCREEN OFFSET first");
+            error("Set OPTION SCREEN KEYBOARD first");
         if (osk_state == OSK_STATE_PROGRAM || osk_state == OSK_STATE_SYSTEM)
         {
             /* Already visible — nothing further to do. */

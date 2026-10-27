@@ -8343,7 +8343,7 @@ void MIPS16 fun_device(void)
 /* KEYBOARD ON  — draws the on-screen keyboard in the bottom reserved strip
                   and routes taps to the console RX path.
    KEYBOARD OFF — erases the OSK and stops routing.
-   Requires OptionVResreserved > 0 (set via OPTION SCREEN OFFSET).
+   Requires OptionVResreserved > 0 (set via OPTION SCREEN KEYBOARD).
    Outside a running program the OSK is managed automatically by the prompt,
    so this command is intended for use inside RUNning code. */
 void MIPS16 cmd_keyboard(void)
