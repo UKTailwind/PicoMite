@@ -7816,6 +7816,7 @@ void MIPS16 ClearStack(void)
     g_LocalIndex = 0;
     g_TempMemoryIsChanged = true; // signal that temporary memory should be checked
     InterruptReturn = NULL;
+    PauseInterrupted = false; // a PAUSE whose interrupt ended in an error is never resumed
 }
 
 // clear the runtime (eg, variables, external I/O, etc) includes ClearStack() and ClearVars()

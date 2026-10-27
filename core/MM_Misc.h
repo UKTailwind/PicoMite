@@ -67,6 +67,7 @@ struct s_inttbl
  * ============================================================================ */
 extern struct s_inttbl inttbl[NBRINTERRUPTS];
 extern unsigned char *InterruptReturn;
+extern int PauseInterrupted;
 
 /* What check_interrupt() must do after each statement. It tests .any with a
    single load: zero means no interrupt can be due, so the scan is skipped.

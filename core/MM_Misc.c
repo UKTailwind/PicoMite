@@ -145,6 +145,7 @@ const char *KBrdList[] = {"", "US", "FR", "GR", "IT", "BE", "UK", "ES"};
 extern const void *const CallTable[];
 struct s_inttbl inttbl[NBRINTERRUPTS];
 unsigned char *InterruptReturn;
+int PauseInterrupted = false; // a PAUSE was cut short by an interrupt and resumes after it; cleared by ClearStack()
 extern const char *FErrorMsg[];
 uint8_t *buff320 = NULL;
 #ifdef PICOMITEWEB
@@ -701,7 +702,6 @@ void fun_epoch(void)
 
 void cmd_pause(void)
 {
-    static int interrupted = false;
     unsigned char *pausetoken = CmdTokenPtr; // this statement, to re-run if an interrupt cuts the pause short
     MMFLOAT f;
     static uint64_t PauseTimer, IntPauseTimer;
@@ -725,9 +725,9 @@ void cmd_pause(void)
         // we are running pause in a normal program
         // first check if we have reentered (from an interrupt) and only zero the timer if we have NOT been interrupted.
         // This means an interrupted pause will resume from where it was when interrupted
-        if (!interrupted)
+        if (!PauseInterrupted)
             PauseTimer = time_us_64();
-        interrupted = false;
+        PauseInterrupted = false;
 
         while (time_us_64() < FloatToInt32(f) + PauseTimer)
         {
@@ -737,14 +737,15 @@ void cmd_pause(void)
                 // if there is an interrupt fake the return point to the start of this stmt
                 // and return immediately to the program processor so that it can send us off
                 // to the interrupt routine.  When the interrupt routine finishes we should reexecute
-                // this stmt and because the variable interrupted is static we can see that we need to
-                // resume pausing rather than start a new pause time.
+                // this stmt and because PauseInterrupted is set we can see that we need to
+                // resume pausing rather than start a new pause time.  If the interrupt ends in an
+                // error the pause is never resumed, so ClearStack() clears the flag for the next run.
                 InterruptReturn = pausetoken; // point to the command token
-                interrupted = true;        // show that this stmt was interrupted
-                return;                    // and let the interrupt run
+                PauseInterrupted = true;      // show that this stmt was interrupted
+                return;                       // and let the interrupt run
             }
         }
-        interrupted = false;
+        PauseInterrupted = false;
     }
     else
     {
