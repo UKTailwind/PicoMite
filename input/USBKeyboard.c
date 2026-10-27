@@ -2732,6 +2732,12 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			if (is_digitizer)
 			{
 				int touch_slot = (HID[3].active && slot != 3) ? slot : 3;
+				if (touch_slot != slot)
+				{ /* the IDs went to the slot FindFreeSlot picked: they move with the device (MM.INFO(USB VID/PID n)) */
+					HID[touch_slot].vid = vid;
+					HID[touch_slot].pid = pid;
+					HID[slot].vid = HID[slot].pid = 0;
+				}
 				HID[touch_slot].Device_address = dev_addr;
 				HID[touch_slot].Device_instance = instance;
 				HID[touch_slot].Device_type = USB_TOUCH;
