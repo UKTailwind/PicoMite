@@ -4905,6 +4905,8 @@ void ResetGUI(void)
     LastX = LastY = TOUCH_ERROR;
     gui_int_down = gui_int_up = false;
     GuiIntDownVector = GuiIntUpVector = NULL;
+    // a pop-up waits for IRETURN of the pen-down interrupt: if that interrupt ended in an error it never came (#140)
+    DelayedDrawKeyboard = DelayedDrawFmtBox = DelayedDrawListbox = false;
     GUIKeyDown = 0;
     KeyAltShift = 0;
     last_x2 = 100;
