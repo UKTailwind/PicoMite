@@ -205,6 +205,13 @@ volatile bool CursorSuspend = false;
    GUI CLICK isn't used. */
 volatile bool gui_click_synthetic_down = false;
 
+#ifdef GUICONTROLS
+/* Where a bare GUI CLICK is (0 = not started, 1 = down wait, 2 = up wait),
+   kept while the interrupt it lets run is serviced. Reset at RUN: if that
+   interrupt ends in an error the click is never resumed (issue #140). */
+static int gui_click_phase = 0;
+#endif
+
 /* GUI CLICK PIN: a physical input pin acts as a click source, the
    same way the touch IRQ or the mouse left button does. Lets the
    user wire a joystick fire-button (or similar) to drive the GUI
@@ -283,6 +290,9 @@ void CursorOnHeapWipe(void)
     /* Reset any synthetic-click state so a stuck GUI CLICK DOWN from
        the previous program doesn't bleed into the next one. */
     gui_click_synthetic_down = false;
+#ifdef GUICONTROLS
+    gui_click_phase = 0; // nor a GUI CLICK whose interrupt ended in an error
+#endif
 }
 
 /* Return the geometry of the currently-selected sprite. Returns
@@ -1546,8 +1556,8 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
      * Borrow cmd_pause's trick: when check_interrupt() queues an
      * interrupt during the wait, point InterruptReturn at our OWN
      * command token and return. The executor then runs the queued
-     * interrupt; its IRET hands control back to us, and the static
-     * `phase` distinguishes a fresh entry (start the down phase)
+     * interrupt; its IRET hands control back to us, and the file-scope
+     * `gui_click_phase` distinguishes a fresh entry (start the down phase)
      * from a resume in the down wait (after the TouchDown interrupt
      * ran) from a resume in the up wait (after TouchUp ran).
      *
@@ -1556,11 +1566,10 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
      *   phase 2: up   wait (synthetic_down = false)
      * Reset to 0 once the up wait expires.
      */
-    static int phase = 0;
     static uint64_t until = 0;
     extern int check_interrupt(void);
 
-    if (phase == 0)
+    if (gui_click_phase == 0)
     {
         if (*p != 0 && *p != '\'')
         {
@@ -1577,10 +1586,10 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
         nunstruct[2].ay = cursor_y;
         gui_click_synthetic_down = true;
         until = time_us_64() + 50000;
-        phase = 1;
+        gui_click_phase = 1;
     }
 
-    if (phase == 1)
+    if (gui_click_phase == 1)
     {
         while (time_us_64() < until)
         {
@@ -1599,10 +1608,10 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
            it never fired). Move to the up phase. */
         gui_click_synthetic_down = false;
         until = time_us_64() + 80000;
-        phase = 2;
+        gui_click_phase = 2;
     }
 
-    if (phase == 2)
+    if (gui_click_phase == 2)
     {
         while (time_us_64() < until)
         {
@@ -1614,7 +1623,7 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
             }
         }
         /* Up wait expired. Click finished — reset for the next one. */
-        phase = 0;
+        gui_click_phase = 0;
     }
 
     return true;
