@@ -1946,6 +1946,8 @@ void MIPS16 cmd_Nunchuck(void)
     nunbuff[5] = 0;
     if (argc == 1)
     {
+      if (nunInterruptc[5] == NULL)
+        nunfoundc[5] = 0; // a press only counts while armed: not one from before or an earlier run
       nunInterruptc[5] = (char *)GetIntAddress(argv[0]); // get the interrupt location
       IntSignal();
     }
@@ -2015,6 +2017,8 @@ void MIPS16 cmd_Classic(void)
     uSec(5000);
     if (argc >= 1)
     {
+      if (nunInterruptc[0] == NULL)
+        nunfoundc[0] = 0; // a press only counts while armed: not one from before or an earlier run
       nunInterruptc[0] = (char *)GetIntAddress(argv[0]); // get the interrupt location
       IntSignal();
       nunstruct[0].x1 = 0b111111111111111;

@@ -487,6 +487,8 @@ void cmd_mouse(void)
       SyntaxError();
     ;
     n = getint(argv[0], 2, 2);
+    if (nunInterruptc[n] == NULL)
+      nunfoundc[n] = 0; // set on every button change, so one only counts while armed
     nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
     IntSignal();
     return;

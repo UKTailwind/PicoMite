@@ -3214,6 +3214,8 @@ void cmd_gamepad(void)
 			SyntaxError();
 		;
 		n = getint(argv[0], 1, 4);
+		if (nunInterruptc[n] == NULL)
+			nunfoundc[n] = 0; // a change only counts while armed: not one from before or an earlier run
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
 		IntSignal();
 		nunstruct[n].x1 = 0b1111111111111111;
@@ -3307,6 +3309,8 @@ void cmd_mouse(void)
 			SyntaxError();
 		;
 		n = getint(argv[0], 1, 4);
+		if (nunInterruptc[n] == NULL)
+			nunfoundc[n] = 0; // set on every button change, so one only counts while armed
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
 		IntSignal();
 		return;

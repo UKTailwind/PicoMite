@@ -8563,6 +8563,8 @@ void cmd_on(void)
 				}
 				else
 				{
+					if (KeyInterrupt == NULL)
+						Keycomplete = false; // a key only counts while armed: one left from an earlier ON KEY or run would fire at once
 					KeyInterrupt = (char *)GetIntAddress(argv[2]); // get a pointer to the interrupt routine
 					IntSignal();
 				}
