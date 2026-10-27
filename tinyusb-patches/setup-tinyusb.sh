@@ -51,6 +51,7 @@ apply() {  # $1 = patch basename, $2... = its target files relative to the tree 
 apply hcd_rp2040 src/portable/raspberrypi/rp2040/hcd_rp2040.c
 apply rp2040_usb src/portable/raspberrypi/rp2040/rp2040_usb.c
 apply cdc_host   src/class/cdc/cdc_host.c src/class/cdc/cdc_host.h
+apply usbh       src/host/usbh.c
 
 echo
 echo "Done. ../tinyusb-master is ready; PicoMite builds against it via PICO_TINYUSB_PATH."

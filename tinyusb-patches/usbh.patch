@@ -1,0 +1,68 @@
+--- a/src/host/usbh.c
++++ b/src/host/usbh.c
+@@ -191,6 +191,7 @@
+                  "CFG_TUH_CONTROL_TIMEOUT_MS must be in 1..INT32_MAX");
+ 
+ // enum_attempt is uint8_t: a larger limit would wrap it and retry forever
++TU_VERIFY_STATIC(CFG_TUH_ENUMERATION_BUFSIZE >= 255, "a string descriptor is read whole in enumeration (PicoMite)");
+ TU_VERIFY_STATIC(CFG_TUH_ENUM_ATTEMPT_MAX >= 1 && CFG_TUH_ENUM_ATTEMPT_MAX <= 256,
+                  "CFG_TUH_ENUM_ATTEMPT_MAX must be in 1..256");
+ 
+@@ -2011,8 +2012,11 @@
+       break;
+     }
+ 
+-    // For string descriptor (langid, manufacturer, product, serila): always get the first 2 bytes
+-    // to determine the length first. otherwise, some device may have buffer overflow.
++    // PicoMite: each string descriptor (langid, manufacturer, product, serial) is read once, 255 bytes, as Windows and
++    // Linux read them. Its first 2 bytes and then the rest is how macOS reads them, and some touch monitors' controllers
++    // (WingCoolTouch/WCH 27C0:0859) take a host that does so for one that is not Windows: they send their touches only
++    // as a mouse's, whatever Input Mode is set. The strings are still read (some gamepads, 8BitDo's, need that); the
++    // states that read the rest of a string are only passed through, when it has none.
+     case ENUM_GET_STRING_LANGUAGE_ID_LEN: {
+       // save the received device descriptor
+       tusb_desc_device_t const *desc_device = (tusb_desc_device_t const *) _usbh_epbuf.ctrl;
+@@ -2020,8 +2024,8 @@
+       memcpy(&dev->desc_device, (const uint8_t*) desc_device + offsetof(tusb_desc_device_t, bcdUSB), sizeof(desc_device_noheader_t));
+ 
+       tuh_enum_descriptor_device_cb(daddr, desc_device); // callback
+-      is_enum_failed = !tuh_descriptor_get_string_langid(daddr, _usbh_epbuf.ctrl, 2,
+-                                                         process_enumeration, ENUM_GET_STRING_LANGUAGE_ID);
++      is_enum_failed = !tuh_descriptor_get_string_langid(daddr, _usbh_epbuf.ctrl, 255,
++                                                         process_enumeration, ENUM_GET_STRING_MANUFACTURER_LEN);
+       break;
+     }
+ 
+@@ -2038,8 +2042,8 @@
+         langid = tu_le16toh(desc_langid->utf16le[0]); // previous request is langid
+       }
+       if (dev->desc_device.iManufacturer != 0) {
+-        is_enum_failed = !tuh_descriptor_get_string(daddr, dev->desc_device.iManufacturer, langid, _usbh_epbuf.ctrl, 2,
+-                                                    process_enumeration, ENUM_GET_STRING_MANUFACTURER);
++        is_enum_failed = !tuh_descriptor_get_string(daddr, dev->desc_device.iManufacturer, langid, _usbh_epbuf.ctrl, 255,
++                                                    process_enumeration, ENUM_GET_STRING_PRODUCT_LEN);
+         break;
+       }
+       TU_ATTR_FALLTHROUGH;
+@@ -2061,8 +2065,8 @@
+         if (state == ENUM_GET_STRING_PRODUCT_LEN) {
+           langid = tu_le16toh(xfer->setup->wIndex); // get langid from previous setup packet if not fall through
+         }
+-        is_enum_failed = !tuh_descriptor_get_string(daddr, dev->desc_device.iProduct, langid, _usbh_epbuf.ctrl, 2,
+-                                                    process_enumeration, ENUM_GET_STRING_PRODUCT);
++        is_enum_failed = !tuh_descriptor_get_string(daddr, dev->desc_device.iProduct, langid, _usbh_epbuf.ctrl, 255,
++                                                    process_enumeration, ENUM_GET_STRING_SERIAL_LEN);
+         break;
+       }
+       TU_ATTR_FALLTHROUGH;
+@@ -2084,8 +2088,8 @@
+         if (state == ENUM_GET_STRING_SERIAL_LEN) {
+           langid = tu_le16toh(xfer->setup->wIndex); // get langid from previous setup packet if not fall through
+         }
+-        is_enum_failed = !tuh_descriptor_get_string(daddr, dev->desc_device.iSerialNumber, langid, _usbh_epbuf.ctrl, 2,
+-                                                    process_enumeration, ENUM_GET_STRING_SERIAL);
++        is_enum_failed = !tuh_descriptor_get_string(daddr, dev->desc_device.iSerialNumber, langid, _usbh_epbuf.ctrl, 255,
++                                                    process_enumeration, ENUM_GET_9BYTE_CONFIG_DESC);
+         break;
+       }
+       TU_ATTR_FALLTHROUGH;
