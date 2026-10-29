@@ -8112,6 +8112,7 @@ void ResetOptions(bool startup)
     Option.AUDIO_SLICE = 5; /* GP10/GP11: PWM slice 5 */
     Option.PSRAM_CS_PIN = PINMAP[rp2350a ? 8 : 47];
     Option.ColourCode = 1;
+    Option.NoHeartbeat = 1;
 #endif
 
     if (!SuppressOptionFlash)
