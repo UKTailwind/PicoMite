@@ -20,7 +20,7 @@
 
 #define USING_GLOBALS
 #include "tcc.h"
-#include "mos_time.h"
+#include "tcc_time.h"
 
 /********************************************************/
 /* global variables */
@@ -3445,7 +3445,7 @@ static int macro_subst_tok(
         time_t ti;
         struct tm *tm;
 
-        int timestamp_status = mos_tcc_timestamp(&ti);
+        int timestamp_status = tcc_timestamp(&ti);
         if (timestamp_status == -2)
             tcc_error("invalid SOURCE_DATE_EPOCH");
         tm = timestamp_status == 0 ? localtime(&ti) : NULL;

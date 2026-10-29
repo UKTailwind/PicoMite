@@ -19,7 +19,7 @@
  */
 
 #include "tcc.h"
-#include "mos_time.h"
+#include "tcc_time.h"
 #if ONE_SOURCE
 # include "libtcc.c"
 #endif
@@ -246,7 +246,7 @@ static unsigned getclock_ms(void)
 #ifdef _WIN32
     return GetTickCount();
 #else
-    return mos_clock_ms();
+    return tcc_clock_ms();
 #endif
 }
 

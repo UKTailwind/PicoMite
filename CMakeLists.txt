@@ -474,6 +474,18 @@ pico_sdk_init()
 
 add_executable(PicoMite ${COMMON_SOURCES})
 
+# Step 1: compile the MOS2-derived TinyCC as a library for EVERY variant.
+# It is intentionally not linked into PicoMite yet: no BASIC commands, runtime
+# allocation, file I/O or execution path is introduced by this build check.
+# The current Thumb-2/VFP code generator must be adapted before running output
+# on Cortex-M0+ (RP2040), and runtime relocation needs separate validation.
+add_library(PicoMiteTinyCC STATIC
+    core/tcc/libtcc.c
+    core/tcc/tcc_time.c
+)
+target_compile_definitions(PicoMiteTinyCC PRIVATE NO_SEMAPHORE_H=1)
+target_compile_options(PicoMiteTinyCC PRIVATE -O2)
+
 # Diagnostic: timing-neutral USB host event ring in the PC3-patched TinyUSB
 # files (four stores per event, no prints - a UART print in the IRQ path is
 # known to CHANGE enumeration outcomes on this hardware). Read back over the
