@@ -474,6 +474,10 @@ pico_sdk_init()
 
 add_executable(PicoMite ${COMMON_SOURCES})
 
+# The firmware must end before FLASH_TARGET_OFFSET (configuration.h): the link
+# fails instead of the code silently overlapping the options and A:.
+target_link_options(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR}/cmake/flash_layout_check.ld)
+
 # TinyCC is built and linked only for RP2350.  tcc.c includes libtcc.c
 # (ONE_SOURCE), so compiling both would define the compiler twice.
 # The compiler is a library of its own, compiled without the PicoMite

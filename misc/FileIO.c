@@ -528,6 +528,14 @@ void __not_in_flash_func(enable_interrupts_pico)(void)
     irqs = 0;
     irqs_off_pico = false;
 }
+/* FLASH_TARGET_OFFSET as a link-time symbol: cmake/flash_layout_check.ld
+   stops the link when the firmware grows into the flash storage that starts
+   there (options, saved variables, program, A:) instead of the firmware
+   overwriting it - or being overwritten - at run time. */
+#define FLASHCHK_STR2(x) #x
+#define FLASHCHK_STR(x) FLASHCHK_STR2(x)
+__asm__(".global __pm_flash_target_offset\n\t.set __pm_flash_target_offset, " FLASHCHK_STR(FLASH_TARGET_OFFSET));
+
 void ErrorThrow(int e, int type)
 {
     FatFSFileSystem = FatFSFileSystemSave;

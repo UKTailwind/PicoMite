@@ -104,17 +104,14 @@ static volatile bool pm_in_program;   /* the compiled program is running */
 static volatile bool pm_prog_started; /* it was compiled and started */
 static volatile int pm_prog_end;      /* PM_END_* */
 static volatile int pm_exit_code;
-static char pm_prog_errmsg[MAXERRMSG];
-static jmp_buf pm_prog_jmp; /* tcc_pm_call_main: exit() and errors of the program */
-static jmp_buf pm_run_jmp;  /* tcc_picomite_run: exit() of the compiler */
 
-/* End the compiled program now (exit(), CTRL-C, an MMBasic error). */
-static void __attribute__((noreturn)) pm_end_program(int how, int code)
-{
-    pm_prog_end = how;
-    pm_exit_code = code;
-    longjmp(pm_prog_jmp, 1);
-}
+/* Everything else a run needs lives in the arena (pm_state, set up by
+   tcc_picomite_run): until RUN "file.c" TinyCC takes no RAM but a few
+   pointers and its own globals. */
+typedef struct pm_state pm_state;
+static pm_state *pm;
+
+static void __attribute__((noreturn)) pm_end_program(int how, int code);
 
 /* CTRL-C ends the program; the compiler itself is not interrupted (it
    finishes quickly, and the program is not started if CTRL-C is pending). */
@@ -122,14 +119,6 @@ static inline void pm_poll(void)
 {
     if (MMAbort && pm_in_program)
         pm_end_program(PM_END_ABORT, 1);
-}
-
-/* An MMBasic error in a PicoMite call made by the compiled program. */
-static void __attribute__((noreturn)) pm_program_error(void)
-{
-    memcpy(pm_prog_errmsg, MMErrMsg, MAXERRMSG);
-    pm_prog_errmsg[MAXERRMSG - 1] = 0;
-    pm_end_program(PM_END_ERROR, 1);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -322,25 +311,56 @@ typedef struct pm_file
 } pm_file;
 #define TCC_PM_WBUF 128
 
-static pm_file pm_files[TCC_PM_MAX_FILES];
-static pm_file pm_con_in = {.kind = PM_FILE_CONIN};
-static pm_file pm_con_out = {.kind = PM_FILE_CONOUT};
-static pm_file pm_con_err = {.kind = PM_FILE_CONOUT};
+typedef struct
+{
+    int argc;
+    char **argv;
+    int ret;
+} pm_run_args;
 
-/* stdin, stdout and stderr of compiled programs (include/stdio.h) */
-FILE *__tcc_pm_stdin = (FILE *)&pm_con_in;
-FILE *__tcc_pm_stdout = (FILE *)&pm_con_out;
-FILE *__tcc_pm_stderr = (FILE *)&pm_con_err;
+struct pm_state
+{
+    pm_file files[TCC_PM_MAX_FILES];
+    pm_file con_in, con_out, con_err;
+    jmp_buf prog_jmp; /* tcc_pm_call_main: exit() and errors of the program */
+    jmp_buf run_jmp;  /* tcc_picomite_run: exit() of the compiler */
+    char prog_errmsg[MAXERRMSG];
+    pm_run_args args;
+    void *stack;
+    uint32_t msplim;
+};
+#define pm_files (pm->files)
+
+/* End the compiled program now (exit(), CTRL-C, an MMBasic error). */
+static void __attribute__((noreturn)) pm_end_program(int how, int code)
+{
+    pm_prog_end = how;
+    pm_exit_code = code;
+    longjmp(pm->prog_jmp, 1);
+}
+
+/* An MMBasic error in a PicoMite call made by the compiled program. */
+static void __attribute__((noreturn)) pm_program_error(void)
+{
+    memcpy(pm->prog_errmsg, MMErrMsg, MAXERRMSG);
+    pm->prog_errmsg[MAXERRMSG - 1] = 0;
+    pm_end_program(PM_END_ERROR, 1);
+}
+
+
+/* stdin, stdout and stderr of compiled programs (include/stdio.h): set to
+   pm->con_* for each run */
+FILE *__tcc_pm_stdin, *__tcc_pm_stdout, *__tcc_pm_stderr;
 
 static pm_file *pm_file_of(FILE *f)
 {
     pm_file *p = (pm_file *)f;
     if (p >= pm_files && p < pm_files + TCC_PM_MAX_FILES && p->kind != PM_FILE_FREE)
         return p;
-    if (p == &pm_con_in || f == stdin)
-        return &pm_con_in;
-    if (p == &pm_con_out || p == &pm_con_err || f == stdout || f == stderr)
-        return &pm_con_out;
+    if (p == &pm->con_in || f == stdin)
+        return &pm->con_in;
+    if (p == &pm->con_out || p == &pm->con_err || f == stdout || f == stderr)
+        return &pm->con_out;
     return NULL;
 }
 
@@ -970,7 +990,7 @@ void tcc_pm_exit(int code)
         pm_end_program(PM_END_NONE, code);
     pm_exit_code = code;
     if (pm_active)
-        longjmp(pm_run_jmp, 1);
+        longjmp(pm->run_jmp, 1);
     error("TinyCC exit");
     __builtin_unreachable();
 }
@@ -1304,7 +1324,7 @@ int tcc_pm_call_main(int (*prog_main)(int, char **), int argc_, char **argv_)
     pm_prog_started = true;
     pm_prog_end = PM_END_NONE;
     pm_line_len = pm_line_pos = 0;
-    if (setjmp(pm_prog_jmp) == 0)
+    if (setjmp(pm->prog_jmp) == 0)
     {
         pm_in_program = true;
         ret = prog_main(argc_, argv_);
@@ -1333,13 +1353,6 @@ static int __attribute__((naked, noinline)) pm_call_on_stack(int (*fn)(void *), 
         "pop  {r4, pc}\n\t");
 }
 
-typedef struct
-{
-    int argc;
-    char **argv;
-    int ret;
-} pm_run_args;
-
 static int pm_run_entry(void *p)
 {
     pm_run_args *a = (pm_run_args *)p;
@@ -1349,7 +1362,7 @@ static int pm_run_entry(void *p)
 
 static void pm_state_reset(void)
 {
-    memset(pm_files, 0, sizeof(pm_files));
+    pm = NULL;
     pm_chunks = NULL;
     pm_freep = NULL;
     pm_in_program = pm_prog_started = false;
@@ -1357,16 +1370,15 @@ static void pm_state_reset(void)
     pm_exit_code = 0;
     pm_line = NULL;
     pm_line_len = pm_line_pos = 0;
+    __tcc_pm_stdin = __tcc_pm_stdout = __tcc_pm_stderr = NULL;
 }
 
 void tcc_picomite_run(const char *filename, const char *args)
 {
-    static pm_run_args a; /* (static: kept over the longjmps) */
-    static void *stack;
-    static uint32_t msplim;
-    static int how;
-    static char errmsg[MAXERRMSG];
+    volatile int how = PM_END_NONE;
+    char errmsg[MAXERRMSG];
     char *argbuf, *p;
+    pm_run_args *a;
     pm_trap t;
 
     if (pm_active)
@@ -1379,53 +1391,53 @@ void tcc_picomite_run(const char *filename, const char *args)
     }
     pm_state_reset();
 
-    /* tcc -xc -D__PICOMITE__ -run file [args...] */
+    pm = pm_calloc(1, sizeof(pm_state));
     argbuf = pm_strdup(args ? args : "");
-    a.argv = pm_calloc(TCC_PM_MAX_ARGS + 6, sizeof(char *));
-    if (argbuf == NULL || a.argv == NULL)
+    if (pm == NULL || argbuf == NULL ||
+        (pm->args.argv = pm_calloc(TCC_PM_MAX_ARGS + 6, sizeof(char *))) == NULL ||
+        (pm->stack = GetMemoryNull(TCC_PM_STACK_SIZE)) == NULL)
     {
         pm_heap_release();
         error("Not enough memory");
     }
-    a.argc = 0;
-    a.argv[a.argc++] = "tcc";
-    a.argv[a.argc++] = "-xc";
-    a.argv[a.argc++] = "-D__PICOMITE__";
-    a.argv[a.argc++] = "-run";
-    a.argv[a.argc++] = pm_strdup(filename);
-    for (p = argbuf; *p && a.argc < TCC_PM_MAX_ARGS + 5;)
+    pm->con_in.kind = PM_FILE_CONIN;
+    pm->con_out.kind = pm->con_err.kind = PM_FILE_CONOUT;
+    __tcc_pm_stdin = (FILE *)&pm->con_in;
+    __tcc_pm_stdout = (FILE *)&pm->con_out;
+    __tcc_pm_stderr = (FILE *)&pm->con_err;
+
+    /* tcc -xc -D__PICOMITE__ -run file [args...] */
+    a = &pm->args;
+    a->argv[a->argc++] = "tcc";
+    a->argv[a->argc++] = "-xc";
+    a->argv[a->argc++] = "-D__PICOMITE__";
+    a->argv[a->argc++] = "-run";
+    a->argv[a->argc++] = pm_strdup(filename);
+    for (p = argbuf; *p && a->argc < TCC_PM_MAX_ARGS + 5;)
     {
         while (*p == ' ')
             *p++ = 0;
         if (*p == 0)
             break;
-        a.argv[a.argc++] = p;
+        a->argv[a->argc++] = p;
         while (*p && *p != ' ')
             p++;
     }
-    a.argv[a.argc] = NULL;
-    a.ret = 0;
-    if (a.argv[4] == NULL)
+    a->argv[a->argc] = NULL;
+    if (a->argv[4] == NULL)
     {
+        FreeMemory(pm->stack);
         pm_heap_release();
         error("Not enough memory");
     }
 
-    stack = GetMemoryNull(TCC_PM_STACK_SIZE);
-    if (stack == NULL)
-    {
-        pm_heap_release();
-        error("Not enough memory");
-    }
-
-    how = PM_END_NONE;
-    __asm volatile("mrs %0, msplim" : "=r"(msplim));
+    __asm volatile("mrs %0, msplim" : "=r"(pm->msplim));
     __asm volatile("msr msplim, %0" ::"r"(0));
     pm_active = true;
-    if (setjmp(pm_run_jmp) == 0)
+    if (setjmp(pm->run_jmp) == 0)
     {
         if (PM_TRY(t))
-            pm_call_on_stack(pm_run_entry, &a, (char *)stack + TCC_PM_STACK_SIZE);
+            pm_call_on_stack(pm_run_entry, &pm->args, (char *)pm->stack + TCC_PM_STACK_SIZE);
         else
         { /* an MMBasic error that no adapter call trapped */
             memcpy(errmsg, MMErrMsg, MAXERRMSG);
@@ -1435,23 +1447,26 @@ void tcc_picomite_run(const char *filename, const char *args)
     }
     else
     { /* exit() of the compiler itself: TinyCC's state is abandoned */
-        a.ret = pm_exit_code;
+        pm->args.ret = pm_exit_code;
         tcc_pm_forget_globals();
     }
     pm_trap_restore(&t);
-    __asm volatile("msr msplim, %0" ::"r"(msplim));
+    __asm volatile("msr msplim, %0" ::"r"(pm->msplim));
     pm_active = false;
     pm_in_program = false;
-
-    pm_close_all();
-    pm_heap_release();
-    FreeMemory(stack);
-    stack = NULL;
 
     if (how == PM_END_NONE)
         how = pm_prog_end;
     if (how == PM_END_ERROR && pm_prog_end == PM_END_ERROR)
-        memcpy(errmsg, pm_prog_errmsg, MAXERRMSG);
+        memcpy(errmsg, pm->prog_errmsg, MAXERRMSG);
+    if (how == PM_END_NONE && !pm_prog_started && pm->args.ret != 0)
+        how = -1; /* the compile failed */
+
+    pm_close_all();
+    FreeMemory(pm->stack);
+    pm_heap_release(); /* (pm itself is in the arena) */
+    pm_state_reset();
+
     switch (how)
     {
     case PM_END_ABORT:
@@ -1462,9 +1477,10 @@ void tcc_picomite_run(const char *filename, const char *args)
         errmsg[MAXERRMSG - 1] = 0;
         error("$", errmsg);
         break;
+    case -1:
+        error("C compilation failed");
+        break;
     default:
-        if (!pm_prog_started && a.ret != 0)
-            error("C compilation failed");
         break;
     }
 }
