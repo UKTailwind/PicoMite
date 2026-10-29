@@ -41,12 +41,12 @@ static unsigned table_ident_capacity;
 
 /* ------------------------------------------------------------------------- */
 
-static TokenSym *hash_ident[TOK_HASH_SIZE];
-static char token_buf[STRING_MAX_SIZE + 1];
+static TokenSym **hash_ident;
+static char *token_buf;
 static CString cstr_buf;
 static CString macro_equal_buf;
 static TokenString tokstr_buf;
-static unsigned char isidnum_table[256 - CH_EOF];
+static unsigned char *isidnum_table;
 static int pp_debug_tok, pp_debug_symv;
 static int pp_once;
 static int pp_expr;
@@ -3786,6 +3786,10 @@ ST_FUNC void tccpp_new(TCCState *s)
     int i, c;
     const char *p, *r;
 
+    hash_ident = tcc_mallocz(TOK_HASH_SIZE * sizeof(*hash_ident));
+    token_buf = tcc_malloc(STRING_MAX_SIZE + 1);
+    isidnum_table = tcc_malloc(256 - CH_EOF);
+
     /* init isid table */
     for(i = CH_EOF; i<128; i++)
         set_idnum(i,
@@ -3801,7 +3805,6 @@ ST_FUNC void tccpp_new(TCCState *s)
     tal_new(&toksym_alloc, TOKSYM_TAL_LIMIT, TOKSYM_TAL_SIZE);
     tal_new(&tokstr_alloc, TOKSTR_TAL_LIMIT, TOKSTR_TAL_SIZE);
 
-    memset(hash_ident, 0, TOK_HASH_SIZE * sizeof(TokenSym *));
     memset(s->cached_includes_hash, 0, sizeof s->cached_includes_hash);
 
     cstr_new(&cstr_buf);
@@ -3858,6 +3861,12 @@ ST_FUNC void tccpp_delete(TCCState *s)
     cstr_free(&cstr_buf);
     cstr_free(&macro_equal_buf);
     tok_str_free_str(tokstr_buf.str);
+    tcc_free(hash_ident);
+    tcc_free(token_buf);
+    tcc_free(isidnum_table);
+    hash_ident = NULL;
+    token_buf = NULL;
+    isidnum_table = NULL;
 
     /* free allocators */
     tal_delete(toksym_alloc);

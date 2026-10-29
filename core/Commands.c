@@ -50,6 +50,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifndef PICOMITEWEB
 #include "Turtle.h"
 #endif
+#ifdef rp2350
+/* Real TinyCC CLI entry point (core/tcc/tcc.c), not an emulated compiler. */
+extern int pico_tcc_main(int argc, char **argv);
+#endif
 #define overlap (VRes % (FontTable[gui_font >> 4][1] * (gui_font & 0b1111)) ? 0 : 1)
 
 /* Stride-aware array access macros for struct member arrays */
@@ -2515,6 +2519,23 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 			cmd_args = getCstring(argv[2]);
 		break;
 	}
+
+#ifdef rp2350
+	/* RUN "file.c" / RUN "file.C": enter TinyCC's own -run path.
+	   Its filesystem and runtime support are not adapted yet; for this
+	   iteration the goal is to compile and link the real entry point. */
+	if (!CMM2mode && *filename)
+	{
+		size_t len = strlen((const char *)filename);
+		if (len >= 2 && filename[len - 2] == '.' &&
+		    (filename[len - 1] == 'c' || filename[len - 1] == 'C'))
+		{
+			char *tcc_argv[] = {"tcc", "-xc", "-run", (char *)filename, NULL};
+			(void)pico_tcc_main(4, tcc_argv);
+			return;
+		}
+	}
+#endif
 
 	// The memory allocated by getCstring() is not preserved across
 	// a call to FileLoadProgram() so we need to cache 'filename' and

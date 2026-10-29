@@ -180,13 +180,8 @@
 # endif
 #endif
 
-#if defined TCC_IS_NATIVE && !defined CONFIG_TCCBOOT
-# define CONFIG_TCC_BACKTRACE
-# if (defined TCC_TARGET_I386 || defined TCC_TARGET_X86_64) \
-  && !defined TCC_UCLIBC && !defined TCC_MUSL
-# define CONFIG_TCC_BCHECK /* enable bound checking code */
-# endif
-#endif
+/* PicoMite has no POSIX signal/backtrace runtime. */
+/* No signal/backtrace runtime on bare-metal RP2350. */
 
 /* ------------ path configuration ------------ */
 

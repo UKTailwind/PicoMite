@@ -86,7 +86,7 @@ extern Sym *all_cleanups, *pending_gotos;
 extern int local_scope;
 extern int in_sizeof;
 extern int in_generic;
-extern SValue _vstack[1 + VSTACK_SIZE];
+extern SValue *_vstack;
 extern int last_line_num, new_file, func_ind;
 extern struct switch_t *cur_switch;
 extern struct temp_local_variable arr_temp_local_vars[MAX_TEMP_LOCAL_VARIABLE_NUMBER];

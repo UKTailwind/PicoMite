@@ -50,7 +50,7 @@ ST_DATA int in_generic;
 static int section_sym;
 
 ST_DATA SValue *vtop;
-ST_DATA SValue _vstack[1 + VSTACK_SIZE];
+ST_DATA SValue *_vstack;
 
 ST_DATA int const_wanted; /* true if constant wanted */
 ST_DATA int nocode_wanted; /* no code generation wanted */
@@ -250,17 +250,14 @@ void pv (const char *lbl, int a, int b)
 ST_FUNC void tcc_debug_start(TCCState *s1)
 {
     if (s1->do_debug) {
-        static char buf[512];
+        char *buf = tcc_malloc(512);
 
         /* file info: full path + filename */
         section_sym = put_elf_sym(symtab_section, 0, 0,
                                   ELFW(ST_INFO)(STB_LOCAL, STT_SECTION), 0,
                                   text_section->sh_num, NULL);
-        getcwd(buf, sizeof(buf));
-#ifdef _WIN32
-        normalize_slashes(buf);
-#endif
-        pstrcat(buf, sizeof(buf), "/");
+        buf[0] = 0; /* no process working directory on PicoMite */
+        pstrcat(buf, 512, "/");
         put_stabs_r(s1, buf, N_SO, 0, 0,
                     text_section->data_offset, text_section, section_sym);
         put_stabs_r(s1, file->prev->filename, N_SO, 0, 0,
@@ -269,6 +266,7 @@ ST_FUNC void tcc_debug_start(TCCState *s1)
         func_ind = -1;
         /* we're currently 'including' the <command line> */
         tcc_debug_bincl(s1);
+        tcc_free(buf);
     }
 
     /* an elf symbol of type STT_FILE must be put so that STB_LOCAL
@@ -321,14 +319,16 @@ ST_FUNC void tcc_debug_line(TCCState *s1)
 /* put function symbol */
 ST_FUNC void tcc_debug_funcstart(TCCState *s1, Sym *sym)
 {
-    static char buf[512];
+    char *buf;
     BufferedFile *f;
     if (!s1->do_debug || !(f = put_new_file(s1)))
         return;
+    buf = tcc_malloc(512);
     /* XXX: we put here a dummy type */
-    snprintf(buf, sizeof(buf), "%s:%c1",
+    snprintf(buf, 512, "%s:%c1",
              funcname, sym->type.t & VT_STATIC ? 'f' : 'F');
     put_stabs_r(s1, buf, N_FUN, 0, f->line_num, 0, cur_text_section, sym->c);
+    tcc_free(buf);
     tcc_debug_line(s1);
 }
 
@@ -371,6 +371,7 @@ ST_FUNC void tcc_debug_eincl(TCCState *s1)
 /* initialize vstack and types.  This must be done also for tcc -E */
 ST_FUNC void tccgen_init(TCCState *s1)
 {
+    _vstack = tcc_mallocz((1 + VSTACK_SIZE) * sizeof(*_vstack));
     vtop = vstack - 1;
     memset(vtop, 0, sizeof *vtop);
 
@@ -424,6 +425,9 @@ ST_FUNC void tccgen_finish(TCCState *s1)
     /* free sym_pools */
     dynarray_reset(&sym_pools, &nb_sym_pools);
     sym_free_first = NULL;
+    tcc_free(_vstack);
+    _vstack = NULL;
+    vtop = NULL;
 }
 
 /* ------------------------------------------------------------------------- */

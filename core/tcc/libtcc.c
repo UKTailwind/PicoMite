@@ -525,13 +525,13 @@ PUB_FUNC void tcc_enter_state(TCCState *s1)
     tcc_state = s1;
 }
 
-/* Diagnostic formatting must not consume half the application stack. */
-static char error1_buf[2048];
-
+/* Diagnostic formatting uses transient memory, not permanent RAM. */
 static void error1(int mode, const char *fmt, va_list ap)
 {
-    char *buf = error1_buf;
-    const size_t buf_size = sizeof(error1_buf);
+    char fallback[192];
+    char *allocated;
+    char *buf;
+    size_t buf_size;
     BufferedFile **pf, *f;
     TCCState *s1 = tcc_state;
 
@@ -555,6 +555,11 @@ static void error1(int mode, const char *fmt, va_list ap)
             mode = ERROR_ERROR;
     }
 
+    /* Do not use tcc_malloc here: an allocation failure can recurse into
+       this very diagnostic handler. */
+    allocated = malloc(2048);
+    buf = allocated ? allocated : fallback;
+    buf_size = allocated ? 2048 : sizeof(fallback);
     buf[0] = '\0';
     /* use upper file if inline ":asm:" or token ":paste:" */
     for (f = file; f && f->filename[0] == ':'; f = f->prev)
@@ -589,6 +594,7 @@ static void error1(int mode, const char *fmt, va_list ap)
     } else {
         s1->error_func(s1->error_opaque, buf);
     }
+    free(allocated);
     if (s1) {
         if (mode != ERROR_WARN)
             s1->nb_errors++;

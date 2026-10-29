@@ -51,10 +51,6 @@ static void rt_exit(int code);
 /* defined when included from lib/bt-exe.c */
 #ifndef CONFIG_TCC_BACKTRACE_ONLY
 
-#ifndef _WIN32
-# include <sys/mman.h>
-#endif
-
 static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length);
 static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff);
 
@@ -304,28 +300,11 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
 
 static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length)
 {
-#ifdef _WIN32
-    unsigned long old_protect;
-    VirtualProtect(ptr, length, PAGE_EXECUTE_READWRITE, &old_protect);
-#else
-    void __clear_cache(void *beginning, void *end);
-# ifndef HAVE_SELINUX
-    addr_t start, end;
-#  ifndef PAGESIZE
-#   define PAGESIZE 4096
-#  endif
-    start = (addr_t)ptr & ~(PAGESIZE - 1);
-    end = (addr_t)ptr + length;
-    end = (end + PAGESIZE - 1) & ~(PAGESIZE - 1);
-    if (mprotect((void *)start, end - start, PROT_READ | PROT_WRITE | PROT_EXEC))
-        tcc_error("mprotect failed: did you mean to configure --with-selinux?");
-# endif
-# if defined TCC_TARGET_ARM || defined TCC_TARGET_ARM64
-    __clear_cache(ptr, (char *)ptr + length);
-# endif
-#endif
+    /* RP2350 SRAM is executable. No MMU or mprotect(). */
+    (void)s1;
+    (void)ptr;
+    (void)length;
 }
-
 #ifdef _WIN64
 static void *win64_add_function_table(TCCState *s1)
 {

@@ -218,13 +218,13 @@ static void set_environment(TCCState *s)
 static char *default_outputfile(TCCState *s, const char *first_file)
 {
     /* The output-name helper is not recursive. */
-    static char buf[1024];
+    char *buf = tcc_malloc(1024); /* s->outfile owns the result */
     char *ext;
     const char *name = "a";
 
     if (first_file && strcmp(first_file, "-"))
         name = tcc_basename(first_file);
-    snprintf(buf, sizeof(buf), "%s", name);
+    snprintf(buf, 1024, "%s", name);
     ext = tcc_fileextension(buf);
 #ifdef TCC_TARGET_PE
     if (s->output_type == TCC_OUTPUT_DLL)
@@ -238,7 +238,7 @@ static char *default_outputfile(TCCState *s, const char *first_file)
         strcpy(ext, ".o");
     else
         strcpy(buf, "a.out");
-    return tcc_strdup(buf);
+    return buf;
 }
 
 static unsigned getclock_ms(void)
@@ -250,7 +250,7 @@ static unsigned getclock_ms(void)
 #endif
 }
 
-int main(int argc0, char **argv0)
+int pico_tcc_main(int argc0, char **argv0)
 {
     TCCState *s, *s1;
     int ret, opt, n = 0, t = 0, done;
@@ -276,8 +276,11 @@ redo:
             tcc_tool_cross(s, argv, opt); /* never returns */
         if (s->verbose)
             printf(version);
-        if (opt == OPT_AR)
-            return tcc_tool_ar(s, argc, argv);
+        if (opt == OPT_AR) {
+            tcc_delete(s);
+            fputs("tcc: -ar is unsupported on PicoMite\n", stderr);
+            return 1;
+        }
 #ifdef TCC_TARGET_PE
         if (opt == OPT_IMPDEF)
             return tcc_tool_impdef(s, argc, argv);
