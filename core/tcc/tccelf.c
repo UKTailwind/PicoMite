@@ -1185,8 +1185,14 @@ static struct sym_attr * put_got_entry(TCCState *s1, int dyn_reloc_type,
             len = sizeof plt_name - 5;
         memcpy(plt_name, name, len);
         strcpy(plt_name + len, "@plt");
+#ifdef TCC_TARGET_ARM_THUMB
+        /* a Thumb PLT entry: the Thumb bit keeps a call to it a BL */
+        attr->plt_sym = put_elf_sym(s1->symtab, attr->plt_offset + 1, sym->st_size,
+            ELFW(ST_INFO)(STB_GLOBAL, STT_FUNC), 0, s1->plt->sh_num, plt_name);
+#else
         attr->plt_sym = put_elf_sym(s1->symtab, attr->plt_offset, sym->st_size,
             ELFW(ST_INFO)(STB_GLOBAL, STT_FUNC), 0, s1->plt->sh_num, plt_name);
+#endif
 
     } else {
         attr->got_offset = got_offset;

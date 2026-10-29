@@ -98,6 +98,51 @@ int gotplt_entry_type (int reloc_type)
     return -1;
 }
 
+#ifdef TCC_TARGET_ARM_THUMB
+/* Cortex-M runs Thumb only: the ARM-mode PLT below (and the "bx pc" stub
+   that enters it, and the BL->BLX a call to it becomes) faults with an
+   invalid state.  A Thumb-2 entry instead: the GOT slot holds the target's
+   address (Thumb bit set), filled at relocation time - for -run there is no
+   lazy binding, so no PLT0 either.
+
+     +0  f8df c008  ldr.w ip, [pc, #8]   ; the word at +12
+     +4  44fc       add   ip, pc         ; + (entry + 8) = GOT slot
+     +6  f8dc f000  ldr.w pc, [ip]       ; jump (interworking load)
+     +10 bf00       nop
+     +12 .word      GOT slot - (entry + 8), set by relocate_plt  */
+ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
+{
+    Section *plt = s1->plt;
+    uint8_t *p;
+    unsigned plt_offset;
+
+    (void)attr;
+    if (s1->output_type == TCC_OUTPUT_DLL)
+        tcc_error("DLLs unimplemented!");
+    plt_offset = plt->data_offset;
+    p = section_ptr_add(plt, 16);
+    write16le(p,      0xf8df); write16le(p + 2,  0xc008);
+    write16le(p + 4,  0x44fc);
+    write16le(p + 6,  0xf8dc); write16le(p + 8,  0xf000);
+    write16le(p + 10, 0xbf00);
+    write32le(p + 12, got_offset);
+    return plt_offset;
+}
+
+ST_FUNC void relocate_plt(TCCState *s1)
+{
+    uint8_t *p, *p_end;
+
+    if (!s1->plt)
+      return;
+    p = s1->plt->data;
+    p_end = p + s1->plt->data_offset;
+    for (; p < p_end; p += 16)
+        add32le(p + 12, s1->got->sh_addr -
+                (s1->plt->sh_addr + (p - s1->plt->data) + 8));
+}
+
+#else /* ARM-mode PLT */
 ST_FUNC unsigned create_plt_entry(TCCState *s1, unsigned got_offset, struct sym_attr *attr)
 {
     Section *plt = s1->plt;
@@ -160,6 +205,7 @@ ST_FUNC void relocate_plt(TCCState *s1)
         }
     }
 }
+#endif /* TCC_TARGET_ARM_THUMB */
 
 void relocate(TCCState *s1, ElfW_Rel *rel, int type, unsigned char *ptr, addr_t addr, addr_t val)
 {
