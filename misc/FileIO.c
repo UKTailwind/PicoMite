@@ -8091,6 +8091,29 @@ void ResetOptions(bool startup)
         Option.AllPins = 1;
     }
 #endif
+#ifdef MURMULATOR_M2P2
+    /* M2P2 HDMI factory wiring, used on a fresh options sector or OPTION RESET. */
+    strcpy((char *)Option.platform, "Murmulator 2");
+    Option.HDMIclock = 1;
+    Option.HDMId0 = 3;
+    Option.HDMId1 = 5;
+    Option.HDMId2 = 7;
+    Option.KEYBOARD_CLOCK = PINMAP[2];
+    Option.KEYBOARD_DATA = PINMAP[3];
+    Option.KeyboardConfig = CONFIG_US;
+    Option.MOUSE_CLOCK = PINMAP[0];
+    Option.MOUSE_DATA = PINMAP[1];
+    Option.SD_CS = PINMAP[5];
+    Option.SD_CLK_PIN = PINMAP[6];
+    Option.SD_MOSI_PIN = PINMAP[7];
+    Option.SD_MISO_PIN = PINMAP[4];
+    Option.AUDIO_L = PINMAP[10];
+    Option.AUDIO_R = PINMAP[11];
+    Option.AUDIO_SLICE = 5; /* GP10/GP11: PWM slice 5 */
+    Option.PSRAM_CS_PIN = PINMAP[rp2350a ? 8 : 47];
+    Option.ColourCode = 1;
+#endif
+
     if (!SuppressOptionFlash)
     {
         /* The default-builder (BuildDefaultOptions) drives ResetOptions purely to
