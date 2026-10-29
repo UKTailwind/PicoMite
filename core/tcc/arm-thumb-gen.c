@@ -162,7 +162,7 @@ ST_FUNC void arm_init(struct TCCState *s)
     func_double_type.ref = sym_push(SYM_FIELD, &double_type, FUNC_CDECL, FUNC_OLD);
 
     float_abi = s->float_abi;
-#ifndef TCC_ARM_HARDFLOAT
+#if !defined(TCC_ARM_HARDFLOAT) && !defined(TCC_PICOMITE)
 # warning "soft float ABI currently not supported: default to softfp"
 #endif
 }

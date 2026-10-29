@@ -51,8 +51,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "Turtle.h"
 #endif
 #ifdef rp2350
-/* Real TinyCC CLI entry point (core/tcc/tcc.c), not an emulated compiler. */
-extern int pico_tcc_main(int argc, char **argv);
+#include "core/tcc/tcc_picomite.h" /* RUN "file.c": TinyCC */
 #endif
 #define overlap (VRes % (FontTable[gui_font >> 4][1] * (gui_font & 0b1111)) ? 0 : 1)
 
@@ -2521,17 +2520,21 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 	}
 
 #ifdef rp2350
-	/* RUN "file.c" / RUN "file.C": enter TinyCC's own -run path.
-	   Its filesystem and runtime support are not adapted yet; for this
-	   iteration the goal is to compile and link the real entry point. */
+	/* RUN "file.c" [, "args"]: compile the C file with TinyCC and run it in
+	   memory (tcc -run), its args as argv[1..].  As for a BASIC program the
+	   variables, open files and heap are cleared first, which leaves the
+	   whole heap to the compiler; the names are copied off the heap first. */
 	if (!CMM2mode && *filename)
 	{
 		size_t len = strlen((const char *)filename);
 		if (len >= 2 && filename[len - 2] == '.' &&
-		    (filename[len - 1] == 'c' || filename[len - 1] == 'C'))
+			(filename[len - 1] == 'c' || filename[len - 1] == 'C'))
 		{
-			char *tcc_argv[] = {"tcc", "-xc", "-run", (char *)filename, NULL};
-			(void)pico_tcc_main(4, tcc_argv);
+			char cfile[MAXSTRLEN + 1], cargs[MAXSTRLEN + 1];
+			snprintf(cfile, sizeof(cfile), "%s", (char *)filename);
+			snprintf(cargs, sizeof(cargs), "%s", (char *)cmd_args);
+			ClearRuntime(true);
+			tcc_picomite_run(cfile, cargs);
 			return;
 		}
 	}

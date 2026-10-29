@@ -214,6 +214,13 @@ PUB_FUNC char *tcc_fileextension (const char *name)
 #undef malloc
 #undef realloc
 
+#ifdef TCC_PICOMITE
+/* TinyCC's memory is an arena on the PicoMite heap (tcc_picomite.c) */
+#define free(p) tcc_pm_free(p)
+#define malloc(s) tcc_pm_malloc(s)
+#define realloc(p, s) tcc_pm_realloc(p, s)
+#endif
+
 #ifndef MEM_DEBUG
 
 PUB_FUNC void tcc_free(void *ptr)
@@ -224,8 +231,7 @@ PUB_FUNC void tcc_free(void *ptr)
 PUB_FUNC void *tcc_malloc(unsigned long size)
 {
     void *ptr;
-    /* MOS reports malloc(0) as an allocation failure. Keep zero-sized
-       TCC allocations valid and freeable without that diagnostic. */
+    /* Keep zero-sized TCC allocations valid and freeable. */
     ptr = malloc(size ? size : 1);
     if (!ptr)
         _tcc_error("memory full (malloc)");
@@ -243,7 +249,6 @@ PUB_FUNC void *tcc_mallocz(unsigned long size)
 PUB_FUNC void *tcc_realloc(void *ptr, unsigned long size)
 {
     void *ptr1;
-    /* Use free so MOS also removes the pointer from its allocation list. */
     if (!size) {
         tcc_free(ptr);
         return NULL;
@@ -416,6 +421,9 @@ PUB_FUNC void tcc_memcheck(void)
 }
 #endif /* MEM_DEBUG */
 
+#undef free
+#undef malloc
+#undef realloc
 #define free(p) use_tcc_free(p)
 #define malloc(s) use_tcc_malloc(s)
 #define realloc(p, s) use_tcc_realloc(p, s)
@@ -556,8 +564,8 @@ static void error1(int mode, const char *fmt, va_list ap)
     }
 
     /* Do not use tcc_malloc here: an allocation failure can recurse into
-       this very diagnostic handler. */
-    allocated = malloc(2048);
+       this very diagnostic handler.  The arena allocator returns NULL. */
+    allocated = tcc_pm_malloc(2048);
     buf = allocated ? allocated : fallback;
     buf_size = allocated ? 2048 : sizeof(fallback);
     buf[0] = '\0';
@@ -594,7 +602,7 @@ static void error1(int mode, const char *fmt, va_list ap)
     } else {
         s1->error_func(s1->error_opaque, buf);
     }
-    free(allocated);
+    tcc_pm_free(allocated);
     if (s1) {
         if (mode != ERROR_WARN)
             s1->nb_errors++;
@@ -2146,3 +2154,38 @@ PUB_FUNC void tcc_print_stats(TCCState *s1, unsigned total_time)
     fprintf(stderr, "* %d bytes memory used\n", mem_max_size);
 #endif
 }
+
+#ifdef TCC_PICOMITE
+/* The compiler or the compiled program was left by a longjmp to the MMBasic
+   prompt (CTRL-C inside a console read, an exit() outside the compiler's own
+   error handler): the arena they used is gone, so drop every pointer into it
+   that tcc_new() would otherwise reuse instead of setting up afresh. */
+void tcc_pm_forget_globals(void)
+{
+    tcc_state = NULL;
+    file = NULL;
+    macro_ptr = NULL;
+    memset(&tokcstr, 0, sizeof tokcstr);
+    table_ident = NULL;
+    table_ident_capacity = 0;
+    hash_ident = NULL;
+    token_buf = NULL;
+    memset(&cstr_buf, 0, sizeof cstr_buf);
+    memset(&macro_equal_buf, 0, sizeof macro_equal_buf);
+    memset(&tokstr_buf, 0, sizeof tokstr_buf);
+    isidnum_table = NULL;
+    toksym_alloc = NULL;
+    tokstr_alloc = NULL;
+    macro_stack = NULL;
+    pp_temps = NULL;
+    global_stack = local_stack = define_stack = NULL;
+    global_label_stack = local_label_stack = NULL;
+    sym_free_first = NULL;
+    sym_pools = NULL;
+    nb_sym_pools = 0;
+    all_cleanups = pending_gotos = NULL;
+    vtop = _vstack = NULL;
+    cur_switch = NULL;
+    cur_scope = loop_scope = root_scope = NULL;
+}
+#endif

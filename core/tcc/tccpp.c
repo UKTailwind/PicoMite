@@ -3446,11 +3446,10 @@ static int macro_subst_tok(
         struct tm *tm;
 
         int timestamp_status = tcc_timestamp(&ti);
-        if (timestamp_status == -2)
-            tcc_error("invalid SOURCE_DATE_EPOCH");
-        tm = timestamp_status == 0 ? localtime(&ti) : NULL;
+        /* the PicoMite clock keeps local time as an epoch: gmtime() */
+        tm = timestamp_status == 0 ? gmtime(&ti) : NULL;
         if (!tm) {
-            tcc_warning("calendar time unavailable; set SOURCE_DATE_EPOCH (UTC)");
+            tcc_warning("calendar time unavailable; set the clock (TIME$, DATE$)");
             strcpy(buf, tok == TOK___DATE__ ? "??? ?? ????" : "??:??:??");
         } else if (tok == TOK___DATE__) {
             snprintf(buf, sizeof(buf), "%s %2d %d", 

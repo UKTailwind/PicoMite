@@ -183,7 +183,12 @@ LIBTCCAPI int tcc_run(TCCState *s1, int argc, char **argv)
     if (!rc->do_jmp || !(ret = setjmp(rc->jmp_buf)))
 #endif
     {
+#ifdef TCC_PICOMITE
+        /* exit(), CTRL-C and MMBasic errors of the program come back here */
+        ret = tcc_pm_call_main(prog_main, argc, argv);
+#else
         ret = prog_main(argc, argv);
+#endif
     }
     run_cdtors(s1, "__fini_array_start", "__fini_array_end");
     if ((s1->dflag & 16) && ret)
@@ -300,10 +305,10 @@ static int tcc_relocate_ex(TCCState *s1, void *ptr, addr_t ptr_diff)
 
 static void set_pages_executable(TCCState *s1, void *ptr, unsigned long length)
 {
-    /* RP2350 SRAM is executable. No MMU or mprotect(). */
+    /* RP2350 SRAM and PSRAM are executable: no MMU, no mprotect(); only
+       wait for the code to be written. */
     (void)s1;
-    (void)ptr;
-    (void)length;
+    tcc_pm_code_ready(ptr, length);
 }
 #ifdef _WIN64
 static void *win64_add_function_table(TCCState *s1)
@@ -846,35 +851,11 @@ ST_FUNC const char *dlerror(void)
     return "error";
 }
 
-typedef struct TCCSyms {
-    char *str;
-    void *ptr;
-} TCCSyms;
-
-
-/* add the symbol you want here if no dynamic linking is done */
-static TCCSyms tcc_syms[] = {
-#if !defined(CONFIG_TCCBOOT)
-#define TCCSYM(a) { #a, &a, },
-    TCCSYM(printf)
-    TCCSYM(fprintf)
-    TCCSYM(fopen)
-    TCCSYM(fclose)
-#undef TCCSYM
-#endif
-    { NULL, NULL },
-};
-
+/* the firmware's run-time symbol table (tcc_picomite.c) */
 ST_FUNC void *dlsym(void *handle, const char *symbol)
 {
-    TCCSyms *p;
-    p = tcc_syms;
-    while (p->str != NULL) {
-        if (!strcmp(p->str, symbol))
-            return p->ptr;
-        p++;
-    }
-    return NULL;
+    (void)handle;
+    return tcc_pm_resolve_symbol(symbol);
 }
 
 #endif /* CONFIG_TCC_STATIC */

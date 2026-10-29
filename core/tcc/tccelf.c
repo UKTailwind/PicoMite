@@ -1440,7 +1440,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
     tcc_add_pragma_libs(s1);
     /* add libc */
     if (!s1->nostdlib) {
+#ifndef TCC_PICOMITE /* the firmware is the C library (tcc_pm_resolve_symbol) */
         tcc_add_library_err(s1, "c");
+#endif
 #ifdef TCC_LIBGCC
         if (!s1->static_link) {
             if (TCC_LIBGCC[0] == '/')
@@ -1466,7 +1468,9 @@ ST_FUNC void tcc_add_runtime(TCCState *s1)
                 tcc_add_btstub(s1);
         }
 #endif
+#ifndef TCC_PICOMITE /* and the run-time helpers too (__aeabi_*) */
         tcc_add_support(s1, TCC_LIBTCC1);
+#endif
         /* add crt end if not memory output */
         if (s1->output_type != TCC_OUTPUT_MEMORY)
             tcc_add_crt(s1, "crtn.o");
@@ -2269,8 +2273,8 @@ static int tcc_write_elf_file(TCCState *s1, const char *filename, int phnum,
 {
     FILE *f;
 
-    /* MOS stdio provides fopen/fclose, but does not export fdopen.
-     * Generated objects do not require executable permissions. */
+    /* Written with the PicoMite adapter's fopen(): there is no fdopen(),
+     * and generated objects do not need executable permissions. */
     f = fopen(filename, "wb");
     if (!f) {
         tcc_error_noabort("could not write '%s'", filename);

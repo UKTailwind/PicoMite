@@ -476,6 +476,11 @@ add_executable(PicoMite ${COMMON_SOURCES})
 
 # TinyCC is built and linked only for RP2350.  tcc.c includes libtcc.c
 # (ONE_SOURCE), so compiling both would define the compiler twice.
+# The compiler is a library of its own, compiled without the PicoMite
+# headers; core/tcc/tcc_picomite.c, compiled with the firmware, is its
+# PicoMite side (memory, files, console, run-time symbols - tcc_picomite.h),
+# and the system headers it gives compiled programs (core/tcc/include) are
+# built into the firmware.
 if(IS_RP2350)
     add_library(PicoMiteTinyCC STATIC
         core/tcc/tcc.c
@@ -484,6 +489,19 @@ if(IS_RP2350)
     target_compile_definitions(PicoMiteTinyCC PRIVATE
         NO_SEMAPHORE_H=1 TCC_IS_NATIVE=1)
     target_compile_options(PicoMiteTinyCC PRIVATE -O2)
+
+    file(GLOB TCC_ROM_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/core/tcc/include/*.h)
+    set(TCC_ROM_C ${CMAKE_CURRENT_BINARY_DIR}/tcc_rom_headers.c)
+    add_custom_command(OUTPUT ${TCC_ROM_C}
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC_DIR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/include
+            -DOUT=${TCC_ROM_C}
+            -DHDR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/tcc_picomite.h
+            -P ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
+        DEPENDS ${TCC_ROM_HEADERS} ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
+        COMMENT "Embedding the TinyCC system headers"
+        VERBATIM)
+    target_sources(PicoMite PRIVATE core/tcc/tcc_picomite.c ${TCC_ROM_C})
     target_link_libraries(PicoMite PicoMiteTinyCC)
 endif()
 

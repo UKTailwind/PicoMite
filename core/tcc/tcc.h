@@ -44,6 +44,12 @@
 # endif
 #endif
 
+#ifdef TCC_PICOMITE
+/* libc calls go to the PicoMite adapter (memory, files, console) */
+# define TCC_PM_REDIRECT_LIBC
+# include "tcc_picomite.h"
+#endif
+
 #ifdef _WIN32
 # include <windows.h>
 # include <io.h> /* open, close etc. */
@@ -111,6 +117,13 @@
 # define IS_DIRSEP(c) (c == '/' || c == '\\')
 # define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':' && IS_DIRSEP(p[2])))
 # define PATHCMP stricmp
+# define PATHSEP ";"
+#elif defined TCC_PICOMITE
+/* PicoMite: "B:/dir/file.c", "/dir/file.c"; a path list is separated with
+   ';' since ':' follows a drive letter */
+# define IS_DIRSEP(c) (c == '/')
+# define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':'))
+# define PATHCMP strcmp
 # define PATHSEP ";"
 #else
 # define IS_DIRSEP(c) (c == '/')
