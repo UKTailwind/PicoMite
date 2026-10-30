@@ -1318,19 +1318,99 @@ static int pm_get_mem_info(void *out)
     return pm_fill(out, &m, sizeof(m));
 }
 
+/* PM_DEFAULT in <picomite/graphics.h>: the argument as if left out in BASIC */
+#define PM_DEFAULT_ARG (-2)
+
+/* getint()'s error for an argument out of its range */
+static void pm_range(int v, int lo, int hi)
+{
+    if (v < lo || v > hi)
+        error("~ is invalid (valid is ~ to ~)", (long long)v, (long long)lo, (long long)hi);
+}
+
+/* a font and scale as TEXT and FONT check them (PM_DEFAULT_ARG: the current) */
 static int pm_font_code(int font, int scale)
 {
-    if (font < 1 || font > FONT_TABLE_SIZE || FontTable[font - 1] == NULL)
+    if (font == PM_DEFAULT_ARG)
+        font = (gui_font >> 4) + 1;
+    if (scale == PM_DEFAULT_ARG)
+        scale = gui_font & 0b1111;
+    pm_range(font, 1, FONT_TABLE_SIZE);
+    if (FontTable[font - 1] == NULL)
         error("Invalid font #%", font);
-    if (scale < 1 || scale > 15)
-        error("Invalid font scale");
+    pm_range(scale, 1, 15);
     return ((font - 1) << 4) | scale;
 }
 
-static void pm_text(int x, int y, const char *s, int font, int scale, int fg, int bg)
+/* a colour argument as BASIC's getint(arg, lo, WHITE) checks it */
+static int pm_colour_arg(int c, int lo, int dflt)
 {
-    PM_CALL(GUIPrintString(x, y, pm_font_code(font, scale), JUSTIFY_LEFT, JUSTIFY_TOP, ORIENT_NORMAL,
-                           fg, bg, (char *)s));
+    if (c == PM_DEFAULT_ARG)
+        return dflt;
+    pm_range(c, lo, WHITE);
+    return c;
+}
+
+/* TEXT x, y, s$ [, align$] [, font] [, scale] [, c] [, bc]  (cmd_text) */
+static void pm_text_do(int x, int y, const char *s, const char *align, int font, int scale, int fg, int bg)
+{
+    int jh = 0, jv = 0, jo = 0, code;
+    CheckDisplay();
+    if (align != NULL && *align)
+        if (!GetJustification((char *)align, &jh, &jv, &jo))
+            error("Justification");
+    code = pm_font_code(font, scale);
+    fg = pm_colour_arg(fg, 0, gui_fcolour);
+    bg = pm_colour_arg(bg, -1, gui_bcolour);
+    GUIPrintString(x, y, code, jh, jv, jo, fg, bg, (char *)s);
+    if (Option.Refresh)
+        Display_Refresh();
+}
+
+static void pm_text(int x, int y, const char *s, const char *align, int font, int scale, int fg, int bg)
+{
+    PM_CALL(pm_text_do(x, y, s, align, font, scale, fg, bg));
+}
+
+/* BOX x, y, w, h [, lw] [, c] [, fill]  (cmd_box, for single values) */
+static void pm_draw_box_do(int x, int y, int w, int h, int lw, int c, int fill)
+{
+    CheckDisplay();
+    if (lw == PM_DEFAULT_ARG)
+        lw = 1;
+    else
+        pm_range(lw, 0, 100);
+    c = pm_colour_arg(c, 0, gui_fcolour);
+    fill = pm_colour_arg(fill, -1, -1);
+    if (w != 0 && h != 0)
+        DrawBox(x, y, x + w + (w > 0 ? -1 : 1), y + h + (h > 0 ? -1 : 1), lw, c, fill);
+    if (Option.Refresh)
+        Display_Refresh();
+}
+
+static void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill)
+{
+    PM_CALL(pm_draw_box_do(x, y, w, h, lw, c, fill));
+}
+
+/* MODE n  (cmd_mode: VGA and HDMI builds) */
+static void pm_mode_do(int mode)
+{
+#ifdef PICOMITEVGA
+    pm_range(mode, 1, MAXMODES);
+    setmode(mode, true);
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+    OSK_Invalidate();
+#endif
+#else
+    (void)mode;
+    error("MODE is not available on this firmware");
+#endif
+}
+
+static void pm_mode(int mode)
+{
+    PM_CALL(pm_mode_do(mode));
 }
 
 static int pm_font_width(int font, int scale)
@@ -1603,6 +1683,8 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_mem_where)
     PM_SYM(pm_get_mem_info)
     PM_SYM(pm_text)
+    PM_SYM(pm_draw_box)
+    PM_SYM(pm_mode)
     PM_SYM(pm_font_width)
     PM_SYM(pm_font_height)
     PM_SYM(pm_get_framebuffer)

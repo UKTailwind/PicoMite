@@ -359,7 +359,8 @@ copied to a drive.
 `assert.h`, `ctype.h`, `float.h`, `limits.h`, `math.h`, `stdalign.h`,
 `stdarg.h`, `stdbool.h`, `stddef.h`, `stdint.h`, `stdio.h`, `stdlib.h`,
 `stdnoreturn.h`, `string.h`, `time.h`, `picomite.h`, and the firmware API
-`picomite/system.h`, `picomite/memory.h`, `picomite/graphics.h` and
+`picomite/system.h`, `picomite/memory.h`, `picomite/graphics.h`,
+`picomite/input.h` and
 `PicoCFunctions.h` (see [The firmware API](#the-firmware-api-picomite)).
 
 They declare exactly what the run-time library below provides. A function
@@ -532,15 +533,42 @@ int   pm_get_mem_info(pm_mem_info *m);   /* SRAM and PSRAM: total and free */
 The drawing functions of `picomite.h`, and:
 
 ```c
-void pm_text(int x, int y, const char *s, int font, int scale, int fg, int bg);
+void pm_text(int x, int y, const char *s, const char *align, int font, int scale, int c, int bc);
+void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill);
+void pm_mode(int mode);
 int  pm_font_width(int font, int scale);
 int  pm_font_height(int font, int scale);
 int  pm_get_framebuffer(pm_framebuffer *fb);
 unsigned pm_fb_colour(int rgb);
 ```
 
-- `pm_text` is `TEXT x, y, s$, "LT", font, scale, fg, bg`. `bg` may be
-  `PM_TRANSPARENT`.
+The functions named after a BASIC command take its arguments in its order,
+check them the same way and fail with the same errors:
+
+| BASIC | C |
+|---|---|
+| `TEXT x, y, s$, align$, font, scale, c, bc` | `pm_text(x, y, s, align, font, scale, c, bc)` |
+| `BOX x, y, w, h, lw, c, fill` | `pm_draw_box(x, y, w, h, lw, c, fill)` |
+| `MODE n` | `pm_mode(n)` (VGA and HDMI builds) |
+
+- An argument that BASIC lets you leave out is `PM_DEFAULT` in C, with the
+  same default: the current font, scale, foreground and background colour
+  (`FONT`, `COLOUR`), BOX's line width 1 and no fill. For `align`, `NULL` or
+  `""` gives the default `"LT"`.
+- `bc` may be `PM_TRANSPARENT` and `fill` may be `PM_NOFILL`, which is -1 as
+  in BASIC.
+- With `OPTION REFRESH` on, the display is refreshed after them, as after
+  the commands.
+- `pm_box` (from `picomite.h`) keeps its older form: a filled box between
+  two corners. BASIC's BOX is `pm_draw_box`.
+
+```c
+/* Text MM.HRES\2, 20, "SCORE", "CM", 1, 2, RGB(CYAN)
+   Box 10, 40, 100, 50, 2, RGB(WHITE), RGB(BLUE) */
+pm_text(pm_hres() / 2, 20, "SCORE", "CM", 1, 2, PM_CYAN, PM_DEFAULT);
+pm_draw_box(10, 40, 100, 50, 2, PM_WHITE, PM_BLUE);
+```
+
 - `pm_get_framebuffer` gives the buffer that drawing goes to: the display
   memory on VGA and HDMI, or the buffer of `FRAMEBUFFER CREATE`/`WRITE`. It
   returns its address, size, stride and format:
@@ -574,10 +602,21 @@ int main(void)
     for (int y = 0; y < fb.height; y++)
         for (int x = 0; x < fb.width; x++)
             p[y * fb.stride + x] = (unsigned char)(x ^ y);
-    pm_text(8, 8, "framebuffer", 1, 2, PM_WHITE, PM_TRANSPARENT);
+    pm_text(8, 8, "framebuffer", "LT", 1, 2, PM_WHITE, PM_TRANSPARENT);
     return 0;
 }
 ```
+
+#### `<picomite/input.h>`
+
+```c
+int pm_inkey(void);   /* INKEY$: a key code, or -1 if no key is waiting */
+```
+
+The codes are those of `INKEY$`: ASCII, and from 128 the keys MMBasic names
+(UP 128, DOWN 129, LEFT 130, RIGHT 131, INSERT 132, DEL 127, HOME 134,
+END 135, PGUP 136, PGDN 137, F1 145 to F12 156). The same function is in
+`picomite.h`.
 
 ### PicoCFunctions.h: the classic CSUB interface
 

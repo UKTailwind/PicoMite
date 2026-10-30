@@ -21,6 +21,10 @@
 #endif
 #define PM_TRANSPARENT (-1) /* pm_text's background */
 
+/* PM_DEFAULT for an argument is the argument left out in BASIC: the current
+   font, scale or colour (FONT, COLOUR), BOX's line width 1 and no fill. */
+#define PM_DEFAULT (-2)
+
 /* drawing (also in <picomite.h>) */
 int pm_hres(void);
 int pm_vres(void);
@@ -32,11 +36,24 @@ void pm_circle(int x, int y, int r, int width, int colour, int fill);
 void pm_triangle(int x0, int y0, int x1, int y1, int x2, int y2, int colour, int fill);
 void pm_refresh(void); /* push the drawing to buffered panels */
 
-/* TEXT x, y, s$, "LT", font, scale, fg, bg.  font is 1.. (FONT), scale
-   1..15; bg may be PM_TRANSPARENT. */
-void pm_text(int x, int y, const char *s, int font, int scale, int fg, int bg);
-int pm_font_width(int font, int scale);  /* pixels per character */
+/* TEXT x, y, s$, align$, font, scale, c, bc - as TEXT, argument by
+   argument.  align is TEXT's justification ("LT", "CM", "RB", with an
+   optional orientation letter "N" "V" "I" "U" "D"), or NULL or "" for the
+   default "LT".  font is 1..16, scale 1..15; bc may be PM_TRANSPARENT; any
+   of font, scale, c and bc may be PM_DEFAULT. */
+void pm_text(int x, int y, const char *s, const char *align, int font, int scale, int c, int bc);
+int pm_font_width(int font, int scale);  /* pixels per character (PM_DEFAULT: current) */
 int pm_font_height(int font, int scale);
+
+/* BOX x, y, w, h, lw, c, fill - as BOX: a box w by h from (x, y), negative
+   w or h going left or up, a border lw pixels wide (0 for none) and fill a
+   colour or PM_NOFILL.  lw, c and fill may be PM_DEFAULT (1, the current
+   colour, no fill).  (pm_box above is the older filled-corners form.) */
+void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill);
+
+/* MODE n - as MODE on the VGA and HDMI builds: the display mode, the
+   screen cleared.  An MMBasic error on other builds. */
+void pm_mode(int mode);
 
 /* The framebuffer drawing goes to: the display memory itself on VGA and
    HDMI, or the buffer of FRAMEBUFFER CREATE / WRITE.  Writing pixels here
