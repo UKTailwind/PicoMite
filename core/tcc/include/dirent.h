@@ -1,7 +1,8 @@
-/* PicoMite TinyCC: <dirent.h> - a directory's entries, over MMBasic's
-   DIR$(path + "/*", ALL).  DIR$ keeps one listing at a time, so one DIR can
-   be open at a time (opendir returns NULL while another is).  Not in a C
-   CSUB. */
+/* PicoMite TinyCC: <dirent.h> - a directory's entries, from MMBasic's
+   DIR$(path + "/*", ALL).  opendir reads the whole listing at once, so any
+   number of DIRs can be open, and DIR$ or pm_dir used meanwhile does not
+   disturb them; a file made or removed after opendir is not seen.  Not in
+   a C CSUB. */
 #ifndef _DIRENT_H
 #define _DIRENT_H
 

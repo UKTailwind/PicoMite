@@ -431,9 +431,10 @@ The rest of the file system has two forms:
   - `stat` fills `st_mode` (`S_ISDIR`, `S_ISREG`), `st_size` and
     `st_mtime`: `MM.INFO(MODIFIED)` as seconds from 1970, in the PicoMite
     clock's own time, as `time()` gives it.
-  - `readdir` gives `d_name` and `d_type` (`DT_DIR` or `DT_REG`). It works
-    over `DIR$`, which keeps one listing at a time, so one directory can be
-    open at a time: `opendir` returns `NULL` while another is.
+  - `readdir` gives `d_name` and `d_type` (`DT_DIR` or `DT_REG`).
+    `opendir` reads the whole listing at once with `DIR$`, so any number of
+    directories can be open, and `DIR$` or `pm_dir` used meanwhile does not
+    disturb them. A file made or removed after `opendir` is not seen.
 - **MMBasic's**, in `<picomite/files.h>`: the commands and functions of the
   same name, with their errors (`pm_try` catches them).
 
@@ -551,8 +552,20 @@ firmware's services are being opened up further in separate headers under
 `picomite/`, one for each subsystem. They may repeat a few declarations of
 `picomite.h`, so a program can include either or both.
 
-All of them are version 1 of the API (`PM_API_VERSION`). A function that a
-later firmware adds is listed with the version that added it. Structs that
+The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 2. It
+goes up by one whenever functions are added, and nothing is ever taken away
+or changed, so a firmware of version n has everything of 1 to n.
+`system.h` lists what each version added; a program that uses what version
+n added can check `pm_api_version() >= n` first. An ELF executable binds
+every function it uses by name when it is run, so on an older firmware a
+missing one is `undefined symbol`, never a crash.
+
+| Version | Added |
+|---|---|
+| 1 | `picomite.h`; `system.h`, `memory.h`, `graphics.h`, `input.h` (`pm_inkey`, `pm_keydown`), `basic.h` (`pm_execute`, `pm_eval_*`, `pm_settick`), `sprite.h`, `audio.h`, `pm_colour`, `pm_load_image`, `pm_load_jpg` |
+| 2 | `basic.h`: `pm_try`, `pm_execute_try`, `pm_eval_*_try`, `pm_errno`, `pm_errmsg`, `pm_error_clear`; `files.h`; `vars.h`; `input.h`: `pm_mouse`, `pm_usb_device`, `pm_cursor_*`; the C library's `remove`, `rename`, `unistd.h`, `sys/stat.h`, `dirent.h` and `fopen`'s `"a"`, `"r+"`, `"w+"`, `"a+"` |
+
+Structs that
 the firmware fills start with a `size` field, which the program sets to
 `sizeof` the struct before the call, so a program built against an older
 header keeps working when the firmware's struct grows.
@@ -581,6 +594,10 @@ info.size = sizeof info;
 pm_get_info(&info);
 printf("%s on %s, %u KB PSRAM\n", info.firmware, info.device, info.psram / 1024);
 ```
+
+`pm_pause(ms)` waits as `PAUSE` does: the firmware's background work (USB
+keyboard and mouse, the GUI cursor, the network) goes on meanwhile, and
+CTRL-C ends the program. `pm_delay_us` is a bare delay for timing.
 
 `pm_yield()` belongs in any long loop that neither prints nor draws. It keeps
 USB and the keyboard serviced and ends the program at once if CTRL-C has

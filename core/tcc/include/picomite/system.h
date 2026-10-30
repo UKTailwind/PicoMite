@@ -3,10 +3,20 @@
 #ifndef _PICOMITE_SYSTEM_H
 #define _PICOMITE_SYSTEM_H
 
-/* The version of the <picomite/...> API this header describes.  A program
-   built for a later one can check pm_api_version() before using what it
-   added. */
-#define PM_API_VERSION 1
+/* The version of the <picomite/...> API this header describes.  It goes up
+   by one whenever the API gains functions, and nothing is ever taken away
+   or changed, so a firmware of version n has everything of versions 1..n.
+   A program that uses what version n added can check pm_api_version() >= n
+   first.  (An ELF executable binds every function it uses by name when it
+   is run: one the firmware lacks is "undefined symbol", not a crash.)
+     1  picomite.h; system.h, memory.h, graphics.h, input.h (pm_inkey,
+        pm_keydown), basic.h (pm_execute, pm_eval_*, pm_settick), sprite.h,
+        audio.h, pm_colour, pm_load_image, pm_load_jpg
+     2  basic.h: pm_try, pm_execute_try, pm_eval_*_try, pm_errno,
+        pm_errmsg, pm_error_clear; files.h; vars.h; input.h: pm_mouse,
+        pm_usb_device, pm_cursor_*; the C library's remove, rename,
+        unistd.h, sys/stat.h, dirent.h and fopen's "a", "r+", "w+", "a+" */
+#define PM_API_VERSION 2
 unsigned pm_api_version(void);
 
 /* pm_get_info(): the firmware and the board.  Set size first, so a program

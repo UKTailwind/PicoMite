@@ -4,8 +4,12 @@
 #include <picomite/graphics.h>
 #include <picomite/input.h>
 
-/* Find the mouse as MMbg does: MM.INFO(USB n) = 2 is a mouse (USB builds),
-   else channel 2; GUI CURSOR linked to it; ESC ends. */
+/* mouse.c - find the mouse as MMbg does (MM.INFO(USB n) = 2 is a mouse on
+   the USB builds; else channel 2) and link the GUI cursor to it.  Without a
+   mouse (LINK MOUSE fails) the program moves the cursor itself, from the
+   top left corner down the diagonal, to show pm_cursor_move.  Then it shows
+   the mouse's X, Y and buttons; a pixel where the left button is held, a
+   message for a double click.  ESC ends. */
 int main(void)
 {
     long long t;

@@ -1247,11 +1247,17 @@ static void pm_delay_us(unsigned int us)
         pm_poll();
 }
 
+static void pm_yield(void);
+
+/* PAUSE: waiting as PAUSE does, through CheckAbort - the firmware's
+   background work goes on meanwhile (the USB keyboard and mouse, the GUI
+   cursor, ...) */
 static void pm_pause(unsigned int ms)
 {
     uint64_t end = time_us_64() + (uint64_t)ms * 1000;
-    while (time_us_64() < end)
-        pm_poll();
+    do
+        pm_yield();
+    while (time_us_64() < end);
 }
 
 static int pm_inkey(void)
@@ -1282,7 +1288,7 @@ static int pm_pin_read(int gp)
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 1
+#define PM_API_VERSION 2 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -2230,6 +2236,7 @@ static char *pm_cwd(char *buf, int size) /* CWD$ */
 
 /* DIR$(pattern, FILE | DIR | ALL), and DIR$() for the next name (pattern
    NULL): "" when there are no more */
+#define PM_DIR_ALL_ARG 2 /* (PM_DIR_ALL of include/picomite/files.h) */
 static char *pm_dir(const char *pattern, int what, char *buf, int size)
 {
     static const char *const kind[] = {"FILE", "DIR", "ALL"};
@@ -2391,34 +2398,55 @@ static int pm_c_stat(const char *path, struct pm_c_stat *st)
     return 0;
 }
 
-/* <dirent.h>: over DIR$, which keeps one listing at a time - so one DIR
-   open at a time.  (include/dirent.h has the same layout.) */
+/* <dirent.h>: opendir reads the whole listing at once (DIR$, then DIR$()
+   to its end), so each DIR is independent of the others and of DIR$ /
+   pm_dir afterwards.  (include/dirent.h has the same layout.) */
 #define PM_DT_REG 8
 #define PM_DT_DIR 4
 struct pm_c_dirent
 {
     unsigned char d_type;
-    char d_name[FF_MAX_LFN + 1];
+    char d_name[256];
 };
+_Static_assert(FF_MAX_LFN < 256, "struct dirent d_name");
 typedef struct
 {
-    bool open, first;
-    char path[FF_MAX_LFN];
-    char next[FF_MAX_LFN + 1];
     struct pm_c_dirent ent;
+    char *list; /* the entries: a type byte, the name, a 0 - one after another */
+    int len, pos;
 } pm_c_dir;
-static pm_c_dir *pm_dir_open; /* (in the arena) */
 
 typedef struct
 {
-    const char *pattern;
-    char *buf;
+    const char *pattern; /* DIR$(pattern, ALL), or NULL for DIR$() */
+    const char *path;
+    pm_c_dir *d;
 } pm_dir_args;
 
-static void pm_dir_fn(void *p)
+static void pm_dir_read_fn(void *p)
 {
     pm_dir_args *a = (pm_dir_args *)p;
-    pm_dir(a->pattern, 2, a->buf, FF_MAX_LFN + 1);
+    char name[FF_MAX_LFN + 1], full[FF_MAX_LFN * 2 + 2];
+    size_t n = strlen(a->path);
+    int cap = 0;
+    pm_dir(a->pattern, PM_DIR_ALL_ARG, name, sizeof(name));
+    while (name[0])
+    {
+        int k = (int)strlen(name) + 2;
+        if (a->d->len + k > cap)
+        {
+            char *l = tcc_pm_realloc(a->d->list, (size_t)(cap = cap * 2 + k + 256));
+            if (l == NULL)
+                error("Not enough memory");
+            a->d->list = l;
+        }
+        snprintf(full, sizeof(full), "%s%s%s", a->path,
+                 n == 0 || a->path[n - 1] == '/' || a->path[n - 1] == ':' ? "" : "/", name);
+        a->d->list[a->d->len] = pm_exists_dir(full) == 1 ? PM_DT_DIR : PM_DT_REG;
+        strcpy(a->d->list + a->d->len + 1, name);
+        a->d->len += k;
+        pm_dir(NULL, PM_DIR_ALL_ARG, name, sizeof(name)); /* DIR$() */
+    }
 }
 
 static void *pm_c_opendir(const char *path)
@@ -2427,53 +2455,42 @@ static void *pm_c_opendir(const char *path)
     pm_dir_args a;
     char pat[FF_MAX_LFN + 4];
     size_t n;
-    if (path == NULL || pm_dir_open != NULL || (n = strlen(path)) + 3 > FF_MAX_LFN)
+    if (path == NULL || (n = strlen(path)) + 3 > FF_MAX_LFN)
         return NULL;
     if ((d = pm_calloc(1, sizeof(pm_c_dir))) == NULL)
         return NULL;
-    strcpy(d->path, path);
     if (n == 0 || strcmp(path, ".") == 0)
-        strcpy(pat, "*");
+        strcpy(pat, "*"), path = "";
     else
         snprintf(pat, sizeof(pat), "%s%s*", path, path[n - 1] == '/' || path[n - 1] == ':' ? "" : "/");
-    a.pattern = pat, a.buf = d->next;
-    if (pm_try(pm_dir_fn, &a))
+    a.pattern = pat, a.path = path, a.d = d;
+    if (pm_try(pm_dir_read_fn, &a))
     {
+        tcc_pm_free(d->list);
         tcc_pm_free(d);
         return NULL;
     }
-    d->open = true;
-    pm_dir_open = d;
     return d;
 }
 
 static struct pm_c_dirent *pm_c_readdir(void *dir)
 {
     pm_c_dir *d = (pm_c_dir *)dir;
-    pm_dir_args a;
-    pm_fs_args x;
-    char full[FF_MAX_LFN * 2 + 2];
-    size_t n;
-    if (d == NULL || d != pm_dir_open || d->next[0] == 0)
+    if (d == NULL || d->pos >= d->len)
         return NULL;
-    strcpy(d->ent.d_name, d->next);
-    n = strlen(d->path);
-    snprintf(full, sizeof(full), "%s%s%s", d->path,
-             n == 0 || d->path[n - 1] == '/' || d->path[n - 1] == ':' ? "" : "/", d->ent.d_name);
-    x.a = full;
-    d->ent.d_type = (pm_try(pm_exists_dir_fn, &x) == 0 && x.v == 1) ? PM_DT_DIR : PM_DT_REG;
-    a.pattern = NULL, a.buf = d->next; /* DIR$() */
-    if (pm_try(pm_dir_fn, &a))
-        d->next[0] = 0;
+    d->ent.d_type = (unsigned char)d->list[d->pos];
+    strcpy(d->ent.d_name, d->list + d->pos + 1);
+    d->pos += (int)strlen(d->list + d->pos + 1) + 2;
     return &d->ent;
 }
 
 static int pm_c_closedir(void *dir)
 {
-    if (dir == NULL || dir != pm_dir_open)
+    pm_c_dir *d = (pm_c_dir *)dir;
+    if (d == NULL)
         return -1;
-    pm_dir_open = NULL;
-    tcc_pm_free(dir);
+    tcc_pm_free(d->list);
+    tcc_pm_free(d);
     return 0;
 }
 
@@ -3120,7 +3137,6 @@ static void pm_state_reset(void)
 {
     pm = NULL;
     pm_try_top = NULL;
-    pm_dir_open = NULL;
     pm_tick_any = false;
     pm_blocks = NULL;
     pm_chunks = NULL;
