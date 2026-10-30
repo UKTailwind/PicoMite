@@ -215,6 +215,39 @@ static void set_environment(TCCState *s)
     }
 }
 
+#ifdef TCC_PICOMITE
+/* No ld.so and no fixed load address on PicoMite: an executable is the
+   whole program linked into one relocatable ELF object (as -r), which RUN
+   loads and binds to the firmware's run-time library (tcc -run). */
+static int pm_exe;
+
+/* What the executable still needs must be in the firmware, and it must have
+   a main(): report what a linker would. */
+static int pm_check_exe(TCCState *s1)
+{
+    ElfW(Sym) *sym;
+    int ret = 0, has_main = 0;
+    for_each_elem(s1->symtab, 1, sym, ElfW(Sym)) {
+        const char *name = (char *)s1->symtab->link->data + sym->st_name;
+        if (ELFW(ST_BIND)(sym->st_info) == STB_LOCAL)
+            continue;
+        if (sym->st_shndx != SHN_UNDEF) {
+            if (!strcmp(name, "main"))
+                has_main = 1;
+        } else if (ELFW(ST_BIND)(sym->st_info) != STB_WEAK &&
+                   !tcc_pm_resolve_symbol(name)) {
+            tcc_error_noabort("undefined symbol '%s'", name);
+            ret = 1;
+        }
+    }
+    if (!has_main) {
+        tcc_error_noabort("undefined symbol 'main'");
+        ret = 1;
+    }
+    return ret;
+}
+#endif
+
 static char *default_outputfile(TCCState *s, const char *first_file)
 {
     /* The output-name helper is not recursive. */
@@ -232,6 +265,11 @@ static char *default_outputfile(TCCState *s, const char *first_file)
     else
     if (s->output_type == TCC_OUTPUT_EXE)
         strcpy(ext, ".exe");
+    else
+#endif
+#ifdef TCC_PICOMITE
+    if (pm_exe)
+        strcpy(ext, ".elf"); /* main.c -> main.elf */
     else
 #endif
     if (s->output_type == TCC_OUTPUT_OBJ && !s->option_r && *ext)
@@ -261,6 +299,9 @@ int pico_tcc_main(int argc0, char **argv0)
 
 redo:
     argc = argc0, argv = argv0;
+#ifdef TCC_PICOMITE
+    pm_exe = 0;
+#endif
     MOS_TRACE("new begin\n");
     s = s1 = tcc_new();
     MOS_TRACE("new done\n");
@@ -319,6 +360,13 @@ redo:
     }
 
     set_environment(s);
+#ifdef TCC_PICOMITE
+    if (s->output_type == 0) {
+        s->output_type = TCC_OUTPUT_OBJ;
+        s->option_r = 1;
+        pm_exe = 1;
+    }
+#endif
     if (s->output_type == 0)
         s->output_type = TCC_OUTPUT_EXE;
     tcc_set_output_type(s, s->output_type);
@@ -368,6 +416,11 @@ redo:
             if (!s->outfile)
                 s->outfile = default_outputfile(s, first_file);
             MOS_TRACE("output begin %s\n", s->outfile);
+#ifdef TCC_PICOMITE
+            if (pm_exe && pm_check_exe(s))
+                ret = 1;
+            else
+#endif
             if (tcc_output_file(s, s->outfile))
                 ret = 1;
             else if (s->gen_deps)

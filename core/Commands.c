@@ -2521,20 +2521,23 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 
 #ifdef rp2350
 	/* RUN "file.c" [, "args"]: compile the C file with TinyCC and run it in
-	   memory (tcc -run), its args as argv[1..].  As for a BASIC program the
-	   variables, open files and heap are cleared first, which leaves the
-	   whole heap to the compiler; the names are copied off the heap first. */
+	   memory (tcc -run), its args as argv[1..].  RUN "file" [, "args"] of an
+	   ELF file (made by the TCC command) loads it the same way, binding it to
+	   the firmware's run-time library.  As for a BASIC program the variables,
+	   open files and heap are cleared first, which leaves the whole heap to
+	   TinyCC; the names are copied off the heap first. */
 	if (!CMM2mode && *filename)
 	{
 		size_t len = strlen((const char *)filename);
-		if (len >= 2 && filename[len - 2] == '.' &&
-			(filename[len - 1] == 'c' || filename[len - 1] == 'C'))
+		bool is_c = len >= 2 && filename[len - 2] == '.' &&
+					(filename[len - 1] == 'c' || filename[len - 1] == 'C');
+		if (is_c || tcc_picomite_is_elf((const char *)filename))
 		{
 			char cfile[MAXSTRLEN + 1], cargs[MAXSTRLEN + 1];
 			snprintf(cfile, sizeof(cfile), "%s", (char *)filename);
 			snprintf(cargs, sizeof(cargs), "%s", (char *)cmd_args);
 			ClearRuntime(true);
-			tcc_picomite_run(cfile, cargs);
+			tcc_picomite_run(cfile, cargs, is_c);
 			return;
 		}
 	}

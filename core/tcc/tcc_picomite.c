@@ -42,7 +42,6 @@
 #define TCC_PM_CHUNK_SIZE (16 * 1024)  /* arena growth step */
 #define TCC_PM_MAX_FILES 8             /* adapter files open at once */
 #define TCC_PM_FD_BASE 3               /* 0..2 are stdin/out/err */
-#define TCC_PM_MAX_ARGS 16
 
 /* ------------------------------------------------------------------------ */
 /* MMBasic error trap                                                        */
@@ -1373,31 +1372,71 @@ static void pm_state_reset(void)
     __tcc_pm_stdin = __tcc_pm_stdout = __tcc_pm_stderr = NULL;
 }
 
-void tcc_picomite_run(const char *filename, const char *args)
+/* Split a command line into words in place: blanks separate them, "..."
+   keeps blanks in one.  Returns the number of words stored (at most max). */
+static int pm_split(char *p, char **argv_, int max)
+{
+    int n = 0;
+    char *d;
+    while (n < max)
+    {
+        while (*p == ' ' || *p == '\t')
+            p++;
+        if (*p == 0)
+            break;
+        argv_[n++] = d = p;
+        while (*p && *p != ' ' && *p != '\t')
+        {
+            if (*p == '"')
+            {
+                p++;
+                while (*p && *p != '"')
+                    *d++ = *p++;
+                if (*p)
+                    p++;
+            }
+            else
+                *d++ = *p++;
+        }
+        if (*p)
+            p++;
+        *d = 0;
+    }
+    return n;
+}
+
+/* Run the TinyCC command line prefix[] + the words of args.  fail is the
+   MMBasic error for a non-zero result when no program was started. */
+static void pm_exec(const char *const *prefix, int nprefix, const char *args, const char *fail)
 {
     volatile int how = PM_END_NONE;
     char errmsg[MAXERRMSG];
-    char *argbuf, *p;
+    char *argbuf;
     pm_run_args *a;
     pm_trap t;
+    int i, max;
 
     if (pm_active)
     {
         /* The last run was left by a jump straight to the prompt (CTRL-C
-           inside a console read): its memory and files went with
-           ClearRuntime, so only TinyCC's pointers to them are left. */
+           inside a console read): only TinyCC's pointers into its arena are
+           left (the arena itself goes with the next ClearRuntime). */
         tcc_pm_forget_globals();
         pm_active = false;
     }
     pm_state_reset();
 
+    if (args == NULL)
+        args = "";
+    max = nprefix + (int)strlen(args) / 2 + 2;
     pm = pm_calloc(1, sizeof(pm_state));
-    argbuf = pm_strdup(args ? args : "");
+    argbuf = pm_strdup(args);
     if (pm == NULL || argbuf == NULL ||
-        (pm->args.argv = pm_calloc(TCC_PM_MAX_ARGS + 6, sizeof(char *))) == NULL ||
+        (pm->args.argv = pm_calloc((size_t)max, sizeof(char *))) == NULL ||
         (pm->stack = GetMemoryNull(TCC_PM_STACK_SIZE)) == NULL)
     {
         pm_heap_release();
+        pm_state_reset();
         error("Not enough memory");
     }
     pm->con_in.kind = PM_FILE_CONIN;
@@ -1406,30 +1445,11 @@ void tcc_picomite_run(const char *filename, const char *args)
     __tcc_pm_stdout = (FILE *)&pm->con_out;
     __tcc_pm_stderr = (FILE *)&pm->con_err;
 
-    /* tcc -xc -D__PICOMITE__ -run file [args...] */
     a = &pm->args;
-    a->argv[a->argc++] = "tcc";
-    a->argv[a->argc++] = "-xc";
-    a->argv[a->argc++] = "-D__PICOMITE__";
-    a->argv[a->argc++] = "-run";
-    a->argv[a->argc++] = pm_strdup(filename);
-    for (p = argbuf; *p && a->argc < TCC_PM_MAX_ARGS + 5;)
-    {
-        while (*p == ' ')
-            *p++ = 0;
-        if (*p == 0)
-            break;
-        a->argv[a->argc++] = p;
-        while (*p && *p != ' ')
-            p++;
-    }
+    for (i = 0; i < nprefix; i++)
+        a->argv[a->argc++] = (char *)prefix[i];
+    a->argc += pm_split(argbuf, a->argv + a->argc, max - a->argc - 1);
     a->argv[a->argc] = NULL;
-    if (a->argv[4] == NULL)
-    {
-        FreeMemory(pm->stack);
-        pm_heap_release();
-        error("Not enough memory");
-    }
 
     __asm volatile("mrs %0, msplim" : "=r"(pm->msplim));
     __asm volatile("msr msplim, %0" ::"r"(0));
@@ -1478,9 +1498,58 @@ void tcc_picomite_run(const char *filename, const char *args)
         error("$", errmsg);
         break;
     case -1:
-        error("C compilation failed");
+        error("$", fail);
         break;
     default:
         break;
     }
+}
+
+/* RUN "file.c" [, "args"]: tcc -xc -D__PICOMITE__ -run file.c args...
+   RUN "file" [, "args"] for an ELF object made by the TCC command:
+   tcc -xb -run file args... - linked to the firmware as it is loaded. */
+void tcc_picomite_run(const char *filename, const char *args, bool is_c)
+{
+    static const char *const c_prefix[] = {"tcc", "-xc", "-D__PICOMITE__", "-run"};
+    static const char *const elf_prefix[] = {"tcc", "-xb", "-run"};
+    char line[STRINGSIZE * 2 + 4]; /* "file" args, the name quoted for pm_split */
+    snprintf(line, sizeof(line), "\"%s\" %s", filename, args ? args : "");
+    if (is_c)
+        pm_exec(c_prefix, 4, line, "C compilation failed");
+    else
+        pm_exec(elf_prefix, 3, line, "Cannot run the ELF file");
+}
+
+/* Does the file start with the ELF signature?  False for a file that does
+   not exist or cannot be read - never an MMBasic error. */
+bool tcc_picomite_is_elf(const char *filename)
+{
+    unsigned char sig[4] = {0};
+    unsigned int got = 0;
+    volatile bool elf = false;
+    int fnbr = pm_free_fnbr();
+    pm_trap t;
+    if (fnbr < 0 || !pm_disk_open(filename, fnbr, false))
+        return false;
+    if (PM_TRY(t))
+        elf = FileGetData(fnbr, sig, 4, &got) == 0 && got == 4 &&
+              sig[0] == 0x7f && sig[1] == 'E' && sig[2] == 'L' && sig[3] == 'F';
+    pm_trap_restore(&t);
+    ForceFileClose(fnbr);
+    return elf;
+}
+
+/* TCC "command line": TinyCC's own command line (see TCC "-h"), e.g.
+     TCC "-c util.c"                     object file util.o
+     TCC "-o game.elf main.c util.o"     executable for RUN "game.elf"
+     TCC "@game.rsp"                     the arguments read from a file
+     TCC "-run test.c arg"               compile and run, as RUN "test.c"
+   Without -c, -r, -E or -run the files are linked into an executable (an ELF
+   object holding the whole program, which RUN binds to the firmware). */
+void cmd_tcc(void)
+{
+    static const char *const prefix[] = {"tcc", "-D__PICOMITE__"};
+    char line[STRINGSIZE];
+    snprintf(line, sizeof(line), "%s", (char *)getCstring(cmdline));
+    pm_exec(prefix, 2, line, "TCC failed");
 }

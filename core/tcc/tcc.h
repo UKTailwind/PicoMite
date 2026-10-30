@@ -123,7 +123,7 @@
    ';' since ':' follows a drive letter */
 # define IS_DIRSEP(c) (c == '/')
 # define IS_ABSPATH(p) (IS_DIRSEP(p[0]) || (p[0] && p[1] == ':'))
-# define PATHCMP strcmp
+# define PATHCMP strcasecmp /* the PicoMite drives ignore case: X.C is C */
 # define PATHSEP ";"
 #else
 # define IS_DIRSEP(c) (c == '/')

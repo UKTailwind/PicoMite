@@ -19,6 +19,7 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -90,8 +91,12 @@ int pico_tcc_main(int argc, char **argv);
    left by a longjmp past TinyCC's own cleanup. */
 void tcc_pm_forget_globals(void);
 
-/* Entry point for the firmware: RUN "file.c" [, "args"] */
-void tcc_picomite_run(const char *filename, const char *args);
+/* Entry points for the firmware:
+   RUN "file.c" [, "args"] (is_c) and RUN "file" of an ELF made by TCC */
+void tcc_picomite_run(const char *filename, const char *args, bool is_c);
+bool tcc_picomite_is_elf(const char *filename);
+/* the TCC command (AllCommands.h) */
+void cmd_tcc(void);
 
 #ifdef TCC_PM_REDIRECT_LIBC
 #undef open
