@@ -1288,7 +1288,7 @@ static int pm_pin_read(int gp)
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 2 /* (include/picomite/system.h: what each version added) */
+#define PM_API_VERSION 3 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -2495,6 +2495,124 @@ static int pm_c_closedir(void *dir)
 }
 
 /* ------------------------------------------------------------------------ */
+/* <picomite/framebuffer.h>: FRAMEBUFFER and BLIT                           */
+/* ------------------------------------------------------------------------ */
+
+/* a buffer letter of FRAMEBUFFER / BLIT FRAMEBUFFER: N F L T 2 */
+static char pm_fb_letter(int b)
+{
+    b = toupper(b);
+    if (b != 'N' && b != 'F' && b != 'L' && b != 'T' && b != '2')
+        PM_CALL(error("Invalid argument"));
+    return (char)b;
+}
+
+/* FRAMEBUFFER CREATE (buffer 'F') / CREATE 2 ('2') */
+static void pm_framebuffer_create(int buffer)
+{
+    pm_execute(pm_fb_letter(buffer) == '2' ? "FRAMEBUFFER CREATE 2" : "FRAMEBUFFER CREATE");
+}
+
+/* FRAMEBUFFER LAYER [transparent] / LAYER TOP [transparent] */
+static void pm_framebuffer_layer(int transparent)
+{
+    char a1[16];
+    pm_cmdf("FRAMEBUFFER LAYER %s", pm_arg(a1, transparent) + 1);
+}
+
+static void pm_framebuffer_layer_top(int transparent)
+{
+    char a1[16];
+    pm_cmdf("FRAMEBUFFER LAYER TOP %s", pm_arg(a1, transparent) + 1);
+}
+
+static void pm_framebuffer_write(int buffer) /* FRAMEBUFFER WRITE N | F | L | T | 2 */
+{
+    pm_cmdf("FRAMEBUFFER WRITE %c", pm_fb_letter(buffer));
+}
+
+/* FRAMEBUFFER COPY from, to [, B] (at_blank: wait for the frame blanking) */
+static void pm_framebuffer_copy(int from, int to, int at_blank)
+{
+    pm_cmdf("FRAMEBUFFER COPY %c,%c%s", pm_fb_letter(from), pm_fb_letter(to), at_blank ? ",B" : "");
+}
+
+/* FRAMEBUFFER MERGE [colour] [, mode [, rate]]: mode 'B', 'R', 'A' or
+   PM_DEFAULT; rate PM_DEFAULT if left out (the LCD builds take it) */
+static void pm_framebuffer_merge(int colour, int mode, int rate)
+{
+    char a1[16], a2[16], b[64];
+    if (mode != PM_DEFAULT_ARG)
+    {
+        mode = toupper(mode);
+        if (mode != 'B' && mode != 'R' && mode != 'A')
+            PM_CALL(error("Invalid argument"));
+        snprintf(a2, sizeof(a2), ",%c", mode);
+    }
+    else
+        strcpy(a2, ",");
+    snprintf(b, sizeof(b), "FRAMEBUFFER MERGE %s%s", pm_arg(a1, colour) + 1, a2);
+    if (rate != PM_DEFAULT_ARG)
+        snprintf(b + strlen(b), sizeof(b) - strlen(b), ",%d", rate);
+    pm_cmd_trim(b);
+    pm_execute(b);
+}
+
+static void pm_framebuffer_sync(void) { pm_execute("FRAMEBUFFER SYNC"); }
+static void pm_framebuffer_wait(void) { pm_execute("FRAMEBUFFER WAIT"); }
+
+/* FRAMEBUFFER CLOSE [F | L | T | 2]: PM_DEFAULT closes them all */
+static void pm_framebuffer_close(int buffer)
+{
+    if (buffer == PM_DEFAULT_ARG)
+        pm_execute("FRAMEBUFFER CLOSE");
+    else
+        pm_cmdf("FRAMEBUFFER CLOSE %c", pm_fb_letter(buffer));
+}
+
+/* BLIT FRAMEBUFFER from, to, x1, y1, x2, y2, w, h [, colour]: straight to
+   the firmware (graphics/Blit.c), as it is often used for each frame */
+static void pm_blit_framebuffer(int from, int to, int x1, int y1, int x2, int y2, int w, int h, int colour)
+{
+    char f = pm_fb_letter(from), t = pm_fb_letter(to);
+    PM_CALL(BlitFramebufferC(f, t, x1, y1, x2, y2, w, h, colour == PM_DEFAULT_ARG ? -1 : colour));
+}
+
+/* BLIT x1, y1, x2, y2, w, h; BLIT READ / WRITE / LOAD / CLOSE of a BLIT
+   buffer (1..), run by pm_execute */
+static void pm_blit(int x1, int y1, int x2, int y2, int w, int h)
+{
+    pm_cmdf("BLIT %d,%d,%d,%d,%d,%d", x1, y1, x2, y2, w, h);
+}
+
+static void pm_blit_read(int n, int x, int y, int w, int h)
+{
+    pm_cmdf("BLIT READ %d,%d,%d,%d,%d", n, x, y, w, h);
+}
+
+static void pm_blit_write(int n, int x, int y, int mode)
+{
+    char a1[16], b[64];
+    snprintf(b, sizeof(b), "BLIT WRITE %d,%d,%d%s", n, x, y, pm_arg(a1, mode));
+    pm_cmd_trim(b);
+    pm_execute(b);
+}
+
+static void pm_blit_load(int n, const char *file, int x, int y, int w, int h)
+{
+    char a1[16], a2[16], a3[16], a4[16], b[STRINGSIZE];
+    snprintf(b, sizeof(b), "%d,\"%s\"%s%s%s%s", n, pm_word(file, false), pm_arg(a1, x), pm_arg(a2, y), pm_arg(a3, w),
+             pm_arg(a4, h));
+    pm_cmd_trim(b);
+    pm_cmdf("BLIT LOAD %s", b);
+}
+
+static void pm_blit_close(int n)
+{
+    pm_cmdf("BLIT CLOSE %d", n);
+}
+
+/* ------------------------------------------------------------------------ */
 /* <picomite/input.h>: the mouse and the GUI cursor                         */
 /* ------------------------------------------------------------------------ */
 
@@ -2981,6 +3099,22 @@ static const pm_sym pm_syms[] = {
     PM_SYM_AS(opendir, pm_c_opendir)
     PM_SYM_AS(readdir, pm_c_readdir)
     PM_SYM_AS(closedir, pm_c_closedir)
+    /* <picomite/framebuffer.h> */
+    PM_SYM(pm_framebuffer_create)
+    PM_SYM(pm_framebuffer_layer)
+    PM_SYM(pm_framebuffer_layer_top)
+    PM_SYM(pm_framebuffer_write)
+    PM_SYM(pm_framebuffer_copy)
+    PM_SYM(pm_framebuffer_merge)
+    PM_SYM(pm_framebuffer_sync)
+    PM_SYM(pm_framebuffer_wait)
+    PM_SYM(pm_framebuffer_close)
+    PM_SYM(pm_blit_framebuffer)
+    PM_SYM(pm_blit)
+    PM_SYM(pm_blit_read)
+    PM_SYM(pm_blit_write)
+    PM_SYM(pm_blit_load)
+    PM_SYM(pm_blit_close)
     /* <picomite/input.h>: the mouse and the cursor */
     PM_SYM(pm_mouse)
     PM_SYM(pm_usb_device)

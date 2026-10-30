@@ -365,7 +365,7 @@ copied to a drive.
 `dirent.h`, `picomite.h`, and the firmware API `picomite/system.h`,
 `picomite/memory.h`, `picomite/graphics.h`, `picomite/input.h`,
 `picomite/basic.h`, `picomite/sprite.h`, `picomite/audio.h`,
-`picomite/files.h`, `picomite/vars.h` and
+`picomite/files.h`, `picomite/vars.h`, `picomite/framebuffer.h` and
 `PicoCFunctions.h` (see [The firmware API](#the-firmware-api-picomite)).
 
 They declare exactly what the run-time library below provides. A function
@@ -552,7 +552,7 @@ firmware's services are being opened up further in separate headers under
 `picomite/`, one for each subsystem. They may repeat a few declarations of
 `picomite.h`, so a program can include either or both.
 
-The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 2. It
+The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 3. It
 goes up by one whenever functions are added, and nothing is ever taken away
 or changed, so a firmware of version n has everything of 1 to n.
 `system.h` lists what each version added; a program that uses what version
@@ -563,6 +563,7 @@ missing one is `undefined symbol`, never a crash.
 | Version | Added |
 |---|---|
 | 1 | `picomite.h`; `system.h`, `memory.h`, `graphics.h`, `input.h` (`pm_inkey`, `pm_keydown`), `basic.h` (`pm_execute`, `pm_eval_*`, `pm_settick`), `sprite.h`, `audio.h`, `pm_colour`, `pm_load_image`, `pm_load_jpg` |
+| 3 | `framebuffer.h` |
 | 2 | `basic.h`: `pm_try`, `pm_execute_try`, `pm_eval_*_try`, `pm_errno`, `pm_errmsg`, `pm_error_clear`; `files.h`; `vars.h`; `input.h`: `pm_mouse`, `pm_usb_device`, `pm_cursor_*`; the C library's `remove`, `rename`, `unistd.h`, `sys/stat.h`, `dirent.h` and `fopen`'s `"a"`, `"r+"`, `"w+"`, `"a+"` |
 
 Structs that
@@ -769,6 +770,51 @@ if (ch && pm_execute_try("GUI CURSOR ON 0, 320, 240") == 0 &&
     pm_cursor_off();
 ...
 if (pm_mouse(ch, 'L')) { int x = pm_mouse(ch, 'X'), y = pm_mouse(ch, 'Y'); ... }
+```
+
+#### `<picomite/framebuffer.h>`: FRAMEBUFFER and BLIT
+
+```c
+void pm_framebuffer_create(int buffer);           /* FRAMEBUFFER CREATE ('F') / CREATE 2 ('2') */
+void pm_framebuffer_layer(int transparent);       /* FRAMEBUFFER LAYER [transparent] */
+void pm_framebuffer_layer_top(int transparent);   /* FRAMEBUFFER LAYER TOP [transparent] */
+void pm_framebuffer_write(int buffer);            /* FRAMEBUFFER WRITE N | F | L | T | 2 */
+void pm_framebuffer_copy(int from, int to, int at_blank); /* FRAMEBUFFER COPY from, to [, B] */
+void pm_framebuffer_merge(int colour, int mode, int rate); /* FRAMEBUFFER MERGE [c] [, mode [, rate]] */
+void pm_framebuffer_sync(void);                   /* FRAMEBUFFER SYNC */
+void pm_framebuffer_wait(void);                   /* FRAMEBUFFER WAIT */
+void pm_framebuffer_close(int buffer);            /* FRAMEBUFFER CLOSE [buffer] */
+void pm_blit_framebuffer(int from, int to, int x1, int y1, int x2, int y2,
+                         int w, int h, int colour); /* BLIT FRAMEBUFFER ... [, colour] */
+void pm_blit(int x1, int y1, int x2, int y2, int w, int h); /* BLIT */
+void pm_blit_read(int n, int x, int y, int w, int h);       /* BLIT READ */
+void pm_blit_write(int n, int x, int y, int mode);          /* BLIT WRITE */
+void pm_blit_load(int n, const char *file, int x, int y, int w, int h); /* BLIT LOAD */
+void pm_blit_close(int n);                                  /* BLIT CLOSE */
+```
+
+- A buffer is its BASIC letter: `'N'` the display, `'F'` the framebuffer,
+  `'L'` the layer, and on the RP2350 VGA/HDMI builds `'T'` the top layer and
+  `'2'` framebuffer 2. What a build does not have is the error BASIC gives.
+- An argument BASIC lets you leave out is `PM_DEFAULT`: `pm_framebuffer_close(PM_DEFAULT)`
+  closes them all, as `FRAMEBUFFER CLOSE` does.
+- Drawing goes to the buffer `pm_framebuffer_write` chose, as in BASIC.
+- `pm_blit_framebuffer` calls the firmware directly (the copy of `BLIT
+  FRAMEBUFFER` is shared with the command), so it is fit for every frame of
+  an animation. The others run the statement.
+
+```c
+/* MMbg's animation: the background in F, the moving piece over N */
+pm_framebuffer_create('F');
+pm_framebuffer_write('F');
+/* ... draw the board ... */
+pm_framebuffer_copy('F', 'N', 1);
+pm_framebuffer_write('N');
+for (;;) {
+    pm_blit_framebuffer('F', 'N', ox, oy, ox, oy, 29, 29, PM_DEFAULT); /* the background back */
+    pm_circle(x + 14, y + 14, 13, 1, PM_WHITE, PM_YELLOW);           /* the piece */
+    ...
+}
 ```
 
 #### `<picomite/sprite.h>`

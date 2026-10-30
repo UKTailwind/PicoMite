@@ -15,8 +15,9 @@
      2  basic.h: pm_try, pm_execute_try, pm_eval_*_try, pm_errno,
         pm_errmsg, pm_error_clear; files.h; vars.h; input.h: pm_mouse,
         pm_usb_device, pm_cursor_*; the C library's remove, rename,
-        unistd.h, sys/stat.h, dirent.h and fopen's "a", "r+", "w+", "a+" */
-#define PM_API_VERSION 2
+        unistd.h, sys/stat.h, dirent.h and fopen's "a", "r+", "w+", "a+"
+     3  framebuffer.h (FRAMEBUFFER, BLIT FRAMEBUFFER, BLIT) */
+#define PM_API_VERSION 3
 unsigned pm_api_version(void);
 
 /* pm_get_info(): the firmware and the board.  Set size first, so a program

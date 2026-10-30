@@ -506,6 +506,7 @@ void SpriteShowC(int bnbr, int x1, int y1, int layer, int rotation);
 void SpriteHideC(int bnbr);
 void SpriteWriteC(int bnbr, int x1, int y1, int orientation);
 void SpriteCloseAllC(void);
+void BlitFramebufferC(int from, int to, int x1, int y1, int x2, int y2, int w, int h, int blank); /* BLIT FRAMEBUFFER */
 void closeallstobjects(void);
 void closeframebuffer(char layer);
 

@@ -216,7 +216,9 @@ extern "C"
       of text) went 22 KB over. */
    /* +32 KB (2026-10-30): the typed C API (<picomite/sprite.h>, audio.h, ...)
       went 2.7 KB over; the firmware ends at 1346.7 KB. */
-#define FLASH_TARGET_OFFSET (1376 * 1024)
+   /* +16 KB (2026-10-30): the C API to FRAMEBUFFER and BLIT left 5.5 KB; the
+      firmware ends at 1370.5 KB. */
+#define FLASH_TARGET_OFFSET (1392 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 1144 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -259,7 +261,9 @@ extern "C"
    /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 1.1 KB over. */
    /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
       ~250 KB of flash); the firmware ends at 1315.4 KB. */
-#define FLASH_TARGET_OFFSET (1344 * 1024)
+   /* +16 KB (2026-10-30): the C API to FRAMEBUFFER and BLIT left 4.7 KB; the
+      firmware ends at 1339.3 KB. */
+#define FLASH_TARGET_OFFSET (1360 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.5 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.5 KB of RAM margin left for the stack. */
@@ -495,7 +499,9 @@ extern "C"
       BLIT went 5.0 KB over. */
    /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
       ~250 KB of flash); the firmware ends at 1401.4 KB. */
-#define FLASH_TARGET_OFFSET (1424 * 1024)
+   /* +16 KB (2026-10-30): the C API to FRAMEBUFFER and BLIT went 1.4 KB over;
+      the firmware ends at 1425.4 KB. */
+#define FLASH_TARGET_OFFSET (1440 * 1024)
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
    /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~6.0 KB of RAM margin left for the stack. */
