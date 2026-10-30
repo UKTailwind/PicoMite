@@ -2178,12 +2178,22 @@ static void pm_play_bbc_sound(int channel, int amplitude, int pitch, int duratio
    ALA, ALD: the 14 values in that order */
 static void pm_play_bbc_envelope(const int e[14])
 {
-    char b[160];
-    int k, n = snprintf(b, sizeof(b), "PLAY BBC ENVELOPE");
+    char b[192]; /* the command plus fourteen signed 32-bit integers */
+    size_t n;
+    int k;
     if (e == NULL)
         PM_CALL(error("Argument count"));
+    n = (size_t)snprintf(b, sizeof(b), "PLAY BBC ENVELOPE");
     for (k = 0; k < 14; k++)
-        n += snprintf(b + n, sizeof(b) - (size_t)n, "%s%d", k ? "," : " ", e[k]);
+    {
+        int written;
+        if (n >= sizeof(b))
+            PM_CALL(error("String too long"));
+        written = snprintf(b + n, sizeof(b) - n, "%s%d", k ? "," : " ", e[k]);
+        if (written < 0 || (size_t)written >= sizeof(b) - n)
+            PM_CALL(error("String too long"));
+        n += (size_t)written;
+    }
     pm_execute(b);
 }
 
@@ -2613,7 +2623,10 @@ static char pm_fb_letter(int b)
 /* FRAMEBUFFER CREATE (buffer 'F') / CREATE 2 ('2') */
 static void pm_framebuffer_create(int buffer)
 {
-    pm_execute(pm_fb_letter(buffer) == '2' ? "FRAMEBUFFER CREATE 2" : "FRAMEBUFFER CREATE");
+    char b = pm_fb_letter(buffer);
+    if (b != 'F' && b != '2')
+        PM_CALL(error("Invalid argument"));
+    pm_execute(b == '2' ? "FRAMEBUFFER CREATE 2" : "FRAMEBUFFER CREATE");
 }
 
 /* FRAMEBUFFER LAYER [transparent] / LAYER TOP [transparent] */
@@ -2634,10 +2647,12 @@ static void pm_framebuffer_write(int buffer) /* FRAMEBUFFER WRITE N | F | L | T 
     pm_cmdf("FRAMEBUFFER WRITE %c", pm_fb_letter(buffer));
 }
 
-/* FRAMEBUFFER COPY from, to [, B] (at_blank: wait for the frame blanking) */
+/* FRAMEBUFFER COPY from, to [, B]: wait for blanking on VGA/HDMI,
+   background screen copy on supported LCD builds. */
 static void pm_framebuffer_copy(int from, int to, int at_blank)
 {
-    pm_cmdf("FRAMEBUFFER COPY %c,%c%s", pm_fb_letter(from), pm_fb_letter(to), at_blank ? ",B" : "");
+    char src = pm_fb_letter(from), dst = pm_fb_letter(to);
+    PM_CALL(FrameBufferCopyC(src, dst, at_blank != 0));
 }
 
 /* FRAMEBUFFER MERGE [colour] [, mode [, rate]]: mode 'B', 'R', 'A' or
