@@ -374,6 +374,7 @@ void CursorHide(void);
 void CursorRefresh(void);
 void CursorOnHeapWipe(void);   /* called by ClearRuntime before InitHeap(true) */
 bool cursor_handle_gui_subcommand(unsigned char *cmdline_in);
+void CursorMoveC(int x, int y); /* GUI CURSOR x, y */
 extern volatile bool CursorSuspend;
 #ifdef GUICONTROLS
 bool click_handle_gui_subcommand(unsigned char *cmdline_in);

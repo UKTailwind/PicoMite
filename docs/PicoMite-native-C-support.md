@@ -318,9 +318,11 @@ After that:
 - **Not available in a CSUB**, because a CSUB runs outside any C program:
   `malloc calloc realloc free strdup exit abort`, console input
   (`getchar fgetc getc fgets`, `stdin`) and files
-  (`fopen fclose fread fwrite fseek ftell rewind feof ferror`), `pm_alloc`,
-  `pm_free` and `pm_settick`. Using one is reported as `undefined symbol`
-  when the program is saved. `pm_execute` and `pm_eval_*` work.
+  (`fopen fclose fread fwrite fseek ftell rewind feof ferror`,
+  `opendir readdir closedir`), `pm_alloc`, `pm_free` and `pm_settick`. Using one is reported as `undefined symbol`
+  when the program is saved. `pm_execute`, `pm_eval_*` and `pm_try` work,
+  and `pm_var` (`<picomite/vars.h>`) reaches the calling program's
+  variables by name.
 - An MMBasic error in a `pm_` call (an invalid pin, for example) is reported
   as that error at the CSUB's call, as for any MMBasic command.
 
@@ -359,9 +361,11 @@ copied to a drive.
 
 `assert.h`, `ctype.h`, `float.h`, `limits.h`, `math.h`, `stdalign.h`,
 `stdarg.h`, `stdbool.h`, `stddef.h`, `stdint.h`, `stdio.h`, `stdlib.h`,
-`stdnoreturn.h`, `string.h`, `time.h`, `picomite.h`, and the firmware API
-`picomite/system.h`, `picomite/memory.h`, `picomite/graphics.h`,
-`picomite/input.h`, `picomite/basic.h` and
+`stdnoreturn.h`, `string.h`, `time.h`, `unistd.h`, `sys/stat.h`,
+`dirent.h`, `picomite.h`, and the firmware API `picomite/system.h`,
+`picomite/memory.h`, `picomite/graphics.h`, `picomite/input.h`,
+`picomite/basic.h`, `picomite/sprite.h`, `picomite/audio.h`,
+`picomite/files.h`, `picomite/vars.h` and
 `PicoCFunctions.h` (see [The firmware API](#the-firmware-api-picomite)).
 
 They declare exactly what the run-time library below provides. A function
@@ -372,7 +376,10 @@ that is declared nowhere and not in the library ends with
 
 | Header | Functions |
 |---|---|
-| stdio.h | `printf fprintf vprintf vfprintf sprintf snprintf vsprintf vsnprintf puts putchar fputs fputc putc getchar fgetc getc fgets fopen fclose fread fwrite fseek ftell rewind feof ferror fflush`, `stdin stdout stderr` |
+| stdio.h | `printf fprintf vprintf vfprintf sprintf snprintf vsprintf vsnprintf puts putchar fputs fputc putc getchar fgetc getc fgets fopen fclose fread fwrite fseek ftell rewind feof ferror fflush remove rename`, `stdin stdout stderr` |
+| unistd.h | `chdir rmdir unlink getcwd` |
+| sys/stat.h | `stat mkdir` |
+| dirent.h | `opendir readdir closedir` |
 | stdlib.h | `malloc calloc realloc free exit abort atoi atol atof strtol strtoul strtoll strtoull strtod strtof abs labs llabs rand srand qsort bsearch` |
 | string.h | `memcpy memmove memset memcmp memchr strlen strcpy strncpy strcat strncat strcmp strncmp strchr strrchr strstr strspn strcspn strpbrk strtok strdup` |
 | ctype.h | `isalnum isalpha iscntrl isdigit isgraph islower isprint ispunct isspace isupper isxdigit tolower toupper` |
@@ -395,13 +402,79 @@ software, `float` on the FPU.
 ### Files
 
 `fopen()` takes MMBasic file names (`"B:/data/log.txt"`, or a name relative
-to the current directory on the current drive). Supported modes are `"r"`,
-`"rb"`, `"w"` and `"wb"`. Append and update modes (`"a"`, `"r+"`, ...) are
-not supported and `fopen` returns `NULL`. A program can have up to 8 files
-open at once, within MMBasic's own limit of 10 open files.
+to the current directory on the current drive). A program can have up to 8
+files open at once, within MMBasic's own limit of 10 open files.
+
+| Mode | | As MMBasic's |
+|---|---|---|
+| `"r"` | read; the file must exist | `OPEN ... FOR INPUT` |
+| `"w"` | write, emptied or created | `OPEN ... FOR OUTPUT` |
+| `"a"` | write at the end, created if missing | `OPEN ... FOR APPEND` |
+| `"r+"` | read and write from the start; the file must exist | `OPEN ... FOR RANDOM` |
+| `"w+"` | read and write, emptied or created | `OUTPUT`, then `RANDOM` |
+| `"a+"` | read from the start, write at the end | `OPEN ... FOR RANDOM` |
+
+`"b"` and `"t"` are accepted and ignored. In `"a"` and `"a+"` every write
+goes to the end, wherever `fseek` left the position.
 
 File errors never stop the program with an MMBasic error. `fopen` returns
 `NULL`, `fread`/`fwrite` return short counts, and `ferror()` is set.
+
+The rest of the file system has two forms:
+
+- **The C library's**: `remove`, `rename` (`stdio.h`), `chdir`, `rmdir`,
+  `unlink`, `getcwd` (`unistd.h`), `stat`, `mkdir` (`sys/stat.h`) and
+  `opendir`, `readdir`, `closedir` (`dirent.h`). They mean what C means and
+  return -1 (or `NULL`) when they fail, never an MMBasic error;
+  `pm_errmsg()` (`<picomite/basic.h>`) then says why.
+  - `rename` works on the current drive only, as `RENAME` does.
+  - `stat` fills `st_mode` (`S_ISDIR`, `S_ISREG`), `st_size` and
+    `st_mtime`: `MM.INFO(MODIFIED)` as seconds from 1970, in the PicoMite
+    clock's own time, as `time()` gives it.
+  - `readdir` gives `d_name` and `d_type` (`DT_DIR` or `DT_REG`). It works
+    over `DIR$`, which keeps one listing at a time, so one directory can be
+    open at a time: `opendir` returns `NULL` while another is.
+- **MMBasic's**, in `<picomite/files.h>`: the commands and functions of the
+  same name, with their errors (`pm_try` catches them).
+
+```c
+void pm_kill(const char *file);                   /* KILL file$ */
+void pm_rename(const char *from, const char *to); /* RENAME from$ AS to$ */
+void pm_copy(const char *from, const char *to);   /* COPY from$ TO to$ */
+void pm_mkdir(const char *dir);                   /* MKDIR */
+void pm_rmdir(const char *dir);                   /* RMDIR */
+void pm_chdir(const char *dir);                   /* CHDIR */
+void pm_drive(const char *drive);                 /* DRIVE "B:" */
+char *pm_cwd(char *buf, int size);                /* CWD$ */
+char *pm_drive_name(char *buf, int size);         /* MM.INFO$(DRIVE) */
+char *pm_dir(const char *pattern, int what, char *buf, int size); /* DIR$ */
+int  pm_exists_file(const char *file);            /* MM.INFO(EXISTS FILE) */
+int  pm_exists_dir(const char *dir);              /* MM.INFO(EXISTS DIR) */
+long long pm_filesize(const char *file);          /* MM.INFO(FILESIZE) */
+char *pm_modified(const char *file, char *buf, int size); /* MM.INFO(MODIFIED) */
+long long pm_free_space(void);                    /* MM.INFO(FREE SPACE) */
+long long pm_disk_size(void);                     /* MM.INFO(DISK SIZE) */
+```
+
+`pm_dir(pattern, what, ...)` is `DIR$(pattern, FILE | DIR | ALL)` with
+`what` `PM_DIR_FILE` (or `PM_DEFAULT`), `PM_DIR_DIR` or `PM_DIR_ALL`;
+`pm_dir(NULL, ...)` is `DIR$()`, the next name. Names cannot contain `"`.
+
+```c
+#include <stdio.h>
+#include <sys/stat.h>
+#include <dirent.h>
+
+FILE *log = fopen("B:/mmbg/log/game.log", "a");   /* OPEN ... FOR APPEND */
+fprintf(log, "%s\n", line);
+fclose(log);
+
+DIR *d = opendir("B:/mmbg");
+struct dirent *e;
+while ((e = readdir(d)) != NULL)
+    printf("%s%s\n", e->d_name, e->d_type == DT_DIR ? "/" : "");
+closedir(d);
+```
 
 ### Memory
 
@@ -638,6 +711,49 @@ int pm_keydown(int n); /* KEYDOWN(n) */
 `pm_keydown(0)` is the number of keys held down, 1 to 6 the code of each,
 as `KEYDOWN()` on a USB or PS/2 keyboard; n out of range is the same error.
 
+```c
+int  pm_mouse(int channel, int what);   /* DEVICE(MOUSE channel, what) */
+int  pm_usb_device(int port);           /* MM.INFO(USB port) */
+void pm_cursor_on(int no, int x, int y, int colour); /* GUI CURSOR ON [no [, x, y [, c]]] */
+void pm_cursor_off(void);               /* GUI CURSOR OFF */
+void pm_cursor_hide(void);              /* GUI CURSOR HIDE */
+void pm_cursor_show(void);              /* GUI CURSOR SHOW */
+void pm_cursor_colour(int colour);      /* GUI CURSOR COLOUR c */
+void pm_cursor_link(int link);          /* GUI CURSOR LINK MOUSE / UNLINK MOUSE */
+void pm_cursor_load(const char *file);  /* GUI CURSOR LOAD file$ */
+void pm_cursor_move(int x, int y);      /* GUI CURSOR x, y */
+```
+
+- `pm_mouse(channel, what)` is `DEVICE(MOUSE channel, what)`, with `what`
+  the letter BASIC takes: `'X'`, `'Y'` the position, `'L'`, `'R'`, `'M'` the
+  buttons, `'W'` the wheel, `'B'` all buttons, `'D'` a double click (read
+  once), `'T'` 3 for a mouse with a wheel. It reads the firmware's mouse
+  state directly, so it can be polled in a loop.
+- `pm_usb_device(n)` is `MM.INFO(USB n)`: on the USB keyboard builds, 0 the
+  number of devices and 1 to 4 the type of each (2 a mouse). Elsewhere it is
+  the error BASIC gives.
+- The `pm_cursor_` functions are `GUI CURSOR`; `PM_DEFAULT` for what is left
+  out of `GUI CURSOR ON`. `pm_cursor_move` calls the firmware directly; the
+  others run the statement. `GUI CURSOR LINK MOUSE` with no mouse is "No
+  mouse connected", as in BASIC: `pm_try` turns it into a test.
+
+```c
+/* MMbg's GuMsInit: the first USB mouse, the cursor linked to it */
+int ch = 0;
+for (int i = 1; i <= 4 && ch == 0; i++) {
+    long long k;
+    char e[24];
+    snprintf(e, sizeof e, "MM.INFO(USB %d)", i);   /* ON ERROR SKIP 1 */
+    if (pm_eval_int_try(e, &k) == 0 && k == 2)
+        ch = i;
+}
+if (ch && pm_execute_try("GUI CURSOR ON 0, 320, 240") == 0 &&
+    pm_execute_try("GUI CURSOR LINK MOUSE") != 0)
+    pm_cursor_off();
+...
+if (pm_mouse(ch, 'L')) { int x = pm_mouse(ch, 'X'), y = pm_mouse(ch, 'Y'); ... }
+```
+
 #### `<picomite/sprite.h>`
 
 ```c
@@ -684,6 +800,15 @@ long long pm_eval_int(const char *expr);                   /* EVAL(s$) */
 double    pm_eval_float(const char *expr);
 char     *pm_eval_str(const char *expr, char *buf, int size);
 void      pm_settick(int period, void (*fn)(void), int nbr); /* SETTICK */
+
+int  pm_try(void (*fn)(void *arg), void *arg);             /* ON ERROR SKIP */
+int  pm_execute_try(const char *cmd);
+int  pm_eval_int_try(const char *expr, long long *value);
+int  pm_eval_float_try(const char *expr, double *value);
+int  pm_eval_str_try(const char *expr, char *buf, int size);
+int  pm_errno(void);                                         /* MM.ERRNO */
+const char *pm_errmsg(void);                                 /* MM.ERRMSG$ */
+void pm_error_clear(void);                                   /* ON ERROR CLEAR */
 ```
 
 These make every MMBasic command and function available to C with exactly
@@ -715,7 +840,8 @@ use it instead.
   ```
 
 - An MMBasic error in the command or expression ends the program with that
-  error. In a C CSUB, it is reported at the CSUB's call.
+  error (in a C CSUB, it is reported at the CSUB's call), unless it is made
+  in `pm_try`: see below.
 - A C program counts as a running program: what MMBasic allows only at the
   prompt (`EDIT`, `AUTOSAVE`, `OPTION LCDPANEL`, `XMODEM` and so on) fails
   with "Invalid in a program". What a BASIC program may do but would replace
@@ -737,6 +863,34 @@ use it instead.
   program run from the prompt: `RUN "x.c"` ends as `RUN` does, which stops
   sound and closes sprites and files.
 
+**`pm_try`** is `ON ERROR SKIP 1` for a C function: an MMBasic error in
+any `pm_` call that `fn(arg)` makes, directly or deeper down, comes back to
+`pm_try` instead of ending the program.
+
+- It returns 0, or the error's number. `pm_errno()` and `pm_errmsg()` then
+  give `MM.ERRNO` and `MM.ERRMSG$`. As `ON ERROR SKIP` does, `pm_try` clears
+  them first, and `pm_error_clear()` is `ON ERROR CLEAR`.
+- What `fn` was doing is abandoned at the error, as a skipped statement is:
+  the rest of `fn` does not run. Memory it took with `malloc` is not freed.
+- A `pm_settick` function is outside it, as a BASIC interrupt is outside the
+  `ON ERROR` of the code it interrupts: an error there ends the program.
+- CTRL-C and `exit()` still end the program.
+- `pm_execute_try` and `pm_eval_*_try` are `pm_try` of a single call, the
+  usual `ON ERROR SKIP : statement : IF MM.ERRNO ...`. On an error the value
+  is 0 (the string `""`).
+- Works in a C CSUB too.
+
+```c
+/* ON ERROR SKIP : GUI CURSOR ON 0, 320, 240 : IF MM.ERRNO THEN ... */
+if (pm_execute_try("GUI CURSOR ON 0, 320, 240"))
+    printf("no cursor: %s\n", pm_errmsg());
+
+static void show(void *p) { pm_sprite_show(*(int *)p, 10, 10, 1, PM_DEFAULT); }
+...
+if (pm_try(show, &n) != 0)  /* any pm_ call, any depth */
+    ...
+```
+
 **`pm_settick`** is `SETTICK period, sub, nbr` with a C function for the
 SUB:
 
@@ -755,6 +909,60 @@ static void clock_tick(void) { /* SUB clock */ }
 ...
 pm_settick(100, clock_tick, 4);  /* SETTICK 100, clock, 4 */
 pm_settick(0, NULL, 4);          /* SETTICK 0, 0, 4 */
+```
+
+#### `<picomite/vars.h>`: BASIC variables and arrays
+
+```c
+void *pm_var(const char *ref, pm_varinfo *info);   /* VARADDR, and what it is */
+void *pm_dim(const char *decl, pm_varinfo *info);  /* DIM decl */
+void  pm_erase(const char *names);                 /* ERASE */
+char *pm_str_get(const void *mmstr, char *buf, int size);
+void  pm_str_set(void *mmstr, int capacity, const char *s);
+```
+
+A C program can make BASIC variables with `DIM` and reach any variable by
+its BASIC name: those it made, and in a C CSUB those of the BASIC program
+that called it.
+
+- `pm_var(ref, info)` gives the address of the variable's data, as
+  `VARADDR` does: `"n%"`, `"x!"`, `"name$"`, an element `"grid%(3, 4)"`, or
+  a whole array `"buf%()"` (its first element). It is an error if the
+  variable does not exist.
+- `pm_dim(decl, info)` runs `DIM decl` (`"buf%(511)"`, `"INTEGER n(10)"`,
+  `"s$ LENGTH 16"`, `"m!(2, 3)"`) and gives the address of the variable it
+  declares first.
+- `info` (or `NULL`) is filled with what the variable is: `type`
+  (`PM_VAR_INT`, `PM_VAR_FLOAT`, `PM_VAR_STRING`), a string's capacity
+  `size`, `constant`, the dimensions `ndims` and `dims[]` (elements of
+  each, `OPTION BASE` taken into account), `elements` and `element_size`.
+- The data are MMBasic's: `long long` for an integer, `double` for a float,
+  and for a string a length byte followed by the characters, `size + 1`
+  bytes per element (`pm_str_get`, `pm_str_set`, which is "String too
+  long" when it does not fit, as an assignment). In an array the first
+  index varies fastest: `m!(i, j)` is element `i + j * dims[0]` (with
+  `OPTION BASE 0`).
+- The address does not move while the variable exists, so it can be kept
+  and used in a loop. A firmware command given the variable by name works on
+  the same memory: `MATH`, `SORT`, `LONGSTRING`, `WEB TCP CLIENT STREAM` and
+  others that take a BASIC array now work from C through `pm_execute`.
+- The variables a C program makes stay after it ends, as a BASIC program's
+  do, until the next `RUN`.
+- Errors are MMBasic's; `pm_try` catches them.
+
+```c
+#include <picomite/basic.h>
+#include <picomite/vars.h>
+
+pm_varinfo vi;
+long long *buf = pm_dim("buf%(9)", &vi);    /* DIM buf%(9) */
+for (int i = 0; i < vi.elements; i++)
+    buf[i] = i * i;
+pm_execute("MATH SET 7, buf%()");          /* BASIC's MATH on C's array */
+
+unsigned char *s = pm_dim("s$ LENGTH 16", &vi);
+pm_str_set(s, vi.size, "hello");
+pm_execute("PRINT s$; LEN(s$)");
 ```
 
 ### PicoCFunctions.h: the classic CSUB interface
@@ -798,7 +1006,6 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
   document).
 - No `scanf` family. Read lines with `fgets` and convert with `strtol`,
   `strtod` and similar.
-- `fopen` supports read and write (truncate) modes only.
 - No `setjmp`/`longjmp`, `signal`, `errno` values, locales, wide characters or
   threads.
 - No debugger or backtrace support (`-g` is accepted but has no use here).

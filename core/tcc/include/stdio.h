@@ -1,6 +1,9 @@
 /* PicoMite TinyCC: <stdio.h>.  The console is the MMBasic console; files are
    opened with MMBasic's file names ("B:/dir/file.txt", relative to the current
-   directory).  fopen() modes: "r", "w" (+ "b"); no append or update. */
+   directory).  fopen() modes: "r", "w", "a", "r+", "w+", "a+" ("b" and "t"
+   are ignored) - MMBasic's OPEN FOR INPUT, OUTPUT, APPEND and RANDOM.
+   remove() and rename() are KILL and RENAME: -1 if they fail (pm_errmsg()
+   in <picomite/basic.h> says why), never an MMBasic error. */
 #ifndef _STDIO_H
 #define _STDIO_H
 
@@ -51,5 +54,8 @@ void rewind(FILE *f);
 int feof(FILE *f);
 int ferror(FILE *f);
 int fflush(FILE *f);
+
+int remove(const char *name);                  /* KILL */
+int rename(const char *from, const char *to);  /* RENAME from AS to (on the current drive) */
 
 #endif /* _STDIO_H */

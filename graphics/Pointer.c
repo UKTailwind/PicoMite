@@ -1382,12 +1382,27 @@ bool cursor_handle_gui_subcommand(unsigned char *cmdline_in)
     getcsargs(&p, 3);
     if (argc != 3)
         SyntaxError();
-    cursor_x = getint(argv[0], 0, (HRes > 0 ? HRes - 1 : 0x7FFFFFFF));
-    cursor_y = getint(argv[2], 0, (VRes > 0 ? VRes - 1 : 0x7FFFFFFF));
+    {
+        int x = getint(argv[0], 0, (HRes > 0 ? HRes - 1 : 0x7FFFFFFF));
+        CursorMoveC(x, getint(argv[2], 0, (VRes > 0 ? VRes - 1 : 0x7FFFFFFF)));
+    }
+    return true;
+}
+
+/* GUI CURSOR x, y with the coordinates checked as the command checks them
+   (also the C API's pm_cursor_move) */
+void CursorMoveC(int x, int y)
+{
+    int xmax = HRes > 0 ? HRes - 1 : 0x7FFFFFFF, ymax = VRes > 0 ? VRes - 1 : 0x7FFFFFFF;
+    if (x < 0 || x > xmax)
+        error("~ is invalid (valid is ~ to ~)", (long long)x, 0LL, (long long)xmax);
+    if (y < 0 || y > ymax)
+        error("~ is invalid (valid is ~ to ~)", (long long)y, 0LL, (long long)ymax);
+    cursor_x = x;
+    cursor_y = y;
     if (cursor_linked)
         cursor_sync_mouse_to_cursor();
     cursor_invalidate();
-    return true;
 }
 
 #ifdef GUICONTROLS

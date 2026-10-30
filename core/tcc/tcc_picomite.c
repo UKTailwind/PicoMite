@@ -322,6 +322,8 @@ typedef struct pm_file
     int kind;
     int fnbr;                 /* PM_FILE_DISK: MMBasic file number */
     bool write;               /* opened for writing */
+    bool read;                /* opened for reading */
+    bool append;              /* "a", "a+": every write at the end */
     bool eof, err;            /* feof() / ferror() */
     const unsigned char *rom; /* PM_FILE_ROM */
     unsigned int rom_size, rom_pos;
@@ -369,9 +371,21 @@ struct pm_state
 };
 #define pm_files (pm->files)
 
+/* pm_try (ON ERROR SKIP): the innermost one in progress.  Its frame is on
+   the stack of the code that called it - a C program's, or a C CSUB's. */
+typedef struct pm_tryframe
+{
+    jmp_buf jmp;
+    struct pm_tryframe *prev;
+    int err;               /* the error caught: MM.ERRNO */
+    char msg[MAXERRMSG];   /* and MM.ERRMSG$ */
+} pm_tryframe;
+static pm_tryframe *pm_try_top;
+
 /* End the compiled program now (exit(), CTRL-C, an MMBasic error). */
 static void __attribute__((noreturn)) pm_end_program(int how, int code)
 {
+    pm_try_top = NULL; /* (its frames are left behind) */
     pm_prog_end = how;
     pm_exit_code = code;
     longjmp(pm->prog_jmp, 1);
@@ -448,10 +462,46 @@ static bool pm_is_rom_path(const char *path)
     return strncmp(path, TCC_PM_ROM_INCLUDE, sizeof(TCC_PM_ROM_INCLUDE) - 1) == 0;
 }
 
+/* How fopen()'s mode opens the file: one of MMBasic's OPEN modes (fa: INPUT
+   FA_READ, OUTPUT, APPEND, RANDOM), and what C asks on top of it */
+typedef struct
+{
+    int fa;
+    bool must_exist; /* "r", "r+" */
+    bool truncate;   /* "w+": emptied first (RANDOM keeps the contents) */
+    bool rewind;     /* "r+", "w+", "a+": reading starts at the beginning */
+    bool read, write, append;
+} pm_fmode;
+#define PM_FA_OUTPUT (FA_WRITE | FA_CREATE_ALWAYS)
+#define PM_FA_APPEND (FA_WRITE | FA_OPEN_APPEND)
+#define PM_FA_RANDOM (FA_WRITE | FA_OPEN_APPEND | FA_READ)
+
+static bool pm_fmode_parse(const char *m, pm_fmode *o)
+{
+    bool plus = false;
+    const char *q;
+    memset(o, 0, sizeof(*o));
+    if (m == NULL || (*m != 'r' && *m != 'w' && *m != 'a'))
+        return false;
+    for (q = m + 1; *q; q++)
+        if (*q == '+')
+            plus = true;
+        else if (*q != 'b' && *q != 't')
+            return false;
+    if (*m == 'r')
+        o->fa = plus ? PM_FA_RANDOM : FA_READ, o->must_exist = true, o->read = true, o->write = plus;
+    else if (*m == 'w')
+        o->fa = plus ? PM_FA_RANDOM : PM_FA_OUTPUT, o->truncate = plus, o->write = true, o->read = plus;
+    else
+        o->fa = plus ? PM_FA_RANDOM : PM_FA_APPEND, o->append = true, o->write = true, o->read = plus;
+    o->rewind = plus;
+    return true;
+}
+
 /* BasicFileOpen without the MMBasic error: false if the file cannot be opened
    (a missing file is not an error for TinyCC, which tries each include
-   directory in turn). */
-static bool pm_disk_open(const char *path, int fnbr, bool write)
+   directory in turn).  fa is an MMBasic OPEN mode (pm_fmode). */
+static bool pm_disk_open(const char *path, int fnbr, int fa, bool must_exist)
 {
     char name[FF_MAX_LFN + 4];
     volatile bool ok = false;
@@ -463,8 +513,8 @@ static bool pm_disk_open(const char *path, int fnbr, bool write)
     {
         FatFSFileSystemSave = FatFSFileSystem;
         /* checked first: a failed FatFS open is closed as a LittleFS one */
-        if (write || ExistsFile(name) == 1)
-            ok = BasicFileOpen(name, fnbr, write ? (FA_WRITE | FA_CREATE_ALWAYS) : FA_READ);
+        if (!must_exist || ExistsFile(name) == 1)
+            ok = BasicFileOpen(name, fnbr, fa);
     }
     else
     {
@@ -477,9 +527,12 @@ static bool pm_disk_open(const char *path, int fnbr, bool write)
     return ok;
 }
 
-static pm_file *pm_open(const char *path, bool write)
+static int pm_close(pm_file *f);
+
+static pm_file *pm_open(const char *path, const pm_fmode *m)
 {
     pm_file *f = NULL;
+    bool write = m->write;
     int i;
     for (i = 0; i < TCC_PM_MAX_FILES; i++)
         if (pm_files[i].kind == PM_FILE_FREE)
@@ -501,7 +554,15 @@ static pm_file *pm_open(const char *path, bool write)
         return f;
     }
     f->fnbr = pm_free_fnbr();
-    if (f->fnbr < 0 || !pm_disk_open(path, f->fnbr, write))
+    if (f->fnbr < 0)
+        return NULL;
+    if (m->truncate)
+    { /* "w+": OUTPUT empties it, then RANDOM reads and writes it */
+        if (!pm_disk_open(path, f->fnbr, PM_FA_OUTPUT, false))
+            return NULL;
+        ForceFileClose(f->fnbr);
+    }
+    if (!pm_disk_open(path, f->fnbr, m->fa, m->must_exist))
         return NULL;
     if (write && (f->wbuf = tcc_pm_malloc(TCC_PM_WBUF)) == NULL)
     {
@@ -510,8 +571,27 @@ static pm_file *pm_open(const char *path, bool write)
     }
     f->kind = PM_FILE_DISK;
     f->write = write;
+    f->read = m->read;
+    f->append = m->append;
+    if (m->rewind)
+    { /* (RANDOM opens at the end) */
+        volatile bool ok = true;
+        pm_trap t;
+        if (PM_TRY(t))
+            positionfile(f->fnbr, 0, true);
+        else
+            ok = false;
+        pm_trap_restore(&t);
+        if (!ok)
+        {
+            pm_close(f);
+            return NULL;
+        }
+    }
     return f;
 }
+
+static long pm_disk_size(pm_file *f);
 
 static bool pm_disk_flush(pm_file *f)
 {
@@ -520,7 +600,11 @@ static bool pm_disk_flush(pm_file *f)
     if (f->kind != PM_FILE_DISK || f->wlen == 0)
         return true;
     if (PM_TRY(t))
+    {
+        if (f->append) /* (C's "a": wherever an fseek left it) */
+            positionfile(f->fnbr, (int)pm_disk_size(f), true);
         FilePutData(f->wbuf, f->fnbr, f->wlen);
+    }
     else
         ok = false;
     pm_trap_restore(&t);
@@ -584,7 +668,7 @@ static int pm_read(pm_file *f, void *buf, unsigned int count)
         r = (int)count;
     }
     else if (f->kind == PM_FILE_DISK)
-        r = pm_disk_read(f, buf, count);
+        r = f->read ? pm_disk_read(f, buf, count) : -1;
     else
         r = -1;
     if (r < 0)
@@ -651,7 +735,11 @@ int tcc_pm_open(const char *path, int flags, ...)
     pm_file *f;
     if ((flags & O_ACCMODE) != O_RDONLY)
         return -1; /* TinyCC writes through fopen() */
-    f = pm_open(path, false);
+    {
+        pm_fmode m;
+        pm_fmode_parse("r", &m);
+        f = pm_open(path, &m);
+    }
     return f ? (int)(f - pm_files) + TCC_PM_FD_BASE : -1;
 }
 
@@ -859,15 +947,14 @@ static int pm_sprintf(char *buf, const char *fmt, ...)
     return r;
 }
 
+/* fopen: "r" "w" "a" and "r+" "w+" "a+" ("b", "t" ignored), as MMBasic's
+   OPEN FOR INPUT, OUTPUT, APPEND and RANDOM */
 FILE *tcc_pm_fopen(const char *path, const char *mode)
 {
-    bool write;
-    if (mode == NULL || (mode[0] != 'r' && mode[0] != 'w'))
-        return NULL; /* append and update are not supported */
-    write = mode[0] == 'w';
-    if (strchr(mode, '+'))
+    pm_fmode m;
+    if (!pm_fmode_parse(mode, &m))
         return NULL;
-    return (FILE *)pm_open(path, write);
+    return (FILE *)pm_open(path, &m);
 }
 
 int tcc_pm_fclose(FILE *stream)
@@ -1095,13 +1182,27 @@ static long pm_clock(void)
         }                            \
     } while (0)
 
+
+/* An MMBasic error (already untrapped) inside a pm_try: back to it */
+static void pm_try_catch(const char *msg, int err)
+{
+    pm_tryframe *f = pm_try_top;
+    if (f == NULL)
+        return;
+    f->err = err ? err : 16; /* (error() makes it 16 when it was 0) */
+    memcpy(f->msg, msg, MAXERRMSG);
+    f->msg[MAXERRMSG - 1] = 0;
+    longjmp(f->jmp, 1);
+}
+
 /* An MMBasic error msg (already untrapped): the end of the C program, or in
-   a C CSUB an error at its call */
-static void __attribute__((noreturn)) pm_program_error_tr_msg(const char *m)
+   a C CSUB an error at its call - unless a pm_try catches it */
+static void __attribute__((noreturn)) pm_program_error_tr_msg(const char *m, int err)
 {
     char msg[MAXERRMSG];
     memcpy(msg, m, MAXERRMSG);
     msg[MAXERRMSG - 1] = 0;
+    pm_try_catch(msg, err);
     if (!tcc_pm_running)
         error("$", msg);
     memcpy(MMErrMsg, msg, MAXERRMSG);
@@ -1111,8 +1212,10 @@ static void __attribute__((noreturn)) pm_program_error_tr_msg(const char *m)
 static void __attribute__((noreturn)) pm_program_error_tr(pm_trap *t)
 {
     char msg[MAXERRMSG];
+    int err = MMerrno;
     memcpy(msg, MMErrMsg, MAXERRMSG);
     pm_trap_restore(t);
+    pm_try_catch(msg, err);
     memcpy(MMErrMsg, msg, MAXERRMSG);
     if (!tcc_pm_running)
     { /* a C CSUB: an MMBasic error like any other */
@@ -1642,6 +1745,7 @@ static void pm_execute(const char *cmd)
     pm_linebufs b;
     pm_trap t;
     char msg[MAXERRMSG];
+    int err;
     pm_poll();
     pm_lines_save(&b);
     if (PM_TRY(t))
@@ -1652,12 +1756,13 @@ static void pm_execute(const char *cmd)
         pm_temps_done();
         return;
     }
+    err = MMerrno;
     memcpy(msg, MMErrMsg, MAXERRMSG);
     pm_trap_restore(&t);
     pm_lines_restore(&b);
     pm_temps_done();
     memcpy(MMErrMsg, msg, MAXERRMSG);
-    pm_program_error_tr_msg(msg);
+    pm_program_error_tr_msg(msg, err);
 }
 
 /* EVAL(s$) (fun_eval in core/Functions.c) */
@@ -1681,6 +1786,7 @@ static int pm_eval_do(const char *expr, MMFLOAT *f, long long *i, unsigned char 
 /* the value of expr, as type: 'i', 'f' or 's' */
 static void pm_eval(const char *expr, int type, long long *ip, double *fp, char *sp, int size)
 {
+    int err;
     pm_linebufs b;
     pm_trap t;
     char msg[MAXERRMSG];
@@ -1712,12 +1818,13 @@ static void pm_eval(const char *expr, int type, long long *ip, double *fp, char 
         }
         return;
     }
+    err = MMerrno;
     memcpy(msg, MMErrMsg, MAXERRMSG);
     pm_trap_restore(&t);
     pm_lines_restore(&b);
     pm_temps_done();
     memcpy(MMErrMsg, msg, MAXERRMSG);
-    pm_program_error_tr_msg(msg);
+    pm_program_error_tr_msg(msg, err);
 }
 
 static long long pm_eval_int(const char *expr)
@@ -1738,6 +1845,98 @@ static char *pm_eval_str(const char *expr, char *buf, int size)
 {
     pm_eval(expr, 's', NULL, NULL, buf, size);
     return buf;
+}
+
+/* ON ERROR SKIP 1 for fn(arg): an MMBasic error in any pm_ call it makes
+   (or in pm_execute, pm_eval_*) returns here instead of ending the program.
+   0, or the error's number with MM.ERRNO and MM.ERRMSG$ set as SKIP sets
+   them (pm_errno, pm_errmsg); like ON ERROR SKIP it clears them first.
+   What fn was doing is abandoned at the error, as a skipped statement is.
+   A SETTICK function run meanwhile is outside it, as a BASIC interrupt is
+   outside the ON ERROR of the code it interrupts.  CTRL-C and exit() still
+   end the program. */
+static int pm_try(void (*fn)(void *), void *arg)
+{
+    pm_tryframe f;
+    pm_trap t;
+    char msg[MAXERRMSG];
+    volatile int err = 0;
+    if (fn == NULL)
+        return 0;
+    pm_poll();
+    MMerrno = 0, MMErrMsg[0] = 0; /* (ON ERROR SKIP) */
+    f.prev = pm_try_top;
+    if (PM_TRY(t))
+    {
+        if (setjmp(f.jmp) == 0)
+        {
+            pm_try_top = &f;
+            fn(arg);
+        }
+        else /* an error in a pm_ call (pm_try_catch) */
+            err = f.err, memcpy(msg, f.msg, MAXERRMSG);
+    }
+    else /* an MMBasic error nothing else trapped */
+        err = MMerrno ? MMerrno : 16, memcpy(msg, MMErrMsg, MAXERRMSG);
+    pm_try_top = f.prev;
+    pm_trap_restore(&t);
+    if (err)
+    {
+        pm_temps_done();
+        MMerrno = err;
+        memcpy(MMErrMsg, msg, MAXERRMSG);
+        MMErrMsg[MAXERRMSG - 1] = 0;
+    }
+    return err;
+}
+
+static int pm_errno(void) { return MMerrno; }              /* MM.ERRNO */
+static const char *pm_errmsg(void) { return MMErrMsg; }    /* MM.ERRMSG$ */
+static void pm_error_clear(void) { MMerrno = 0, MMErrMsg[0] = 0; } /* ON ERROR CLEAR */
+
+/* The try forms of pm_execute and pm_eval_*: pm_try of the call */
+typedef struct
+{
+    const char *s;
+    int type, size;
+    long long *ip;
+    double *fp;
+    char *sp;
+} pm_try_args;
+
+static void pm_execute_fn(void *p) { pm_execute(((pm_try_args *)p)->s); }
+static void pm_eval_fn(void *p)
+{
+    pm_try_args *a = (pm_try_args *)p;
+    pm_eval(a->s, a->type, a->ip, a->fp, a->sp, a->size);
+}
+
+static int pm_execute_try(const char *cmd)
+{
+    pm_try_args a = {.s = cmd};
+    return pm_try(pm_execute_fn, &a);
+}
+
+static int pm_eval_int_try(const char *expr, long long *v)
+{
+    pm_try_args a = {.s = expr, .type = 'i', .ip = v};
+    *v = 0;
+    return pm_try(pm_eval_fn, &a);
+}
+
+static int pm_eval_float_try(const char *expr, double *v)
+{
+    pm_try_args a = {.s = expr, .type = 'f', .fp = v};
+    *v = 0;
+    return pm_try(pm_eval_fn, &a);
+}
+
+static int pm_eval_str_try(const char *expr, char *buf, int size)
+{
+    pm_try_args a = {.s = expr, .type = 's', .sp = buf, .size = size};
+    if (size > 0)
+        buf[0] = 0;
+    return pm_try(pm_eval_fn, &a);
 }
 
 /* SETTICK period, fn [, nbr]: fn is called every period ms, between the
@@ -1783,9 +1982,12 @@ static void pm_tick_service(void)
             tk->next_us += tk->period_us;
             if (tk->next_us <= now) /* (fell behind: no burst of calls) */
                 tk->next_us = now + tk->period_us;
+            pm_tryframe *outer = pm_try_top; /* (a tick is outside its pm_try) */
+            pm_try_top = NULL;
             pm->in_tick = true;
             tk->fn();
             pm->in_tick = false;
+            pm_try_top = outer;
         }
     }
 }
@@ -1966,6 +2168,550 @@ static int pm_keydown(int n)
     else
         pm_program_error_tr(&t);
     return v;
+}
+
+/* ------------------------------------------------------------------------ */
+/* <picomite/files.h>: MMBasic's file commands and functions; and the C      */
+/* library's remove, rename, mkdir, stat, opendir... built on them           */
+/* ------------------------------------------------------------------------ */
+
+/* KILL, RENAME, COPY, MKDIR, RMDIR, CHDIR, DRIVE: the statement, run by
+   pm_execute (their arguments are parsed from text only) */
+static void pm_kill(const char *file)
+{
+    pm_cmdf("KILL \"%s\"", pm_word(file, false));
+}
+
+static void pm_rename(const char *from, const char *to)
+{
+    pm_cmdf("RENAME \"%s\" AS \"%s\"", pm_word(from, false), pm_word(to, false));
+}
+
+static void pm_copy(const char *from, const char *to)
+{
+    pm_cmdf("COPY \"%s\" TO \"%s\"", pm_word(from, false), pm_word(to, false));
+}
+
+static void pm_mkdir(const char *dir)
+{
+    pm_cmdf("MKDIR \"%s\"", pm_word(dir, false));
+}
+
+static void pm_rmdir(const char *dir)
+{
+    pm_cmdf("RMDIR \"%s\"", pm_word(dir, false));
+}
+
+static void pm_chdir(const char *dir)
+{
+    pm_cmdf("CHDIR \"%s\"", pm_word(dir, false));
+}
+
+static void pm_drive(const char *drive)
+{
+    pm_cmdf("DRIVE \"%s\"", pm_word(drive, false));
+}
+
+/* An MMBasic function of a file name: "name(\"file\"" + tail, by pm_eval */
+static void pm_evalf(int type, long long *ip, char *sp, int size, const char *fmt, const char *a, const char *b)
+{
+    char e[STRINGSIZE + 48];
+    int n = snprintf(e, sizeof(e), fmt, a ? pm_word(a, false) : "", b ? b : "");
+    if (n < 0 || n >= STRINGSIZE)
+        PM_CALL(error("String too long"));
+    pm_eval(e, type, ip, NULL, sp, size);
+}
+
+static char *pm_cwd(char *buf, int size) /* CWD$ */
+{
+    pm_eval("CWD$", 's', NULL, NULL, buf, size);
+    return buf;
+}
+
+/* DIR$(pattern, FILE | DIR | ALL), and DIR$() for the next name (pattern
+   NULL): "" when there are no more */
+static char *pm_dir(const char *pattern, int what, char *buf, int size)
+{
+    static const char *const kind[] = {"FILE", "DIR", "ALL"};
+    if (pattern == NULL)
+        pm_eval("DIR$()", 's', NULL, NULL, buf, size);
+    else
+    {
+        if (what == PM_DEFAULT_ARG)
+            what = 0;
+        if (what < 0 || what > 2)
+            PM_CALL(error("Invalid argument"));
+        pm_evalf('s', NULL, buf, size, "DIR$(\"%s\",%s)", pattern, kind[what]);
+    }
+    return buf;
+}
+
+static int pm_exists_file(const char *file) /* MM.INFO(EXISTS FILE f$) */
+{
+    long long v = 0;
+    pm_evalf('i', &v, NULL, 0, "MM.INFO(EXISTS FILE \"%s\")%s", file, NULL);
+    return (int)v;
+}
+
+static int pm_exists_dir(const char *dir) /* MM.INFO(EXISTS DIR d$) */
+{
+    long long v = 0;
+    pm_evalf('i', &v, NULL, 0, "MM.INFO(EXISTS DIR \"%s\")%s", dir, NULL);
+    return (int)v;
+}
+
+static long long pm_filesize(const char *file) /* MM.INFO(FILESIZE f$) */
+{
+    long long v = 0;
+    pm_evalf('i', &v, NULL, 0, "MM.INFO(FILESIZE \"%s\")%s", file, NULL);
+    return v;
+}
+
+static char *pm_modified(const char *file, char *buf, int size) /* MM.INFO(MODIFIED f$) */
+{
+    pm_evalf('s', NULL, buf, size, "MM.INFO(MODIFIED \"%s\")%s", file, NULL);
+    return buf;
+}
+
+static long long pm_free_space(void) /* MM.INFO(FREE SPACE) */
+{
+    long long v = 0;
+    pm_eval("MM.INFO(FREE SPACE)", 'i', &v, NULL, NULL, 0);
+    return v;
+}
+
+static long long pm_disk_size_info(void) /* MM.INFO(DISK SIZE) */
+{
+    long long v = 0;
+    pm_eval("MM.INFO(DISK SIZE)", 'i', &v, NULL, NULL, 0);
+    return v;
+}
+
+static char *pm_drive_name(char *buf, int size) /* MM.INFO$(DRIVE) */
+{
+    pm_eval("MM.INFO$(DRIVE)", 's', NULL, NULL, buf, size);
+    return buf;
+}
+
+/* The C library's functions: C's meaning, -1 (or NULL) for a failure and
+   never an MMBasic error (pm_try): pm_errmsg() then says why. */
+typedef struct
+{
+    const char *a, *b;
+    char *buf;
+    int size;
+    long long v;
+} pm_fs_args;
+
+static void pm_kill_fn(void *p) { pm_kill(((pm_fs_args *)p)->a); }
+static void pm_rename_fn(void *p) { pm_rename(((pm_fs_args *)p)->a, ((pm_fs_args *)p)->b); }
+static void pm_mkdir_fn(void *p) { pm_mkdir(((pm_fs_args *)p)->a); }
+static void pm_rmdir_fn(void *p) { pm_rmdir(((pm_fs_args *)p)->a); }
+static void pm_chdir_fn(void *p) { pm_chdir(((pm_fs_args *)p)->a); }
+static void pm_cwd_fn(void *p) { pm_cwd(((pm_fs_args *)p)->buf, ((pm_fs_args *)p)->size); }
+static void pm_exists_file_fn(void *p) { ((pm_fs_args *)p)->v = pm_exists_file(((pm_fs_args *)p)->a); }
+static void pm_exists_dir_fn(void *p) { ((pm_fs_args *)p)->v = pm_exists_dir(((pm_fs_args *)p)->a); }
+static void pm_filesize_fn(void *p) { ((pm_fs_args *)p)->v = pm_filesize(((pm_fs_args *)p)->a); }
+static void pm_modified_fn(void *p) { pm_modified(((pm_fs_args *)p)->a, ((pm_fs_args *)p)->buf, ((pm_fs_args *)p)->size); }
+
+static int pm_fs_try(void (*fn)(void *), const char *a, const char *b)
+{
+    pm_fs_args x = {.a = a, .b = b};
+    return pm_try(fn, &x) ? -1 : 0;
+}
+
+static int pm_c_remove(const char *path) { return pm_fs_try(pm_kill_fn, path, NULL); }
+static int pm_c_rename(const char *from, const char *to) { return pm_fs_try(pm_rename_fn, from, to); }
+static int pm_c_mkdir(const char *path, unsigned mode) { (void)mode; return pm_fs_try(pm_mkdir_fn, path, NULL); }
+static int pm_c_rmdir(const char *path) { return pm_fs_try(pm_rmdir_fn, path, NULL); }
+static int pm_c_chdir(const char *path) { return pm_fs_try(pm_chdir_fn, path, NULL); }
+
+static char *pm_c_getcwd(char *buf, size_t size)
+{
+    pm_fs_args x = {.buf = buf, .size = (int)size};
+    if (buf == NULL || size == 0 || pm_try(pm_cwd_fn, &x))
+        return NULL;
+    return buf;
+}
+
+/* <sys/stat.h> (include/sys/stat.h has the same layout) */
+struct pm_c_stat
+{
+    unsigned mode;   /* st_mode */
+    long size;       /* st_size */
+    long long mtime; /* st_mtime (newlib makes st_mtime a macro) */
+};
+#define PM_S_IFREG 0100000
+#define PM_S_IFDIR 0040000
+
+/* "YYYY-MM-DD HH:MM:SS" (MM.INFO(MODIFIED)) as seconds from 1970, the
+   clock's own time as time() gives it */
+static long long pm_mtime_of(const char *s)
+{
+    int y, mo, d, h, mi, se;
+    long long days;
+    if (strlen(s) < 19)
+        return 0;
+    y = atoi(s), mo = atoi(s + 5), d = atoi(s + 8), h = atoi(s + 11), mi = atoi(s + 14), se = atoi(s + 17);
+    if (mo < 1 || mo > 12 || d < 1)
+        return 0;
+    y -= mo <= 2; /* (days from civil, H. Hinnant) */
+    {
+        int era = y / 400, yoe = y - era * 400;
+        int doy = (153 * (mo + (mo > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+        int doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+        days = (long long)era * 146097 + doe - 719468;
+    }
+    return days * 86400 + h * 3600 + mi * 60 + se;
+}
+
+static int pm_c_stat(const char *path, struct pm_c_stat *st)
+{
+    pm_fs_args x = {.a = path};
+    char when[32];
+    if (st == NULL || pm_try(pm_exists_file_fn, &x))
+        return -1;
+    memset(st, 0, sizeof(*st));
+    if (x.v == 1)
+    {
+        if (pm_try(pm_filesize_fn, &x))
+            return -1;
+        st->mode = PM_S_IFREG;
+        st->size = (long)x.v;
+    }
+    else
+    {
+        if (pm_try(pm_exists_dir_fn, &x) || x.v != 1)
+            return -1;
+        st->mode = PM_S_IFDIR;
+    }
+    x.buf = when, x.size = sizeof(when);
+    if (pm_try(pm_modified_fn, &x) == 0)
+        st->mtime = pm_mtime_of(when);
+    return 0;
+}
+
+/* <dirent.h>: over DIR$, which keeps one listing at a time - so one DIR
+   open at a time.  (include/dirent.h has the same layout.) */
+#define PM_DT_REG 8
+#define PM_DT_DIR 4
+struct pm_c_dirent
+{
+    unsigned char d_type;
+    char d_name[FF_MAX_LFN + 1];
+};
+typedef struct
+{
+    bool open, first;
+    char path[FF_MAX_LFN];
+    char next[FF_MAX_LFN + 1];
+    struct pm_c_dirent ent;
+} pm_c_dir;
+static pm_c_dir *pm_dir_open; /* (in the arena) */
+
+typedef struct
+{
+    const char *pattern;
+    char *buf;
+} pm_dir_args;
+
+static void pm_dir_fn(void *p)
+{
+    pm_dir_args *a = (pm_dir_args *)p;
+    pm_dir(a->pattern, 2, a->buf, FF_MAX_LFN + 1);
+}
+
+static void *pm_c_opendir(const char *path)
+{
+    pm_c_dir *d;
+    pm_dir_args a;
+    char pat[FF_MAX_LFN + 4];
+    size_t n;
+    if (path == NULL || pm_dir_open != NULL || (n = strlen(path)) + 3 > FF_MAX_LFN)
+        return NULL;
+    if ((d = pm_calloc(1, sizeof(pm_c_dir))) == NULL)
+        return NULL;
+    strcpy(d->path, path);
+    if (n == 0 || strcmp(path, ".") == 0)
+        strcpy(pat, "*");
+    else
+        snprintf(pat, sizeof(pat), "%s%s*", path, path[n - 1] == '/' || path[n - 1] == ':' ? "" : "/");
+    a.pattern = pat, a.buf = d->next;
+    if (pm_try(pm_dir_fn, &a))
+    {
+        tcc_pm_free(d);
+        return NULL;
+    }
+    d->open = true;
+    pm_dir_open = d;
+    return d;
+}
+
+static struct pm_c_dirent *pm_c_readdir(void *dir)
+{
+    pm_c_dir *d = (pm_c_dir *)dir;
+    pm_dir_args a;
+    pm_fs_args x;
+    char full[FF_MAX_LFN * 2 + 2];
+    size_t n;
+    if (d == NULL || d != pm_dir_open || d->next[0] == 0)
+        return NULL;
+    strcpy(d->ent.d_name, d->next);
+    n = strlen(d->path);
+    snprintf(full, sizeof(full), "%s%s%s", d->path,
+             n == 0 || d->path[n - 1] == '/' || d->path[n - 1] == ':' ? "" : "/", d->ent.d_name);
+    x.a = full;
+    d->ent.d_type = (pm_try(pm_exists_dir_fn, &x) == 0 && x.v == 1) ? PM_DT_DIR : PM_DT_REG;
+    a.pattern = NULL, a.buf = d->next; /* DIR$() */
+    if (pm_try(pm_dir_fn, &a))
+        d->next[0] = 0;
+    return &d->ent;
+}
+
+static int pm_c_closedir(void *dir)
+{
+    if (dir == NULL || dir != pm_dir_open)
+        return -1;
+    pm_dir_open = NULL;
+    tcc_pm_free(dir);
+    return 0;
+}
+
+/* ------------------------------------------------------------------------ */
+/* <picomite/input.h>: the mouse and the GUI cursor                         */
+/* ------------------------------------------------------------------------ */
+
+/* DEVICE(MOUSE channel, what): what is the letter X Y L R M W B D T, as in
+   BASIC (fun_dev in misc/External.c) */
+static int pm_mouse_do(int channel, int what)
+{
+    volatile struct s_nunstruct *m;
+    int v;
+    pm_range(channel, 1, 4);
+    m = &nunstruct[channel];
+    switch (toupper(what))
+    {
+    case 'X': return m->ax;
+    case 'Y': return m->ay;
+    case 'L': return m->L;
+    case 'R': return m->R;
+    case 'M': return m->C;
+    case 'W': return m->az;
+    case 'B': return m->x0;
+    case 'D': /* a double click, reported once */
+        v = m->Z;
+        m->Z = 0;
+        return v;
+    case 'T': return m->classic[0];
+    default:
+        SyntaxError();
+    }
+    return 0;
+}
+
+static int pm_mouse(int channel, int what)
+{
+    volatile int v = 0;
+    PM_CALL(v = pm_mouse_do(channel, what));
+    return v;
+}
+
+static int pm_usb_device(int port) /* MM.INFO(USB port) (USB keyboard builds) */
+{
+    char e[32];
+    long long v = 0;
+    snprintf(e, sizeof(e), "MM.INFO(USB %d)", port);
+    pm_eval(e, 'i', &v, NULL, NULL, 0);
+    return (int)v;
+}
+
+/* GUI CURSOR ON [no [, x, y [, colour]]], OFF, HIDE, SHOW, COLOUR c,
+   LINK MOUSE / UNLINK MOUSE, LOAD file$: the statement, run by pm_execute */
+static void pm_cursor_on(int no, int x, int y, int colour)
+{
+    char a1[16], a2[16], a3[16], b[96];
+    if (no == PM_DEFAULT_ARG)
+        strcpy(b, "GUI CURSOR ON");
+    else
+    {
+        snprintf(b, sizeof(b), "GUI CURSOR ON %d%s%s%s", no, pm_arg(a1, x), pm_arg(a2, y), pm_arg(a3, colour));
+        pm_cmd_trim(b);
+    }
+    pm_execute(b);
+}
+
+static void pm_cursor_off(void) { pm_execute("GUI CURSOR OFF"); }
+static void pm_cursor_hide(void) { pm_execute("GUI CURSOR HIDE"); }
+static void pm_cursor_show(void) { pm_execute("GUI CURSOR SHOW"); }
+
+static void pm_cursor_colour(int colour)
+{
+    pm_cmdf("GUI CURSOR COLOUR %d", colour);
+}
+
+static void pm_cursor_link(int link)
+{
+    pm_execute(link ? "GUI CURSOR LINK MOUSE" : "GUI CURSOR UNLINK MOUSE");
+}
+
+static void pm_cursor_load(const char *file)
+{
+    pm_cmdf("GUI CURSOR LOAD \"%s\"", pm_word(file, false));
+}
+
+/* GUI CURSOR x, y: often, so straight to the firmware where it has it */
+static void pm_cursor_move(int x, int y)
+{
+#if defined(PICOMITEVGA) || defined(GUICONTROLS)
+    PM_CALL(CursorMoveC(x, y));
+#else
+    pm_cmdf("GUI CURSOR %d,%d", x, y);
+#endif
+}
+
+/* ------------------------------------------------------------------------ */
+/* <picomite/vars.h>: BASIC variables and arrays                            */
+/* ------------------------------------------------------------------------ */
+
+/* (include/picomite/vars.h has the same layout) */
+#define PM_MAXDIM 6
+typedef struct
+{
+    int type;              /* PM_VAR_FLOAT 1, PM_VAR_STRING 2, PM_VAR_INT 4 (MMBasic's T_NBR, T_STR, T_INT) */
+    int size;              /* a string's capacity, LENGTH (255 by default) */
+    int constant;          /* CONST: not to be written */
+    int ndims;             /* 0: not an array */
+    int dims[PM_MAXDIM];   /* elements of each dimension (OPTION BASE taken into account) */
+    int elements;          /* all of them (1 for a scalar) */
+    int element_size;      /* bytes of one element: 8, or size + 1 for a string */
+} pm_varinfo;
+_Static_assert(MAXDIM <= PM_MAXDIM, "pm_varinfo.dims");
+
+/* findvar() of the reference ref - "n%", "a$", "x!(3, i)", "buf%()" - as
+   VARADDR finds it: its address and, if info, what it is */
+static void *pm_var_do(const char *ref, pm_varinfo *info)
+{
+    void *addr;
+    struct s_vartbl *v;
+    int k;
+    if (strlen(ref) + 2 >= STRINGSIZE)
+        error("String too long");
+    inpbuf[0] = 'r';
+    inpbuf[1] = '='; /* (as pm_eval_do: a line the tokeniser takes) */
+    strcpy((char *)inpbuf + 2, ref);
+    multi = false;
+    tokenise(true);
+    addr = findvar(tknbuf + 2 + sizeof(CommandToken), V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
+    v = VREC(g_VarIndex);
+    if (v->type & T_STRUCT)
+        error("A structure is not supported here");
+    if (info)
+    {
+        memset(info, 0, sizeof(*info));
+        info->type = v->type & (T_NBR | T_STR | T_INT);
+        info->size = (v->type & T_STR) ? v->size : 0;
+        info->constant = (v->type & T_CONST) != 0;
+        info->element_size = (v->type & T_STR) ? v->size + 1 : 8;
+        info->elements = 1;
+        if (DimIsRealArray(RAW_DIM(*v, 0)))
+            for (k = 0; k < MAXDIM && DimIsRealArray(RAW_DIM(*v, k)); k++)
+            {
+                info->dims[k] = DimElements(RAW_DIM(*v, k));
+                info->elements *= info->dims[k];
+                info->ndims = k + 1;
+            }
+    }
+    return addr;
+}
+
+static void *pm_var(const char *ref, pm_varinfo *info)
+{
+    pm_linebufs b;
+    pm_trap t;
+    void *volatile addr = NULL;
+    char msg[MAXERRMSG];
+    int err;
+    if (ref == NULL)
+        PM_CALL(error("Argument count"));
+    pm_poll();
+    pm_lines_save(&b);
+    if (PM_TRY(t))
+    {
+        addr = pm_var_do(ref, info);
+        pm_trap_restore(&t);
+        pm_lines_restore(&b);
+        pm_temps_done();
+        return addr;
+    }
+    err = MMerrno;
+    memcpy(msg, MMErrMsg, MAXERRMSG);
+    pm_trap_restore(&t);
+    pm_lines_restore(&b);
+    pm_temps_done();
+    memcpy(MMErrMsg, msg, MAXERRMSG);
+    pm_program_error_tr_msg(msg, err);
+}
+
+/* DIM decl: the variable it declares first, as pm_var finds it ("x%(9)":
+   the array) */
+static void *pm_dim(const char *decl, pm_varinfo *info)
+{
+    static const char *const types[] = {"INTEGER ", "FLOAT ", "STRING "};
+    char ref[MAXVARLEN + 8];
+    const char *p;
+    unsigned i;
+    int n = 0;
+    if (decl == NULL)
+        PM_CALL(error("Argument count"));
+    pm_cmdf("DIM %s", decl);
+    for (p = decl; *p == ' '; p++)
+        ;
+    for (i = 0; i < sizeof(types) / sizeof(types[0]); i++)
+        if (strncasecmp(p, types[i], strlen(types[i])) == 0)
+            for (p += strlen(types[i]); *p == ' '; p++)
+                ;
+    while ((isalnum((unsigned char)*p) || *p == '_' || *p == '.') && n < MAXVARLEN)
+        ref[n++] = *p++;
+    if (*p == '%' || *p == '!' || *p == '$')
+        ref[n++] = *p++;
+    while (*p == ' ')
+        p++;
+    if (*p == '(')
+        ref[n++] = '(', ref[n++] = ')';
+    ref[n] = 0;
+    return pm_var(ref, info);
+}
+
+static void pm_erase(const char *names) /* ERASE name [, name ...] */
+{
+    pm_cmdf("ERASE %s", names ? names : "");
+}
+
+/* MMBasic strings: a length byte, then the characters (no terminating 0) */
+static char *pm_str_get(const void *mmstr, char *buf, int size)
+{
+    const unsigned char *m = (const unsigned char *)mmstr;
+    int n;
+    if (buf == NULL || size <= 0)
+        return buf;
+    n = m ? m[0] : 0;
+    if (n > size - 1)
+        n = size - 1;
+    if (n)
+        memcpy(buf, m + 1, (size_t)n);
+    buf[n] = 0;
+    return buf;
+}
+
+static void pm_str_set(void *mmstr, int capacity, const char *s)
+{
+    unsigned char *m = (unsigned char *)mmstr;
+    size_t n = s ? strlen(s) : 0;
+    if (m == NULL || (int)n > capacity || n > MAXSTRLEN)
+        PM_CALL(error("String too long"));
+    m[0] = (unsigned char)n;
+    if (n)
+        memcpy(m + 1, s, n);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -2167,6 +2913,14 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_eval_int)
     PM_SYM(pm_eval_float)
     PM_SYM(pm_eval_str)
+    PM_SYM(pm_try)
+    PM_SYM(pm_execute_try)
+    PM_SYM(pm_eval_int_try)
+    PM_SYM(pm_eval_float_try)
+    PM_SYM(pm_eval_str_try)
+    PM_SYM(pm_errno)
+    PM_SYM(pm_errmsg)
+    PM_SYM(pm_error_clear)
     PM_SYM(pm_settick)
     PM_SYM(pm_sprite_load)
     PM_SYM(pm_sprite_show)
@@ -2181,6 +2935,52 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_load_jpg)
     PM_SYM(pm_colour)
     PM_SYM(pm_keydown)
+    /* <picomite/files.h> */
+    PM_SYM(pm_kill)
+    PM_SYM(pm_rename)
+    PM_SYM(pm_copy)
+    PM_SYM(pm_mkdir)
+    PM_SYM(pm_rmdir)
+    PM_SYM(pm_chdir)
+    PM_SYM(pm_drive)
+    PM_SYM(pm_cwd)
+    PM_SYM(pm_dir)
+    PM_SYM(pm_exists_file)
+    PM_SYM(pm_exists_dir)
+    PM_SYM(pm_filesize)
+    PM_SYM(pm_modified)
+    PM_SYM(pm_free_space)
+    PM_SYM_AS(pm_disk_size, pm_disk_size_info)
+    PM_SYM(pm_drive_name)
+    /* remove, rename (stdio.h), unistd.h, sys/stat.h, dirent.h */
+    PM_SYM_AS(remove, pm_c_remove)
+    PM_SYM_AS(unlink, pm_c_remove)
+    PM_SYM_AS(rename, pm_c_rename)
+    PM_SYM_AS(mkdir, pm_c_mkdir)
+    PM_SYM_AS(rmdir, pm_c_rmdir)
+    PM_SYM_AS(chdir, pm_c_chdir)
+    PM_SYM_AS(getcwd, pm_c_getcwd)
+    PM_SYM_AS(stat, pm_c_stat)
+    PM_SYM_AS(opendir, pm_c_opendir)
+    PM_SYM_AS(readdir, pm_c_readdir)
+    PM_SYM_AS(closedir, pm_c_closedir)
+    /* <picomite/input.h>: the mouse and the cursor */
+    PM_SYM(pm_mouse)
+    PM_SYM(pm_usb_device)
+    PM_SYM(pm_cursor_on)
+    PM_SYM(pm_cursor_off)
+    PM_SYM(pm_cursor_hide)
+    PM_SYM(pm_cursor_show)
+    PM_SYM(pm_cursor_colour)
+    PM_SYM(pm_cursor_link)
+    PM_SYM(pm_cursor_load)
+    PM_SYM(pm_cursor_move)
+    /* <picomite/vars.h> */
+    PM_SYM(pm_var)
+    PM_SYM(pm_dim)
+    PM_SYM(pm_erase)
+    PM_SYM(pm_str_get)
+    PM_SYM(pm_str_set)
     PM_SYM(pm_mode)
     PM_SYM(pm_font_width)
     PM_SYM(pm_font_height)
@@ -2196,7 +2996,7 @@ static const char *const pm_csub_refused[] = {
     "malloc", "calloc", "realloc", "free", "strdup", "exit", "abort",
     "getchar", "fgetc", "getc", "fgets", "fopen", "fclose", "fread", "fwrite",
     "fseek", "ftell", "rewind", "feof", "ferror", "__tcc_pm_stdin",
-    "pm_alloc", "pm_free", "pm_settick", NULL};
+    "pm_alloc", "pm_free", "pm_settick", "opendir", "readdir", "closedir", NULL};
 
 void *tcc_pm_resolve_symbol(const char *name)
 {
@@ -2319,6 +3119,8 @@ static int pm_run_entry(void *p)
 static void pm_state_reset(void)
 {
     pm = NULL;
+    pm_try_top = NULL;
+    pm_dir_open = NULL;
     pm_tick_any = false;
     pm_blocks = NULL;
     pm_chunks = NULL;
@@ -2521,7 +3323,7 @@ bool tcc_picomite_is_elf(const char *filename)
     volatile bool elf = false;
     int fnbr = pm_free_fnbr();
     pm_trap t;
-    if (fnbr < 0 || !pm_disk_open(filename, fnbr, false))
+    if (fnbr < 0 || !pm_disk_open(filename, fnbr, FA_READ, true))
         return false;
     if (PM_TRY(t))
         elf = FileGetData(fnbr, sig, 4, &got) == 0 && got == 4 &&
@@ -2564,6 +3366,7 @@ void tcc_picomite_reset_guard(void)
 void tcc_picomite_abandoned(void)
 {
     int i;
+    pm_try_top = NULL; /* (a C CSUB's pm_try left by CTRL-C: its frame is gone) */
     if (!pm_active)
         return;
     pm_active = false;
@@ -2668,10 +3471,13 @@ static char *pm_dirname(const char *path)
 /* the whole of a file, zero-terminated, or NULL */
 static char *pm_read_all(const char *path)
 {
-    pm_file *f = pm_open(path, false);
+    pm_fmode m;
+    pm_file *f;
     char *buf = NULL;
     size_t len = 0, cap = 0;
     int r;
+    pm_fmode_parse("r", &m);
+    f = pm_open(path, &m);
     if (f == NULL)
         return NULL;
     do
