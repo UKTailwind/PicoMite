@@ -99,7 +99,7 @@ enum
 };
 
 static volatile bool pm_active;       /* between entry and cleanup of a run */
-static volatile bool pm_in_program;   /* the compiled program is running */
+volatile bool tcc_pm_running;         /* the compiled program is running (ProgramRunning) */
 static volatile bool pm_prog_started; /* it was compiled and started */
 static volatile int pm_prog_end;      /* PM_END_* */
 static volatile int pm_exit_code;
@@ -119,7 +119,7 @@ static void pm_tick_service(void);
 
 static inline void pm_poll(void)
 {
-    if (MMAbort && pm_in_program)
+    if (MMAbort && tcc_pm_running)
         pm_end_program(PM_END_ABORT, 1);
     if (pm_tick_any)
         pm_tick_service();
@@ -1035,7 +1035,7 @@ static void pm_rewind(FILE *stream)
 
 void tcc_pm_exit(int code)
 {
-    if (pm_in_program)
+    if (tcc_pm_running)
         pm_end_program(PM_END_NONE, code);
     pm_exit_code = code;
     if (pm_active)
@@ -1102,7 +1102,7 @@ static void __attribute__((noreturn)) pm_program_error_tr_msg(const char *m)
     char msg[MAXERRMSG];
     memcpy(msg, m, MAXERRMSG);
     msg[MAXERRMSG - 1] = 0;
-    if (!pm_in_program)
+    if (!tcc_pm_running)
         error("$", msg);
     memcpy(MMErrMsg, msg, MAXERRMSG);
     pm_program_error();
@@ -1114,7 +1114,7 @@ static void __attribute__((noreturn)) pm_program_error_tr(pm_trap *t)
     memcpy(msg, MMErrMsg, MAXERRMSG);
     pm_trap_restore(t);
     memcpy(MMErrMsg, msg, MAXERRMSG);
-    if (!pm_in_program)
+    if (!tcc_pm_running)
     { /* a C CSUB: an MMBasic error like any other */
         msg[MAXERRMSG - 1] = 0;
         error("$", msg);
@@ -1557,8 +1557,32 @@ static void pm_lines_restore(const pm_linebufs *b)
    any; in a C CSUB its caller's statement does, and clears them itself */
 static void pm_temps_done(void)
 {
-    if (pm_in_program)
+    if (tcc_pm_running)
         ClearTempMemory();
+}
+
+/* A command that is allowed in a BASIC program but replaces it, and with it
+   the heap a C program runs in: RUN, CHAIN, NEW, LOAD file$ [, R],
+   FLASH RUN / CHAIN, RAM RUN / CHAIN.  (Those MMBasic allows only at the
+   prompt are refused by their own "Invalid in a program", ProgramRunning;
+   tcc_picomite_reset_guard stops anything else that resets the heap.)
+   Refused here, before the command has changed anything. */
+static bool pm_replaces_program(void (*fn)(void), unsigned char *args)
+{
+    static const char *const load_sub[] = {"CONTEXT", "IMAGE", "DATA", "BMP", "JPG", "PNG"};
+    unsigned i;
+    if (fn == cmd_run || fn == cmd_chain || fn == cmd_new)
+        return true;
+    if (fn == cmd_flash || fn == cmd_psram)
+        return checkstring(args, (unsigned char *)"RUN") || checkstring(args, (unsigned char *)"CHAIN");
+    if (fn == cmd_load)
+    {
+        for (i = 0; i < sizeof(load_sub) / sizeof(load_sub[0]); i++)
+            if (checkstring(args, (unsigned char *)load_sub[i]))
+                return false;
+        return true; /* LOAD file$: a program */
+    }
+    return false;
 }
 
 /* EXECUTE cmd$ (execute() in core/Commands.c): one statement, as typed at
@@ -1573,8 +1597,6 @@ static void pm_execute_do(const char *cmd)
     strcpy((char *)inpbuf, cmd);
     p = inpbuf;
     skipspace(p);
-    if (checkstring(p, (unsigned char *)"RUN"))
-        error("RUN is not possible from C");
     while (inpbuf[i])
     { /* upper case outside quotes, one statement */
         if (inpbuf[i] == 34)
@@ -1604,6 +1626,8 @@ static void pm_execute_do(const char *cmd)
         cmdtoken = c;
         cmdline = p + sizeof(CommandToken);
         skipspace(cmdline);
+        if (pm_replaces_program(commandtbl[c].fptr, cmdline))
+            error("Not possible from a C program");
         if (!SymAwareCommand(c))
             cmdline = SymExpandStatement(cmdline);
         /* (not EXECUTE's ScrewUpTimer: its 1 s limit would restart the
@@ -1748,7 +1772,7 @@ static void pm_tick_service(void)
 {
     uint64_t now;
     int k;
-    if (pm == NULL || !pm_in_program || pm->in_tick)
+    if (pm == NULL || !tcc_pm_running || pm->in_tick)
         return;
     now = time_us_64();
     for (k = 0; k < TCC_PM_TICKS; k++)
@@ -2209,12 +2233,12 @@ int tcc_pm_call_main(int (*prog_main)(int, char **), int argc_, char **argv_)
     pm_line_len = pm_line_pos = 0;
     if (setjmp(pm->prog_jmp) == 0)
     {
-        pm_in_program = true;
+        tcc_pm_running = true;
         ret = prog_main(argc_, argv_);
     }
     else
         ret = pm_exit_code;
-    pm_in_program = false;
+    tcc_pm_running = false;
     return ret;
 }
 
@@ -2299,7 +2323,7 @@ static void pm_state_reset(void)
     pm_blocks = NULL;
     pm_chunks = NULL;
     pm_freep = NULL;
-    pm_in_program = pm_prog_started = false;
+    tcc_pm_running = pm_prog_started = false;
     pm_prog_end = PM_END_NONE;
     pm_exit_code = 0;
     pm_line = NULL;
@@ -2421,7 +2445,7 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
     __asm volatile("msr msplim, %0" ::"r"(pm->msplim));
     pm_stack_check_leave();
     pm_active = false;
-    pm_in_program = false;
+    tcc_pm_running = false;
 
     if (how == PM_END_NONE)
         how = pm_prog_end;
@@ -2522,12 +2546,14 @@ void cmd_tcc(void)
     pm_exec(prefix, 2, line, "TCC failed", NULL);
 }
 
-/* A compiled C program is running (RUN "x.c", RUN of an ELF file): for the
-   firmware's messages meant only for the prompt, as CurrentLinePtr is for
-   a BASIC program */
-bool tcc_picomite_running(void)
+/* Called before the heap or the program is reset (InitHeap, m_alloc,
+   ClearRuntime): under a C program, or the compiler, that would free its
+   arena and the stack it runs on.  Whatever a command run from C that does
+   it (pm_execute) got past is stopped here, before any memory is touched. */
+void tcc_picomite_reset_guard(void)
 {
-    return pm_in_program;
+    if (pm_active)
+        error("Not possible from a C program");
 }
 
 /* Called where the MMBasic prompt lands after a longjmp(mark) (PicoMite.c).
@@ -2541,7 +2567,7 @@ void tcc_picomite_abandoned(void)
     if (!pm_active)
         return;
     pm_active = false;
-    pm_in_program = false;
+    tcc_pm_running = false;
     if (pm != NULL)
     {
         __asm volatile("msr msplim, %0" ::"r"(pm->msplim));

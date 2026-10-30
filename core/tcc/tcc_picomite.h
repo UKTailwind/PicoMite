@@ -100,8 +100,6 @@ void tcc_pm_forget_globals(void);
    RUN "file.c" [, "args"] (is_c) and RUN "file" of an ELF made by TCC */
 void tcc_picomite_run(const char *filename, const char *args, bool is_c);
 bool tcc_picomite_is_elf(const char *filename);
-/* a compiled C program is running: no messages meant for the prompt */
-bool tcc_picomite_running(void);
 /* at the MMBasic prompt after a longjmp(mark): clean up a run left there */
 void tcc_picomite_abandoned(void);
 /* the TCC command (AllCommands.h) */

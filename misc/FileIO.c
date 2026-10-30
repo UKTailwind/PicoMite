@@ -1005,7 +1005,7 @@ void MIPS16 cmd_psram(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"LOAD")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int j = (Option.PROG_FLASH_SIZE >> 2), i = getint(p, 1, MAXRAMSLOTS);
         uint8_t *q = (uint8_t *)(PSRAMblock + ((i - 1) * MAX_PROG_SIZE));
@@ -1261,7 +1261,7 @@ void MIPS16 cmd_flash(void)
     unsigned char *p;
     if ((p = checkstring(cmdline, (unsigned char *)"ERASE ALL")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         //        uint32_t j = FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE;
         int k = MAXFLASHSLOTS;
@@ -1385,7 +1385,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"OVERWRITE")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
@@ -1589,7 +1589,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SAVE")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
@@ -1624,7 +1624,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"LOAD")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int j = (Option.PROG_FLASH_SIZE >> 2), i = getint(p, 1, MAXFLASHSLOTS);
         uint8_t *q = (uint8_t *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
@@ -2861,7 +2861,7 @@ void MIPS16 cmd_kill(void)
         }
         if (pp[0] == 0)
             strcpy(pp, "*");
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         FatFSFileSystem = t - 1;
         if (!InitSDCard())
@@ -5297,7 +5297,7 @@ void MIPS16 loadCMM2(unsigned char *p, bool autorun, bool message)
     if (!(argc & 1) || argc == 0)
         SyntaxError();
     ;
-    if (CurrentLinePtr != NULL && !autorun)
+    if (ProgramRunning() && !autorun)
         StandardError(10);
 
     if (!FileLoadCMM2Program((char *)argv[0], message))
@@ -5335,7 +5335,7 @@ void MIPS16 cmd_loadCMM2(void)
             SyntaxError();
         ;
     }
-    else if (CurrentLinePtr != NULL)
+    else if (ProgramRunning())
         StandardError(10);
 
     loadCMM2(argv[0], autorun, true);
@@ -5546,7 +5546,7 @@ void MIPS16 cmd_load(void)
         else
             crunch = true;
     }
-    if (!autorun && CurrentLinePtr != NULL)
+    if (!autorun && ProgramRunning())
         StandardError(10);
     if (!FileLoadProgram(argv[0], false, crunch))
     {
@@ -6538,7 +6538,7 @@ void MIPS16 cmd_copy(void)
         }
         if (pp[0] == 0)
             strcpy(pp, "*");
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         FatFSFileSystem = t - 1;
         if (!InitSDCard())
@@ -6904,7 +6904,7 @@ void MIPS16 cmd_files(void)
         *cmdbuf = '"';
     }
     int oldfont = PromptFont;
-    if (!CurrentLinePtr)
+    if (!ProgramRunning())
     {
         ClearVars(0, true);
         ClearRuntime(true);
@@ -7376,7 +7376,7 @@ void cmd_autosave(void)
     int count = 0;
     int noecho = 0;
     uint64_t timeout;
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
     char *tp = (char *)checkstring(cmdline, (unsigned char *)"APPEND");
     if (tp)

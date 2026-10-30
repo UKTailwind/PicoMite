@@ -1958,7 +1958,7 @@ void MIPS16 cmd_library(void)
         unsigned short rem, tkn;
         int i, j, k, InCFun, InQuote, CmdExpected;
         unsigned int CFunDefAddr[100], *CFunHexAddr[100];
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (*ProgMemory != 0x01)
             return;
@@ -2501,7 +2501,7 @@ void MIPS16 cmd_library(void)
     if (checkstring(cmdline, (unsigned char *)"DELETE"))
     {
         int i;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
             return;
@@ -2533,7 +2533,7 @@ void MIPS16 cmd_library(void)
 
     if (checkstring(cmdline, (unsigned char *)"LIST ALL"))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (!LibPresent())
             return;
@@ -2542,7 +2542,7 @@ void MIPS16 cmd_library(void)
     }
     if (checkstring(cmdline, (unsigned char *)"LIST"))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (!LibPresent())
             return;
@@ -2555,7 +2555,7 @@ void MIPS16 cmd_library(void)
         if (!(argc == 1))
             SyntaxError();
         ;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int fnbr = FindFreeFileNbr();
         if (!InitSDCard())
@@ -2618,7 +2618,7 @@ void MIPS16 cmd_library(void)
         if (!(argc == 1))
             SyntaxError();
         ;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int fnbr = FindFreeFileNbr();
         if (!InitSDCard())
@@ -5781,7 +5781,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 7);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 7)
             SyntaxError();
@@ -5835,7 +5835,7 @@ void MIPS16 cmd_option(void)
         }
         int pin1;
         getcsargs(&tp, 1);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         pin1 = getpinarg(argv[0]);
         if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
@@ -5899,7 +5899,7 @@ void MIPS16 cmd_option(void)
     {
         int pin1, pin2;
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (Option.KEYBOARD_CLOCK)
             error("Keyboard must be disabled to change pins");
@@ -5921,7 +5921,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"MOUSE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
@@ -5955,7 +5955,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"KEYBOARD");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
 /* PICOMITEBTH takes the same code path as USBKEYBOARD here: the BLE
    HID host accepts the same set of layout names, and stores the
@@ -6068,7 +6068,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"BAUDRATE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int i;
         i = getint(tp, Option.CPU_Speed * 1000 / 16 / 65535, 921600);
@@ -6103,7 +6103,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"SERIAL CONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         //        unsigned char *p=NULL;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
@@ -6177,7 +6177,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"GPS");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         //        unsigned char *p=NULL;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
@@ -6567,7 +6567,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"LCDPANEL NOCONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.Height = SCREENHEIGHT;
         Option.Width = SCREENWIDTH;
@@ -6589,7 +6589,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"LCDPANEL CONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.NoScroll = 0;
         if (!(Option.DISPLAY_TYPE == ST7365P || Option.DISPLAY_TYPE == ST7789B || Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ST7365P || Option.DISPLAY_TYPE == ST7796SP || Option.DISPLAY_TYPE == ST7796S || Option.DISPLAY_TYPE == ILI9488P || Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE >= VGADISPLAY))
@@ -6787,7 +6787,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         uint8_t radio = 0;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"BOTH"))
             radio = 0;
@@ -6818,7 +6818,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.TCP_PORT = getint(argv[0], 0, 65535);
         Option.ServerResponceTime = 5000;
@@ -6832,7 +6832,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.UDP_PORT = getint(argv[0], 0, 65535);
         Option.UDPServerResponceTime = 5000;
@@ -6845,7 +6845,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"TELNET CONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"OFF"))
             Option.Telnet = 0;
@@ -6863,7 +6863,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"TFTP");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"OFF"))
             Option.disabletftp = 1;
@@ -6896,7 +6896,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 1 && argc != 3)
             SyntaxError();
@@ -6960,7 +6960,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if ((checkstring(argv[0], (unsigned char *)"640")) || (checkstring(argv[0], (unsigned char *)"640x480")))
         {
@@ -7044,7 +7044,7 @@ void MIPS16 cmd_option(void)
     {
         int pin1, pin2, testpin;
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         pin1 = getpinarg(argv[0]);
         pin2 = getpinarg(argv[2]);
@@ -7174,7 +7174,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         uint32_t speed = 0;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         speed = getint(tp, MIN_CPU, MAX_CPU);
         if (speed > 384000 && Option.PSRAM_CS_PIN != 0)
@@ -7213,7 +7213,7 @@ void MIPS16 cmd_option(void)
     {
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             Option.LCD_CD = Option.LCD_CS = Option.LCD_Reset = Option.DISPLAY_TYPE = Option.SSD_DATA = HRes = VRes = 0;
             Option.SSD_DC = Option.SSD_WR = Option.SSD_RD = SSD1963data = 0;
@@ -7241,7 +7241,7 @@ void MIPS16 cmd_option(void)
             ConfigDisplayUser(tp);
             if (Option.DISPLAY_TYPE)
                 return;
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             if (!Option.DISPLAY_TYPE)
                 ConfigDisplaySPI(tp);
@@ -7265,7 +7265,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"TOUCH");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
@@ -7315,7 +7315,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 1);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.MaxCtrls = getint(argv[0], 0, MAXCONTROLS - 1);
         if (Option.MaxCtrls)
@@ -7511,7 +7511,7 @@ void MIPS16 cmd_option(void)
     {
         unsigned char *p = NULL;
         int i, size = 0;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (FixedFlashMap)
             error("The MOD buffer is fixed at 1024K with 16M of flash");
@@ -7588,7 +7588,7 @@ void MIPS16 cmd_option(void)
     {
         int slice;
         unsigned char *p;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
@@ -7823,7 +7823,7 @@ void MIPS16 cmd_option(void)
         const int board[4] = {CYW43_DEFAULT_PIN_WL_REG_ON, CYW43_DEFAULT_PIN_WL_DATA_OUT, CYW43_DEFAULT_PIN_WL_CS, CYW43_DEFAULT_PIN_WL_CLOCK};
         int gp[4], pin[4];
         bool isboard = true;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DEFAULT"))
             memcpy(gp, board, sizeof(gp));
@@ -7863,7 +7863,7 @@ void MIPS16 cmd_option(void)
         int pin1, pin2, channel = -1;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
 #ifdef PICOMITEVGA
             if (Option.RTC_Clock || Option.RTC_Data)
@@ -7878,7 +7878,7 @@ void MIPS16 cmd_option(void)
             return; // this will restart the processor ? only works when not in debug
         }
         getcsargs(&tp, 5);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc == 1)                                              // *EB*
         {                                                           // *EB*
@@ -7892,7 +7892,7 @@ void MIPS16 cmd_option(void)
             SoftReset(SOFT_RESET);                                  // *EB*
             return;                                                 // *EB*
         } // *EB*
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc < 3)
             SyntaxError();
@@ -7992,7 +7992,7 @@ void MIPS16 cmd_option(void)
         int pin1, pin2, pin3;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             if ((Option.SD_CS && Option.SD_CLK_PIN == 0) || Option.TOUCH_CS || Option.LCD_CS || Option.CombinedCS)
                 error("In use");
@@ -8002,7 +8002,7 @@ void MIPS16 cmd_option(void)
             return; // this will restart the processor ? only works when not in debug
         }
         getcsargs(&tp, 5);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 5)
             SyntaxError();
@@ -8047,7 +8047,7 @@ void MIPS16 cmd_option(void)
         int pin1, pin2, pin3;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             if (Option.LCD_CS)
                 error("In use");
@@ -8057,7 +8057,7 @@ void MIPS16 cmd_option(void)
             return; // this will restart the processor ? only works when not in debug
         }
         getcsargs(&tp, 5);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 5)
             SyntaxError();
@@ -8091,7 +8091,7 @@ void MIPS16 cmd_option(void)
 #endif
     tp = checkstring(cmdline, (unsigned char *)"SDCARD");
     int pin1, pin2, pin3, pin4;
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
     if (tp)
     {
@@ -8188,7 +8188,7 @@ void MIPS16 cmd_option(void)
         if (!(argc == 1))
             SyntaxError();
         ;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int fnbr = FindFreeFileNbr();
         if (!InitSDCard())
@@ -8205,7 +8205,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 1);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (!(argc == 1))
             SyntaxError();
@@ -8264,7 +8264,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"RESET");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE)
         {

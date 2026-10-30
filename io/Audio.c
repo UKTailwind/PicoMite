@@ -170,13 +170,8 @@ uint16_t *ubuff1, *ubuff2;
 int16_t *g_buff1, *g_buff2;
 char *modbuff = NULL;
 /* The prompt's own messages ("Playing ...", "Directory found ..."): not while
-   a program runs, a BASIC one (CurrentLinePtr) or a C one (RUN "x.c") */
-#ifdef rp2350
-extern bool tcc_picomite_running(void);
-#define AUDIO_AT_PROMPT (!CurrentLinePtr && !tcc_picomite_running())
-#else
-#define AUDIO_AT_PROMPT (!CurrentLinePtr)
-#endif
+   a program runs, a BASIC one or a C one */
+#define AUDIO_AT_PROMPT (!ProgramRunning())
 modcontext *mcontext = NULL;
 int modfilesamplerate = 22050;
 char *pbuffp;

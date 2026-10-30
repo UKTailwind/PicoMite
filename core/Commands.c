@@ -3248,7 +3248,7 @@ void MIPS16 cmd_continue(void)
 	}
 	// must be a normal CONTINUE
 	checkend(cmdline);
-	if (CurrentLinePtr)
+	if (ProgramRunning())
 		StandardError(10);
 	if (ContinuePoint == NULL)
 		error("Cannot continue");

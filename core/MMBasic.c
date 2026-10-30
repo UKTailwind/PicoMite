@@ -7824,6 +7824,7 @@ void MIPS16 ClearStack(void)
 void MIPS16 ClearRuntime(bool all)
 {
     int i;
+    tcc_picomite_reset_guard(); /* (not under a C program: it clears its memory) */
     /* Profiling buffers were allocated from the BASIC variable pool via
      * GetMemory().  ClearRuntime() is about to wipe that pool, so we must
      * release our references first - otherwise the pointers stay valid in

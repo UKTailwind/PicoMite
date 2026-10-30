@@ -533,6 +533,24 @@ extern "C"
     extern int NextData;
     extern unsigned char *NextDataLine;
     extern unsigned char *CurrentLinePtr, *SaveCurrentLinePtr;
+    /* A program is running: a BASIC one (CurrentLinePtr) or, on the RP2350,
+       a C one (RUN "x.c": tcc_pm_running).  What MMBasic allows only at the
+       prompt ("Invalid in a program", its messages for the prompt) is so for
+       both. */
+#ifdef rp2350
+    extern volatile bool tcc_pm_running;
+#define ProgramRunning() (CurrentLinePtr != NULL || tcc_pm_running)
+#else
+#define ProgramRunning() (CurrentLinePtr != NULL)
+#endif
+    /* (rp2350) an MMBasic error if a C program or the compiler is running:
+       called before the heap or the program is reset, which would pull its
+       memory and stack from under it */
+#ifdef rp2350
+    void tcc_picomite_reset_guard(void);
+#else
+#define tcc_picomite_reset_guard() ((void)0)
+#endif
     extern unsigned char *ContinuePoint;
     extern int ContinueLocalIndex;
     extern bool ProgramRunStarted; // RUN started a program (do_run): its running off the end is an implied END

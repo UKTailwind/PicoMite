@@ -692,8 +692,8 @@ its BASIC meaning, including those with no C function of their own yet:
 (`<picomite/sprite.h>`, `<picomite/audio.h>`, `pm_colour`, `pm_keydown`, ...)
 use it instead.
 
-- **`pm_execute`** runs one statement as `EXECUTE` does: as if typed at the
-  prompt, a single statement (no `:`) and not `RUN`. A C program has no BASIC
+- **`pm_execute`** runs one statement as `EXECUTE` does: a single statement
+  (no `:`), as a statement of a running program. A C program has no BASIC
   variables or SUBs, so put the values into the text:
 
   ```c
@@ -716,6 +716,14 @@ use it instead.
 
 - An MMBasic error in the command or expression ends the program with that
   error. In a C CSUB, it is reported at the CSUB's call.
+- A C program counts as a running program: what MMBasic allows only at the
+  prompt (`EDIT`, `AUTOSAVE`, `OPTION LCDPANEL`, `XMODEM` and so on) fails
+  with "Invalid in a program". What a BASIC program may do but would replace
+  the program, and with it the memory the C program runs in, fails with
+  "Not possible from a C program": `RUN`, `CHAIN`, `NEW`, `LOAD file$`,
+  `FLASH RUN`/`CHAIN`, `RAM RUN`/`CHAIN`. `END` ends the C program at
+  once and goes back to the prompt, as `END` in a BASIC program does
+  (`exit()` is the C program's ordinary end).
 - Unlike `EXECUTE`, a command may take as long as it needs (EXECUTE restarts
   the board after 1 s): it is the program's own statement, as in a BASIC
   program. Likewise the messages the firmware prints only at the prompt

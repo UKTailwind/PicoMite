@@ -3087,7 +3087,7 @@ void ScrollSSD1963(int lines)
 #if PICOMITERP2350
 void cmd_mode(void)
 {
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
 
     if (!(Option.DISPLAY_TYPE == SSD1963_5_16BUFF ||
