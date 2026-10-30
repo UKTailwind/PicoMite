@@ -5950,7 +5950,20 @@ int BasicFileOpen(char *fname, int fnbr, int mode)
         FileTable[fnbr].fptr = GetMemory(sizeof(FIL)); // allocate the file descriptor
         SDbuffer[fnbr] = GetMemory(SDbufferSize);
         FSerror = f_open(FileTable[fnbr].fptr, q, mode); // open it
-        ErrorCheck(fnbr);
+        if (FSerror != FR_OK)
+        {
+            /* Never opened: give the descriptor and the buffer back here.
+               ErrorCheck(fnbr) would close it as a LittleFS file (filesource
+               is not FATFSFILE yet), hand LittleFS a FIL and leak the buffer. */
+            FreeMemory((void *)SDbuffer[fnbr]);
+            SDbuffer[fnbr] = NULL;
+            FreeMemory((void *)FileTable[fnbr].fptr);
+            FileTable[fnbr].fptr = NULL;
+            clearrepeat();
+            ErrorCheck(0); // the error, without touching the file number
+            FatFSFileSystem = FatFSFileSystemSave;
+            return false;
+        }
         filesource[fnbr] = FATFSFILE;
         buffpointer[fnbr] = 0;
         lastfptr[fnbr] = -1;
@@ -5980,19 +5993,32 @@ int BasicFileOpen(char *fname, int fnbr, int mode)
         if (mode != LFS_O_RDONLY && ExistsFile(q))
             lfs_removeattr(&lfs, q, 'A');
         FSerror = lfs_file_open(&lfs, FileTable[fnbr].lfsptr, q, lfsmode);
-        /* (not after a failed open: the attribute's result replaced the open's
-           error, so a directory opened for writing reported no error) */
-        if (FSerror == 0 && mode != LFS_O_RDONLY)
+        if (FSerror < 0)
+        {
+            /* Never opened: free the descriptor here.  ErrorCheck(fnbr) would
+               lfs_file_close() a file LittleFS does not know. */
+            FreeMemory((void *)FileTable[fnbr].lfsptr);
+            FileTable[fnbr].lfsptr = NULL;
+            clearrepeat();
+            ErrorCheck(0); // the error, without touching the file number
+            FatFSFileSystem = FatFSFileSystemSave;
+            return false;
+        }
+        filesource[fnbr] = FLASHFILE; // open: from here ErrorCheck(fnbr) closes it
+        if (mode != LFS_O_RDONLY)
         {
             int dt = get_fattime();
+            /* (a failed attribute write closes the open file below; it used
+               to be left open in LittleFS's list after the error) */
             FSerror = lfs_setattr(&lfs, q, 'A', &dt, 4);
-            ErrorCheck(0);
-            if (mode != (FA_WRITE | FA_CREATE_ALWAYS))
-                lfs_file_seek(&lfs, FileTable[fnbr].lfsptr, lfs_file_size(&lfs, FileTable[fnbr].lfsptr), LFS_SEEK_SET);
-            lfs_file_sync(&lfs, FileTable[fnbr].lfsptr);
+            if (FSerror == 0)
+            {
+                if (mode != (FA_WRITE | FA_CREATE_ALWAYS))
+                    lfs_file_seek(&lfs, FileTable[fnbr].lfsptr, lfs_file_size(&lfs, FileTable[fnbr].lfsptr), LFS_SEEK_SET);
+                lfs_file_sync(&lfs, FileTable[fnbr].lfsptr);
+            }
         }
         ErrorCheck(fnbr);
-        filesource[fnbr] = FLASHFILE;
     }
     clearrepeat();
     if (FSerror)

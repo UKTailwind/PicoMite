@@ -1418,9 +1418,8 @@ static void pm_exec(const char *const *prefix, int nprefix, const char *args, co
 
     if (pm_active)
     {
-        /* The last run was left by a jump straight to the prompt (CTRL-C
-           inside a console read): only TinyCC's pointers into its arena are
-           left (the arena itself goes with the next ClearRuntime). */
+        /* Not cleaned up at the prompt (tcc_picomite_abandoned): the heap
+           may have been reset since, so only drop the pointers into it. */
         tcc_pm_forget_globals();
         pm_active = false;
     }
@@ -1552,4 +1551,35 @@ void cmd_tcc(void)
     char line[STRINGSIZE];
     snprintf(line, sizeof(line), "%s", (char *)getCstring(cmdline));
     pm_exec(prefix, 2, line, "TCC failed");
+}
+
+/* Called where the MMBasic prompt lands after a longjmp(mark) (PicoMite.c).
+   If a run was in progress, it was left past its own cleanup - CTRL-C inside
+   a firmware call that checks for it itself (CheckAbort from getConsole, for
+   instance), or an error nothing trapped.  Nothing has used the heap since,
+   so the stack and the arena are still ours to give back. */
+void tcc_picomite_abandoned(void)
+{
+    int i;
+    if (!pm_active)
+        return;
+    pm_active = false;
+    pm_in_program = false;
+    if (pm != NULL)
+    {
+        __asm volatile("msr msplim, %0" ::"r"(pm->msplim));
+        for (i = 0; i < TCC_PM_MAX_FILES; i++)
+            if (pm_files[i].kind == PM_FILE_DISK)
+            {
+                /* (do_end's CloseAllFiles may have closed it already) */
+                if (filesource[pm_files[i].fnbr] != NONEFILE)
+                    ForceFileClose(pm_files[i].fnbr);
+                pm_files[i].kind = PM_FILE_FREE;
+            }
+        if (pm->stack != NULL)
+            FreeMemory(pm->stack);
+    }
+    pm_heap_release(); /* (pm itself is in the arena) */
+    tcc_pm_forget_globals();
+    pm_state_reset();
 }

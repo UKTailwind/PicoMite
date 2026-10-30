@@ -95,6 +95,9 @@ extern "C"
 #include "hardware/vreg.h"
 #include "pico/multicore.h"
 #include "pico/sem.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* tcc_picomite_abandoned */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
@@ -4479,6 +4482,9 @@ uint32_t testPSRAM(void)
         if (setjmp(mark) != 0)
         {
             // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
+#ifdef rp2350
+            tcc_picomite_abandoned(); // a C program (RUN "x.c", TCC) left past its cleanup: free its memory
+#endif
             FlashLoad = 0;
             ExecDepth = 0; // (see ExecuteProgram)
             OptionErrorSkip = 0; // the prompt has no ON ERROR of the program's (issue 35)
