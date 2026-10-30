@@ -190,6 +190,10 @@ uint_fast64_t gettimefromepoch(int *year, int *month, int *day, int *hour, int *
 void OtherOptions(void);
 void printoptions(void);
 void configure(unsigned char *p, bool noask);
+/* Typed backend for MM.INFO and the native C API (no BASIC evaluation). */
+int64_t MMInfoDiskSpace(int free_space);
+const char *MMInfoDriveName(void);
+int MMInfoModified(const char *file, char *out, int size);
 #endif /* !defined(INCLUDE_COMMAND_TABLE) && !defined(INCLUDE_TOKEN_TABLE) */
 
 #endif /* MISC_HEADER */

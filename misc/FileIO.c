@@ -696,7 +696,10 @@ int FileSize(char *p)
         memset(&djd, 0, sizeof(DIR));
         memset(&fnod, 0, sizeof(FILINFO));
         if (!InitSDCard())
+        {
+            FatFSFileSystem = localfilesystemsave;
             return -1;
+        }
         FSerror = f_stat(q, &fnod);
         if (FSerror != FR_OK)
             iret = 0;
@@ -731,7 +734,10 @@ int ExistsFile(char *p)
         memset(&djd, 0, sizeof(DIR));
         memset(&fnod, 0, sizeof(FILINFO));
         if (!InitSDCard())
+        {
+            FatFSFileSystem = localfilesystemsave;
             return -1;
+        }
         FSerror = f_stat(q, &fnod);
         if (FSerror != FR_OK)
             iret = 0;

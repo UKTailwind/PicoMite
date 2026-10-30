@@ -8364,6 +8364,98 @@ void MIPS16 cmd_keyboard(void)
 }
 #endif
 
+/* Shared, typed MM.INFO backends.  The BASIC parser and the TinyCC API
+   must agree on drive mapping, capacity and modification timestamps. */
+int64_t MMInfoDiskSpace(int free_space)
+{
+    if (FatFSFileSystem)
+    {
+        FATFS *fs = NULL;
+        DWORD free_clusters;
+        const char *volume = FatFSFileSystem == 2 ? "C:" : "B:";
+        FRESULT status;
+        if (!InitSDCard())
+            error((char *)FErrorMsg[20]);
+        status = f_getfree(volume, &free_clusters, &fs);
+        if (status != FR_OK || fs == NULL)
+        {
+            FSerror = status;
+            if (status != FR_OK)
+                ErrorCheck(0);
+            return -1;
+        }
+        return (int64_t)(uint64_t)(free_space ? free_clusters : fs->n_fatent - 2) *
+               (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
+    }
+    if (!free_space)
+        return (int64_t)Option.FlashSize - FlashStoreStart;
+    lfs_ssize_t blocks = lfs_fs_size(&lfs);
+    if (blocks < 0)
+    {
+        FSerror = blocks;
+        ErrorCheck(0);
+        return -1;
+    }
+    return (int64_t)Option.FlashSize - FlashStoreStart - (int64_t)blocks * 4096;
+}
+
+const char *MMInfoDriveName(void)
+{
+    if (FatFSFileSystem == 0)
+        return "A:";
+#if HAS_USB_MSC
+    return FatFSFileSystem == 1 ? "B:" : "C:";
+#else
+    return "B:";
+#endif
+}
+
+/* Return 1 when metadata exists, 0 otherwise; an absent file is an empty
+   string in both APIs.  Restore the selected drive on normal returns. */
+int MMInfoModified(const char *file, char *out, int size)
+{
+    char path[FF_MAX_LFN] = {0};
+    FILINFO info = {0};
+    int was = FatFSFileSystem, waste = 0;
+    int drive = drivecheck((char *)file, &waste) - 1;
+    int found = 0;
+    if (out && size > 0)
+        out[0] = 0;
+    /* InitSDCard may throw for an unconfigured SD card.  Do that check
+       before changing the active filesystem. */
+    if (drive == 1 && !SDCardConfigured())
+        error("SDcard not configured");
+    if (strlen(file + waste) > FF_MAX_LFN)
+        error("Filename > % characters", FF_MAX_LFN);
+    FatFSFileSystem = drive;
+    getfullfilename((char *)file + waste, path);
+    FatFSFileSystem = drive;
+    if (drive == 0)
+    {
+        uint32_t stamp = 0;
+        FSerror = lfs_getattr(&lfs, path, 'A', &stamp, sizeof(stamp));
+        if (FSerror == sizeof(stamp))
+        {
+            info.fdate = (WORD)(stamp >> 16);
+            info.ftime = (WORD)stamp;
+            found = 1;
+        }
+    }
+    else if (InitSDCard())
+    {
+        FSerror = f_stat(path, &info);
+        found = FSerror == FR_OK;
+    }
+    FatFSFileSystem = was;
+    if (found && out && size > 0)
+        snprintf(out, (size_t)size, "%04d-%02d-%02d %02d:%02d:%02d",
+                 ((info.fdate >> 9) & 0x7f) + 1980,
+                 (info.fdate >> 5) & 0xf, info.fdate & 0x1f,
+                 (info.ftime >> 11) & 0x1f, (info.ftime >> 5) & 0x3f,
+                 (info.ftime & 0x1f) * 2);
+    return found;
+}
+
 void MIPS16 fun_info(void)
 {
     unsigned char *tp;
@@ -8597,14 +8689,7 @@ void MIPS16 fun_info(void)
         }
         else if ((tp = checkstring(ep, (unsigned char *)"DRIVE")))
         {
-            strcpy((char *)sret,
-                   FatFSFileSystem == 0 ? "A:" :
-#if HAS_USB_MSC
-                                        (FatFSFileSystem == 1 ? "B:" : "C:")
-#else
-                                        "B:"
-#endif
-            );
+            strcpy((char *)sret, MMInfoDriveName());
             CtoM(sret);
             targ = T_STR;
             return;
@@ -8617,22 +8702,7 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(ep, (unsigned char *)"DISK SIZE"))
         {
-            if (FatFSFileSystem)
-            {
-                if (!InitSDCard())
-                    error((char *)FErrorMsg[20]); // setup the SD card
-                FATFS *fs;
-                DWORD fre_clust;
-                /* Query the current FatFS volume (B: for SD, C: for USB) */
-                const char *vol = (FatFSFileSystem == 2) ? "C:" : "B:";
-                f_getfree(vol, &fre_clust, &fs);
-                /* Get total sectors and free sectors */
-                iret = (uint64_t)(fs->n_fatent - 2) * (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
-            }
-            else
-            {
-                iret = Option.FlashSize - FlashStoreStart;
-            }
+            iret = MMInfoDiskSpace(0);
             targ = T_INT;
             return;
         }
@@ -8714,22 +8784,7 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(ep, (unsigned char *)"FREE SPACE"))
         {
-            if (FatFSFileSystem)
-            {
-                if (!InitSDCard())
-                    error((char *)FErrorMsg[20]); // setup the SD card
-                FATFS *fs;
-                DWORD fre_clust;
-                /* Query the current FatFS volume (B: for SD, C: for USB) */
-                const char *vol = (FatFSFileSystem == 2) ? "C:" : "B:";
-                f_getfree(vol, &fre_clust, &fs);
-                /* Get total sectors and free sectors */
-                iret = (uint64_t)fre_clust * (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
-            }
-            else
-            {
-                iret = Option.FlashSize - FlashStoreStart - lfs_fs_size(&lfs) * 4096;
-            }
+            iret = MMInfoDiskSpace(1);
             targ = T_INT;
             return;
         }
@@ -8966,56 +9021,7 @@ void MIPS16 fun_info(void)
     }
     else if ((tp = checkstring(ep, (unsigned char *)"MODIFIED")))
     {
-        //		int i,j;
-        DIR djd;
-        FILINFO fnod;
-        sret = GetTempStrMemory(); // this will last for the life of the command
-        targ = T_STR;
-        memset(&djd, 0, sizeof(DIR));
-        memset(&fnod, 0, sizeof(FILINFO));
-        char *p = (char *)getFstring(tp);
-        char q[FF_MAX_LFN] = {0};
-        int waste = 0, t = FatFSFileSystem + 1;
-        t = drivecheck(p, &waste);
-        p += waste;
-        getfullfilename(p, q);
-        FatFSFileSystem = t - 1;
-        if (FatFSFileSystem == 0)
-        {
-            int dt;
-            FSerror = lfs_getattr(&lfs, q, 'A', &dt, 4);
-            if (FSerror != 4)
-                return;
-            else
-            {
-                WORD *p = (WORD *)&dt;
-                fnod.fdate = (WORD)p[1];
-                fnod.ftime = (WORD)p[0];
-            }
-        }
-        else
-        {
-            if (!InitSDCard())
-            {
-                iret = -1;
-                return;
-            }
-            FSerror = f_stat(p, &fnod);
-            if (FSerror != FR_OK)
-                return;
-        }
-        IntToStr((char *)sret, ((fnod.fdate >> 9) & 0x7F) + 1980, 10);
-        sret[4] = '-';
-        IntToStrPad((char *)sret + 5, (fnod.fdate >> 5) & 0xF, '0', 2, 10);
-        sret[7] = '-';
-        IntToStrPad((char *)sret + 8, fnod.fdate & 0x1F, '0', 2, 10);
-        sret[10] = ' ';
-        IntToStrPad((char *)sret + 11, (fnod.ftime >> 11) & 0x1F, '0', 2, 10);
-        sret[13] = ':';
-        IntToStrPad((char *)sret + 14, (fnod.ftime >> 5) & 0x3F, '0', 2, 10);
-        sret[16] = ':';
-        IntToStrPad((char *)sret + 17, (fnod.ftime & 0x1F) * 2, '0', 2, 10);
-        FatFSFileSystem = FatFSFileSystemSave;
+        MMInfoModified((char *)getFstring(tp), (char *)sret, STRINGSIZE);
         CtoM(sret);
         targ = T_STR;
         return;

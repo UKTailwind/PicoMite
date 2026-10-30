@@ -2187,10 +2187,12 @@ static void pm_play_bbc_envelope(const int e[14])
     pm_execute(b);
 }
 
-/* MM.INFO(SOUND): what is playing - "OFF", "TONE", "WAV", "MOD", "BBC" ... */
+/* MM.INFO(SOUND): the player already exposes the state as a C string. */
 static char *pm_sound(char *buf, int size)
 {
-    pm_eval("MM.INFO(SOUND)", 's', NULL, NULL, buf, size);
+    pm_poll();
+    if (size > 0)
+        snprintf(buf, (size_t)size, "%s", PlayingStr[CurrentlyPlaying]);
     return buf;
 }
 
@@ -2337,50 +2339,67 @@ static char *pm_dir(const char *pattern, int what, char *buf, int size)
     return buf;
 }
 
-static int pm_exists_file(const char *file) /* MM.INFO(EXISTS FILE f$) */
+/* Keep MM.INFO(EXISTS FILE)'s -1 result for a directory.  The
+   filesystem helpers return -1 for an unavailable drive as well. */
+static int pm_exists_file(const char *file)
 {
-    long long v = 0;
-    pm_evalf('i', &v, NULL, 0, "MM.INFO(EXISTS FILE \"%s\")%s", file, NULL);
-    return (int)v;
-}
-
-static int pm_exists_dir(const char *dir) /* MM.INFO(EXISTS DIR d$) */
-{
-    long long v = 0;
-    pm_evalf('i', &v, NULL, 0, "MM.INFO(EXISTS DIR \"%s\")%s", dir, NULL);
-    return (int)v;
-}
-
-static long long pm_filesize(const char *file) /* MM.INFO(FILESIZE f$) */
-{
-    long long v = 0;
-    pm_evalf('i', &v, NULL, 0, "MM.INFO(FILESIZE \"%s\")%s", file, NULL);
+    volatile int v = 0;
+    PM_CALL(
+        v = ExistsFile((char *)file);
+        if (v == 0)
+        {
+            char path[FF_MAX_LFN] = {0};
+            int fs;
+            if (ExistsDir((char *)file, path, &fs) != 0)
+                v = -1;
+        }
+    );
     return v;
 }
 
-static char *pm_modified(const char *file, char *buf, int size) /* MM.INFO(MODIFIED f$) */
+static int pm_exists_dir(const char *dir)
 {
-    pm_evalf('s', NULL, buf, size, "MM.INFO(MODIFIED \"%s\")%s", file, NULL);
+    volatile int v = 0;
+    PM_CALL(
+        char path[FF_MAX_LFN] = {0};
+        int fs;
+        v = ExistsDir((char *)dir, path, &fs);
+    );
+    return v;
+}
+
+static long long pm_filesize(const char *file)
+{
+    volatile long long v = 0;
+    PM_CALL(v = FileSize((char *)file));
+    return v;
+}
+
+static char *pm_modified(const char *file, char *buf, int size)
+{
+    PM_CALL(MMInfoModified(file, buf, size));
     return buf;
 }
 
-static long long pm_free_space(void) /* MM.INFO(FREE SPACE) */
+static long long pm_free_space(void)
 {
-    long long v = 0;
-    pm_eval("MM.INFO(FREE SPACE)", 'i', &v, NULL, NULL, 0);
+    volatile long long v = 0;
+    PM_CALL(v = MMInfoDiskSpace(1));
     return v;
 }
 
-static long long pm_disk_size_info(void) /* MM.INFO(DISK SIZE) */
+static long long pm_disk_size_info(void)
 {
-    long long v = 0;
-    pm_eval("MM.INFO(DISK SIZE)", 'i', &v, NULL, NULL, 0);
+    volatile long long v = 0;
+    PM_CALL(v = MMInfoDiskSpace(0));
     return v;
 }
 
-static char *pm_drive_name(char *buf, int size) /* MM.INFO$(DRIVE) */
+static char *pm_drive_name(char *buf, int size)
 {
-    pm_eval("MM.INFO$(DRIVE)", 's', NULL, NULL, buf, size);
+    pm_poll();
+    if (size > 0)
+        snprintf(buf, (size_t)size, "%s", MMInfoDriveName());
     return buf;
 }
 
@@ -2735,13 +2754,20 @@ static int pm_mouse(int channel, int what)
     return v;
 }
 
-static int pm_usb_device(int port) /* MM.INFO(USB port) (USB keyboard builds) */
+static int pm_usb_device(int port) /* MM.INFO(USB port) */
 {
-    char e[32];
-    long long v = 0;
-    snprintf(e, sizeof(e), "MM.INFO(USB %d)", port);
-    pm_eval(e, 'i', &v, NULL, NULL, 0);
-    return (int)v;
+#ifdef USBKEYBOARD
+    volatile int v = 0;
+    PM_CALL(
+        pm_range(port, 0, 4);
+        v = port == 0 ? Current_USB_devices : HID[port - 1].Device_type;
+    );
+    return v;
+#else
+    (void)port;
+    PM_CALL(SyntaxError()); /* same availability as MM.INFO(USB) */
+    return 0;
+#endif
 }
 
 /* GUI CURSOR ON [no [, x, y [, colour]]], OFF, HIDE, SHOW, COLOUR c,

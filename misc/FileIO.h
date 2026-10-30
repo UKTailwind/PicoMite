@@ -547,6 +547,7 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
         int MMfeof(int filenbr);
         void MMgetline(int filenbr, char *p);
         int ExistsFile(char *p);
+        int SDCardConfigured(void);
         bool FileTry(bool (*fn)(void *), void *arg);
         void FileRename(char *from, char *to);
 #define FileDelete(name) FileRename(name, NULL)
