@@ -620,7 +620,11 @@ uint8_t PSRAMpin;
         // PIN(n) and PIN(n) = v. Setting a pin up is a one-off and belongs in
         // BASIC; watching or driving one in a tight loop is what a CSUB is for.
         (void *)PinVal, // 0x1b8 MMFLOAT PinVal(int pin)        PIN(n)
-        (void *)PinPut, // 0x1bc void PinPut(int pin, int val)  PIN(n) = v
+        (void *)PinPut,       // 0x1bc void PinPut(int pin, int val)  PIN(n) = v
+        // RP2040/RP2350-common CSUB-safe additions; no heap/runtime resets.
+        (void *)MMInkey,      // 0x1c0 int MMInkey(void): decoded INKEY$, -1 if empty
+        (void *)kbhitConsole, // 0x1c4 int kbhitConsole(void): raw console RX bytes
+        (void *)DrawRBox,     // 0x1c8 void DrawRBox(x1,y1,x2,y2,r,c,fill)
     };
 #ifdef rp2350
     // once a frig to place the call table at 0x1000023C as in earlier releases; the

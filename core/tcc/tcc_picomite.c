@@ -4031,6 +4031,9 @@ const char *const tcc_pm_predefined[] = {
 #ifdef PICOMITEHDMIBTH
     "__PM_PICOMITEHDMIBTH",
 #endif
+#ifdef PICOMITEPC3
+    "__PM_PICOMITEPC3",
+#endif
 #ifdef GUICONTROLS
     "__PM_GUICONTROLS",
 #endif
