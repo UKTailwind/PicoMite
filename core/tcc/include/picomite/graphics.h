@@ -50,6 +50,9 @@ int pm_font_height(int font, int scale);
    colour or PM_NOFILL.  lw, c and fill may be PM_DEFAULT (1, the current
    colour, no fill).  (pm_box above is the older filled-corners form.) */
 void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill);
+/* RBOX x, y, w, h [, r] [, c] [, fill]: radius 10, the foreground colour
+   and no fill by default (API version 4) */
+void pm_draw_rbox(int x, int y, int w, int h, int r, int c, int fill);
 
 /* MODE n - as MODE on the VGA and HDMI builds: the display mode, the
    screen cleared.  An MMBasic error on other builds. */

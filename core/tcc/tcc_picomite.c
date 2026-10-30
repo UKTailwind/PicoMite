@@ -1288,7 +1288,7 @@ static int pm_pin_read(int gp)
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 3 /* (include/picomite/system.h: what each version added) */
+#define PM_API_VERSION 4 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -1530,6 +1530,28 @@ static void pm_draw_box_do(int x, int y, int w, int h, int lw, int c, int fill)
 static void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill)
 {
     PM_CALL(pm_draw_box_do(x, y, w, h, lw, c, fill));
+}
+
+/* RBOX x, y, w, h [, r] [, c] [, fill]  (cmd_rbox: radius 10, the
+   foreground colour and no fill by default) */
+static void pm_draw_rbox_do(int x, int y, int w, int h, int r, int c, int fill)
+{
+    CheckDisplay();
+    if (r == PM_DEFAULT_ARG)
+        r = 10;
+    else
+        pm_range(r, 0, 100);
+    c = pm_colour_arg(c, 0, gui_fcolour);
+    fill = pm_colour_arg(fill, -1, -1);
+    if (w != 0 && h != 0)
+        DrawRBox(x, y, x + w + (w > 0 ? -1 : 1), y + h + (h > 0 ? -1 : 1), r, c, fill);
+    if (Option.Refresh)
+        Display_Refresh();
+}
+
+static void pm_draw_rbox(int x, int y, int w, int h, int r, int c, int fill)
+{
+    PM_CALL(pm_draw_rbox_do(x, y, w, h, r, c, fill));
 }
 
 /* MODE n  (cmd_mode: VGA and HDMI builds) */
@@ -2108,6 +2130,68 @@ static void pm_play_stop(void)
     pm_poll();
     if (CurrentlyPlaying != P_NOTHING) /* (cmd_play's PLAY STOP) */
         CloseAudio(1);
+}
+
+/* PLAY TONE left, right [, duration] (Hz, ms) */
+static void pm_play_tone(double left, double right, int duration)
+{
+    char a1[16], b[96];
+    snprintf(b, sizeof(b), "PLAY TONE %.10g,%.10g%s", left, right, pm_arg(a1, duration));
+    pm_cmd_trim(b);
+    pm_execute(b);
+}
+
+/* PLAY WAV / FLAC / MP3 / MIDIFILE file$ (a file, or a directory to play
+   all of; the interrupt SUB of BASIC has no C form) */
+static void pm_play_file(const char *what, const char *file)
+{
+    pm_cmdf("PLAY %s \"%s\"", what, pm_word(file, false));
+}
+static void pm_play_wav(const char *file) { pm_play_file("WAV", file); }
+static void pm_play_flac(const char *file) { pm_play_file("FLAC", file); }
+static void pm_play_mp3(const char *file) { pm_play_file("MP3", file); }
+static void pm_play_midifile(const char *file) { pm_play_file("MIDIFILE", file); }
+
+static void pm_play_pause(void) { pm_execute("PLAY PAUSE"); }
+static void pm_play_resume(void) { pm_execute("PLAY RESUME"); }
+static void pm_play_next(void) { pm_execute("PLAY NEXT"); }
+static void pm_play_previous(void) { pm_execute("PLAY PREVIOUS"); }
+static void pm_play_close(void) { pm_execute("PLAY CLOSE"); }
+
+/* PLAY VOLUME left [, right] (0..100; PM_DEFAULT leaves one as it is) */
+static void pm_play_volume(int left, int right)
+{
+    char a1[16], a2[16], b[48];
+    snprintf(b, sizeof(b), "PLAY VOLUME %s%s", pm_arg(a1, left) + 1, pm_arg(a2, right));
+    pm_cmd_trim(b);
+    pm_execute(b);
+}
+
+/* PLAY BBC SOUND channel, amplitude, pitch, duration: the BBC Micro's SOUND
+   (it waits, as the BBC did, while the channel's queue is full) */
+static void pm_play_bbc_sound(int channel, int amplitude, int pitch, int duration)
+{
+    pm_cmdf("PLAY BBC SOUND %d,%d,%d,%d", channel, amplitude, pitch, duration);
+}
+
+/* PLAY BBC ENVELOPE n, T, PI1, PI2, PI3, PN1, PN2, PN3, AA, AD, AS, AR,
+   ALA, ALD: the 14 values in that order */
+static void pm_play_bbc_envelope(const int e[14])
+{
+    char b[160];
+    int k, n = snprintf(b, sizeof(b), "PLAY BBC ENVELOPE");
+    if (e == NULL)
+        PM_CALL(error("Argument count"));
+    for (k = 0; k < 14; k++)
+        n += snprintf(b + n, sizeof(b) - (size_t)n, "%s%d", k ? "," : " ", e[k]);
+    pm_execute(b);
+}
+
+/* MM.INFO(SOUND): what is playing - "OFF", "TONE", "WAV", "MOD", "BBC" ... */
+static char *pm_sound(char *buf, int size)
+{
+    pm_eval("MM.INFO(SOUND)", 's', NULL, NULL, buf, size);
+    return buf;
 }
 
 /* LOAD IMAGE file$ [, x] [, y] [, mode];  LOAD JPG file$ [, x] [, y] */
@@ -3044,6 +3128,7 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_get_mem_info)
     PM_SYM(pm_text)
     PM_SYM(pm_draw_box)
+    PM_SYM(pm_draw_rbox)
     PM_SYM(pm_execute)
     PM_SYM(pm_eval_int)
     PM_SYM(pm_eval_float)
@@ -3066,6 +3151,20 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_play_modsample)
     PM_SYM(pm_play_sound)
     PM_SYM(pm_play_stop)
+    PM_SYM(pm_play_tone)
+    PM_SYM(pm_play_wav)
+    PM_SYM(pm_play_flac)
+    PM_SYM(pm_play_mp3)
+    PM_SYM(pm_play_midifile)
+    PM_SYM(pm_play_pause)
+    PM_SYM(pm_play_resume)
+    PM_SYM(pm_play_next)
+    PM_SYM(pm_play_previous)
+    PM_SYM(pm_play_close)
+    PM_SYM(pm_play_volume)
+    PM_SYM(pm_play_bbc_sound)
+    PM_SYM(pm_play_bbc_envelope)
+    PM_SYM(pm_sound)
     PM_SYM(pm_load_image)
     PM_SYM(pm_load_jpg)
     PM_SYM(pm_colour)

@@ -552,7 +552,7 @@ firmware's services are being opened up further in separate headers under
 `picomite/`, one for each subsystem. They may repeat a few declarations of
 `picomite.h`, so a program can include either or both.
 
-The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 3. It
+The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 4. It
 goes up by one whenever functions are added, and nothing is ever taken away
 or changed, so a firmware of version n has everything of 1 to n.
 `system.h` lists what each version added; a program that uses what version
@@ -563,6 +563,7 @@ missing one is `undefined symbol`, never a crash.
 | Version | Added |
 |---|---|
 | 1 | `picomite.h`; `system.h`, `memory.h`, `graphics.h`, `input.h` (`pm_inkey`, `pm_keydown`), `basic.h` (`pm_execute`, `pm_eval_*`, `pm_settick`), `sprite.h`, `audio.h`, `pm_colour`, `pm_load_image`, `pm_load_jpg` |
+| 4 | `graphics.h`: `pm_draw_rbox`; `audio.h`: `pm_play_tone`, `_wav`, `_flac`, `_mp3`, `_midifile`, `_pause`, `_resume`, `_next`, `_previous`, `_close`, `_volume`, `_bbc_sound`, `_bbc_envelope`, `pm_sound` |
 | 3 | `framebuffer.h` |
 | 2 | `basic.h`: `pm_try`, `pm_execute_try`, `pm_eval_*_try`, `pm_errno`, `pm_errmsg`, `pm_error_clear`; `files.h`; `vars.h`; `input.h`: `pm_mouse`, `pm_usb_device`, `pm_cursor_*`; the C library's `remove`, `rename`, `unistd.h`, `sys/stat.h`, `dirent.h` and `fopen`'s `"a"`, `"r+"`, `"w+"`, `"a+"` |
 
@@ -647,6 +648,7 @@ check them the same way and fail with the same errors:
 |---|---|
 | `TEXT x, y, s$, align$, font, scale, c, bc` | `pm_text(x, y, s, align, font, scale, c, bc)` |
 | `BOX x, y, w, h, lw, c, fill` | `pm_draw_box(x, y, w, h, lw, c, fill)` |
+| `RBOX x, y, w, h [, r] [, c] [, fill]` | `pm_draw_rbox(x, y, w, h, r, c, fill)` |
 | `MODE n` | `pm_mode(n)` (VGA and HDMI builds) |
 | `COLOUR fc [, bc]` | `pm_colour(fc, bc)` |
 | `LOAD IMAGE file$ [, x] [, y] [, mode]` | `pm_load_image(file, x, y, mode)` |
@@ -845,14 +847,43 @@ void pm_play_modfile(const char *file);                      /* PLAY MODFILE fil
 void pm_play_modsample(int sample, int channel, int volume); /* PLAY MODSAMPLE s, ch [, vol] */
 void pm_play_sound(int channel, const char *position, const char *type,
                    double frequency, int volume);            /* PLAY SOUND ch, pos$, type$, f [, vol] */
+void pm_play_tone(double left, double right, int duration);  /* PLAY TONE l, r [, ms] */
+void pm_play_wav(const char *file);                          /* PLAY WAV file$ */
+void pm_play_flac(const char *file);                         /* PLAY FLAC file$ */
+void pm_play_mp3(const char *file);                          /* PLAY MP3 file$ */
+void pm_play_midifile(const char *file);                     /* PLAY MIDIFILE file$ */
+void pm_play_pause(void);                                    /* PLAY PAUSE */
+void pm_play_resume(void);                                   /* PLAY RESUME */
+void pm_play_next(void);                                     /* PLAY NEXT */
+void pm_play_previous(void);                                 /* PLAY PREVIOUS */
+void pm_play_close(void);                                    /* PLAY CLOSE */
 void pm_play_stop(void);                                     /* PLAY STOP */
+void pm_play_volume(int left, int right);                    /* PLAY VOLUME l [, r] */
+void pm_play_bbc_sound(int channel, int amplitude, int pitch, int duration); /* PLAY BBC SOUND */
+void pm_play_bbc_envelope(const int e[14]);                  /* PLAY BBC ENVELOPE n, T, ... ALD */
+char *pm_sound(char *buf, int size);                         /* MM.INFO(SOUND) */
 ```
 
-The `PLAY` subcommands, with `PM_DEFAULT` for a volume left out.
-As `PLAY STOP`, `pm_play_stop` does nothing when nothing is playing.
+The `PLAY` subcommands, with `PM_DEFAULT` for an argument left out.
+
+- `pm_play_wav`, `_flac`, `_mp3` and `_midifile` take a file or a directory
+  (all its files are played, `pm_play_next` / `_previous` move between them).
+  The interrupt SUB of the BASIC form has no C form: poll `pm_sound()`,
+  which is `"OFF"` when nothing plays.
+- `pm_play_bbc_sound` and `pm_play_bbc_envelope` are the BBC Micro's
+  `SOUND` and `ENVELOPE`: `e[]` holds the 14 values of the envelope in the
+  order of `PLAY BBC ENVELOPE`. As on the BBC, a full channel queue makes
+  `pm_play_bbc_sound` wait.
+- As `PLAY STOP`, `pm_play_stop` does nothing when nothing is playing.
+- Without `OPTION AUDIO` they fail as the commands do; `pm_try` turns that
+  into a test.
 
 ```c
 pm_play_sound(1, "B", "Q", 2101 - dur * 20, 15); /* PLAY SOUND 1,"B","Q",2101-dur*20,15 */
+
+static const int env3[14] = {3, 1, 0,0,0, 0,0,0, 127, -40, 0, -127, 81, 0};
+pm_play_bbc_envelope(env3);                      /* PLAY BBC ENVELOPE 3, 1, 0,0,0, ... */
+pm_play_bbc_sound(0x10, 3, 6, 0);                /* PLAY BBC SOUND &H10, 3, 6, 0 */
 ```
 
 #### `<picomite/basic.h>`: MMBasic's commands and functions

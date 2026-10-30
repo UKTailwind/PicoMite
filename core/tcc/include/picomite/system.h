@@ -16,8 +16,11 @@
         pm_errmsg, pm_error_clear; files.h; vars.h; input.h: pm_mouse,
         pm_usb_device, pm_cursor_*; the C library's remove, rename,
         unistd.h, sys/stat.h, dirent.h and fopen's "a", "r+", "w+", "a+"
-     3  framebuffer.h (FRAMEBUFFER, BLIT FRAMEBUFFER, BLIT) */
-#define PM_API_VERSION 3
+     3  framebuffer.h (FRAMEBUFFER, BLIT FRAMEBUFFER, BLIT)
+     4  graphics.h: pm_draw_rbox; audio.h: pm_play_tone, _wav, _flac, _mp3,
+        _midifile, _pause, _resume, _next, _previous, _close, _volume,
+        _bbc_sound, _bbc_envelope, pm_sound */
+#define PM_API_VERSION 4
 unsigned pm_api_version(void);
 
 /* pm_get_info(): the firmware and the board.  Set size first, so a program
