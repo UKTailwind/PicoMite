@@ -364,6 +364,8 @@ struct pm_state
     pm_run_args args;
     void *stack;
     uint32_t msplim;
+    uint32_t heapend, stackwarn, stacklow; /* MMBasic's stack check, while on our stack */
+    int stacklowdepth;
 };
 #define pm_files (pm->files)
 
@@ -1766,6 +1768,184 @@ static void pm_tick_service(void)
 }
 
 /* ------------------------------------------------------------------------ */
+/* <picomite/sprite.h>, <picomite/audio.h>, the rest of graphics and input   */
+/* ------------------------------------------------------------------------ */
+
+/* A command whose arguments the firmware only parses from BASIC text (PLAY,
+   LOAD IMAGE, SPRITE LOAD): its typed C arguments are written out as the
+   statement and run by pm_execute, so they go through the very same
+   parsing and checks. */
+static void pm_cmdf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void pm_cmdf(const char *fmt, ...)
+{
+    char b[STRINGSIZE + 8];
+    va_list ap;
+    int n;
+    va_start(ap, fmt);
+    n = vsnprintf(b, sizeof(b), fmt, ap);
+    va_end(ap);
+    if (n < 0 || n >= STRINGSIZE)
+        PM_CALL(error("String too long"));
+    pm_execute(b);
+}
+
+/* a file name or option letters for pm_cmdf: no quote, nothing to split it */
+static const char *pm_word(const char *s, bool letters)
+{
+    const char *p;
+    if (s == NULL)
+        PM_CALL(error("Argument count"));
+    for (p = s; *p; p++)
+        if (*p == '"' || (letters && !isalnum((unsigned char)*p)))
+            PM_CALL(error("Invalid argument"));
+    return s;
+}
+
+/* ",n" for an argument, "," for one left out (PM_DEFAULT_ARG) */
+static char *pm_arg(char *b, int v)
+{
+    if (v == PM_DEFAULT_ARG)
+        strcpy(b, ",");
+    else
+        sprintf(b, ",%d", v);
+    return b;
+}
+
+/* drop the trailing commas of arguments left out at the end */
+static void pm_cmd_trim(char *b)
+{
+    size_t n = strlen(b);
+    while (n && b[n - 1] == ',')
+        b[--n] = 0;
+}
+
+/* SPRITE LOAD file$ [, start] [, mode] */
+static void pm_sprite_load(const char *file, int start, int mode)
+{
+    char a1[16], a2[16], b[STRINGSIZE];
+    snprintf(b, sizeof(b), "\"%s\"%s%s", pm_word(file, false), pm_arg(a1, start), pm_arg(a2, mode));
+    pm_cmd_trim(b);
+    pm_cmdf("SPRITE LOAD %s", b);
+}
+
+/* SPRITE SHOW n, x, y, layer [, rotation]; HIDE n; WRITE n, x, y [, orientation]; CLOSE ALL */
+static void pm_sprite_show(int n, int x, int y, int layer, int rotation)
+{
+    PM_CALL(SpriteShowC(n, x, y, layer, rotation == PM_DEFAULT_ARG ? -1 : rotation));
+}
+
+static void pm_sprite_hide(int n)
+{
+    PM_CALL(SpriteHideC(n));
+}
+
+static void pm_sprite_write(int n, int x, int y, int orientation)
+{
+    PM_CALL(SpriteWriteC(n, x, y, orientation == PM_DEFAULT_ARG ? -1 : orientation));
+}
+
+static void pm_sprite_close_all(void)
+{
+    PM_CALL(SpriteCloseAllC());
+}
+
+/* PLAY MODFILE file$; MODSAMPLE sample, channel [, volume]; SOUND ...; STOP */
+static void pm_play_modfile(const char *file)
+{
+    pm_cmdf("PLAY MODFILE \"%s\"", pm_word(file, false));
+}
+
+static void pm_play_modsample(int sample, int channel, int volume)
+{
+    char a1[16], b[64];
+    snprintf(b, sizeof(b), "PLAY MODSAMPLE %d,%d%s", sample, channel, pm_arg(a1, volume));
+    pm_cmd_trim(b);
+    pm_execute(b);
+}
+
+static void pm_play_sound(int channel, const char *position, const char *type, double frequency, int volume)
+{
+    char a1[16], b[96];
+    snprintf(b, sizeof(b), "PLAY SOUND %d,%s,%s,%.10g%s", channel, pm_word(position, true), pm_word(type, true),
+             frequency, pm_arg(a1, volume));
+    pm_cmd_trim(b);
+    pm_execute(b);
+}
+
+static void pm_play_stop(void)
+{
+    pm_poll();
+    if (CurrentlyPlaying != P_NOTHING) /* (cmd_play's PLAY STOP) */
+        CloseAudio(1);
+}
+
+/* LOAD IMAGE file$ [, x] [, y] [, mode];  LOAD JPG file$ [, x] [, y] */
+static void pm_load_image(const char *file, int x, int y, int mode)
+{
+    char a1[16], a2[16], a3[16], b[STRINGSIZE];
+    snprintf(b, sizeof(b), "\"%s\"%s%s%s", pm_word(file, false), pm_arg(a1, x), pm_arg(a2, y), pm_arg(a3, mode));
+    pm_cmd_trim(b);
+    pm_cmdf("LOAD IMAGE %s", b);
+}
+
+static void pm_load_jpg(const char *file, int x, int y)
+{
+    char a1[16], a2[16], b[STRINGSIZE];
+    snprintf(b, sizeof(b), "\"%s\"%s%s", pm_word(file, false), pm_arg(a1, x), pm_arg(a2, y));
+    pm_cmd_trim(b);
+    pm_cmdf("LOAD JPG %s", b);
+}
+
+/* COLOUR fc [, bc] (cmd_colour), with OPTION LEGACY's colour numbers (getColour) */
+extern const int CMM1map[16];
+static int pm_colour_value(int c)
+{
+    if (CMM1)
+    {
+        pm_range(c, 0, 15);
+        return CMM1map[c];
+    }
+    pm_range(c, 0, 0xFFFFFFF);
+    return c;
+}
+
+static void pm_colour_do(int fc, int bc)
+{
+    gui_fcolour = pm_colour_value(fc);
+    if (bc != PM_DEFAULT_ARG)
+        gui_bcolour = pm_colour_value(bc);
+    last_fcolour = gui_fcolour;
+    last_bcolour = gui_bcolour;
+    if (!CurrentLinePtr)
+    {
+        PromptFC = gui_fcolour;
+        PromptBC = gui_bcolour;
+    }
+}
+
+static void pm_colour(int fc, int bc)
+{
+    PM_CALL(pm_colour_do(fc, bc));
+}
+
+/* KEYDOWN(n) */
+static int pm_keydown(int n)
+{
+    volatile int v = 0;
+    pm_trap t;
+    pm_poll();
+    if (PM_TRY(t))
+    {
+        pm_range(n, 0, 8);
+        v = KeyDownValue(n);
+        pm_trap_restore(&t);
+    }
+    else
+        pm_program_error_tr(&t);
+    return v;
+}
+
+/* ------------------------------------------------------------------------ */
 /* Run-time symbol table for -run                                            */
 /* ------------------------------------------------------------------------ */
 
@@ -1965,6 +2145,19 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_eval_float)
     PM_SYM(pm_eval_str)
     PM_SYM(pm_settick)
+    PM_SYM(pm_sprite_load)
+    PM_SYM(pm_sprite_show)
+    PM_SYM(pm_sprite_hide)
+    PM_SYM(pm_sprite_write)
+    PM_SYM(pm_sprite_close_all)
+    PM_SYM(pm_play_modfile)
+    PM_SYM(pm_play_modsample)
+    PM_SYM(pm_play_sound)
+    PM_SYM(pm_play_stop)
+    PM_SYM(pm_load_image)
+    PM_SYM(pm_load_jpg)
+    PM_SYM(pm_colour)
+    PM_SYM(pm_keydown)
     PM_SYM(pm_mode)
     PM_SYM(pm_font_width)
     PM_SYM(pm_font_height)
@@ -2050,6 +2243,28 @@ static bool pm_stack_intact(const void *stack)
         if (w[i] != (0x5AC0FFEEu ^ (uint32_t)i))
             return false;
     return true;
+}
+
+/* MMBasic checks its stack against the top of the C heap (TestStackOverflow
+   in core/MMBasic.c: heapend, stackwarn).  Our stack is in the MMBasic heap,
+   far below it, so while we are on it the check is moved to our stack's
+   bottom (above the pattern): a BASIC command run from C (pm_execute) that
+   goes too deep is then the usual "Stack overflow" error. */
+extern uint32_t heapend, stackwarn, StackLow;
+extern int StackLowDepth;
+
+static void pm_stack_check_enter(void)
+{
+    pm->heapend = heapend, pm->stackwarn = stackwarn;
+    pm->stacklow = StackLow, pm->stacklowdepth = StackLowDepth;
+    heapend = (uint32_t)pm->stack + TCC_PM_STACK_MARK * 4 + 256;
+    stackwarn = heapend + 1024;
+}
+
+static void pm_stack_check_leave(void)
+{
+    heapend = pm->heapend, stackwarn = pm->stackwarn;
+    StackLow = pm->stacklow, StackLowDepth = pm->stacklowdepth; /* (no warning about our stack) */
 }
 
 /* Call fn(arg) with the stack pointer at stack_top. */
@@ -2185,6 +2400,7 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
 
     __asm volatile("mrs %0, msplim" : "=r"(pm->msplim));
     __asm volatile("msr msplim, %0" ::"r"(0));
+    pm_stack_check_enter();
     pm_active = true;
     if (setjmp(pm->run_jmp) == 0)
     {
@@ -2204,6 +2420,7 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
     }
     pm_trap_restore(&t);
     __asm volatile("msr msplim, %0" ::"r"(pm->msplim));
+    pm_stack_check_leave();
     pm_active = false;
     pm_in_program = false;
 
@@ -2321,6 +2538,7 @@ void tcc_picomite_abandoned(void)
     if (pm != NULL)
     {
         __asm volatile("msr msplim, %0" ::"r"(pm->msplim));
+        pm_stack_check_leave();
         for (i = 0; i < TCC_PM_MAX_FILES; i++)
             if (pm_files[i].kind == PM_FILE_DISK)
             {

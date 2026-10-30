@@ -10,4 +10,8 @@
    (Also in <picomite.h>.) */
 int pm_inkey(void);
 
+/* KEYDOWN(n): n 0 the number of keys down, 1..6 the code of each, 8 the
+   lock keys (as KEYDOWN) */
+int pm_keydown(int n);
+
 #endif /* _PICOMITE_INPUT_H */

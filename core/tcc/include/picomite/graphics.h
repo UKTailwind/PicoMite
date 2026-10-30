@@ -55,6 +55,16 @@ void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill);
    screen cleared.  An MMBasic error on other builds. */
 void pm_mode(int mode);
 
+/* COLOUR fc [, bc] - the colours that PM_DEFAULT stands for, as COLOUR:
+   RGB, or with OPTION LEGACY ON the colour numbers 0..15.  bc may be
+   PM_DEFAULT (left as it is). */
+void pm_colour(int fc, int bc);
+
+/* LOAD IMAGE file$ [, x] [, y] [, mode]  and  LOAD JPG file$ [, x] [, y],
+   any of x, y and mode PM_DEFAULT (as left out) */
+void pm_load_image(const char *file, int x, int y, int mode);
+void pm_load_jpg(const char *file, int x, int y);
+
 /* The framebuffer drawing goes to: the display memory itself on VGA and
    HDMI, or the buffer of FRAMEBUFFER CREATE / WRITE.  Writing pixels here
    is much faster than pm_pixel(); call pm_refresh() after it for buffered

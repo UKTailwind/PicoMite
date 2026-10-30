@@ -3604,60 +3604,57 @@ void MIPS16 setterminal(int height, int width)
     strcat(sp, "t");
     SSPrintString(sp);
 }
-#ifdef USBKEYBOARD
-void fun_keydown(void)
+/* KEYDOWN(n) once n (0..8) is checked: also for C (core/tcc: <picomite/input.h>) */
+int KeyDownValue(int n)
 {
-    int i, n = getint(ep, 0, 8);
-    iret = 0;
+    int i, r = 0;
     while (getConsole() != -1)
         ; // clear anything in the input buffer
+#ifdef USBKEYBOARD
     if (n == 8)
     {
-        iret = (caps_lock ? 1 : 0) |
-               (num_lock ? 2 : 0) |
-               (scroll_lock ? 4 : 0);
+        r = (caps_lock ? 1 : 0) |
+            (num_lock ? 2 : 0) |
+            (scroll_lock ? 4 : 0);
     }
     else if (n)
     {
-        iret = KeyDown[n - 1]; // this is the character
+        r = KeyDown[n - 1]; // this is the character
     }
     else
     {
         for (i = 0; i < 6; i++)
         {
             if (KeyDown[i])
-                iret++;
+                r++;
         }
     }
-    targ = T_INT;
-}
 #else
-void fun_keydown(void)
-{
-    int i, n = getint(ep, 0, 8);
-    iret = 0;
-    while (getConsole() != -1)
-        ; // clear anything in the input buffer
     if (n == 8)
     {
-        iret = (CapsLock ? 1 : 0) |
-               (NumLock ? 2 : 0);
+        r = (CapsLock ? 1 : 0) |
+            (NumLock ? 2 : 0);
     }
     else if (n)
     {
-        iret = PS2KeyDown[n - 1];
+        r = PS2KeyDown[n - 1];
     }
     else
     {
         for (i = 0; i < 6; i++)
         {
             if (PS2KeyDown[i])
-                iret++;
+                r++;
         }
     }
+#endif
+    return r;
+}
+void fun_keydown(void)
+{
+    iret = KeyDownValue(getint(ep, 0, 8));
     targ = T_INT;
 }
-#endif
 void MIPS16 disable_systemspi(void)
 {
     if (!IsInvalidPin(Option.SYSTEM_MOSI))

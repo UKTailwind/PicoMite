@@ -1193,6 +1193,151 @@ static int spritepngrow(void *v, unsigned y, const unsigned char *rgba)
     return 1;
 }
 #endif
+/* SPRITE's checks before any of its subcommands: the display and its mode */
+static void sprite_check(int *maxW, int *maxH)
+{
+#ifndef PICOMITEVGA
+    if (WriteBuf == NULL)
+        error("Not available on physical display");
+#endif
+    CheckDisplay();
+    *maxW = HRes;
+    *maxH = VRes;
+    if (DISPLAY_TYPE == SCREENMODE4 || DISPLAY_TYPE == SCREENMODE5)
+        error("Not available for this display mode");
+}
+
+/* SPRITE SHOW once its arguments are checked (rotation: 0 if not given; 4-7 opaque: BlitShowBuffer) */
+static void sprite_show_core(int bnbr, int x1, int y1, int layer, int rotation)
+{
+    spritebuff[bnbr]->rotation = rotation;
+    if (spritebuff[bnbr]->active)
+    {
+        layer_in_use[spritebuff[bnbr]->layer]--;
+        if (spritebuff[bnbr]->layer == 0)
+            zeroLIFOremove(bnbr);
+        else
+            LIFOremove(bnbr);
+        sprites_in_use--;
+    }
+    spritebuff[bnbr]->layer = layer;
+    layer_in_use[spritebuff[bnbr]->layer]++;
+    if (spritebuff[bnbr]->layer == 0)
+        zeroLIFOadd(bnbr);
+    else
+        LIFOadd(bnbr);
+    sprites_in_use++;
+    BlitShowBuffer(bnbr, x1, y1, 1);
+    ProcessCollisions(bnbr);
+    if (sprites_in_use != LIFOpointer + zeroLIFOpointer || sprites_in_use != sumlayer())
+        error((char *)"sprite internal error");
+}
+
+/* SPRITE HIDE once the number is checked */
+static void sprite_hide_core(int bnbr)
+{
+    if (spritebuff[bnbr] != NULL && spritebuff[bnbr]->spritebuffptr != NULL)
+    {
+        if (spritebuff[bnbr]->active)
+        {
+            sprites_in_use--;
+            blithide(bnbr);
+            layer_in_use[spritebuff[bnbr]->layer]--;
+            spritebuff[bnbr]->x = SPRITE_POS_INACTIVE;
+            spritebuff[bnbr]->y = SPRITE_POS_INACTIVE;
+            if (spritebuff[bnbr]->layer == 0)
+                zeroLIFOremove(bnbr);
+            else
+                LIFOremove(bnbr);
+            spritebuff[bnbr]->layer = -1;
+            spritebuff[bnbr]->next_x = SPRITE_POS_INACTIVE;
+            spritebuff[bnbr]->next_y = SPRITE_POS_INACTIVE;
+            spritebuff[bnbr]->lastcollisions = 0;
+            spritebuff[bnbr]->edges = 0;
+        }
+        else
+            error((char *)"Not Showing");
+    }
+    else
+        error((char *)"Buffer not in use");
+    if (sprites_in_use != LIFOpointer + zeroLIFOpointer || sprites_in_use != sumlayer())
+        error((char *)"sprite internal error");
+}
+
+/* SPRITE WRITE once its arguments are checked.  WRITE's orientations 0-3 draw every pixel and 4-7 (the
+   default) leave the transparent ones, the other way round from SHOW's; a sprite showing keeps its own */
+static void sprite_write_core(int bnbr, int x1, int y1, int o)
+{
+    int keep = spritebuff[bnbr]->rotation;
+    spritebuff[bnbr]->rotation = (o & 3) | ((o & 4) ? 0 : 4);
+    BlitShowBuffer(bnbr, x1, y1, 4);
+    spritebuff[bnbr]->rotation = keep;
+}
+
+/* getint()'s range error, for the C entry points below */
+static void sprite_range(int v, int lo, int hi)
+{
+    if (v < lo || v > hi)
+        error("~ is invalid (valid is ~ to ~)", (long long)v, (long long)lo, (long long)hi);
+}
+
+/* The sprite of SHOW and WRITE: as cmd_sprite checks it */
+static void sprite_buffer_check(int bnbr)
+{
+    sprite_range(bnbr, 1, MAXBLITBUF);
+    if (spritebuff[bnbr] == NULL)
+        error((char *)"Buffer not in use");
+    if (spritebuff[bnbr]->h == TRIANGLE_BUFFER_MARKER)
+        StandardError(37);
+    if (spritebuff[bnbr]->spritebuffptr == NULL)
+        error((char *)"Buffer not in use");
+}
+
+/* SPRITE SHOW, HIDE, WRITE and CLOSE ALL for C (core/tcc: <picomite/sprite.h>), with SPRITE's own
+   checks and errors.  rotation / orientation < 0: not given. */
+void SpriteShowC(int bnbr, int x1, int y1, int layer, int rotation)
+{
+    int maxW, maxH;
+    sprite_check(&maxW, &maxH);
+    if (hideall)
+        error((char *)"Sprites are hidden");
+    sprite_buffer_check(bnbr);
+    sprite_range(x1, -spritebuff[bnbr]->w + 1, maxW - 1);
+    sprite_range(y1, -spritebuff[bnbr]->h + 1, maxH - 1);
+    sprite_range(layer, 0, MAXLAYER);
+    if (rotation >= 0)
+        sprite_range(rotation, 0, 7);
+    sprite_show_core(bnbr, x1, y1, layer, rotation >= 0 ? rotation : 0);
+}
+
+void SpriteHideC(int bnbr)
+{
+    int maxW, maxH;
+    sprite_check(&maxW, &maxH);
+    sprite_range(bnbr, 1, MAXBLITBUF);
+    sprite_hide_core(bnbr);
+}
+
+void SpriteWriteC(int bnbr, int x1, int y1, int orientation)
+{
+    int maxW, maxH;
+    sprite_check(&maxW, &maxH);
+    sprite_buffer_check(bnbr);
+    sprite_range(x1, -spritebuff[bnbr]->w + 1, maxW);
+    sprite_range(y1, -spritebuff[bnbr]->h + 1, maxH);
+    if (orientation >= 0)
+        sprite_range(orientation, 0, 7);
+    sprite_write_core(bnbr, x1, y1, orientation >= 0 ? orientation : 4);
+}
+
+void SpriteCloseAllC(void)
+{
+    int maxW, maxH;
+    sprite_check(&maxW, &maxH);
+    closeallsprites();
+    closeallstobjects();
+}
+
 void cmd_sprite(void)
 {
     int x1, y1, w, h, bnbr;
@@ -1200,15 +1345,7 @@ void cmd_sprite(void)
     int maxW;
     int maxH;
     int newb = 0;
-#ifndef PICOMITEVGA
-    if (WriteBuf == NULL)
-        error("Not available on physical display");
-#endif
-    CheckDisplay();
-    maxW = HRes;
-    maxH = VRes;
-    if (DISPLAY_TYPE == SCREENMODE4 || DISPLAY_TYPE == SCREENMODE5)
-        error("Not available for this display mode");
+    sprite_check(&maxW, &maxH);
     if ((p = checkstring(cmdline, (unsigned char *)"SHOW SAFE")))
     {
         int layer, mode = 1;
@@ -1288,7 +1425,7 @@ void cmd_sprite(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SHOW")))
     {
-        int layer, mode = 1;
+        int layer;
         getcsargs(&p, 9);
         if (!(argc == 7 || argc == 9))
             SyntaxError();
@@ -1306,33 +1443,7 @@ void cmd_sprite(void)
             x1 = (int)getint(argv[2], -spritebuff[bnbr]->w + 1, maxW - 1);
             y1 = (int)getint(argv[4], -spritebuff[bnbr]->h + 1, maxH - 1);
             layer = (int)getint(argv[6], 0, MAXLAYER);
-            if (argc == 9)
-                spritebuff[bnbr]->rotation = (int)getint(argv[8], 0, 7);
-            else
-                spritebuff[bnbr]->rotation = 0; // (4-7 opaque: BlitShowBuffer)
-            w = spritebuff[bnbr]->w;
-            h = spritebuff[bnbr]->h;
-            if (spritebuff[bnbr]->active)
-            {
-                layer_in_use[spritebuff[bnbr]->layer]--;
-                if (spritebuff[bnbr]->layer == 0)
-                    zeroLIFOremove(bnbr);
-                else
-                    LIFOremove(bnbr);
-                sprites_in_use--;
-            }
-            spritebuff[bnbr]->layer = layer;
-            layer_in_use[spritebuff[bnbr]->layer]++;
-            if (spritebuff[bnbr]->layer == 0)
-                zeroLIFOadd(bnbr);
-            else
-                LIFOadd(bnbr);
-            sprites_in_use++;
-            //            int cursorhidden = 0;
-            BlitShowBuffer(bnbr, x1, y1, mode);
-            ProcessCollisions(bnbr);
-            if (sprites_in_use != LIFOpointer + zeroLIFOpointer || sprites_in_use != sumlayer())
-                error((char *)"sprite internal error");
+            sprite_show_core(bnbr, x1, y1, layer, argc == 9 ? (int)getint(argv[8], 0, 7) : 0);
         }
         else
             error((char *)"Buffer not in use");
@@ -1415,34 +1526,7 @@ void cmd_sprite(void)
         if (*argv[0] == '#')
             argv[0]++;
         bnbr = (int)getint(argv[0], 1, MAXBLITBUF); // get the number
-        if (spritebuff[bnbr] != NULL && spritebuff[bnbr]->spritebuffptr != NULL)
-        {
-            if (spritebuff[bnbr]->active)
-            {
-                sprites_in_use--;
-                //                int cursorhidden = 0;
-                blithide(bnbr);
-                layer_in_use[spritebuff[bnbr]->layer]--;
-                spritebuff[bnbr]->x = SPRITE_POS_INACTIVE;
-                spritebuff[bnbr]->y = SPRITE_POS_INACTIVE;
-                if (spritebuff[bnbr]->layer == 0)
-                    zeroLIFOremove(bnbr);
-                else
-                    LIFOremove(bnbr);
-                spritebuff[bnbr]->layer = -1;
-                spritebuff[bnbr]->next_x = SPRITE_POS_INACTIVE;
-                spritebuff[bnbr]->next_y = SPRITE_POS_INACTIVE;
-                spritebuff[bnbr]->lastcollisions = 0;
-                spritebuff[bnbr]->edges = 0;
-            }
-            else
-                error((char *)"Not Showing");
-        }
-        else
-            error((char *)"Buffer not in use");
-        if (sprites_in_use != LIFOpointer + zeroLIFOpointer || sprites_in_use != sumlayer())
-            error((char *)"sprite internal error");
-        //
+        sprite_hide_core(bnbr);
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SWAP")))
     {
@@ -1741,7 +1825,6 @@ void cmd_sprite(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"WRITE")))
     {
-        int mode = 4;
         getcsargs(&p, 7);
         if (!(argc == 5 || argc == 7))
             SyntaxError();
@@ -1758,12 +1841,7 @@ void cmd_sprite(void)
             y1 = (int)getint(argv[4], -spritebuff[bnbr]->h + 1, maxH);
             // WRITE's orientations 0-3 draw every pixel and 4-7 (the default) leave the transparent ones, the other
             // way round from SHOW's; a sprite showing keeps its own orientation
-            int o = argc == 7 ? (int)getint(argv[6], 0, 7) : 4, keep = spritebuff[bnbr]->rotation;
-            spritebuff[bnbr]->rotation = (o & 3) | ((o & 4) ? 0 : 4);
-            w = spritebuff[bnbr]->w;
-            h = spritebuff[bnbr]->h;
-            BlitShowBuffer(bnbr, x1, y1, mode);
-            spritebuff[bnbr]->rotation = keep;
+            sprite_write_core(bnbr, x1, y1, argc == 7 ? (int)getint(argv[6], 0, 7) : 4);
         }
         else
             error((char *)"Buffer not in use");

@@ -138,6 +138,7 @@ extern bool optionfulltime;
  * ============================================================================ */
 extern int64_t TimeOffsetToUptime;
 extern uint32_t TimeSubSecondUs;
+int KeyDownValue(int n); /* KEYDOWN(n), n checked: 0..8 */
 void set_time_epoch(int64_t epoch, bool zero_ms);
 void set_time_epoch_us(int64_t epoch_us);
 

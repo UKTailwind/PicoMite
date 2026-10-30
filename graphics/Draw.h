@@ -500,6 +500,11 @@ void closeall3d(void);
  * Function declarations - Sprite operations
  * ============================================================================ */
 void closeallsprites(void);
+/* SPRITE SHOW, HIDE, WRITE, CLOSE ALL for C (graphics/Sprite.c): rotation / orientation < 0 for none */
+void SpriteShowC(int bnbr, int x1, int y1, int layer, int rotation);
+void SpriteHideC(int bnbr);
+void SpriteWriteC(int bnbr, int x1, int y1, int orientation);
+void SpriteCloseAllC(void);
 void closeallstobjects(void);
 void closeframebuffer(char layer);
 

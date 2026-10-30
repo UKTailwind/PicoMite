@@ -412,8 +412,11 @@ File errors never stop the program with an MMBasic error. `fopen` returns
 - Until a C program is run, the compiler uses no heap at all. Only its code
   (about 180 KB of flash) and some 0.8 KB of static RAM are permanent.
 - The compiler and the program run on a private **32 KB stack**. Deep
-  recursion or large local arrays can overflow it, and there is no check for
-  that.
+  recursion or large local arrays can overflow it. The firmware's own stack
+  check is moved onto this stack while the program runs, so a BASIC command
+  or expression run from C (`pm_execute`, `pm_eval_*`, the wrappers below)
+  that finds less than about 1 KB left fails with MMBasic's usual
+  "Stack overflow" error instead of damaging memory.
 
 ### picomite.h: the firmware's display, keyboard, timing and pins
 
@@ -537,6 +540,9 @@ The drawing functions of `picomite.h`, and:
 void pm_text(int x, int y, const char *s, const char *align, int font, int scale, int c, int bc);
 void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill);
 void pm_mode(int mode);
+void pm_colour(int fc, int bc);
+void pm_load_image(const char *file, int x, int y, int mode);
+void pm_load_jpg(const char *file, int x, int y);
 int  pm_font_width(int font, int scale);
 int  pm_font_height(int font, int scale);
 int  pm_get_framebuffer(pm_framebuffer *fb);
@@ -551,6 +557,9 @@ check them the same way and fail with the same errors:
 | `TEXT x, y, s$, align$, font, scale, c, bc` | `pm_text(x, y, s, align, font, scale, c, bc)` |
 | `BOX x, y, w, h, lw, c, fill` | `pm_draw_box(x, y, w, h, lw, c, fill)` |
 | `MODE n` | `pm_mode(n)` (VGA and HDMI builds) |
+| `COLOUR fc [, bc]` | `pm_colour(fc, bc)` |
+| `LOAD IMAGE file$ [, x] [, y] [, mode]` | `pm_load_image(file, x, y, mode)` |
+| `LOAD JPG file$ [, x] [, y]` | `pm_load_jpg(file, x, y)` |
 
 - An argument that BASIC lets you leave out is `PM_DEFAULT` in C, with the
   same default: the current font, scale, foreground and background colour
@@ -560,6 +569,9 @@ check them the same way and fail with the same errors:
   in BASIC.
 - With `OPTION REFRESH` on, the display is refreshed after them, as after
   the commands.
+- `pm_colour` sets the colours `PM_DEFAULT` stands for. As `COLOUR` does,
+  it takes RGB colours, or with `OPTION LEGACY ON` the colour numbers 0..15;
+  `bc` may be `PM_DEFAULT` to leave the background as it is.
 - `pm_box` (from `picomite.h`) keeps its older form: a filled box between
   two corners. BASIC's BOX is `pm_draw_box`.
 
@@ -617,7 +629,52 @@ int pm_inkey(void);   /* INKEY$: a key code, or -1 if no key is waiting */
 The codes are those of `INKEY$`: ASCII, and from 128 the keys MMBasic names
 (UP 128, DOWN 129, LEFT 130, RIGHT 131, INSERT 132, DEL 127, HOME 134,
 END 135, PGUP 136, PGDN 137, F1 145 to F12 156). The same function is in
-`picomite.h`. For `KEYDOWN()` use `pm_eval_int("KEYDOWN(n)")` (below).
+`picomite.h`.
+
+```c
+int pm_keydown(int n); /* KEYDOWN(n) */
+```
+
+`pm_keydown(0)` is the number of keys held down, 1 to 6 the code of each,
+as `KEYDOWN()` on a USB or PS/2 keyboard; n out of range is the same error.
+
+#### `<picomite/sprite.h>`
+
+```c
+void pm_sprite_load(const char *file, int start, int mode); /* SPRITE LOAD file$ [, start] [, mode] */
+void pm_sprite_show(int n, int x, int y, int layer, int rotation);
+void pm_sprite_hide(int n);
+void pm_sprite_write(int n, int x, int y, int orientation);
+void pm_sprite_close_all(void);
+```
+
+The `SPRITE` subcommands of the same name, arguments in their BASIC order,
+with `PM_DEFAULT` for an argument left out. `SHOW`, `HIDE`, `WRITE` and
+`CLOSE ALL` call the firmware's sprite code directly, with the same checks
+and errors as the commands, so they are fit for a game loop.
+
+```c
+pm_sprite_load("maxitrek.spr", PM_DEFAULT, PM_DEFAULT);
+pm_sprite_show(enty, ex, ey, 1, PM_DEFAULT);   /* SPRITE SHOW enty, ex, ey, 1 */
+pm_sprite_write(7, cx, cy, 4);                 /* SPRITE WRITE 7, cx, cy, 4 */
+```
+
+#### `<picomite/audio.h>`
+
+```c
+void pm_play_modfile(const char *file);                      /* PLAY MODFILE file$ */
+void pm_play_modsample(int sample, int channel, int volume); /* PLAY MODSAMPLE s, ch [, vol] */
+void pm_play_sound(int channel, const char *position, const char *type,
+                   double frequency, int volume);            /* PLAY SOUND ch, pos$, type$, f [, vol] */
+void pm_play_stop(void);                                     /* PLAY STOP */
+```
+
+The `PLAY` subcommands, with `PM_DEFAULT` for a volume left out.
+As `PLAY STOP`, `pm_play_stop` does nothing when nothing is playing.
+
+```c
+pm_play_sound(1, "B", "Q", 2101 - dur * 20, 15); /* PLAY SOUND 1,"B","Q",2101-dur*20,15 */
+```
 
 #### `<picomite/basic.h>`: MMBasic's commands and functions
 
@@ -631,8 +688,9 @@ void      pm_settick(int period, void (*fn)(void), int nbr); /* SETTICK */
 
 These make every MMBasic command and function available to C with exactly
 its BASIC meaning, including those with no C function of their own yet:
-`SPRITE`, `PLAY`, `LOAD IMAGE`, `LOAD JPG`, `BLIT`, `COLOUR`, `OPTION ...`,
-`KEYDOWN()`, `MM.INFO()` and so on.
+`BLIT`, `OPTION ...`, `MM.INFO()` and so on. Where a C function exists
+(`<picomite/sprite.h>`, `<picomite/audio.h>`, `pm_colour`, `pm_keydown`, ...)
+use it instead.
 
 - **`pm_execute`** runs one statement as `EXECUTE` does: as if typed at the
   prompt, a single statement (no `:`) and not `RUN`. A C program has no BASIC
@@ -640,10 +698,9 @@ its BASIC meaning, including those with no C function of their own yet:
 
   ```c
   char cmd[64];
-  pm_execute("SPRITE LOAD \"maxitrek.spr\"");
-  snprintf(cmd, sizeof cmd, "SPRITE SHOW %d,%d,%d,1", n, x, y);
+  snprintf(cmd, sizeof cmd, "BLIT %d,%d,%d,%d,%d,%d", x1, y1, x2, y2, w, h);
   pm_execute(cmd);
-  pm_execute("PLAY MODFILE \"ptsfx2.mod\"");
+  pm_execute("OPTION KEYBOARD REPEAT 500,50");
   ```
 
 - **`pm_eval_int`, `pm_eval_float` and `pm_eval_str`** give the value of an
@@ -652,7 +709,7 @@ its BASIC meaning, including those with no C function of their own yet:
   expression, or the other way round, is an error.
 
   ```c
-  if (pm_eval_int("KEYDOWN(0)") == 0) ...
+  int vres = (int)pm_eval_int("MM.VRES");
   char dev[40];
   pm_eval_str("MM.DEVICE$", dev, sizeof dev);
   ```
@@ -734,7 +791,9 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 - No debugger or backtrace support (`-g` is accepted but has no use here).
 - A tight loop that never prints, reads input or calls a `pm_` function cannot
   be stopped with CTRL-C.
-- The 32 KB stack is not guarded as it is used. The bottom of it holds a
+- The 32 KB stack is guarded only where the firmware checks its stack (in
+  BASIC commands and expressions run from C, which report "Stack overflow").
+  The program's own code is not checked: the bottom of the stack holds a
   pattern that is checked when the program ends, and an overwritten pattern
   is reported as "C stack overflow (32 KB)", but by then whatever lay below
   the stack in the heap may have been damaged. Keep big arrays `static` or
