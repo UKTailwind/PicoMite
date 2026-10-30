@@ -4978,6 +4978,12 @@ uint32_t testPSRAM(void)
         multi = false;
         tokenise_insub = false;
         uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realflashsave;
+#ifdef rp2350
+        uint32_t *cimg[MAXCFUNCTION] = {NULL}; // C CSUBs: the images linked in the first pass
+        int cwords[MAXCFUNCTION] = {0};
+        char cerr[MAXERRMSG], *cline = NULL;
+        unsigned char *csubdecl = NULL;
+#endif
         const uint8_t *scanbase = (region == LIBRARY_FLASH) ? flash_libmemory : flash_progmemory;
         uint32_t writebase = (region == LIBRARY_FLASH) ? (uint32_t)(PROGSTART - MAX_PROG_SIZE) : (uint32_t)PROGSTART;
         initFonts();
@@ -5145,6 +5151,9 @@ uint32_t testPSRAM(void)
                 else
                 {
                     endtoken = GetCommandValue((unsigned char *)"End CSub");
+#ifdef rp2350
+                    csubdecl = p;
+#endif
                     realflashpointer += 4;
                     fontnbr = 0;
                     firsthex = 0;
@@ -5179,6 +5188,30 @@ uint32_t testPSRAM(void)
                             p += 3; // skip over a line number
                     }
                 }
+#ifdef rp2350
+                if (!fontnbr)
+                { // a C CSUB: its files and options in quotes (core/tcc/tcc_picomite.c)
+                    unsigned char *endp;
+                    if (cline == NULL)
+                        cline = GetTempMemory(STRINGSIZE * 4);
+                    if ((endp = tcc_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4)) != NULL)
+                    {
+                        // linked for where it goes: its record's entry word, here
+                        cimg[updatecount] = tcc_picomite_csub_compile(csubdecl, cline, XIP_BASE + realflashpointer,
+                                                                      scanbase, &cwords[updatecount], cerr);
+                        if (cimg[updatecount] == NULL)
+                        {
+                            refusal = cerr;
+                            goto exiterror;
+                        }
+                        realflashpointer += 4 * cwords[updatecount];
+                        if ((int)((char *)realflashpointer - writebase) >= MAX_PROG_SIZE - 5)
+                            goto exiterror;
+                        p = endp;
+                        goto csub_linked;
+                    }
+                }
+#endif
                 do
                 {
                     while (*p && *p != '\'')
@@ -5232,6 +5265,9 @@ uint32_t testPSRAM(void)
                     skipspace(p);
                     tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
+#ifdef rp2350
+            csub_linked:
+#endif
                 storedupdates[updatecount++] = realflashpointer - SaveSizeAddr - 4;
             }
             while (*p)
@@ -5325,6 +5361,17 @@ uint32_t testPSRAM(void)
                             p += 3; // skip over a line number
                     }
                 }
+#ifdef rp2350
+                if (!fontnbr && cimg[updatecount - 1] != NULL)
+                { // the C CSUB linked in the first pass
+                    p = tcc_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4);
+                    for (i = 0; i < cwords[updatecount - 1]; i++)
+                        FlashWriteWord(cimg[updatecount - 1][i]);
+                    FreeMemory(cimg[updatecount - 1]);
+                    cimg[updatecount - 1] = NULL;
+                    goto csub_written;
+                }
+#endif
                 do
                 {
                     while (*p && *p != '\'')
@@ -5370,6 +5417,9 @@ uint32_t testPSRAM(void)
                     skipspace(p);
                     tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
+#ifdef rp2350
+            csub_written:;
+#endif
             }
             while (*p)
                 p++; // look for the zero marking the start of the next element
@@ -5395,6 +5445,11 @@ uint32_t testPSRAM(void)
     // we only get here in an error situation while writing the program to flash
     exiterror:
         SymEnd();
+#ifdef rp2350
+        for (i = 0; i < MAXCFUNCTION; i++)
+            if (cimg[i] != NULL)
+                FreeMemory(cimg[i]);
+#endif
         /* What is in the slot is the part of the program written so far, its
            text already in symbols and no table after it (the table comes
            last).  Kept, it could never be prepared: PrepareProgram runs at

@@ -1699,10 +1699,10 @@ ST_FUNC int gv(int rc)
             size = type_size(&vtop->type, &align);
             if (NODATA_WANTED)
                 size = 0, align = 1;
-            offset = section_add(data_section, size, align);
-            vpush_ref(&vtop->type, data_section, offset, size);
+            offset = section_add(rodata_section, size, align);
+            vpush_ref(&vtop->type, rodata_section, offset, size);
 	    vswap();
-	    init_putv(&vtop->type, data_section, offset);
+	    init_putv(&vtop->type, rodata_section, offset);
 	    vtop->r |= VT_LVAL;
         }
 #ifdef CONFIG_TCC_BCHECK

@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <time.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -99,6 +100,21 @@ bool tcc_picomite_is_elf(const char *filename);
 void tcc_picomite_abandoned(void);
 /* the TCC command (AllCommands.h) */
 void cmd_tcc(void);
+
+/* C CSUBs: a CSUB whose body is file names and options in quotes
+     CSUB Sum INTEGER, INTEGER, INTEGER
+       "sum.c", "util.o"
+     END CSUB
+   is compiled as the program is saved and stored as an ordinary CSUB record
+   (see tcc_pm_relocate_csub in tccrun.c for the image) */
+#define TCC_PM_CSUB_MAGIC 0x42555343u /* "CSUB" */
+uint32_t tcc_pm_firmware_id(void);
+unsigned char *tcc_picomite_csub_source(unsigned char *p, unsigned short endtoken, char *line, int size);
+uint32_t *tcc_picomite_csub_compile(const unsigned char *decl, const char *line, uint32_t base,
+                                    const unsigned char *prog, int *words, char *err);
+void tcc_picomite_csub_check(const uint32_t *code);
+bool tcc_picomite_csub_stale(void);
+void tcc_picomite_csub_rebuild(void);
 
 #ifdef TCC_PM_REDIRECT_LIBC
 #undef open

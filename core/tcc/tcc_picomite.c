@@ -315,6 +315,13 @@ typedef struct
     int argc;
     char **argv;
     int ret;
+    /* a C CSUB (tcc_picomite_csub_compile) */
+    const char *csub_entry;   /* its name: the function to enter */
+    uint32_t csub_base;       /* the address its image is linked for */
+    const char *csub_dir;     /* relative names are relative to this, or NULL */
+    void *csub_image;         /* out: the image, from the MMBasic heap */
+    unsigned csub_size;       /* out: its size in bytes */
+    char *csub_err;           /* out: the error (MAXERRMSG) */
 } pm_run_args;
 
 struct pm_state
@@ -349,11 +356,22 @@ static void __attribute__((noreturn)) pm_program_error(void)
 
 /* stdin, stdout and stderr of compiled programs (include/stdio.h): set to
    pm->con_* for each run */
-FILE *__tcc_pm_stdin, *__tcc_pm_stdout, *__tcc_pm_stderr;
+/* The console outside a run: a C CSUB printing (stdout and stderr).  In
+   flash: nothing writes to a console pm_file. */
+static const pm_file pm_con_rom = {.kind = PM_FILE_CONOUT};
+FILE *__tcc_pm_stdin;
+FILE *__tcc_pm_stdout = (FILE *)&pm_con_rom, *__tcc_pm_stderr = (FILE *)&pm_con_rom;
+
+/* a C CSUB is being linked: refuse what needs a run (tcc_pm_resolve_symbol) */
+static bool pm_csub_linking;
 
 static pm_file *pm_file_of(FILE *f)
 {
     pm_file *p = (pm_file *)f;
+    if (pm == NULL) /* a C CSUB: only the console */
+        return (p == &pm_con_rom || f == stdout || f == stderr) ? (pm_file *)&pm_con_rom : NULL;
+    if (p == &pm_con_rom)
+        return &pm->con_out;
     if (p >= pm_files && p < pm_files + TCC_PM_MAX_FILES && p->kind != PM_FILE_FREE)
         return p;
     if (p == &pm->con_in || f == stdin)
@@ -1051,6 +1069,11 @@ static void __attribute__((noreturn)) pm_program_error_tr(pm_trap *t)
     memcpy(msg, MMErrMsg, MAXERRMSG);
     pm_trap_restore(t);
     memcpy(MMErrMsg, msg, MAXERRMSG);
+    if (!pm_in_program)
+    { /* a C CSUB: an MMBasic error like any other */
+        msg[MAXERRMSG - 1] = 0;
+        error("$", msg);
+    }
     pm_program_error();
 }
 
@@ -1294,9 +1317,20 @@ static const pm_sym pm_syms[] = {
     PM_AEABI(PM_SYM)
 };
 
+/* What a C CSUB cannot use: it runs outside any C run, with no arena (for
+   malloc), no stdin, no files and nothing for exit() to end. */
+static const char *const pm_csub_refused[] = {
+    "malloc", "calloc", "realloc", "free", "strdup", "exit", "abort",
+    "getchar", "fgetc", "getc", "fgets", "fopen", "fclose", "fread", "fwrite",
+    "fseek", "ftell", "rewind", "feof", "ferror", "__tcc_pm_stdin", NULL};
+
 void *tcc_pm_resolve_symbol(const char *name)
 {
     unsigned int i;
+    if (pm_csub_linking)
+        for (i = 0; pm_csub_refused[i]; i++)
+            if (strcmp(pm_csub_refused[i], name) == 0)
+                return NULL; /* "undefined symbol" */
     for (i = 0; i < sizeof(pm_syms) / sizeof(pm_syms[0]); i++)
         if (strcmp(pm_syms[i].name, name) == 0)
             return (void *)pm_syms[i].addr;
@@ -1352,10 +1386,15 @@ static int __attribute__((naked, noinline)) pm_call_on_stack(int (*fn)(void *), 
         "pop  {r4, pc}\n\t");
 }
 
+static int pm_csub_entry(pm_run_args *a);
+
 static int pm_run_entry(void *p)
 {
     pm_run_args *a = (pm_run_args *)p;
-    a->ret = pico_tcc_main(a->argc, a->argv);
+    if (a->csub_entry)
+        a->ret = pm_csub_entry(a);
+    else
+        a->ret = pico_tcc_main(a->argc, a->argv);
     return 0;
 }
 
@@ -1369,7 +1408,9 @@ static void pm_state_reset(void)
     pm_exit_code = 0;
     pm_line = NULL;
     pm_line_len = pm_line_pos = 0;
-    __tcc_pm_stdin = __tcc_pm_stdout = __tcc_pm_stderr = NULL;
+    __tcc_pm_stdin = NULL;
+    __tcc_pm_stdout = __tcc_pm_stderr = (FILE *)&pm_con_rom;
+    pm_csub_linking = false;
 }
 
 /* Split a command line into words in place: blanks separate them, "..."
@@ -1406,8 +1447,11 @@ static int pm_split(char *p, char **argv_, int max)
 }
 
 /* Run the TinyCC command line prefix[] + the words of args.  fail is the
-   MMBasic error for a non-zero result when no program was started. */
-static void pm_exec(const char *const *prefix, int nprefix, const char *args, const char *fail)
+   MMBasic error for a non-zero result when no program was started.  With
+   csub, link a C CSUB instead (pm_csub_entry): its result and error are
+   returned in *csub and no MMBasic error is raised (-1 for a failure). */
+static int pm_exec(const char *const *prefix, int nprefix, const char *args, const char *fail,
+                   pm_run_args *csub)
 {
     volatile int how = PM_END_NONE;
     char errmsg[MAXERRMSG];
@@ -1449,6 +1493,12 @@ static void pm_exec(const char *const *prefix, int nprefix, const char *args, co
         a->argv[a->argc++] = (char *)prefix[i];
     a->argc += pm_split(argbuf, a->argv + a->argc, max - a->argc - 1);
     a->argv[a->argc] = NULL;
+    if (csub != NULL)
+    {
+        a->csub_entry = csub->csub_entry;
+        a->csub_base = csub->csub_base;
+        a->csub_dir = csub->csub_dir;
+    }
 
     __asm volatile("mrs %0, msplim" : "=r"(pm->msplim));
     __asm volatile("msr msplim, %0" ::"r"(0));
@@ -1480,12 +1530,26 @@ static void pm_exec(const char *const *prefix, int nprefix, const char *args, co
         memcpy(errmsg, pm->prog_errmsg, MAXERRMSG);
     if (how == PM_END_NONE && !pm_prog_started && pm->args.ret != 0)
         how = -1; /* the compile failed */
+    if (csub != NULL)
+    { /* (the image is outside the arena) */
+        csub->csub_image = how == PM_END_NONE ? pm->args.csub_image : NULL;
+        csub->csub_size = pm->args.csub_size;
+        if (how != PM_END_NONE && pm->args.csub_image != NULL)
+            FreeMemory(pm->args.csub_image);
+    }
 
     pm_close_all();
     FreeMemory(pm->stack);
     pm_heap_release(); /* (pm itself is in the arena) */
     pm_state_reset();
 
+    if (csub != NULL)
+    {
+        if (how == PM_END_NONE)
+            return 0;
+        snprintf(csub->csub_err, MAXERRMSG, "%s", how == PM_END_ERROR ? errmsg : fail);
+        return -1;
+    }
     switch (how)
     {
     case PM_END_ABORT:
@@ -1502,6 +1566,7 @@ static void pm_exec(const char *const *prefix, int nprefix, const char *args, co
     default:
         break;
     }
+    return 0;
 }
 
 /* RUN "file.c" [, "args"]: tcc -xc -D__PICOMITE__ -run file.c args...
@@ -1514,9 +1579,9 @@ void tcc_picomite_run(const char *filename, const char *args, bool is_c)
     char line[STRINGSIZE * 2 + 4]; /* "file" args, the name quoted for pm_split */
     snprintf(line, sizeof(line), "\"%s\" %s", filename, args ? args : "");
     if (is_c)
-        pm_exec(c_prefix, 4, line, "C compilation failed");
+        pm_exec(c_prefix, 4, line, "C compilation failed", NULL);
     else
-        pm_exec(elf_prefix, 3, line, "Cannot run the ELF file");
+        pm_exec(elf_prefix, 3, line, "Cannot run the ELF file", NULL);
 }
 
 /* Does the file start with the ELF signature?  False for a file that does
@@ -1550,7 +1615,7 @@ void cmd_tcc(void)
     static const char *const prefix[] = {"tcc", "-D__PICOMITE__"};
     char line[STRINGSIZE];
     snprintf(line, sizeof(line), "%s", (char *)getCstring(cmdline));
-    pm_exec(prefix, 2, line, "TCC failed");
+    pm_exec(prefix, 2, line, "TCC failed", NULL);
 }
 
 /* Called where the MMBasic prompt lands after a longjmp(mark) (PicoMite.c).
@@ -1582,4 +1647,365 @@ void tcc_picomite_abandoned(void)
     pm_heap_release(); /* (pm itself is in the arena) */
     tcc_pm_forget_globals();
     pm_state_reset();
+}
+
+/* ------------------------------------------------------------------------ */
+/* C CSUBs                                                                   */
+/* ------------------------------------------------------------------------ */
+
+/* An image linked against the firmware is valid only while every address it
+   was bound to is unchanged: the id hashes the addresses of the run-time
+   symbol table, which is all a C CSUB binds to (FNV-1a). */
+uint32_t tcc_pm_firmware_id(void)
+{
+    static uint32_t id;
+    unsigned int i;
+    if (id == 0)
+    {
+        uint32_t h = 2166136261u;
+        for (i = 0; i < sizeof(pm_syms) / sizeof(pm_syms[0]); i++)
+        {
+            uint32_t a = (uint32_t)pm_syms[i].addr;
+            int b;
+            for (b = 0; b < 4; b++, a >>= 8)
+                h = (h ^ (a & 0xff)) * 16777619u;
+        }
+        id = (h == 0 || h == 0xffffffffu) ? 1 : h;
+    }
+    return id;
+}
+
+static void pm_push_word(char ***argv_, int *argc_, int *cap, char *w)
+{
+    if (*argc_ + 2 > *cap)
+    {
+        char **n = tcc_pm_realloc(*argv_, (size_t)(*cap *= 2) * sizeof(char *));
+        if (n == NULL)
+            return; /* (the compile then reports a missing file or option) */
+        *argv_ = n;
+    }
+    (*argv_)[(*argc_)++] = w;
+}
+
+static bool pm_is_abs(const char *p)
+{
+    return p[0] == '/' || (p[0] && p[1] == ':');
+}
+
+/* dir + name for a relative name (dir ends with '/'), else the name */
+static char *pm_join(const char *dir, const char *name)
+{
+    char *r;
+    if (dir == NULL || *name == 0 || pm_is_abs(name))
+        return (char *)name;
+    r = tcc_pm_malloc(strlen(dir) + strlen(name) + 1);
+    if (r == NULL)
+        return (char *)name;
+    strcpy(r, dir);
+    strcat(r, name);
+    return r;
+}
+
+/* the directory part of a path, with its '/', or NULL */
+static char *pm_dirname(const char *path)
+{
+    const char *e = strrchr(path, '/');
+    char *r;
+    size_t n;
+    if (e == NULL)
+        e = (path[0] && path[1] == ':') ? path + 1 : NULL;
+    if (e == NULL)
+        return NULL;
+    n = (size_t)(e - path) + 1;
+    r = tcc_pm_malloc(n + 1);
+    if (r != NULL)
+    {
+        memcpy(r, path, n);
+        r[n] = 0;
+    }
+    return r;
+}
+
+/* the whole of a file, zero-terminated, or NULL */
+static char *pm_read_all(const char *path)
+{
+    pm_file *f = pm_open(path, false);
+    char *buf = NULL;
+    size_t len = 0, cap = 0;
+    int r;
+    if (f == NULL)
+        return NULL;
+    do
+    {
+        if (len + 257 > cap)
+        {
+            char *n = tcc_pm_realloc(buf, cap = cap ? cap * 2 : 512);
+            if (n == NULL)
+            {
+                tcc_pm_free(buf);
+                pm_close(f);
+                return NULL;
+            }
+            buf = n;
+        }
+        r = pm_read(f, buf + len, 256);
+        if (r > 0)
+            len += (size_t)r;
+    } while (r > 0);
+    pm_close(f);
+    if (r < 0)
+    {
+        tcc_pm_free(buf);
+        return NULL;
+    }
+    buf[len] = 0;
+    return buf;
+}
+
+/* The words of a C CSUB with relative names made relative to dir: input
+   files, -I/-L directories and response files - whose own words are then
+   relative to the response file's directory. */
+static int pm_csub_words(char **w, int n, const char *dir, char ***argv_, int *argc_, int *cap, int depth)
+{
+    int i;
+    for (i = 0; i < n; i++)
+    {
+        char *x = w[i];
+        if (x[0] == '@')
+        {
+            char *path = pm_join(dir, x + 1), *text, *p, **ws;
+            int k;
+            if (depth >= 4)
+            {
+                fprintf(stderr, "tcc: error: '%s': response files nested too deep\n", path);
+                return -1;
+            }
+            if ((text = pm_read_all(path)) == NULL)
+            {
+                fprintf(stderr, "tcc: error: cannot read '%s'\n", path);
+                return -1;
+            }
+            for (p = text; *p; p++)
+                if (*p == '\r' || *p == '\n')
+                    *p = ' ';
+            k = (int)strlen(text) / 2 + 2;
+            if ((ws = tcc_pm_malloc((size_t)k * sizeof(char *))) == NULL)
+                return -1;
+            k = pm_split(text, ws, k);
+            if (pm_csub_words(ws, k, pm_dirname(path), argv_, argc_, cap, depth + 1) < 0)
+                return -1;
+        }
+        else if (x[0] == '-')
+        {
+            if ((x[1] == 'I' || x[1] == 'L') && x[2])
+            {
+                char *d = pm_join(dir, x + 2), *o = tcc_pm_malloc(strlen(d) + 3);
+                if (o == NULL)
+                    return -1;
+                o[0] = '-', o[1] = x[1];
+                strcpy(o + 2, d);
+                pm_push_word(argv_, argc_, cap, o);
+            }
+            else
+            {
+                pm_push_word(argv_, argc_, cap, x);
+                if (x[2] == 0 && i + 1 < n)
+                {
+                    if (x[1] == 'I' || x[1] == 'L')
+                        pm_push_word(argv_, argc_, cap, pm_join(dir, w[++i]));
+                    else if (x[1] && strchr("DUxo", x[1]))
+                        pm_push_word(argv_, argc_, cap, w[++i]);
+                }
+            }
+        }
+        else
+            pm_push_word(argv_, argc_, cap, pm_join(dir, x));
+    }
+    return 0;
+}
+
+int pico_tcc_csub(int argc, char **argv, const char *entry, unsigned base,
+                  unsigned char **pimage, unsigned *psize);
+
+/* (on the private stack) */
+static int pm_csub_entry(pm_run_args *a)
+{
+    int argc_ = 0, cap = 16, i;
+    char **argv_ = tcc_pm_malloc((size_t)cap * sizeof(char *));
+    unsigned char *img;
+    unsigned size;
+    if (argv_ == NULL)
+        return 1;
+    argv_[argc_++] = "tcc";
+    if (pm_csub_words(a->argv + 1, a->argc - 1, a->csub_dir, &argv_, &argc_, &cap, 0) < 0)
+        return 1;
+    argv_[argc_] = NULL;
+    pm_csub_linking = true;
+    i = pico_tcc_csub(argc_, argv_, a->csub_entry, a->csub_base, &img, &size);
+    pm_csub_linking = false;
+    if (i)
+        return 1;
+    if ((a->csub_image = GetMemoryNull((int)size)) == NULL)
+    {
+        fprintf(stderr, "tcc: error: not enough memory for the CSUB\n");
+        return 1;
+    }
+    memcpy(a->csub_image, img, size);
+    a->csub_size = size;
+    return 0;
+}
+
+/* The C body of a CSUB, from its first body line p (as the hex loops find
+   it) to END CSUB: the file names and options in quotes become the TinyCC
+   command line in line.  Returns where END CSUB is (as the hex loops leave
+   p), or NULL if the body is hex. */
+unsigned char *tcc_picomite_csub_source(unsigned char *p, unsigned short endtoken, char *line, int size)
+{
+    int n = 0;
+    skipspace(p);
+    if (*p != '"')
+        return NULL;
+    *line = 0;
+    for (;;)
+    {
+        while (*p && *p != '\'')
+        {
+            unsigned char *e = NULL;
+            skipspace(p);
+            if (*p == 0 || *p == '\'')
+                break;
+            if (*p == '"')
+                e = (unsigned char *)strchr((char *)p + 1, '"');
+            if (e == NULL)
+                error("CSUB: a C CSUB holds file names and options in quotes");
+            if (n + (e - p) + 2 >= size)
+                error("CSUB: too many files and options");
+            memcpy(line + n, p, (size_t)(e - p) + 1); /* with its quotes (pm_split) */
+            n += (int)(e - p) + 1;
+            line[n++] = ' ';
+            line[n] = 0;
+            p = e + 1;
+            skipspace(p);
+            if (*p == ',')
+                p++;
+        }
+        while (*p)
+            p++; // to the end of the line
+        p++;     // the start of the next line
+        if (*p == 0)
+            error("Missing END declaration");
+        if (*p == T_NEWLINE)
+        {
+            CurrentLinePtr = p;
+            p += T_NEWLINE_HDR;
+        }
+        if (*p == T_LINENBR)
+            p += 3;
+        skipspace(p);
+        if (commandtbl_at(p) == endtoken)
+            return p;
+    }
+}
+
+/* The directory of the program, from its "'#B:/dir/prog.bas" first line */
+static bool pm_prog_dir(const unsigned char *prog, char *dir, int size)
+{
+    const char *path, *e;
+    if (prog == NULL || prog[0] != T_NEWLINE || prog[T_NEWLINE_HDR] != '\'' || prog[T_NEWLINE_HDR + 1] != '#')
+        return false;
+    path = (const char *)prog + T_NEWLINE_HDR + 2;
+    e = strrchr(path, '/');
+    if (e == NULL || e - path + 2 > size)
+        return false;
+    memcpy(dir, path, (size_t)(e - path) + 1);
+    dir[e - path + 1] = 0;
+    return true;
+}
+
+/* Compile and link a C CSUB (tcc_picomite_csub_source's line) for the
+   address base of its record's entry word.  decl is the CSUB statement (for
+   its name: the function to enter), prog the program (for its directory).
+   Returns the image (MMBasic heap, *words words; FreeMemory it) or NULL, the
+   error in err (MAXERRMSG) - TinyCC's own messages are on the console. */
+uint32_t *tcc_picomite_csub_compile(const unsigned char *decl, const char *line, uint32_t base,
+                                    const unsigned char *prog, int *words, char *err)
+{
+    static const char *const prefix[] = {"tcc"};
+    char name[MAXVARLEN + 1], dir[STRINGSIZE];
+    pm_run_args c;
+    bool irqs = irqs_off_pico;
+    int n = 0, r;
+
+    decl += 2; // the CSUB token
+    skipspace(decl);
+    while (isnamechar(*decl) && n < MAXVARLEN)
+        name[n++] = (char)*decl++;
+    name[n] = 0;
+    memset(&c, 0, sizeof(c));
+    c.csub_entry = name;
+    c.csub_base = base;
+    c.csub_dir = pm_prog_dir(prog, dir, sizeof(dir)) ? dir : NULL;
+    c.csub_err = err;
+    if (irqs) /* (SaveProgramToFlash: no flash write is under way between records) */
+        enable_interrupts_pico();
+    r = pm_exec(prefix, 1, line, "CSUB: C compilation failed", &c);
+    if (irqs)
+        disable_interrupts_pico();
+    if (r < 0)
+        return NULL;
+    *words = (int)((c.csub_size + 3) / 4);
+    return (uint32_t *)c.csub_image;
+}
+
+/* Before a C CSUB is called (CallCFunction): code is its record's code
+   after the entry word (3), so code[3] is the entry. */
+void tcc_picomite_csub_check(const uint32_t *code)
+{
+    if (code[0] == TCC_PM_CSUB_MAGIC &&
+        (code[1] != tcc_pm_firmware_id() || code[2] != (uint32_t)(code - 1)))
+        error("C CSUB built for another firmware or place: LOAD the program again");
+}
+
+/* Is a C CSUB of the program built for another firmware? */
+bool tcc_picomite_csub_stale(void)
+{
+    const uint32_t *p = (const uint32_t *)CFunctionFlash;
+    if (p == NULL)
+        return false;
+    while (*p != 0xffffffff)
+    {
+        uint32_t decl = *p++;
+        if (!(decl & 0x80000000u) && *p >= 24 && p[1] == 3 && p[2] == TCC_PM_CSUB_MAGIC &&
+            (p[3] != tcc_pm_firmware_id() || p[4] != (uint32_t)(p + 1)))
+            return true;
+        p += (*p + 4) / sizeof(uint32_t);
+    }
+    return false;
+}
+
+/* Save the program again from flash, which compiles its C CSUBs again (for
+   a new firmware: RUN, when tcc_picomite_csub_stale). */
+void tcc_picomite_csub_rebuild(void)
+{
+    unsigned char *buf, *q, *p, line[STRINGSIZE];
+    if (ProgMemory != flash_progmemory)
+        error("C CSUB built for another firmware: LOAD the program again");
+    MMPrintString("Recompiling the C CSUBs for this firmware\r\n");
+    q = buf = GetTempMemory(EDIT_BUFFER_SIZE - 2048);
+    p = ProgMemory;
+    while (!(*p == 0 || *p == 0xff))
+    {
+        size_t n;
+        p = llist(line, p);
+        n = strlen((char *)line);
+        if ((size_t)(q - buf) + n + 2 >= EDIT_BUFFER_SIZE - 2048)
+            error("Not enough memory");
+        memcpy(q, line, n);
+        q += n;
+        *q++ = '\n';
+        if (p[0] == 0 && p[1] == 0)
+            break;
+    }
+    *q = 0;
+    SaveProgramToFlash(buf, false, PROGRAM_FLASH);
 }

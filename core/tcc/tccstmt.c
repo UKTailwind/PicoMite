@@ -1400,8 +1400,11 @@ ST_FUNC void decl_initializer_alloc(CType *type, AttributeDef *ad, int r,
         /* allocate symbol in corresponding section */
         sec = ad->section;
         if (!sec) {
+            CType *et = type;
+            while (et->t & VT_ARRAY) /* (const int a[] has a const element) */
+                et = &et->ref->type;
             if (has_init)
-                sec = data_section;
+                sec = (et->t & VT_CONSTANT) ? rodata_section : data_section;
             else if (tcc_state->nocommon)
                 sec = bss_section;
         }

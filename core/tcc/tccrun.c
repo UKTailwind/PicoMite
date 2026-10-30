@@ -101,6 +101,116 @@ LIBTCCAPI int tcc_relocate(TCCState *s1, void *ptr)
     return 0;
 }
 
+#ifdef TCC_PICOMITE
+/* A C CSUB: link the program for the flash (or RAM) address it will be
+   stored at and return it as one image of 'size' bytes, in the arena.
+
+   The image is
+     word 0  3                 the CSUB entry offset (in words, from word 1)
+     word 1  TCC_PM_CSUB_MAGIC marks a C CSUB for CallCFunction's check
+     word 2  firmware id       tcc_pm_firmware_id() at the time of linking
+     word 3  base              the address of word 0: it may not move
+     word 4  ldr.w pc, [pc]    the entry: jump to the function, wherever
+     word 5  function | 1      TinyCC placed it (Thumb-2 code has no
+                               4-byte alignment for the entry offset)
+     word 6  the sections: code, constants, GOT and PLT
+   There is no data segment, as for a hex CSUB: a writable variable is an
+   error naming it.  Everything else the code needs is the firmware's, bound
+   by address (tcc_pm_resolve_symbol). */
+ST_FUNC int tcc_pm_relocate_csub(TCCState *s1, const char *entry, addr_t base,
+                                 unsigned char **pimage, unsigned *psize)
+{
+    Section *s;
+    unsigned offset, align, i;
+    addr_t mem = base + 24; /* the sections follow the 6 header words */
+    unsigned char *image;
+    ElfW(Sym) *sym;
+    int sym_index;
+    addr_t func;
+
+    s1->nb_errors = 0;
+    tcc_add_runtime(s1);
+    resolve_common_syms(s1);
+    build_got_entries(s1);
+    if (s1->nb_errors)
+        return -1;
+
+    /* no writable data in flash (the GOT is written only now, by the link) */
+    for (i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if ((s->sh_flags & (SHF_ALLOC | SHF_WRITE)) != (SHF_ALLOC | SHF_WRITE) ||
+            s == s1->got || s->data_offset == 0)
+            continue;
+        for_each_elem(s1->symtab, 1, sym, ElfW(Sym)) {
+            if (sym->st_shndx == s->sh_num && ELFW(ST_TYPE)(sym->st_info) == STT_OBJECT) {
+                tcc_error_noabort("'%s' is a variable (%s): a CSUB can have constants "
+                    "and locals but no variables",
+                    (char *)s1->symtab->link->data + sym->st_name, s->name);
+                break;
+            }
+        }
+        if (!s1->nb_errors)
+            tcc_error_noabort("a CSUB cannot have variables (%s)", s->name);
+        return -1;
+    }
+
+    /* lay out every allocated section at its final address */
+    offset = 0;
+    for (i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (!(s->sh_flags & SHF_ALLOC))
+            continue;
+        align = s->sh_addralign ? s->sh_addralign - 1 : 0;
+        if (align < 3)
+            align = 3;
+        offset = (offset + align) & ~align;
+        s->sh_addr = mem + offset;
+        offset += s->data_offset;
+    }
+    offset = (offset + 3) & ~3;
+
+    relocate_syms(s1, s1->symtab, 1);
+    if (s1->nb_errors)
+        return -1;
+    sym_index = find_elf_sym(s1->symtab, entry);
+    if (!sym_index)
+        sym_index = find_elf_sym(s1->symtab, "main");
+    sym = &((ElfW(Sym) *)s1->symtab->data)[sym_index];
+    if (!sym_index || sym->st_shndx == SHN_UNDEF ||
+        ELFW(ST_TYPE)(sym->st_info) != STT_FUNC) {
+        tcc_error_noabort("no function '%s' (or 'main') for the CSUB", entry);
+        return -1;
+    }
+    func = sym->st_value | 1;
+
+    for (i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if (s->reloc)
+            relocate_section(s1, s);
+    }
+    relocate_plt(s1);
+    if (s1->nb_errors)
+        return -1;
+
+    image = tcc_mallocz(24 + offset);
+    write32le(image, 3); /* CallCFunction enters word 1 + 3 */
+    write32le(image + 4, TCC_PM_CSUB_MAGIC);
+    write32le(image + 8, tcc_pm_firmware_id());
+    write32le(image + 12, base);
+    write16le(image + 16, 0xf8df); /* ldr.w pc, [pc, #0]: the word at +20 */
+    write16le(image + 18, 0xf000);
+    write32le(image + 20, func);
+    for (i = 1; i < s1->nb_sections; i++) {
+        s = s1->sections[i];
+        if ((s->sh_flags & SHF_ALLOC) && s->sh_type != SHT_NOBITS && s->data_offset)
+            memcpy(image + 24 + (s->sh_addr - mem), s->data, s->data_offset);
+    }
+    *pimage = image;
+    *psize = 24 + offset;
+    return 0;
+}
+#endif
+
 ST_FUNC void tcc_run_free(TCCState *s1)
 {
     int i;

@@ -1,4 +1,4 @@
-# Native C on PicoMite: RUN "file.c", TCC and ELF programs
+# Native C on PicoMite: RUN "file.c", TCC, ELF programs and C CSUBs
 
 The RP2350 firmware includes a C compiler, [TinyCC](https://bellard.org/tcc/)
 0.9.27 with a Thumb-2 back end. With it the firmware can:
@@ -6,7 +6,9 @@ The RP2350 firmware includes a C compiler, [TinyCC](https://bellard.org/tcc/)
 - compile a C source and run it straight away: `RUN "hello.c"`;
 - compile and link C sources into object files and executables with the
   `TCC` command, which takes TinyCC's own command line;
-- run such an executable: `RUN "game.elf"`.
+- run such an executable: `RUN "game.elf"`;
+- build a CSUB from C sources or objects right in a BASIC program
+  ([C CSUBs](#c-csubs)), with no PC toolchain and no hex.
 
 The code is native Cortex-M33 code. It runs from RAM and calls the firmware
 directly for its C library, console, files, display and pins.
@@ -214,6 +216,136 @@ with the usual `.bas` default extension.
 
 ---
 
+## C CSUBs
+
+A CSUB can be written in C instead of hex. In place of the hex words, the
+body of the CSUB holds file names and options in double quotes:
+
+```basic
+CSUB Sum INTEGER, INTEGER, INTEGER
+  "sum.c"
+END CSUB
+
+Sum 2, 3, r%
+PRINT r%
+```
+
+```c
+/* sum.c - the CSUB's arguments, as for any CSUB: pointers to its BASIC values */
+void Sum(long long *a, long long *b, long long *r)
+{
+    *r = *a + *b;
+}
+```
+
+The declaration line and the way the CSUB is called work exactly as for a hex
+CSUB: the type list, by-reference variables, temporaries for expressions and
+up to 16 arguments. Existing hex CSUBs are not affected in any way.
+
+### What the body may hold
+
+The quoted strings are a TinyCC command line, so all of these work and can be
+mixed:
+
+```basic
+CSUB Sum INTEGER, INTEGER, INTEGER
+  "sum.c", "sumExt.c"                 ' several sources
+  "util.o"                            ' an object from TCC "-c util.c"
+  "lib.elf"                           ' or an ELF made by TCC (it is an object too)
+  "-IB:/inc -DFAST"                   ' options: -I, -D, -U, -L, -l, -w, -W...
+  "@sum.rsp"                          ' a response file
+END CSUB
+```
+
+- Strings are separated by commas or blanks and may continue over several
+  lines. A string may hold several words.
+- Hex and strings cannot be mixed in one CSUB.
+- `-o`, `-c`, `-r`, `-E` and `-run` are refused, since the CSUB decides the
+  output.
+- **Relative names are relative to the program's directory**: the directory
+  of the `.bas` file it was loaded from, as reported by MM.INFO(CURRENT). This
+  applies to sources, objects, `-I` and `-L` directories and response files.
+  `"sum.c"` therefore finds the file next to the program whatever the current
+  directory is. A program that was not loaded from a file (one typed into the
+  editor) uses the current directory.
+- **Inside a response file, relative names are relative to the response
+  file's own directory**, and response files may include further response
+  files. Note that this differs from the `TCC` command, where TinyCC reads
+  `@file` itself relative to the current directory.
+
+### The entry point
+
+The CSUB enters the C function with **the CSUB's name**: `Sum` above. The
+match is case sensitive, so use the name exactly as it is written on the
+CSUB line. If no such function exists, `main` is used, as with
+armcfgen-built CSUBs. Other functions in the sources are ordinary helpers.
+
+### When it is compiled
+
+The CSUB is compiled and linked **when the program is saved to flash**:
+`LOAD`, `AUTOSAVE`, saving from the editor, or loading into a RAM slot. It is
+stored as an ordinary CSUB record, linked for the exact address it occupies.
+After that:
+
+- RUN does not compile anything, and the CSUB runs from flash with no RAM
+  used, like a hex CSUB;
+- the source files are no longer needed;
+- compiler messages appear while the program is saved, and the save is
+  abandoned with "CSUB: C compilation failed" (the program memory is left
+  empty, as for any failed save).
+
+### What the C code can use
+
+- **Locals and constants: yes.** String literals, floating-point constants
+  and `const` objects with an initializer (`static const int table[] = {...}`)
+  go into the CSUB's read-only data, stored in flash with the code.
+- **Variables: no.** As for any CSUB, there is no data segment, so a global
+  or `static` variable that is not `const` is refused when the program is
+  saved: `'count' is a variable (.bss): a CSUB can have constants and locals
+  but no variables`. Keep state in the BASIC variables passed as arguments.
+- **The firmware's run-time library.** All of [the run-time
+  library](#run-time-library) and `picomite.h` can be called directly
+  (`sin`, `memcpy`, `printf`, `pm_line`...). The calls are bound to the
+  firmware by address when the program is saved.
+- **The classic CSUB interface** through `PicoCFunctions.h` and its CallTable
+  (`MMPrintString`, `DrawLine`, `CFuncmSec` and so on) works too, if the
+  header is available as a file (with `-I`), because only the CallTable's
+  address is fixed.
+- `printf`, `puts` and the other console *output* functions work and print
+  on the MMBasic console.
+- **Not available in a CSUB**, because a CSUB runs outside any C program:
+  `malloc calloc realloc free strdup exit abort`, console input
+  (`getchar fgetc getc fgets`, `stdin`) and files
+  (`fopen fclose fread fwrite fseek ftell rewind feof ferror`). Using one is
+  reported as `undefined symbol` when the program is saved.
+- An MMBasic error in a `pm_` call (an invalid pin, for example) is reported
+  as that error at the CSUB's call, as for any MMBasic command.
+
+### Firmware updates
+
+A C CSUB is bound to the addresses of the firmware it was built with.
+Each record carries the firmware's id and its own address:
+
+- **RUN** checks the program's C CSUBs. If they were built for another
+  firmware, it prints "Recompiling the C CSUBs for this firmware", saves the
+  program again from flash (recompiling them from their sources) and runs it.
+  If the sources are gone, the save fails with the compiler's error.
+- **A call** of a C CSUB that does not match (for a program run in some other
+  way, or a CSUB record moved to another place in flash or RAM) stops with
+  "C CSUB built for another firmware or place: LOAD the program again".
+
+### Limits
+
+- A C CSUB is not position independent. A program copied to another flash
+  slot or RAM slot without being saved again must be loaded again.
+- C CSUBs cannot go into the library (`LIBRARY SAVE` refuses them).
+- Each CSUB gets its own copy of everything it is linked from. Ten CSUBs
+  built from one `util.c` hold ten copies of it in flash.
+- `CFuncmSec` and the other interrupt vectors may point into a C CSUB, as
+  they may for a hex CSUB.
+
+---
+
 ## The C environment
 
 ### Built-in headers
@@ -361,9 +493,11 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 - The 32 KB stack is not guarded.
 - Code is generated by TinyCC, unoptimised, and is several times slower than
   the firmware's own GCC-compiled code, but far faster than BASIC.
-- Executables are relocatable objects bound at RUN time. They are not
-  portable to other firmware versions if the run-time library changes, so
-  recompile after a firmware update.
+- Executables are relocatable objects bound to the firmware by name at RUN
+  time, so they keep working after a firmware update. Only a function that
+  the new firmware no longer provides makes RUN fail with
+  `undefined symbol`.
+- C CSUBs have the limits listed in [C CSUBs](#limits).
 
 ---
 
@@ -378,5 +512,8 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 | `core/tcc/include/*.h` | The built-in headers |
 | `cmake/tcc_rom_headers.cmake` | Embeds the built-in headers in the firmware at build time |
 | `cmake/flash_layout_check.ld` | Link-time check that the firmware ends before `FLASH_TARGET_OFFSET` |
-| `core/Commands.c` (`do_run`) | `RUN "file.c"` and `RUN` of ELF files |
+| `core/Commands.c` (`do_run`) | `RUN "file.c"`, `RUN` of ELF files, rebuilding C CSUBs for a new firmware |
+| `PicoMite.c` / `misc/FileIO.c` (`SaveProgramToFlash`, `SaveProgramToRAM`) | Compiling C CSUBs as the program is saved |
+| `core/CFunction.c` (`CallCFunction`) | The check before a C CSUB is called |
+| `core/tcc/tccrun.c` (`tcc_pm_relocate_csub`) | Linking a C CSUB image for its address |
 | `AllCommands.h` | The `TCC` command token (rp2350 builds) |

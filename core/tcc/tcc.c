@@ -442,3 +442,43 @@ redo:
         fclose(ppfp);
     return ret;
 }
+
+#ifdef TCC_PICOMITE
+/* A C CSUB (tcc_picomite.c): compile and link the files and options of argv
+   into an image for the address 'base' (see tcc_pm_relocate_csub).  The
+   image is in the arena; returns 0 or 1 if TinyCC reported an error. */
+int pico_tcc_csub(int argc, char **argv, const char *entry, unsigned base,
+                  unsigned char **pimage, unsigned *psize)
+{
+    TCCState *s, *s1;
+    int ret = 0, n;
+
+    s = s1 = tcc_new();
+    if (tcc_parse_args(s, &argc, &argv, 1) != 0 || s->output_type ||
+        s->option_r || s->outfile) {
+        tcc_error_noabort("a CSUB takes files and options such as -I and -D; "
+                          "not -o, -c, -r, -E, -run or -h");
+        ret = 1;
+    } else if (s->nb_files == 0) {
+        tcc_error_noabort("no input files for the CSUB");
+        ret = 1;
+    }
+    if (ret == 0) {
+        set_environment(s);
+        tcc_set_output_type(s, TCC_OUTPUT_MEMORY);
+        for (n = 0; n < s->nb_files && ret == 0; n++) {
+            struct filespec *f = s->files[n];
+            s->filetype = f->type;
+            if (f->type & AFF_TYPE_LIB)
+                ret = tcc_add_library_err(s, f->name) < 0;
+            else
+                ret = tcc_add_file(s, f->name) < 0;
+        }
+    }
+    if (ret == 0 && tcc_pm_relocate_csub(s, entry, base, pimage, psize) < 0)
+        ret = 1;
+    /* (the image stays: it is in the arena, released by the caller) */
+    tcc_delete(s);
+    return ret;
+}
+#endif

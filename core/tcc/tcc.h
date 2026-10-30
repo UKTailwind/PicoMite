@@ -844,6 +844,9 @@ struct TCCState {
 
     /* predefined sections */
     Section *text_section, *data_section, *bss_section;
+    /* constants: string literals, floating-point literals and const objects
+       with an initializer - read-only, so they can stay in flash (a CSUB) */
+    Section *rodata_section;
     Section *common_section;
     Section *cur_text_section; /* current section where function code is generated */
 #ifdef CONFIG_TCC_BCHECK
@@ -1770,6 +1773,7 @@ ST_FUNC void gen_makedeps(TCCState *s, const char *target, const char *filename)
 #define text_section        TCC_STATE_VAR(text_section)
 #define data_section        TCC_STATE_VAR(data_section)
 #define bss_section         TCC_STATE_VAR(bss_section)
+#define rodata_section      TCC_STATE_VAR(rodata_section)
 #define common_section      TCC_STATE_VAR(common_section)
 #define cur_text_section    TCC_STATE_VAR(cur_text_section)
 #define bounds_section      TCC_STATE_VAR(bounds_section)

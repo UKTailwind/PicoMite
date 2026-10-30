@@ -49,6 +49,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "sys/stat.h"
 #include "picojpeg.h"
 #include "hardware/sync.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* C CSUBs */
+#endif
 #ifdef PICOMITE
 #include "pico/multicore.h"
 extern mutex_t frameBufferMutex;
@@ -4150,6 +4153,15 @@ static int MIPS16 lib_scan(int fnbr, uint32_t *hash, unsigned char *text, uint32
             }
             else
             {
+                {
+                    unsigned char *q = inpbuf;
+                    skipspace(q);
+                    if (*q == '"')
+                    {
+                        FileClose(fnbr);
+                        error("A C CSUB cannot be in the library");
+                    }
+                }
                 if (!lib_hex_line(inpbuf, bin, &bl, binmax))
                 {
                     FileClose(fnbr);
@@ -4769,6 +4781,12 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     multi = false;
     tokenise_insub = false;
     uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realmemsave;
+#ifdef rp2350
+    uint32_t *cimg[MAXCFUNCTION] = {NULL}; // C CSUBs: the images linked in the first pass
+    int cwords[MAXCFUNCTION] = {0};
+    char cerr[MAXERRMSG], *cline = NULL;
+    unsigned char *csubdecl = NULL;
+#endif
     initFonts();
     clearrepeat();
     memcpy(buf, tknbuf, STRINGSIZE); // save the token buffer because we are going to use it
@@ -4908,6 +4926,9 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
             else
             {
                 endtoken = GetCommandValue((unsigned char *)"End CSub");
+#ifdef rp2350
+                csubdecl = p;
+#endif
                 realmempointer += 4;
                 fontnbr = 0;
                 firsthex = 0;
@@ -4941,6 +4962,30 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                         p += 3; // skip over a line number
                 }
             }
+#ifdef rp2350
+            if (!fontnbr)
+            { // a C CSUB: its files and options in quotes (core/tcc/tcc_picomite.c)
+                unsigned char *endp;
+                if (cline == NULL)
+                    cline = GetTempMemory(STRINGSIZE * 4);
+                if ((endp = tcc_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4)) != NULL)
+                {
+                    // linked for where it goes: its record's entry word, here
+                    cimg[updatecount] = tcc_picomite_csub_compile(csubdecl, cline, realmempointer,
+                                                                  ram, &cwords[updatecount], cerr);
+                    if (cimg[updatecount] == NULL)
+                    {
+                        refusal = cerr;
+                        goto exiterror;
+                    }
+                    realmempointer += 4 * cwords[updatecount];
+                    if (((uint32_t)realmempointer - (uint32_t)ram) >= MAX_PROG_SIZE - 5)
+                        goto exiterror;
+                    p = endp;
+                    goto csub_linked;
+                }
+            }
+#endif
             do
             {
                 while (*p && *p != '\'')
@@ -4992,6 +5037,9 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                 tkn = p[0] & 0x7f;
                 tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
             } while (tkn != endtoken);
+#ifdef rp2350
+        csub_linked:
+#endif
             storedupdates[updatecount++] = realmempointer - SaveSizeAddr - 4;
         }
         while (*p)
@@ -5084,6 +5132,17 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                         p += 3; // skip over a line number
                 }
             }
+#ifdef rp2350
+            if (!fontnbr && cimg[updatecount - 1] != NULL)
+            { // the C CSUB linked in the first pass
+                p = tcc_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4);
+                for (i = 0; i < cwords[updatecount - 1]; i++)
+                    MemWriteWord(cimg[updatecount - 1][i]);
+                FreeMemory(cimg[updatecount - 1]);
+                cimg[updatecount - 1] = NULL;
+                goto csub_written;
+            }
+#endif
             do
             {
                 while (*p && *p != '\'')
@@ -5128,6 +5187,9 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                 tkn = p[0] & 0x7f;
                 tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
             } while (tkn != endtoken);
+#ifdef rp2350
+        csub_written:;
+#endif
         }
         while (*p)
             p++; // look for the zero marking the start of the next element
@@ -5152,6 +5214,11 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
 // we only get here in an error situation while writing the program to RAM
 exiterror:
     SymEnd();
+#ifdef rp2350
+    for (i = 0; i < MAXCFUNCTION; i++)
+        if (cimg[i] != NULL)
+            FreeMemory(cimg[i]);
+#endif
     MemWriteClose();
     /* An empty program, not the part written so far: that is in symbols
        with no table after it (see SaveProgramToFlash's exiterror). */

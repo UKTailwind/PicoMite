@@ -199,7 +199,8 @@ extern "C"
    /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 164 bytes over. */
    /* +176 KB (2026-10-30): TinyCC (RUN "file.c", core/tcc) is ~180 KB of
       flash; at 1104 KB the firmware ran 157 KB into the options. */
-#define FLASH_TARGET_OFFSET (1280 * 1024)
+   /* +32 KB (2026-10-30): the TCC command, ELF RUN and C CSUBs went 2 KB over. */
+#define FLASH_TARGET_OFFSET (1312 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 1144 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */

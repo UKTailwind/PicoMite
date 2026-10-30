@@ -2574,6 +2574,20 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		PrintPreprogramError();
 		return;
 	}
+#ifdef rp2350
+	if (tcc_picomite_csub_stale())
+	{
+		// C CSUBs linked against another firmware: save the program again,
+		// which compiles them again, and prepare the new copy
+		tcc_picomite_csub_rebuild();
+		ClearRuntime(true);
+		if (PrepareProgram(true))
+		{
+			PrintPreprogramError();
+			return;
+		}
+	}
+#endif
 	if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
 	{
 		ClearScreen(gui_bcolour);

@@ -334,9 +334,9 @@ ST_FUNC void unary(void)
             mk_pointer(&type);
             type.t |= VT_ARRAY;
             type.ref->c = len;
-            vpush_ref(&type, data_section, data_section->data_offset, len);
+            vpush_ref(&type, rodata_section, rodata_section->data_offset, len);
             if (!NODATA_WANTED) {
-                ptr = section_ptr_add(data_section, len);
+                ptr = section_ptr_add(rodata_section, len);
                 memcpy(ptr, funcname, len);
             }
             next();
@@ -361,6 +361,7 @@ ST_FUNC void unary(void)
         mk_pointer(&type);
         type.t |= VT_ARRAY;
         memset(&ad, 0, sizeof(AttributeDef));
+        ad.section = rodata_section; /* a string literal is not modifiable */
         decl_initializer_alloc(&type, &ad, VT_CONST, 2, 0, 0);
         break;
     case '(':
