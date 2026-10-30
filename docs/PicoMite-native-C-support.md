@@ -318,8 +318,9 @@ After that:
 - **Not available in a CSUB**, because a CSUB runs outside any C program:
   `malloc calloc realloc free strdup exit abort`, console input
   (`getchar fgetc getc fgets`, `stdin`) and files
-  (`fopen fclose fread fwrite fseek ftell rewind feof ferror`). Using one is
-  reported as `undefined symbol` when the program is saved.
+  (`fopen fclose fread fwrite fseek ftell rewind feof ferror`), `pm_alloc`,
+  `pm_free` and `pm_settick`. Using one is reported as `undefined symbol`
+  when the program is saved. `pm_execute` and `pm_eval_*` work.
 - An MMBasic error in a `pm_` call (an invalid pin, for example) is reported
   as that error at the CSUB's call, as for any MMBasic command.
 
@@ -360,7 +361,7 @@ copied to a drive.
 `stdarg.h`, `stdbool.h`, `stddef.h`, `stdint.h`, `stdio.h`, `stdlib.h`,
 `stdnoreturn.h`, `string.h`, `time.h`, `picomite.h`, and the firmware API
 `picomite/system.h`, `picomite/memory.h`, `picomite/graphics.h`,
-`picomite/input.h` and
+`picomite/input.h`, `picomite/basic.h` and
 `PicoCFunctions.h` (see [The firmware API](#the-firmware-api-picomite)).
 
 They declare exactly what the run-time library below provides. A function
@@ -616,7 +617,75 @@ int pm_inkey(void);   /* INKEY$: a key code, or -1 if no key is waiting */
 The codes are those of `INKEY$`: ASCII, and from 128 the keys MMBasic names
 (UP 128, DOWN 129, LEFT 130, RIGHT 131, INSERT 132, DEL 127, HOME 134,
 END 135, PGUP 136, PGDN 137, F1 145 to F12 156). The same function is in
-`picomite.h`.
+`picomite.h`. For `KEYDOWN()` use `pm_eval_int("KEYDOWN(n)")` (below).
+
+#### `<picomite/basic.h>`: MMBasic's commands and functions
+
+```c
+void      pm_execute(const char *cmd);                     /* EXECUTE cmd$ */
+long long pm_eval_int(const char *expr);                   /* EVAL(s$) */
+double    pm_eval_float(const char *expr);
+char     *pm_eval_str(const char *expr, char *buf, int size);
+void      pm_settick(int period, void (*fn)(void), int nbr); /* SETTICK */
+```
+
+These make every MMBasic command and function available to C with exactly
+its BASIC meaning, including those with no C function of their own yet:
+`SPRITE`, `PLAY`, `LOAD IMAGE`, `LOAD JPG`, `BLIT`, `COLOUR`, `OPTION ...`,
+`KEYDOWN()`, `MM.INFO()` and so on.
+
+- **`pm_execute`** runs one statement as `EXECUTE` does: as if typed at the
+  prompt, a single statement (no `:`) and not `RUN`. A C program has no BASIC
+  variables or SUBs, so put the values into the text:
+
+  ```c
+  char cmd[64];
+  pm_execute("SPRITE LOAD \"maxitrek.spr\"");
+  snprintf(cmd, sizeof cmd, "SPRITE SHOW %d,%d,%d,1", n, x, y);
+  pm_execute(cmd);
+  pm_execute("PLAY MODFILE \"ptsfx2.mod\"");
+  ```
+
+- **`pm_eval_int`, `pm_eval_float` and `pm_eval_str`** give the value of an
+  expression as `EVAL()` does. `pm_eval_int` rounds a float as BASIC does
+  when it assigns one to an integer. Asking for a number from a string
+  expression, or the other way round, is an error.
+
+  ```c
+  if (pm_eval_int("KEYDOWN(0)") == 0) ...
+  char dev[40];
+  pm_eval_str("MM.DEVICE$", dev, sizeof dev);
+  ```
+
+- An MMBasic error in the command or expression ends the program with that
+  error. In a C CSUB, it is reported at the CSUB's call.
+- The text is tokenised on every call (as `EXECUTE` does), which takes some
+  tens of microseconds. That is fine for setting things up and for an
+  occasional sound or sprite, but a hot loop is better served by the C
+  functions where there is one.
+- What the commands start keeps going after the program, as after a BASIC
+  program run from the prompt: `RUN "x.c"` ends as `RUN` does, which stops
+  sound and closes sprites and files.
+
+**`pm_settick`** is `SETTICK period, sub, nbr` with a C function for the
+SUB:
+
+- `nbr` is 1 to 4, and period 0 stops that tick.
+- A BASIC tick SUB runs between statements. Likewise the C function runs
+  between the program's own calls of the firmware: in `pm_pause`,
+  `pm_yield`, output, input and the `pm_` drawing calls. It is never called
+  from an interrupt, and never while it is still running, so it may use
+  everything the program does.
+- A program that computes for a long time without any of these calls gets
+  no ticks until it makes one.
+- Not available in a C CSUB.
+
+```c
+static void clock_tick(void) { /* SUB clock */ }
+...
+pm_settick(100, clock_tick, 4);  /* SETTICK 100, clock, 4 */
+pm_settick(0, NULL, 4);          /* SETTICK 0, 0, 4 */
+```
 
 ### PicoCFunctions.h: the classic CSUB interface
 
@@ -665,7 +734,11 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 - No debugger or backtrace support (`-g` is accepted but has no use here).
 - A tight loop that never prints, reads input or calls a `pm_` function cannot
   be stopped with CTRL-C.
-- The 32 KB stack is not guarded.
+- The 32 KB stack is not guarded as it is used. The bottom of it holds a
+  pattern that is checked when the program ends, and an overwritten pattern
+  is reported as "C stack overflow (32 KB)", but by then whatever lay below
+  the stack in the heap may have been damaged. Keep big arrays `static` or
+  in `malloc()` memory, not in locals.
 - Code is generated by TinyCC, unoptimised, and is several times slower than
   the firmware's own GCC-compiled code, but far faster than BASIC.
 - Executables are relocatable objects bound to the firmware by name at RUN

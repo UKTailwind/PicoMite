@@ -114,10 +114,15 @@ static void __attribute__((noreturn)) pm_end_program(int how, int code);
 
 /* CTRL-C ends the program; the compiler itself is not interrupted (it
    finishes quickly, and the program is not started if CTRL-C is pending). */
+static bool pm_tick_any; /* a SETTICK is set (pm_settick) */
+static void pm_tick_service(void);
+
 static inline void pm_poll(void)
 {
     if (MMAbort && pm_in_program)
         pm_end_program(PM_END_ABORT, 1);
+    if (pm_tick_any)
+        pm_tick_service();
 }
 
 /* ------------------------------------------------------------------------ */
@@ -339,8 +344,18 @@ typedef struct
     char *csub_err;           /* out: the error (MAXERRMSG) */
 } pm_run_args;
 
+/* SETTICK in a C program (pm_settick) */
+#define TCC_PM_TICKS 4
+typedef struct
+{
+    void (*fn)(void);
+    uint64_t period_us, next_us;
+} pm_tick;
+
 struct pm_state
 {
+    pm_tick ticks[TCC_PM_TICKS];
+    bool in_tick; /* a tick function is running: not again until it returns */
     pm_file files[TCC_PM_MAX_FILES];
     pm_file con_in, con_out, con_err;
     jmp_buf prog_jmp; /* tcc_pm_call_main: exit() and errors of the program */
@@ -1078,6 +1093,19 @@ static long pm_clock(void)
         }                            \
     } while (0)
 
+/* An MMBasic error msg (already untrapped): the end of the C program, or in
+   a C CSUB an error at its call */
+static void __attribute__((noreturn)) pm_program_error_tr_msg(const char *m)
+{
+    char msg[MAXERRMSG];
+    memcpy(msg, m, MAXERRMSG);
+    msg[MAXERRMSG - 1] = 0;
+    if (!pm_in_program)
+        error("$", msg);
+    memcpy(MMErrMsg, msg, MAXERRMSG);
+    pm_program_error();
+}
+
 static void __attribute__((noreturn)) pm_program_error_tr(pm_trap *t)
 {
     char msg[MAXERRMSG];
@@ -1490,6 +1518,254 @@ static unsigned pm_fb_colour(int rgb)
 }
 
 /* ------------------------------------------------------------------------ */
+/* <picomite/basic.h>: EXECUTE, EVAL and SETTICK                             */
+/* ------------------------------------------------------------------------ */
+
+/* the interpreter's line buffers, which a command line from C goes through:
+   kept for whatever was using them (the prompt's RUN line, a statement
+   calling a C CSUB) */
+typedef struct
+{
+    unsigned char tkn[STRINGSIZE], inp[STRINGSIZE];
+    unsigned char *nextstmt, *cmdline;
+    int cmdtoken, multi;
+} pm_linebufs;
+
+static void pm_lines_save(pm_linebufs *b)
+{
+    memcpy(b->tkn, tknbuf, STRINGSIZE);
+    memcpy(b->inp, inpbuf, STRINGSIZE);
+    b->nextstmt = nextstmt;
+    b->cmdline = cmdline;
+    b->cmdtoken = cmdtoken;
+    b->multi = multi;
+}
+
+static void pm_lines_restore(const pm_linebufs *b)
+{
+    memcpy(tknbuf, b->tkn, STRINGSIZE);
+    memcpy(inpbuf, b->inp, STRINGSIZE);
+    nextstmt = b->nextstmt;
+    cmdline = b->cmdline;
+    cmdtoken = b->cmdtoken;
+    multi = b->multi;
+}
+
+/* the temporary strings a command left: in a C program nothing else holds
+   any; in a C CSUB its caller's statement does, and clears them itself */
+static void pm_temps_done(void)
+{
+    if (pm_in_program)
+        ClearTempMemory();
+}
+
+/* EXECUTE cmd$ (execute() in core/Commands.c): one statement, as typed at
+   the prompt, tokenised and run here rather than by ExecuteProgram, whose
+   own error trapping would hide its errors from PM_CALL */
+static void pm_execute_do(const char *cmd)
+{
+    int i = 0, toggle = 0;
+    unsigned char *p;
+    if (strlen(cmd) >= STRINGSIZE)
+        error("String too long");
+    strcpy((char *)inpbuf, cmd);
+    p = inpbuf;
+    skipspace(p);
+    if (checkstring(p, (unsigned char *)"RUN"))
+        error("RUN is not possible from C");
+    while (inpbuf[i])
+    { /* upper case outside quotes, one statement */
+        if (inpbuf[i] == 34)
+            toggle = !toggle;
+        if (!toggle)
+        {
+            if (inpbuf[i] == ':')
+                error("Only single statements allowed");
+            inpbuf[i] = mytoupper(inpbuf[i]);
+        }
+        i++;
+    }
+    multi = false;
+    tokenise(true);
+    memset(inpbuf, 0, STRINGSIZE);
+    p = tknbuf;
+    skipspace(p);
+    if (*p == 0)
+        return;
+    targ = T_CMD;
+    if (!commandtbl_is_cmd(p))
+        StandardError(36); /* (no SUBs: a C program has none) */
+    {
+        CommandToken c = commandtbl_decode(p);
+        if (c == cmdWHILE || c == cmdDO || c == cmdFOR)
+            error("Invalid inside THEN ... ELSE");
+        cmdtoken = c;
+        cmdline = p + sizeof(CommandToken);
+        skipspace(cmdline);
+        if (!SymAwareCommand(c))
+            cmdline = SymExpandStatement(cmdline);
+        ScrewUpTimer = 1000;
+        commandtbl[c].fptr();
+        ScrewUpTimer = 0;
+    }
+}
+
+static void pm_execute(const char *cmd)
+{
+    pm_linebufs b;
+    pm_trap t;
+    char msg[MAXERRMSG];
+    pm_poll();
+    pm_lines_save(&b);
+    if (PM_TRY(t))
+    {
+        pm_execute_do(cmd);
+        pm_trap_restore(&t);
+        ScrewUpTimer = 0;
+        pm_lines_restore(&b);
+        pm_temps_done();
+        return;
+    }
+    ScrewUpTimer = 0;
+    memcpy(msg, MMErrMsg, MAXERRMSG);
+    pm_trap_restore(&t);
+    pm_lines_restore(&b);
+    pm_temps_done();
+    memcpy(MMErrMsg, msg, MAXERRMSG);
+    pm_program_error_tr_msg(msg);
+}
+
+/* EVAL(s$) (fun_eval in core/Functions.c) */
+static int pm_eval_do(const char *expr, MMFLOAT *f, long long *i, unsigned char *str)
+{
+    unsigned char *s = NULL;
+    int t = T_NOTYPE;
+    if (strlen(expr) + 2 >= STRINGSIZE)
+        error("String too long");
+    inpbuf[0] = 'r';
+    inpbuf[1] = '='; /* a dummy assignment keeps the tokeniser happy */
+    strcpy((char *)inpbuf + 2, expr);
+    multi = false;
+    tokenise(true);
+    evaluate(tknbuf + 2 + sizeof(CommandToken), f, i, &s, &t, false);
+    if ((t & T_STR) && str != NULL)
+        Mstrcpy(str, s);
+    return t;
+}
+
+/* the value of expr, as type: 'i', 'f' or 's' */
+static void pm_eval(const char *expr, int type, long long *ip, double *fp, char *sp, int size)
+{
+    pm_linebufs b;
+    pm_trap t;
+    char msg[MAXERRMSG];
+    MMFLOAT f = 0;
+    long long i = 0;
+    unsigned char str[STRINGSIZE];
+    volatile int ty = 0;
+    pm_poll();
+    pm_lines_save(&b);
+    if (PM_TRY(t))
+    {
+        ty = pm_eval_do(expr, &f, &i, str);
+        if (type == 's' && !(ty & T_STR))
+            error("Expected a string");
+        if (type != 's' && (ty & T_STR))
+            error("Expected a number");
+        pm_trap_restore(&t);
+        pm_lines_restore(&b);
+        pm_temps_done();
+        if (type == 'i')
+            *ip = (ty & T_NBR) ? FloatToInt64(f) : i;
+        else if (type == 'f')
+            *fp = (ty & T_NBR) ? f : (double)i;
+        else if (size > 0)
+        {
+            int n = str[0] < size - 1 ? str[0] : size - 1;
+            memcpy(sp, str + 1, (size_t)n);
+            sp[n] = 0;
+        }
+        return;
+    }
+    memcpy(msg, MMErrMsg, MAXERRMSG);
+    pm_trap_restore(&t);
+    pm_lines_restore(&b);
+    pm_temps_done();
+    memcpy(MMErrMsg, msg, MAXERRMSG);
+    pm_program_error_tr_msg(msg);
+}
+
+static long long pm_eval_int(const char *expr)
+{
+    long long v = 0;
+    pm_eval(expr, 'i', &v, NULL, NULL, 0);
+    return v;
+}
+
+static double pm_eval_float(const char *expr)
+{
+    double v = 0;
+    pm_eval(expr, 'f', NULL, &v, NULL, 0);
+    return v;
+}
+
+static char *pm_eval_str(const char *expr, char *buf, int size)
+{
+    pm_eval(expr, 's', NULL, NULL, buf, size);
+    return buf;
+}
+
+/* SETTICK period, fn [, nbr]: fn is called every period ms, between the
+   program's own calls of the firmware (as a BASIC tick SUB runs between
+   statements) - never from an interrupt.  period 0 stops it. */
+static void pm_settick(int period, void (*fn)(void), int nbr)
+{
+    int k;
+    pm_trap t;
+    if (pm == NULL)
+        return;
+    if (PM_TRY(t))
+    {
+        pm_range(nbr, 1, TCC_PM_TICKS);
+        pm_range(period, 0, INT_MAX);
+        if (period && fn == NULL)
+            error("Argument count");
+        pm_trap_restore(&t);
+    }
+    else
+        pm_program_error_tr(&t);
+    pm->ticks[nbr - 1].fn = period ? fn : NULL;
+    pm->ticks[nbr - 1].period_us = (uint64_t)period * 1000;
+    pm->ticks[nbr - 1].next_us = time_us_64() + (uint64_t)period * 1000;
+    pm_tick_any = false;
+    for (k = 0; k < TCC_PM_TICKS; k++)
+        if (pm->ticks[k].fn)
+            pm_tick_any = true;
+}
+
+static void pm_tick_service(void)
+{
+    uint64_t now;
+    int k;
+    if (pm == NULL || !pm_in_program || pm->in_tick)
+        return;
+    now = time_us_64();
+    for (k = 0; k < TCC_PM_TICKS; k++)
+    {
+        pm_tick *tk = &pm->ticks[k];
+        if (tk->fn && now >= tk->next_us)
+        {
+            tk->next_us += tk->period_us;
+            if (tk->next_us <= now) /* (fell behind: no burst of calls) */
+                tk->next_us = now + tk->period_us;
+            pm->in_tick = true;
+            tk->fn();
+            pm->in_tick = false;
+        }
+    }
+}
+
+/* ------------------------------------------------------------------------ */
 /* Run-time symbol table for -run                                            */
 /* ------------------------------------------------------------------------ */
 
@@ -1684,6 +1960,11 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_get_mem_info)
     PM_SYM(pm_text)
     PM_SYM(pm_draw_box)
+    PM_SYM(pm_execute)
+    PM_SYM(pm_eval_int)
+    PM_SYM(pm_eval_float)
+    PM_SYM(pm_eval_str)
+    PM_SYM(pm_settick)
     PM_SYM(pm_mode)
     PM_SYM(pm_font_width)
     PM_SYM(pm_font_height)
@@ -1699,7 +1980,7 @@ static const char *const pm_csub_refused[] = {
     "malloc", "calloc", "realloc", "free", "strdup", "exit", "abort",
     "getchar", "fgetc", "getc", "fgets", "fopen", "fclose", "fread", "fwrite",
     "fseek", "ftell", "rewind", "feof", "ferror", "__tcc_pm_stdin",
-    "pm_alloc", "pm_free", NULL};
+    "pm_alloc", "pm_free", "pm_settick", NULL};
 
 void *tcc_pm_resolve_symbol(const char *name)
 {
@@ -1749,6 +2030,28 @@ int tcc_pm_call_main(int (*prog_main)(int, char **), int argc_, char **argv_)
 /* Entry                                                                     */
 /* ------------------------------------------------------------------------ */
 
+/* The bottom of the private stack holds a pattern: overwritten, the compiler
+   or the program went past the end of its stack.  (No MSPLIM guard: the
+   fault it raises could not stack its own exception frame there.) */
+#define TCC_PM_STACK_MARK 64 /* words */
+static void pm_stack_mark(void *stack)
+{
+    uint32_t *w = (uint32_t *)stack;
+    int i;
+    for (i = 0; i < TCC_PM_STACK_MARK; i++)
+        w[i] = 0x5AC0FFEEu ^ (uint32_t)i;
+}
+
+static bool pm_stack_intact(const void *stack)
+{
+    const uint32_t *w = (const uint32_t *)stack;
+    int i;
+    for (i = 0; i < TCC_PM_STACK_MARK; i++)
+        if (w[i] != (0x5AC0FFEEu ^ (uint32_t)i))
+            return false;
+    return true;
+}
+
 /* Call fn(arg) with the stack pointer at stack_top. */
 static int __attribute__((naked, noinline)) pm_call_on_stack(int (*fn)(void *), void *arg, void *stack_top)
 {
@@ -1778,6 +2081,7 @@ static int pm_run_entry(void *p)
 static void pm_state_reset(void)
 {
     pm = NULL;
+    pm_tick_any = false;
     pm_blocks = NULL;
     pm_chunks = NULL;
     pm_freep = NULL;
@@ -1862,6 +2166,7 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
     }
     pm->con_in.kind = PM_FILE_CONIN;
     pm->con_out.kind = pm->con_err.kind = PM_FILE_CONOUT;
+    pm_stack_mark(pm->stack);
     __tcc_pm_stdin = (FILE *)&pm->con_in;
     __tcc_pm_stdout = (FILE *)&pm->con_out;
     __tcc_pm_stderr = (FILE *)&pm->con_err;
@@ -1916,6 +2221,11 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
             FreeMemory(pm->args.csub_image);
     }
 
+    if (!pm_stack_intact(pm->stack) && how != PM_END_ABORT)
+    { /* (found afterwards: whatever lay below the stack may be damaged) */
+        how = PM_END_ERROR;
+        snprintf(errmsg, sizeof(errmsg), "C stack overflow (%d KB)", TCC_PM_STACK_SIZE / 1024);
+    }
     pm_close_all();
     FreeMemory(pm->stack);
     pm_heap_release(); /* (pm itself is in the arena) */
