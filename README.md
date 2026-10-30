@@ -95,3 +95,6 @@ Valid `<variant>` names:
 
 User manuals and per-feature guides live in [`docs/`](docs/), including the
 main PicoMite user manual and the Advanced Graphics manual (GUI controls).
+
+The TinyCC native COM1/COM2 UART API (including an example C program) is
+covered in [`docs/tcc-serial.md`](docs/tcc-serial.md).

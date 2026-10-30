@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tcc_picomite.h"
+#include "include/picomite/serial.h"
 
 #ifndef TCC_PM_STACK_SIZE
 #define TCC_PM_STACK_SIZE (32 * 1024) /* compiler + compiled program */
@@ -358,6 +359,8 @@ struct pm_state
 {
     pm_tick ticks[TCC_PM_TICKS];
     bool in_tick; /* a tick function is running: not again until it returns */
+    unsigned serial_owned; /* bit 0: COM1, bit 1: COM2 */
+    unsigned serial_epoch[2];
     pm_file files[TCC_PM_MAX_FILES];
     pm_file con_in, con_out, con_err;
     jmp_buf prog_jmp; /* tcc_pm_call_main: exit() and errors of the program */
@@ -1288,7 +1291,7 @@ static int pm_pin_read(int gp)
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 4 /* (include/picomite/system.h: what each version added) */
+#define PM_API_VERSION 5 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -1389,6 +1392,178 @@ static void pm_yield(void)
 static int pm_abort_requested(void)
 {
     return MMAbort != 0;
+}
+
+/* UART C API: only ports explicitly opened by this C run may be used.
+   An epoch prevents accidentally using a port BASIC closed and reopened. */
+/* Port occupies bits 0..1, generation occupies bits 2..30; handles are
+   opaque and cannot be reused after a close + reopen in the same run. */
+static int pm_serial_port(pm_serial_t handle)
+{
+    unsigned idx, id = (unsigned)handle;
+    int port = (int)(id & 3u);
+    if (!tcc_pm_running || pm == NULL || port < 1 || port > 2)
+        return 0;
+    idx = (unsigned)port - 1;
+    if (!(pm->serial_owned & (1u << idx)) ||
+        pm->serial_epoch[idx] != SerialPortEpoch(port) ||
+        (pm->serial_epoch[idx] & 0x1fffffffu) != (id >> 2) ||
+        !SerialPortIsOpen(port))
+        return 0;
+    return port;
+}
+
+static int pm_serial_require(pm_serial_t handle)
+{
+    int port = pm_serial_port(handle);
+    if (!port)
+        error("Serial port not owned by C program");
+    return port;
+}
+
+static void pm_serial_cleanup(void)
+{
+    int port;
+    if (pm == NULL)
+        return;
+    for (port = 1; port <= 2; ++port)
+        if ((pm->serial_owned & (1u << (port - 1))) &&
+            pm->serial_epoch[port - 1] == SerialPortEpoch(port) && SerialPortIsOpen(port))
+            SerialClose(port);
+    pm->serial_owned = 0;
+}
+
+static int pm_serial_open_do(const pm_serial_config *cfg)
+{
+    unsigned flags, idx;
+    int parity;
+    if (!tcc_pm_running || pm == NULL || cfg == NULL)
+        error("Invalid serial configuration");
+    if (cfg->port < 1 || cfg->port > 2)
+        error("Only COM1/COM2 UART supported");
+    flags = cfg->flags;
+    if (flags & ~(PM_SERIAL_7BIT | PM_SERIAL_STOP2 | PM_SERIAL_EVEN |
+                  PM_SERIAL_ODD | PM_SERIAL_INVERT))
+        error("Invalid serial flags");
+    if ((flags & PM_SERIAL_EVEN) && (flags & PM_SERIAL_ODD))
+        error("Conflicting serial parity");
+    idx = (unsigned)cfg->port - 1;
+    if (pm->serial_owned & (1u << idx))
+        error("Serial port already open");
+    parity = (flags & PM_SERIAL_EVEN) ? 1 : (flags & PM_SERIAL_ODD) ? 2 : 0;
+    SerialOpenTyped(cfg->port, (int)(cfg->baudrate ? cfg->baudrate : 9600),
+                    (int)(cfg->rx_buffer_size ? cfg->rx_buffer_size : 1024),
+                    (flags & PM_SERIAL_7BIT) ? 7 : 8, parity,
+                    (flags & PM_SERIAL_STOP2) ? 2 : 1,
+                    (flags & PM_SERIAL_INVERT) ? 1 : 0);
+    pm->serial_epoch[idx] = SerialPortEpoch(cfg->port);
+    pm->serial_owned |= 1u << idx;
+    return (int)(((pm->serial_epoch[idx] & 0x1fffffffu) << 2) | (unsigned)cfg->port);
+}
+
+pm_serial_t pm_serial_open(const pm_serial_config *cfg)
+{
+    volatile int port = -1;
+    PM_CALL(port = pm_serial_open_do(cfg));
+    return port;
+}
+
+int pm_serial_available(pm_serial_t port)
+{
+    volatile int count = 0;
+    volatile int raw_port = 0;
+    PM_CALL(raw_port = pm_serial_require(port));
+    count = SerialRxStatus(raw_port);
+    return count;
+}
+
+/* Wait at most timeout_ms from entry, returning a partial transfer.  Zero
+   timeout never waits for another byte / TX slot. */
+int pm_serial_read(pm_serial_t port, void *buf, unsigned size, unsigned timeout_ms)
+{
+    unsigned n = 0;
+    uint64_t end = time_us_64() + (uint64_t)timeout_ms * 1000;
+    volatile int raw_port = 0;
+    PM_CALL(raw_port = pm_serial_require(port));
+    if (size > INT_MAX || (size && buf == NULL))
+        PM_CALL(error("Invalid serial read buffer"));
+    while (n < size)
+    {
+        if (timeout_ms && n && time_us_64() >= end)
+            break;
+        int c = SerialGetchar(raw_port);
+        if (c >= 0)
+        {
+            ((unsigned char *)buf)[n++] = (unsigned char)c;
+            if ((n & 63u) == 0)
+            {
+                pm_yield();
+                PM_CALL(raw_port = pm_serial_require(port));
+            }
+            continue;
+        }
+        if (timeout_ms == 0 || time_us_64() >= end)
+            break;
+        pm_yield();
+        PM_CALL(raw_port = pm_serial_require(port));
+    }
+    return (int)n;
+}
+
+int pm_serial_write(pm_serial_t port, const void *buf, unsigned size, unsigned timeout_ms)
+{
+    unsigned n = 0;
+    uint64_t end = time_us_64() + (uint64_t)timeout_ms * 1000;
+    volatile int raw_port = 0;
+    PM_CALL(raw_port = pm_serial_require(port));
+    if (size > INT_MAX || (size && buf == NULL))
+        PM_CALL(error("Invalid serial write buffer"));
+    while (n < size)
+    {
+        if (timeout_ms && n && time_us_64() >= end)
+            break;
+        /* SerialPutchar blocks on a full ring. Check first so timeout is
+           actually respected (the IRQ consumes bytes, never adds them). */
+        if (SerialTxStatus(raw_port) < TX_BUFFER_SIZE - 1)
+        {
+            SerialPutchar(raw_port, ((const unsigned char *)buf)[n++]);
+            if ((n & 63u) == 0)
+            {
+                pm_yield();
+                PM_CALL(raw_port = pm_serial_require(port));
+            }
+            continue;
+        }
+        if (timeout_ms == 0 || time_us_64() >= end)
+            break;
+        pm_yield();
+        PM_CALL(raw_port = pm_serial_require(port));
+    }
+    return (int)n;
+}
+
+/* 0: software queue and hardware shifter idle; -1: deadline expired. */
+int pm_serial_flush(pm_serial_t port, unsigned timeout_ms)
+{
+    uint64_t end = time_us_64() + (uint64_t)timeout_ms * 1000;
+    volatile int raw_port = 0;
+    PM_CALL(raw_port = pm_serial_require(port));
+    while (!SerialTxIdle(raw_port))
+    {
+        if (timeout_ms == 0 || time_us_64() >= end)
+            return -1;
+        pm_yield();
+        PM_CALL(raw_port = pm_serial_require(port));
+    }
+    return 0;
+}
+
+void pm_serial_close(pm_serial_t port)
+{
+    volatile int raw_port = 0;
+    PM_CALL(raw_port = pm_serial_require(port));
+    pm->serial_owned &= ~(1u << (raw_port - 1));
+    SerialClose(raw_port);
 }
 
 static void *pm_alloc(size_t size, int where)
@@ -3158,6 +3333,13 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_pin_mode)
     PM_SYM(pm_pin_write)
     PM_SYM(pm_pin_read)
+    /* <picomite/serial.h>: native UART COM1/COM2 */
+    PM_SYM(pm_serial_open)
+    PM_SYM(pm_serial_read)
+    PM_SYM(pm_serial_write)
+    PM_SYM(pm_serial_available)
+    PM_SYM(pm_serial_flush)
+    PM_SYM(pm_serial_close)
     /* <picomite/system.h>, <picomite/memory.h>, <picomite/graphics.h> */
     PM_SYM(pm_api_version)
     PM_SYM(pm_get_info)
@@ -3287,7 +3469,9 @@ static const char *const pm_csub_refused[] = {
     "malloc", "calloc", "realloc", "free", "strdup", "exit", "abort",
     "getchar", "fgetc", "getc", "fgets", "fopen", "fclose", "fread", "fwrite",
     "fseek", "ftell", "rewind", "feof", "ferror", "__tcc_pm_stdin",
-    "pm_alloc", "pm_free", "pm_settick", "opendir", "readdir", "closedir", NULL};
+    "pm_alloc", "pm_free", "pm_settick", "opendir", "readdir", "closedir",
+    "pm_serial_open", "pm_serial_read", "pm_serial_write", "pm_serial_available",
+    "pm_serial_flush", "pm_serial_close", NULL};
 
 void *tcc_pm_resolve_symbol(const char *name)
 {
@@ -3559,6 +3743,7 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
         snprintf(errmsg, sizeof(errmsg), "C stack overflow (%d KB)", TCC_PM_STACK_SIZE / 1024);
     }
     pm_close_all();
+    pm_serial_cleanup();
     FreeMemory(pm->stack);
     pm_heap_release(); /* (pm itself is in the arena) */
     pm_state_reset();
@@ -3665,6 +3850,7 @@ void tcc_picomite_abandoned(void)
     {
         __asm volatile("msr msplim, %0" ::"r"(pm->msplim));
         pm_stack_check_leave();
+        pm_serial_cleanup();
         for (i = 0; i < TCC_PM_MAX_FILES; i++)
             if (pm_files[i].kind == PM_FILE_DISK)
             {
