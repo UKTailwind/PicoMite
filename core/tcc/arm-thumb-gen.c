@@ -397,8 +397,22 @@ void load(int r, SValue *sv)
   else if (v == VT_JMP || v == VT_JMPI)
     return load_vt_jmp_jmpi (r, sv);
   else if (v < VT_CONST) {
-    if(is_float(ft))
-      tcc_error("internal error: missing code in function load");
+    if(is_float(ft)) {
+      /* A copy between VFP registers (x++ of a float or double: gv_dup).
+         VFP register n is d<n>, a float in s<2n>, as in gen_opf_regular.
+         The Cortex-M33 FPU is single precision, which has no vmov.f64:
+         a double is moved as its two halves, vmov.f32 s<2r>, s<2v> and
+         vmov.f32 s<2r+1>, s<2v+1>. */
+      uint32_t inst = 0xeeb00a40 | (vfpr(r) << 12) | vfpr(v);
+      ot(inst >> 16);
+      ot(inst);
+      if ((ft & VT_BTYPE) != VT_FLOAT) {
+        inst |= (1u << 22) | (1u << 5); /* the D and M bits: the odd halves */
+        ot(inst >> 16);
+        ot(inst);
+      }
+      return;
+    }
     else
     {
       DBG1(printf (GRN"mov r %i v %i\n"CLR, r, v));
