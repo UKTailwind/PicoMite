@@ -271,9 +271,24 @@ static char *pm_strdup(const char *s)
 }
 
 /* Give every chunk back to the PicoMite heap. */
+/* pm_alloc's blocks (<picomite/memory.h>): straight from the MMBasic heap,
+   listed here so they go back with the arena */
+typedef union pm_block
+{
+    union pm_block *next;
+    long long align;
+} pm_block;
+static pm_block *pm_blocks;
+
 static void pm_heap_release(void)
 {
     pm_chunk *c = pm_chunks;
+    while (pm_blocks)
+    {
+        pm_block *next = pm_blocks->next;
+        FreeMemory(pm_blocks);
+        pm_blocks = next;
+    }
     while (c)
     {
         pm_chunk *next = c->next;
@@ -1130,6 +1145,271 @@ static int pm_pin_read(int gp)
 }
 
 /* ------------------------------------------------------------------------ */
+/* <picomite/system.h>, <picomite/memory.h>, <picomite/graphics.h>           */
+/* The structs must match those headers (core/tcc/include/picomite).         */
+/* ------------------------------------------------------------------------ */
+
+#define PM_API_VERSION 1
+
+/* fill the caller's struct of 'size' bytes from ours: the first word of both
+   is the size, which the caller set */
+static int pm_fill(void *dst, const void *src, unsigned have)
+{
+    unsigned want = *(const unsigned *)dst;
+    if (want < sizeof(unsigned))
+        return -1;
+    memcpy((char *)dst + sizeof(unsigned), (const char *)src + sizeof(unsigned),
+           (want < have ? want : have) - sizeof(unsigned));
+    return 0;
+}
+
+static unsigned pm_api_version(void)
+{
+    return PM_API_VERSION;
+}
+
+typedef struct
+{
+    unsigned size, api_version;
+    char firmware[16], device[32];
+    unsigned cpu_khz, sram_heap, psram;
+    int hres, vres;
+    unsigned caps;
+} pm_info_t;
+
+static int pm_get_framebuffer(void *fb);
+
+static int pm_get_info(void *out)
+{
+    pm_info_t i;
+    unsigned char *saved_sret = sret, *d;
+    int saved_targ = targ;
+    struct
+    {
+        unsigned size;
+        void *pixels;
+        int w, h, stride, format;
+    } fb;
+    memset(&i, 0, sizeof(i));
+    i.api_version = PM_API_VERSION;
+    snprintf(i.firmware, sizeof(i.firmware), "%s", VERSION);
+    fun_device(); /* MM.DEVICE$, into a temporary MMBasic string */
+    d = sret;
+    sret = saved_sret;
+    targ = saved_targ;
+    memcpy(i.device, d + 1, d[0] < sizeof(i.device) - 1 ? d[0] : sizeof(i.device) - 1);
+    ClearSpecificTempMemory(d);
+    i.cpu_khz = (unsigned)Option.CPU_Speed;
+    i.sram_heap = heap_memory_size;
+    i.psram = PSRAMsize;
+    i.hres = HRes;
+    i.vres = VRes;
+#ifdef PICOMITEVGA
+    i.caps |= 0x0001;
+#else
+    if (Option.DISPLAY_TYPE)
+        i.caps |= 0x0001;
+#endif
+    fb.size = sizeof(fb);
+    if (pm_get_framebuffer(&fb) == 0)
+        i.caps |= 0x0002;
+    if (PSRAMsize)
+        i.caps |= 0x0004;
+    if (SDCardConfigured())
+        i.caps |= 0x0008;
+#ifdef USBKEYBOARD
+    i.caps |= 0x0010;
+#endif
+#ifdef PICOMITEWEB
+    i.caps |= 0x0020;
+#endif
+#if defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+    i.caps |= 0x0040;
+#endif
+#ifdef HDMI
+    i.caps |= 0x0080;
+#elif defined(PICOMITEVGA)
+    i.caps |= 0x0100;
+#endif
+    return pm_fill(out, &i, sizeof(i));
+}
+
+/* CheckAbort without its jump to the prompt (pm_poll ends the program) */
+static void pm_yield(void)
+{
+    pm_poll();
+#ifdef PICOMITEWEB
+    if (WIFIconnected || WebScanActive)
+        ProcessWeb(1);
+#endif
+    ProcessBT();
+    routinechecks();
+    pm_poll();
+}
+
+static int pm_abort_requested(void)
+{
+    return MMAbort != 0;
+}
+
+static void *pm_alloc(size_t size, int where)
+{
+    pm_block *b;
+    if (pm == NULL || size > (size_t)INT_MAX - sizeof(pm_block))
+        return NULL;
+    size += sizeof(pm_block);
+    if (where == 1)
+        b = GetSRAMMemoryNull((int)size);
+    else if (where == 2)
+        b = PSRAMsize ? GetPSMemoryNull((int)size) : NULL;
+    else
+        b = GetMemoryNull((int)size);
+    if (b == NULL)
+        return NULL;
+    b->next = pm_blocks;
+    pm_blocks = b;
+    return b + 1;
+}
+
+static void pm_free(void *p)
+{
+    pm_block **q, *b;
+    if (p == NULL)
+        return;
+    b = (pm_block *)p - 1;
+    for (q = &pm_blocks; *q; q = &(*q)->next)
+        if (*q == b)
+        {
+            *q = b->next;
+            FreeMemory(b);
+            return;
+        }
+}
+
+static int pm_mem_where(const void *p)
+{
+    const unsigned char *a = (const unsigned char *)p;
+    if (PSRAMsize && a >= (const unsigned char *)PSRAMbase && a < (const unsigned char *)(PSRAMbase + PSRAMsize))
+        return 2;
+    if (a >= MMHeap && a < MMHeap + heap_memory_size)
+        return 1;
+    return 0;
+}
+
+extern unsigned int SBitsGet(unsigned char *addr); /* core/Memory.c */
+
+static int pm_get_mem_info(void *out)
+{
+    struct
+    {
+        unsigned size, sram_total, sram_free, psram_total, psram_free;
+    } m;
+    unsigned char *a;
+    unsigned all = (unsigned)FreeSpaceOnHeap(), ps = 0;
+    memset(&m, 0, sizeof(m));
+    if (PSRAMsize)
+        for (a = (unsigned char *)PSRAMbase; a < (unsigned char *)(PSRAMbase + PSRAMsize); a += PAGESIZE)
+            if (!(SBitsGet(a) & PUSED))
+                ps += PAGESIZE;
+    m.sram_total = heap_memory_size;
+    m.sram_free = all - ps;
+    m.psram_total = PSRAMsize;
+    m.psram_free = ps;
+    return pm_fill(out, &m, sizeof(m));
+}
+
+static int pm_font_code(int font, int scale)
+{
+    if (font < 1 || font > FONT_TABLE_SIZE || FontTable[font - 1] == NULL)
+        error("Invalid font #%", font);
+    if (scale < 1 || scale > 15)
+        error("Invalid font scale");
+    return ((font - 1) << 4) | scale;
+}
+
+static void pm_text(int x, int y, const char *s, int font, int scale, int fg, int bg)
+{
+    PM_CALL(GUIPrintString(x, y, pm_font_code(font, scale), JUSTIFY_LEFT, JUSTIFY_TOP, ORIENT_NORMAL,
+                           fg, bg, (char *)s));
+}
+
+static int pm_font_width(int font, int scale)
+{
+    volatile int w = 0;
+    PM_CALL(w = GetFontWidth(pm_font_code(font, scale)));
+    return w;
+}
+
+static int pm_font_height(int font, int scale)
+{
+    volatile int h = 0;
+    PM_CALL(h = GetFontHeight(pm_font_code(font, scale)));
+    return h;
+}
+
+/* bits per pixel of WriteBuf, as the firmware's own buffer code sees it
+   (scroll_get_bpp in graphics/Sprite.c) */
+static int pm_fb_bpp(void)
+{
+#ifdef PICOMITEVGA
+    if (DISPLAY_TYPE == SCREENMODE1)
+        return 1;
+#ifdef HDMI
+    if (DISPLAY_TYPE == SCREENMODE4)
+        return 16;
+    if (DISPLAY_TYPE == SCREENMODE5)
+        return 8;
+#endif
+#endif
+    return 4;
+}
+
+static int pm_get_framebuffer(void *out)
+{
+    struct
+    {
+        unsigned size;
+        void *pixels;
+        int width, height, stride, format;
+    } f;
+    unsigned char *buf = WriteBuf;
+#ifndef PICOMITEVGA
+    /* a virtual display draws into FRAMEBUFFER (DrawPixel16 sets it on first use) */
+#if PICOMITERP2350
+    if (buf == NULL && Option.DISPLAY_TYPE >= VIRTUAL && Option.DISPLAY_TYPE < VGA222)
+        buf = FRAMEBUFFER;
+#else
+    if (buf == NULL && Option.DISPLAY_TYPE >= VIRTUAL)
+        buf = FRAMEBUFFER;
+#endif
+#endif
+    if (buf == NULL || HRes <= 0 || VRes <= 0)
+        return -1;
+    memset(&f, 0, sizeof(f));
+    f.pixels = buf;
+    f.width = HRes;
+    f.height = VRes;
+    f.format = pm_fb_bpp();
+    f.stride = f.format == 1 ? (HRes + 7) >> 3 : f.format == 4 ? (HRes + 1) >> 1 : HRes * (f.format >> 3);
+    return pm_fill(out, &f, sizeof(f));
+}
+
+static unsigned pm_fb_colour(int rgb)
+{
+    switch (pm_fb_bpp())
+    {
+    case 1:
+        return (rgb & 0xffffff) != 0;
+    case 8:
+        return RGB332((uint32_t)rgb);
+    case 16:
+        return RGB555((uint32_t)rgb);
+    default:
+        return RGB121((uint32_t)rgb);
+    }
+}
+
+/* ------------------------------------------------------------------------ */
 /* Run-time symbol table for -run                                            */
 /* ------------------------------------------------------------------------ */
 
@@ -1313,6 +1593,20 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_pin_mode)
     PM_SYM(pm_pin_write)
     PM_SYM(pm_pin_read)
+    /* <picomite/system.h>, <picomite/memory.h>, <picomite/graphics.h> */
+    PM_SYM(pm_api_version)
+    PM_SYM(pm_get_info)
+    PM_SYM(pm_yield)
+    PM_SYM(pm_abort_requested)
+    PM_SYM(pm_alloc)
+    PM_SYM(pm_free)
+    PM_SYM(pm_mem_where)
+    PM_SYM(pm_get_mem_info)
+    PM_SYM(pm_text)
+    PM_SYM(pm_font_width)
+    PM_SYM(pm_font_height)
+    PM_SYM(pm_get_framebuffer)
+    PM_SYM(pm_fb_colour)
     /* ARM EABI run-time helpers */
     PM_AEABI(PM_SYM)
 };
@@ -1322,7 +1616,8 @@ static const pm_sym pm_syms[] = {
 static const char *const pm_csub_refused[] = {
     "malloc", "calloc", "realloc", "free", "strdup", "exit", "abort",
     "getchar", "fgetc", "getc", "fgets", "fopen", "fclose", "fread", "fwrite",
-    "fseek", "ftell", "rewind", "feof", "ferror", "__tcc_pm_stdin", NULL};
+    "fseek", "ftell", "rewind", "feof", "ferror", "__tcc_pm_stdin",
+    "pm_alloc", "pm_free", NULL};
 
 void *tcc_pm_resolve_symbol(const char *name)
 {
@@ -1401,6 +1696,7 @@ static int pm_run_entry(void *p)
 static void pm_state_reset(void)
 {
     pm = NULL;
+    pm_blocks = NULL;
     pm_chunks = NULL;
     pm_freep = NULL;
     pm_in_program = pm_prog_started = false;
@@ -2009,3 +2305,47 @@ void tcc_picomite_csub_rebuild(void)
     *q = 0;
     SaveProgramToFlash(buf, false, PROGRAM_FLASH);
 }
+
+/* ------------------------------------------------------------------------ */
+/* Predefined macros: the firmware's build, for PicoCFunctions.h             */
+/* ------------------------------------------------------------------------ */
+
+const char *const tcc_pm_predefined[] = {
+    "__PM_FIRMWARE__",
+#ifdef PICOMITE
+    "__PM_PICOMITE",
+#endif
+#ifdef PICOMITEVGA
+    "__PM_PICOMITEVGA",
+#endif
+#ifdef PICOMITEWEB
+    "__PM_PICOMITEWEB",
+#endif
+#ifdef PICOMITEHDMIWEB
+    "__PM_PICOMITEHDMIWEB",
+#endif
+#ifdef PICOMITEBT
+    "__PM_PICOMITEBT",
+#endif
+#ifdef PICOMITEBTH
+    "__PM_PICOMITEBTH",
+#endif
+#ifdef PICOMITEHDMIBTH
+    "__PM_PICOMITEHDMIBTH",
+#endif
+#ifdef GUICONTROLS
+    "__PM_GUICONTROLS",
+#endif
+#ifdef rp2350
+    "__PM_PICORP2350",
+#endif
+#if PICOMITERP2350
+    "__PM_PICOMITERP2350",
+#endif
+#ifdef HDMI
+    "__PM_HDMI",
+#endif
+#ifdef USBKEYBOARD
+    "__PM_USBKEYBOARD",
+#endif
+    NULL};

@@ -307,10 +307,12 @@ After that:
   library](#run-time-library) and `picomite.h` can be called directly
   (`sin`, `memcpy`, `printf`, `pm_line`...). The calls are bound to the
   firmware by address when the program is saved.
-- **The classic CSUB interface** through `PicoCFunctions.h` and its CallTable
-  (`MMPrintString`, `DrawLine`, `CFuncmSec` and so on) works too, if the
-  header is available as a file (with `-I`), because only the CallTable's
-  address is fixed.
+- **The classic CSUB interface**: `#include "PicoCFunctions.h"` (built in,
+  see [PicoCFunctions.h](#picocfunctionsh-the-classic-csub-interface)) and
+  its CallTable (`MMPrintString`, `DrawLine`, `CFuncmSec` and so on). The C
+  source of an existing CSUB usually compiles as it is.
+- `<picomite/system.h>` and `<picomite/graphics.h>` (but not
+  `<picomite/memory.h>`, which needs a C program's run).
 - `printf`, `puts` and the other console *output* functions work and print
   on the MMBasic console.
 - **Not available in a CSUB**, because a CSUB runs outside any C program:
@@ -356,7 +358,9 @@ copied to a drive.
 
 `assert.h`, `ctype.h`, `float.h`, `limits.h`, `math.h`, `stdalign.h`,
 `stdarg.h`, `stdbool.h`, `stddef.h`, `stdint.h`, `stdio.h`, `stdlib.h`,
-`stdnoreturn.h`, `string.h`, `time.h`, `picomite.h`.
+`stdnoreturn.h`, `string.h`, `time.h`, `picomite.h`, and the firmware API
+`picomite/system.h`, `picomite/memory.h`, `picomite/graphics.h` and
+`PicoCFunctions.h` (see [The firmware API](#the-firmware-api-picomite)).
 
 They declare exactly what the run-time library below provides. A function
 that is declared nowhere and not in the library ends with
@@ -462,17 +466,149 @@ int main(void)
 }
 ```
 
+### The firmware API: `<picomite/...>`
+
+`picomite.h` above is the original, small API and stays as it is. The
+firmware's services are being opened up further in separate headers under
+`picomite/`, one for each subsystem. They may repeat a few declarations of
+`picomite.h`, so a program can include either or both.
+
+All of them are version 1 of the API (`PM_API_VERSION`). A function that a
+later firmware adds is listed with the version that added it. Structs that
+the firmware fills start with a `size` field, which the program sets to
+`sizeof` the struct before the call, so a program built against an older
+header keeps working when the firmware's struct grows.
+
+#### `<picomite/system.h>`
+
+```c
+unsigned pm_api_version(void);     /* the firmware's PM_API_VERSION */
+int  pm_get_info(pm_info *info);   /* firmware, board, memory, display, PM_CAP_... */
+void pm_yield(void);               /* service USB, keyboard, network, CTRL-C */
+int  pm_abort_requested(void);     /* has CTRL-C been pressed? */
+unsigned long long pm_timer_us(void);
+void pm_delay_us(unsigned int us);
+void pm_pause(unsigned int ms);
+```
+
+`pm_info` holds the firmware version string (e.g. "7.00.00RC6"), the device
+(`MM.DEVICE$`), the CPU clock in kHz, the SRAM heap and PSRAM sizes,
+`MM.HRES`/`MM.VRES`, and capability bits: `PM_CAP_DISPLAY`,
+`PM_CAP_FRAMEBUFFER`, `PM_CAP_PSRAM`, `PM_CAP_SDCARD`, `PM_CAP_USB_HOST`,
+`PM_CAP_WIFI`, `PM_CAP_BLUETOOTH`, `PM_CAP_HDMI` and `PM_CAP_VGA`.
+
+```c
+pm_info info;
+info.size = sizeof info;
+pm_get_info(&info);
+printf("%s on %s, %u KB PSRAM\n", info.firmware, info.device, info.psram / 1024);
+```
+
+`pm_yield()` belongs in any long loop that neither prints nor draws. It keeps
+USB and the keyboard serviced and ends the program at once if CTRL-C has
+been pressed. A program that needs to tidy up first can poll
+`pm_abort_requested()` instead and return from `main()`.
+
+#### `<picomite/memory.h>`
+
+```c
+void *pm_alloc(size_t size, int where);  /* PM_MEM_ANY, PM_MEM_SRAM, PM_MEM_PSRAM */
+void  pm_free(void *p);
+int   pm_mem_where(const void *p);       /* PM_MEM_SRAM, PM_MEM_PSRAM or 0 */
+int   pm_get_mem_info(pm_mem_info *m);   /* SRAM and PSRAM: total and free */
+```
+
+- `pm_alloc` takes a zeroed block straight from the MMBasic heap, so the
+  program chooses where it goes. Use PSRAM for big buffers, and SRAM for
+  speed or for anything DMA reads.
+- Blocks are whole 256-byte pages, so use it for buffers and `malloc()` for
+  small objects.
+- Like `malloc()` memory, every block is given back when the program ends.
+- `NULL` means there is no room where asked.
+- Not available in a C CSUB.
+
+#### `<picomite/graphics.h>`
+
+The drawing functions of `picomite.h`, and:
+
+```c
+void pm_text(int x, int y, const char *s, int font, int scale, int fg, int bg);
+int  pm_font_width(int font, int scale);
+int  pm_font_height(int font, int scale);
+int  pm_get_framebuffer(pm_framebuffer *fb);
+unsigned pm_fb_colour(int rgb);
+```
+
+- `pm_text` is `TEXT x, y, s$, "LT", font, scale, fg, bg`. `bg` may be
+  `PM_TRANSPARENT`.
+- `pm_get_framebuffer` gives the buffer that drawing goes to: the display
+  memory on VGA and HDMI, or the buffer of `FRAMEBUFFER CREATE`/`WRITE`. It
+  returns its address, size, stride and format:
+
+  | `format` | Pixel |
+  |---|---|
+  | `PM_FB_MONO` | 1 bit: pixel x is bit `x & 7` of byte `x / 8` |
+  | `PM_FB_RGB121` | 4 bits: even x in the low nibble, odd x in the high one |
+  | `PM_FB_RGB332` | 1 byte |
+  | `PM_FB_RGB555` | 2 bytes, little-endian |
+
+  It returns -1 when drawing goes straight to a panel (an SPI LCD with no
+  framebuffer).
+- `pm_fb_colour` converts an RGB colour to a pixel value of the current
+  format.
+- Writing pixels directly is far faster than `pm_pixel()`. Call
+  `pm_refresh()` afterwards for buffered panels.
+- The buffer and its format change with `MODE`, `RESOLUTION` and
+  `FRAMEBUFFER WRITE`, so get it again after any of these.
+
+```c
+#include <picomite/graphics.h>
+
+int main(void)
+{
+    pm_framebuffer fb;
+    fb.size = sizeof fb;
+    if (pm_get_framebuffer(&fb) || fb.format != PM_FB_RGB332)
+        return 1;
+    unsigned char *p = fb.pixels;
+    for (int y = 0; y < fb.height; y++)
+        for (int x = 0; x < fb.width; x++)
+            p[y * fb.stride + x] = (unsigned char)(x ^ y);
+    pm_text(8, 8, "framebuffer", 1, 2, PM_WHITE, PM_TRANSPARENT);
+    return 0;
+}
+```
+
+### PicoCFunctions.h: the classic CSUB interface
+
+The firmware includes the repository's `PicoCFunctions.h`, so
+`#include "PicoCFunctions.h"` works anywhere: in `RUN "x.c"`, in `TCC` and in
+C CSUBs. It is the interface hex CSUBs are written against. Through the
+CallTable it gives the console, the drawing routines and fonts, the
+framebuffer pointers, pins, PIO, audio output, the `CFuncmSec`/`CFuncInt*`
+interrupt vectors, `Option` and the BASIC variable table.
+
+- Compiled on the PicoMite, the header gets the firmware's own build
+  (`PICOMITE`, `PICOMITEVGA`, `PICOMITEWEB`, `GUICONTROLS`, ...) from
+  predefined `__PM_...` macros instead of the defines at its top, so `Option`
+  and the variable records match the firmware it runs on.
+- `NOP()` does nothing under TinyCC, which has no ARM inline assembler.
+- Its functions are called through the CallTable, whose offsets never
+  change. Code that uses only this header does not depend on the firmware's
+  symbol addresses.
+
 ### Stopping a program
 
 CTRL-C ends a C program and returns to the prompt, as it does for BASIC. It
 is noticed whenever the program prints, reads the console, pauses or calls a
 `pm_` function. A loop that does none of these cannot be interrupted, so add
-a `pm_inkey()` or `pm_pause()` to long computations.
+`pm_yield()` (`<picomite/system.h>`) to long computations.
 
 ### Predefined macros
 
 `__PICOMITE__`, `__TINYC__`, `__arm__`, `__ARM_EABI__`, `__STDC__`,
-`__STDC_VERSION__` (199901L). `__DATE__` and `__TIME__` come from the PicoMite
+`__STDC_VERSION__` (199901L), `__PM_FIRMWARE__`, and `__PM_<macro>` for each
+of the firmware's build macros (for `PicoCFunctions.h`). `__DATE__` and `__TIME__` come from the PicoMite
 clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 `??` and a warning is printed.
 
@@ -510,6 +646,8 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 | `core/tcc/tcc_picomite.h` | Interface between TinyCC and the firmware |
 | `core/tcc/tcc_picomite.c` | The firmware side: heap arena, files, console, run-time symbol table, private stack, MMBasic error trapping, `RUN` entry points, the `TCC` command |
 | `core/tcc/include/*.h` | The built-in headers |
+| `core/tcc/include/picomite/*.h` | The firmware API headers (`<picomite/...>`) |
+| `PicoCFunctions.h` | The CSUB interface, also built in for TinyCC |
 | `cmake/tcc_rom_headers.cmake` | Embeds the built-in headers in the firmware at build time |
 | `cmake/flash_layout_check.ld` | Link-time check that the firmware ends before `FLASH_TARGET_OFFSET` |
 | `core/Commands.c` (`do_run`) | `RUN "file.c"`, `RUN` of ELF files, rebuilding C CSUBs for a new firmware |

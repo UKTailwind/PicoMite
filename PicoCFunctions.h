@@ -45,6 +45,41 @@
 #include <stdbool.h> /* and bool - both are freestanding headers, always available  */
 #include <stddef.h>	 /* size_t, so the memcpy/memset/memmove shims match the builtins */
 
+/* Compiled on the PicoMite itself (its C compiler: TCC, RUN "x.c", C CSUBs),
+   the firmware predefines __PM_FIRMWARE__ and __PM_<macro> for each of its
+   own build macros below, so option_s matches the firmware it runs on. */
+#ifdef __PM_FIRMWARE__
+#ifdef __PM_PICOMITE
+#define PICOMITE
+#endif
+#ifdef __PM_PICOMITEVGA
+#define PICOMITEVGA
+#endif
+#ifdef __PM_PICOMITEWEB
+#define PICOMITEWEB
+#endif
+#ifdef __PM_PICOMITEHDMIWEB
+#define PICOMITEHDMIWEB
+#endif
+#ifdef __PM_PICOMITEBT
+#define PICOMITEBT
+#endif
+#ifdef __PM_PICOMITEBTH
+#define PICOMITEBTH
+#endif
+#ifdef __PM_PICOMITEHDMIBTH
+#define PICOMITEHDMIBTH
+#endif
+#ifdef __PM_GUICONTROLS
+#define GUICONTROLS
+#endif
+#ifdef __PM_PICORP2350
+#define PICORP2350
+#endif
+#ifdef __PM_PICOMITERP2350
+#define PICOMITERP2350 1
+#endif
+#else
 /*** Uncomment one of these three  ***/
 #define PICOMITE
 // #define PICOMITEVGA
@@ -59,6 +94,7 @@
 
 /***  Uncomment this define if HDMI pins required  ***/
 #define GUICONTROLS
+#endif /* __PM_FIRMWARE__ */
 
 /*****************************************************************************************/
 #define MAXVARLEN 32 // maximum length of a variable name
@@ -838,5 +874,9 @@ struct option_s
 #define EXT_DS18B20_RESERVED 0x100 // this pin is reserved for DS18B20 and cannot be used
 #define EXT_COM_RESERVED 0x200	   // this pin is reserved and SETPIN and PIN cannot be used
 #define EXT_BOOT_RESERVED 0x400	   // this pin is reserved at bootup and cannot be used
+#ifdef __TINYC__
+#define NOP() ((void)0) /* TinyCC has no ARM inline assembler */
+#else
 #define NOP() __asm volatile("nop")
+#endif
 #define USERLCDPANEL 25

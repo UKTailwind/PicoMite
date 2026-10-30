@@ -41,6 +41,10 @@ typedef struct tcc_pm_rom_file
 extern const tcc_pm_rom_file tcc_pm_rom_files[]; /* generated: tcc_rom_headers.c */
 extern const unsigned int tcc_pm_rom_count;
 
+/* Predefined for every compile: __PM_FIRMWARE__ and __PM_<macro> for the
+   firmware's build macros (PicoCFunctions.h maps them back), NULL-terminated */
+extern const char *const tcc_pm_predefined[];
+
 /* Memory: a private arena carved from the PicoMite heap (SRAM first, then
    PSRAM).  NULL on exhaustion, never an MMBasic error. Released as a whole
    when the run ends. */

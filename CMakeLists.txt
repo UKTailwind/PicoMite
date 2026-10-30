@@ -494,13 +494,16 @@ if(IS_RP2350)
         NO_SEMAPHORE_H=1 TCC_IS_NATIVE=1)
     target_compile_options(PicoMiteTinyCC PRIVATE -O2)
 
-    file(GLOB TCC_ROM_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/core/tcc/include/*.h)
+    # core/tcc/include (with picomite/), and PicoCFunctions.h: the CSUB API
+    file(GLOB_RECURSE TCC_ROM_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/core/tcc/include/*.h)
+    list(APPEND TCC_ROM_HEADERS ${CMAKE_CURRENT_LIST_DIR}/PicoCFunctions.h)
     set(TCC_ROM_C ${CMAKE_CURRENT_BINARY_DIR}/tcc_rom_headers.c)
     add_custom_command(OUTPUT ${TCC_ROM_C}
         COMMAND ${CMAKE_COMMAND}
             -DSRC_DIR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/include
             -DOUT=${TCC_ROM_C}
             -DHDR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/tcc_picomite.h
+            -DEXTRA=${CMAKE_CURRENT_LIST_DIR}/PicoCFunctions.h
             -P ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
         DEPENDS ${TCC_ROM_HEADERS} ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
         COMMENT "Embedding the TinyCC system headers"

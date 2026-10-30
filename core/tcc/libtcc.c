@@ -848,6 +848,13 @@ LIBTCCAPI TCCState *tcc_new(void)
         sprintf(buffer, "%d", a*10000 + b*100 + c);
         tcc_define_symbol(s, "__TINYC__", buffer);
     }
+#ifdef TCC_PICOMITE
+    { /* __PM_FIRMWARE__ and the firmware's build macros (tcc_picomite.c) */
+        const char *const *d;
+        for (d = tcc_pm_predefined; *d; d++)
+            tcc_define_symbol(s, *d, NULL);
+    }
+#endif
 
     /* standard defines */
     tcc_define_symbol(s, "__STDC__", NULL);
