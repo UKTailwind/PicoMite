@@ -169,6 +169,14 @@ char *sbuff1 = NULL, *sbuff2 = NULL;
 uint16_t *ubuff1, *ubuff2;
 int16_t *g_buff1, *g_buff2;
 char *modbuff = NULL;
+/* The prompt's own messages ("Playing ...", "Directory found ..."): not while
+   a program runs, a BASIC one (CurrentLinePtr) or a C one (RUN "x.c") */
+#ifdef rp2350
+extern bool tcc_picomite_running(void);
+#define AUDIO_AT_PROMPT (!CurrentLinePtr && !tcc_picomite_running())
+#else
+#define AUDIO_AT_PROMPT (!CurrentLinePtr)
+#endif
 modcontext *mcontext = NULL;
 int modfilesamplerate = 22050;
 char *pbuffp;
@@ -1523,7 +1531,7 @@ void MIPS16 cmd_play(void)
 		{
 			if (trackplaying == trackstoplay)
 			{
-				if (!CurrentLinePtr)
+				if (AUDIO_AT_PROMPT)
 					MMPrintString("Last track is playing\r\n");
 				return;
 			}
@@ -1540,7 +1548,7 @@ void MIPS16 cmd_play(void)
 		{
 			if (trackplaying == 0)
 			{
-				if (!CurrentLinePtr)
+				if (AUDIO_AT_PROMPT)
 					MMPrintString("First track is playing\r\n");
 				return;
 			}
@@ -2371,7 +2379,7 @@ void MIPS16 cmd_play(void)
 				trackplaying = 0;
 				DIR djd;
 				djd.pat = "*.wav";
-				if (!CurrentLinePtr)
+				if (AUDIO_AT_PROMPT)
 					MMPrintString("Directory found - commencing player\r\n");
 				FSerror = f_opendir(&djd, q);
 				for (;;)
@@ -2396,7 +2404,7 @@ void MIPS16 cmd_play(void)
 						strcat(alist[trackstoplay].fn, fno.fname);
 						str_replace(alist[trackstoplay].fn, "//", "/", 3);
 						str_replace(alist[trackstoplay].fn, "/./", "/", 3);
-						if (!CurrentLinePtr)
+						if (AUDIO_AT_PROMPT)
 						{
 							MMPrintString(fno.fname);
 							PRet();
@@ -2468,7 +2476,7 @@ void MIPS16 cmd_play(void)
 				trackplaying = 0;
 				DIR djd;
 				djd.pat = "*.flac";
-				if (!CurrentLinePtr)
+				if (AUDIO_AT_PROMPT)
 					MMPrintString("Directory found - commencing player\r\n");
 				FSerror = f_opendir(&djd, q);
 				for (;;)
@@ -2493,7 +2501,7 @@ void MIPS16 cmd_play(void)
 						strcat(alist[trackstoplay].fn, fno.fname);
 						str_replace(alist[trackstoplay].fn, "//", "/", 3);
 						str_replace(alist[trackstoplay].fn, "/./", "/", 3);
-						if (!CurrentLinePtr)
+						if (AUDIO_AT_PROMPT)
 						{
 							MMPrintString(fno.fname);
 							PRet();
@@ -2658,7 +2666,7 @@ void MIPS16 cmd_play(void)
 		setVolumes(vol_left, vol_right);
 		midienabled = 1;
 		miditest(0);
-		if (!CurrentLinePtr)
+		if (AUDIO_AT_PROMPT)
 			MMPrintString("Real Time MIDI mode enabled\r\n");
 		return;
 	}
@@ -2708,7 +2716,7 @@ void MIPS16 cmd_play(void)
 				trackplaying = 0;
 				DIR djd;
 				djd.pat = "*.mid";
-				if (!CurrentLinePtr)
+				if (AUDIO_AT_PROMPT)
 					MMPrintString("Directory found - commencing player\r\n");
 				FSerror = f_opendir(&djd, q);
 				for (;;)
@@ -2733,7 +2741,7 @@ void MIPS16 cmd_play(void)
 						strcat(alist[trackstoplay].fn, fno.fname);
 						str_replace(alist[trackstoplay].fn, "//", "/", 3);
 						str_replace(alist[trackstoplay].fn, "/./", "/", 3);
-						if (!CurrentLinePtr)
+						if (AUDIO_AT_PROMPT)
 						{
 							MMPrintString(fno.fname);
 							PRet();
@@ -2876,7 +2884,7 @@ void MIPS16 cmd_play(void)
 				trackplaying = 0;
 				DIR djd;
 				djd.pat = "*.mp3";
-				if (!CurrentLinePtr)
+				if (AUDIO_AT_PROMPT)
 					MMPrintString("Directory found - commencing player\r\n");
 				FSerror = f_opendir(&djd, q);
 				for (;;)
@@ -2901,7 +2909,7 @@ void MIPS16 cmd_play(void)
 						strcat(alist[trackstoplay].fn, fno.fname);
 						str_replace(alist[trackstoplay].fn, "//", "/", 3);
 						str_replace(alist[trackstoplay].fn, "/./", "/", 3);
-						if (!CurrentLinePtr)
+						if (AUDIO_AT_PROMPT)
 						{
 							MMPrintString(fno.fname);
 							PRet();
@@ -3041,7 +3049,7 @@ void MIPS16 cmd_play(void)
 		hxcmod_load(mcontext, (void *)modbuff, fsize);
 		if (!mcontext->mod_loaded)
 			error("Load failed");
-		if (!CurrentLinePtr)
+		if (AUDIO_AT_PROMPT)
 		{
 			MMPrintString("Playing ");
 			MMPrintString((char *)mcontext->song.title);

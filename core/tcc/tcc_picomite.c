@@ -1606,9 +1606,10 @@ static void pm_execute_do(const char *cmd)
         skipspace(cmdline);
         if (!SymAwareCommand(c))
             cmdline = SymExpandStatement(cmdline);
-        ScrewUpTimer = 1000;
+        /* (not EXECUTE's ScrewUpTimer: its 1 s limit would restart the
+           board in a PLAY MODFILE or LOAD IMAGE that takes longer, which
+           a program's own statement may) */
         commandtbl[c].fptr();
-        ScrewUpTimer = 0;
     }
 }
 
@@ -1623,12 +1624,10 @@ static void pm_execute(const char *cmd)
     {
         pm_execute_do(cmd);
         pm_trap_restore(&t);
-        ScrewUpTimer = 0;
         pm_lines_restore(&b);
         pm_temps_done();
         return;
     }
-    ScrewUpTimer = 0;
     memcpy(msg, MMErrMsg, MAXERRMSG);
     pm_trap_restore(&t);
     pm_lines_restore(&b);
@@ -2521,6 +2520,14 @@ void cmd_tcc(void)
     char line[STRINGSIZE];
     snprintf(line, sizeof(line), "%s", (char *)getCstring(cmdline));
     pm_exec(prefix, 2, line, "TCC failed", NULL);
+}
+
+/* A compiled C program is running (RUN "x.c", RUN of an ELF file): for the
+   firmware's messages meant only for the prompt, as CurrentLinePtr is for
+   a BASIC program */
+bool tcc_picomite_running(void)
+{
+    return pm_in_program;
 }
 
 /* Called where the MMBasic prompt lands after a longjmp(mark) (PicoMite.c).

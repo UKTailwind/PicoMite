@@ -716,6 +716,11 @@ use it instead.
 
 - An MMBasic error in the command or expression ends the program with that
   error. In a C CSUB, it is reported at the CSUB's call.
+- Unlike `EXECUTE`, a command may take as long as it needs (EXECUTE restarts
+  the board after 1 s): it is the program's own statement, as in a BASIC
+  program. Likewise the messages the firmware prints only at the prompt
+  (`Playing ...` of `PLAY MODFILE`, for instance) are not printed while a C
+  program runs.
 - The text is tokenised on every call (as `EXECUTE` does), which takes some
   tens of microseconds. That is fine for setting things up and for an
   occasional sound or sprite, but a hot loop is better served by the C
