@@ -11003,6 +11003,16 @@ int __not_in_flash_func(check_interrupt)(void)
         ProcessTouch();
     }
 #endif
+#ifdef USBKEYBOARD
+    else if (usb_touch_present && !calibrate)
+    {
+        /* A USB touch screen's gestures start and end in ProcessTouch
+           (touch_gesture_on_down/_on_up), so it runs for one without GUI
+           controls too, as on the CMM2: TOUCH(TAP), (DTAP), (HOLD) and the
+           swipes needed OPTION GUI CONTROLS, only the pinches did not. */
+        ProcessTouch();
+    }
+#endif
 #endif
     /* Cursor refresh lives in routinechecks() — it fires from the
        prompt's getchar loop too, so the cursor tracks the mouse even
