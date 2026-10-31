@@ -3,6 +3,7 @@
 #include "Hardware_Includes.h"
 #include "elf_loader.h"
 #include "elf_picomite.h"
+#include "core/pm_api.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -25,6 +26,12 @@ static uint32_t elf_firmware_id(void) {
         for (j = 0; j < 4; j++, v >>= 8)
             hash = (hash ^ (v & 255u)) * 16777619u;
     }
+    /* Common named exports can be bound by absolute address in a CSUB. */
+    {
+        uint32_t common = pm_core_firmware_id();
+        for (j = 0; j < 4; j++, common >>= 8)
+            hash = (hash ^ (common & 255u)) * 16777619u;
+    }
 #ifdef rp2350
     /* Native CSUBs can also bind pm_* symbols, not just CallTable entries. */
     {
@@ -38,9 +45,9 @@ static uint32_t elf_firmware_id(void) {
 
 static bool elf_resolve_symbol(const char *name, uintptr_t *value, void *ctx) {
     bool csub = (bool)(uintptr_t)ctx;
-    if (!strcmp(name, "__picomite_calltable")) {
-        *value = (uintptr_t)CallTable;
-        return true;
+    {
+        const void *addr = pm_core_resolve_symbol(name);
+        if (addr) { *value = (uintptr_t)addr; return true; }
     }
 #ifdef rp2350
     {

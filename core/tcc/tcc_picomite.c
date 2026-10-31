@@ -36,6 +36,7 @@
 #include <string.h>
 #include "tcc_picomite.h"
 #include "core/elf/elf_picomite.h"
+#include "core/pm_api.h"
 #include "include/picomite/serial.h"
 #include "include/picomite/i2c.h"
 #include "include/picomite/spi.h"
@@ -1240,20 +1241,13 @@ static void __attribute__((noreturn)) pm_program_error_tr(pm_trap *t)
     pm_program_error();
 }
 
-static int pm_hres(void) { return HRes; }
-static int pm_vres(void) { return VRes; }
-static void pm_cls(int c) { PM_CALL(ClearScreen(c)); }
-static void pm_pixel(int x, int y, int c) { PM_CALL(DrawPixel(x, y, c)); }
-static void pm_line_draw(int x1, int y1, int x2, int y2, int w, int c) { PM_CALL(DrawLine(x1, y1, x2, y2, w, c)); }
-static void pm_box(int x1, int y1, int x2, int y2, int c) { PM_CALL(DrawRectangle(x1, y1, x2, y2, c)); }
-static void pm_circle(int x, int y, int r, int w, int c, int fill) { PM_CALL(DrawCircle(x, y, r, w, c, fill, 1.0)); }
-static void pm_triangle(int x0, int y0, int x1, int y1, int x2, int y2, int c, int fill)
+/* Core services use this one common error/abort trampoline on RP2350.
+ * Their implementations and symbol lookup live in core/pm_api.c on both MCUs. */
+void tcc_picomite_api_call(void (*fn)(void *), void *arg)
 {
-    PM_CALL(DrawTriangle(x0, y0, x1, y1, x2, y2, c, fill));
+    PM_CALL(fn(arg));
 }
-static void pm_refresh(void) { PM_CALL(Display_Refresh()); }
 static void pm_print(const char *s) { pm_con_write(s, strlen(s)); }
-static unsigned long long pm_timer_us(void) { return time_us_64(); }
 
 static void pm_delay_us(unsigned int us)
 {
@@ -1275,28 +1269,7 @@ static void pm_pause(unsigned int ms)
     while (time_us_64() < end);
 }
 
-static int pm_inkey(void)
-{
-    pm_poll();
-    return MMInkey();
-}
 
-static void pm_pin_mode(int gp, int mode)
-{
-    PM_CALL(ExtCfg(codemap(gp), mode, 0));
-}
-
-static void pm_pin_write(int gp, int value)
-{
-    PM_CALL(ExtSet(codemap(gp), value));
-}
-
-static int pm_pin_read(int gp)
-{
-    volatile int v = 0;
-    PM_CALL(v = (int)ExtInp(codemap(gp)));
-    return v;
-}
 
 /* Shared with BASIC PIN(): the voltage filter is in PinVal(), raw ADC
    sampling in ExtInp(). No ADC reconfiguration or memory allocation. */
@@ -1433,10 +1406,7 @@ static void pm_yield(void)
     pm_poll();
 }
 
-static int pm_abort_requested(void)
-{
-    return MMAbort != 0;
-}
+
 
 /* UART C API: only ports explicitly opened by this C run may be used.
    An epoch prevents accidentally using a port BASIC closed and reopened. */
@@ -3620,7 +3590,7 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_vres)
     PM_SYM(pm_cls)
     PM_SYM(pm_pixel)
-    PM_SYM_AS(pm_line, pm_line_draw)
+
     PM_SYM(pm_box)
     PM_SYM(pm_circle)
     PM_SYM(pm_triangle)
@@ -3809,10 +3779,13 @@ static const char *const pm_csub_refused[] = {
 void *tcc_pm_resolve_symbol(const char *name)
 {
     unsigned int i;
+    const void *common;
     if (pm_csub_linking)
         for (i = 0; pm_csub_refused[i]; i++)
             if (strcmp(pm_csub_refused[i], name) == 0)
                 return NULL; /* "undefined symbol" */
+    common = pm_core_resolve_symbol(name);
+    if (common) return (void *)common;
     for (i = 0; i < sizeof(pm_syms) / sizeof(pm_syms[0]); i++)
         if (strcmp(pm_syms[i].name, name) == 0)
             return (void *)pm_syms[i].addr;
