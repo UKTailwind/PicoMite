@@ -230,68 +230,69 @@ On the PicoMite console, `RUN "elf_loader_smoke.o"` calls `main` and prints
 `ELF RUN OK`. The same object is used by `Bas/elf_loader_smoke.bas` as a CSUB,
 printing `ELF CSUB OK` through `CallTable`.
 
-### Common C API for external ELF objects (RP2040 and RP2350)
+### Common C runtime for external ELF objects (RP2040 and RP2350)
 
-The independent ELF loader now resolves **44 named core functions on both
-chips**, without requiring TinyCC. These exports live in `core/pm_api.c` and
-`core/pm_api_extra.c`; their implementations are compiled with the firmware:
+The external ELF32/ARM ET_REL loader resolves the **same named C-library and
+PicoMite API exports** on both chips. `core/pm_api.c`, `core/pm_api_extra.c`
+provide the original core services, while `core/pm_runtime*.c`,
+`core/pm_basic_runtime.c` and `core/pm_peripheral_runtime.c` implement the
+compiler-independent C execution environment. TinyCC still compiles C on
+RP2350, but is no longer needed to provide the C program's library symbols.
 
-| Area | Available functions |
+| Area | Available from both RP2040 and RP2350 |
 |---|---|
-| Graphics/display | `pm_hres`, `pm_vres`, `pm_cls`, `pm_pixel`, `pm_line`, `pm_box`, `pm_circle`, `pm_triangle`, `pm_refresh`, `pm_text`, `pm_draw_box`, `pm_draw_rbox`, `pm_colour`, `pm_mode`, `pm_font_width`, `pm_font_height`, `pm_get_framebuffer`, `pm_fb_colour`, `pm_blit_framebuffer`, `pm_framebuffer_copy` |
-| Input | `pm_inkey`, `pm_keydown`, `pm_mouse`, `pm_usb_device` |
-| GPIO | `pm_pin_mode`, `pm_pin_write`, `pm_pin_read` |
-| System/error reporting | `pm_timer_us`, `pm_abort_requested`, `pm_print`, `pm_yield`, `pm_delay_us`, `pm_pause`, `pm_errno`, `pm_errmsg`, `pm_error_clear` |
-| Sprites | `pm_sprite_show`, `pm_sprite_hide`, `pm_sprite_write`, `pm_sprite_close_all` |
-| PCM | `pm_pcm_play`, `pm_pcm_stop`, `pm_pcm_playing`, `pm_pcm_poll` |
+| Graphics, input, GPIO | The 44 previously shared `pm_*` services, plus `pm_mode`, framebuffer/BLIT commands, cursor, and image loading |
+| C library | `malloc`/`calloc`/`realloc`/`free`, `printf`/`fprintf`, `snprintf`, standard string/ctype/math functions, numeric conversion, `qsort`/`bsearch`, `time`, `clock`, `exit`, `abort` |
+| Files and directories | `fopen`, `fclose`, `fread`, `fwrite`, `fseek`, `ftell`, `fgets`, `fputs`, `stat`, `opendir`, `readdir`, `closedir`, `getcwd`, `remove`, `rename`, and related PicoMite file commands |
+| BASIC integration | `pm_execute`, `pm_eval_*`, `pm_try`, `pm_basic_sub`, `pm_basic_function`, `pm_var`, `pm_dim`, `pm_str_get`/`set`, `pm_settick` |
+| Peripherals | Typed `pm_serial_*`, `pm_i2c_*`, `pm_spi_*`, `pm_adc_*`, `pm_pwm_*`, `pm_pcm_start` and the existing core PCM functions |
+| System | `pm_api_version`, `pm_get_info`, `pm_alloc`, `pm_free`, `pm_mem_where`, `pm_get_mem_info`, and ARM EABI runtime helpers |
 
-The existing `__picomite_calltable` remains available. The runtime header
-files in `core/tcc/include/picomite/` also declare additional functions which
-are **not yet available in the RP2040 ELF resolver**. Declaring an external
-symbol or compiling with `-c` does not supply an implementation.
+The original `__picomite_calltable` remains unchanged. C functions requiring
+an active program have a managed run scope: heap allocations, file handles,
+serial/I2C/SPI ownership, and callbacks are released on normal return,
+`exit()`, CTRL-C and abnormal termination. These rules also apply to ELF
+started by `RUN "file.elf"` without any onboard compiler. CSUBs retain their
+stricter restrictions: the loader rejects allocations, file streams and
+other run-owned resources in a flash CSUB. `pm_try` catches MMBasic errors,
+not standard C `errno` values.
 
-From the repository root, compile the existing shared-API smoke test:
-
-```sh
-arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
-    -ffreestanding -fno-unwind-tables -O1 -I. -c \
-    C/core_pm_api_smoke.c -o core_pm_api_smoke.elf
-```
-
-Copy the resulting file to the SD card and run
-`RUN "B:/core_pm_api_smoke.elf"`. It draws a line and a pixel and prints
-`CORE PM API OK` through CallTable. One ARMv6-M `.elf` works on both targets.
-
-**RP2040 limitation:** the 44 named core functions listed above and
-`__picomite_calltable` are exported. TinyCC's full C runtime (`printf`,
-`malloc`, `fopen`, `pm_execute`, `pm_api_version`, and other services tied to
-its private run context) is **not** available there. In particular,
-`pm_pcm_start` is not yet exported through the common resolver: a persistent
-callback needs ownership and cleanup on all ELF exit paths. GCC's `-c`
-creates a relocatable object; it does not link in a C library. Unresolved
-symbols cause `ELF: undefined symbol ...`.
-
-The expanded regression test is `C/core_pm_extended_smoke.c`:
+An external object must use **ARMv6-M/soft-float** to run on both MCUs and
+must remain **ET_REL**; a linked fixed-address ET_EXEC executable cannot be
+loaded. Compile from the repository root with PicoMite's provided C headers:
 
 ```sh
 arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
-    -ffreestanding -fno-unwind-tables -O1 -Icore/tcc/include -c \
-    C/core_pm_extended_smoke.c -o core_pm_extended_smoke.elf
+    -ffreestanding -fno-unwind-tables -O1 -Icore/tcc/include -I. -c \
+    C/core_pm_runtime_smoke.c -o core_pm_runtime_smoke.elf
 ```
 
-Run with `RUN "B:/core_pm_extended_smoke.elf"` on both architectures.
-On RP2350 also run the source through TinyCC (`RUN "B:/core_pm_extended_smoke.c"`)
-to exercise the compiler resolver's fallback to the common API. Hardware
-verification is required for each firmware variant.
+The ELF runner on RP2040 uses a 24 KiB private C stack; TinyCC's RP2350
+run path uses a 32 KiB private stack. A large C array should be dynamically
+allocated or static, not placed on that stack.
 
-On RP2350 the loader additionally resolves the existing TinyCC runtime
-symbols, with the usual RUN/CSUB safety restrictions.
+Copy the `.elf` and its accompanying `.c` test file to B: and run
+`RUN "B:/core_pm_runtime_smoke.elf"`. It checks C allocation/reallocation,
+string/stdio, and reading a file through MMBasic's filesystem. Both MCUs
+use the same source and object when built for Cortex-M0+; TinyCC on RP2350
+may also run the source directly. This test must be verified on hardware.
+
+**ABI caution:** The bundled `<stdio.h>`, `<time.h>`, `<dirent.h>` and
+`<sys/stat.h>` define PicoMite's `FILE`, 64-bit `time_t`, `DIR`, and
+`struct stat` layouts. Do not substitute incompatible newlib structure
+layouts. A header declaration alone does not guarantee that a particular
+firmware variant supports the corresponding hardware feature (for example
+GUI controls, HDMI or wireless/network operations). The loader reports
+`ELF: undefined symbol ...` when an object requires a symbol that the
+firmware has not exported.
+
+The original shared-API tests remain available:
+`C/core_pm_api_smoke.c` and `C/core_pm_extended_smoke.c`.
 
 **Architecture/ABI:** ARMv6-M code can execute on the RP2350 ARM core, but
-ARMv8-M/Thumb-2 code cannot execute on RP2040. This instruction-set
-compatibility does not make firmware structures with different layouts
-binary-compatible. Build and use only the appropriate ABI. ELF CSUBs cannot
-contain writable `.data` or `.bss` sections.
+ARMv8-M/Thumb-2 code cannot execute on RP2040. Firmware data structure
+layouts may differ between builds. ELF CSUBs cannot contain writable
+`.data` or `.bss` sections, even though `RUN` ELF programs can.
 
 ---
 
@@ -1441,11 +1442,10 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 
 ## Known limitations
 
-- **Onboard TinyCC is RP2350-only.** External ELF ET_REL execution works on
-  both architectures, with the different symbol sets described above.
-  PSRAM is strongly recommended for compilation and the TinyCC runtime on
-  RP2350. The following C-library limitations describe that RP2350 runtime,
-  not a full C library on RP2040.
+- **Onboard TinyCC is RP2350-only.** External ELF ET_REL execution and the
+  compiler-independent C runtime work on both architectures. PSRAM is
+  strongly recommended for onboard compilation on RP2350; RP2040 uses its
+  available PicoMite heap for native code, stack, and C allocations.
 - No `scanf` family. Read lines with `fgets` and convert with `strtol`,
   `strtod` and similar.
 - No `setjmp`/`longjmp`, `signal`, `errno` values, locales, wide characters or
@@ -1474,7 +1474,9 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 
 | File | Purpose |
 |---|---|
-| `core/pm_api.c`, `core/pm_api.h` | Common native C API and named-symbol resolver for both chips |
+| `core/pm_api.c`, `core/pm_api_extra.c`, `core/pm_api.h` | Common graphics/input/PCM API and resolver for both chips |
+| `core/pm_runtime.c`, `core/pm_runtime_stdio.c`, `core/pm_runtime_commands.c` | Common C heap, libc, filesystem, and PicoMite statement services |
+| `core/pm_basic_runtime.c`, `core/pm_peripheral_runtime.c` | Common BASIC integration and managed native peripheral handles |
 | `core/elf/elf_loader.c`, `core/elf/elf_picomite.c` | Independent ELF linker and RUN/CSUB adapter |
 | `core/tcc/*.c, *.h` | TinyCC (library `PicoMiteTinyCC`), with PicoMite changes marked `TCC_PICOMITE` |
 | `core/tcc/config.h` | TinyCC configuration: Thumb-2, EABI, softfp (the firmware's float ABI), `rom:/include` |

@@ -4,6 +4,7 @@
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
 #include "core/pm_api.h"
+#include "core/pm_runtime.h"
 #include "pico/time.h"
 #include <stdint.h>
 #include <string.h>
@@ -16,6 +17,7 @@ extern void tcc_picomite_api_call(void (*fn)(void *), void *arg);
 #endif
 void pm_core_call(void (*fn)(void *), void *arg)
 {
+    pm_runtime_tick_service();
 #ifdef rp2350
     tcc_picomite_api_call(fn, arg);
 #else
@@ -170,7 +172,7 @@ const void *pm_core_resolve_symbol(const char *name)
     for (i = 0; i < sizeof(pm_core_symbols) / sizeof(pm_core_symbols[0]); ++i)
         if (strcmp(name, pm_core_symbols[i].name) == 0)
             return pm_core_symbols[i].address;
-    return NULL;
+    return pm_runtime_resolve_symbol(name);
 }
 
 /* External ELF CSUBs are linked by absolute address. On RP2040 their
@@ -183,6 +185,11 @@ unsigned pm_core_firmware_id(void)
         uint32_t value = (uint32_t)(uintptr_t)pm_core_symbols[i].address;
         for (j = 0; j < 4; ++j, value >>= 8)
             hash = (hash ^ (value & 255u)) * 16777619u;
+    }
+    {
+        uint32_t extra = pm_runtime_firmware_id();
+        for (j = 0; j < 4; ++j, extra >>= 8)
+            hash = (hash ^ (extra & 255u)) * 16777619u;
     }
     return hash ? hash : 1u;
 }

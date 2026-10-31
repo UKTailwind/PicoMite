@@ -4,6 +4,7 @@
 #include "elf_loader.h"
 #include "elf_picomite.h"
 #include "core/pm_api.h"
+#include "core/pm_runtime.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -45,6 +46,7 @@ static uint32_t elf_firmware_id(void) {
 
 static bool elf_resolve_symbol(const char *name, uintptr_t *value, void *ctx) {
     bool csub = (bool)(uintptr_t)ctx;
+    if (csub && pm_runtime_csub_forbidden(name)) return false;
     {
         const void *addr = pm_core_resolve_symbol(name);
         if (addr) { *value = (uintptr_t)addr; return true; }
@@ -319,7 +321,9 @@ static int elf_exec_argv_impl(int argc, char **argv, bool tcc_runtime) {
     else FreeMemory(image);
 #else
     running_image = image;
-    result = ((int (*)(int, char **))entry)(argc, argv);
+    pm_runtime_begin();
+    result = pm_runtime_call_main((int (*)(int, char **))entry, argc, argv);
+    pm_runtime_end();
     running_image = NULL;
     FreeMemory(image);
 #endif
@@ -432,6 +436,8 @@ void elf_picomite_run_file(const char *filename, const char *args) {
 void elf_picomite_abandoned(void) {
     if (!running) return;
     running = false;
+    /* C allocations must be released before the abandoned ELF image. */
+    pm_runtime_end();
     elf_stack_restore();
     if (running_image) FreeMemory(running_image);
     running_image = NULL;

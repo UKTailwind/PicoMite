@@ -36,6 +36,7 @@
 #include <string.h>
 #include "tcc_picomite.h"
 #include "core/elf/elf_picomite.h"
+#include "core/pm_runtime.h"
 #include "core/pm_api.h"
 #include "include/picomite/serial.h"
 #include "include/picomite/i2c.h"
@@ -283,24 +284,11 @@ static char *pm_strdup(const char *s)
 }
 
 /* Give every chunk back to the PicoMite heap. */
-/* pm_alloc's blocks (<picomite/memory.h>): straight from the MMBasic heap,
-   listed here so they go back with the arena */
-typedef union pm_block
-{
-    union pm_block *next;
-    long long align;
-} pm_block;
-static pm_block *pm_blocks;
-
+/* The compiled program's allocations are now owned by core/pm_runtime.c.
+ * This arena belongs solely to the compiler and generated machine code. */
 static void pm_heap_release(void)
 {
     pm_chunk *c = pm_chunks;
-    while (pm_blocks)
-    {
-        pm_block *next = pm_blocks->next;
-        FreeMemory(pm_blocks);
-        pm_blocks = next;
-    }
     while (c)
     {
         pm_chunk *next = c->next;
@@ -1202,6 +1190,7 @@ static long pm_clock(void)
 /* An MMBasic error (already untrapped) inside a pm_try: back to it */
 static void pm_try_catch(const char *msg, int err)
 {
+    pm_runtime_try_catch(msg, err);
     pm_tryframe *f = pm_try_top;
     if (f == NULL)
         return;
@@ -1783,72 +1772,6 @@ void pm_pwm_set_frequency(int slice, unsigned frequency_hz)
 void pm_pwm_close(int slice)
 {
     PM_CALL(PWM_Close(slice));
-}
-
-static void *pm_alloc(size_t size, int where)
-{
-    pm_block *b;
-    if (pm == NULL || size > (size_t)INT_MAX - sizeof(pm_block))
-        return NULL;
-    size += sizeof(pm_block);
-    if (where == 1)
-        b = GetSRAMMemoryNull((int)size);
-    else if (where == 2)
-        b = PSRAMsize ? GetPSMemoryNull((int)size) : NULL;
-    else
-        b = GetMemoryNull((int)size);
-    if (b == NULL)
-        return NULL;
-    b->next = pm_blocks;
-    pm_blocks = b;
-    return b + 1;
-}
-
-static void pm_free(void *p)
-{
-    pm_block **q, *b;
-    if (p == NULL)
-        return;
-    b = (pm_block *)p - 1;
-    for (q = &pm_blocks; *q; q = &(*q)->next)
-        if (*q == b)
-        {
-            *q = b->next;
-            FreeMemory(b);
-            return;
-        }
-}
-
-static int pm_mem_where(const void *p)
-{
-    const unsigned char *a = (const unsigned char *)p;
-    if (PSRAMsize && a >= (const unsigned char *)PSRAMbase && a < (const unsigned char *)(PSRAMbase + PSRAMsize))
-        return 2;
-    if (a >= MMHeap && a < MMHeap + heap_memory_size)
-        return 1;
-    return 0;
-}
-
-extern unsigned int SBitsGet(unsigned char *addr); /* core/Memory.c */
-
-static int pm_get_mem_info(void *out)
-{
-    struct
-    {
-        unsigned size, sram_total, sram_free, psram_total, psram_free;
-    } m;
-    unsigned char *a;
-    unsigned all = (unsigned)FreeSpaceOnHeap(), ps = 0;
-    memset(&m, 0, sizeof(m));
-    if (PSRAMsize)
-        for (a = (unsigned char *)PSRAMbase; a < (unsigned char *)(PSRAMbase + PSRAMsize); a += PAGESIZE)
-            if (!(SBitsGet(a) & PUSED))
-                ps += PAGESIZE;
-    m.sram_total = heap_memory_size;
-    m.sram_free = all - ps;
-    m.psram_total = PSRAMsize;
-    m.psram_free = ps;
-    return pm_fill(out, &m, sizeof(m));
 }
 
 /* PM_DEFAULT in <picomite/graphics.h>: the argument as if left out in BASIC */
@@ -3632,10 +3555,6 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_api_version)
     PM_SYM(pm_get_info)
     PM_SYM(pm_abort_requested)
-    PM_SYM(pm_alloc)
-    PM_SYM(pm_free)
-    PM_SYM(pm_mem_where)
-    PM_SYM(pm_get_mem_info)
     PM_SYM(pm_execute)
     PM_SYM(pm_basic_sub)
     PM_SYM(pm_basic_function)
@@ -3750,18 +3669,11 @@ static const char *const pm_csub_refused[] = {
 void *tcc_pm_resolve_symbol(const char *name)
 {
     unsigned int i;
-    const void *common;
-    if (pm_csub_linking)
-        for (i = 0; pm_csub_refused[i]; i++)
-            if (strcmp(pm_csub_refused[i], name) == 0)
-                return NULL; /* "undefined symbol" */
-    common = pm_core_resolve_symbol(name);
-    if (common) return (void *)common;
-    for (i = 0; i < sizeof(pm_syms) / sizeof(pm_syms[0]); i++)
-        if (strcmp(pm_syms[i].name, name) == 0)
-            return (void *)pm_syms[i].addr;
-    /* The compiler must resolve the same core services as the ELF loader.
-       The CSUB safety filter above must be evaluated before this lookup. */
+    if (pm_csub_linking) {
+        for (i = 0; pm_csub_refused[i]; ++i)
+            if (strcmp(pm_csub_refused[i], name) == 0) return NULL;
+        if (pm_runtime_csub_forbidden(name)) return NULL;
+    }
     return (void *)pm_core_resolve_symbol(name);
 }
 
@@ -3795,14 +3707,16 @@ int tcc_pm_call_main(int (*prog_main)(int, char **), int argc_, char **argv_)
     pm_prog_started = true;
     pm_prog_end = PM_END_NONE;
     pm_line_len = pm_line_pos = 0;
+    pm_runtime_begin();
     if (setjmp(pm->prog_jmp) == 0)
     {
         tcc_pm_running = true;
-        ret = prog_main(argc_, argv_);
+        ret = pm_runtime_call_main(prog_main, argc_, argv_);
     }
     else
         ret = pm_exit_code;
     tcc_pm_running = false;
+    pm_runtime_end();
     return ret;
 }
 
@@ -3887,7 +3801,6 @@ static void pm_state_reset(void)
     pm = NULL;
     pm_try_top = NULL;
     pm_tick_any = false;
-    pm_blocks = NULL;
     pm_chunks = NULL;
     pm_freep = NULL;
     tcc_pm_running = pm_prog_started = false;
@@ -4139,6 +4052,8 @@ void tcc_picomite_abandoned(void)
         return;
     pm_active = false;
     tcc_pm_running = false;
+    /* A longjmp past the normal C exit cannot bypass heap cleanup. */
+    pm_runtime_end();
     PCMRunCleanup();
     if (pm != NULL)
     {
@@ -4172,29 +4087,8 @@ void tcc_picomite_abandoned(void)
    symbol table, which is all a C CSUB binds to (FNV-1a). */
 uint32_t tcc_pm_firmware_id(void)
 {
-    static uint32_t id;
-    unsigned int i;
-    if (id == 0)
-    {
-        uint32_t h = 2166136261u;
-        for (i = 0; i < sizeof(pm_syms) / sizeof(pm_syms[0]); i++)
-        {
-            uint32_t a = (uint32_t)pm_syms[i].addr;
-            int b;
-            for (b = 0; b < 4; b++, a >>= 8)
-                h = (h ^ (a & 0xff)) * 16777619u;
-        }
-        {
-            /* TCC CSUBs also bind the common core functions by address.
-             * Include that table in their firmware stamp. */
-            uint32_t a = pm_core_firmware_id();
-            int b;
-            for (b = 0; b < 4; ++b, a >>= 8)
-                h = (h ^ (a & 0xff)) * 16777619u;
-        }
-        id = (h == 0 || h == 0xffffffffu) ? 1 : h;
-    }
-    return id;
+    /* TinyCC-compiled C code and external ELF now share core symbol bindings. */
+    return pm_core_firmware_id();
 }
 
 static void pm_push_word(char ***argv_, int *argc_, int *cap, char *w)
