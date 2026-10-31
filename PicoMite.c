@@ -78,6 +78,7 @@ extern "C"
 #include "class/cdc/cdc_device.h"
 #endif
 #endif
+#include "core/elf/elf_picomite.h"
 #ifndef rp2350
 #include "hardware/structs/ssi.h"
 #include "hardware/vreg.h"
@@ -98,7 +99,6 @@ extern "C"
 #ifdef rp2350
 #include "core/tcc/tcc_picomite.h" /* tcc_picomite_abandoned */
 #endif
-#include "core/elf/elf_picomite.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
@@ -3809,6 +3809,16 @@ uint32_t testPSRAM(void)
             SetFlashMap();
         }
 #ifndef HDMI
+#ifdef MURMULATOR_M2P1
+        /* Migrate only the incorrect pin defaults of the first M2P1VGA
+           test build, without erasing the flash storage or user data. */
+        if (Option.VGA_HSYNC == PINMAP[12] && Option.VGA_BLUE == PINMAP[15])
+        {
+            Option.VGA_HSYNC = PINMAP[18];
+            Option.VGA_BLUE = PINMAP[13];
+            SaveOptions();
+        }
+#endif
         if (Option.VGA_HSYNC == 0)
         {
             Option.VGA_HSYNC = 21;

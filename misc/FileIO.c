@@ -8235,6 +8235,28 @@ void ResetOptions(bool startup)
     Option.ColourCode = 1;
     Option.NoHeartbeat = 1;
 #endif
+#ifdef MURMULATOR_M2P1
+    /* M2P1 VGA: GP12..17 = RGB222, GP18 = HSYNC, GP19 = VSYNC.
+       Keep RGB121 output on the four consecutive GP13..16 lines.
+       GP12 and GP17 remain unconfigured for this temporary test. */
+    strcpy((char *)Option.platform, "Murmulator 2");
+    Option.VGA_HSYNC = PINMAP[18]; /* VSYNC uses GP19 */
+    Option.VGA_BLUE = PINMAP[13];  /* 4-bit PIO output uses GP13..16 */
+    Option.KEYBOARD_CLOCK = PINMAP[2];
+    Option.KEYBOARD_DATA = PINMAP[3];
+    Option.KeyboardConfig = CONFIG_US;
+    Option.MOUSE_CLOCK = PINMAP[0];
+    Option.MOUSE_DATA = PINMAP[1];
+    Option.SD_CS = PINMAP[5];
+    Option.SD_CLK_PIN = PINMAP[6];
+    Option.SD_MOSI_PIN = PINMAP[7];
+    Option.SD_MISO_PIN = PINMAP[4];
+    Option.AUDIO_L = PINMAP[10];
+    Option.AUDIO_R = PINMAP[11];
+    Option.AUDIO_SLICE = 5; /* GP10/GP11: PWM slice 5 */
+    Option.ColourCode = 1;
+    Option.NoHeartbeat = 1;
+#endif
 
     if (!SuppressOptionFlash)
     {

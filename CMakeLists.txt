@@ -22,6 +22,7 @@ set(VALID_COMPILE_VARIANTS
 	PICOUSB
 	PICOMIN
 	VGA
+	M2P1VGA
 	VGAUSB
 	WEB
 	PICORP2350
@@ -43,7 +44,7 @@ set(VALID_COMPILE_VARIANTS
 # Guard restored: without it, this set() shadows the -DCOMPILE=X passed
 # by buildpicomite.bat and every variant silently builds as the default.
 if(NOT DEFINED COMPILE)
-	set(COMPILE M2P2HDMI)
+	set(COMPILE M2P1VGA)
 endif()
 
 list(FIND VALID_COMPILE_VARIANTS "${COMPILE}" COMPILE_INDEX)
@@ -174,6 +175,7 @@ set(FULL_RP2040_VARIANTS
 	PICO
 	PICOUSB
 	VGA
+	M2P1VGA
 	VGAUSB
 	WEB
 	PICOMIN
@@ -275,6 +277,7 @@ set(RAYCASTER_VARIANTS
 
 set(VGA_PIO_VARIANTS
 	VGA
+	M2P1VGA
 	VGAUSB
 	VGARP2350
 	VGAUSBRP2350
@@ -282,6 +285,7 @@ set(VGA_PIO_VARIANTS
 
 set(VGA_VARIANTS
 	VGA
+	M2P1VGA
 	VGAUSB
 	VGARP2350
 	VGAUSBRP2350
@@ -307,6 +311,7 @@ set(PICOMITE_VARIANTS
 
 set(PICO_MULTICORE_VARIANTS
 	VGA
+	M2P1VGA
 	PICO
 	PICOMIN
 	HDMI
@@ -978,6 +983,11 @@ if(IS_HDMI)
 	if(COMPILE STREQUAL "HDMIBTH" OR COMPILE STREQUAL "HDMIWEB")
 		target_compile_definitions(PicoMite PRIVATE HDMICUTDOWN)
 	endif()
+endif()
+
+# M2P1 VGA reuses the RP2040 PicoMiteVGA PIO scanout unchanged.
+if(COMPILE STREQUAL "M2P1VGA")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P1)
 endif()
 
 # M2P2 HDMI uses the standard HDMI firmware with factory pin defaults.

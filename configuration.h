@@ -282,7 +282,14 @@ extern "C"
 #define MAXMODES 2
 #define MAX_CPU 378000
 #define MIN_CPU 252000
-#ifdef USBKEYBOARD
+#ifdef MURMULATOR_M2P1
+   /* ELF-enabled RP2040 Murmulator 2 VGA test build. Separate flash map
+      from standard VGA; 16 KB-aligned, with space for the ELF loader. */
+#define FLASH_TARGET_OFFSET (960 * 1024)
+#define MagicKey 0x4D325031 /* M2P1: invalidate options of other layouts */
+#define HEAP_MEMORY_SIZE (120 * 1024)
+#define MAX_PROG_SIZE (100 * 1024)
+#elif defined(USBKEYBOARD)
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c).
       It fitted without this at +284 bytes, and the font handling then took all
       but 108 of them - which is no place to stop. */
