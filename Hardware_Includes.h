@@ -689,6 +689,7 @@ extern int radioready;
 #define PC3_HEARTBEAT_GP 25 /* OPTION RADIO NONE: the LED on GP25 instead of the chip's GPIO0 */
 #endif
 extern int WebScanActive; // WEB SCAN is waiting for results: ProcessWeb polls with no connection
+extern volatile int WebInCallback; // inside an lwIP callback: WebHeartbeat leaves the chip alone
 void WebHeartbeat(uint64_t timenow);
 #endif
 

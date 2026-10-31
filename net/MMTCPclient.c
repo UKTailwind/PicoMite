@@ -136,7 +136,15 @@ err_t tcp_client_recv(void *arg, struct altcp_pcb *tpcb, struct pbuf *p, err_t e
     {
         if (state->buffer != NULL)
         {
+            /* WebInCallback: routinechecks' heartbeat must not toggle the LED
+               here. That is a WiFi-chip ioctl, and while it waits the driver
+               hands any packet that has arrived to lwIP, which came back into
+               this callback: the rest of the reply was copied in first and
+               this packet went at the end (6.04.00 RC2 onwards, when the
+               heartbeat moved to routinechecks). */
+            WebInCallback++;
             routinechecks(); // don't know why I'm doing this but it solves a race condition for the RP2350
+            WebInCallback--;
             const uint16_t buffer_left = state->BUF_SIZE - state->buffer_len;
             state->buffer_len += pbuf_copy_partial(p, (void *)state->buffer + state->buffer_len,
                                                    p->tot_len > buffer_left ? buffer_left : p->tot_len, 0);

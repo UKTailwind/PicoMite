@@ -394,10 +394,17 @@
        transaction), so it is driven from the main loop: routinechecks calls
        this every 100 us or so, connected or not. It blinks every 0.5 s with a
        connection and every 1 s without. */
+    volatile int WebInCallback = 0;
     void __not_in_flash_func(WebHeartbeat)(uint64_t timenow)
     {
         static int lastonoff = 0;
         static uint64_t lastheartmsec = 0;
+        /* Not from inside an lwIP callback (MMTCPclient's receive calls
+           routinechecks): a toggle is a chip ioctl, during which the driver
+           delivers received packets to lwIP and re-enters the callback. The
+           blink just comes on the next call from the main loop. */
+        if (WebInCallback)
+            return;
 #ifdef PICOMITEPC3
         if (!radioready) /* the chip is up in every OPTION RADIO setting; the WiFi need not be */
             return;
