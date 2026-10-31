@@ -3478,7 +3478,11 @@ typedef struct
 #define PM_SYM(n) {#n, (const void *)&n},
 #define PM_SYM_AS(n, f) {#n, (const void *)&f},
 
+/* Match the symbol exported by the standalone ELF loader for external objects. */
+extern const void *const CallTable[];
+
 static const pm_sym pm_syms[] = {
+    PM_SYM_AS(__picomite_calltable, CallTable)
     /* stdio */
     PM_SYM_AS(printf, tcc_pm_printf)
     PM_SYM_AS(fprintf, tcc_pm_fprintf)

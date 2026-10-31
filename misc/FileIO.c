@@ -4693,7 +4693,21 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
     HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     if (!BasicFileOpen(p, fnbr, FA_READ))
         return false;
-    p = buf = GetTempMemory(EDIT_BUFFER_SIZE - 2048); // get all the memory while leaving space for the couple of buffers defined and the file handle
+    /* The source buffer lives through SaveProgramToFlash(), including ELF
+       CSUB linking.  Reserving almost the entire heap here leaves no room
+       even for a tiny object on a board without PSRAM.  The raw file size is
+       an upper bound for the stored source (also with CRUNCH), apart from the
+       generated path header.  Keep the existing 512-byte safety margin. */
+    size_t source_buf_size = EDIT_BUFFER_SIZE - 2048;
+    int source_file_size = filesource[fnbr] == FATFSFILE
+        ? (int)f_size(FileTable[fnbr].fptr)
+        : (int)lfs_file_size(&lfs, FileTable[fnbr].lfsptr);
+    if (source_file_size >= 0) {
+        size_t required = (size_t)source_file_size + strlen(q) + 8u + 512u;
+        if (required < source_buf_size)
+            source_buf_size = required;
+    }
+    p = buf = GetTempMemory(source_buf_size);
     *p++ = '\'';
     *p++ = '#';
     strcpy(p, filesystem_drive_prefix(CurrentFileSystem));
@@ -4712,7 +4726,7 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
         CrunchData((unsigned char **)&p, 0);
     while (!FileEOF(fnbr))
     { // while waiting for the end of file
-        if ((p - buf) >= EDIT_BUFFER_SIZE - 2048 - 512)
+        if ((size_t)(p - buf) >= source_buf_size - 512u)
             StandardError(29);
         c = FileGetChar(fnbr) & 0x7f;
         if (isprint(c) || c == '\r' || c == '\n' || c == TAB)

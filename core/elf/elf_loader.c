@@ -193,7 +193,7 @@ static bool layout_init(Layout *l, const void *object, size_t len, uintptr_t bas
             return fail(err, cap, "ELF: section outside file");
         if (s->type == SHT_RELA) return fail(err, cap, "ELF: RELA not supported");
         if ((s->flags & SHF_ALLOC) == 0) continue;
-        if (!writable && (s->flags & SHF_WRITE))
+        if (!writable && (s->flags & SHF_WRITE) && s->size != 0)
             return fail(err, cap, "ELF: CSUB cannot have writable sections");
         if (s->align > 4096u || base > UINT32_MAX - cursor) return fail(err, cap, "ELF: invalid alignment");
         {
