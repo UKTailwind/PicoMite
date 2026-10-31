@@ -564,6 +564,8 @@ that lacks a function reports `undefined symbol`.
 | 3 | `framebuffer.h` |
 | 4 | `graphics.h`: `pm_draw_rbox`; `audio.h`: `pm_play_tone`, `_wav`, `_flac`, `_mp3`, `_midifile`, `_pause`, `_resume`, `_next`, `_previous`, `_close`, `_volume`, `_bbc_sound`, `_bbc_envelope`, `pm_sound` |
 | 5 | `serial.h`: typed COM1/COM2 UART open, read, write, status, flush and close |
+| 6 | `i2c.h`: typed I2C0/I2C1 master open/close, read/write, repeated-START transfer, probe |
+| 7 | `spi.h`: SPI0/SPI1 master, modes 0..3, 4..16 bits, binary transfers |
 
 Structs that
 the firmware fills start with a `size` field, which the program sets to
@@ -955,6 +957,81 @@ depend on the board and its currently reserved peripherals.
 This is a **polling API**, not an IRQ callback API. It deliberately never
 runs C code inside a UART interrupt. Concurrent BASIC `OPEN`/`CLOSE` on a
 C-owned port is unsupported; a handle is rejected if the port was replaced.
+
+#### `<picomite/i2c.h>`: I2C0/I2C1 master (API version 6)
+
+The firmware's BASIC `I2C` and `I2C2` commands and the native C API use the
+same low-level master transfer service in `io/I2C.c`, without invoking the
+MMBasic tokenizer. Slave mode remains available in BASIC only.
+
+```c
+#include <picomite/i2c.h>
+
+pm_i2c_t bus = pm_i2c_open(0, 400, 1000); /* I2C0, 400 kHz, 1000 ms */
+unsigned char reg = 0x00, value;
+int status = pm_i2c_transfer(bus, 0x68, &reg, 1, &value, 1);
+pm_i2c_close(bus);
+```
+
+The C caller must assign both I2C pins using BASIC `SETPIN` before running.
+`pm_i2c_open(bus, speed_khz, timeout_ms)` accepts bus 0 or 1, speed 100,
+400 or 1000 kHz (0 defaults to 100), and 100..10000 ms (0 defaults to 1000).
+The operation refuses buses already open for BASIC, configured as slaves,
+reserved by SYSTEM I2C, or using reserved GPIOs. No pin reassignment occurs.
+Handles belong to the current C run and are invalidated by BASIC `I2C CLOSE`.
+The bus is closed automatically on normal exit, error, or Ctrl+C.
+
+`pm_i2c_transfer` sends `tx` then reads `rx` under a **repeated START**,
+with a STOP at the end. `pm_i2c_write`/`pm_i2c_read` each issue a STOP.
+Both lengths must not be zero and may be at most 65535 bytes each;
+addresses are 7-bit (0..127). The buffers are used directly, without
+allocating copies. Each transfer phase has the configured timeout.
+
+Transfer functions return **0** on success, **1** on NACK/short transfer,
+**2** on timeout. The status is independent of BASIC's `MM.I2C`.
+`pm_i2c_probe` returns 1 on ACK, 0 on NACK, -1 on timeout; like BASIC
+`I2C CHECK`, it reads one byte and can have device-specific side effects.
+Incorrect arguments or unavailable resources raise PicoMite errors,
+catchable with `pm_try()`. The C API is unavailable to external CSUBs;
+no existing `CallTable` entries change.
+
+Example: [`C/i2c_reg_read.c`](../C/i2c_reg_read.c) reads one 8-bit register
+from a device specified by command-line arguments. It requires an actual
+device supporting this register-read protocol.
+
+#### `<picomite/spi.h>`: SPI0/SPI1 master (API version 7)
+
+The C API uses `io/SPI.c`'s low-level service, also used by BASIC's SPI
+and SPI2 operations. It bypasses the MMBasic tokenizer.
+
+```c
+#include <picomite/spi.h>
+pm_spi_t port = pm_spi_open(0, 1000000, 0, 8); /* SPI0, 1 MHz, mode 0, 8-bit */
+unsigned char tx[2] = {0x9f, 0};
+unsigned char rx[2];
+pm_spi_transfer(port, tx, rx, 2); /* full-duplex, two words */
+pm_spi_close(port);
+```
+
+Configure TX/RX/SCK through BASIC `SETPIN` before running. The API rejects
+pins or controllers reserved by SYSTEM SPI, and buses already open from
+BASIC. `pm_spi_open(bus, speed_hz, mode, bits)` accepts bus 0/1, SPI mode
+0..3, and 4..16 bits per word. Zero speed defaults to 1 MHz; zero bits
+means 8-bit. `pm_spi_transfer` sends and receives simultaneously; for
+read-only or write-only use `pm_spi_read` and `pm_spi_write` (read transmits
+zero dummy words). The count is **words**, not bytes: buffers use `uint8_t`
+for 4..8 bits, `uint16_t` for 9..16 bits. For 16-bit data, pointers must be
+2-byte aligned. The functions process chunks of 64 words and service
+PicoMite background tasks between chunks. Up to 65535 words per call.
+
+No automatic chip select is configured: manage CS with a separate GPIO as
+required by the target SPI device. The full-duplex API does not support
+half-duplex 3-wire SPI or DMA. Error conditions and stale descriptors raise
+PicoMite errors, catchable using `pm_try()`. All C-owned SPI buses close
+on program exit, error, or Ctrl+C. External CSUBs cannot use this API.
+
+[`C/spi_loopback.c`](../C/spi_loopback.c) tests SPI0 with TX joined to RX.
+
 #### `<picomite/basic.h>`: MMBasic's commands and functions
 
 ```c

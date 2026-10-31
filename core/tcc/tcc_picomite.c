@@ -36,6 +36,8 @@
 #include <string.h>
 #include "tcc_picomite.h"
 #include "include/picomite/serial.h"
+#include "include/picomite/i2c.h"
+#include "include/picomite/spi.h"
 
 #ifndef TCC_PM_STACK_SIZE
 #define TCC_PM_STACK_SIZE (32 * 1024) /* compiler + compiled program */
@@ -361,6 +363,12 @@ struct pm_state
     bool in_tick; /* a tick function is running: not again until it returns */
     unsigned serial_owned; /* bit 0: COM1, bit 1: COM2 */
     unsigned serial_epoch[2];
+    unsigned i2c_owned; /* bit 0: I2C0, bit 1: I2C1 */
+    unsigned i2c_epoch[2];
+    unsigned i2c_timeout[2];
+    unsigned spi_owned;
+    unsigned spi_epoch[2];
+    unsigned spi_bits[2];
     pm_file files[TCC_PM_MAX_FILES];
     pm_file con_in, con_out, con_err;
     jmp_buf prog_jmp; /* tcc_pm_call_main: exit() and errors of the program */
@@ -1291,7 +1299,7 @@ static int pm_pin_read(int gp)
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 5 /* (include/picomite/system.h: what each version added) */
+#define PM_API_VERSION 7 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -1564,6 +1572,190 @@ void pm_serial_close(pm_serial_t port)
     PM_CALL(raw_port = pm_serial_require(port));
     pm->serial_owned &= ~(1u << (raw_port - 1));
     SerialClose(raw_port);
+}
+
+/* I2C handles: low two bits are bus + 1; the remaining bits are an epoch. */
+static int pm_i2c_require(pm_i2c_t handle)
+{
+    unsigned h = (unsigned)handle;
+    int bus = (int)(h & 3u) - 1;
+    if (!tcc_pm_running || pm == NULL || bus < 0 || bus > 1 ||
+        !(pm->i2c_owned & (1u << bus)) ||
+        pm->i2c_epoch[bus] != I2C_MasterEpoch(bus) ||
+        (pm->i2c_epoch[bus] & 0x1fffffffu) != (h >> 2) ||
+        !I2C_MasterIsOpen(bus))
+        error("I2C bus not owned by C program");
+    return bus;
+}
+
+static void pm_i2c_cleanup(void)
+{
+    if (pm == NULL)
+        return;
+    for (int bus = 0; bus < 2; bus++)
+        if ((pm->i2c_owned & (1u << bus)) &&
+            pm->i2c_epoch[bus] == I2C_MasterEpoch(bus) &&
+            I2C_MasterIsOpen(bus))
+            I2C_MasterClose(bus);
+    pm->i2c_owned = 0;
+}
+
+static int pm_i2c_open_do(int bus, unsigned speed_khz, unsigned timeout_ms)
+{
+    if (!tcc_pm_running || pm == NULL || bus < 0 || bus > 1)
+        error("Invalid I2C bus");
+    if (pm->i2c_owned & (1u << bus))
+        error("I2C bus already owned by C program");
+    if (!speed_khz)
+        speed_khz = 100;
+    if (!timeout_ms)
+        timeout_ms = 1000;
+    I2C_MasterOpen(bus, (int)speed_khz, timeout_ms);
+    pm->i2c_owned |= 1u << bus;
+    pm->i2c_epoch[bus] = I2C_MasterEpoch(bus);
+    pm->i2c_timeout[bus] = timeout_ms;
+    return (int)(((pm->i2c_epoch[bus] & 0x1fffffffu) << 2) | (unsigned)(bus + 1));
+}
+
+pm_i2c_t pm_i2c_open(int bus, unsigned speed_khz, unsigned timeout_ms)
+{
+    volatile int handle = 0;
+    PM_CALL(handle = pm_i2c_open_do(bus, speed_khz, timeout_ms));
+    return handle;
+}
+
+int pm_i2c_transfer(pm_i2c_t handle, unsigned address, const void *tx,
+                           unsigned txlen, void *rx, unsigned rxlen)
+{
+    volatile int bus = -1;
+    int status;
+    PM_CALL(bus = pm_i2c_require(handle));
+    if (address > 0x7fu || (!txlen && !rxlen) ||
+        txlen > 65535u || rxlen > 65535u ||
+        (txlen && tx == NULL) || (rxlen && rx == NULL))
+        PM_CALL(error("Invalid I2C transfer"));
+    status = I2C_MasterTransfer(bus, address, tx, txlen, rx, rxlen, 0,
+                                pm->i2c_timeout[bus]);
+    pm_yield();
+    return status;
+}
+
+int pm_i2c_write(pm_i2c_t handle, unsigned address, const void *tx, unsigned len)
+{
+    return pm_i2c_transfer(handle, address, tx, len, NULL, 0);
+}
+
+int pm_i2c_read(pm_i2c_t handle, unsigned address, void *rx, unsigned len)
+{
+    return pm_i2c_transfer(handle, address, NULL, 0, rx, len);
+}
+
+/* Like BASIC I2C CHECK, probing reads one byte (it can advance a register pointer). */
+int pm_i2c_probe(pm_i2c_t handle, unsigned address)
+{
+    unsigned char sample = 0;
+    int status = pm_i2c_read(handle, address, &sample, 1);
+    return status == 0 ? 1 : status == 1 ? 0 : -1;
+}
+
+void pm_i2c_close(pm_i2c_t handle)
+{
+    volatile int bus = -1;
+    PM_CALL(bus = pm_i2c_require(handle));
+    pm->i2c_owned &= ~(1u << bus);
+    I2C_MasterClose(bus);
+}
+
+static int pm_spi_require(pm_spi_t handle)
+{
+    unsigned h = (unsigned)handle;
+    int bus = (int)(h & 3u) - 1;
+    if (!tcc_pm_running || pm == NULL || bus < 0 || bus > 1 ||
+        !(pm->spi_owned & (1u << bus)) ||
+        pm->spi_epoch[bus] != SPI_MasterEpoch(bus) ||
+        (pm->spi_epoch[bus] & 0x1fffffffu) != (h >> 2) ||
+        !SPI_MasterIsOpen(bus))
+        error("SPI bus not owned by C program");
+    return bus;
+}
+
+static void pm_spi_cleanup(void)
+{
+    if (pm == NULL) return;
+    for (int bus = 0; bus < 2; ++bus)
+        if ((pm->spi_owned & (1u << bus)) &&
+            pm->spi_epoch[bus] == SPI_MasterEpoch(bus) &&
+            SPI_MasterIsOpen(bus))
+            SPI_MasterClose(bus);
+    pm->spi_owned = 0;
+}
+
+static int pm_spi_open_do(int bus, unsigned speed_hz, unsigned mode, unsigned bits)
+{
+    if (!tcc_pm_running || pm == NULL || bus < 0 || bus > 1)
+        error("Invalid SPI bus");
+    if (pm->spi_owned & (1u << bus))
+        error("SPI bus already owned by C program");
+    if (mode > 3 || (bits != 0 && (bits < 4 || bits > 16)))
+        error("Invalid SPI configuration");
+    if (!speed_hz) speed_hz = 1000000;
+    if (!bits) bits = 8;
+    SPI_MasterOpen(bus, speed_hz, mode, bits);
+    pm->spi_owned |= 1u << bus;
+    pm->spi_epoch[bus] = SPI_MasterEpoch(bus);
+    pm->spi_bits[bus] = bits;
+    return (int)(((pm->spi_epoch[bus] & 0x1fffffffu) << 2) | (unsigned)(bus + 1));
+}
+
+pm_spi_t pm_spi_open(int bus, unsigned speed_hz, unsigned mode, unsigned bits)
+{
+    volatile int handle = 0;
+    PM_CALL(handle = pm_spi_open_do(bus, speed_hz, mode, bits));
+    return handle;
+}
+
+int pm_spi_transfer(pm_spi_t handle, const void *tx, void *rx, unsigned count)
+{
+    volatile int bus = -1;
+    unsigned done = 0, bytes;
+    PM_CALL(bus = pm_spi_require(handle));
+    bytes = pm->spi_bits[bus] <= 8 ? 1 : 2;
+    if (count > 65535u || (count && tx == NULL && rx == NULL) ||
+        (bytes == 2 && (((uintptr_t)tx & 1u) || ((uintptr_t)rx & 1u))))
+        PM_CALL(error("Invalid SPI transfer"));
+    while (done < count)
+    {
+        unsigned n = count - done;
+        int sent;
+        if (n > 64) n = 64;
+        sent = SPI_MasterTransfer(bus,
+            tx ? (const unsigned char *)tx + done * bytes : NULL,
+            rx ? (unsigned char *)rx + done * bytes : NULL, n);
+        if (sent != (int)n)
+            PM_CALL(error("SPI transfer failed"));
+        done += n;
+        pm_yield();
+        PM_CALL(bus = pm_spi_require(handle));
+    }
+    return (int)done;
+}
+
+int pm_spi_write(pm_spi_t handle, const void *tx, unsigned count)
+{
+    return pm_spi_transfer(handle, tx, NULL, count);
+}
+
+int pm_spi_read(pm_spi_t handle, void *rx, unsigned count)
+{
+    return pm_spi_transfer(handle, NULL, rx, count);
+}
+
+void pm_spi_close(pm_spi_t handle)
+{
+    volatile int bus = -1;
+    PM_CALL(bus = pm_spi_require(handle));
+    pm->spi_owned &= ~(1u << bus);
+    SPI_MasterClose(bus);
 }
 
 static void *pm_alloc(size_t size, int where)
@@ -3340,6 +3532,19 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_serial_available)
     PM_SYM(pm_serial_flush)
     PM_SYM(pm_serial_close)
+    /* <picomite/i2c.h> */
+    PM_SYM(pm_i2c_open)
+    PM_SYM(pm_i2c_close)
+    PM_SYM(pm_i2c_transfer)
+    PM_SYM(pm_i2c_write)
+    PM_SYM(pm_i2c_read)
+    PM_SYM(pm_i2c_probe)
+    /* <picomite/spi.h> */
+    PM_SYM(pm_spi_open)
+    PM_SYM(pm_spi_close)
+    PM_SYM(pm_spi_transfer)
+    PM_SYM(pm_spi_write)
+    PM_SYM(pm_spi_read)
     /* <picomite/system.h>, <picomite/memory.h>, <picomite/graphics.h> */
     PM_SYM(pm_api_version)
     PM_SYM(pm_get_info)
@@ -3471,7 +3676,11 @@ static const char *const pm_csub_refused[] = {
     "fseek", "ftell", "rewind", "feof", "ferror", "__tcc_pm_stdin",
     "pm_alloc", "pm_free", "pm_settick", "opendir", "readdir", "closedir",
     "pm_serial_open", "pm_serial_read", "pm_serial_write", "pm_serial_available",
-    "pm_serial_flush", "pm_serial_close", NULL};
+    "pm_serial_flush", "pm_serial_close",
+    "pm_i2c_open", "pm_i2c_close", "pm_i2c_transfer", "pm_i2c_write",
+    "pm_i2c_read", "pm_i2c_probe",
+    "pm_spi_open", "pm_spi_close", "pm_spi_transfer", "pm_spi_write",
+    "pm_spi_read", NULL};
 
 void *tcc_pm_resolve_symbol(const char *name)
 {
@@ -3744,6 +3953,8 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
     }
     pm_close_all();
     pm_serial_cleanup();
+    pm_i2c_cleanup();
+    pm_spi_cleanup();
     FreeMemory(pm->stack);
     pm_heap_release(); /* (pm itself is in the arena) */
     pm_state_reset();
@@ -3851,6 +4062,8 @@ void tcc_picomite_abandoned(void)
         __asm volatile("msr msplim, %0" ::"r"(pm->msplim));
         pm_stack_check_leave();
         pm_serial_cleanup();
+        pm_i2c_cleanup();
+        pm_spi_cleanup();
         for (i = 0; i < TCC_PM_MAX_FILES; i++)
             if (pm_files[i].kind == PM_FILE_DISK)
             {

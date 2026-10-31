@@ -71,6 +71,8 @@ static volatile unsigned int I2C_Sendlen;  // length of the master send buffer
 static volatile unsigned int I2C_Rcvlen;   // length of the master receive buffer
 static unsigned char I2C_Send_Buffer[256]; // I2C send buffer
 bool I2C_enabled = false;                  // I2C enable marker
+/* A BASIC CLOSE invalidates handles previously returned to native C. */
+static unsigned i2c_native_epoch[2];
 unsigned int I2C_Timeout;                  // master timeout value
 volatile unsigned int I2C_Status = 0;      // status flags
 int mmI2Cvalue;
@@ -1589,6 +1591,8 @@ Disable the I2C1 module - master mode
 ***************************************************************************************************/
 void i2c_disable()
 {
+  if (I2C_enabled)
+    ++i2c_native_epoch[0];
   if (I2C_Status & I2C_Status_Slave)
   {
     irq_set_enabled(I2C0_IRQ, false);
@@ -1613,6 +1617,8 @@ void i2c_disable()
 }
 void i2c2_disable()
 {
+  if (I2C2_enabled)
+    ++i2c_native_epoch[1];
   if (I2C2_Status & I2C_Status_Slave)
   {
     irq_set_enabled(I2C1_IRQ, false);
@@ -1638,48 +1644,108 @@ void i2c2_disable()
 /**************************************************************************************************
 Send and/or Receive data - master mode
 ***************************************************************************************************/
+/* Native and BASIC master operations share this transport. A write followed
+   by a read uses a repeated START; hold_after is for BASIC's bus-hold mode. */
+int I2C_MasterTransfer(int bus, unsigned address, const unsigned char *tx, unsigned txlen,
+                       unsigned char *rx, unsigned rxlen, int hold_after, unsigned timeout_ms)
+{
+  i2c_inst_t *inst = bus == 0 ? i2c0 : i2c1;
+  uint32_t timeout_us = timeout_ms * 1000u;
+  int n;
+  if (txlen)
+  {
+    n = i2c_write_timeout_us(inst, (uint8_t)address, tx, txlen,
+                             rxlen != 0 || hold_after != 0, timeout_us);
+    if (n == PICO_ERROR_TIMEOUT)
+      return 2;
+    if (n < 0 || (unsigned)n != txlen)
+      return 1;
+  }
+  if (rxlen)
+  {
+    n = i2c_read_timeout_us(inst, (uint8_t)address, rx, rxlen,
+                            hold_after != 0, timeout_us);
+    if (n == PICO_ERROR_TIMEOUT)
+      return 2;
+    if (n < 0 || (unsigned)n != rxlen)
+      return 1;
+  }
+  return 0;
+}
+
+/* Only non-system, configured master buses may be acquired by a C run. */
+void I2C_MasterOpen(int bus, int khz, unsigned timeout_ms)
+{
+  int sda, scl;
+  if (bus != 0 && bus != 1)
+    error("Invalid I2C bus");
+  if (khz != 100 && khz != 400 && khz != 1000)
+    error("Valid speeds 100, 400, 1000");
+  if (timeout_ms < 100 || timeout_ms > 10000)
+    error("Invalid I2C timeout");
+  if (bus == 0 ? I2C0locked : I2C1locked)
+    error("Allocated to System I2C");
+  sda = bus == 0 ? I2C0SDApin : I2C1SDApin;
+  scl = bus == 0 ? I2C0SCLpin : I2C1SCLpin;
+  if (sda == 99 || scl == 99)
+    error("Pins not set for I2C");
+  if (bus == 0 ? (I2C_enabled || (I2C_Status & I2C_Status_Slave)) :
+                 (I2C2_enabled || (I2C2_Status & I2C_Status_Slave)))
+    error("I2C already OPEN");
+  if (ExtCurrentConfig[sda] >= EXT_COM_RESERVED ||
+      ExtCurrentConfig[scl] >= EXT_COM_RESERVED)
+    error("I2C pins in use");
+  if (bus == 0)
+  {
+    I2C_Timeout = timeout_ms;
+    i2c_enable(khz);
+  }
+  else
+  {
+    I2C2_Timeout = timeout_ms;
+    i2c2_enable(khz);
+  }
+}
+
+unsigned I2C_MasterEpoch(int bus)
+{
+  return bus == 0 || bus == 1 ? i2c_native_epoch[bus] : 0;
+}
+
+int I2C_MasterIsOpen(int bus)
+{
+  if (bus == 0)
+    return I2C_enabled && !I2C0locked && !(I2C_Status & I2C_Status_Slave);
+  if (bus == 1)
+    return I2C2_enabled && !I2C1locked && !(I2C2_Status & I2C_Status_Slave);
+  return 0;
+}
+
+void I2C_MasterClose(int bus)
+{
+  if (!I2C_MasterIsOpen(bus))
+    return;
+  if (bus == 0)
+    i2c_disable();
+  else
+    i2c2_disable();
+}
+
 int i2c_masterCommand(int timer, unsigned char *I2C_Rcv_Buffer, int update_global)
 {
-  //	unsigned char start_type,
-  int status = 0;
-  unsigned char i2caddr = I2C_Addr;
-  if (I2C_Sendlen)
-  {
-    int i2cret = i2c_write_timeout_us(i2c0, (uint8_t)i2caddr, (uint8_t *)I2C_Send_Buffer, I2C_Sendlen, (I2C_Status == I2C_Status_BusHold ? true : false), I2C_Timeout * 1000);
-    if (i2cret == PICO_ERROR_GENERIC)
-      status = 1;
-    if (i2cret == PICO_ERROR_TIMEOUT)
-      status = 2;
-  }
-  if (I2C_Rcvlen)
-  {
-    int i2cret = i2c_read_timeout_us(i2c0, (uint8_t)i2caddr, (uint8_t *)I2C_Rcv_Buffer, I2C_Rcvlen, (I2C_Status == I2C_Status_BusHold ? true : false), I2C_Timeout * 1000);
-    status = 0;
-    if (i2cret == PICO_ERROR_GENERIC)
-      status = 1;
-    if (i2cret == PICO_ERROR_TIMEOUT)
-      status = 2;
+  (void)timer;
+  int status = I2C_MasterTransfer(0, I2C_Addr, I2C_Send_Buffer, I2C_Sendlen,
+                                  I2C_Rcv_Buffer, I2C_Rcvlen,
+                                  I2C_Status == I2C_Status_BusHold, I2C_Timeout);
+  if (!status && I2C_Rcvlen)
     for (int i = 0; i < I2C_Rcvlen; i++)
     {
-      if (I2C_Rcvbuf_String != NULL)
-      {
-        *I2C_Rcvbuf_String = I2C_Rcv_Buffer[i];
-        I2C_Rcvbuf_String++;
-      }
-      if (I2C_Rcvbuf_Float != NULL)
-      {
-        *I2C_Rcvbuf_Float = I2C_Rcv_Buffer[i];
-        I2C_Rcvbuf_Float++;
-      }
-      if (I2C_Rcvbuf_Int != NULL)
-      {
-        *I2C_Rcvbuf_Int = I2C_Rcv_Buffer[i];
-        I2C_Rcvbuf_Int++;
-      }
+      if (I2C_Rcvbuf_String != NULL) *I2C_Rcvbuf_String++ = I2C_Rcv_Buffer[i];
+      if (I2C_Rcvbuf_Float != NULL) *I2C_Rcvbuf_Float++ = I2C_Rcv_Buffer[i];
+      if (I2C_Rcvbuf_Int != NULL) *I2C_Rcvbuf_Int++ = I2C_Rcv_Buffer[i];
     }
-  }
   if (status)
-    I2C_Status = 0; // Clear bus hold on error
+    I2C_Status = 0;
   if (update_global)
     mmI2Cvalue = status;
   return status;
@@ -1687,46 +1753,19 @@ int i2c_masterCommand(int timer, unsigned char *I2C_Rcv_Buffer, int update_globa
 
 int i2c2_masterCommand(int timer, unsigned char *I2C2_Rcv_Buffer, int update_global)
 {
-  //	unsigned char start_type,
-  int status = 0;
-  unsigned char i2c2addr = I2C2_Addr;
-  if (I2C2_Sendlen)
-  {
-    int i2cret = i2c_write_timeout_us(i2c1, (uint8_t)i2c2addr, (uint8_t *)I2C_Send_Buffer, I2C2_Sendlen, (I2C2_Status == I2C_Status_BusHold ? true : false), I2C2_Timeout * 1000);
-    if (i2cret == PICO_ERROR_GENERIC)
-      status = 1;
-    if (i2cret == PICO_ERROR_TIMEOUT)
-      status = 2;
-  }
-  if (I2C2_Rcvlen)
-  {
-    int i2cret = i2c_read_timeout_us(i2c1, (uint8_t)i2c2addr, (uint8_t *)I2C2_Rcv_Buffer, I2C2_Rcvlen, (I2C2_Status == I2C_Status_BusHold ? true : false), I2C2_Timeout * 1000);
-    status = 0;
-    if (i2cret == PICO_ERROR_GENERIC)
-      status = 1;
-    if (i2cret == PICO_ERROR_TIMEOUT)
-      status = 2;
+  (void)timer;
+  int status = I2C_MasterTransfer(1, I2C2_Addr, I2C_Send_Buffer, I2C2_Sendlen,
+                                  I2C2_Rcv_Buffer, I2C2_Rcvlen,
+                                  I2C2_Status == I2C_Status_BusHold, I2C2_Timeout);
+  if (!status && I2C2_Rcvlen)
     for (int i = 0; i < I2C2_Rcvlen; i++)
     {
-      if (I2C2_Rcvbuf_String != NULL)
-      {
-        *I2C2_Rcvbuf_String = I2C2_Rcv_Buffer[i];
-        I2C2_Rcvbuf_String++;
-      }
-      if (I2C2_Rcvbuf_Float != NULL)
-      {
-        *I2C2_Rcvbuf_Float = I2C2_Rcv_Buffer[i];
-        I2C2_Rcvbuf_Float++;
-      }
-      if (I2C2_Rcvbuf_Int != NULL)
-      {
-        *I2C2_Rcvbuf_Int = I2C2_Rcv_Buffer[i];
-        I2C2_Rcvbuf_Int++;
-      }
+      if (I2C2_Rcvbuf_String != NULL) *I2C2_Rcvbuf_String++ = I2C2_Rcv_Buffer[i];
+      if (I2C2_Rcvbuf_Float != NULL) *I2C2_Rcvbuf_Float++ = I2C2_Rcv_Buffer[i];
+      if (I2C2_Rcvbuf_Int != NULL) *I2C2_Rcvbuf_Int++ = I2C2_Rcv_Buffer[i];
     }
-  }
   if (status)
-    I2C2_Status = 0; // Clear bus hold on error
+    I2C2_Status = 0;
   if (update_global)
     mmI2Cvalue = status;
   return status;

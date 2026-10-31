@@ -30,6 +30,13 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifndef SPI_H
 #define SPI_H
 
+/* Low-level service shared by BASIC SPI/SPI2 and native TinyCC. */
+void SPI_MasterOpen(int bus, unsigned speed_hz, int mode, int bits);
+void SPI_MasterClose(int bus);
+int SPI_MasterIsOpen(int bus);
+unsigned SPI_MasterEpoch(int bus);
+int SPI_MasterTransfer(int bus, const void *tx, void *rx, unsigned count);
+
 #endif /* SPI_H */
 
 /*  @endcond */
