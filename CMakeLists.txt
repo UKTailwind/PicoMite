@@ -66,6 +66,13 @@ endmacro()
 set(COMMON_SOURCES
 	PicoMite.c
 	core/pm_api.c
+	core/pm_api_extra.c
+	core/pm_runtime.c
+	core/pm_runtime_stdio.c
+	core/pm_basic_runtime.c
+	core/pm_peripheral_runtime.c
+	core/pm_runtime_commands.c
+	core/pm_api_extra.c
 	core/MMBasic.c
 	core/Symbols.c
 	core/Stream.c
