@@ -1,7 +1,7 @@
 /* ARMv6-M ET_REL smoke test: same object for RP2040 and RP2350.
  * arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
  *   -ffreestanding -fno-unwind-tables -O1 -Icore/tcc/include -c \
- *   C/core_pm_extended_smoke.c -o core_pm_extended_smoke.o
+ *   C/core_pm_extended_smoke.c -o core_pm_extended_smoke.elf
  */
 #include <picomite.h>
 #include <picomite/graphics.h>

@@ -4,7 +4,7 @@
 Example:
   C:\Users\New\.pico-sdk\toolchain\13_3_Rel1\bin\arm-none-eabi-gcc \
    -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft -ffreestanding \
-   -fno-unwind-tables -O1 -I. -c C\core_pm_api_smoke.c -o core_pm_api_smoke.o
+   -fno-unwind-tables -O1 -I. -c C\core_pm_api_smoke.c -o core_pm_api_smoke.elf
  */
 #include "core/tcc/include/picomite/graphics.h"
 extern const void *const __picomite_calltable[];

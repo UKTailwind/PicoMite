@@ -255,12 +255,12 @@ From the repository root, compile the existing shared-API smoke test:
 ```sh
 arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
     -ffreestanding -fno-unwind-tables -O1 -I. -c \
-    C/core_pm_api_smoke.c -o core_pm_api_smoke.o
+    C/core_pm_api_smoke.c -o core_pm_api_smoke.elf
 ```
 
 Copy the resulting file to the SD card and run
-`RUN "B:/core_pm_api_smoke.o"`. It draws a line and a pixel and prints
-`CORE PM API OK` through CallTable. One ARMv6-M `.o` works on both targets.
+`RUN "B:/core_pm_api_smoke.elf"`. It draws a line and a pixel and prints
+`CORE PM API OK` through CallTable. One ARMv6-M `.elf` works on both targets.
 
 **RP2040 limitation:** the 44 named core functions listed above and
 `__picomite_calltable` are exported. TinyCC's full C runtime (`printf`,
@@ -276,10 +276,10 @@ The expanded regression test is `C/core_pm_extended_smoke.c`:
 ```sh
 arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
     -ffreestanding -fno-unwind-tables -O1 -Icore/tcc/include -c \
-    C/core_pm_extended_smoke.c -o core_pm_extended_smoke.o
+    C/core_pm_extended_smoke.c -o core_pm_extended_smoke.elf
 ```
 
-Run with `RUN "B:/core_pm_extended_smoke.o"` on both architectures.
+Run with `RUN "B:/core_pm_extended_smoke.elf"` on both architectures.
 On RP2350 also run the source through TinyCC (`RUN "B:/core_pm_extended_smoke.c"`)
 to exercise the compiler resolver's fallback to the common API. Hardware
 verification is required for each firmware variant.

@@ -10,7 +10,6 @@ CMakeCache.txt
 # ---- Firmware build artifacts ----
 *.uf2
 *.zip
-*.elf
 *.bin
 *.hex
 *.map
