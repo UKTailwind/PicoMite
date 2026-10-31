@@ -566,6 +566,8 @@ that lacks a function reports `undefined symbol`.
 | 5 | `serial.h`: typed COM1/COM2 UART open, read, write, status, flush and close |
 | 6 | `i2c.h`: typed I2C0/I2C1 master open/close, read/write, repeated-START transfer, probe |
 | 7 | `spi.h`: SPI0/SPI1 master, modes 0..3, 4..16 bits, binary transfers |
+| 8 | `adc.h`: filtered ADC voltage and raw 12-bit conversion through existing PIN() services |
+| 9 | `pwm.h`: shared BASIC/C PWM slice control, frequency and duty |
 
 Structs that
 the firmware fills start with a `size` field, which the program sets to
@@ -1031,6 +1033,65 @@ PicoMite errors, catchable using `pm_try()`. All C-owned SPI buses close
 on program exit, error, or Ctrl+C. External CSUBs cannot use this API.
 
 [`C/spi_loopback.c`](../C/spi_loopback.c) tests SPI0 with TX joined to RX.
+
+#### `<picomite/adc.h>`: ADC input (API version 8)
+
+```c
+#include <picomite/adc.h>
+double pm_adc_read(int gp);   /* voltage, filtered as BASIC PIN(GP...) */
+int pm_adc_read_raw(int gp);  /* one 12-bit conversion; -1 on ADC fault */
+```
+
+Both functions accept a **GPIO number**, not PicoMite's internal pin index.
+Configure it with BASIC `SETPIN GPn, AIN` first (for example GP26 on
+RP2350A or GP40 on RP2350B). No GPIO is claimed or reconfigured by the C
+API. `pm_adc_read()` requires the `AIN` configuration and returns the same
+voltage as BASIC `PIN(GPn)`, using its sorted, trimmed-mean filter and the
+firmware's `VCC` scaling. `pm_adc_read_raw()` returns a single
+unfiltered 0..4095 conversion from `AIN` or `ADCRAW` pin mode.
+
+Both functions reject unconfigured or reserved pins, an active BASIC
+`ADC OPEN` session, and ongoing ADC DMA/buffer capture. These conditions
+raise PicoMite errors (catchable with `pm_try()`), not silent zero readings.
+`pm_adc_read_raw()` returns -1 when the ADC hardware reports a conversion
+fault; this is distinct from those configuration errors. The functions are
+available to TinyCC-linked programs only, not external CSUBs. They have no
+open/close lifetime and do not allocate memory.
+
+[`C/adc_read.c`](../C/adc_read.c) shows voltage and raw readings for a GPIO
+selected on the command line.
+
+#### `<picomite/pwm.h>`: PWM outputs (API version 9)
+
+```c
+#include <picomite/pwm.h>
+void pm_pwm_open(int slice, unsigned frequency_hz, double duty_a, double duty_b);
+void pm_pwm_set_duty(int slice, double duty_a, double duty_b);
+void pm_pwm_set_frequency(int slice, unsigned frequency_hz);
+void pm_pwm_close(int slice);
+```
+
+Select PWM slice 0..7 on RP2350A or 0..11 on RP2350B. Configure the
+corresponding pins with BASIC `SETPIN GPn,PWMnA` / `PWMnB` beforehand.
+All functions use the **slice number**, not a C-owned handle. `pm_pwm_open`
+starts or reconfigures the slice, including PWM already running under BASIC.
+Duty arguments are percentages (0..100); **-1** leaves an output unchanged
+when it is already active, or leaves an unconfigured output unused. At least
+one channel must be specified when opening. The period/divider are shared
+by A and B. `pm_pwm_set_frequency` preserves the current hardware compare
+ratios and phase-correct setting; `pm_pwm_open` selects ordinary PWM mode.
+For `pm_pwm_set_duty`, **-1** means do not change that channel.
+
+BASIC `PWM`, BASIC `SERVO` and C `pm_pwm_open` now share the same
+frequency/divider/compare-value calculation and `set_PWM` output path. BASIC
+retains negative-duty inversion and phase-correct options; `PWM SYNC` remains
+the common register-based enable/synchronisation mechanism. There is no
+C-only resource owner or automatic close at program exit, error or Ctrl+C.
+System-controlled slices (audio, backlight, camera, FAST TIMER, Stepper)
+remain protected; errors are catchable using `pm_try()` in C programs.
+External CSUBs cannot use this API.
+
+[`C/pwm_sweep.c`](../C/pwm_sweep.c) sweeps duty on slice 0, channel A.
 
 #### `<picomite/basic.h>`: MMBasic's commands and functions
 

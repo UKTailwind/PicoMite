@@ -38,6 +38,8 @@
 #include "include/picomite/serial.h"
 #include "include/picomite/i2c.h"
 #include "include/picomite/spi.h"
+#include "include/picomite/adc.h"
+#include "include/picomite/pwm.h"
 
 #ifndef TCC_PM_STACK_SIZE
 #define TCC_PM_STACK_SIZE (32 * 1024) /* compiler + compiled program */
@@ -1294,12 +1296,44 @@ static int pm_pin_read(int gp)
     return v;
 }
 
+/* Shared with BASIC PIN(): the voltage filter is in PinVal(), raw ADC
+   sampling in ExtInp(). No ADC reconfiguration or memory allocation. */
+static int pm_adc_pin(int gp, int raw)
+{
+    int pin;
+    if (!tcc_pm_running || pm == NULL)
+        error("ADC requires a running C program");
+    pin = codemap(gp);
+    if (IsInvalidPin(pin))
+        error("Invalid ADC pin");
+    if (ADCopen || ADCDualBuffering || dmarunning)
+        error("ADC in use");
+    if (ExtCurrentConfig[pin] != EXT_ANA_IN &&
+        (!raw || ExtCurrentConfig[pin] != EXT_ADCRAW))
+        error("Pin not configured for ADC");
+    return pin;
+}
+
+double pm_adc_read(int gp)
+{
+    volatile double value = 0;
+    PM_CALL(value = (double)PinVal(pm_adc_pin(gp, 0)));
+    return value;
+}
+
+int pm_adc_read_raw(int gp)
+{
+    volatile int sample = 0;
+    PM_CALL(sample = (int)ExtInp(pm_adc_pin(gp, 1)));
+    return sample;
+}
+
 /* ------------------------------------------------------------------------ */
 /* <picomite/system.h>, <picomite/memory.h>, <picomite/graphics.h>           */
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 7 /* (include/picomite/system.h: what each version added) */
+#define PM_API_VERSION 9 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -1756,6 +1790,27 @@ void pm_spi_close(pm_spi_t handle)
     PM_CALL(bus = pm_spi_require(handle));
     pm->spi_owned &= ~(1u << bus);
     SPI_MasterClose(bus);
+}
+
+/* PWM is persistent PicoMite state, shared with BASIC; no C-owned handles. */
+void pm_pwm_open(int slice, unsigned frequency_hz, double duty_a, double duty_b)
+{
+    PM_CALL(PWM_Configure(slice, frequency_hz, duty_a, duty_b));
+}
+
+void pm_pwm_set_duty(int slice, double duty_a, double duty_b)
+{
+    PM_CALL(PWM_SetDuty(slice, duty_a, duty_b));
+}
+
+void pm_pwm_set_frequency(int slice, unsigned frequency_hz)
+{
+    PM_CALL(PWM_SetFrequency(slice, frequency_hz));
+}
+
+void pm_pwm_close(int slice)
+{
+    PM_CALL(PWM_Close(slice));
 }
 
 static void *pm_alloc(size_t size, int where)
@@ -3525,6 +3580,9 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_pin_mode)
     PM_SYM(pm_pin_write)
     PM_SYM(pm_pin_read)
+    /* <picomite/adc.h>: existing PIN() ADC implementation */
+    PM_SYM(pm_adc_read)
+    PM_SYM(pm_adc_read_raw)
     /* <picomite/serial.h>: native UART COM1/COM2 */
     PM_SYM(pm_serial_open)
     PM_SYM(pm_serial_read)
@@ -3545,6 +3603,11 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_spi_transfer)
     PM_SYM(pm_spi_write)
     PM_SYM(pm_spi_read)
+    /* <picomite/pwm.h> */
+    PM_SYM(pm_pwm_open)
+    PM_SYM(pm_pwm_set_duty)
+    PM_SYM(pm_pwm_set_frequency)
+    PM_SYM(pm_pwm_close)
     /* <picomite/system.h>, <picomite/memory.h>, <picomite/graphics.h> */
     PM_SYM(pm_api_version)
     PM_SYM(pm_get_info)
@@ -3680,7 +3743,8 @@ static const char *const pm_csub_refused[] = {
     "pm_i2c_open", "pm_i2c_close", "pm_i2c_transfer", "pm_i2c_write",
     "pm_i2c_read", "pm_i2c_probe",
     "pm_spi_open", "pm_spi_close", "pm_spi_transfer", "pm_spi_write",
-    "pm_spi_read", NULL};
+    "pm_spi_read", "pm_adc_read", "pm_adc_read_raw",
+    "pm_pwm_open", "pm_pwm_set_duty", "pm_pwm_set_frequency", "pm_pwm_close", NULL};
 
 void *tcc_pm_resolve_symbol(const char *name)
 {
