@@ -53,6 +53,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifdef rp2350
 #include "core/tcc/tcc_picomite.h" /* RUN "file.c": TinyCC */
 #endif
+#include "core/elf/elf_picomite.h"
 #define overlap (VRes % (FontTable[gui_font >> 4][1] * (gui_font & 0b1111)) ? 0 : 1)
 
 /* Stride-aware array access macros for struct member arrays */
@@ -2519,30 +2520,33 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		break;
 	}
 
-#ifdef rp2350
-	/* RUN "file.c" [, "args"]: compile the C file with TinyCC and run it in
-	   memory (tcc -run), its args as argv[1..].  RUN "file" [, "args"] of an
-	   ELF file (made by the TCC command) loads it the same way, binding it to
-	   the firmware's run-time library.  As for a BASIC program the variables,
-	   open files and heap are cleared first, which leaves the whole heap to
-	   TinyCC; the names are copied off the heap first. */
+	/* ELF objects are detected from their signature, independently of TinyCC.
+	   Only the source-compilation branch is restricted to RP2350. */
 	if (!CMM2mode && *filename)
 	{
 		size_t len = strlen((const char *)filename);
+#ifdef rp2350
 		bool is_c = len >= 2 && filename[len - 2] == '.' &&
 					(filename[len - 1] == 'c' || filename[len - 1] == 'C');
-		if (is_c || tcc_picomite_is_elf((const char *)filename))
+#else
+		bool is_c = false;
+		(void)len;
+#endif
+		if (is_c || elf_picomite_is_elf((const char *)filename))
 		{
 			char cfile[MAXSTRLEN + 1], cargs[MAXSTRLEN + 1];
 			snprintf(cfile, sizeof(cfile), "%s", (char *)filename);
 			snprintf(cargs, sizeof(cargs), "%s", (char *)cmd_args);
 			ClearRuntime(true);
 			BasicPrepareLibraryOnly();
+#ifdef rp2350
 			tcc_picomite_run(cfile, cargs, is_c);
+#else
+			elf_picomite_run_file(cfile, cargs);
+#endif
 			return;
 		}
 	}
-#endif
 
 	// The memory allocated by getCstring() is not preserved across
 	// a call to FileLoadProgram() so we need to cache 'filename' and
@@ -2575,12 +2579,14 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		PrintPreprogramError();
 		return;
 	}
+	if (elf_picomite_csub_stale()
 #ifdef rp2350
-	if (tcc_picomite_csub_stale())
+	    || tcc_picomite_csub_stale()
+#endif
+	    )
 	{
-		// C CSUBs linked against another firmware: save the program again,
-		// which compiles them again, and prepare the new copy
-		tcc_picomite_csub_rebuild();
+		// The linked CSUB image was bound to a different firmware or XIP address.
+		elf_picomite_csub_rebuild();
 		ClearRuntime(true);
 		if (PrepareProgram(true))
 		{
@@ -2588,7 +2594,6 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 			return;
 		}
 	}
-#endif
 	if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
 	{
 		ClearScreen(gui_bcolour);

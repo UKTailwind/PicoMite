@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "tcc_picomite.h"
+#include "core/elf/elf_picomite.h"
 #include "include/picomite/serial.h"
 #include "include/picomite/i2c.h"
 #include "include/picomite/spi.h"
@@ -342,6 +343,7 @@ typedef struct
     int argc;
     char **argv;
     int ret;
+    bool elf_mode; /* executable object: use the ELF loader, not TinyCC */
     /* a C CSUB (tcc_picomite_csub_compile) */
     const char *csub_entry;   /* its name: the function to enter */
     uint32_t csub_base;       /* the address its image is linked for */
@@ -3813,6 +3815,16 @@ void *tcc_pm_resolve_symbol(const char *name)
     return NULL;
 }
 
+void *tcc_picomite_resolve_csub_symbol(const char *name)
+{
+    bool previous = pm_csub_linking;
+    void *address;
+    pm_csub_linking = true;
+    address = tcc_pm_resolve_symbol(name);
+    pm_csub_linking = previous;
+    return address;
+}
+
 /* The generated code was written through the data side: make sure it is
    complete before it is fetched as instructions. */
 void tcc_pm_code_ready(void *ptr, unsigned long length)
@@ -3913,6 +3925,8 @@ static int pm_run_entry(void *p)
     pm_run_args *a = (pm_run_args *)p;
     if (a->csub_entry)
         a->ret = pm_csub_entry(a);
+    else if (a->elf_mode)
+        a->ret = elf_picomite_run_argv(a->argc, a->argv);
     else
         a->ret = pico_tcc_main(a->argc, a->argv);
     return 0;
@@ -3974,7 +3988,7 @@ static int pm_split(char *p, char **argv_, int max)
    csub, link a C CSUB instead (pm_csub_entry): its result and error are
    returned in *csub and no MMBasic error is raised (-1 for a failure). */
 static int pm_exec(const char *const *prefix, int nprefix, const char *args, const char *fail,
-                   pm_run_args *csub)
+                   pm_run_args *csub, bool elf_mode)
 {
     volatile int how = PM_END_NONE;
     char errmsg[MAXERRMSG];
@@ -4013,6 +4027,7 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
     __tcc_pm_stderr = (FILE *)&pm->con_err;
 
     a = &pm->args;
+    a->elf_mode = elf_mode;
     for (i = 0; i < nprefix; i++)
         a->argv[a->argc++] = (char *)prefix[i];
     a->argc += pm_split(argbuf, a->argv + a->argc, max - a->argc - 1);
@@ -4104,19 +4119,17 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
     return 0;
 }
 
-/* RUN "file.c" [, "args"]: tcc -xc -D__PICOMITE__ -run file.c args...
-   RUN "file" [, "args"] for an ELF object made by the TCC command:
-   tcc -xb -run file args... - linked to the firmware as it is loaded. */
+/* Only RUN "file.c" enters TinyCC.  ELF objects go through the shared
+   linker, reusing the already existing C runtime/stack/error lifecycle. */
 void tcc_picomite_run(const char *filename, const char *args, bool is_c)
 {
     static const char *const c_prefix[] = {"tcc", "-xc", "-D__PICOMITE__", "-run"};
-    static const char *const elf_prefix[] = {"tcc", "-xb", "-run"};
-    char line[STRINGSIZE * 2 + 4]; /* "file" args, the name quoted for pm_split */
+    char line[STRINGSIZE * 2 + 4];
     snprintf(line, sizeof(line), "\"%s\" %s", filename, args ? args : "");
     if (is_c)
-        pm_exec(c_prefix, 4, line, "C compilation failed", NULL);
+        pm_exec(c_prefix, 4, line, "C compilation failed", NULL, false);
     else
-        pm_exec(elf_prefix, 3, line, "Cannot run the ELF file", NULL);
+        pm_exec(NULL, 0, line, "Cannot run the ELF file", NULL, true);
 }
 
 /* Does the file start with the ELF signature?  False for a file that does
@@ -4150,7 +4163,7 @@ void cmd_tcc(void)
     static const char *const prefix[] = {"tcc", "-D__PICOMITE__"};
     char line[STRINGSIZE];
     snprintf(line, sizeof(line), "%s", (char *)getCstring(cmdline));
-    pm_exec(prefix, 2, line, "TCC failed", NULL);
+    pm_exec(prefix, 2, line, "TCC failed", NULL, false);
 }
 
 /* Called before the heap or the program is reset (InitHeap, m_alloc,
@@ -4502,7 +4515,7 @@ uint32_t *tcc_picomite_csub_compile(const unsigned char *decl, const char *line,
     c.csub_err = err;
     if (irqs) /* (SaveProgramToFlash: no flash write is under way between records) */
         enable_interrupts_pico();
-    r = pm_exec(prefix, 1, line, "CSUB: C compilation failed", &c);
+    r = pm_exec(prefix, 1, line, "CSUB: C compilation failed", &c, false);
     if (irqs)
         disable_interrupts_pico();
     if (r < 0)

@@ -100,6 +100,8 @@ set(COMMON_SOURCES
 	io/Audio.c
 	io/AudioBBC.c
 	core/CFunction.c
+	core/elf/elf_loader.c
+	core/elf/elf_picomite.c
 	third_party_mod/picojpeg.c
 	third_party_mod/lfs.c
 	third_party_mod/lfs_util.c

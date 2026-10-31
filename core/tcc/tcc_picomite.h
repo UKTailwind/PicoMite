@@ -86,6 +86,7 @@ time_t tcc_pm_time(void); /* (time_t)-1 when unavailable */
 
 /* -run support */
 void *tcc_pm_resolve_symbol(const char *name);
+void *tcc_picomite_resolve_csub_symbol(const char *name);
 int tcc_pm_call_main(int (*prog_main)(int, char **), int argc, char **argv);
 void tcc_pm_code_ready(void *ptr, unsigned long length);
 

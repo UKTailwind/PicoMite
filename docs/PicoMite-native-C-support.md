@@ -10,13 +10,17 @@ The RP2350 firmware includes a C compiler, [TinyCC](https://bellard.org/tcc/)
 - build a CSUB from C sources or objects right in a BASIC program
   ([C CSUBs](#c-csubs)), with no PC toolchain and no hex.
 
-The code is native Cortex-M33 code. It runs from RAM and calls the firmware
-directly for its C library, console, files, display and pins.
+The code produced by TinyCC is native Cortex-M33 code. It runs from RAM
+and calls the firmware for its C library, console, files, display and pins.
+
+Precompiled ELF32/ARM relocatable objects can also run on RP2040 and RP2350
+without an onboard compiler. See [ELF objects](#run-file--args-for-elf-files).
 
 > **Limitations**
 >
-> - **RP2350 only.** The RP2040 builds have neither TinyCC nor the `TCC`
->   command, and `RUN "file.c"` is not recognised there.
+> - **Onboard compilation is RP2350 only.** RP2040 has no TinyCC or `TCC`
+>   command, and does not recognise `RUN "file.c"`; loading prebuilt ELF objects
+>   works on both microcontrollers.
 > - **PSRAM is close to a requirement.** The compiler and the compiled
 >   program both take their memory from the MMBasic heap. This includes the
 >   compiler's tables, the generated code and data, a 32 KB stack and the
@@ -200,19 +204,37 @@ directory**, not to the response file's own directory.
 
 ## RUN "file" [, "args"] for ELF files
 
-If the file named in RUN is not a `.c` source and **starts with the ELF
-signature** (`7F 45 4C 46`), RUN loads it as a TinyCC object
-(`tcc -xb -run file args...`):
+If a file starts with the ELF signature (`7F 45 4C 46`), `RUN` checks its
+ELF32/ARM header and loads the relocatable **ET_REL** object using the
+independent linker. **No TinyCC compilation or linking step is involved**.
+Both RP2040 and RP2350 accept suitable prebuilt objects. The code runs from
+RAM with `main(argc, argv)` as its entry point; missing symbols, unsupported
+relocations, invalid sections and ABI mismatches are errors.
 
-- an executable made by `TCC` runs at once;
-- any other ELF object (`.o` from `-c`, or the output of `-r`) is linked to
-  the firmware as it is loaded. If something is missing (an undefined symbol
-  or no `main`), the usual link errors are printed, followed by the MMBasic
-  error **Cannot run the ELF file**.
+The filename's extension does not determine the format: `.o` and `.elf` are
+examples. Fixed-address ET_EXEC images are not supported. `.c` source files
+are compiled by TinyCC only on RP2350. Other non-ELF files retain the BASIC
+RUN behaviour. RUN clears BASIC state before entering a C program.
 
-Arguments and the clearing of the BASIC state are the same as for
-`RUN "file.c"`. Files that are not ELF are loaded as BASIC programs as before,
-with the usual `.bas` default extension.
+An external object can be built for both chips using ARMv6-M soft-float:
+
+```sh
+arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
+    -ffreestanding -fno-unwind-tables -O1 -c \
+    Bas/elf_loader_smoke.c -o elf_loader_smoke.o
+```
+
+On the PicoMite console, `RUN "elf_loader_smoke.o"` calls `main` and prints
+`ELF RUN OK`. The same object is used by `Bas/elf_loader_smoke.bas` as a CSUB,
+printing `ELF CSUB OK` through `CallTable`.
+
+**Architecture/ABI:** ARMv6-M code can execute on the RP2350 ARM core, but
+ARMv8-M/Thumb-2 code cannot execute on RP2040. This instruction-set
+compatibility does not make firmware structures with different layouts
+binary-compatible. Build and use only the appropriate ABI. On RP2040 the
+independent ELF resolver currently exposes `__picomite_calltable`; on RP2350
+it also exposes the existing TinyCC runtime symbols. ELF CSUBs cannot
+contain writable `.data` or `.bss` sections.
 
 ---
 
@@ -257,6 +279,12 @@ CSUB Sum INTEGER, INTEGER, INTEGER
 END CSUB
 ```
 
+A **single quoted ELF object** in a CSUB is instead linked directly by the
+independent loader at save time on both RP2040 and RP2350. On RP2350,
+source files, compiler flags and multiple inputs still use TinyCC. On RP2040,
+combine multiple external object files into one ET_REL with `ld -r` before
+loading it as a CSUB.
+
 - Strings are separated by commas or blanks and may continue over several
   lines. A string may hold several words.
 - Hex and strings cannot be mixed in one CSUB.
@@ -280,9 +308,11 @@ match is case sensitive, so use the name exactly as it is written on the
 CSUB line. If no such function exists, `main` is used, as with
 armcfgen-built CSUBs. Other functions in the sources are ordinary helpers.
 
-### When it is compiled
+### When it is linked
 
-The CSUB is compiled and linked **when the program is saved to flash**:
+The CSUB is linked **when the program is saved to flash**. If the body
+contains C sources, TinyCC compiles them on RP2350 first. A precompiled ELF
+object needs no onboard compiler. This linking happens during:
 `LOAD`, `AUTOSAVE`, saving from the editor, or loading into a RAM slot. It is
 stored as an ordinary CSUB record, linked for the exact address it occupies.
 After that:
@@ -290,9 +320,8 @@ After that:
 - RUN does not compile anything, and the CSUB runs from flash with no RAM
   used, like a hex CSUB;
 - the source files are no longer needed;
-- compiler messages appear while the program is saved, and the save is
-  abandoned with "CSUB: C compilation failed" (the program memory is left
-  empty, as for any failed save).
+- a compiler or linker error aborts the save; an incomplete CSUB image is
+  never executed.
 
 ### What the C code can use
 
