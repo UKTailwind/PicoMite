@@ -1245,7 +1245,7 @@ static void __attribute__((noreturn)) pm_program_error_tr(pm_trap *t)
  * Their implementations and symbol lookup live in core/pm_api.c on both MCUs. */
 void tcc_picomite_api_call(void (*fn)(void *), void *arg)
 {
-    PM_CALL(fn(arg));
+    PM_CALL(if (fn) fn(arg));
 }
 static void pm_print(const char *s) { pm_con_write(s, strlen(s)); }
 
@@ -3595,10 +3595,7 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_circle)
     PM_SYM(pm_triangle)
     PM_SYM(pm_refresh)
-    PM_SYM(pm_print)
     PM_SYM(pm_timer_us)
-    PM_SYM(pm_delay_us)
-    PM_SYM(pm_pause)
     PM_SYM(pm_inkey)
     PM_SYM(pm_pin_mode)
     PM_SYM(pm_pin_write)
@@ -3634,15 +3631,11 @@ static const pm_sym pm_syms[] = {
     /* <picomite/system.h>, <picomite/memory.h>, <picomite/graphics.h> */
     PM_SYM(pm_api_version)
     PM_SYM(pm_get_info)
-    PM_SYM(pm_yield)
     PM_SYM(pm_abort_requested)
     PM_SYM(pm_alloc)
     PM_SYM(pm_free)
     PM_SYM(pm_mem_where)
     PM_SYM(pm_get_mem_info)
-    PM_SYM(pm_text)
-    PM_SYM(pm_draw_box)
-    PM_SYM(pm_draw_rbox)
     PM_SYM(pm_execute)
     PM_SYM(pm_basic_sub)
     PM_SYM(pm_basic_function)
@@ -3654,15 +3647,8 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_eval_int_try)
     PM_SYM(pm_eval_float_try)
     PM_SYM(pm_eval_str_try)
-    PM_SYM(pm_errno)
-    PM_SYM(pm_errmsg)
-    PM_SYM(pm_error_clear)
     PM_SYM(pm_settick)
     PM_SYM(pm_sprite_load)
-    PM_SYM(pm_sprite_show)
-    PM_SYM(pm_sprite_hide)
-    PM_SYM(pm_sprite_write)
-    PM_SYM(pm_sprite_close_all)
     PM_SYM(pm_play_modfile)
     PM_SYM(pm_play_modsample)
     PM_SYM(pm_play_sound)
@@ -3680,16 +3666,10 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_play_volume)
     PM_SYM(pm_play_bbc_sound)
     PM_SYM(pm_play_bbc_envelope)
-    PM_SYM(pm_pcm_play)
     PM_SYM(pm_pcm_start)
-    PM_SYM(pm_pcm_stop)
-    PM_SYM(pm_pcm_playing)
-    PM_SYM(pm_pcm_poll)
     PM_SYM(pm_sound)
     PM_SYM(pm_load_image)
     PM_SYM(pm_load_jpg)
-    PM_SYM(pm_colour)
-    PM_SYM(pm_keydown)
     /* <picomite/files.h> */
     PM_SYM(pm_kill)
     PM_SYM(pm_rename)
@@ -3724,20 +3704,16 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_framebuffer_layer)
     PM_SYM(pm_framebuffer_layer_top)
     PM_SYM(pm_framebuffer_write)
-    PM_SYM(pm_framebuffer_copy)
     PM_SYM(pm_framebuffer_merge)
     PM_SYM(pm_framebuffer_sync)
     PM_SYM(pm_framebuffer_wait)
     PM_SYM(pm_framebuffer_close)
-    PM_SYM(pm_blit_framebuffer)
     PM_SYM(pm_blit)
     PM_SYM(pm_blit_read)
     PM_SYM(pm_blit_write)
     PM_SYM(pm_blit_load)
     PM_SYM(pm_blit_close)
     /* <picomite/input.h>: the mouse and the cursor */
-    PM_SYM(pm_mouse)
-    PM_SYM(pm_usb_device)
     PM_SYM(pm_cursor_on)
     PM_SYM(pm_cursor_off)
     PM_SYM(pm_cursor_hide)
@@ -3752,11 +3728,6 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_erase)
     PM_SYM(pm_str_get)
     PM_SYM(pm_str_set)
-    PM_SYM(pm_mode)
-    PM_SYM(pm_font_width)
-    PM_SYM(pm_font_height)
-    PM_SYM(pm_get_framebuffer)
-    PM_SYM(pm_fb_colour)
     /* ARM EABI run-time helpers */
     PM_AEABI(PM_SYM)
 };
@@ -3789,7 +3760,9 @@ void *tcc_pm_resolve_symbol(const char *name)
     for (i = 0; i < sizeof(pm_syms) / sizeof(pm_syms[0]); i++)
         if (strcmp(pm_syms[i].name, name) == 0)
             return (void *)pm_syms[i].addr;
-    return NULL;
+    /* The compiler must resolve the same core services as the ELF loader.
+       The CSUB safety filter above must be evaluated before this lookup. */
+    return (void *)pm_core_resolve_symbol(name);
 }
 
 void *tcc_picomite_resolve_csub_symbol(const char *name)
@@ -4209,6 +4182,14 @@ uint32_t tcc_pm_firmware_id(void)
             uint32_t a = (uint32_t)pm_syms[i].addr;
             int b;
             for (b = 0; b < 4; b++, a >>= 8)
+                h = (h ^ (a & 0xff)) * 16777619u;
+        }
+        {
+            /* TCC CSUBs also bind the common core functions by address.
+             * Include that table in their firmware stamp. */
+            uint32_t a = pm_core_firmware_id();
+            int b;
+            for (b = 0; b < 4; ++b, a >>= 8)
                 h = (h ^ (a & 0xff)) * 16777619u;
         }
         id = (h == 0 || h == 0xffffffffu) ? 1 : h;

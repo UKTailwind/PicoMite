@@ -22,6 +22,10 @@ void pm_pin_mode(int gp, int mode);
 void pm_pin_write(int gp, int value);
 int pm_pin_read(int gp);
 
+/* Invoke a firmware service within the active C program's error boundary.
+ * Passing NULL performs the abort/poll check only. */
+void pm_core_call(void (*fn)(void *), void *arg);
+
 /* Common named-symbol exports for external ET_REL and TinyCC-compiled code.
  * NULL means the name is not supplied by the common firmware API. */
 const void *pm_core_resolve_symbol(const char *name);

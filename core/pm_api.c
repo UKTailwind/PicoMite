@@ -14,13 +14,13 @@
 #ifdef rp2350
 extern void tcc_picomite_api_call(void (*fn)(void *), void *arg);
 #endif
-static void pm_core_call(void (*fn)(void *), void *arg)
+void pm_core_call(void (*fn)(void *), void *arg)
 {
 #ifdef rp2350
     tcc_picomite_api_call(fn, arg);
 #else
     if (MMAbort) CheckAbort();
-    fn(arg);
+    if (fn) fn(arg);
 #endif
 }
 
@@ -80,6 +80,38 @@ static void pm_pin_read_do(void *p)
 int pm_pin_read(int gp)
 { int a[] = {gp, 0}; pm_core_call(pm_pin_read_do, a); return a[1]; }
 
+/* Compiler-independent native functions; local declarations avoid clashing
+ * with the legacy static TinyCC adapter implementations during migration. */
+extern void pm_print(const char *);
+extern void pm_yield(void);
+extern void pm_delay_us(unsigned int);
+extern void pm_pause(unsigned int);
+extern int pm_keydown(int);
+extern int pm_mouse(int, int);
+extern int pm_usb_device(int);
+extern int pm_errno(void);
+extern const char *pm_errmsg(void);
+extern void pm_error_clear(void);
+extern int pm_get_framebuffer(void *);
+extern unsigned pm_fb_colour(int);
+extern int pm_font_width(int, int);
+extern int pm_font_height(int, int);
+extern void pm_text(int, int, const char *, const char *, int, int, int, int);
+extern void pm_draw_box(int, int, int, int, int, int, int);
+extern void pm_draw_rbox(int, int, int, int, int, int, int);
+extern void pm_blit_framebuffer(int, int, int, int, int, int, int, int, int);
+extern void pm_sprite_show(int, int, int, int, int);
+extern void pm_sprite_hide(int);
+extern void pm_sprite_write(int, int, int, int);
+extern void pm_sprite_close_all(void);
+extern void pm_framebuffer_copy(int, int, int);
+extern void pm_pcm_play(const int16_t *, unsigned, unsigned, unsigned);
+extern void pm_pcm_stop(void);
+extern int pm_pcm_playing(void);
+extern void pm_pcm_poll(void);
+extern void pm_colour(int, int);
+extern void pm_mode(int);
+
 extern const void *const CallTable[];
 typedef struct { const char *name; const void *address; } pm_core_symbol;
 #define PM_CORE_SYM(n) {#n, (const void *)&n},
@@ -100,6 +132,35 @@ static const pm_core_symbol pm_core_symbols[] = {
     PM_CORE_SYM(pm_pin_mode)
     PM_CORE_SYM(pm_pin_write)
     PM_CORE_SYM(pm_pin_read)
+    PM_CORE_SYM(pm_print)
+    PM_CORE_SYM(pm_yield)
+    PM_CORE_SYM(pm_delay_us)
+    PM_CORE_SYM(pm_pause)
+    PM_CORE_SYM(pm_keydown)
+    PM_CORE_SYM(pm_mouse)
+    PM_CORE_SYM(pm_usb_device)
+    PM_CORE_SYM(pm_errno)
+    PM_CORE_SYM(pm_errmsg)
+    PM_CORE_SYM(pm_error_clear)
+    PM_CORE_SYM(pm_get_framebuffer)
+    PM_CORE_SYM(pm_fb_colour)
+    PM_CORE_SYM(pm_font_width)
+    PM_CORE_SYM(pm_font_height)
+    PM_CORE_SYM(pm_text)
+    PM_CORE_SYM(pm_draw_box)
+    PM_CORE_SYM(pm_draw_rbox)
+    PM_CORE_SYM(pm_blit_framebuffer)
+    PM_CORE_SYM(pm_sprite_show)
+    PM_CORE_SYM(pm_sprite_hide)
+    PM_CORE_SYM(pm_sprite_write)
+    PM_CORE_SYM(pm_sprite_close_all)
+    PM_CORE_SYM(pm_framebuffer_copy)
+    PM_CORE_SYM(pm_pcm_play)
+    PM_CORE_SYM(pm_pcm_stop)
+    PM_CORE_SYM(pm_pcm_playing)
+    PM_CORE_SYM(pm_pcm_poll)
+    PM_CORE_SYM(pm_colour)
+    PM_CORE_SYM(pm_mode)
 };
 #undef PM_CORE_SYM
 

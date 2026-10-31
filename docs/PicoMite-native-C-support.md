@@ -232,19 +232,23 @@ printing `ELF CSUB OK` through `CallTable`.
 
 ### Common C API for external ELF objects (RP2040 and RP2350)
 
-The independent ELF loader now resolves these **named firmware symbols on
-both chips**, without an onboard compiler:
+The independent ELF loader now resolves **44 named core functions on both
+chips**, without requiring TinyCC. These exports live in `core/pm_api.c` and
+`core/pm_api_extra.c`; their implementations are compiled with the firmware:
 
 | Area | Available functions |
 |---|---|
-| Display | `pm_hres`, `pm_vres`, `pm_cls`, `pm_pixel`, `pm_line`, `pm_box`, `pm_circle`, `pm_triangle`, `pm_refresh` |
-| Input and GPIO | `pm_inkey`, `pm_pin_mode`, `pm_pin_write`, `pm_pin_read` |
-| System | `pm_timer_us`, `pm_abort_requested` |
+| Graphics/display | `pm_hres`, `pm_vres`, `pm_cls`, `pm_pixel`, `pm_line`, `pm_box`, `pm_circle`, `pm_triangle`, `pm_refresh`, `pm_text`, `pm_draw_box`, `pm_draw_rbox`, `pm_colour`, `pm_mode`, `pm_font_width`, `pm_font_height`, `pm_get_framebuffer`, `pm_fb_colour`, `pm_blit_framebuffer`, `pm_framebuffer_copy` |
+| Input | `pm_inkey`, `pm_keydown`, `pm_mouse`, `pm_usb_device` |
+| GPIO | `pm_pin_mode`, `pm_pin_write`, `pm_pin_read` |
+| System/error reporting | `pm_timer_us`, `pm_abort_requested`, `pm_print`, `pm_yield`, `pm_delay_us`, `pm_pause`, `pm_errno`, `pm_errmsg`, `pm_error_clear` |
+| Sprites | `pm_sprite_show`, `pm_sprite_hide`, `pm_sprite_write`, `pm_sprite_close_all` |
+| PCM | `pm_pcm_play`, `pm_pcm_stop`, `pm_pcm_playing`, `pm_pcm_poll` |
 
-The existing `__picomite_calltable` remains available. External GCC builds
-can use declarations in `core/tcc/include/picomite/`, but those headers also
-declare functions **not yet exported on RP2040**. A declaration alone does
-not make a symbol available to the ELF loader.
+The existing `__picomite_calltable` remains available. The runtime header
+files in `core/tcc/include/picomite/` also declare additional functions which
+are **not yet available in the RP2040 ELF resolver**. Declaring an external
+symbol or compiling with `-c` does not supply an implementation.
 
 From the repository root, compile the existing shared-API smoke test:
 
@@ -258,13 +262,27 @@ Copy the resulting file to the SD card and run
 `RUN "B:/core_pm_api_smoke.o"`. It draws a line and a pixel and prints
 `CORE PM API OK` through CallTable. One ARMv6-M `.o` works on both targets.
 
-**RP2040 limitation:** only the 15 named functions listed above and
-`__picomite_calltable` are currently exported by the ELF resolver. TinyCC's
-`printf`, `malloc`, `fopen`, `pm_execute`, `pm_get_framebuffer`,
-`pm_api_version` and the rest of its C runtime are **not** automatically
-available there. GCC's `-c` creates a relocatable object; it does not link
-in a C library. Any other external symbols must be provided by the object
-or the loader rejects it as `ELF: undefined symbol ...`.
+**RP2040 limitation:** the 44 named core functions listed above and
+`__picomite_calltable` are exported. TinyCC's full C runtime (`printf`,
+`malloc`, `fopen`, `pm_execute`, `pm_api_version`, and other services tied to
+its private run context) is **not** available there. In particular,
+`pm_pcm_start` is not yet exported through the common resolver: a persistent
+callback needs ownership and cleanup on all ELF exit paths. GCC's `-c`
+creates a relocatable object; it does not link in a C library. Unresolved
+symbols cause `ELF: undefined symbol ...`.
+
+The expanded regression test is `C/core_pm_extended_smoke.c`:
+
+```sh
+arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
+    -ffreestanding -fno-unwind-tables -O1 -Icore/tcc/include -c \
+    C/core_pm_extended_smoke.c -o core_pm_extended_smoke.o
+```
+
+Run with `RUN "B:/core_pm_extended_smoke.o"` on both architectures.
+On RP2350 also run the source through TinyCC (`RUN "B:/core_pm_extended_smoke.c"`)
+to exercise the compiler resolver's fallback to the common API. Hardware
+verification is required for each firmware variant.
 
 On RP2350 the loader additionally resolves the existing TinyCC runtime
 symbols, with the usual RUN/CSUB safety restrictions.
