@@ -50,6 +50,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifndef PICOMITEWEB
 #include "Turtle.h"
 #endif
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* RUN "file.c": TinyCC */
+#endif
+#include "core/elf/elf_picomite.h"
 #define overlap (VRes % (FontTable[gui_font >> 4][1] * (gui_font & 0b1111)) ? 0 : 1)
 
 /* Stride-aware array access macros for struct member arrays */
@@ -2516,6 +2520,34 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		break;
 	}
 
+	/* ELF objects are detected from their signature, independently of TinyCC.
+	   Only the source-compilation branch is restricted to RP2350. */
+	if (!CMM2mode && *filename)
+	{
+		size_t len = strlen((const char *)filename);
+#ifdef rp2350
+		bool is_c = len >= 2 && filename[len - 2] == '.' &&
+					(filename[len - 1] == 'c' || filename[len - 1] == 'C');
+#else
+		bool is_c = false;
+		(void)len;
+#endif
+		if (is_c || elf_picomite_is_elf((const char *)filename))
+		{
+			char cfile[MAXSTRLEN + 1], cargs[MAXSTRLEN + 1];
+			snprintf(cfile, sizeof(cfile), "%s", (char *)filename);
+			snprintf(cargs, sizeof(cargs), "%s", (char *)cmd_args);
+			ClearRuntime(true);
+			BasicPrepareLibraryOnly();
+#ifdef rp2350
+			tcc_picomite_run(cfile, cargs, is_c);
+#else
+			elf_picomite_run_file(cfile, cargs);
+#endif
+			return;
+		}
+	}
+
 	// The memory allocated by getCstring() is not preserved across
 	// a call to FileLoadProgram() so we need to cache 'filename' and
 	// 'cmd_args' on the stack.
@@ -2546,6 +2578,21 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		// Error in program - print message and don't run
 		PrintPreprogramError();
 		return;
+	}
+	if (elf_picomite_csub_stale()
+#ifdef rp2350
+	    || tcc_picomite_csub_stale()
+#endif
+	    )
+	{
+		// The linked CSUB image was bound to a different firmware or XIP address.
+		elf_picomite_csub_rebuild();
+		ClearRuntime(true);
+		if (PrepareProgram(true))
+		{
+			PrintPreprogramError();
+			return;
+		}
 	}
 	if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
 	{
@@ -3207,7 +3254,7 @@ void MIPS16 cmd_continue(void)
 	}
 	// must be a normal CONTINUE
 	checkend(cmdline);
-	if (CurrentLinePtr)
+	if (ProgramRunning())
 		StandardError(10);
 	if (ContinuePoint == NULL)
 		error("Cannot continue");
@@ -3527,6 +3574,22 @@ static void iftab_sort_range(int lo, int hi)
  * the table each time it comes back, and a program that stopped with "Not
  * enough memory" leaves the heap full, so an allocation that raised the error
  * itself (GetMemory) sent the prompt round that loop for ever. */
+/* Rebuild the IF jump table for a library-only program context. */
+void IfTableBuildLibraryOnly(void)
+{
+    IfTableFree();
+    if (LibPresent() && LibMemory)
+    {
+        if (!iftab_build_region(LibMemory))
+        {
+            IfTableFree();
+            return;
+        }
+        iftab_lib_count = iftab_count;
+        iftab_sort_range(0, iftab_lib_count);
+    }
+}
+
 void MIPS16 IfTableBuild(void)
 {
 	IfTableFree();

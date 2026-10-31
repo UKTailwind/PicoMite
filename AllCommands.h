@@ -278,6 +278,9 @@ void cmd_keyboard(void);
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 void cmd_bluetooth(void); /* bluetooth/BTAudio.c */
 #endif
+#ifdef rp2350
+void cmd_tcc(void); /* core/tcc/tcc_picomite.c */
+#endif
 
 /* Operator functions */
 void op_invalid(void);
@@ -720,6 +723,9 @@ void fun_frame(void);
 	{(unsigned char *)"Bluetooth", T_CMD, 0, cmd_bluetooth},
 #endif
 	{(unsigned char *)"ZModem", T_CMD, 0, cmd_zmodem},
+#ifdef rp2350
+	{(unsigned char *)"TCC", T_CMD, 0, cmd_tcc}, /* TinyCC, core/tcc/tcc_picomite.c (appended: earlier tokens keep their numbers) */
+#endif
 
 {
 	(unsigned char *)"", 0, 0, cmd_null

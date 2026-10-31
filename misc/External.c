@@ -2900,6 +2900,246 @@ static inline uint8_t *pwm_slice_flag_ptr(int slice)
     }
 }
 
+/* PWM has one firmware-owned state shared by BASIC and C. */
+static void pwm_shared_check(int slice)
+{
+    int maxslice = 7;
+#ifdef rp2350
+    maxslice = rp2350a ? 7 : 11;
+#endif
+    if (slice < 0 || slice > maxslice)
+        error("Invalid PWM channel");
+    if (slice == Option.AUDIO_SLICE || slice == BacklightSlice || slice == CameraSlice
+#if PICOMITERP2350
+        || slice == KeyboardlightSlice
+#endif
+        )
+        error("PWM channel reserved by system");
+#ifdef rp2350
+    if (slice == 0 && (fast_timer_active ||
+        ExtCurrentConfig[FAST_TIMER_PIN] == EXT_FAST_TIMER))
+        error("PWM channel in use by FAST TIMER");
+    extern volatile bool stepper_initialized;
+    if (slice == 10 && stepper_initialized)
+        error("PWM channel in use by Stepper");
+#endif
+}
+
+/* Shared counter/divider calculation for BASIC PWM, SERVO and native C.
+   BASIC supplies the effective counter frequency (2x for phase-correct). */
+static unsigned pwm_shared_period(double hz, unsigned *div_out)
+{
+    double ticks;
+    unsigned div = 1;
+    if (!(hz > 0.0) || hz > (double)Option.CPU_Speed * 250.0)
+        error("Invalid PWM frequency");
+    ticks = (double)Option.CPU_Speed * 1000.0 / hz;
+    while (ticks >= 65536.0 && div <= 256u)
+    {
+        ticks *= 0.5;
+        div <<= 1;
+    }
+    if (div > 256u || ticks < 4.0 || ticks > 65535.0)
+        error("Invalid PWM frequency");
+    *div_out = div;
+    return (unsigned)ticks;
+}
+
+/* Match BASIC's compare-value rounding: zero remains zero; all other
+   levels use a one-count decrement after truncation. */
+static int pwm_shared_level(unsigned period, double duty)
+{
+    int high = (int)((double)period * duty / 100.0);
+    if (high > 65535) high = 65535;
+    return high ? high - 1 : 0;
+}
+
+/* Keep already-programmed compare levels when changing the period. */
+static int pwm_shared_rescale(unsigned period, unsigned old_period, unsigned compare)
+{
+    double result = (double)compare * (double)period / (double)old_period;
+    return (int)(result > 65535.0 ? 65535.0 : result);
+}
+
+/* BASIC's original truncate/shift/decrement order for new duty levels. */
+static int pwm_shared_compare(double hz, double duty, unsigned div)
+{
+    int high = (int)((double)Option.CPU_Speed / hz * duty * 10.0);
+    while (div > 1u)
+    {
+        high >>= 1;
+        div >>= 1;
+    }
+    return high ? high - 1 : 0;
+}
+
+static void pwm_shared_clock(int slice, unsigned period, unsigned div)
+{
+    pwm_set_clkdiv(slice, (float)div);
+    pwm_set_wrap(slice, period - 1u);
+}
+
+static void pwm_shared_validate_duty(double a, double b)
+{
+    /* This also rejects NaN (all ordered comparisons are false). */
+    if (!(a == -1.0 || (a >= 0.0 && a <= 100.0)) ||
+        !(b == -1.0 || (b >= 0.0 && b <= 100.0)))
+        error("Invalid PWM duty");
+}
+
+static int pwm_shared_running(int slice)
+{
+    uint8_t *flag = pwm_slice_flag_ptr(slice);
+    return flag != NULL && *flag != 0;
+}
+
+static int pwm_shared_channel_active(int slice, int channel)
+{
+    uint8_t *pin = channel ? pwmB_pin_ptr(slice) : pwmA_pin_ptr(slice);
+    return pin && *pin != 99 && ExtCurrentConfig[*pin] == EXT_COM_RESERVED;
+}
+
+void MIPS16 set_PWM(int slice, MMFLOAT duty1, MMFLOAT duty2, int high1, int high2, int delaystart);
+void PWMoff(int slice);
+
+/* One register/pin programming path. Only the frontends parse arguments. */
+static void pwm_shared_apply(int slice, double effective_hz, double a, double b,
+                             int invert_a, int invert_b, int phase_correct,
+                             int delaystart)
+{
+    unsigned div, period;
+    pwm_shared_check(slice);
+    pwm_shared_validate_duty(a, b);
+    period = pwm_shared_period(effective_hz, &div);
+    pwm_shared_clock(slice, period, div);
+    pwm_set_output_polarity(slice, invert_a != 0, invert_b != 0);
+    pwm_set_phase_correct(slice, phase_correct != 0);
+    if (!pwm_shared_running(slice))
+        pwm_set_counter(slice, 0);
+    set_PWM(slice, a, b,
+            a >= 0.0 ? pwm_shared_compare(effective_hz, a, div) : 0,
+            b >= 0.0 ? pwm_shared_compare(effective_hz, b, div) : 0, delaystart);
+}
+
+/* Synchronisation is shared state, even though only BASIC exposes SYNC. */
+static void pwm_shared_sync(const MMFLOAT *counts, int max_slices)
+{
+    int enabled = 0;
+    int i;
+#ifdef rp2350
+    extern volatile bool stepper_initialized;
+    if (stepper_initialized && (counts[10] >= 0.0 || slice10))
+        error("Channel 10 in use for Stepper");
+#endif
+    for (i = 0; i < max_slices; i++)
+    {
+        uint8_t *slice_flag = pwm_slice_flag_ptr(i);
+        int reserved = false;
+        if (slice_flag != NULL && *slice_flag)
+            reserved = true;
+        if (Option.AUDIO_SLICE == i || BacklightSlice == i || CameraSlice == i)
+            reserved = true;
+#if PICOMITERP2350
+        if (KeyboardlightSlice == i)
+            reserved = true;
+#endif
+        if (reserved)
+        {
+            enabled |= (1 << i);
+            if (counts[i] >= 0.0 && Option.AUDIO_SLICE != i &&
+                BacklightSlice != i && CameraSlice != i
+#if PICOMITERP2350
+                && KeyboardlightSlice != i
+#endif
+                )
+            {
+                MMFLOAT count = (MMFLOAT)pwm_hw->slice[i].top * (100.0 - counts[i]) / 100.0;
+                pwm_set_enabled(i, false);
+                pwm_set_counter(i, (int)count);
+            }
+        }
+    }
+    pwm_hw->en = enabled;
+}
+
+void PWM_Configure(int slice, unsigned hz, double a, double b)
+{
+    unsigned period, div, old_period;
+    uint32_t cc;
+    uint8_t *pA, *pB;
+    int preserve_a = -1, preserve_b = -1;
+    pwm_shared_check(slice);
+    pwm_shared_validate_duty(a, b);
+    if (a < 0.0 && b < 0.0)
+        error("PWM requires at least one duty");
+    pA = pwmA_pin_ptr(slice);
+    pB = pwmB_pin_ptr(slice);
+    if ((a >= 0.0 && (*pA == 99 ||
+         (ExtCurrentConfig[*pA] != EXT_PWM0A + slice * 2 &&
+          ExtCurrentConfig[*pA] != EXT_COM_RESERVED))) ||
+        (b >= 0.0 && (*pB == 99 ||
+         (ExtCurrentConfig[*pB] != EXT_PWM0B + slice * 2 &&
+          ExtCurrentConfig[*pB] != EXT_COM_RESERVED))))
+        error("Assign PWM pins with SETPIN first");
+    period = pwm_shared_period((double)hz, &div);
+    old_period = (unsigned)pwm_hw->slice[slice].top + 1u;
+    cc = pwm_hw->slice[slice].cc;
+    if (pwm_shared_running(slice))
+    {
+        if (a < 0.0 && pwm_shared_channel_active(slice, 0))
+            preserve_a = pwm_shared_rescale(period, old_period, cc & 65535u);
+        if (b < 0.0 && pwm_shared_channel_active(slice, 1))
+            preserve_b = pwm_shared_rescale(period, old_period, cc >> 16);
+    }
+    pwm_shared_apply(slice, (double)hz, a, b, 0, 0, 0, 0);
+    if (preserve_a >= 0) pwm_set_chan_level(slice, PWM_CHAN_A, preserve_a);
+    if (preserve_b >= 0) pwm_set_chan_level(slice, PWM_CHAN_B, preserve_b);
+}
+
+void PWM_SetDuty(int slice, double a, double b)
+{
+    unsigned period;
+    pwm_shared_check(slice);
+    pwm_shared_validate_duty(a, b);
+    if (!pwm_shared_running(slice))
+        error("PWM not open");
+    if ((a >= 0.0 && !pwm_shared_channel_active(slice, 0)) ||
+        (b >= 0.0 && !pwm_shared_channel_active(slice, 1)))
+        error("PWM output not active");
+    period = (unsigned)pwm_hw->slice[slice].top + 1u;
+    if (a >= 0.0) pwm_set_chan_level(slice, PWM_CHAN_A, pwm_shared_level(period, a));
+    if (b >= 0.0) pwm_set_chan_level(slice, PWM_CHAN_B, pwm_shared_level(period, b));
+}
+
+void PWM_SetFrequency(int slice, unsigned hz)
+{
+    unsigned period, div, old_period;
+    uint32_t cc;
+    int phase;
+    pwm_shared_check(slice);
+    if (!pwm_shared_running(slice))
+        error("PWM not open");
+    phase = (pwm_hw->slice[slice].csr & PWM_CH0_CSR_PH_CORRECT_BITS) != 0;
+    period = pwm_shared_period((double)hz * (phase ? 2.0 : 1.0), &div);
+    old_period = (unsigned)pwm_hw->slice[slice].top + 1u;
+    cc = pwm_hw->slice[slice].cc;
+    int a = pwm_shared_rescale(period, old_period, cc & 65535u);
+    int b = pwm_shared_rescale(period, old_period, cc >> 16);
+    pwm_shared_clock(slice, period, div);
+    if (pwm_shared_channel_active(slice, 0)) pwm_set_chan_level(slice, PWM_CHAN_A, a);
+    if (pwm_shared_channel_active(slice, 1)) pwm_set_chan_level(slice, PWM_CHAN_B, b);
+}
+
+void PWM_Close(int slice)
+{
+    uint8_t *flag;
+    pwm_shared_check(slice);
+    flag = pwm_slice_flag_ptr(slice);
+    PWMoff(slice);
+    if (flag != NULL) *flag = 0;
+}
+
+
 void MIPS16 set_PWM(int slice, MMFLOAT duty1, MMFLOAT duty2, int high1, int high2, int delaystart)
 {
     uint8_t *pA = pwmA_pin_ptr(slice);
@@ -3087,37 +3327,20 @@ void MIPS16 cmd_backlight(void)
 void MIPS16 cmd_Servo(void)
 {
     unsigned char *tp;
-    int div = 1, high1 = 0, high2 = 0;
     MMFLOAT duty1 = -1.0, duty2 = -1.0;
     getcsargs(&cmdline, 5);
     if (!(argc >= 3))
         SyntaxError();
     ;
-    int CPU_Speed = Option.CPU_Speed;
 #ifdef rp2350
     int slice = getint(argv[0], 0, rp2350a ? 7 : 11);
-    if (slice == 0 && ExtCurrentConfig[FAST_TIMER_PIN] == EXT_FAST_TIMER)
-        error("Channel in use for fast frequency");
 #else
     int slice = getint(argv[0], 0, 7);
 #endif
-    if (slice == BacklightSlice)
-        error("Channel in use for backlight");
-    if (slice == Option.AUDIO_SLICE)
-        error("Channel in use for Audio");
-    if (slice == CameraSlice)
-        error("Channel in use for Camera");
-#ifdef rp2350
-    extern volatile bool stepper_initialized;
-    if (slice == 10 && stepper_initialized)
-        error("Channel in use for Stepper");
-#endif
+    pwm_shared_check(slice);
     if ((tp = checkstring(argv[2], (unsigned char *)"OFF")))
     {
-        uint8_t *slice_flag = pwm_slice_flag_ptr(slice);
-        PWMoff(slice);
-        if (slice_flag != NULL)
-            *slice_flag = 0;
+        PWM_Close(slice);
         return;
     }
     MMFLOAT frequency = 50.0;
@@ -3137,32 +3360,7 @@ void MIPS16 cmd_Servo(void)
         ;
         duty2 = 5.0 + duty2 * 0.05;
     }
-    int wrap = (CPU_Speed * 1000) / frequency;
-    if (duty1 >= 0.0)
-        high1 = (int)((MMFLOAT)CPU_Speed / frequency * duty1 * 10.0);
-    if (duty2 >= 0.0)
-        high2 = (int)((MMFLOAT)CPU_Speed / frequency * duty2 * 10.0);
-    while (wrap > 65535)
-    {
-        wrap >>= 1;
-        if (duty1 >= 0.0)
-            high1 >>= 1;
-        if (duty2 >= 0.0)
-            high2 >>= 1;
-        div <<= 1;
-    }
-    if (div > 256)
-        error("Invalid frequency");
-    wrap--;
-    if (high1)
-        high1--;
-    if (high2)
-        high2--;
-    pwm_set_clkdiv(slice, (float)div);
-    pwm_set_wrap(slice, wrap);
-    pwm_set_output_polarity(slice, false, false);
-    pwm_set_phase_correct(slice, false);
-    set_PWM(slice, duty1, duty2, high1, high2, 0);
+    pwm_shared_apply(slice, frequency, duty1, duty2, 0, 0, 0, 0);
 }
 void MIPS16 cmd_pwm(void)
 {
@@ -3170,7 +3368,6 @@ void MIPS16 cmd_pwm(void)
     if ((tp = checkstring(cmdline, (unsigned char *)"SYNC")))
     {
         MMFLOAT counts[12];
-        int enabled = 0;
         int i;
 #ifdef rp2350
         int max_slices = 12;
@@ -3194,77 +3391,24 @@ void MIPS16 cmd_pwm(void)
             }
         }
 
-#ifdef rp2350
-        extern volatile bool stepper_initialized;
-        if (stepper_initialized && (counts[10] >= 0.0 || slice10))
-            error("Channel 10 in use for Stepper");
-#endif
-
-        for (i = 0; i < max_slices; i++)
-        {
-            uint8_t *slice_flag = pwm_slice_flag_ptr(i);
-            int reserved = false;
-
-            if (slice_flag != NULL && *slice_flag)
-                reserved = true;
-            if (Option.AUDIO_SLICE == i || BacklightSlice == i || CameraSlice == i)
-                reserved = true;
-#if PICOMITERP2350
-            if (KeyboardlightSlice == i)
-                reserved = true;
-#endif
-
-            if (reserved)
-            {
-                enabled |= (1 << i);
-                if (counts[i] >= 0.0 && Option.AUDIO_SLICE != i && BacklightSlice != i && CameraSlice != i
-#if PICOMITERP2350
-                    && KeyboardlightSlice != i
-#endif
-                )
-                {
-                    MMFLOAT count = (MMFLOAT)pwm_hw->slice[i].top * (100.0 - counts[i]) / 100.0;
-                    pwm_set_enabled(i, false);
-                    pwm_set_counter(i, (int)count);
-                }
-            }
-        }
-
-        pwm_hw->en = enabled;
+        pwm_shared_sync(counts, max_slices);
         return;
     }
-    int div = 1, high1 = 0, high2 = 0;
     int phase1 = 0, phase2 = 0;
     MMFLOAT duty1 = -1.0, duty2 = -1.0;
     getcsargs(&cmdline, 11);
     if (!(argc >= 3))
         SyntaxError();
     ;
-    int CPU_Speed = Option.CPU_Speed;
 #ifdef rp2350
     int slice = getint(argv[0], 0, rp2350a ? 7 : 11);
-    if (slice == 0 && ExtCurrentConfig[FAST_TIMER_PIN] == EXT_FAST_TIMER)
-        error("Channel in use for fast frequency");
 #else
     int slice = getint(argv[0], 0, 7);
 #endif
-    if (slice == BacklightSlice)
-        error("Channel in use for backlight");
-    if (slice == Option.AUDIO_SLICE)
-        error("Channel in use for Audio");
-    if (slice == CameraSlice)
-        error("Channel in use for Camera");
-#ifdef rp2350
-    extern volatile bool stepper_initialized;
-    if (slice == 10 && stepper_initialized)
-        error("Channel in use for Stepper");
-#endif
+    pwm_shared_check(slice);
     if ((tp = checkstring(argv[2], (unsigned char *)"OFF")))
     {
-        uint8_t *slice_flag = pwm_slice_flag_ptr(slice);
-        PWMoff(slice);
-        if (slice_flag != NULL)
-            *slice_flag = 0;
+        PWM_Close(slice);
         return;
     }
     if (!(argc >= 5))
@@ -3277,8 +3421,6 @@ void MIPS16 cmd_pwm(void)
     if (argc == 11)
         delaystart = getint(argv[10], 0, 1);
     MMFLOAT frequency = getnumber(argv[2]) * phase;
-    if (frequency > (MMFLOAT)(CPU_Speed >> 2) * 1000.0)
-        error("Invalid frequency");
     if (*argv[4])
     {
         duty1 = getnumber(argv[4]);
@@ -3303,32 +3445,7 @@ void MIPS16 cmd_pwm(void)
             phase2 = 1;
         }
     }
-    int wrap = (CPU_Speed * 1000) / frequency;
-    if (duty1 >= 0.0)
-        high1 = (int)((MMFLOAT)CPU_Speed / frequency * duty1 * 10.0);
-    if (duty2 >= 0.0)
-        high2 = (int)((MMFLOAT)CPU_Speed / frequency * duty2 * 10.0);
-    while (wrap > 65535)
-    {
-        wrap >>= 1;
-        if (duty1 >= 0.0)
-            high1 >>= 1;
-        if (duty2 >= 0.0)
-            high2 >>= 1;
-        div <<= 1;
-    }
-    if (div > 256)
-        error("Invalid frequency");
-    wrap--;
-    if (high1)
-        high1--;
-    if (high2)
-        high2--;
-    pwm_set_clkdiv(slice, (float)div);
-    pwm_set_wrap(slice, wrap);
-    pwm_set_output_polarity(slice, phase1, phase2);
-    pwm_set_phase_correct(slice, (phase == 2 ? true : false));
-    set_PWM(slice, duty1, duty2, high1, high2, delaystart);
+    pwm_shared_apply(slice, frequency, duty1, duty2, phase1, phase2, phase == 2, delaystart);
 }
 
 /****************************************************************************************************************************

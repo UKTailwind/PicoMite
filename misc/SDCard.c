@@ -412,7 +412,7 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 		if ((pioi2s->flevel & (0xf << (i2ssm * 8))) > (0x6 << (i2ssm * 8)))
 			return;
 		static int32_t left = 0, right = 0;
-		if (CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY
+		if (CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY || CurrentlyPlaying == P_PCM
 #ifdef rp2350
 			|| CurrentlyPlaying == P_SAMPLE
 #endif
@@ -472,7 +472,7 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 			if (VSbuffer > 1023 - (CurrentlyPlaying == P_STREAM ? sendstream : sendcount))
 				return;
 		}
-		if (CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_MIDI || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY
+		if (CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_MIDI || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY || CurrentlyPlaying == P_PCM
 #ifdef rp2350
 			|| CurrentlyPlaying == P_SAMPLE
 #endif
@@ -534,7 +534,7 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 	}
 	else
 	{
-		if (CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY
+		if (CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY || CurrentlyPlaying == P_PCM
 #ifdef rp2350
 			|| CurrentlyPlaying == P_SAMPLE
 #endif
@@ -556,7 +556,7 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 				right = (uint16_t)sr;
 			}
 		}
-		else if (CurrentlyPlaying <= P_STOP)
+		else if (CurrentlyPlaying <= P_STOP || CurrentlyPlaying == P_PAUSE_PCM)
 		{
 			return;
 		}
@@ -581,7 +581,7 @@ bool bt_audio_playing(void)
 		return false;
 	return CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_MOD ||
 		   CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND ||
-		   CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY || CurrentlyPlaying == P_SAMPLE;
+		   CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY || CurrentlyPlaying == P_SAMPLE || CurrentlyPlaying == P_PCM;
 }
 
 /* Bluetooth output: BTAudio asks for `frames` stereo frames at out_rate

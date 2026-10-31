@@ -78,6 +78,7 @@ extern "C"
 #include "class/cdc/cdc_device.h"
 #endif
 #endif
+#include "core/elf/elf_picomite.h"
 #ifndef rp2350
 #include "hardware/structs/ssi.h"
 #include "hardware/vreg.h"
@@ -95,6 +96,9 @@ extern "C"
 #include "hardware/vreg.h"
 #include "pico/multicore.h"
 #include "pico/sem.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* tcc_picomite_abandoned */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
@@ -617,7 +621,17 @@ uint8_t PSRAMpin;
         // PIN(n) and PIN(n) = v. Setting a pin up is a one-off and belongs in
         // BASIC; watching or driving one in a tight loop is what a CSUB is for.
         (void *)PinVal, // 0x1b8 MMFLOAT PinVal(int pin)        PIN(n)
-        (void *)PinPut, // 0x1bc void PinPut(int pin, int val)  PIN(n) = v
+        (void *)PinPut,       // 0x1bc void PinPut(int pin, int val)  PIN(n) = v
+        // RP2040/RP2350-common CSUB-safe additions; no heap/runtime resets.
+        (void *)MMInkey,      // 0x1c0 int MMInkey(void): decoded INKEY$, -1 if empty
+        (void *)kbhitConsole, // 0x1c4 int kbhitConsole(void): raw console RX bytes
+        (void *)DrawRBox,     // 0x1c8 void DrawRBox(x1,y1,x2,y2,r,c,fill)
+        (void *)BasicCallTyped,  // 0x1cc universal typed BASIC SUB/FUNCTION callback
+        (void *)PCMPlay,         // 0x1d0 signed-16 one-shot PCM copy
+        (void *)PCMStart,        // 0x1d4 signed-16 PCM streaming callback
+        (void *)PCMStop,         // 0x1d8 stop PCM and free owned data
+        (void *)PCMPlaying,      // 0x1dc PCM active (including paused)
+        (void *)PCMPoll,         // 0x1e0 service PCM outside the IRQ
     };
 #ifdef rp2350
     // once a frig to place the call table at 0x1000023C as in earlier releases; the
@@ -973,7 +987,7 @@ uint8_t PSRAMpin;
                 WITH_FRAMEBUFFER_LOCK(SPIatRisk, checkWAVinput());
             }
             else if (CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY ||
-                     CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC
+                     CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_PCM
 #ifdef rp2350
                      || CurrentlyPlaying == P_SAMPLE
 #endif
@@ -3795,6 +3809,16 @@ uint32_t testPSRAM(void)
             SetFlashMap();
         }
 #ifndef HDMI
+#ifdef MURMULATOR_M2P1
+        /* Migrate only the incorrect pin defaults of the first M2P1VGA
+           test build, without erasing the flash storage or user data. */
+        if (Option.VGA_HSYNC == PINMAP[12] && Option.VGA_BLUE == PINMAP[15])
+        {
+            Option.VGA_HSYNC = PINMAP[18];
+            Option.VGA_BLUE = PINMAP[13];
+            SaveOptions();
+        }
+#endif
         if (Option.VGA_HSYNC == 0)
         {
             Option.VGA_HSYNC = 21;
@@ -4479,6 +4503,10 @@ uint32_t testPSRAM(void)
         if (setjmp(mark) != 0)
         {
             // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
+#ifdef rp2350
+            tcc_picomite_abandoned(); // a C program (RUN "x.c", TCC) left past its cleanup: free its memory
+#endif
+            elf_picomite_abandoned();
             FlashLoad = 0;
             ExecDepth = 0; // (see ExecuteProgram)
             OptionErrorSkip = 0; // the prompt has no ON ERROR of the program's (issue 35)
@@ -4972,6 +5000,10 @@ uint32_t testPSRAM(void)
         multi = false;
         tokenise_insub = false;
         uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realflashsave;
+        uint32_t *cimg[MAXCFUNCTION] = {NULL}; // linked ELF/TinyCC CSUBs
+        int cwords[MAXCFUNCTION] = {0};
+        char cerr[MAXERRMSG], *cline = NULL;
+        unsigned char *csubdecl = NULL;
         const uint8_t *scanbase = (region == LIBRARY_FLASH) ? flash_libmemory : flash_progmemory;
         uint32_t writebase = (region == LIBRARY_FLASH) ? (uint32_t)(PROGSTART - MAX_PROG_SIZE) : (uint32_t)PROGSTART;
         initFonts();
@@ -5139,6 +5171,7 @@ uint32_t testPSRAM(void)
                 else
                 {
                     endtoken = GetCommandValue((unsigned char *)"End CSub");
+                    csubdecl = p;
                     realflashpointer += 4;
                     fontnbr = 0;
                     firsthex = 0;
@@ -5171,6 +5204,39 @@ uint32_t testPSRAM(void)
                         }
                         if (*p == T_LINENBR)
                             p += 3; // skip over a line number
+                    }
+                }
+                if (!fontnbr)
+                { // quoted files: native ELF on either chip, TinyCC sources on RP2350
+                    unsigned char *endp;
+                    if (cline == NULL)
+                        cline = GetTempMemory(STRINGSIZE * 4);
+                    if ((endp = elf_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4)) != NULL)
+                    {
+                        bool was_disabled = irqs_off_pico;
+                        if (was_disabled) enable_interrupts_pico();
+                        if (elf_picomite_csub_single_object(cline, scanbase))
+                            cimg[updatecount] = elf_picomite_csub_compile(csubdecl, cline, XIP_BASE + realflashpointer,
+                                                                          scanbase, &cwords[updatecount], cerr);
+#ifdef rp2350
+                        else
+                            cimg[updatecount] = tcc_picomite_csub_compile(csubdecl, cline, XIP_BASE + realflashpointer,
+                                                                          scanbase, &cwords[updatecount], cerr);
+#else
+                        else
+                            snprintf(cerr, sizeof(cerr), "CSUB: expected one ELF object (RP2040)");
+#endif
+                        if (was_disabled) disable_interrupts_pico();
+                        if (cimg[updatecount] == NULL)
+                        {
+                            refusal = cerr;
+                            goto exiterror;
+                        }
+                        realflashpointer += 4 * cwords[updatecount];
+                        if ((int)((char *)realflashpointer - writebase) >= MAX_PROG_SIZE - 5)
+                            goto exiterror;
+                        p = endp;
+                        goto csub_linked;
                     }
                 }
                 do
@@ -5226,6 +5292,7 @@ uint32_t testPSRAM(void)
                     skipspace(p);
                     tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
+            csub_linked:
                 storedupdates[updatecount++] = realflashpointer - SaveSizeAddr - 4;
             }
             while (*p)
@@ -5319,6 +5386,15 @@ uint32_t testPSRAM(void)
                             p += 3; // skip over a line number
                     }
                 }
+                if (!fontnbr && cimg[updatecount - 1] != NULL)
+                { // linked CSUB image from the first pass
+                    p = elf_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4);
+                    for (i = 0; i < cwords[updatecount - 1]; i++)
+                        FlashWriteWord(cimg[updatecount - 1][i]);
+                    FreeMemory(cimg[updatecount - 1]);
+                    cimg[updatecount - 1] = NULL;
+                    goto csub_written;
+                }
                 do
                 {
                     while (*p && *p != '\'')
@@ -5364,6 +5440,7 @@ uint32_t testPSRAM(void)
                     skipspace(p);
                     tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
+            csub_written:;
             }
             while (*p)
                 p++; // look for the zero marking the start of the next element
@@ -5389,6 +5466,9 @@ uint32_t testPSRAM(void)
     // we only get here in an error situation while writing the program to flash
     exiterror:
         SymEnd();
+        for (i = 0; i < MAXCFUNCTION; i++)
+            if (cimg[i] != NULL)
+                FreeMemory(cimg[i]);
         /* What is in the slot is the part of the program written so far, its
            text already in symbols and no table after it (the table comes
            last).  Kept, it could never be prepared: PrepareProgram runs at

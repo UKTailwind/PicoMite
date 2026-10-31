@@ -31,6 +31,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include <stdio.h>
 #include <limits.h>
 #include <stdarg.h>
+#include <ctype.h>
+#include <setjmp.h>
 #include "MMBasic.h"
 #include "pico/stdlib.h"
 #include "Functions.h"
@@ -840,14 +842,16 @@ static inline unsigned char *LineFind(int nbr)
 // error (set) if ErrAbort, else 0.  With no memory for it (only possible at
 // the command prompt: RUN starts with an empty heap) the index is left
 // absent, and a name lookup reports that.
-static int MIPS16 NameIndexBuild(int nsubs, int ErrAbort)
+static int MIPS16 NameIndexBuild(int nsubs, int ErrAbort, bool library_only)
 {
     int n, size, i, numbered = 0, nt = 0;
     uint16_t *targets = NULL;
     NameIndexFree();
     NameSubs = nsubs;
-    n = nsubs + (LibPresent() ? NameLabels(LibMemory, 0, 0, &numbered) : 0) + NameLabels(ProgMemory, 0, 0, &numbered);
-    if (numbered)
+    n = nsubs + (LibPresent() ? NameLabels(LibMemory, 0, 0, &numbered) : 0);
+    if (!library_only)
+        n += NameLabels(ProgMemory, 0, 0, &numbered);
+    if (numbered && !library_only)
         nt = LineTargetsGather(&targets);
     n += nt;
     if (n == 0)
@@ -877,7 +881,8 @@ static int MIPS16 NameIndexBuild(int nsubs, int ErrAbort)
             return 1;
         }
     }
-    if ((LibPresent() && NameLabels(LibMemory, 1, ErrAbort, NULL) < 0) || NameLabels(ProgMemory, 1, ErrAbort, NULL) < 0)
+    if ((LibPresent() && NameLabels(LibMemory, 1, ErrAbort, NULL) < 0) ||
+        (!library_only && NameLabels(ProgMemory, 1, ErrAbort, NULL) < 0))
     {
         FreeMemorySafe((void **)&targets);
         return 1;
@@ -896,7 +901,32 @@ static int MIPS16 NameIndexBuild(int nsubs, int ErrAbort)
 void MIPS16 NameIndexRebuild(void)
 {
     NameIndexForget();
-    NameIndexBuild(NameSubs, 0);
+    NameIndexBuild(NameSubs, 0, false);
+}
+/* Prepare the current VM context with library routines only.  This does not
+   import definitions from the dormant program in ProgMemory.  The caller has
+   already cleared the previous runtime with ClearRuntime(true). */
+void BasicPrepareLibraryOnly(void)
+{
+    int n;
+    SymSetProgram(NULL);
+    SymSetLibrary((LibPresent() && LibMemory) ? LibMemory : NULL);
+    SymOffLine = NULL;
+    if (!LibPresent() || LibMemory == NULL)
+        return;
+    SymBindInit();
+    CFunctionFlash = CFunctionLibrary = NULL;
+    n = PrepareProgramExt(LibMemory, 0, &CFunctionLibrary, true);
+    if (n < 0)
+        error("Invalid BASIC library");
+    int failed = NameIndexBuild(n, false, true);
+    if (failed)
+        error("Invalid BASIC library");
+    extern void IfTableBuildLibraryOnly(void);
+    IfTableBuildLibraryOnly();
+    /* Same initialization as BASIC RUN.  This executes the library's own
+       top-level statements, not the dormant program in ProgMemory. */
+    ExecuteProgram(LibMemory);
 }
 
 // the first slot of a name of the kinds in kinds (a bit per kind), or NULL
@@ -1562,7 +1592,7 @@ static int MIPS16 PrepareProgramWalk(int ErrAbort)
 
     // the index of every SUB, FUNCTION, CSUB and label by name (both chips), which
     // also finds a name defined twice
-    if (NameIndexBuild(NbrFuncts, ErrAbort))
+    if (NameIndexBuild(NbrFuncts, ErrAbort, false))
     {
         ProgramValid = 0;
         return 1;
@@ -3188,6 +3218,132 @@ static __attribute__((noinline)) void ByValArrayCheck(unsigned char *arg, int vi
         error("Array as BYVAL not allowed $", arg);
 }
 
+static const pm_basic_value *basic_native_argv;
+static unsigned basic_native_argc;
+
+void BasicTypedCallStage(const pm_basic_value *args, unsigned count)
+{
+    basic_native_argv = args;
+    basic_native_argc = count;
+}
+void BasicTypedCallCancel(void)
+{
+    basic_native_argv = NULL;
+    basic_native_argc = 0;
+}
+
+/* Native C and classic CSUB frontends share the same MMBasic call machinery.
+   Do not build a new program index: use the active context's visibility.
+   Keep this in the VM (RP2040 as well as RP2350), not in the TCC adapter. */
+void BasicCallTyped(int isfun, const char *name,
+                    const pm_basic_value *args, unsigned count,
+                    pm_basic_value *result, char *strbuf, unsigned capacity)
+{
+    unsigned char saved_inp[STRINGSIZE], saved_tkn[STRINGSIZE];
+    unsigned char *const saved_line = CurrentLinePtr;
+    unsigned char *const saved_cmd = cmdline;
+    unsigned char *const saved_next = nextstmt;
+    const int saved_token = cmdtoken, saved_multi = multi;
+    const int saved_local = g_LocalIndex, saved_gosub = gosubindex;
+    const int saved_skip = OptionErrorSkip;
+    jmp_buf saved_errnext;
+    static const pm_basic_value no_args = {0};
+    static unsigned char call_end[] = {0, 0, 0};
+    MMFLOAT number = 0;
+    long long integer = 0;
+    unsigned char *str = NULL;
+    int type = T_NOTYPE, idx;
+    const char *p;
+
+    memcpy(saved_inp, inpbuf, STRINGSIZE);
+    memcpy(saved_tkn, tknbuf, STRINGSIZE);
+    memcpy(saved_errnext, ErrNext, sizeof(jmp_buf));
+    OptionErrorSkip = 1;
+    if (setjmp(ErrNext) != 0)
+    {
+        /* An ON ERROR SKIP inside the BASIC body must not leave the CSUB or
+           C run with another program's GOSUB frames and local variables. */
+        int errcode = MMerrno;
+        char errmsg[MAXERRMSG];
+        memcpy(errmsg, MMErrMsg, MAXERRMSG);
+        BasicTypedCallCancel();
+        while (g_LocalIndex > saved_local)
+            ClearVars(g_LocalIndex--, true);
+        gosubindex = saved_gosub;
+        memcpy(ErrNext, saved_errnext, sizeof(jmp_buf));
+        OptionErrorSkip = saved_skip;
+        cmdline = saved_cmd;
+        nextstmt = saved_next;
+        cmdtoken = saved_token;
+        multi = saved_multi;
+        CurrentLinePtr = saved_line;
+        memcpy(inpbuf, saved_inp, STRINGSIZE);
+        memcpy(tknbuf, saved_tkn, STRINGSIZE);
+        memcpy(MMErrMsg, errmsg, MAXERRMSG);
+        MMerrno = errcode;
+        error("$", errmsg); /* rethrow into the original BASIC/TCC handler */
+        return;
+    }
+
+    if (name == NULL || !isalpha((unsigned char)name[0]) ||
+        strlen(name) >= MAXVARLEN + 2 ||
+        (count && args == NULL) || count > (MAX_ARG_COUNT + 1) / 2 ||
+        (isfun && result == NULL))
+        error("Invalid BASIC callback");
+    p = name + 1;
+    while (isalnum((unsigned char)*p) || *p == '_' || *p == '.')
+        ++p;
+    if (isfun && (*p == '$' || *p == '%' || *p == '!'))
+        ++p;
+    if (*p)
+        error("Invalid BASIC callback name");
+    idx = FindSubFun((unsigned char *)name, isfun);
+    if (idx < 0 || commandtbl_decode(subfun[idx]) != (isfun ? cmdFUN : cmdSUB))
+        error(isfun ? "BASIC FUNCTION not found: $" : "BASIC SUB not found: $", (char *)name);
+
+    BasicTypedCallStage(args ? args : &no_args, count);
+    nextstmt = call_end;
+    DefinedSubFun(isfun, (unsigned char *)name, idx, &number, &integer, &str, &type);
+    if (!isfun)
+        ExecuteProgram(nextstmt); /* END SUB returns to call_end */
+    else
+    {
+        result->type = PM_BASIC_INTEGER;
+        result->integer = 0;
+        result->number = 0;
+        result->string = NULL;
+        if (type & T_INT)
+            result->integer = integer;
+        else if (type & T_NBR)
+        {
+            result->type = PM_BASIC_FLOAT;
+            result->number = number;
+        }
+        else if (type & T_STR)
+        {
+            unsigned len = str ? str[0] : 0;
+            if (strbuf == NULL || capacity == 0 || len >= capacity)
+                error("BASIC string result buffer too small");
+            memcpy(strbuf, str + 1, len);
+            strbuf[len] = 0;
+            result->type = PM_BASIC_STRING;
+            result->string = strbuf;
+        }
+        else
+            error("Unsupported BASIC function result type");
+    }
+    BasicTypedCallCancel();
+    memcpy(ErrNext, saved_errnext, sizeof(jmp_buf));
+    OptionErrorSkip = saved_skip;
+    cmdline = saved_cmd;
+    nextstmt = saved_next;
+    cmdtoken = saved_token;
+    multi = saved_multi;
+    CurrentLinePtr = saved_line;
+    memcpy(inpbuf, saved_inp, STRINGSIZE);
+    memcpy(tknbuf, saved_tkn, STRINGSIZE);
+}
+
 #if LOWRAM
 /* (in RAM on the LOWRAM builds too since the RAM review of 2026-10-02 freed
    the room: every SUB and FUNCTION call runs it) */
@@ -3224,6 +3380,10 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     union u_argval *argval;
     int *argVarIndex;
     struct s_sublayout *L; // the definition's parameter list, as read on its first call (P6 F1)
+    /* Consume the staged argument set before invoking any nested BASIC code. */
+    const pm_basic_value *typed_argv = basic_native_argv;
+    unsigned typed_argc = basic_native_argc;
+    BasicTypedCallCancel();
 
     // Errors generated after gosubindex is incremented need to restore the original value
     // Any variables created if LocalIndex was incremented also need to be cleared
@@ -3401,7 +3561,15 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     // now split up the arguments in the caller
     CurrentLinePtr = CallersLinePtr; // report errors at the caller
     argc1 = 0;
-    if (*tp)
+    if (typed_argv != NULL)
+    {
+        if (typed_argc > (MAX_ARG_COUNT + 1) / 2)
+            error("Argument list");
+        argc1 = typed_argc ? (int)(typed_argc * 2 - 1) : 0;
+        for (int j = 0; j < argc1; j += 2)
+            argv1[j] = (unsigned char *)"C value"; /* only for BASIC error diagnostics */
+    }
+    else if (*tp)
         makeargs(&tp, MAX_ARG_COUNT, argbuf1, argv1, &argc1, (*tp == '(') ? (unsigned char *)"(," : (unsigned char *)",");
 
     // the arguments in the definition, as read on its first call (P6 F1)
@@ -3425,7 +3593,45 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
 #endif
     for (i = 0; i < argc2; i += 2)
     { // count through the arguments in the definition of the sub/fun
-        if (i < argc1 && *argv1[i])
+        if (typed_argv != NULL)
+        {
+            if (i >= argc1)
+                continue;
+            const pm_basic_value *v = &typed_argv[i >> 1];
+            if (L->p[i >> 1].by == SL_BYREF)
+                error("BYREF is not supported by native BASIC callbacks");
+            if (strchr((char *)L->p[i >> 1].name, '(') != NULL)
+                error("Array parameters are not supported by native BASIC callbacks");
+#ifdef STRUCTENABLED
+            if (L->p[i >> 1].type & T_STRUCT)
+                error("Structure parameters are not supported by native BASIC callbacks");
+#endif
+            argbyref[i] = 0;
+            if (v->type == PM_BASIC_INTEGER)
+            {
+                argtype[i] = T_INT;
+                argval[i].i = v->integer;
+            }
+            else if (v->type == PM_BASIC_FLOAT)
+            {
+                argtype[i] = T_NBR;
+                argval[i].f = v->number;
+            }
+            else if (v->type == PM_BASIC_STRING)
+            {
+                if (v->string == NULL || strlen(v->string) > MAXSTRLEN)
+                    error("Invalid native string argument");
+                size_t slen = strlen(v->string);
+                argval[i].s = GetMemory(STRINGSIZE);
+                argval[i].s[0] = (unsigned char)slen;
+                memcpy(argval[i].s + 1, v->string, slen);
+                argtype[i] = T_STR;
+            }
+            else
+                error("Invalid native BASIC argument type");
+            continue;
+        }
+        else if (i < argc1 && *argv1[i])
         {
             // check if the argument is a valid variable
             if (i < argc1 && isnamestartsym(*argv1[i]) && *skipvar(argv1[i], false) == 0)
@@ -7824,6 +8030,7 @@ void MIPS16 ClearStack(void)
 void MIPS16 ClearRuntime(bool all)
 {
     int i;
+    tcc_picomite_reset_guard(); /* (not under a C program: it clears its memory) */
     /* Profiling buffers were allocated from the BASIC variable pool via
      * GetMemory().  ClearRuntime() is about to wipe that pool, so we must
      * release our references first - otherwise the pointers stay valid in

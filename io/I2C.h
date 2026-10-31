@@ -181,6 +181,13 @@ extern int mmI2Cvalue;
  * ============================================================================================================== */
 extern void i2c_disable(void);
 extern void i2c2_disable(void);
+/* Shared native/BASIC I2C master transport; C ownership is checked in the adapter. */
+void I2C_MasterOpen(int bus, int khz, unsigned timeout_ms);
+void I2C_MasterClose(int bus);
+int I2C_MasterIsOpen(int bus);
+unsigned I2C_MasterEpoch(int bus);
+int I2C_MasterTransfer(int bus, unsigned address, const unsigned char *tx, unsigned txlen,
+                       unsigned char *rx, unsigned rxlen, int hold_after, unsigned timeout_ms);
 extern int I2C_Send_Command(char command, int update_global);
 extern int I2C_Send_Data(unsigned char *data, int n, int update_global);
 extern uint8_t readRegister8(unsigned int addr, uint8_t reg);

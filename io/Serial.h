@@ -111,6 +111,13 @@ extern void on_uart_irq1(void);
  */
 void SerialOpen(unsigned char *spec);
 
+/* Typed open for C clients, no command parser. COM1/COM2 only: the GPIOs
+   must already be assigned by SETPIN as for BASIC OPEN. */
+void SerialOpenTyped(int port, int baud, int rx_size, int bits, int parity, int stop_bits, int invert);
+unsigned SerialPortEpoch(int port);
+int SerialPortIsOpen(int port);
+int SerialTxIdle(int port);
+
 /**
  * Close a serial port
  * @param comnbr COM port number (1 or 2)

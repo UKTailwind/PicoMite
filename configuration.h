@@ -80,7 +80,10 @@ extern "C"
       16 MB fixed map's 3 MB system top.  There is no Route B flash stream
       (RB_STREAM_FLASH_SLOTS below): this build has PSRAM, and the stream
       lives in the PSRAM reserve, which is 2.5 MB here (PSRAM_RESERVE). */
-#define FLASH_TARGET_OFFSET (1744 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash).  Not linked here: estimated from the builds that were
+      (243-254 KB over their old offsets), so the link check may ask for more. */
+#define FLASH_TARGET_OFFSET (2016 * 1024)
    /* 108 KB: the SRAM heap the review's budget gives with the full 153600-byte
       pool (4.2 KB of RAM margin left for the stack); the boot-time resize for
       800x600, 848x480 and 800x480 takes its pool from this, as on HDMIUSB. */
@@ -112,7 +115,10 @@ extern "C"
       +16 KB (2026-10-10): the RC0 build went over.
       +16 KB (2026-10-10): BLE serial devices on COM7 (BTSerial.c, 4.3 KB) went
       1.8 KB over, the Classic ones (12.8 KB) having taken the rest. */
-#define FLASH_TARGET_OFFSET (1504 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash).  Not linked here: estimated from the builds that were
+      (243-254 KB over their old offsets), so the link check may ask for more. */
+#define FLASH_TARGET_OFFSET (1776 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
    /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
       output added ~12.6 KB of BSS (less what dropping VS1053 and PWM/SPI
@@ -142,7 +148,9 @@ extern "C"
       P3b (compiled SUB calls) on development. */
    /* +16 KB (2026-09-29): Route B's P5c left 832 bytes. */
    /* +16 KB (2026-10-10): ZMODEM SEND was 1.3 KB over. */
-#define FLASH_TARGET_OFFSET (1568 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash); the firmware ends at 1821.1 KB. */
+#define FLASH_TARGET_OFFSET (1840 * 1024)
    /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
       kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
       pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
@@ -183,7 +191,11 @@ extern "C"
       been sized for HDMIWEB. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 4.1 KB over. */
-#define FLASH_TARGET_OFFSET (1136 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash); the firmware ends at 1390.3 KB. */
+   /* +16 KB (2026-10-30): pm_try, the file and variable API, the mouse went
+      0.4 KB over; the firmware ends at 1408.4 KB. */
+#define FLASH_TARGET_OFFSET (1424 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -197,7 +209,16 @@ extern "C"
 #define MagicKey 0xDDE229A1
    /* +48 KB (2026-09-29): Route B (P1-P5) went 29.4 KB over. */
    /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 164 bytes over. */
-#define FLASH_TARGET_OFFSET (1104 * 1024)
+   /* +176 KB (2026-10-30): TinyCC (RUN "file.c", core/tcc) is ~180 KB of
+      flash; at 1104 KB the firmware ran 157 KB into the options. */
+   /* +32 KB (2026-10-30): the TCC command, ELF RUN and C CSUBs went 2 KB over. */
+   /* +32 KB (2026-10-30): <picomite/...> and the built-in PicoCFunctions.h (44 KB
+      of text) went 22 KB over. */
+   /* +32 KB (2026-10-30): the typed C API (<picomite/sprite.h>, audio.h, ...)
+      went 2.7 KB over; the firmware ends at 1346.7 KB. */
+   /* +16 KB (2026-10-30): the C API to FRAMEBUFFER and BLIT left 5.5 KB; the
+      firmware ends at 1370.5 KB. */
+#define FLASH_TARGET_OFFSET (1392 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 1144 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -214,7 +235,10 @@ extern "C"
    /* +32 KB (2026-09-29): Route B (P1-P5) went 19.5 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 3.9 KB over. */
-#define FLASH_TARGET_OFFSET (1104 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash).  Not linked here: estimated from the builds that were
+      (243-254 KB over their old offsets), so the link check may ask for more. */
+#define FLASH_TARGET_OFFSET (1376 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
@@ -235,7 +259,11 @@ extern "C"
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
    /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 1.1 KB over. */
-#define FLASH_TARGET_OFFSET (1072 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash); the firmware ends at 1315.4 KB. */
+   /* +16 KB (2026-10-30): the C API to FRAMEBUFFER and BLIT left 4.7 KB; the
+      firmware ends at 1339.3 KB. */
+#define FLASH_TARGET_OFFSET (1360 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.5 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.5 KB of RAM margin left for the stack. */
@@ -254,7 +282,14 @@ extern "C"
 #define MAXMODES 2
 #define MAX_CPU 378000
 #define MIN_CPU 252000
-#ifdef USBKEYBOARD
+#ifdef MURMULATOR_M2P1
+   /* ELF-enabled RP2040 Murmulator 2 VGA test build. Separate flash map
+      from standard VGA; 16 KB-aligned, with space for the ELF loader. */
+#define FLASH_TARGET_OFFSET (960 * 1024)
+#define MagicKey 0x4D325031 /* M2P1: invalidate options of other layouts */
+#define HEAP_MEMORY_SIZE (120 * 1024)
+#define MAX_PROG_SIZE (100 * 1024)
+#elif defined(USBKEYBOARD)
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c).
       It fitted without this at +284 bytes, and the font handling then took all
       but 108 of them - which is no place to stop. */
@@ -382,7 +417,10 @@ extern "C"
 #ifdef USBKEYBOARD
 #define MagicKey 0x3F42F5D6
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
-#define FLASH_TARGET_OFFSET (1184 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash).  Not linked here: estimated from the builds that were
+      (243-254 KB over their old offsets), so the link check may ask for more. */
+#define FLASH_TARGET_OFFSET (1456 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
       from the cursor module (~650 bytes for user_cursor.pixels +
       state) and the click/cursor ownership tracking. Heap and BSS
@@ -466,7 +504,11 @@ extern "C"
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 5.0 KB over. */
-#define FLASH_TARGET_OFFSET (1152 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
+      ~250 KB of flash); the firmware ends at 1401.4 KB. */
+   /* +16 KB (2026-10-30): the C API to FRAMEBUFFER and BLIT went 1.4 KB over;
+      the firmware ends at 1425.4 KB. */
+#define FLASH_TARGET_OFFSET (1440 * 1024)
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
    /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~6.0 KB of RAM margin left for the stack. */

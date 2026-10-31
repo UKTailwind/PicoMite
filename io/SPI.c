@@ -41,6 +41,79 @@ unsigned int *GetReceiveDataBuffer(unsigned char *p, unsigned int *nbr, CommsRxD
 
 uint8_t spibits = 8;
 uint8_t spi2bits = 8;
+/* Each BASIC SPI CLOSE invalidates any prior native C descriptor. */
+static unsigned spi_native_epoch[2];
+
+static void SPI_MasterConfigure(int bus, unsigned speed, int mode, int bits)
+{
+    spi_inst_t *inst = bus == 0 ? spi0 : spi1;
+    uint8_t tx = bus == 0 ? SPI0TXpin : SPI1TXpin;
+    uint8_t rx = bus == 0 ? SPI0RXpin : SPI1RXpin;
+    uint8_t sck = bus == 0 ? SPI0SCKpin : SPI1SCKpin;
+    spi_init(inst, speed);
+    spi_set_format(inst, bits, (mode & 2) != 0, (mode & 1) != 0, SPI_MSB_FIRST);
+    if (bus == 0) spibits = bits;
+    else spi2bits = bits;
+    ExtCfg(tx, EXT_COM_RESERVED, 0);
+    ExtCfg(rx, EXT_COM_RESERVED, 0);
+    ExtCfg(sck, EXT_COM_RESERVED, 0);
+}
+
+unsigned SPI_MasterEpoch(int bus)
+{
+    return bus == 0 || bus == 1 ? spi_native_epoch[bus] : 0;
+}
+
+int SPI_MasterIsOpen(int bus)
+{
+    int tx, rx, sck;
+    if (bus != 0 && bus != 1) return 0;
+    if (bus == 0 ? SPI0locked : SPI1locked) return 0;
+    tx = bus == 0 ? SPI0TXpin : SPI1TXpin;
+    rx = bus == 0 ? SPI0RXpin : SPI1RXpin;
+    sck = bus == 0 ? SPI0SCKpin : SPI1SCKpin;
+    return tx != 99 && rx != 99 && sck != 99 &&
+           ExtCurrentConfig[tx] == EXT_COM_RESERVED &&
+           ExtCurrentConfig[rx] == EXT_COM_RESERVED &&
+           ExtCurrentConfig[sck] == EXT_COM_RESERVED;
+}
+
+void SPI_MasterOpen(int bus, unsigned speed, int mode, int bits)
+{
+    int tx, rx, sck;
+    if (bus != 0 && bus != 1) error("Invalid SPI bus");
+    if (!speed || mode < 0 || mode > 3 || bits < 4 || bits > 16)
+        error("Invalid SPI configuration");
+    if (bus == 0 ? SPI0locked : SPI1locked)
+        error("Allocated to System SPI");
+    tx = bus == 0 ? SPI0TXpin : SPI1TXpin;
+    rx = bus == 0 ? SPI0RXpin : SPI1RXpin;
+    sck = bus == 0 ? SPI0SCKpin : SPI1SCKpin;
+    if (tx == 99 || rx == 99 || sck == 99)
+        error("Not all pins set for SPI");
+    if (ExtCurrentConfig[tx] >= EXT_COM_RESERVED ||
+        ExtCurrentConfig[rx] >= EXT_COM_RESERVED ||
+        ExtCurrentConfig[sck] >= EXT_COM_RESERVED)
+        error("SPI pins already in use");
+    SPI_MasterConfigure(bus, speed, mode, bits);
+}
+
+/* Transfer count is in SPI words, not bytes. NULL selects write- or read-only. */
+int SPI_MasterTransfer(int bus, const void *tx, void *rx, unsigned count)
+{
+    spi_inst_t *inst = bus == 0 ? spi0 : spi1;
+    int bits = bus == 0 ? spibits : spi2bits;
+    if (!count) return 0;
+    if (bits <= 8)
+    {
+        if (tx && rx) return spi_write_read_blocking(inst, tx, rx, count);
+        if (tx) return spi_write_blocking(inst, tx, count);
+        return spi_read_blocking(inst, 0, rx, count);
+    }
+    if (tx && rx) return spi_write16_read16_blocking(inst, tx, rx, count);
+    if (tx) return spi_write16_blocking(inst, tx, count);
+    return spi_read16_blocking(inst, 0, rx, count);
+}
 /*  @endcond */
 void cmd_spi(void)
 {
@@ -73,10 +146,7 @@ void cmd_spi(void)
         while (nbr--)
         {
             mybuff.aTxBuffer = *d++;
-            if (spibits > 8)
-                spi_write16_blocking(spi0, &mybuff.bTXBuffer[0], 1);
-            else
-                spi_write_blocking(spi0, &mybuff.cTxBuffer[0], 1);
+            SPI_MasterTransfer(0, &mybuff, NULL, 1);
         }
         return;
     }
@@ -97,10 +167,7 @@ void cmd_spi(void)
         for (i = 0; i < nbr; i++)
         {
             mybuff.aRxBuffer = 0;
-            if (spibits > 8)
-                spi_read16_blocking(spi0, 0, &mybuff.bRXBuffer[0], 1);
-            else
-                spi_read_blocking(spi0, 0, &mybuff.cRxBuffer[0], 1);
+            SPI_MasterTransfer(0, NULL, &mybuff, 1);
             rbuf[i] = mybuff.aRxBuffer;
         }
         PutCommsRxData(&dest, rbuf);
@@ -120,14 +187,8 @@ void cmd_spi(void)
             StandardError(2);
         mode = getinteger(argv[2]);
         speed = getinteger(argv[0]);
-        spibits = 8;
-        if (argc == 5)
-            spibits = getint(argv[4], 4, 16);
-        spi_init(spi0, speed);
-        spi_set_format(spi0, spibits, (mode & 2 ? true : false), (mode & 1 ? true : false), SPI_MSB_FIRST);
-        ExtCfg(SPI0TXpin, EXT_COM_RESERVED, 0);
-        ExtCfg(SPI0RXpin, EXT_COM_RESERVED, 0);
-        ExtCfg(SPI0SCKpin, EXT_COM_RESERVED, 0);
+        int bits = argc == 5 ? getint(argv[4], 4, 16) : 8;
+        SPI_MasterConfigure(0, speed, mode, bits);
     }
 }
 
@@ -144,10 +205,7 @@ void fun_spi(void)
     outbuff.aTxBuffer = getinteger(ep);
     if (ExtCurrentConfig[SPI0TXpin] < EXT_COM_RESERVED)
         error("Not open");
-    if (spibits > 8)
-        spi_write16_read16_blocking(spi0, &outbuff.bTXBuffer[0], &inbuff.bTXBuffer[0], 1);
-    else
-        spi_write_read_blocking(spi0, &outbuff.cTxBuffer[0], &inbuff.cTxBuffer[0], 1);
+    SPI_MasterTransfer(0, &outbuff, &inbuff, 1);
     iret = inbuff.aTxBuffer;
     targ = T_INT;
 }
@@ -163,6 +221,8 @@ void SPIClose(void)
     {
         if (ExtCurrentConfig[SPI0TXpin] < EXT_BOOT_RESERVED)
         {
+            if (ExtCurrentConfig[SPI0TXpin] == EXT_COM_RESERVED)
+                ++spi_native_epoch[0];
             spi_deinit(spi0);
             ExtCfg(SPI0TXpin, EXT_NOT_CONFIG, 0);
             ExtCfg(SPI0RXpin, EXT_NOT_CONFIG, 0); // reset to not in use
@@ -203,11 +263,7 @@ void cmd_spi2(void)
         while (nbr--)
         {
             mybuff.aTxBuffer = *d++;
-            if (spi2bits > 8)
-                spi_write16_blocking(spi1, &mybuff.bTXBuffer[0], 1);
-            else
-                spi_write_blocking(spi1, &mybuff.cTxBuffer[0], 1);
-            //        	HAL_SPI_Transmit(&hspi2, mybuff.cTxBuffer,1, 5000);
+            SPI_MasterTransfer(1, &mybuff, NULL, 1);
         }
         return;
     }
@@ -228,10 +284,7 @@ void cmd_spi2(void)
         for (i = 0; i < nbr; i++)
         {
             mybuff.aRxBuffer = 0;
-            if (spi2bits > 8)
-                spi_read16_blocking(spi1, 0, &mybuff.bRXBuffer[0], 1);
-            else
-                spi_read_blocking(spi1, 0, &mybuff.cRxBuffer[0], 1);
+            SPI_MasterTransfer(1, NULL, &mybuff, 1);
             rbuf[i] = mybuff.aRxBuffer;
         }
         PutCommsRxData(&dest, rbuf);
@@ -251,14 +304,8 @@ void cmd_spi2(void)
             StandardError(2);
         mode = getinteger(argv[2]);
         speed = getinteger(argv[0]);
-        spi2bits = 8;
-        if (argc == 5)
-            spi2bits = getint(argv[4], 4, 16);
-        spi_init(spi1, speed);
-        spi_set_format(spi1, spi2bits, (mode & 2 ? true : false), (mode & 1 ? true : false), SPI_MSB_FIRST);
-        ExtCfg(SPI1TXpin, EXT_COM_RESERVED, 0);
-        ExtCfg(SPI1RXpin, EXT_COM_RESERVED, 0);
-        ExtCfg(SPI1SCKpin, EXT_COM_RESERVED, 0);
+        int bits = argc == 5 ? getint(argv[4], 4, 16) : 8;
+        SPI_MasterConfigure(1, speed, mode, bits);
     }
 }
 
@@ -275,10 +322,7 @@ void fun_spi2(void)
     outbuff.aTxBuffer = getinteger(ep);
     if (ExtCurrentConfig[SPI1TXpin] < EXT_COM_RESERVED)
         error("Not open");
-    if (spi2bits > 8)
-        spi_write16_read16_blocking(spi1, &outbuff.bTXBuffer[0], &inbuff.bTXBuffer[0], 1);
-    else
-        spi_write_read_blocking(spi1, &outbuff.cTxBuffer[0], &inbuff.cTxBuffer[0], 1);
+    SPI_MasterTransfer(1, &outbuff, &inbuff, 1);
     iret = inbuff.aTxBuffer;
     targ = T_INT;
 }
@@ -294,6 +338,8 @@ void SPI2Close(void)
     {
         if (ExtCurrentConfig[SPI1TXpin] < EXT_BOOT_RESERVED)
         {
+            if (ExtCurrentConfig[SPI1TXpin] == EXT_COM_RESERVED)
+                ++spi_native_epoch[1];
             spi_deinit(spi1);
             ExtCfg(SPI1TXpin, EXT_NOT_CONFIG, 0);
             ExtCfg(SPI1RXpin, EXT_NOT_CONFIG, 0); // reset to not in use
@@ -301,6 +347,13 @@ void SPI2Close(void)
         }
     }
 }
+void SPI_MasterClose(int bus)
+{
+    if (!SPI_MasterIsOpen(bus)) return;
+    if (bus == 0) SPIClose();
+    else SPI2Close();
+}
+
 unsigned int *GetSendDataList(unsigned char *p, unsigned int *nbr)
 {
     unsigned int *buf;

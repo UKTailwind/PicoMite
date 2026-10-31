@@ -1,3 +1,17 @@
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.3.1)
+set(toolchainVersion 13_3_Rel1)
+set(picotoolVersion 2.3.1)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
 cmake_minimum_required(VERSION 3.13)
 
 # Valid builds are PICO, PICOUSB, PICOMIN, VGA, VGAUSB, WEB,
@@ -8,6 +22,7 @@ set(VALID_COMPILE_VARIANTS
 	PICOUSB
 	PICOMIN
 	VGA
+	M2P1VGA
 	VGAUSB
 	WEB
 	PICORP2350
@@ -16,6 +31,7 @@ set(VALID_COMPILE_VARIANTS
 	VGAUSBRP2350
 	WEBRP2350
 	HDMI
+	M2P2HDMI
 	HDMIUSB
 	PICOBTRP2350
 	PICOBTHRP2350
@@ -28,7 +44,7 @@ set(VALID_COMPILE_VARIANTS
 # Guard restored: without it, this set() shadows the -DCOMPILE=X passed
 # by buildpicomite.bat and every variant silently builds as the default.
 if(NOT DEFINED COMPILE)
-	set(COMPILE HDMIWEB)
+	set(COMPILE M2P2HDMI)
 endif()
 
 list(FIND VALID_COMPILE_VARIANTS "${COMPILE}" COMPILE_INDEX)
@@ -49,6 +65,14 @@ endmacro()
 
 set(COMMON_SOURCES
 	PicoMite.c
+	core/pm_api.c
+	core/pm_api_extra.c
+	core/pm_runtime.c
+	core/pm_runtime_stdio.c
+	core/pm_basic_runtime.c
+	core/pm_peripheral_runtime.c
+	core/pm_runtime_commands.c
+	core/pm_api_extra.c
 	core/MMBasic.c
 	core/Symbols.c
 	core/Stream.c
@@ -85,6 +109,8 @@ set(COMMON_SOURCES
 	io/Audio.c
 	io/AudioBBC.c
 	core/CFunction.c
+	core/elf/elf_loader.c
+	core/elf/elf_picomite.c
 	third_party_mod/picojpeg.c
 	third_party_mod/lfs.c
 	third_party_mod/lfs_util.c
@@ -157,6 +183,7 @@ set(FULL_RP2040_VARIANTS
 	PICO
 	PICOUSB
 	VGA
+	M2P1VGA
 	VGAUSB
 	WEB
 	PICOMIN
@@ -164,6 +191,7 @@ set(FULL_RP2040_VARIANTS
 
 set(RP2350_VARIANTS
 	HDMI
+	M2P2HDMI
 	WEBRP2350
 	HDMIUSB
 	VGARP2350
@@ -229,6 +257,7 @@ set(UPNG_VARIANTS
 	WEBRP2350
 	PICORP2350
 	HDMI
+	M2P2HDMI
 	HDMIUSB
 	VGAUSBRP2350
 	PICOUSBRP2350
@@ -243,6 +272,7 @@ set(RAYCASTER_VARIANTS
 	VGARP2350
 	PICORP2350
 	HDMI
+	M2P2HDMI
 	HDMIUSB
 	VGAUSBRP2350
 	PICOUSBRP2350
@@ -255,6 +285,7 @@ set(RAYCASTER_VARIANTS
 
 set(VGA_PIO_VARIANTS
 	VGA
+	M2P1VGA
 	VGAUSB
 	VGARP2350
 	VGAUSBRP2350
@@ -262,6 +293,7 @@ set(VGA_PIO_VARIANTS
 
 set(VGA_VARIANTS
 	VGA
+	M2P1VGA
 	VGAUSB
 	VGARP2350
 	VGAUSBRP2350
@@ -269,6 +301,7 @@ set(VGA_VARIANTS
 
 set(HDMI_VARIANTS
 	HDMI
+	M2P2HDMI
 	HDMIUSB
 	HDMIBTH
 	HDMIWEB
@@ -286,9 +319,11 @@ set(PICOMITE_VARIANTS
 
 set(PICO_MULTICORE_VARIANTS
 	VGA
+	M2P1VGA
 	PICO
 	PICOMIN
 	HDMI
+	M2P2HDMI
 	VGARP2350
 	PICORP2350
 	PICOBTRP2350
@@ -300,6 +335,7 @@ set(PICO_RAND_VARIANTS
 	WEBRP2350
 	PICORP2350
 	HDMI
+	M2P2HDMI
 	HDMIUSB
 	VGAUSBRP2350
 	PICOUSBRP2350
@@ -317,6 +353,7 @@ set(USES_SUBPROFILE_VARIANTS
 	VGARP2350
 	VGAUSBRP2350
 	HDMI
+	M2P2HDMI
 	PICOBTRP2350
 	PICOBTHRP2350
 	HDMIBTH
@@ -451,6 +488,44 @@ set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
 
 add_executable(PicoMite ${COMMON_SOURCES})
+
+# The firmware must end before FLASH_TARGET_OFFSET (configuration.h): the link
+# fails instead of the code silently overlapping the options and A:.
+target_link_options(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR}/cmake/flash_layout_check.ld)
+
+# TinyCC is built and linked only for RP2350.  tcc.c includes libtcc.c
+# (ONE_SOURCE), so compiling both would define the compiler twice.
+# The compiler is a library of its own, compiled without the PicoMite
+# headers; core/tcc/tcc_picomite.c, compiled with the firmware, is its
+# PicoMite side (memory, files, console, run-time symbols - tcc_picomite.h),
+# and the system headers it gives compiled programs (core/tcc/include) are
+# built into the firmware.
+if(IS_RP2350)
+    add_library(PicoMiteTinyCC STATIC
+        core/tcc/tcc.c
+        core/tcc/tcc_time.c
+    )
+    target_compile_definitions(PicoMiteTinyCC PRIVATE
+        NO_SEMAPHORE_H=1 TCC_IS_NATIVE=1)
+    target_compile_options(PicoMiteTinyCC PRIVATE -O2)
+
+    # core/tcc/include (with picomite/), and PicoCFunctions.h: the CSUB API
+    file(GLOB_RECURSE TCC_ROM_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/core/tcc/include/*.h)
+    list(APPEND TCC_ROM_HEADERS ${CMAKE_CURRENT_LIST_DIR}/PicoCFunctions.h)
+    set(TCC_ROM_C ${CMAKE_CURRENT_BINARY_DIR}/tcc_rom_headers.c)
+    add_custom_command(OUTPUT ${TCC_ROM_C}
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC_DIR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/include
+            -DOUT=${TCC_ROM_C}
+            -DHDR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/tcc_picomite.h
+            -DEXTRA=${CMAKE_CURRENT_LIST_DIR}/PicoCFunctions.h
+            -P ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
+        DEPENDS ${TCC_ROM_HEADERS} ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
+        COMMENT "Embedding the TinyCC system headers"
+        VERBATIM)
+    target_sources(PicoMite PRIVATE core/tcc/tcc_picomite.c ${TCC_ROM_C})
+    target_link_libraries(PicoMite PicoMiteTinyCC)
+endif()
 
 # Diagnostic: timing-neutral USB host event ring in the PC3-patched TinyUSB
 # files (four stores per event, no prints - a UART print in the IRQ path is
@@ -916,6 +991,16 @@ if(IS_HDMI)
 	if(COMPILE STREQUAL "HDMIBTH" OR COMPILE STREQUAL "HDMIWEB")
 		target_compile_definitions(PicoMite PRIVATE HDMICUTDOWN)
 	endif()
+endif()
+
+# M2P1 VGA reuses the RP2040 PicoMiteVGA PIO scanout unchanged.
+if(COMPILE STREQUAL "M2P1VGA")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P1)
+endif()
+
+# M2P2 HDMI uses the standard HDMI firmware with factory pin defaults.
+if(COMPILE STREQUAL "M2P2HDMI")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2)
 endif()
 
 if(COMPILE STREQUAL "HDMIBTH")

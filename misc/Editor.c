@@ -573,7 +573,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
         strcpy(name, (char *)getFstring(argv[0]));
         filename = name;
     }
-    if (CurrentLinePtr && cmdfile)
+    if (ProgramRunning() && cmdfile)
         StandardError(10);
     if (argc == 0 && !cmdfile)
         SyntaxError();
@@ -4676,7 +4676,7 @@ fm_relaunch:
     if (FrameBuf != NULL || LayerBuf != NULL)
         closeframebuffer('A');
 
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
     if (*cmdline)
         SyntaxError();

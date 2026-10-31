@@ -466,6 +466,11 @@ int KeypadCheck(void);
  * ============================================================================ */
 void SetADCFreq(float frequency);
 void setBacklight(int level, int frequency);
+/* Shared with BASIC PWM and SERVO; there is no C-owned PWM state. */
+void PWM_Configure(int slice, unsigned hz, double duty_a, double duty_b);
+void PWM_SetDuty(int slice, double duty_a, double duty_b);
+void PWM_SetFrequency(int slice, unsigned hz);
+void PWM_Close(int slice);
 
 /* ============================================================================
  * Function declarations - Utility functions

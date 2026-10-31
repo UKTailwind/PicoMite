@@ -1,0 +1,1 @@
+C:\Users\New\.pico-sdk\toolchain\13_3_Rel1\bin\arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft -ffreestanding -fno-unwind-tables -O1 -Icore/tcc/include -c  C/%1.c -o C/%1.elf

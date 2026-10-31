@@ -374,6 +374,7 @@ void CursorHide(void);
 void CursorRefresh(void);
 void CursorOnHeapWipe(void);   /* called by ClearRuntime before InitHeap(true) */
 bool cursor_handle_gui_subcommand(unsigned char *cmdline_in);
+void CursorMoveC(int x, int y); /* GUI CURSOR x, y */
 extern volatile bool CursorSuspend;
 #ifdef GUICONTROLS
 bool click_handle_gui_subcommand(unsigned char *cmdline_in);
@@ -500,6 +501,13 @@ void closeall3d(void);
  * Function declarations - Sprite operations
  * ============================================================================ */
 void closeallsprites(void);
+/* SPRITE SHOW, HIDE, WRITE, CLOSE ALL for C (graphics/Sprite.c): rotation / orientation < 0 for none */
+void SpriteShowC(int bnbr, int x1, int y1, int layer, int rotation);
+void SpriteHideC(int bnbr);
+void SpriteWriteC(int bnbr, int x1, int y1, int orientation);
+void SpriteCloseAllC(void);
+void BlitFramebufferC(int from, int to, int x1, int y1, int x2, int y2, int w, int h, int blank); /* BLIT FRAMEBUFFER */
+void FrameBufferCopyC(int from, int to, int background); /* FRAMEBUFFER COPY; no BASIC parser */
 void closeallstobjects(void);
 void closeframebuffer(char layer);
 

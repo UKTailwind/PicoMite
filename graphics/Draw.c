@@ -467,7 +467,7 @@ void MIPS16 cmd_guiMX170(void)
         }
         else
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             Option.TOUCH_SWAPXY = 0;
             Option.TOUCH_XZERO = 0;

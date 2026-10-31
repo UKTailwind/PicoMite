@@ -138,6 +138,7 @@ extern bool optionfulltime;
  * ============================================================================ */
 extern int64_t TimeOffsetToUptime;
 extern uint32_t TimeSubSecondUs;
+int KeyDownValue(int n); /* KEYDOWN(n), n checked: 0..8 */
 void set_time_epoch(int64_t epoch, bool zero_ms);
 void set_time_epoch_us(int64_t epoch_us);
 
@@ -189,6 +190,10 @@ uint_fast64_t gettimefromepoch(int *year, int *month, int *day, int *hour, int *
 void OtherOptions(void);
 void printoptions(void);
 void configure(unsigned char *p, bool noask);
+/* Typed backend for MM.INFO and the native C API (no BASIC evaluation). */
+int64_t MMInfoDiskSpace(int free_space);
+const char *MMInfoDriveName(void);
+int MMInfoModified(const char *file, char *out, int size);
 #endif /* !defined(INCLUDE_COMMAND_TABLE) && !defined(INCLUDE_TOKEN_TABLE) */
 
 #endif /* MISC_HEADER */
