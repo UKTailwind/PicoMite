@@ -552,20 +552,18 @@ firmware's services are being opened up further in separate headers under
 `picomite/`, one for each subsystem. They may repeat a few declarations of
 `picomite.h`, so a program can include either or both.
 
-The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 4. It
-goes up by one whenever functions are added, and nothing is ever taken away
-or changed, so a firmware of version n has everything of 1 to n.
-`system.h` lists what each version added; a program that uses what version
-n added can check `pm_api_version() >= n` first. An ELF executable binds
-every function it uses by name when it is run, so on an older firmware a
-missing one is `undefined symbol`, never a crash.
+The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 5.
+Each version adds functions without removing earlier ones. Check
+`pm_api_version()` before using a newer API; an ELF linked against a firmware
+that lacks a function reports `undefined symbol`.
 
 | Version | Added |
 |---|---|
 | 1 | `picomite.h`; `system.h`, `memory.h`, `graphics.h`, `input.h` (`pm_inkey`, `pm_keydown`), `basic.h` (`pm_execute`, `pm_eval_*`, `pm_settick`), `sprite.h`, `audio.h`, `pm_colour`, `pm_load_image`, `pm_load_jpg` |
-| 4 | `graphics.h`: `pm_draw_rbox`; `audio.h`: `pm_play_tone`, `_wav`, `_flac`, `_mp3`, `_midifile`, `_pause`, `_resume`, `_next`, `_previous`, `_close`, `_volume`, `_bbc_sound`, `_bbc_envelope`, `pm_sound` |
-| 3 | `framebuffer.h` |
 | 2 | `basic.h`: `pm_try`, `pm_execute_try`, `pm_eval_*_try`, `pm_errno`, `pm_errmsg`, `pm_error_clear`; `files.h`; `vars.h`; `input.h`: `pm_mouse`, `pm_usb_device`, `pm_cursor_*`; the C library's `remove`, `rename`, `unistd.h`, `sys/stat.h`, `dirent.h` and `fopen`'s `"a"`, `"r+"`, `"w+"`, `"a+"` |
+| 3 | `framebuffer.h` |
+| 4 | `graphics.h`: `pm_draw_rbox`; `audio.h`: `pm_play_tone`, `_wav`, `_flac`, `_mp3`, `_midifile`, `_pause`, `_resume`, `_next`, `_previous`, `_close`, `_volume`, `_bbc_sound`, `_bbc_envelope`, `pm_sound` |
+| 5 | `serial.h`: typed COM1/COM2 UART open, read, write, status, flush and close |
 
 Structs that
 the firmware fills start with a `size` field, which the program sets to
@@ -886,6 +884,77 @@ pm_play_bbc_envelope(env3);                      /* PLAY BBC ENVELOPE 3, 1, 0,0,
 pm_play_bbc_sound(0x10, 3, 6, 0);                /* PLAY BBC SOUND &H10, 3, 6, 0 */
 ```
 
+#### `<picomite/serial.h>`: COM1/COM2 UART (API version 5)
+
+This describes **version 5** of the native PicoMite TinyCC API. The functions
+are defined in `<picomite/serial.h>` and exported to TinyCC-linked C programs.
+The implementation uses the existing `io/Serial.c` UART, pin reservations and
+RX/TX buffers; it does not tokenise BASIC commands.
+
+##### Scope and prerequisites
+
+* Supports **COM1 (UART0)** and **COM2 (UART1)** only. USB CDC COM3-COM6 and
+  Bluetooth COM7 are intentionally not part of this initial API. They have
+  different buffering and flow-control semantics.
+* Use PicoMite `SETPIN` to assign the corresponding COM TX/RX pins first.
+  The same pin availability and UART ownership checks as BASIC `OPEN` apply;
+  occupied pins, the serial console and GPS cannot be taken over.
+* The integrated TinyCC adapter is currently built for **RP2350** variants.
+  The underlying serial driver changes are common to RP2040 and RP2350.
+* Requires `pm_api_version() >= 5`. These entry points are **not available to
+  external CSUBs**; the legacy `CallTable` layout is unchanged.
+* The transmit ring has 256 slots (255 usable bytes); the configuration
+  controls the receive ring only.
+
+##### Interface
+
+```c
+#include <picomite/serial.h>
+
+pm_serial_config cfg = {
+    .port = 1,
+    .baudrate = 115200,
+    .rx_buffer_size = 256,
+    .flags = 0             /* 8 data bits, no parity, 1 stop bit */
+};
+pm_serial_t com = pm_serial_open(&cfg);
+```
+
+`baudrate` defaults to 9600 when zero; `rx_buffer_size` defaults to 1024.
+Valid custom receive buffers are 2..65536 bytes. Baud rates follow the
+existing PicoMite COM range (up to 921600; minimum depends on CPU clock).
+Flags are `PM_SERIAL_7BIT`, `PM_SERIAL_STOP2`, `PM_SERIAL_EVEN`,
+`PM_SERIAL_ODD` and `PM_SERIAL_INVERT`. Even and odd parity cannot be
+combined. `pm_serial_open` returns an opaque handle (`pm_serial_t`).
+
+`pm_serial_available(com)` returns queued input byte count. `pm_serial_read`
+and `pm_serial_write` accept a byte pointer, a maximum length and an overall
+timeout in milliseconds; both return the **number actually transferred**
+(0..length), including partial results. A timeout of zero is nonblocking.
+While waiting, they service PicoMite's background tasks and Ctrl+C.
+
+`pm_serial_flush(com, timeout_ms)` waits until **both** the software TX queue
+and UART hardware transmitter are idle: 0 on success, -1 on timeout.
+`pm_serial_close(com)` closes without waiting; flush first if every outgoing
+byte must be transmitted.
+
+Invalid arguments, an unconfigured/busy UART and invalid/stale handles are
+MMBasic errors, catchable with `pm_try()` in a C program. A C-owned port is
+automatically closed when the C program terminates normally, with an MMBasic
+error or on Ctrl+C. Port generations prevent it from accidentally closing a
+port that BASIC closed and reopened in the meantime.
+
+##### Example
+
+[`C/serial_echo.c`](../C/serial_echo.c) waits for bytes on COM1 at 115200 8N1
+and echoes them. Copy the source to a PicoMite-accessible volume, assign COM1
+GPIOs using BASIC `SETPIN`, and run it with `RUN "B:/serial_echo.c"` (adjust
+the path to the copy). The example has no fixed pin numbers because they
+depend on the board and its currently reserved peripherals.
+
+This is a **polling API**, not an IRQ callback API. It deliberately never
+runs C code inside a UART interrupt. Concurrent BASIC `OPEN`/`CLOSE` on a
+C-owned port is unsupported; a handle is rejected if the port was replaced.
 #### `<picomite/basic.h>`: MMBasic's commands and functions
 
 ```c

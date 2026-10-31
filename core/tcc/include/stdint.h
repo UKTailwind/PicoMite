@@ -2,10 +2,7 @@
 #define MOS_TCC_STDINT_H
 #include <stddef.h>
 
-/* MOS ARM ILP32 profile; exact-width types come from TinyCC stddef.h. */
-#if defined(__LP64__)
-#error This header is for the MOS ARM ILP32 profile
-#endif
+/* RP2350 ARM ILP32; exact-width types from <stddef.h>. */
 typedef int8_t int_least8_t;
 typedef uint8_t uint_least8_t;
 typedef int8_t int_fast8_t;
