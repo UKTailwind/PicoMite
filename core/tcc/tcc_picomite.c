@@ -4194,14 +4194,15 @@ static int pm_csub_words(char **w, int n, const char *dir, char ***argv_, int *a
         {
             char *path = pm_join(dir, x + 1), *text, *p, **ws;
             int k;
+            /* Avoid newlib vfprintf: use the PicoMite console formatter. */
             if (depth >= 4)
             {
-                fprintf(stderr, "tcc: error: '%s': response files nested too deep\n", path);
+                tcc_pm_fprintf(stderr, "tcc: error: '%s': response files nested too deep\n", path);
                 return -1;
             }
             if ((text = pm_read_all(path)) == NULL)
             {
-                fprintf(stderr, "tcc: error: cannot read '%s'\n", path);
+                tcc_pm_fprintf(stderr, "tcc: error: cannot read '%s'\n", path);
                 return -1;
             }
             for (p = text; *p; p++)
@@ -4266,7 +4267,7 @@ static int pm_csub_entry(pm_run_args *a)
         return 1;
     if ((a->csub_image = GetMemoryNull((int)size)) == NULL)
     {
-        fprintf(stderr, "tcc: error: not enough memory for the CSUB\n");
+        tcc_pm_fprintf(stderr, "tcc: error: not enough memory for the CSUB\n");
         return 1;
     }
     memcpy(a->csub_image, img, size);

@@ -354,6 +354,13 @@ static int pm_runtime_vprintf(const char *fmt, va_list ap)
     FreeMemory(buf);
     return n;
 }
+/* Preserve the previous TinyCC vsprintf ABI without importing newlib's
+ * independent _svfprintf_r engine.  snprintf/vsnprintf already use the
+ * formatter linked by PicoMite. */
+static int pm_runtime_vsprintf(char *dst, const char *fmt, va_list ap)
+{
+    return vsnprintf(dst, INT_MAX, fmt, ap);
+}
 static int pm_runtime_printf(const char *fmt, ...)
 {
     va_list ap;
@@ -448,7 +455,7 @@ static const pm_runtime_symbol pm_runtime_symbols[] = {
     PM_RUNTIME_SYM(snprintf)
     PM_RUNTIME_SYM(vsnprintf)
     PM_RUNTIME_SYM(sprintf)
-    PM_RUNTIME_SYM(vsprintf)
+    PM_RUNTIME_AS(vsprintf, pm_runtime_vsprintf)
     PM_RUNTIME_SYM(memcpy)
     PM_RUNTIME_SYM(memmove)
     PM_RUNTIME_SYM(memset)
