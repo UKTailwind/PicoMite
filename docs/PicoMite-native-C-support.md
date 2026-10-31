@@ -14,7 +14,9 @@ The code produced by TinyCC is native Cortex-M33 code. It runs from RAM
 and calls the firmware for its C library, console, files, display and pins.
 
 Precompiled ELF32/ARM relocatable objects can also run on RP2040 and RP2350
-without an onboard compiler. See [ELF objects](#run-file--args-for-elf-files).
+without an onboard compiler. Both now export 15 named `pm_*` services from
+`core/pm_api.c` as well as `__picomite_calltable`. This is **not** the full
+TinyCC C runtime on RP2040. See [ELF objects](#run-file--args-for-elf-files).
 
 > **Limitations**
 >
@@ -228,12 +230,49 @@ On the PicoMite console, `RUN "elf_loader_smoke.o"` calls `main` and prints
 `ELF RUN OK`. The same object is used by `Bas/elf_loader_smoke.bas` as a CSUB,
 printing `ELF CSUB OK` through `CallTable`.
 
+### Common C API for external ELF objects (RP2040 and RP2350)
+
+The independent ELF loader now resolves these **named firmware symbols on
+both chips**, without an onboard compiler:
+
+| Area | Available functions |
+|---|---|
+| Display | `pm_hres`, `pm_vres`, `pm_cls`, `pm_pixel`, `pm_line`, `pm_box`, `pm_circle`, `pm_triangle`, `pm_refresh` |
+| Input and GPIO | `pm_inkey`, `pm_pin_mode`, `pm_pin_write`, `pm_pin_read` |
+| System | `pm_timer_us`, `pm_abort_requested` |
+
+The existing `__picomite_calltable` remains available. External GCC builds
+can use declarations in `core/tcc/include/picomite/`, but those headers also
+declare functions **not yet exported on RP2040**. A declaration alone does
+not make a symbol available to the ELF loader.
+
+From the repository root, compile the existing shared-API smoke test:
+
+```sh
+arm-none-eabi-gcc -mcpu=cortex-m0plus -mthumb -mfloat-abi=soft \
+    -ffreestanding -fno-unwind-tables -O1 -I. -c \
+    C/core_pm_api_smoke.c -o core_pm_api_smoke.o
+```
+
+Copy the resulting file to the SD card and run
+`RUN "B:/core_pm_api_smoke.o"`. It draws a line and a pixel and prints
+`CORE PM API OK` through CallTable. One ARMv6-M `.o` works on both targets.
+
+**RP2040 limitation:** only the 15 named functions listed above and
+`__picomite_calltable` are currently exported by the ELF resolver. TinyCC's
+`printf`, `malloc`, `fopen`, `pm_execute`, `pm_get_framebuffer`,
+`pm_api_version` and the rest of its C runtime are **not** automatically
+available there. GCC's `-c` creates a relocatable object; it does not link
+in a C library. Any other external symbols must be provided by the object
+or the loader rejects it as `ELF: undefined symbol ...`.
+
+On RP2350 the loader additionally resolves the existing TinyCC runtime
+symbols, with the usual RUN/CSUB safety restrictions.
+
 **Architecture/ABI:** ARMv6-M code can execute on the RP2350 ARM core, but
 ARMv8-M/Thumb-2 code cannot execute on RP2040. This instruction-set
 compatibility does not make firmware structures with different layouts
-binary-compatible. Build and use only the appropriate ABI. On RP2040 the
-independent ELF resolver currently exposes `__picomite_calltable`; on RP2350
-it also exposes the existing TinyCC runtime symbols. ELF CSUBs cannot
+binary-compatible. Build and use only the appropriate ABI. ELF CSUBs cannot
 contain writable `.data` or `.bss` sections.
 
 ---
@@ -584,7 +623,9 @@ firmware's services are being opened up further in separate headers under
 The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 11.
 Each version adds functions without removing earlier ones. Check
 `pm_api_version()` before using a newer API; an ELF linked against a firmware
-that lacks a function reports `undefined symbol`.
+that lacks a function reports `undefined symbol`. The RP2040 common API
+currently does **not** export `pm_api_version()`; the version check described
+here applies to the expanded RP2350 runtime.
 
 | Version | Added |
 |---|---|
@@ -1382,8 +1423,11 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 
 ## Known limitations
 
-- **RP2350 only. PSRAM is strongly recommended** (see the top of this
-  document).
+- **Onboard TinyCC is RP2350-only.** External ELF ET_REL execution works on
+  both architectures, with the different symbol sets described above.
+  PSRAM is strongly recommended for compilation and the TinyCC runtime on
+  RP2350. The following C-library limitations describe that RP2350 runtime,
+  not a full C library on RP2040.
 - No `scanf` family. Read lines with `fgets` and convert with `strtol`,
   `strtod` and similar.
 - No `setjmp`/`longjmp`, `signal`, `errno` values, locales, wide characters or
@@ -1412,6 +1456,8 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 
 | File | Purpose |
 |---|---|
+| `core/pm_api.c`, `core/pm_api.h` | Common native C API and named-symbol resolver for both chips |
+| `core/elf/elf_loader.c`, `core/elf/elf_picomite.c` | Independent ELF linker and RUN/CSUB adapter |
 | `core/tcc/*.c, *.h` | TinyCC (library `PicoMiteTinyCC`), with PicoMite changes marked `TCC_PICOMITE` |
 | `core/tcc/config.h` | TinyCC configuration: Thumb-2, EABI, softfp (the firmware's float ABI), `rom:/include` |
 | `core/tcc/tcc_picomite.h` | Interface between TinyCC and the firmware |
