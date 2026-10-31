@@ -1333,7 +1333,7 @@ int pm_adc_read_raw(int gp)
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 9 /* (include/picomite/system.h: what each version added) */
+#define PM_API_VERSION 10 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -2112,6 +2112,39 @@ static void pm_temps_done(void)
 {
     if (tcc_pm_running)
         ClearTempMemory();
+}
+/* TinyCC is only a frontend: all argument conversion, name lookup and
+   invocation are performed by the common MMBasic VM on both RP platforms. */
+static void pm_basic_invoke(int isfun, const char *name,
+                            const pm_basic_value *args, unsigned count,
+                            pm_basic_value *result, char *strbuf, unsigned capacity)
+{
+    pm_trap t;
+    pm_poll();
+    if (PM_TRY(t))
+    {
+        BasicCallTyped(isfun, name, args, count, result, strbuf, capacity);
+        pm_trap_restore(&t);
+        pm_temps_done();
+    }
+    else
+    {
+        /* pm_try may resume after the error: do not retain BASIC temporaries. */
+        pm_temps_done();
+        pm_program_error_tr(&t);
+    }
+}
+
+void pm_basic_sub(const char *name, const pm_basic_value *args, unsigned count)
+{
+    pm_basic_invoke(0, name, args, count, NULL, NULL, 0);
+}
+
+void pm_basic_function(const char *name, const pm_basic_value *args,
+                       unsigned count, pm_basic_value *result,
+                       char *string_buf, unsigned string_capacity)
+{
+    pm_basic_invoke(1, name, args, count, result, string_buf, string_capacity);
 }
 
 /* A command that is allowed in a BASIC program but replaces it, and with it
@@ -3621,6 +3654,8 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_draw_box)
     PM_SYM(pm_draw_rbox)
     PM_SYM(pm_execute)
+    PM_SYM(pm_basic_sub)
+    PM_SYM(pm_basic_function)
     PM_SYM(pm_eval_int)
     PM_SYM(pm_eval_float)
     PM_SYM(pm_eval_str)

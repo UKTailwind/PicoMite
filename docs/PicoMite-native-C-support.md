@@ -552,7 +552,7 @@ firmware's services are being opened up further in separate headers under
 `picomite/`, one for each subsystem. They may repeat a few declarations of
 `picomite.h`, so a program can include either or both.
 
-The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 5.
+The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 10.
 Each version adds functions without removing earlier ones. Check
 `pm_api_version()` before using a newer API; an ELF linked against a firmware
 that lacks a function reports `undefined symbol`.
@@ -568,6 +568,7 @@ that lacks a function reports `undefined symbol`.
 | 7 | `spi.h`: SPI0/SPI1 master, modes 0..3, 4..16 bits, binary transfers |
 | 8 | `adc.h`: filtered ADC voltage and raw 12-bit conversion through existing PIN() services |
 | 9 | `pwm.h`: shared BASIC/C PWM slice control, frequency and duty |
+| 10 | `basic.h`: typed `pm_basic_sub()` / `pm_basic_function()` callbacks from C and CSUB |
 
 Structs that
 the firmware fills start with a `size` field, which the program sets to
@@ -1092,6 +1093,45 @@ remain protected; errors are catchable using `pm_try()` in C programs.
 External CSUBs cannot use this API.
 
 [`C/pwm_sweep.c`](../C/pwm_sweep.c) sweeps duty on slice 0, channel A.
+
+#### Native BASIC callbacks (API v10)
+
+`pm_basic_sub()` and `pm_basic_function()` call existing BASIC definitions
+by name, **without tokenising generated BASIC statements**. Arguments are
+`pm_basic_value` entries (`PM_BASIC_INTEGER`, `PM_BASIC_FLOAT`,
+`PM_BASIC_STRING`); conversion into BASIC parameter types follows the
+ordinary rules of `DefinedSubFun()`. Only scalar BYVAL parameters and scalar
+results are supported in v10. BYREF, arrays and structures are rejected.
+
+A standalone `RUN "file.c"` or `RUN "file.elf"` starts a new program context:
+only definitions in FLASH `LIBRARY` are visible. The dormant `ProgMemory`
+program is not imported. The library's top-level initialization is run as
+in BASIC `RUN`. A C CSUB uses its BASIC caller's already-prepared index,
+seeing caller SUB/FUNCTIONs and `LIBRARY`. RAM libraries are discarded at a
+new RUN by existing `ClearRuntime()` behavior.
+
+```c
+#include <picomite/basic.h>
+#include <stdio.h>
+
+int main(void) {
+    pm_basic_value arg = { .type = PM_BASIC_INTEGER, .integer = 12 };
+    pm_basic_value answer;
+    pm_basic_function("Scale%", &arg, 1, &answer, NULL, 0);
+    printf("%lld\n", answer.integer);
+    return 0;
+}
+```
+
+For a string result, pass a writable C buffer and its capacity; the result
+points into that buffer. Calls use the ordinary MMBasic error mechanism
+and `pm_try()` may catch errors. For a classic externally compiled CSUB, include `PicoCFunctions.h` and call
+`pm_basic_sub()` / `pm_basic_function()` with the same `pm_basic_value` ABI.
+The CSUB uses the new append-only CallTable entry **0x1CC** and shares the
+BASIC VM implementation with TinyCC. The old `RunBasicSub()` entry at 0x74
+remains intact for source and binary compatibility. An externally compiled
+CSUB must run on firmware exposing this new CallTable slot. Existing slots
+are unchanged; do not call 0x1CC on older firmware.
 
 #### `<picomite/basic.h>`: MMBasic's commands and functions
 

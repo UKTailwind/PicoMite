@@ -283,6 +283,42 @@
 #define Vector_MMInkey (*(unsigned int *)(BaseAddress + 0x1C0))         // int MMInkey(void)
 #define Vector_kbhitConsole (*(unsigned int *)(BaseAddress + 0x1C4))   // int kbhitConsole(void)
 #define Vector_DrawRBox (*(unsigned int *)(BaseAddress + 0x1C8))       // void DrawRBox(x1,y1,x2,y2,r,c,fill)
+#define Vector_BasicCallTyped (*(unsigned int *)(BaseAddress + 0x1CC)) // VM typed SUB/FUNCTION callback
+
+/* Native BASIC callbacks are available to classical externally compiled CSUBs
+   via CallTable, using the same value ABI as the firmware TinyCC API v10.
+   TCC programs use <picomite/basic.h> and its normal symbol exports. */
+#ifdef __PM_FIRMWARE__
+#include <picomite/basic.h>
+#endif
+#ifndef PM_BASIC_VALUE_DEFINED
+#define PM_BASIC_VALUE_DEFINED
+#define PM_BASIC_INTEGER 1
+#define PM_BASIC_FLOAT   2
+#define PM_BASIC_STRING  3
+typedef struct {
+    int type;
+    long long integer;
+    double number;
+    const char *string;
+} pm_basic_value;
+#endif
+#ifndef __PM_FIRMWARE__
+static inline void pm_basic_sub(const char *name, const pm_basic_value *args, unsigned count)
+{
+    ((void (*)(int, const char *, const pm_basic_value *, unsigned,
+               pm_basic_value *, char *, unsigned))Vector_BasicCallTyped)(
+        0, name, args, count, (pm_basic_value *)0, (char *)0, 0);
+}
+static inline void pm_basic_function(const char *name, const pm_basic_value *args,
+                                     unsigned count, pm_basic_value *result,
+                                     char *strbuf, unsigned capacity)
+{
+    ((void (*)(int, const char *, const pm_basic_value *, unsigned,
+               pm_basic_value *, char *, unsigned))Vector_BasicCallTyped)(
+        1, name, args, count, result, strbuf, capacity);
+}
+#endif
 
 // Macros to call each function.
 #define uSec(a) ((void (*)(unsigned long long))Vector_uSec)(a)

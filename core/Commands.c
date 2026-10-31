@@ -2537,6 +2537,7 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 			snprintf(cfile, sizeof(cfile), "%s", (char *)filename);
 			snprintf(cargs, sizeof(cargs), "%s", (char *)cmd_args);
 			ClearRuntime(true);
+			BasicPrepareLibraryOnly();
 			tcc_picomite_run(cfile, cargs, is_c);
 			return;
 		}
@@ -3568,6 +3569,22 @@ static void iftab_sort_range(int lo, int hi)
  * the table each time it comes back, and a program that stopped with "Not
  * enough memory" leaves the heap full, so an allocation that raised the error
  * itself (GetMemory) sent the prompt round that loop for ever. */
+/* Rebuild the IF jump table for a library-only program context. */
+void IfTableBuildLibraryOnly(void)
+{
+    IfTableFree();
+    if (LibPresent() && LibMemory)
+    {
+        if (!iftab_build_region(LibMemory))
+        {
+            IfTableFree();
+            return;
+        }
+        iftab_lib_count = iftab_count;
+        iftab_sort_range(0, iftab_lib_count);
+    }
+}
+
 void MIPS16 IfTableBuild(void)
 {
 	IfTableFree();

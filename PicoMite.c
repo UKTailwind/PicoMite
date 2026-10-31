@@ -625,6 +625,7 @@ uint8_t PSRAMpin;
         (void *)MMInkey,      // 0x1c0 int MMInkey(void): decoded INKEY$, -1 if empty
         (void *)kbhitConsole, // 0x1c4 int kbhitConsole(void): raw console RX bytes
         (void *)DrawRBox,     // 0x1c8 void DrawRBox(x1,y1,x2,y2,r,c,fill)
+        (void *)BasicCallTyped,  // 0x1cc universal typed BASIC SUB/FUNCTION callback
     };
 #ifdef rp2350
     // once a frig to place the call table at 0x1000023C as in earlier releases; the

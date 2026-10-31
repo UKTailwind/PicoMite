@@ -573,6 +573,30 @@ extern "C"
     extern unsigned char *subfun[];
     extern unsigned char *CmdTokenPtr;
 
+    /* Typed native-to-BASIC callback contract, independent of RP2040/RP2350.
+       The TCC public <picomite/basic.h> mirrors this definition because its
+       built-in headers cannot include firmware-private paths. */
+#ifndef PM_BASIC_VALUE_DEFINED
+#define PM_BASIC_VALUE_DEFINED
+#define PM_BASIC_INTEGER 1
+#define PM_BASIC_FLOAT   2
+#define PM_BASIC_STRING  3
+    typedef struct {
+        int type;
+        long long integer;
+        double number;
+        const char *string;
+    } pm_basic_value;
+#endif
+    void BasicPrepareLibraryOnly(void);
+    void BasicTypedCallStage(const pm_basic_value *args, unsigned count);
+    void BasicTypedCallCancel(void);
+    /* Shared VM execution of a typed BASIC SUB/FUNCTION callback.
+       The caller's prepared index defines visibility, not the CPU target. */
+    void BasicCallTyped(int isfun, const char *name,
+                        const pm_basic_value *args, unsigned count,
+                        pm_basic_value *result, char *strbuf, unsigned capacity);
+
     /* ============================================================================
      * External variables - Buffers
      * ============================================================================ */
