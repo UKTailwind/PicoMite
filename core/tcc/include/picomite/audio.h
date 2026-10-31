@@ -2,6 +2,18 @@
 #ifndef _PICOMITE_AUDIO_H
 #define _PICOMITE_AUDIO_H
 
+#include <stdint.h>
+#ifndef PM_PCM_CALLBACK_DEFINED
+#define PM_PCM_CALLBACK_DEFINED
+typedef unsigned (*pm_pcm_callback)(int16_t *dst, unsigned capacity_frames, void *userdata);
+#endif
+
+void pm_pcm_play(const int16_t *samples, unsigned frames, unsigned rate, unsigned channels);
+void pm_pcm_start(unsigned rate, unsigned channels, pm_pcm_callback callback, void *userdata);
+void pm_pcm_stop(void);
+int pm_pcm_playing(void);
+void pm_pcm_poll(void);
+
 #ifndef PM_DEFAULT
 #define PM_DEFAULT (-2)
 #endif

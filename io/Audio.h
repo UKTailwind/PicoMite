@@ -37,6 +37,20 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 
 void CloseAudio(int all);
 void StopAudio(void);
+/* Native signed-16 PCM; one frame is one mono or stereo sample pair.
+   The callback is called outside the audio IRQ and returns frames written;
+   zero means end of stream. The destination is writable only during the call. */
+#ifndef PM_PCM_CALLBACK_DEFINED
+#define PM_PCM_CALLBACK_DEFINED
+typedef unsigned (*pm_pcm_callback)(int16_t *dst, unsigned capacity_frames, void *userdata);
+#endif
+void PCMPlay(const int16_t *samples, unsigned frames, unsigned rate, unsigned channels);
+void PCMStart(unsigned rate, unsigned channels, pm_pcm_callback callback, void *userdata);
+void PCMStartOwned(unsigned rate, unsigned channels, pm_pcm_callback callback, void *userdata, int tcc_owned);
+void PCMStop(void);
+int PCMPlaying(void);
+void PCMPoll(void);
+void PCMRunCleanup(void);
 void wavcallback(char *p);
 #ifdef USBKEYBOARD
 void PlayMemWav(const unsigned char *data, unsigned int len);
@@ -114,7 +128,9 @@ typedef enum
    P_ARRAY,
    P_SAMPLE,
    P_WAVOPEN,
-   P_BBC
+   P_BBC,
+   P_PAUSE_PCM, /* appended: keep pre-existing state values unchanged */
+   P_PCM
 } e_CurrentlyPlaying;
 
 /* ============================================================================

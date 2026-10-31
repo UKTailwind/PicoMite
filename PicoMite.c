@@ -626,6 +626,11 @@ uint8_t PSRAMpin;
         (void *)kbhitConsole, // 0x1c4 int kbhitConsole(void): raw console RX bytes
         (void *)DrawRBox,     // 0x1c8 void DrawRBox(x1,y1,x2,y2,r,c,fill)
         (void *)BasicCallTyped,  // 0x1cc universal typed BASIC SUB/FUNCTION callback
+        (void *)PCMPlay,         // 0x1d0 signed-16 one-shot PCM copy
+        (void *)PCMStart,        // 0x1d4 signed-16 PCM streaming callback
+        (void *)PCMStop,         // 0x1d8 stop PCM and free owned data
+        (void *)PCMPlaying,      // 0x1dc PCM active (including paused)
+        (void *)PCMPoll,         // 0x1e0 service PCM outside the IRQ
     };
 #ifdef rp2350
     // once a frig to place the call table at 0x1000023C as in earlier releases; the
@@ -981,7 +986,7 @@ uint8_t PSRAMpin;
                 WITH_FRAMEBUFFER_LOCK(SPIatRisk, checkWAVinput());
             }
             else if (CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY ||
-                     CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC
+                     CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_PCM
 #ifdef rp2350
                      || CurrentlyPlaying == P_SAMPLE
 #endif

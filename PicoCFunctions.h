@@ -284,6 +284,11 @@
 #define Vector_kbhitConsole (*(unsigned int *)(BaseAddress + 0x1C4))   // int kbhitConsole(void)
 #define Vector_DrawRBox (*(unsigned int *)(BaseAddress + 0x1C8))       // void DrawRBox(x1,y1,x2,y2,r,c,fill)
 #define Vector_BasicCallTyped (*(unsigned int *)(BaseAddress + 0x1CC)) // VM typed SUB/FUNCTION callback
+#define Vector_PCMPlay (*(unsigned int *)(BaseAddress + 0x1D0))
+#define Vector_PCMStart (*(unsigned int *)(BaseAddress + 0x1D4))
+#define Vector_PCMStop (*(unsigned int *)(BaseAddress + 0x1D8))
+#define Vector_PCMPlaying (*(unsigned int *)(BaseAddress + 0x1DC))
+#define Vector_PCMPoll (*(unsigned int *)(BaseAddress + 0x1E0))
 
 /* Native BASIC callbacks are available to classical externally compiled CSUBs
    via CallTable, using the same value ABI as the firmware TinyCC API v10.
@@ -318,6 +323,27 @@ static inline void pm_basic_function(const char *name, const pm_basic_value *arg
                pm_basic_value *, char *, unsigned))Vector_BasicCallTyped)(
         1, name, args, count, result, strbuf, capacity);
 }
+#endif
+
+/* Native PCM API for both RP2040/RP2350 CSUBs; no IRQ callbacks. */
+#ifndef PM_PCM_CALLBACK_DEFINED
+#define PM_PCM_CALLBACK_DEFINED
+typedef unsigned (*pm_pcm_callback)(int16_t *dst, unsigned capacity_frames, void *userdata);
+#endif
+#ifdef __PM_FIRMWARE__
+#include <picomite/audio.h> /* use TinyCC symbol exports, not CallTable shims */
+#else
+static inline void pm_pcm_play(const int16_t *samples, unsigned frames, unsigned rate, unsigned channels)
+{
+    ((void (*)(const int16_t *, unsigned, unsigned, unsigned))Vector_PCMPlay)(samples, frames, rate, channels);
+}
+static inline void pm_pcm_start(unsigned rate, unsigned channels, pm_pcm_callback fill, void *userdata)
+{
+    ((void (*)(unsigned, unsigned, pm_pcm_callback, void *))Vector_PCMStart)(rate, channels, fill, userdata);
+}
+static inline void pm_pcm_stop(void) { ((void (*)(void))Vector_PCMStop)(); }
+static inline int pm_pcm_playing(void) { return ((int (*)(void))Vector_PCMPlaying)(); }
+static inline void pm_pcm_poll(void) { ((void (*)(void))Vector_PCMPoll)(); }
 #endif
 
 // Macros to call each function.

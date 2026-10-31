@@ -552,7 +552,7 @@ firmware's services are being opened up further in separate headers under
 `picomite/`, one for each subsystem. They may repeat a few declarations of
 `picomite.h`, so a program can include either or both.
 
-The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 10.
+The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 11.
 Each version adds functions without removing earlier ones. Check
 `pm_api_version()` before using a newer API; an ELF linked against a firmware
 that lacks a function reports `undefined symbol`.
@@ -569,6 +569,16 @@ that lacks a function reports `undefined symbol`.
 | 8 | `adc.h`: filtered ADC voltage and raw 12-bit conversion through existing PIN() services |
 | 9 | `pwm.h`: shared BASIC/C PWM slice control, frequency and duty |
 | 10 | `basic.h`: typed `pm_basic_sub()` / `pm_basic_function()` callbacks from C and CSUB |
+| 11 | `audio.h`: signed-16 PCM one-shot and streaming callback (`pm_pcm_play/start/stop/playing/poll`); PWM/I2S/Bluetooth, not VS1053 |
+
+Native PCM uses signed 16-bit mono/stereo frames, not bytes. `pm_pcm_play()`
+copies the buffer into firmware memory and may outlive `RUN "file.c"`;
+`pm_pcm_start()` calls the filling function outside the audio interrupt (zero
+frames means EOF). `RUN .c/.elf` must call `pm_pcm_poll()` in long C loops;
+its callback is detached when that program exits. A CSUB callback must use
+persistent code and `userdata` (not stack locals), avoid blocking or BASIC
+re-entry, and remains attached only while its BASIC program is running.
+See [`C/pcm_stream.c`](../C/pcm_stream.c) for a TinyCC example.
 
 Structs that
 the firmware fills start with a `size` field, which the program sets to

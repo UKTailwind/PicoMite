@@ -1333,7 +1333,7 @@ int pm_adc_read_raw(int gp)
 /* The structs must match those headers (core/tcc/include/picomite).         */
 /* ------------------------------------------------------------------------ */
 
-#define PM_API_VERSION 10 /* (include/picomite/system.h: what each version added) */
+#define PM_API_VERSION 11 /* (include/picomite/system.h: what each version added) */
 
 /* fill the caller's struct of 'size' bytes from ours: the first word of both
    is the size, which the caller set */
@@ -2557,6 +2557,20 @@ static void pm_sprite_close_all(void)
     PM_CALL(SpriteCloseAllC());
 }
 
+/* The native audio API is a thin adapter over the shared RP2040/RP2350
+   Audio.c engine. Only a streaming callback is tied to the TCC arena. */
+static void pm_pcm_play(const int16_t *samples, unsigned frames, unsigned rate, unsigned channels)
+{
+    PM_CALL(PCMPlay(samples, frames, rate, channels));
+}
+static void pm_pcm_start(unsigned rate, unsigned channels, pm_pcm_callback callback, void *userdata)
+{
+    PM_CALL(PCMStartOwned(rate, channels, callback, userdata, tcc_pm_running));
+}
+static void pm_pcm_stop(void) { PM_CALL(PCMStop()); }
+static int pm_pcm_playing(void) { return PCMPlaying(); }
+static void pm_pcm_poll(void) { PM_CALL(PCMPoll()); }
+
 /* PLAY MODFILE file$; MODSAMPLE sample, channel [, volume]; SOUND ...; STOP */
 static void pm_play_modfile(const char *file)
 {
@@ -3690,6 +3704,11 @@ static const pm_sym pm_syms[] = {
     PM_SYM(pm_play_volume)
     PM_SYM(pm_play_bbc_sound)
     PM_SYM(pm_play_bbc_envelope)
+    PM_SYM(pm_pcm_play)
+    PM_SYM(pm_pcm_start)
+    PM_SYM(pm_pcm_stop)
+    PM_SYM(pm_pcm_playing)
+    PM_SYM(pm_pcm_poll)
     PM_SYM(pm_sound)
     PM_SYM(pm_load_image)
     PM_SYM(pm_load_jpg)
@@ -4030,6 +4049,7 @@ static int pm_exec(const char *const *prefix, int nprefix, const char *args, con
     pm_stack_check_leave();
     pm_active = false;
     tcc_pm_running = false;
+    PCMRunCleanup(); /* callback code/udata may live in the soon-freed TCC arena */
 
     if (how == PM_END_NONE)
         how = pm_prog_end;
@@ -4156,6 +4176,7 @@ void tcc_picomite_abandoned(void)
         return;
     pm_active = false;
     tcc_pm_running = false;
+    PCMRunCleanup();
     if (pm != NULL)
     {
         __asm volatile("msr msplim, %0" ::"r"(pm->msplim));

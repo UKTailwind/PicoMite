@@ -149,7 +149,7 @@ commands and functions
 // define the PWM output frequency for making a tone
 const char *const PlayingStr[] = {"PAUSED TONE", "PAUSED FLAC", "PAUSED MP3", "PAUSED SOUND", "PAUSED MOD", "PAUSED ARRAY", "PAUSED WAV", "PAUSED SAMPLE", "PAUSED BBC", "OFF",
 								  "OFF", "TONE", "SOUND", "WAV", "FLAC", "MP3",
-								  "MIDI", "", "MOD", "STREAM", "ARRAY", "SAMPLE", "", "BBC"};
+								  "MIDI", "", "MOD", "STREAM", "ARRAY", "SAMPLE", "", "BBC", "PAUSED PCM", "PCM"};
 volatile unsigned char PWM_count = 0;
 volatile float PhaseM_left, PhaseM_right;
 volatile uint64_t SoundPlay;
@@ -176,6 +176,14 @@ modcontext *mcontext = NULL;
 int modfilesamplerate = 22050;
 char *pbuffp;
 void audio_checks(void);
+/* PCM state is owned by Audio.c, not by a C program's temporary allocator.
+   No callback is called from an IRQ; the existing swing-buffer refill owns it. */
+static int16_t *pcm_owned;
+static unsigned pcm_frames, pcm_position, pcm_channels;
+static pm_pcm_callback pcm_callback;
+static void *pcm_userdata;
+static bool pcm_tcc_owned, pcm_refilling;
+static void pcm_fill_swing(int idx);
 static int fillToneBuffer(char *buf, int bufsize);
 static int fillSoundBuffer(char *buf, int bufsize);
 uint16_t *playbuff;
@@ -749,6 +757,13 @@ void CloseAudio(int all)
 		swingbuf = nextbuf = playreadcomplete = 0;
 	}
 	StopAudio();
+	/* The IRQ is stopped before releasing either audio or PCM source memory. */
+	pcm_callback = NULL;
+	pcm_userdata = NULL;
+	pcm_tcc_owned = false;
+	pcm_refilling = false;
+	pcm_frames = pcm_position = pcm_channels = 0;
+	FreeMemorySafe((void **)&pcm_owned);
 	vol_left = vol_target_left;
 	vol_right = vol_target_right;
 	if (CurrentlyPlaying == P_WAVOPEN)
@@ -850,6 +865,161 @@ void ResetAudioRate(void)
 {
 	if (AudioCurrentRate > 0)
 		apply_audio_rate(AudioCurrentRate);
+}
+
+/* Native PCM source, fed into the existing PWM/I2S/BT swing buffers.
+   PCM is signed 16-bit, mono or interleaved stereo. The firmware owns both
+   swing buffers and (for one-shot playback) a copy of the source samples. */
+#define PCM_SWING_BYTES WAV_BUFFER_SIZE
+static void pcm_fill_swing(int idx)
+{
+    int16_t *dst = (int16_t *)(idx == 1 ? sbuff1 : sbuff2);
+    const unsigned capacity = PCM_SWING_BYTES / (2 * sizeof(int16_t));
+    unsigned frames = 0;
+    if (pcm_callback)
+    {
+        pcm_refilling = true;
+        frames = pcm_callback(dst, capacity, pcm_userdata);
+        pcm_refilling = false;
+        if (frames > capacity)
+        {
+            playreadcomplete = 1;
+            error("PCM callback exceeded buffer capacity");
+        }
+        if (!frames)
+            playreadcomplete = 1;
+    }
+    else if (pcm_position < pcm_frames)
+    {
+        frames = pcm_frames - pcm_position;
+        if (frames > capacity)
+            frames = capacity;
+        if (pcm_channels == 2)
+            memcpy(dst, pcm_owned + pcm_position * 2, frames * 4);
+        else
+            for (unsigned i = 0; i < frames; ++i)
+                dst[i * 2] = dst[i * 2 + 1] = pcm_owned[pcm_position + i];
+        pcm_position += frames;
+        if (pcm_position == pcm_frames)
+            playreadcomplete = 1;
+    }
+    /* Mono stream callbacks return tightly packed mono samples in dst[0..frames).
+       Expand backwards so that expansion cannot overwrite unread samples. */
+    if (pcm_callback && pcm_channels == 1)
+        for (unsigned i = frames; i > 0; --i)
+            dst[(i - 1) * 2] = dst[(i - 1) * 2 + 1] = dst[i - 1];
+    bcount[idx] = frames * 2; /* swing-buffer counts are int16_t values */
+    if (AUDIO_SIGNED16)
+        i2sconvert(dst, dst, bcount[idx]);
+    else
+        iconvert((uint16_t *)dst, dst, bcount[idx]);
+    wav_filesize = bcount[idx];
+}
+
+static void pcm_setup(unsigned rate, unsigned channels)
+{
+    if (!AUDIO_CONFIGURED)
+        error("Audio not enabled");
+    if (AUDIO_USES_VS1053)
+        error("PCM unavailable with VS1053 audio");
+    if (rate < 8000 || rate > 48000)
+        error("PCM sample rate must be 8000..48000 Hz");
+    if (channels != 1 && channels != 2)
+        error("PCM channels must be 1 or 2");
+    if (pcm_refilling)
+        error("PCM callback cannot change playback");
+    if (CurrentlyPlaying == P_WAVOPEN)
+        CloseAudio(1);
+    if (CurrentlyPlaying != P_NOTHING)
+        error("Sound output in use for $", PlayingStr[CurrentlyPlaying]);
+    pcm_channels = channels;
+    pcm_position = pcm_frames = 0;
+    pcm_owned = NULL;
+    pcm_callback = NULL;
+    pcm_userdata = NULL;
+    pcm_tcc_owned = false;
+    audiorepeat = 1;
+    unsigned actualrate = rate;
+    if (AUDIO_PWM)
+        while (actualrate < 32000)
+        {
+            actualrate += rate;
+            ++audiorepeat;
+        }
+    setrate(actualrate);
+    sbuff1 = GetMemory(PCM_SWING_BYTES);
+    sbuff2 = GetMemory(PCM_SWING_BYTES);
+    ubuff1 = (uint16_t *)sbuff1;
+    ubuff2 = (uint16_t *)sbuff2;
+    g_buff1 = (int16_t *)sbuff1;
+    g_buff2 = (int16_t *)sbuff2;
+    mono = 0; /* the swing-buffer consumer always receives stereo pairs */
+    WAV_fnbr = 0;
+    WAVInterrupt = NULL;
+    WAVcomplete = false;
+    bcount[1] = bcount[2] = 0;
+    wav_filesize = ppos = 0;
+    swingbuf = 1;
+    nextbuf = 2;
+    playreadcomplete = 0;
+    CurrentlyPlaying = P_PCM;
+}
+
+void PCMPlay(const int16_t *samples, unsigned frames, unsigned rate, unsigned channels)
+{
+    if (!samples || !frames || (channels != 1 && channels != 2) ||
+        frames > 0x7fffffffu / (channels * sizeof(int16_t)))
+        error("Invalid PCM sample buffer");
+    /* A one-shot must survive the C program returning: copy into firmware
+       memory rather than retaining a pointer into its TinyCC arena/stack. */
+    pcm_setup(rate, channels);
+    pcm_owned = GetMemory((size_t)frames * channels * sizeof(int16_t));
+    memcpy(pcm_owned, samples, (size_t)frames * channels * sizeof(int16_t));
+    pcm_frames = frames;
+    pcm_fill_swing(1);
+    pwm_set_irq0_enabled(AUDIO_SLICE, true);
+    pwm_set_enabled(AUDIO_SLICE, true);
+}
+
+void PCMStartOwned(unsigned rate, unsigned channels, pm_pcm_callback callback, void *userdata, int tcc_owned)
+{
+    if (!callback)
+        error("PCM callback is NULL");
+    pcm_setup(rate, channels);
+    pcm_callback = callback;
+    pcm_userdata = userdata;
+    /* Set ownership BEFORE invoking the first callback: it can raise an
+       MMBasic error, longjmp out, and abandon the TCC run. */
+    pcm_tcc_owned = tcc_owned != 0;
+    pcm_fill_swing(1);
+    pwm_set_irq0_enabled(AUDIO_SLICE, true);
+    pwm_set_enabled(AUDIO_SLICE, true);
+}
+void PCMStart(unsigned rate, unsigned channels, pm_pcm_callback callback, void *userdata)
+{
+    PCMStartOwned(rate, channels, callback, userdata, 0);
+}
+
+void PCMStop(void)
+{
+    if (pcm_refilling)
+        error("PCM callback cannot change playback");
+    if (CurrentlyPlaying == P_PCM || CurrentlyPlaying == P_PAUSE_PCM)
+        CloseAudio(1);
+}
+int PCMPlaying(void)
+{
+    return CurrentlyPlaying == P_PCM || CurrentlyPlaying == P_PAUSE_PCM;
+}
+void PCMPoll(void)
+{
+    if (CurrentlyPlaying == P_PCM)
+        checkWAVinput();
+}
+void PCMRunCleanup(void)
+{
+    if (pcm_tcc_owned && PCMPlaying())
+        CloseAudio(1);
 }
 #if !defined(NOVS1053)
 void playvs1053(int mode)
@@ -1556,7 +1726,7 @@ void MIPS16 cmd_play(void)
 	}
 	if (checkstring(cmdline, (unsigned char *)"PAUSE"))
 	{
-		if (CurrentlyPlaying < P_STOP)
+		if (CurrentlyPlaying < P_STOP || CurrentlyPlaying == P_PAUSE_PCM)
 			return; // already paused
 		if (CurrentlyPlaying == P_TONE)
 			CurrentlyPlaying = P_PAUSE_TONE;
@@ -1578,6 +1748,8 @@ void MIPS16 cmd_play(void)
 #endif
 		else if (CurrentlyPlaying == P_BBC)
 			CurrentlyPlaying = P_PAUSE_BBC;
+		else if (CurrentlyPlaying == P_PCM)
+			CurrentlyPlaying = P_PAUSE_PCM;
 		else
 			error("Nothing playing");
 		return;
@@ -1604,6 +1776,8 @@ void MIPS16 cmd_play(void)
 #endif
 		else if (CurrentlyPlaying == P_PAUSE_BBC)
 			CurrentlyPlaying = P_BBC;
+		else if (CurrentlyPlaying == P_PAUSE_PCM)
+			CurrentlyPlaying = P_PCM;
 		else
 			error("Nothing to resume");
 		return;
@@ -3430,6 +3604,9 @@ static int fillSoundBuffer(char *buf, int bufsize)
  *******************************************************************************************/
 void checkWAVinput(void)
 {
+	/* A callback may call a firmware routine that polls audio again. */
+	if (CurrentlyPlaying == P_PCM && pcm_refilling)
+		return;
 	audio_checks();
 	if (playreadcomplete == 1)
 		return;
@@ -3688,6 +3865,11 @@ void checkWAVinput(void)
 				fillBBCSwing(swingbuf == 2 ? 1 : 2);
 				nextbuf = swingbuf;
 			}
+			else if (CurrentlyPlaying == P_PCM)
+			{
+				pcm_fill_swing(swingbuf == 2 ? 1 : 2);
+				nextbuf = swingbuf;
+			}
 		}
 	}
 	if (wav_filesize <= 0 && (CurrentlyPlaying == P_WAV || (CurrentlyPlaying == P_FLAC) || (CurrentlyPlaying == P_MP3) || (CurrentlyPlaying == P_MIDI)))
@@ -3733,7 +3915,7 @@ void CheckAudio(void)
 #endif
 	}
 	else if (CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY ||
-			 CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC
+			 CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_PCM
 #ifdef rp2350
 			 || CurrentlyPlaying == P_SAMPLE
 #endif
@@ -3765,6 +3947,15 @@ void audio_checks(void)
 				FreeMemorySafe((void **)&mymp3);
 			}
 #endif
+			if (wasPlaying == P_PCM)
+			{
+				/* The normal end-of-stream path does not call CloseAudio. */
+				pcm_callback = NULL;
+				pcm_userdata = NULL;
+				pcm_tcc_owned = pcm_refilling = false;
+				pcm_frames = pcm_position = pcm_channels = 0;
+				FreeMemorySafe((void **)&pcm_owned);
+			}
 			FreeMemorySafe((void **)&sbuff1);
 			FreeMemorySafe((void **)&sbuff2);
 			FreeMemorySafe((void **)&alist);
@@ -3775,7 +3966,7 @@ void audio_checks(void)
 			}
 			else
 				StopAudio();
-			if (wasPlaying != P_ARRAY && wasPlaying != P_SAMPLE && wasPlaying != P_TONE && wasPlaying != P_SOUND && wasPlaying != P_BBC && WAV_fnbr)
+			if (wasPlaying != P_ARRAY && wasPlaying != P_SAMPLE && wasPlaying != P_TONE && wasPlaying != P_SOUND && wasPlaying != P_BBC && wasPlaying != P_PCM && WAV_fnbr)
 				FileClose(WAV_fnbr);
 			WAVcomplete = true;
 			if (WAVInterrupt != NULL) IntSignal();
