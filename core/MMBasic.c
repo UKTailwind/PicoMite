@@ -1972,6 +1972,25 @@ int MIPS16 PrepareProgramExt(unsigned char *p, int i, unsigned char **CFunPtr, i
         goto toolong;              \
     } while (0)
 
+// A command's name as a variable's (#149): at the start of a statement NAME = x (and NAME$, NAME% or NAME! = x) is an
+// assignment, so a program that used the name before the command came still runs. tokenise() leaves the name as text
+// and the line runs as any assignment does; nothing changes at run time. Not where the name is a keyword, an operator
+// or a function as well (FOR, GOTO, TIMER, DATE$: the variable could not be read back), nor where NAME = is the
+// command's own (FLAGS = n; CASE = 5, CASE's operator; REM, RUN and DATA, whose argument is text). Not an array:
+// IF (x) = y THEN and the like are the commands.
+static int CmdNameVar(int i)
+{
+    const unsigned char *c = commandtbl[i].name;
+    static const char *const own[] = {"Flags", "Case", "Rem", "Run", "Data"};
+    for (int k = 0; k < (int)(sizeof(own) / sizeof(own[0])); k++)
+        if (str_equal(c, (const unsigned char *)own[k]))
+            return false;
+    for (int k = 0; k < TokenTableSize - 1; k++)
+        if (str_equal(c, tokentbl[k].name))
+            return false;
+    return true;
+}
+
 int MIPS16 tokenise(int console)
 {
     unsigned char *p, *op, *tp;
@@ -2214,7 +2233,7 @@ int MIPS16 tokenise(int console)
         if (firstnonwhite)
         { // first entry on the line must be a command
             // these variables are only used in the search for a command code
-            unsigned char *tp2, *match_p = NULL;
+            unsigned char *tp2, *match_p = NULL, *cmdstart = p;
             int match_i = -1, match_l = 0;
             // first test if it is a print shortcut char (?) - this needs special treatment
             if (*p == '?')
@@ -2262,6 +2281,20 @@ int MIPS16 tokenise(int console)
                             match_i = i;
                         }
                     }
+                }
+            }
+
+            // flash = 1, out% = 0: a variable called after a command (CmdNameVar)
+            if (match_i > -1 && isnamestart(*cmdstart))
+            {
+                unsigned char *q = match_p;
+                if (*q == '$' || *q == '%' || *q == '!')
+                    q++;
+                skipspace(q);
+                if (*q == '=' && CmdNameVar(match_i))
+                {
+                    match_i = -1;
+                    p = cmdstart; // the name is copied as text, as any variable's
                 }
             }
 
