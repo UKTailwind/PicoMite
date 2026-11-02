@@ -238,7 +238,9 @@ extern "C"
    /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
       ~250 KB of flash).  Not linked here: estimated from the builds that were
       (243-254 KB over their old offsets), so the link check may ask for more. */
-#define FLASH_TARGET_OFFSET (1376 * 1024)
+   /* +48 KiB (2026-11-02): VGAUSBRP2350 firmware ends at 1389.1 KiB
+      (GCC 13.3.1); 1424 KiB leaves 34.9 KiB before flash storage. */
+#define FLASH_TARGET_OFFSET (1424 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
@@ -255,7 +257,7 @@ extern "C"
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.8 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (220 * 1024)
 #define MAX_PROG_SIZE (160 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0xAD01562A
+#define MagicKey 0xAD01562B
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
    /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 1.1 KB over. */
