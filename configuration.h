@@ -152,25 +152,24 @@ extern "C"
    /* +16 KB (2026-10-10): ZMODEM SEND was 1.3 KB over. */
    /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
       ~250 KB of flash); the firmware ends at 1821.1 KB. */
-#define FLASH_TARGET_OFFSET (1840 * 1024)
-   /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
-      kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
-      pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
-      transiently mallocs ~28-35 KB from the C heap (SSL in/out buffers + RSA
-      cert-chain parse; MEM_LIBC_MALLOC=1) which competes for the RAM between
-      __bss_end__ and the stack — long RSA chains (www.microsoft.com) can overrun
-      it. Do NOT shrink this to "fix" TLS; instead route mbedtls to PSRAM and/or
-      make malloc-fail graceful (see [[hdmiweb-build]]). Watch
-      [[heap-bss-overlap-on-rp2350]]. */
+   /* +48 KiB (2026-11-02): the firmware ends at 0x101CF91C (1854.28 KiB);
+      reserve 1888 KiB, leaving 34532 bytes before flash storage. */
+#define FLASH_TARGET_OFFSET (1888 * 1024)
+   /* The BASIC heap is separate from the 96 KiB HDMI framebuffer pool.
+      TLS uses CallocMemory/FreeMemory: allocations go to PSRAM when present,
+      otherwise to the BASIC heap (core/Memory.c, net/mbedtls_config.h). */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.4 KB of RAM margin left for the stack. */
    /* +4 KB heap and +4 KB program (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4 KB of RAM margin left for the stack.  The larger program size moves the flash layout and A:. */
-#define HEAP_MEMORY_SIZE (208 * 1024)
+   /* -8 KiB (2026-11-02): __end__=0x2007D990 and the 0x2800 SDK heap
+      extended to 0x20080190, 400 bytes past main RAM. At 200 KiB the heap
+      ends at 0x2007E190, leaving 7792 bytes of additional RAM headroom. */
+#define HEAP_MEMORY_SIZE (200 * 1024)
 #define MAX_PROG_SIZE (156 * 1024) // (144 KB until 2026-10-01, 152 KB until 2026-10-02: each larger heap took 4 KB more of program; each move moved the flash layout and A:)
    /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
       changed from 1024x600 to 640x480@315000 so existing devices pick up
       the new default via ResetOptions on first boot. */
-#define MagicKey 0x59213D2A
+#define MagicKey 0x59213D2B
 #else
    /* HDMIUSB: full 153600-byte framebuffer pool (unlike HDMIBTH/HDMIWEB,
       which use the shrunk 96000-byte one) plus the TinyUSB host stack's
