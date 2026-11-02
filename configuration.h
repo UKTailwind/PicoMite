@@ -357,7 +357,7 @@ extern "C"
 #define MIN_CPU 126000
 
 #ifdef rp2350
-#define MagicKey 0x0D2D7BBF
+#define MagicKey 0x0D2D7BC0
 #define MAXSUBFUN 512
 #define MAXGLOBALVARS 576 // Configurable split (the total as before 192 locals: see above)
 #define MAXLOCALVARS 192
@@ -387,7 +387,7 @@ extern "C"
    /* +48 KB (2026-09-29): Route B (P1-P6) went 37.4 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 6.0 KB over. */
-#define FLASH_TARGET_OFFSET (1536 * 1024)
+#define FLASH_TARGET_OFFSET (1856 * 1024)
 #else
 #define MagicKey 0x060B6882
 #define MAXSUBFUN 256
@@ -1018,7 +1018,16 @@ extern "C"
 #else
 #define RB_STREAM_FLASH_SLOTS RB_STREAM_SLOTS
 #endif
+#if defined(PICOMITEWEB) && !defined(PICOMITEHDMIWEB)
+/* WEBRP2350: use the remaining space below the fixed 3 MiB system limit.
+   At FLASH_TARGET_OFFSET=1856 KiB this is 364 KiB.  The PSRAM stream is
+   sized independently by PSRAMstreamsize; other builds are unchanged.
+   Keep the layout assertion effective if the system-area start moves. */
+#define RB_STREAM_FLASH_SIZE \
+    ((RB_STREAM_FLASH < FIXED_MAP_SYSTEM_TOP) ? (FIXED_MAP_SYSTEM_TOP - RB_STREAM_FLASH) : (RB_STREAM_SLOTS * MAX_PROG_SIZE))
+#else
 #define RB_STREAM_FLASH_SIZE (RB_STREAM_FLASH_SLOTS * MAX_PROG_SIZE)
+#endif
 #define TOP_OF_SYSTEM_FLASH (RB_STREAM_FLASH + RB_STREAM_FLASH_SIZE)
 /* The fixed flash map of a 16 MB flash, the same on every RP2350 build so that
    the A: drive survives a change of build or an options reset (SetFlashMap in
