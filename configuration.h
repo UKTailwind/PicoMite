@@ -118,7 +118,9 @@ extern "C"
    /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
       ~250 KB of flash).  Not linked here: estimated from the builds that were
       (243-254 KB over their old offsets), so the link check may ask for more. */
-#define FLASH_TARGET_OFFSET (1776 * 1024)
+   /* +48 KiB (2026-11-02): image ends at 0x101BF57C (1789.37 KiB),
+      leaving 35,460 bytes before 1824 KiB flash storage. */
+#define FLASH_TARGET_OFFSET (1824 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
    /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
       output added ~12.6 KB of BSS (less what dropping VS1053 and PWM/SPI
@@ -131,7 +133,7 @@ extern "C"
       to 2.4 KB. MAX_PROG_SIZE is pinned, so nothing in flash moves. */
 #define HEAP_MEMORY_SIZE (220 * 1024)
 #define MAX_PROG_SIZE (180 * 1024)
-#define MagicKey 0x8DECA3E8
+#define MagicKey 0x8DECA3E9
 #elif defined(PICOMITEHDMIWEB)
    /* HDMIWEB: HDMIUSB-style display stack + USB host + WebMite WiFi /
       lwIP / mbedtls TLS (no Bluetooth). The cyw43 WiFi firmware blob plus
@@ -1023,9 +1025,11 @@ extern "C"
 #define RB_STREAM_FLASH_SLOTS RB_STREAM_SLOTS
 #endif
 #if (defined(PICOMITEWEB) && !defined(PICOMITEHDMIWEB)) || \
-    defined(PICOMITEBT) || defined(PICOMITEBTH)
-/* WEBRP2350, PICOBTRP2350 and PICOBTHRP2350: use the space below the fixed
-   3 MiB limit. WEB and PICOBTH: 364 KiB; PICOBT: 444 KiB.
+    defined(PICOMITEBT) || defined(PICOMITEBTH) || \
+    (defined(PICOMITEHDMIBTH) && !defined(PICOMITEPC3))
+/* WEBRP2350, PICOBTRP2350, PICOBTHRP2350 and HDMIBTH use the remaining
+   space below the fixed 3 MiB system limit. WEB and PICOBTH: 364 KiB;
+   PICOBT: 444 KiB; HDMIBTH: 508 KiB at FLASH_TARGET_OFFSET=1824 KiB.
    The PSRAM stream uses PSRAMstreamsize and is unchanged.
    Keep the layout assertion effective if the system-area start moves. */
 #define RB_STREAM_FLASH_SIZE \
