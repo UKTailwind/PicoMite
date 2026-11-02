@@ -490,7 +490,7 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0x8D8186E6
+#define MagicKey 0x8D8186E7
    /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 0.8 KB over.
@@ -501,7 +501,9 @@ extern "C"
       about 1.7 KB was spare.
       +16 KB (2026-10-13): main went 0.9 KB over after RC1; BLUETOOTH CONNECT
       SPEAKER | SERIAL | KEYBOARD adds 0.4 KB. */
-#define FLASH_TARGET_OFFSET (1536 * 1024)
+   /* +320 KiB (2026-11-02): C/ELF runtime and TinyCC grow this image to
+      0x101C5C30 (1815.05 KiB). 1856 KiB leaves 41936 bytes of headroom. */
+#define FLASH_TARGET_OFFSET (1856 * 1024)
    /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.9 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.6 KB of RAM margin left for the stack. */
@@ -1020,9 +1022,10 @@ extern "C"
 #else
 #define RB_STREAM_FLASH_SLOTS RB_STREAM_SLOTS
 #endif
-#if (defined(PICOMITEWEB) && !defined(PICOMITEHDMIWEB)) || defined(PICOMITEBT)
-/* WEBRP2350 and PICOBTRP2350: use the space below the fixed 3 MiB limit.
-   WEB: 364 KiB at 1856 KiB; PICOBT: 444 KiB at 1776 KiB.
+#if (defined(PICOMITEWEB) && !defined(PICOMITEHDMIWEB)) || \
+    defined(PICOMITEBT) || defined(PICOMITEBTH)
+/* WEBRP2350, PICOBTRP2350 and PICOBTHRP2350: use the space below the fixed
+   3 MiB limit. WEB and PICOBTH: 364 KiB; PICOBT: 444 KiB.
    The PSRAM stream uses PSRAMstreamsize and is unchanged.
    Keep the layout assertion effective if the system-area start moves. */
 #define RB_STREAM_FLASH_SIZE \
