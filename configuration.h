@@ -526,7 +526,7 @@ extern "C"
 #define MAXSUBFUN 256
 
 #ifdef USBKEYBOARD
-#define MagicKey 0xFEBA6747
+#define MagicKey 0xFEBA6748
    /* -16 KB (2026-09-16): compiling misc/FileIO.c at -Os freed ~4.5 KB, so
       912 KB fits again and the 16 KB goes back to the A: drive. */
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c)
@@ -535,7 +535,11 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 2.9 KB over 928 KB. */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 3.2 KB over 944 KB. */
-#define FLASH_TARGET_OFFSET (960 * 1024)
+   /* +96 KB (2026-11-02): native C/ELF services bring the RP2040 PICOUSB
+      flash image to 0x10101474 (1029.1 KB). Move the program/storage boundary
+      to 1056 KB, leaving 27532 bytes for further firmware growth.
+      This intentionally relocates options, LIBRARY and the A: filesystem. */
+#define FLASH_TARGET_OFFSET (1056 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
@@ -561,8 +565,13 @@ extern "C"
    /* +16 KB more (2026-09-29, Peter "A"): P6 took it 1208 bytes over 704 KB.
       The same trade again: 4 KB less program size (MAX_PROG_SIZE 112 KB), so
       the A: drive starts where RC2's did, 1188 KB, and keeps its size. */
-#define FLASH_TARGET_OFFSET (720 * 1024)
-#define MagicKey 0xAA13BB70
+   /* +96 KiB (2026-11-02): native C/ELF services put the PICOMIN firmware
+      end at 0x100C3A28 (782.54 KiB; GCC 13.3.1, Pico SDK 2.3.1).
+      Reserve 816 KiB, leaving 34264 bytes before the flash storage.
+      The new layout intentionally invalidates existing options, LIBRARY
+      and A: contents; BASIC program capacity and heap are unchanged. */
+#define FLASH_TARGET_OFFSET (816 * 1024)
+#define MagicKey 0xAA13BB71
    /* +24 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.0 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (156 * 1024)
@@ -589,8 +598,13 @@ extern "C"
       the magic key check fails on the first boot after the upgrade and the
       board does a full clean - existing A: drives and options do not
       survive.  See [[project_flash_target_offset_alignment]]. */
-#define FLASH_TARGET_OFFSET (928 * 1024)
-#define MagicKey 0x956AD03D
+   /* +96 KB (2026-11-02): the resident/native C API increased the RP2040
+      PICO image to 997.1 KB (GCC 13.3.1, Pico SDK 2.3.1). Reserve 1024 KB
+      for the firmware, leaving 26.9 KB before the flash storage boundary.
+      This deliberately relocates options, LIBRARY and A:; old contents are
+      not compatible with this flash layout. */
+#define FLASH_TARGET_OFFSET (1024 * 1024)
+#define MagicKey 0x956AD03E
 #endif
 #endif
 #endif

@@ -428,7 +428,9 @@ static void *pm_core_var_do(const char *ref, pm_varinfo *info)
     tokenise(true);
     addr=findvar(tknbuf+2+sizeof(CommandToken),V_FIND|V_EMPTY_OK|V_NOFIND_ERR);
     v=VREC(g_VarIndex);
+#ifdef STRUCTENABLED
     if(v->type & T_STRUCT) error("A structure is not supported here");
+#endif
     if(info) {
         memset(info,0,sizeof(*info));
         info->type=v->type&(T_NBR|T_STR|T_INT);
