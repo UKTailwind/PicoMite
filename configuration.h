@@ -296,8 +296,10 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 1.4 KB over 848 KB. */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 2.2 KB over 864 KB. */
-#define FLASH_TARGET_OFFSET (880 * 1024)
-#define MagicKey 0x561D3FB6
+   /* +96 KB (2026-11-02): VGAUSB image ends at 0x100ECBD4 (946.96 KB),
+      leaving 29,740 bytes before the relocated flash storage at 976 KB. */
+#define FLASH_TARGET_OFFSET (976 * 1024)
+#define MagicKey 0x561D3FB7
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
       __end__) was 4732 bytes, only ~640 bytes clear of the 4096 page
@@ -319,11 +321,14 @@ extern "C"
       need a step. */
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went ~1.1 KB over 816 KB. */
-#define FLASH_TARGET_OFFSET (848 * 1024)
+   /* +96 KiB (2026-11-02): the native C/ELF runtime expands the RP2040 VGA
+      image to 909.1 KiB. 944 KiB leaves 34.9 KiB of flash headroom.
+      This changes the locations of options, LIBRARY and the A: filesystem. */
+#define FLASH_TARGET_OFFSET (944 * 1024)
    /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (120 * 1024)
 #define MAX_PROG_SIZE (100 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
-#define MagicKey 0x7E8B7645
+#define MagicKey 0x7E8B7646
 #endif
 
 #endif
@@ -382,7 +387,7 @@ extern "C"
       BLIT went 6.0 KB over. */
 #define FLASH_TARGET_OFFSET (1536 * 1024)
 #else
-#define MagicKey 0x060B6881
+#define MagicKey 0x060B6882
 #define MAXSUBFUN 256
 #define MAXGLOBALVARS 240 // Configurable split
 #define MAXLOCALVARS 192 // (not RC2's 240: this variant's RAM is 1.4 KB short of it)
@@ -392,7 +397,9 @@ extern "C"
 #define MAX_PROG_SIZE (88 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
    /* +16 KB (2026-09-29): 8.0 KB over (on development already, before P6). */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 3.9 KB over 1312 KB. */
-#define FLASH_TARGET_OFFSET (1328 * 1024)
+   /* +96 KB (2026-11-02): WEB native-C build ends at 0x1015C744
+      (1393.82 KiB); reserve 1424 KiB, leaving 30,908 bytes of margin. */
+#define FLASH_TARGET_OFFSET (1424 * 1024)
 #endif
 #endif /* !PICOMITEHDMIWEB */
 
