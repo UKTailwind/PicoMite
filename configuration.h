@@ -469,11 +469,13 @@ extern "C"
 #define MIN_CPU 200000
 #undef MAX_CPU
 #define MAX_CPU 396000
-#define MagicKey 0xEA895E8B
+#define MagicKey 0xEA895E8C
    /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 2.6 KB over. */
-#define FLASH_TARGET_OFFSET (1456 * 1024)
+   /* +320 KiB (2026-11-02): TinyCC/native C/ELF grows the image to
+      0x101B1754 (1733.83 KiB). 1776 KiB leaves 43180 bytes of margin. */
+#define FLASH_TARGET_OFFSET (1776 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~4.1 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.9 KB of RAM margin left for the stack. */
@@ -1018,10 +1020,10 @@ extern "C"
 #else
 #define RB_STREAM_FLASH_SLOTS RB_STREAM_SLOTS
 #endif
-#if defined(PICOMITEWEB) && !defined(PICOMITEHDMIWEB)
-/* WEBRP2350: use the remaining space below the fixed 3 MiB system limit.
-   At FLASH_TARGET_OFFSET=1856 KiB this is 364 KiB.  The PSRAM stream is
-   sized independently by PSRAMstreamsize; other builds are unchanged.
+#if (defined(PICOMITEWEB) && !defined(PICOMITEHDMIWEB)) || defined(PICOMITEBT)
+/* WEBRP2350 and PICOBTRP2350: use the space below the fixed 3 MiB limit.
+   WEB: 364 KiB at 1856 KiB; PICOBT: 444 KiB at 1776 KiB.
+   The PSRAM stream uses PSRAMstreamsize and is unchanged.
    Keep the layout assertion effective if the system-area start moves. */
 #define RB_STREAM_FLASH_SIZE \
     ((RB_STREAM_FLASH < FIXED_MAP_SYSTEM_TOP) ? (FIXED_MAP_SYSTEM_TOP - RB_STREAM_FLASH) : (RB_STREAM_SLOTS * MAX_PROG_SIZE))
