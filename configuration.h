@@ -424,10 +424,10 @@ extern "C"
 #ifdef USBKEYBOARD
 #define MagicKey 0x3F42F5D6
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
-   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
-      ~250 KB of flash).  Not linked here: estimated from the builds that were
-      (243-254 KB over their old offsets), so the link check may ask for more. */
-#define FLASH_TARGET_OFFSET (1456 * 1024)
+   /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>).
+      +48 KB (2026-11-02): the full PICOUSBRP2350 link ends at 0x1016E478
+      (1465.12 KiB), leaving 39816 bytes before the option sector. */
+#define FLASH_TARGET_OFFSET (1504 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
       from the cursor module (~650 bytes for user_cursor.pixels +
       state) and the click/cursor ownership tracking. Heap and BSS
@@ -448,7 +448,11 @@ extern "C"
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~2.9 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~3.6 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (360 * 1024)
+   /* -8 KB (2026-11-02): with 360 KB, __end__=0x2007FB88 and the
+      2048-byte .heap extends 904 bytes beyond main RAM (0x20080000).
+      352 KB leaves 9336 bytes from __end__ to the RAM boundary,
+      including enough space for newlib malloc's 4 KB allocation step. */
+#define HEAP_MEMORY_SIZE (352 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBT)
    /* PICOMITEBT replaces USB CDC console with BLE Nordic UART Service over
