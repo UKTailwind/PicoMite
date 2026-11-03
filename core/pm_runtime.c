@@ -431,13 +431,15 @@ static int pm_runtime_putchar(int c)
     return (unsigned char)ch;
 }
 
-/* The compiler uses these ABI helpers for integer division and soft-float.
+/* External GCC ELF objects may call ARM EABI helpers even when their C source
+ * uses only integer arithmetic (e.g. __aeabi_lmul for 64-bit multiplication).
  * Signatures are immaterial in the table; only addresses are taken. */
 #define PM_RUNTIME_AEABI(X)                                                  \
     X(__aeabi_memcpy) X(__aeabi_memcpy4) X(__aeabi_memcpy8)                  \
     X(__aeabi_memmove) X(__aeabi_memset) X(__aeabi_idiv) X(__aeabi_uidiv)    \
     X(__aeabi_idivmod) X(__aeabi_uidivmod) X(__aeabi_ldivmod)                \
-    X(__aeabi_uldivmod) X(__aeabi_lasr) X(__aeabi_llsr) X(__aeabi_llsl)      \
+    X(__aeabi_uldivmod) X(__aeabi_lmul) X(__aeabi_lasr) X(__aeabi_llsr)      \
+    X(__aeabi_llsl)                                                         \
     X(__aeabi_dadd) X(__aeabi_dsub) X(__aeabi_dmul) X(__aeabi_ddiv)          \
     X(__aeabi_dcmpeq) X(__aeabi_dcmplt) X(__aeabi_dcmple)                    \
     X(__aeabi_dcmpgt) X(__aeabi_dcmpge) X(__aeabi_i2d) X(__aeabi_ui2d)      \
