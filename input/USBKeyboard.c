@@ -2685,7 +2685,10 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 	else if (Option.USBKeyboard == CONFIG_BE)
 		keylayout = BEkeyValue;
 	if (Current_USB_devices == 4)
-		return; /* full — skip quietly rather than error mid-enumeration */
+	{ /* full — skip quietly rather than error mid-enumeration; the slot stays empty, so no IDs (MM.INFO(USB VID/PID n)) */
+		HID[slot].vid = HID[slot].pid = 0;
+		return;
+	}
 
 	// Interface protocol (hid_interface_protocol_enum_t)
 	//  const char* protocol_str[] = { "None", "Keyboard", "Mouse" };
@@ -2981,7 +2984,9 @@ void tuh_hid_mount_cb(uint8_t dev_addr, uint8_t instance, uint8_t const *desc_re
 			   vendor interface). We never service it, so skip it entirely:
 			   don't claim its slot, don't count it toward the device limit,
 			   don't play the connect sound. This keeps slots free for the
-			   keyboard / mouse / digitizer that follow on the same device. */
+			   keyboard / mouse / digitizer that follow on the same device.
+			   The IDs written above go too: MM.INFO(USB VID/PID n) gave them for the empty channel (#142). */
+			HID[slot].vid = HID[slot].pid = 0;
 			return;
 		}
 	}
