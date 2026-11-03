@@ -8,7 +8,7 @@ own folder.
 Build variants are selected by `-DCOMPILE=<variant>` (see `buildpicomite.bat`)
 and gated by macros: `PICOMITEVGA`, `HDMI`, `HDMICUTDOWN`, `PICOMITEWEB`,
 `PICOMITEWEB_TLS`, `PICOMITEBT`/`PICOMITEBTH`, `USBKEYBOARD`, `PICOMITEMIN`,
-`rp2350`.
+`MURMULATOR_M2P1`/`MURMULATOR_M2P2`, `rp2350`.
 
 ---
 
@@ -23,6 +23,9 @@ and gated by macros: `PICOMITEVGA`, `HDMI`, `HDMICUTDOWN`, `PICOMITEWEB`,
 | `AllCommands.h` | The BASIC keyword dispatch tables (command/function/token tables), variant-gated. |
 | `Version.h` | Version and date strings. |
 | `buildpicomite.bat` | Multi-variant build driver (reuses one build dir per platform group). |
+| `example_elf.bat` | Builds one `C/*.c` example as a relocatable ELF object with the PC toolchain (the toolchain path in it is local: edit it). |
+| `cmake/flash_layout_check.ld` | Link-time check that the firmware ends before `FLASH_TARGET_OFFSET`. |
+| `cmake/tcc_rom_headers.cmake`, `cmake/tcc_strip_header_comments.py` | Embed the TinyCC system headers and `PicoCFunctions.h` in the firmware (RP2350). |
 
 ## core/ — the MMBasic interpreter engine
 
@@ -35,8 +38,30 @@ and gated by macros: `PICOMITEVGA`, `HDMI`, `HDMICUTDOWN`, `PICOMITEWEB`,
 | `MM_Misc.c/.h` | `OPTION`, `configure()`, settings, `MM.INFO`, runtime CPU speed, and miscellaneous commands. Heaviest per-variant config in the codebase. |
 | `MATHS.c/.h` | `MATH` command set (matrices, vectors, FFT, sensor fusion) and math functions. |
 | `Memory.c/.h` | The MMBasic heap/memory manager (`GetMemory`, `AllMemory`, program/variable storage). |
-| `CFunction.c` | `CSUB`/`CFUNCTION` embedded-machine-code support (call table, execution). |
+| `CFunction.c` | `CSUB`/`CFUNCTION` embedded-machine-code support (call table, execution, the check before a C/ELF CSUB is called). |
 | `MMtrace.c/.h` | Source-level `TRACE`/debug facility. |
+| `pm_api.c/.h`, `pm_api_extra.c` | Native C API (`pm_*`) and its name resolver, common to both chips. |
+| `pm_runtime.c/.h`, `pm_runtime_stdio.c`, `pm_runtime_commands.c` | C heap, libc, filesystem and PicoMite statement services for native code. |
+| `pm_basic_runtime.c`, `pm_peripheral_runtime.c` | BASIC integration and native peripheral bridges, independent of TinyCC. |
+| `pm_pio_shared.c/.h` | PIO hardware implementation shared by the BASIC commands and C. |
+| `pm_pio_runtime.c` | Native C entry points to that shared PIO implementation. |
+
+See [PicoMite-native-C-support.md](PicoMite-native-C-support.md) for the whole native C side.
+
+## core/elf/ — ELF loader (RP2040 and RP2350)
+
+| File | Contents |
+|---|---|
+| `elf_loader.c/.h` | Independent linker for ELF32/ARM relocatable objects. |
+| `elf_picomite.c/.h` | Filesystem, `RUN` and CSUB adapter for that linker. |
+
+## core/tcc/ — TinyCC (RP2350 builds only)
+
+| File | Contents |
+|---|---|
+| `*.c`, `*.h` | TinyCC 0.9.27 with a Thumb-2 back end, built as the library `PicoMiteTinyCC`; PicoMite changes are marked `TCC_PICOMITE`. |
+| `tcc_picomite.c/.h` | The firmware side: heap arena, files, console, run-time symbols, private stack, error trapping, `RUN "file.c"` and the `TCC` command. |
+| `include/`, `include/picomite/` | The headers built into the firmware for compiled programs, including the `<picomite/...>` API. |
 
 ## graphics/ — display, drawing, GUI
 
@@ -147,6 +172,12 @@ and gated by macros: `PICOMITEVGA`, `HDMI`, `HDMICUTDOWN`, `PICOMITEWEB`,
 `ArialNumFontPlus.h`, `Fnt_10x16.h`, `Font_8x6.h`, `Hom_16x24_LE.h`,
 `Inconsola.h`, `Misc_12x20_LE.h`, `arial_bold.h`, `font-8x10.h`, `font1.h`,
 `smallfont.h` — bitmap/font glyph tables used by `graphics/Draw.c`.
+
+## C/ — native C examples and tests (not part of the build)
+
+Sources run with `RUN "file.c"` on an RP2350, and prebuilt relocatable objects
+(`*.elf`). The matching BASIC test programs are `Bas/elf_loader_smoke.bas`,
+`Bas/pm_library_*.bas` and `Bas/pm_resident_*.bas`.
 
 ## tools/ — host-side / build scripts (not compiled into firmware)
 

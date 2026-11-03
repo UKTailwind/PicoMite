@@ -86,15 +86,20 @@ Each variant is selected with `-DCOMPILE=<variant>`, which forces the matching
 
 Valid `<variant>` names:
 
-- **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
-- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB`
+- **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `M2P1VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
+- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `M2P2HDMI` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB` &nbsp; `HDMIBTH` &nbsp; `PC3`
 
 (Variant names are case-insensitive on the command line.)
+
+`M2P2HDMI` and `M2P1VGA` set the factory wiring of the Murmulator 2 boards;
+`M2P1VGA` is a test build.
 
 ## Documentation
 
 User manuals and per-feature guides live in [`docs/`](docs/), including the
 main PicoMite user manual and the Advanced Graphics manual (GUI controls).
 
-The TinyCC native COM1/COM2 UART API (including an example C program) is
-covered in [`docs/PicoMite-native-C-support.md`](docs/PicoMite-native-C-support.md).
+Native C on the PicoMite (`RUN "file.c"`, the `TCC` command, ELF programs,
+C CSUBs, resident services and the `<picomite/...>` API) is covered in
+[`docs/PicoMite-native-C-support.md`](docs/PicoMite-native-C-support.md), with
+examples and tests in [`C/`](C/).

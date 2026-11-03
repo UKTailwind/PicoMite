@@ -891,7 +891,9 @@ are dropped. On C RUN end or `pm_gui_on_event(NULL)` the subscription and
 queue are discarded, without resetting BASIC's GUI controls or interrupt
 vectors. Registration requires an active `.c`/`.elf` RUN with GUICONTROLS;
 it is not available to external CSUBs. GUI creation and CTRLVAL mutation
-are likewise not exported to CSUBs. `PM_API_VERSION` is 29.
+are likewise not exported to CSUBs.
+
+### Gamepad API (v22)
 
 Gamepad API v22 uses `pm_gamepad_get(channel,&state)` (channels 1..4):
 fill `state.size = sizeof state` first; returns 1 for a supported controller,
@@ -934,7 +936,7 @@ callbacks run in the C program context, not in a hardware IRQ, and C-owned
 subscriptions end with RUN. They must not be used by CSUB.
 See `C/pm_gamepad_test.c` for a smoke test.
 
-GPIO edge subscriptions (API v21):
+### GPIO edge subscriptions (API v21)
 
 ```c
 #include <picomite/input.h>
@@ -967,7 +969,7 @@ by default drives M2's NES-PAD CLK (GP20) and LATCH (GP21), observing DATA
 argument selects the earlier manual input test. Unavailable pins and missing
 transitions produce SKIP instead of PASS.
 
-PIO/DMA notes for API v20:
+### PIO/DMA notes (API v20)
 
 The BASIC function `PIO(IDLE n)` calls the same `pm_pio_idle_hw()` probe as
 native C `pm_pio_idle(n)`. It returns 1 for an available PIO block whose SMs
@@ -1095,6 +1097,11 @@ for an available PIO, so it remains useful on boards with every PIO in use.
   The test expects the exact order of the last four words, not a rotation.
 - `pm_pio_writefifo` and `pm_pio_set_base` mirror the RP2350-only BASIC
   operations; RP2040 firmware reports an unsupported-operation error.
+
+### Header reference
+
+One section for each header under `picomite/`. `resident.h` and `gui.h` are
+described in their own sections above.
 
 #### `<picomite/pio.h>` reference
 
@@ -1977,6 +1984,26 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 
 ---
 
+## Examples and tests
+
+The `C/` folder holds small programs and the tests of the API. On an RP2350,
+copy a `.c` file to the board and use `RUN`. The `.elf` files beside them are
+prebuilt relocatable objects for both chips; `example_elf.bat` builds one with
+the command in [ELF objects](#run-file--args-for-elf-files), but the toolchain
+path in it is local, so edit it first.
+
+| Files in `C/` | What they show |
+|---|---|
+| `circle.c`, `try.c`, `vars.c`, `files.c`, `mouse.c`, `blit.c`, `sound.c`, `maze3.c` | The language, files, variables, input, graphics and sound |
+| `serial_echo.c`, `i2c_reg_read.c`, `spi_loopback.c`, `adc_read.c`, `pwm_sweep.c`, `pcm_stream.c` | One peripheral each; the first lines of each file say what to configure or wire |
+| `basic_callback.c` | Calling a BASIC FUNCTION in the library from C |
+| `core_pm_api_smoke.c`, `core_pm_extended_smoke.c`, `core_pm_runtime_smoke.c`, `pm_aeabi_lmul_test.c` | Smoke and regression tests of the common runtime on both chips |
+| `pm_gamepad_test.c`, `pm_gpio_edge_test.c`, `pm_gui_test.c`, `pm_pio_probe.c`, `pm_pio_loopback_test.c` | Tests of the input, GUI and PIO APIs |
+| `pm_library_csub_smoke.c`, `pm_library_second_probe.c` | C/ELF CSUBs in the LIBRARY, with `Bas/pm_library_*.bas` |
+| `pm_resident_*_probe.c` | Resident services, with `Bas/pm_resident_*.bas` |
+
+---
+
 ## Known limitations
 
 - **Onboard TinyCC is RP2350-only.** External ELF ET_REL execution and the
@@ -2014,6 +2041,8 @@ clock. If the clock has not been set (`TIME$`, `DATE$`, RTC or NTP), they are
 | `core/pm_api.c`, `core/pm_api_extra.c`, `core/pm_api.h` | Common graphics/input/PCM API and resolver for both chips |
 | `core/pm_runtime.c`, `core/pm_runtime_stdio.c`, `core/pm_runtime_commands.c` | Common C heap, libc, filesystem, and PicoMite statement services |
 | `core/pm_basic_runtime.c`, `core/pm_peripheral_runtime.c` | Common BASIC integration and managed native peripheral handles |
+| `core/pm_pio_shared.c`, `core/pm_pio_shared.h` | PIO hardware implementation shared by the BASIC commands and C |
+| `core/pm_pio_runtime.c` | Native C entry points to the shared PIO implementation |
 | `core/elf/elf_loader.c`, `core/elf/elf_picomite.c` | Independent ELF linker and RUN/CSUB adapter |
 | `core/tcc/*.c, *.h` | TinyCC (library `PicoMiteTinyCC`), with PicoMite changes marked `TCC_PICOMITE` |
 | `core/tcc/config.h` | TinyCC configuration: Thumb-2, EABI, softfp (the firmware's float ABI), `rom:/include` |

@@ -446,8 +446,22 @@ static int pm_runtime_putchar(int c)
     X(__aeabi_d2iz) X(__aeabi_d2uiz) X(__aeabi_f2d) X(__aeabi_d2f)          \
     X(__aeabi_l2f) X(__aeabi_l2d) X(__aeabi_f2lz) X(__aeabi_d2lz)           \
     X(__aeabi_ul2f) X(__aeabi_ul2d) X(__aeabi_f2ulz) X(__aeabi_d2ulz)
+/* Additional GCC/Clang ARM EABI helpers.  Keep the original table intact so
+ * this addition also applies after the separate __aeabi_lmul fix. */
+#define PM_RUNTIME_AEABI_MORE(X)                                             \
+    X(__aeabi_idiv0) X(__aeabi_ldiv0) X(__aeabi_lcmp) X(__aeabi_ulcmp)      \
+    X(__aeabi_memmove4) X(__aeabi_memmove8)                                 \
+    X(__aeabi_memset4) X(__aeabi_memset8)                                   \
+    X(__aeabi_memclr) X(__aeabi_memclr4) X(__aeabi_memclr8)                 \
+    X(__aeabi_drsub) X(__aeabi_dcmpun)                                     \
+    X(__aeabi_fadd) X(__aeabi_fsub) X(__aeabi_frsub) X(__aeabi_fmul)        \
+    X(__aeabi_fdiv) X(__aeabi_fcmpeq) X(__aeabi_fcmplt)                     \
+    X(__aeabi_fcmple) X(__aeabi_fcmpgt) X(__aeabi_fcmpge)                   \
+    X(__aeabi_fcmpun)                                                       \
+    X(__aeabi_i2f) X(__aeabi_ui2f) X(__aeabi_f2iz) X(__aeabi_f2uiz)
 #define PM_RUNTIME_DECLARE(n) extern void n(void);
 PM_RUNTIME_AEABI(PM_RUNTIME_DECLARE)
+PM_RUNTIME_AEABI_MORE(PM_RUNTIME_DECLARE)
 #undef PM_RUNTIME_DECLARE
 
 /* PCM streaming callbacks run from PCMPoll(), not from IRQ. The firmware
@@ -594,9 +608,11 @@ static const pm_runtime_symbol pm_runtime_symbols[] = {
     PM_RUNTIME_SYM(floorf)
     PM_RUNTIME_SYM(ceilf)
     PM_RUNTIME_AEABI(PM_RUNTIME_SYM)
+    PM_RUNTIME_AEABI_MORE(PM_RUNTIME_SYM)
 };
 #undef PM_RUNTIME_SYM
 #undef PM_RUNTIME_AS
+#undef PM_RUNTIME_AEABI_MORE
 const void *pm_runtime_stdio_resolve(const char *name);
 unsigned pm_runtime_stdio_firmware_id(void);
 extern const void *pm_pio_resolve_symbol(const char *name);
