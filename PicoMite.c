@@ -4947,6 +4947,18 @@ uint32_t testPSRAM(void)
             }
             ExecuteProgram(tknbuf); // execute the line straight away
 #ifdef MMBASIC_FM
+            if (fm_program_launched_from_fm == 2)
+            {
+                /* FM staged a native RUN. Enter it here, after cmd_fm() has
+                 * returned and its large stack frame is gone. Keep the FM
+                 * relaunch flag armed for normal exit, errors and Ctrl-C. */
+                fm_program_launched_from_fm = 1;
+                CurrentLinePtr = NULL;
+                cmdline = (unsigned char *)"";
+                multi = false;
+                tokenise(true); // inpbuf contains RUN "path" from FM
+                goto autorun;
+            }
             if (fm_program_launched_from_fm || fm_relaunch_status_valid)
             {
                 fm_program_launched_from_fm = 0;

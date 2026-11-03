@@ -1192,10 +1192,70 @@ static void fm_flush_keyboard_buffer(void)
         ;
 }
 
-static int fm_name_is_bas(const char *name)
+enum { FM_RUN_NONE, FM_RUN_BASIC, FM_RUN_NATIVE };
+
+/* Read the signature on the selected panel's filesystem. Do not use
+ * elf_picomite_is_elf() here: FileSize/BasicFileOpen interpret paths using
+ * the BASIC command context, which can be empty while FM is active. */
+static int fm_file_is_elf(int filesystem, const char *dir, const char *name)
+{
+    char path[FM_PATH_MAX];
+    unsigned char sig[4];
+    int is_elf = 0;
+
+    if (!fm_make_child_path(dir, name, path, sizeof(path)))
+        return 0;
+    if (filesystem == 0)
+    {
+        lfs_file_t file;
+        memset(&file, 0, sizeof(file));
+        if (lfs_file_open(&lfs, &file, path, LFS_O_RDONLY) >= 0)
+        {
+            is_elf = lfs_file_read(&lfs, &file, sig, sizeof(sig)) == sizeof(sig) &&
+                     memcmp(sig, "\177ELF", sizeof(sig)) == 0;
+            lfs_file_close(&lfs, &file);
+        }
+    }
+    else
+    {
+        int oldfs = FatFSFileSystem;
+        int oldabort = OptionFileErrorAbort;
+        FIL file;
+        UINT got = 0;
+        FRESULT result = FR_NOT_READY;
+
+        FatFSFileSystem = filesystem;
+        OptionFileErrorAbort = 0;
+        if (InitSDCard())
+        {
+            result = f_open(&file, path, FA_READ);
+            if (result == FR_OK)
+            {
+                result = f_read(&file, sig, sizeof(sig), &got);
+                f_close(&file);
+            }
+        }
+        OptionFileErrorAbort = oldabort;
+        FatFSFileSystem = oldfs;
+        is_elf = result == FR_OK && got == sizeof(sig) &&
+                 memcmp(sig, "\177ELF", sizeof(sig)) == 0;
+    }
+    return is_elf;
+}
+
+static int fm_run_kind(int filesystem, const char *dir, const char *name,
+                       uint32_t size)
 {
     const char *dot = strrchr(name, '.');
-    return dot != NULL && fm_stricmp(dot, ".bas") == 0;
+
+    /* Match RUN's signature-before-extension rule without changing CWD. */
+    if (size >= 52 && fm_file_is_elf(filesystem, dir, name))
+        return FM_RUN_NATIVE;
+#ifdef rp2350
+    if (dot && fm_stricmp(dot, ".c") == 0)
+        return FM_RUN_NATIVE;
+#endif
+    return dot && fm_stricmp(dot, ".bas") == 0 ? FM_RUN_BASIC : FM_RUN_NONE;
 }
 
 static int fm_panel_name_limit(const fm_panel_t *panel)
@@ -4051,27 +4111,19 @@ static int fm_copy_marked(fm_panel_t *src, fm_panel_t *dst, char *status, int st
     return copied > 0;
 }
 
-static int fm_run_bas_program(const char *filename, const char *fullpath)
+static int fm_run_bas_program(const char *fullpath)
 {
     unsigned char runarg[MAXSTRLEN + 1];
     unsigned char *saved_cmdline = cmdline;
     int loaded = 0;
 
-    if (filename && filename[0])
+    /* Use the selected panel's absolute path, not a basename resolved
+     * against whichever drive was active before entering FM. */
+    if (fullpath && fullpath[0] &&
+        snprintf((char *)runarg, sizeof(runarg), "\"%s\",", fullpath) < (int)sizeof(runarg))
     {
-        if (snprintf((char *)runarg, sizeof(runarg), "\"%s\",", filename) < (int)sizeof(runarg))
-            loaded = FileLoadProgram(runarg, false, false);
-    }
-
-    // Fallback for edge cases where current drive/path has not yet been fully applied.
-    if (!loaded && fullpath && fullpath[0])
-    {
-        if (snprintf((char *)runarg, sizeof(runarg), "\"%s\",", fullpath) < (int)sizeof(runarg))
-        {
-            cmdline = (unsigned char *)"FM";
-            loaded = FileLoadProgram(runarg, false, false);
-            cmdline = saved_cmdline;
-        }
+        cmdline = (unsigned char *)"FM";
+        loaded = FileLoadProgram(runarg, false, false);
     }
 
     cmdline = saved_cmdline;
@@ -4593,6 +4645,7 @@ void cmd_fm(void)
     int context_state = 0;
     int done = 0;
     int run_from_fm = 0;
+    int run_kind = FM_RUN_NONE;
     int edit_from_fm = 0;
 #if defined(PICOMITEVGA)
     /* Re-entry after a BASIC program launched from FM: the program may
@@ -5290,13 +5343,9 @@ fm_relaunch:
                     snprintf(status, sizeof(status), "%c:%s", fm_drive_letter(p->filesystem), p->path);
                     need_full_redraw = 1;
                 }
-                else if (fm_name_is_bas(entry.name))
+                else if (fm_make_full_filename(p->filesystem, p->path, entry.name, run_bas_full, sizeof(run_bas_full)) &&
+                         (run_kind = fm_run_kind(p->filesystem, p->path, entry.name, entry.size)) != FM_RUN_NONE)
                 {
-                    if (!fm_make_full_filename(p->filesystem, p->path, entry.name, run_bas_full, sizeof(run_bas_full)))
-                    {
-                        snprintf(status, sizeof(status), "Path too long");
-                        break;
-                    }
                     if (snprintf(run_bas_file, sizeof(run_bas_file), "%s", entry.name) >= (int)sizeof(run_bas_file))
                     {
                         snprintf(status, sizeof(status), "Path too long");
@@ -5719,7 +5768,15 @@ fm_check_run:
         fm_program_run_font = PromptFont;
 #endif
         fm_program_launched_from_fm = 1;
-        if (!fm_run_bas_program(run_bas_file, run_bas_full))
+        if (run_kind == FM_RUN_NATIVE)
+        {
+            /* Defer native RUN until FM's large stack frame has returned. */
+            int n = snprintf((char *)inpbuf, STRINGSIZE, "RUN \"%s\"", run_bas_full);
+            if (n < 0 || n >= STRINGSIZE)
+                error("FM: RUN path too long");
+            fm_program_launched_from_fm = 2;
+        }
+        else if (!fm_run_bas_program(run_bas_full))
         {
             fm_program_launched_from_fm = 0;
             fm_last_launched_bas[0] = 0;
@@ -5750,9 +5807,12 @@ fm_check_run:
         cmdline = (unsigned char *)"";
         cmdline = saved_cmdline;
 
-        if (fm_edit_wants_run && fstrstr(run_bas_full, ".bas"))
+        if (fm_edit_wants_run &&
+            (run_kind = fm_run_kind(panels[active].filesystem, panels[active].path,
+                                    strrchr(run_bas_full, '/') ? strrchr(run_bas_full, '/') + 1 : run_bas_full,
+                                    UINT32_MAX)) != FM_RUN_NONE)
         {
-            // F2 pressed on a .bas file — run it instead of returning to FM.
+            // F2 after editing a BASIC/C file — use the same launch selection as FM.
             // run_bas_full is still valid; derive run_bas_file from it.
             const char *bn = strrchr(run_bas_full, '/');
             strncpy(run_bas_file, bn ? bn + 1 : run_bas_full, sizeof(run_bas_file) - 1);

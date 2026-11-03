@@ -2314,14 +2314,15 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 	if (!CMM2mode && *filename)
 	{
 		size_t len = strlen((const char *)filename);
+		bool is_elf = elf_picomite_is_elf((const char *)filename);
 #ifdef rp2350
-		bool is_c = len >= 2 && filename[len - 2] == '.' &&
+		bool is_c = !is_elf && len >= 2 && filename[len - 2] == '.' &&
 					(filename[len - 1] == 'c' || filename[len - 1] == 'C');
 #else
 		bool is_c = false;
 		(void)len;
 #endif
-		if (is_c || elf_picomite_is_elf((const char *)filename))
+		if (is_c || is_elf)
 		{
 			char cfile[MAXSTRLEN + 1], cargs[MAXSTRLEN + 1];
 			snprintf(cfile, sizeof(cfile), "%s", (char *)filename);
