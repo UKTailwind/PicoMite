@@ -35,6 +35,11 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#include "core/pm_api.h"
+#include "core/pm_runtime.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h"
+#endif
 #if !defined(USBKEYBOARD) && !defined(PICOMITEBT)
 #include "class/cdc/cdc_device.h"
 #endif
@@ -53,6 +58,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #define GUI_C_KEYWORD CYAN
 #define GUI_C_QUOTE MAGENTA
 #define GUI_C_NUMBER GREEN
+#define GUI_C_C_UNSAFE RED
+#define GUI_C_C_REFUSED CERULEAN
 #define GUI_C_LINE MAGENTA
 #define GUI_C_STATUS WHITE
 
@@ -64,6 +71,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #define VT100_C_KEYWORD "\033[36m" // Cyan                 Cyan
 #define VT100_C_QUOTE "\033[35m"   // Green                Green
 #define VT100_C_NUMBER "\033[32m"  // Red                  Red
+#define VT100_C_C_UNSAFE "\033[91m"  // Native C: unavailable in CSUB
+#define VT100_C_C_REFUSED "\033[94m" // Native C: refused by TinyCC CSUB
 #define VT100_C_LINE "\033[35m"    // White                Grey
 #define VT100_C_STATUS "\033[37m"  // Black                Brown
 #define VT100_C_ERROR "\033[31m"   // Red                  Red
@@ -446,6 +455,7 @@ int curx, cury;               // column and row of the current cursor (in charac
 unsigned char *txtp;          // position of the current cursor in the text being edited
 int drawstatusline;           // true if the status line needs to be redrawn on the next keystroke
 static bool edit_is_bas;      // true when editing a .bas file or in-memory program (enforces 255-char line limit)
+static bool edit_is_c;        // C syntax colours, not BASIC's command table
 /* One-shot: ordinary EDIT/F2 should not clear console output on returning to the prompt. */
 int edit_f2_preserve_output = 0;
 /* EDIT "file" F2: dispatch RUN only after FullScreenEditor has returned. */
@@ -580,6 +590,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
     /* Only in-memory source is unconditionally BASIC. File mode is set
      * below after resolving the default extension. */
     edit_is_bas = (filename == NULL);
+    edit_is_c = false;
     if (ProgramRunning() && cmdfile)
         StandardError(10);
     if (argc == 0 && !cmdfile)
@@ -818,7 +829,8 @@ void edit(unsigned char *cmdline, bool cmdfile)
         }
         const char *ext = strrchr(filename, '.');
         edit_is_bas = ext != NULL && strcasecmp(ext, ".bas") == 0;
-        if (!edit_is_bas)
+        edit_is_c = ext && (!strcasecmp(ext, ".c") || !strcasecmp(ext, ".h"));
+        if (!edit_is_bas && !edit_is_c)
             Option.ColourCode = 0;
         p = EdBuff; // (a file that does not exist yet starts empty)
         nbrlines = 0;
@@ -8666,6 +8678,40 @@ void MarkMode(unsigned char *cb, unsigned char *buf)
 char *findLine(int ln, int *inmulti)
 {
     unsigned char *p, *q;
+    if (edit_is_c)
+    {
+        /* Reconstruct only the state at the first character of the line.
+         * No cached per-line state, so edits cannot leave stale colours. */
+        int state = 0, esc = 0; // 1: //, 2: /* */, 3: string, 4: character
+        for (p = EdBuff; ln && *p; ++p)
+        {
+            if (*p == '\n')
+            {
+                if (state == 1 || ((state == 3 || state == 4) && !esc)) state = 0;
+                esc = 0;
+                --ln;
+            }
+            else if (state == 2)
+            {
+                if (p[0] == '*' && p[1] == '/') { state = 0; ++p; }
+            }
+            else if (state == 3 || state == 4)
+            {
+                if (esc) esc = 0;
+                else if (*p == '\\') esc = 1;
+                else if (*p == (state == 3 ? '"' : '\'')) state = 0;
+            }
+            else if (state == 0)
+            {
+                if (p[0] == '/' && p[1] == '*') { state = 2; ++p; }
+                else if (p[0] == '/' && p[1] == '/') { state = 1; ++p; }
+                else if (*p == '"') state = 3;
+                else if (*p == '\'') state = 4;
+            }
+        }
+        *inmulti = state == 2 ? 1 : state == 3 ? 3 : state == 4 ? 4 : 0;
+        return (char *)p;
+    }
     *inmulti = false;
     int inquote = false;
     int incomment = false;
@@ -8736,6 +8782,146 @@ int EditCompStr(char *p, char *tkn)
     return false; // or NULL if not
 }
 
+/* C highlighting is lexical only: no TinyCC parser or duplicate API symbol
+ * table in the firmware.  The resolver already searches pm_core_symbols.
+ * The two CSUB rejection lists are kept in their original modules. */
+static void editCEmitColour(int colour, int vt, int force)
+{
+    if (!force && gui_fcolour == colour) return;
+    gui_fcolour = colour;
+    if (!vt) return;
+    switch (colour)
+    {
+        case GUI_C_COMMENT: PrintString(VT100_C_COMMENT); break;
+        case GUI_C_QUOTE: PrintString(VT100_C_QUOTE); break;
+        case GUI_C_NUMBER: PrintString(VT100_C_NUMBER); break;
+        case GUI_C_KEYWORD: PrintString(VT100_C_KEYWORD); break;
+        case GUI_C_C_UNSAFE: PrintString(VT100_C_C_UNSAFE); break;
+        case GUI_C_C_REFUSED: PrintString(VT100_C_C_REFUSED); break;
+        default: PrintString(VT100_C_NORMAL); break;
+    }
+}
+
+static int editCKeyword(const char *id)
+{
+    /* NUL-separated words are smaller than an array of pointers. */
+    static const char words[] =
+        "auto\0break\0case\0char\0const\0continue\0default\0do\0double\0"
+        "else\0enum\0extern\0float\0for\0goto\0if\0inline\0int\0long\0"
+        "register\0restrict\0return\0short\0signed\0sizeof\0static\0"
+        "struct\0switch\0typedef\0union\0unsigned\0void\0volatile\0while\0"
+        "_Bool\0bool\0size_t\0ptrdiff_t\0int8_t\0int16_t\0int32_t\0"
+        "int64_t\0uint8_t\0uint16_t\0uint32_t\0uint64_t\0";
+    const char *w;
+    for (w = words; *w; w += strlen(w) + 1)
+        if (!strcmp(w, id)) return true;
+    return false;
+}
+
+static void SetCColour(unsigned char *p, int vt)
+{
+    /* 0=code, 1=//, 2=block, 3=string, 4=char, 5=block closing /,
+     * 6=block opening *.  The one-character states keep delimiters coloured. */
+    static unsigned char state, escaped, at_bol, directive;
+    static unsigned char *word_end;
+    static int word_colour;
+    unsigned char *q;
+    int colour;
+
+    if (!p || p == (unsigned char *)1 || p == (unsigned char *)2 ||
+        p == (unsigned char *)3)
+    {
+        state = p == (unsigned char *)1 ? 3 : p == (unsigned char *)2 ? 2 :
+                p == (unsigned char *)3 ? 4 : 0;
+        word_end = NULL;
+        escaped = directive = 0;
+        at_bol = !state;
+        editCEmitColour(state == 2 ? GUI_C_COMMENT : state ? GUI_C_QUOTE :
+                        GUI_C_NORMAL, vt, true);
+        return;
+    }
+    if (state == 1 || state == 2 || state == 5 || state == 6)
+    {
+        if (state == 6) state = 2;
+        else if (state == 5) state = 0;
+        else if (state == 2 && *p == '*' && p[1] == '/') state = 5;
+        editCEmitColour(GUI_C_COMMENT, vt, false);
+        return;
+    }
+    if (state == 3 || state == 4)
+    {
+        if (escaped) escaped = 0;
+        else if (*p == '\\') escaped = 1;
+        else if (*p == (state == 3 ? '"' : '\'')) state = 0;
+        editCEmitColour(GUI_C_QUOTE, vt, false);
+        return;
+    }
+    if (word_end && p < word_end)
+    {
+        editCEmitColour(word_colour, vt, false);
+        return;
+    }
+    word_end = NULL;
+    if (at_bol && *p == '#')
+    {
+        at_bol = 0;
+        directive = 1;
+        editCEmitColour(GUI_C_KEYWORD, vt, false);
+        return;
+    }
+    if (*p != ' ' && *p != '\t') at_bol = 0;
+    if (p[0] == '/' && (p[1] == '/' || p[1] == '*'))
+    {
+        state = p[1] == '/' ? 1 : 6;
+        editCEmitColour(GUI_C_COMMENT, vt, false);
+        return;
+    }
+    if (*p == '"' || *p == '\'')
+    {
+        state = *p == '"' ? 3 : 4;
+        editCEmitColour(GUI_C_QUOTE, vt, false);
+        return;
+    }
+    if (isalpha(*p) || *p == '_')
+    {
+        char id[64];
+        size_t len;
+        for (q = p; isalnum(*q) || *q == '_'; ++q) ;
+        len = (size_t)(q - p);
+        word_end = q;
+        colour = GUI_C_NORMAL;
+        if (directive)
+            colour = GUI_C_KEYWORD;
+        else if (len < sizeof(id))
+        {
+            memcpy(id, p, len);
+            id[len] = 0;
+            if (editCKeyword(id)) colour = GUI_C_KEYWORD;
+#ifdef rp2350
+            else if (tcc_pm_csub_refused(id)) colour = GUI_C_C_REFUSED;
+#endif
+            else if (pm_runtime_csub_forbidden(id)) colour = GUI_C_C_UNSAFE;
+            else if (pm_core_resolve_symbol(id)) colour = GUI_C_KEYWORD;
+        }
+        directive = 0;
+        word_colour = colour;
+        editCEmitColour(colour, vt, false);
+        return;
+    }
+    if (isdigit(*p) || (*p == '.' && isdigit(p[1])))
+    {
+        for (q = p; isalnum(*q) || *q == '.' || *q == '_'; ++q)
+            if ((q[1] == '+' || q[1] == '-') &&
+                (*q == 'e' || *q == 'E' || *q == 'p' || *q == 'P')) ++q;
+        word_end = q;
+        word_colour = GUI_C_NUMBER;
+        editCEmitColour(GUI_C_NUMBER, vt, false);
+        return;
+    }
+    if (*p != ' ' && *p != '\t') directive = 0;
+    editCEmitColour(GUI_C_NORMAL, vt, false);
+}
+
 // this function does the syntax colour coding
 // p = pointer to the current character to be printed
 //     or NULL if the colour coding is to be cmdfile to normal
@@ -8744,6 +8930,11 @@ int EditCompStr(char *p, char *tkn)
 // so it must be fed all chars from the start of the line
 void SetColour(unsigned char *p, int DoVT100)
 {
+    if (edit_is_c)
+    {
+        if (Option.ColourCode) SetCColour(p, DoVT100);
+        return;
+    }
     int i;
     unsigned char **pp;
     static int intext = false;
@@ -9059,14 +9250,18 @@ void restoreColourFromLineStart(unsigned char *target)
             ln++;
     SetColour(NULL, false);
     unsigned char *ls = (unsigned char *)findLine(ln, &inmulti);
-    if (inmulti == 3)
+    if (edit_is_c && inmulti == 1)
+        SetColour((unsigned char *)2, false);
+    else if (inmulti == 3)
         SetColour((unsigned char *)1, false);
     else if (inmulti == 4)
-        SetColour((unsigned char *)2, false);
+        SetColour((unsigned char *)(edit_is_c ? 3 : 2), false);
     for (q = ls; q < target && *q && *q != '\n'; q++)
-        if (!inmulti || inmulti == 3)
+        if (edit_is_c || !inmulti || inmulti == 3)
             SetColour(q, false);
-    if (gui_fcolour == GUI_C_COMMENT)
+    if (edit_is_c)
+        editCEmitColour(gui_fcolour, true, true);
+    else if (gui_fcolour == GUI_C_COMMENT)
         PrintString(VT100_C_COMMENT);
     else if (gui_fcolour == GUI_C_QUOTE)
         PrintString(VT100_C_QUOTE);
@@ -9091,22 +9286,25 @@ void printLine(int ln)
     {
         MX470PutC('\r'); // print on the MX470 display
         p = findLine(ln, &inmulti);
-        // Init colour state for continuation lines split inside a string or comment
-        if (inmulti == 3)
-            SetColour((unsigned char *)1, false); // init quote state
+        // Rebuild the C lexical state at the start of any displayed line.
+        if (edit_is_c) SetColour(NULL, false);
+        if (edit_is_c && inmulti == 1)
+            SetColour((unsigned char *)2, false);
+        else if (inmulti == 3)
+            SetColour((unsigned char *)1, false);
         else if (inmulti == 4)
-            SetColour((unsigned char *)2, false); // init comment state
+            SetColour((unsigned char *)(edit_is_c ? 3 : 2), false);
         // skip edx characters, advancing colour state without displaying
         for (i = edx; i > 0 && *p && *p != '\n'; i--)
         {
-            if (!inmulti || inmulti == 3)
+            if (edit_is_c || !inmulti || inmulti == 3)
                 SetColour((unsigned char *)p, false);
             p++;
         }
         i = VWidth;
         while (i && *p && *p != '\n')
         {
-            if (!inmulti || inmulti == 3)
+            if (edit_is_c || !inmulti || inmulti == 3)
                 SetColour((unsigned char *)p, false); // set the colour for the LCD display only
             else if (Option.ColourCode) // (with it off nothing would set the colour back)
                 gui_fcolour = GUI_C_COMMENT;
@@ -9122,15 +9320,16 @@ void printLine(int ln)
     {
         if (Option.ColourCode)
         {
-            // Init colour state for continuation lines split inside a string or comment
-            if (inmulti == 3)
-                SetColour((unsigned char *)1, true); // init quote state
+            if (edit_is_c && inmulti == 1)
+                SetColour((unsigned char *)2, true);
+            else if (inmulti == 3)
+                SetColour((unsigned char *)1, true);
             else if (inmulti == 4)
-                SetColour((unsigned char *)2, true); // init comment state
+                SetColour((unsigned char *)(edit_is_c ? 3 : 2), true);
             // skip edx characters, advancing colour state without emitting codes
             for (i = edx; i > 0 && *p && *p != '\n'; i--)
             {
-                if (!inmulti || inmulti == 3)
+                if (edit_is_c || !inmulti || inmulti == 3)
                     SetColour((unsigned char *)p, false);
                 p++;
             }
@@ -9139,7 +9338,9 @@ void printLine(int ln)
             // (e.g. a comment ' that has scrolled left of the visible area).
             if (edx > 0)
             {
-                if (gui_fcolour == GUI_C_COMMENT)
+                if (edit_is_c)
+                    editCEmitColour(gui_fcolour, true, true);
+                else if (gui_fcolour == GUI_C_COMMENT)
                     PrintString(VT100_C_COMMENT);
                 else if (gui_fcolour == GUI_C_QUOTE)
                     PrintString(VT100_C_QUOTE);
@@ -9173,7 +9374,7 @@ void printLine(int ln)
     {
         if (Option.ColourCode)
         {
-            if (!inmulti || inmulti == 3)
+            if (edit_is_c || !inmulti || inmulti == 3)
                 SetColour((unsigned char *)p, true); // if colour coding is used set the colour for the VT100 emulator
             else
             {

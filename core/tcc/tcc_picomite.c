@@ -1092,12 +1092,19 @@ static const char *const pm_csub_refused[] = {
     "pm_spi_read", "pm_adc_read", "pm_adc_read_raw",
     "pm_pwm_open", "pm_pwm_set_duty", "pm_pwm_set_frequency", "pm_pwm_close", NULL};
 
-void *tcc_pm_resolve_symbol(const char *name)
+/* Shared with EDIT: use the exact same refusal list as CSUB linking. */
+bool tcc_pm_csub_refused(const char *name)
 {
     unsigned int i;
+    for (i = 0; pm_csub_refused[i]; ++i)
+        if (!strcmp(pm_csub_refused[i], name)) return true;
+    return false;
+}
+
+void *tcc_pm_resolve_symbol(const char *name)
+{
     if (pm_csub_linking) {
-        for (i = 0; pm_csub_refused[i]; ++i)
-            if (strcmp(pm_csub_refused[i], name) == 0) return NULL;
+        if (tcc_pm_csub_refused(name)) return NULL;
         if (pm_runtime_csub_forbidden(name)) return NULL;
     }
     return (void *)pm_core_resolve_symbol(name);
