@@ -7193,11 +7193,13 @@ void MIPS16 error(char *msg, ...)
     if (optionlogging)
     {
         lfs_file_t lfs_file;
-        char crlf[] = "\r\n";
-        lfs_file_open(&lfs, &lfs_file, "log.txt", LFS_O_APPEND | LFS_O_CREAT);
-        lfs_file_write(&lfs, &lfs_file, MMErrMsg, sizeof(MMErrMsg));
-        lfs_file_write(&lfs, &lfs_file, crlf, sizeof(crlf));
-        lfs_file_close(&lfs, &lfs_file);
+        // the message and CR-LF only (sizeof wrote the whole buffer, and a zero after the CR-LF)
+        if (lfs_file_open(&lfs, &lfs_file, "log.txt", LFS_O_WRONLY | LFS_O_APPEND | LFS_O_CREAT) >= 0)
+        {
+            lfs_file_write(&lfs, &lfs_file, MMErrMsg, strlen(MMErrMsg));
+            lfs_file_write(&lfs, &lfs_file, "\r\n", 2);
+            lfs_file_close(&lfs, &lfs_file);
+        }
     }
     // Clean up after an error in DefinedSubFun
     if (DefinedSubFunMem)

@@ -1867,6 +1867,7 @@ void MIPS16 cmd_play(void)
 			SoundPlay = PlayDuration;
 			if (!(CurrentlyPlaying == P_PAUSE_TONE || CurrentlyPlaying == P_TONE))
 			{
+				audiorepeat = 1; // the samples are made at PWM_FREQ: a WAV or MOD before (or the USB chime) left it at 2-4 (#145)
 				setrate(PWM_FREQ);
 				PhaseAC_right = 0.0;
 				PhaseAC_left = 0.0;
@@ -2476,6 +2477,7 @@ void MIPS16 cmd_play(void)
 			sound_mode_right[channel] = local_sound_mode_right;
 		if (!(CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_PAUSE_SOUND))
 		{
+			audiorepeat = 1; // as PLAY TONE (#145)
 			setrate(PWM_FREQ);
 			if (AUDIO_USES_VS1053)
 				playimmediatevs1053(P_SOUND);
