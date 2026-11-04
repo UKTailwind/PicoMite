@@ -196,7 +196,9 @@ extern "C"
       ~250 KB of flash); the firmware ends at 1390.3 KB. */
    /* +16 KB (2026-10-30): pm_try, the file and variable API, the mouse went
       0.4 KB over; the firmware ends at 1408.4 KB. */
-#define FLASH_TARGET_OFFSET (1424 * 1024)
+   /* +16 KB (2026-11-04): editor F2 support exceeded 1424 KB.  This moves
+      options and program slots, but the RP2350 A: drive stays at 4 MB. */
+#define FLASH_TARGET_OFFSET (1440 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
