@@ -3739,6 +3739,34 @@ uint32_t testPSRAM(void)
         }
     }
 #endif
+#ifdef MMBASIC_FM
+    /* Called only after an FM-launched program has finished.  Keep the output
+     * visible until the user acknowledges it, then permit the FM redraw. */
+    static void fm_wait_before_relaunch(void)
+    {
+        MMAbort = false;
+        clearrepeat();
+        while (MMInkey() != -1)
+            ; /* discard stale Enter/F2 and key repeats */
+        if (Option.DISPLAY_CONSOLE && Option.Height > 0)
+        {
+            int reservedBottom = VRes - (VRes * OptionVResreserved / 100);
+            if (CurrentY + 2 * gui_font_height > reservedBottom)
+            {
+                CurrentX = 0;
+                CurrentY = reservedBottom > gui_font_height ? reservedBottom - gui_font_height : 0;
+                MMPrintString("\r"); /* one status line, never clear the full screen */
+            }
+            else
+                MMPrintString("\r\n");
+            MMPrintString(Option.Width < 35 ? "Any key: FM" : "Press any key to return to FM");
+        }
+        else
+            MMPrintString("\r\nPress any key to return to FM");
+        (void)MMgetchar();
+        MMAbort = false;
+    }
+#endif
     int MIPS16 main()
     {
 #if defined(PICOMITEWEB) && defined(rp2350)
@@ -4718,6 +4746,8 @@ uint32_t testPSRAM(void)
 #ifdef MMBASIC_FM
             if (fm_program_launched_from_fm || fm_relaunch_status_valid)
             {
+                if (fm_program_launched_from_fm == 1)
+                    fm_wait_before_relaunch();
                 fm_program_launched_from_fm = 0;
                 CurrentLinePtr = NULL;
                 cmdline = (unsigned char *)"";
@@ -4731,6 +4761,7 @@ uint32_t testPSRAM(void)
                 continue;
             }
 #endif
+            bool edit_prompt_inline = false;
             if (Option.DISPLAY_CONSOLE)
             {
                 SetFont(PromptFont);
@@ -4742,7 +4773,20 @@ uint32_t testPSRAM(void)
                 // the screen, clipping the prompt characters.  Make room for the
                 // new font before the prompt is printed.
                 int reservedBottom = VRes - (VRes * OptionVResreserved / 100);
-                if (CurrentY + gui_font_height > reservedBottom)
+                if (edit_f2_preserve_output)
+                {
+                    /* F2 from the in-memory editor: place the prompt without
+                     * emitting a newline or scrolling/clearing the screen.
+                     * Otherwise the normal prompt path may discard the final
+                     * screenful of console output. */
+                    int py = CurrentY + (CurrentX != 0 ? gui_font_height : 0);
+                    if (py + gui_font_height > reservedBottom)
+                        py = reservedBottom - gui_font_height;
+                    CurrentY = py > 0 ? py : 0;
+                    CurrentX = 0;
+                    edit_prompt_inline = true;
+                }
+                else if (CurrentY + gui_font_height > reservedBottom)
                 {
 #ifdef PICOMITEVGA
                     int canscroll = !Option.NoScroll; // framebuffer display always scrolls unless NoScroll
@@ -4764,7 +4808,7 @@ uint32_t testPSRAM(void)
                         CurrentY = 0;
                     }
                 }
-                if (CurrentX != 0)
+                if (CurrentX != 0 && !edit_prompt_inline)
                     MMPrintString("\r\n"); // prompt should be on a new line
             }
 #if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
@@ -4776,7 +4820,7 @@ uint32_t testPSRAM(void)
             g_LocalIndex = 0;      // this should not be needed but it ensures that all space will be cleared
             ClearTempMemory();     // clear temp string space (might have been used by the prompt)
             CurrentLinePtr = NULL; // do not use the line number in error reporting
-            if (MMCharPos > 1)
+            if (MMCharPos > 1 && !edit_prompt_inline)
                 MMPrintString("\r\n"); // prompt should be on a new line
             {
                 /* the stack reached its last 1K above the limit since the last prompt
@@ -4831,6 +4875,7 @@ uint32_t testPSRAM(void)
                 MMPromptPos = 2;     // Save length of prompt
             }
             ErrorInPrompt = false;
+            edit_f2_preserve_output = 0;
             EditInputLine();
             // InsertLastcmd(inpbuf);                                  // save in case we want to edit it later
             if (!*inpbuf)
@@ -4946,6 +4991,18 @@ uint32_t testPSRAM(void)
                 CurrentLinePtr = 0;
             }
             ExecuteProgram(tknbuf); // execute the line straight away
+            if (edit_f2_pending_run)
+            {
+                /* The EDIT "file" F2 handler staged RUN in inpbuf. Execute
+                 * it at the top level, after the editor's stack is gone. */
+                edit_f2_pending_run = 0;
+                edit_f2_preserve_output = 1;
+                CurrentLinePtr = NULL;
+                cmdline = (unsigned char *)"";
+                multi = false;
+                tokenise(true);
+                goto autorun;
+            }
 #ifdef MMBASIC_FM
             if (fm_program_launched_from_fm == 3)
             {
@@ -4963,7 +5020,7 @@ uint32_t testPSRAM(void)
                 /* EDIT FILE returned: F2 runs the saved file; F1/ESC returns
                  * to FM. Errors longjmp to mark and relaunch FM as usual. */
                 int run = fm_editor_prepare_run();
-                fm_program_launched_from_fm = 1;
+                fm_program_launched_from_fm = run ? 1 : 5; // 5: editor exit, no program output
                 if (run)
                 {
                     CurrentLinePtr = NULL;
@@ -4987,6 +5044,8 @@ uint32_t testPSRAM(void)
             }
             if (fm_program_launched_from_fm || fm_relaunch_status_valid)
             {
+                if (fm_program_launched_from_fm == 1)
+                    fm_wait_before_relaunch();
                 fm_program_launched_from_fm = 0;
                 CurrentLinePtr = NULL;
                 cmdline = (unsigned char *)"";

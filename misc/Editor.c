@@ -446,6 +446,10 @@ int curx, cury;               // column and row of the current cursor (in charac
 unsigned char *txtp;          // position of the current cursor in the text being edited
 int drawstatusline;           // true if the status line needs to be redrawn on the next keystroke
 static bool edit_is_bas;      // true when editing a .bas file or in-memory program (enforces 255-char line limit)
+/* One-shot: ordinary EDIT/F2 should not clear console output on returning to the prompt. */
+int edit_f2_preserve_output = 0;
+/* EDIT "file" F2: dispatch RUN only after FullScreenEditor has returned. */
+int edit_f2_pending_run = 0;
 int insert;                   // true if the editor is in insert text mode
 int tempx;                    // used to track the prefered x position when up/down arrowing
 int TextChanged;              // true if the program has been modified and therefor a save might be required
@@ -7526,6 +7530,18 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     RestoreContext(false);
                     return;
                 }
+                if (fname && (c == F2 || c == CTRLKEY('W')))
+                {
+                    /* EDIT "file" must RUN the saved file, not fall into the
+                     * generic fname exit below. Defer execution to the prompt
+                     * so the editor's large stack frame is already gone. */
+                    int n = snprintf((char *)inpbuf, STRINGSIZE, "RUN \"%s\"", fname);
+                    if (n < 0 || n >= STRINGSIZE)
+                        error("EDIT: RUN path too long");
+                    edit_f2_pending_run = 1;
+                    nextstmt = (unsigned char *)"\0\0\0";
+                    return;
+                }
                 if (c == ESC || c == CTRLKEY('Q') || c == F1 || fname)
                 {
                     cmdline = NULL;
@@ -7555,6 +7571,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 cleanserver();
 #endif
                 nextstmt = ProgMemory;
+                edit_f2_preserve_output = 1;
                 clearrepeat();
                 return;
 

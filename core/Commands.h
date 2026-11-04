@@ -55,6 +55,8 @@ extern struct s_forstack g_forstack[MAXFORLOOPS + 1];
 extern int g_forindex;
 unsigned char *ForFindNext(unsigned char *p, unsigned char *vname, int vlen, unsigned char *errmsg);
 extern unsigned char cmdlinebuff[STRINGSIZE];
+extern int edit_f2_preserve_output;
+extern int edit_f2_pending_run;
 #ifdef MMBASIC_FM
 extern int fm_program_launched_from_fm;
 int fm_editor_prepare_run(void);

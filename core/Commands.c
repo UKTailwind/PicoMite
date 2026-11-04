@@ -4075,8 +4075,20 @@ void do_end(bool ecmd)
 	g_myrand = NULL;
 	OptionConsole = 3;
 #ifdef PICOMITEVGA
-	int mode = DISPLAY_TYPE - SCREENMODE1 + 1;
-	setmode(mode, false);
+	if (edit_f2_preserve_output)
+	{
+		/* An in-memory EDIT/F2 run must return to the prompt with its
+		 * console output intact. setmode() reinitialises the mode-1
+		 * tile attributes (through ResetDisplay/settiles), blanking the
+		 * visible text. Still close any off-screen framebuffer so that
+		 * subsequent console output targets the physical display. */
+		closeframebuffer('A');
+	}
+	else
+	{
+		int mode = DISPLAY_TYPE - SCREENMODE1 + 1;
+		setmode(mode, false);
+	}
 #endif
 	SSPrintString("\033[?25h"); // in case application has turned the cursor off
 	SSPrintString("\033[97;40m");
