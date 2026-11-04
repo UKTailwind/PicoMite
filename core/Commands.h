@@ -57,6 +57,7 @@ unsigned char *ForFindNext(unsigned char *p, unsigned char *vname, int vlen, uns
 extern unsigned char cmdlinebuff[STRINGSIZE];
 #ifdef MMBASIC_FM
 extern int fm_program_launched_from_fm;
+int fm_editor_prepare_run(void);
 extern char fm_relaunch_status[STRINGSIZE];
 extern int fm_relaunch_status_valid;
 extern int fm_suppress_error_output;

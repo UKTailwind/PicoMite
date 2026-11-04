@@ -4638,6 +4638,38 @@ static int fm_saved_valid = 0;
 static int fm_program_run_mode = -1;
 static int fm_program_run_font = -1;
 #endif
+/* F4/N editor is dispatched by the prompt after cmd_fm() returns: keeping
+ * FullScreenEditor below cmd_fm() overflows core0's small stack. */
+static char fm_editor_path[FM_PATH_MAX];
+static int fm_editor_run_kind = FM_RUN_NONE;
+
+/* Called by the prompt after an FM-launched EDIT FILE has returned.
+ * Stage the normal RUN command only for file types FM can execute. */
+int fm_editor_prepare_run(void)
+{
+    int n;
+    if (!fm_edit_wants_run || fm_editor_run_kind == FM_RUN_NONE)
+        return 0;
+    n = snprintf((char *)inpbuf, STRINGSIZE, "RUN \"%s\"", fm_editor_path);
+    if (n < 0 || n >= STRINGSIZE)
+        error("FM: RUN path too long");
+
+    fm_edit_wants_run = 0;
+    fm_error_location_valid = 0;
+    fm_error_file[0] = 0;
+    fm_error_line = fm_error_char = 0;
+    fm_pending_edit_seek_valid = 0;
+    fm_sanitize_next_console_input = 1;
+    strncpy(fm_last_launched_bas, fm_editor_path,
+            sizeof(fm_last_launched_bas) - 1);
+    fm_last_launched_bas[sizeof(fm_last_launched_bas) - 1] = 0;
+#if defined(PICOMITEVGA)
+    fm_program_run_mode = DISPLAY_TYPE;
+    fm_program_run_font = PromptFont;
+#endif
+    return 1;
+}
+
 void cmd_fm(void)
 {
     fm_panel_t panels[2];
@@ -4712,8 +4744,6 @@ void cmd_fm(void)
 #ifdef PICOMITEVGA
     bool mode_changed = false;
 #endif
-
-fm_relaunch:
 
     font_changed = false;
 #ifdef PICOMITEVGA
@@ -5477,6 +5507,7 @@ fm_relaunch:
             }
 
             fm_pending_edit_seek_valid = 0;
+            fm_editor_run_kind = fm_run_kind(p->filesystem, p->path, newname, 0);
             snprintf(status, sizeof(status), "Created %s", newname);
             edit_from_fm = 1;
             done = 1;
@@ -5584,6 +5615,7 @@ fm_relaunch:
             {
                 snprintf(status, sizeof(status), "Editing %s", entry.name);
             }
+            fm_editor_run_kind = fm_run_kind(p->filesystem, p->path, entry.name, entry.size);
             edit_from_fm = 1;
             done = 1;
             break;
@@ -5745,7 +5777,6 @@ fm_relaunch:
 
     BreakKey = break_key_save;
 
-fm_check_run:
     if (run_from_fm)
     {
         if (CurrentlyPlaying != P_NOTHING)
@@ -5796,57 +5827,17 @@ fm_check_run:
     }
     if (edit_from_fm)
     {
-        unsigned char *saved_cmdline = cmdline;
+        int n;
         fm_set_default_drive_dir(&panels[active]);
         fm_edit_wants_run = 0;
-        /* Release any temp-string allocations accumulated during the FM
-         * session so that the editor's huge bottom-up GetTempMemory
-         * (EDIT_BUFFER_SIZE ~ heap_memory_size - 5KB) can find a
-         * contiguous run.  On 100KB heaps (VGA RP2040) even a single
-         * stray temp page would otherwise abort the editor with
-         * "Not enough System Heap memory".                                */
+        /* Launch EDIT FILE at the prompt. FM's large stack frame must not
+         * remain live underneath the fullscreen editor. */
+        n = snprintf((char *)inpbuf, STRINGSIZE, "EDIT FILE %s", run_edit_file);
+        if (n < 0 || n >= STRINGSIZE)
+            error("FM: EDIT path too long");
+        strcpy(fm_editor_path, run_bas_full);
         ClearTempMemory();
-        edit((unsigned char *)run_edit_file, false);
-        // FM calls edit() directly; release command-temporary buffers here.
-        ClearTempMemory();
-        cmdline = (unsigned char *)"";
-        cmdline = saved_cmdline;
-
-        if (fm_edit_wants_run &&
-            (run_kind = fm_run_kind(panels[active].filesystem, panels[active].path,
-                                    strrchr(run_bas_full, '/') ? strrchr(run_bas_full, '/') + 1 : run_bas_full,
-                                    UINT32_MAX)) != FM_RUN_NONE)
-        {
-            // F2 after editing a BASIC/C file — use the same launch selection as FM.
-            // run_bas_full is still valid; derive run_bas_file from it.
-            const char *bn = strrchr(run_bas_full, '/');
-            strncpy(run_bas_file, bn ? bn + 1 : run_bas_full, sizeof(run_bas_file) - 1);
-            run_bas_file[sizeof(run_bas_file) - 1] = 0;
-            run_edit_file[0] = 0;
-            type_select_prefix[0] = 0;
-            type_select_active = 0;
-            type_select_dirty = 0;
-            type_select_last_input_us = 0;
-            edit_from_fm = 0;
-            run_from_fm = 1;
-            goto fm_check_run;
-        }
-        else
-        {
-            // ESC/F1 or non-.bas file — return to FM as before.
-            run_bas_file[0] = 0;
-            run_bas_full[0] = 0;
-            run_edit_file[0] = 0;
-            type_select_prefix[0] = 0;
-            type_select_active = 0;
-            type_select_dirty = 0;
-            type_select_last_input_us = 0;
-            done = 0;
-            run_from_fm = 0;
-            edit_from_fm = 0;
-            need_full_redraw = 1;
-            goto fm_relaunch;
-        }
+        fm_program_launched_from_fm = 3;
     }
 }
 

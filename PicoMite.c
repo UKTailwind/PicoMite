@@ -4947,6 +4947,32 @@ uint32_t testPSRAM(void)
             }
             ExecuteProgram(tknbuf); // execute the line straight away
 #ifdef MMBASIC_FM
+            if (fm_program_launched_from_fm == 3)
+            {
+                /* Dispatch FM's EDIT FILE after releasing cmd_fm()'s stack
+                 * frame. A value of 4 marks the editor as in progress. */
+                fm_program_launched_from_fm = 4;
+                CurrentLinePtr = NULL;
+                cmdline = (unsigned char *)"";
+                multi = false;
+                tokenise(true); // inpbuf contains EDIT FILE "path"
+                goto autorun;
+            }
+            if (fm_program_launched_from_fm == 4)
+            {
+                /* EDIT FILE returned: F2 runs the saved file; F1/ESC returns
+                 * to FM. Errors longjmp to mark and relaunch FM as usual. */
+                int run = fm_editor_prepare_run();
+                fm_program_launched_from_fm = 1;
+                if (run)
+                {
+                    CurrentLinePtr = NULL;
+                    cmdline = (unsigned char *)"";
+                    multi = false;
+                    tokenise(true); // inpbuf now contains RUN "path"
+                    goto autorun;
+                }
+            }
             if (fm_program_launched_from_fm == 2)
             {
                 /* FM staged a native RUN. Enter it here, after cmd_fm() has
