@@ -573,6 +573,9 @@ void edit(unsigned char *cmdline, bool cmdfile)
         strcpy(name, (char *)getFstring(argv[0]));
         filename = name;
     }
+    /* Only in-memory source is unconditionally BASIC. File mode is set
+     * below after resolving the default extension. */
+    edit_is_bas = (filename == NULL);
     if (ProgramRunning() && cmdfile)
         StandardError(10);
     if (argc == 0 && !cmdfile)
@@ -809,7 +812,9 @@ void edit(unsigned char *cmdline, bool cmdfile)
         {
             AppendDefaultExtension(filename, ".bas");
         }
-        if (!fstrstr(filename, ".bas"))
+        const char *ext = strrchr(filename, '.');
+        edit_is_bas = ext != NULL && strcasecmp(ext, ".bas") == 0;
+        if (!edit_is_bas)
             Option.ColourCode = 0;
         p = EdBuff; // (a file that does not exist yet starts empty)
         nbrlines = 0;
@@ -838,7 +843,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
                 if (c == '\n')
                 {
                     nbrlines++;
-                    if (Option.continuation)
+                    if (edit_is_bas && Option.continuation)
                     {
                         strcpy(buff, q);
                         nbrlines += format_string(&buff[0], Option.Width);
@@ -6526,7 +6531,7 @@ static bool EdSaveFile(void *arg)
         return false;
     for (unsigned char *p = EdBuff; *p && !MMerrno; p++)
     {
-        if (Option.continuation && *p == Option.continuation && p[1] == '\n')
+        if (edit_is_bas && Option.continuation && *p == Option.continuation && p[1] == '\n')
         {
             p++; // step over the continuation characters
             continue;
@@ -6666,7 +6671,6 @@ static void EdExport(unsigned char *from, unsigned char *to)
 
 void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdfile)
 {
-    edit_is_bas = (fname == NULL || fstrstr(fname, ".bas") != NULL);
     int c = -1, i;
     unsigned char buf[MAXCLIP + 2], clipboard[MAXCLIP + 2];
     unsigned char *p, *tp, BreakKeySave;
@@ -7436,7 +7440,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 { // (Esc discards the changes: a long line is no reason to refuse that)
                     int line = 0;
                     int i = find_longest_line_length((char *)EdBuff, &line);
-                    if (i > 255 && (fname == NULL || fstrstr(fname, ".bas")))
+                    if (edit_is_bas && i > 255)
                     {
                         char buff[20] = {};
                         sprintf(buff, " LINE %d TOO LONG", line);
@@ -7761,6 +7765,11 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
             case CTRLKEY('A'):
             case F12:
             {
+                if (!edit_is_bas)
+                {
+                    editDisplayMsg((unsigned char *)" BASIC FILES ONLY ");
+                    break;
+                }
                 int keep_blanks = 0;
                 if (beautify_has_stray_blanks())
                 {
