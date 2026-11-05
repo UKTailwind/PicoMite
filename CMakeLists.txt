@@ -503,6 +503,7 @@ target_link_options(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR}/cmake/flash_layou
 # and the system headers it gives compiled programs (core/tcc/include) are
 # built into the firmware.
 if(IS_RP2350)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
     add_library(PicoMiteTinyCC STATIC
         core/tcc/tcc.c
         core/tcc/tcc_time.c
