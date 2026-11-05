@@ -34,6 +34,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include <ctype.h>
 #include <setjmp.h>
 #include "MMBasic.h"
+#include "core/pm_api.h"
 #include "pico/stdlib.h"
 #include "Functions.h"
 #include "Commands.h"
@@ -924,6 +925,7 @@ void BasicPrepareLibraryOnly(void)
         error("Invalid BASIC library");
     extern void IfTableBuildLibraryOnly(void);
     IfTableBuildLibraryOnly();
+    pm_console_font_reapply();
     /* Same initialization as BASIC RUN.  This executes the library's own
        top-level statements, not the dormant program in ProgMemory. */
     ExecuteProgram(LibMemory);
@@ -1597,6 +1599,10 @@ static int MIPS16 PrepareProgramWalk(int ErrAbort)
         ProgramValid = 0;
         return 1;
     }
+    /* FileLoadProgram() reset user fonts before scanning the LIBRARY.
+     * Its registered font is available again now, before BASIC executes. */
+    pm_console_font_reapply();
+
     /* Build the IF/ELSEIF/ELSE/ENDIF jump table.  Done unconditionally
      * (regardless of ErrAbort) so the runtime fast-path is available
      * whenever a valid program is prepared for execution.              */

@@ -27,6 +27,8 @@ uint8_t KeyboardEmit(uint8_t code, uint16_t key,
 int pm_isprint(int code);
 /* Internal: choose a registered font for the next local console prompt. */
 int pm_console_font_for_prompt(void);
+/* Reapply a resident console font after program/library font registration. */
+void pm_console_font_reapply(void);
 void pm_pin_mode(int gp, int mode);
 void pm_pin_write(int gp, int value);
 int pm_pin_read(int gp);

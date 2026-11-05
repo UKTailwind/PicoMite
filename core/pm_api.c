@@ -132,6 +132,17 @@ int pm_console_font_for_prompt(void)
     return PromptFont;
 }
 
+void pm_console_font_reapply(void)
+{
+    int font = pm_console_font_override;
+    /* initFonts() drops user font registrations during LOAD/RUN.  Do not
+     * change the graphics font until the LIBRARY has registered it again.
+     * Without an active override, retain the program's normal font. */
+    if (font > 0 && font <= FONT_TABLE_SIZE &&
+        FontTable[font - 1] && Option.DISPLAY_CONSOLE)
+        SetFont(pm_console_font_for_prompt());
+}
+
 /* Resident code is fixed in flash LIBRARY. Its data must survive InitHeap(),
  * which clears the BASIC heap on RUN/END. The descriptor is allocated from
  * the separate newlib heap only when a resident is installed; no resident
