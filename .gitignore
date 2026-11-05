@@ -10,7 +10,6 @@ CMakeCache.txt
 # ---- Firmware build artifacts ----
 *.uf2
 *.zip
-*.elf
 *.bin
 *.hex
 *.map
@@ -108,3 +107,4 @@ Bas/sandglass_tools/convert.log
 Bas/bench/results/
 # Peter's articles: kept beside the source, not part of it
 Articles/
+.vscode/

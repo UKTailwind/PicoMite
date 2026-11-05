@@ -1,7 +1,7 @@
 /*******************************************************************************************
  *
  *  Definitions used when calling MMBasic Interpreter API Functions from CFunctions
- *  For PicoMite MMBasic V6.00.01
+ *  For PicoMite MMBasic V6 (CallTable interface; all RP2040/RP2350 builds)
  *
  *  This file is public domain and may be used without license.
  *
@@ -39,12 +39,54 @@
  *          STRING$, split out of their fun_ wrappers so the interpreter and a
  *          CSUB share one implementation. An MMBasic string is a LENGTH BYTE
  *          followed by the data, not a C string.
+ *  v2.4.0  Sync option_s and variable records with firmware. Append only
+ *          three CSUB-safe, RP2040/RP2350-common CallTable entries:
+ *          MMInkey (0x1C0), kbhitConsole (0x1C4), DrawRBox (0x1C8).
+ *          TinyCC's pm_* name exports are a separate API, not CallTable slots.
  *
  ******************************************************************************************/
 #include <stdint.h>	 /* option_s and the vector prototypes use int8_t/uint16_t/... */
 #include <stdbool.h> /* and bool - both are freestanding headers, always available  */
 #include <stddef.h>	 /* size_t, so the memcpy/memset/memmove shims match the builtins */
 
+/* Compiled on the PicoMite itself (its C compiler: TCC, RUN "x.c", C CSUBs),
+   the firmware predefines __PM_FIRMWARE__ and __PM_<macro> for each of its
+   own build macros below, so option_s matches the firmware it runs on. */
+#ifdef __PM_FIRMWARE__
+#ifdef __PM_PICOMITE
+#define PICOMITE
+#endif
+#ifdef __PM_PICOMITEVGA
+#define PICOMITEVGA
+#endif
+#ifdef __PM_PICOMITEWEB
+#define PICOMITEWEB
+#endif
+#ifdef __PM_PICOMITEHDMIWEB
+#define PICOMITEHDMIWEB
+#endif
+#ifdef __PM_PICOMITEBT
+#define PICOMITEBT
+#endif
+#ifdef __PM_PICOMITEBTH
+#define PICOMITEBTH
+#endif
+#ifdef __PM_PICOMITEHDMIBTH
+#define PICOMITEHDMIBTH
+#endif
+#ifdef __PM_PICOMITEPC3
+#define PICOMITEPC3
+#endif
+#ifdef __PM_GUICONTROLS
+#define GUICONTROLS
+#endif
+#ifdef __PM_PICORP2350
+#define PICORP2350
+#endif
+#ifdef __PM_PICOMITERP2350
+#define PICOMITERP2350 1
+#endif
+#else
 /*** Uncomment one of these three  ***/
 #define PICOMITE
 // #define PICOMITEVGA
@@ -59,6 +101,13 @@
 
 /***  Uncomment this define if HDMI pins required  ***/
 #define GUICONTROLS
+#endif /* __PM_FIRMWARE__ */
+
+/* For externally compiled RP2350 CSUBs PICORP2350 also selects the firmware's
+   RP2350-specific option_s fields, as it already selects the variable record. */
+#if defined(PICORP2350) && !defined(PICOMITERP2350)
+#define PICOMITERP2350 1
+#endif
 
 /*****************************************************************************************/
 #define MAXVARLEN 32 // maximum length of a variable name
@@ -230,11 +279,81 @@
 // or unconfigured does nothing. Branch on ExtCurrentConfig[] if that matters.
 #define Vector_PinVal (*(unsigned int *)(BaseAddress + 0x1B8))
 #define Vector_PinPut (*(unsigned int *)(BaseAddress + 0x1BC))
+// RP2040/RP2350 common, non-resetting functions; append-only CallTable slots.
+#define Vector_MMInkey (*(unsigned int *)(BaseAddress + 0x1C0))         // int MMInkey(void)
+#define Vector_kbhitConsole (*(unsigned int *)(BaseAddress + 0x1C4))   // int kbhitConsole(void)
+#define Vector_DrawRBox (*(unsigned int *)(BaseAddress + 0x1C8))       // void DrawRBox(x1,y1,x2,y2,r,c,fill)
+#define Vector_BasicCallTyped (*(unsigned int *)(BaseAddress + 0x1CC)) // VM typed SUB/FUNCTION callback
+#define Vector_PCMPlay (*(unsigned int *)(BaseAddress + 0x1D0))
+#define Vector_PCMStart (*(unsigned int *)(BaseAddress + 0x1D4))
+#define Vector_PCMStop (*(unsigned int *)(BaseAddress + 0x1D8))
+#define Vector_PCMPlaying (*(unsigned int *)(BaseAddress + 0x1DC))
+#define Vector_PCMPoll (*(unsigned int *)(BaseAddress + 0x1E0))
+
+/* Native BASIC callbacks are available to classical externally compiled CSUBs
+   via CallTable, using the same value ABI as the firmware TinyCC API v10.
+   TCC programs use <picomite/basic.h> and its normal symbol exports. */
+#ifdef __PM_FIRMWARE__
+#include <picomite/basic.h>
+#endif
+#ifndef PM_BASIC_VALUE_DEFINED
+#define PM_BASIC_VALUE_DEFINED
+#define PM_BASIC_INTEGER 1
+#define PM_BASIC_FLOAT   2
+#define PM_BASIC_STRING  3
+typedef struct {
+    int type;
+    long long integer;
+    double number;
+    const char *string;
+} pm_basic_value;
+#endif
+#ifndef __PM_FIRMWARE__
+static inline void pm_basic_sub(const char *name, const pm_basic_value *args, unsigned count)
+{
+    ((void (*)(int, const char *, const pm_basic_value *, unsigned,
+               pm_basic_value *, char *, unsigned))Vector_BasicCallTyped)(
+        0, name, args, count, (pm_basic_value *)0, (char *)0, 0);
+}
+static inline void pm_basic_function(const char *name, const pm_basic_value *args,
+                                     unsigned count, pm_basic_value *result,
+                                     char *strbuf, unsigned capacity)
+{
+    ((void (*)(int, const char *, const pm_basic_value *, unsigned,
+               pm_basic_value *, char *, unsigned))Vector_BasicCallTyped)(
+        1, name, args, count, result, strbuf, capacity);
+}
+#endif
+
+/* Native PCM API for both RP2040/RP2350 CSUBs; no IRQ callbacks. */
+#ifndef PM_PCM_CALLBACK_DEFINED
+#define PM_PCM_CALLBACK_DEFINED
+typedef unsigned (*pm_pcm_callback)(int16_t *dst, unsigned capacity_frames, void *userdata);
+#endif
+#ifdef __PM_FIRMWARE__
+#include <picomite/audio.h> /* use TinyCC symbol exports, not CallTable shims */
+#else
+static inline void pm_pcm_play(const int16_t *samples, unsigned frames, unsigned rate, unsigned channels)
+{
+    ((void (*)(const int16_t *, unsigned, unsigned, unsigned))Vector_PCMPlay)(samples, frames, rate, channels);
+}
+static inline void pm_pcm_start(unsigned rate, unsigned channels, pm_pcm_callback fill, void *userdata)
+{
+    ((void (*)(unsigned, unsigned, pm_pcm_callback, void *))Vector_PCMStart)(rate, channels, fill, userdata);
+}
+static inline void pm_pcm_stop(void) { ((void (*)(void))Vector_PCMStop)(); }
+static inline int pm_pcm_playing(void) { return ((int (*)(void))Vector_PCMPlaying)(); }
+static inline void pm_pcm_poll(void) { ((void (*)(void))Vector_PCMPoll)(); }
+#endif
 
 // Macros to call each function.
 #define uSec(a) ((void (*)(unsigned long long))Vector_uSec)(a)
 #define putConsole(a, b) ((void (*)(int, int))Vector_putConsole)(a, b)
 #define getConsole() ((int (*)(void))Vector_getConsole)()
+// INKEY$ decoder: consumes one key and returns -1 when none is waiting.
+#define MMInkey() ((int (*)(void))Vector_MMInkey)()
+// Raw console queue length (does not include MMInkey's decoded/pushback keys).
+#define kbhitConsole() ((int (*)(void))Vector_kbhitConsole)()
 #define ExtCfg(a, b, c) ((void (*)(int, int, int))Vector_ExtCfg)(a, b, c)
 #define ExtSet(a, b) ((void (*)(int, int))Vector_ExtSet)(a, b)
 #define ExtInp(a) ((int (*)(int))Vector_ExtInp)(a)
@@ -295,6 +414,9 @@
 #define uSecTimer ((unsigned long long (*)(void))Vector_Timer)
 #define Sine(a) ((MMFLOAT (*)(MMFLOAT))Vector_Sine)(a)
 #define DrawCircle(a, b, c, d, e, f, g) ((void (*)(int, int, int, int, int, int, MMFLOAT))Vector_DrawCircle)(a, b, c, d, e, f, g)
+// RBOX: coordinates are both inclusive, unlike the BASIC width/height syntax.
+#define DrawRBox(x1, y1, x2, y2, radius, colour, fill) \
+    ((void (*)(int, int, int, int, int, int, int))Vector_DrawRBox)(x1, y1, x2, y2, radius, colour, fill)
 #define DrawTriangle(a, b, c, d, e, f, g, h) ((void (*)(int, int, int, int, int, int, int, int))Vector_DrawTriangle)(a, b, c, d, e, f, g, h)
 #define LoadFloat(a) ((MMFLOAT (*)(unsigned int))Vector_LoadFloat)(a)
 #define FMul(a, b) ((MMFLOAT (*)(MMFLOAT, MMFLOAT))Vector_FMul)(a, b)
@@ -408,11 +530,19 @@ struct s_vartbl
 	char type;			  // its type (T_NUM, T_INT or T_STR)
 	char level;			  // its subroutine or function level (used to track local variables)
 	unsigned char size;	  // the number of chars to allocate for each element in a string array
-	char dummy;
+	/* The firmware calls these namelen and dimtbl; retain dummy/dims as
+	   source-compatible aliases for externally compiled CSUBs. */
+	union { unsigned char namelen; char dummy; };
 #ifdef PICORP2350
-	int __attribute__((aligned(4))) dims[MAXDIM]; // the dimensions. it is an array if the first dimension is NOT zero
+	union {
+		int __attribute__((aligned(4))) dimtbl[MAXDIM];
+		int __attribute__((aligned(4))) dims[MAXDIM];
+	};
 #else
-	short __attribute__((aligned(4))) dims[MAXDIM]; // the dimensions. it is an array if the first dimension is NOT zero
+	union {
+		short __attribute__((aligned(4))) dimtbl[MAXDIM];
+		short __attribute__((aligned(4))) dims[MAXDIM];
+	};
 #endif
 	union u_val
 	{
@@ -425,6 +555,10 @@ struct s_vartbl
 } __attribute__((aligned(8)));
 
 //  Useful macros
+
+// Physical dimension entry -2 represents the upper bound zero under OPTION BASE 0.
+// Entries are DECLARED UPPER BOUNDS, not array element counts.
+#define CSUB_DIM_ONE (-2)
 
 // Types used to define a variable in its record (the type field).   Often they are ORed together.
 // Also used in tokens and arguments to functions
@@ -474,7 +608,11 @@ struct option_s
 	int8_t ColourCode;
 	unsigned char MOUSE_CLOCK;
 	unsigned char MOUSE_DATA;
+#if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+	uint8_t audio_bluetooth; // OPTION AUDIO BLUETOOTH (formerly spare)
+#else
 	char spare;
+#endif
 	int CPU_Speed;
 	unsigned int Telnet; // Also stores size of program flash (start of LIBRARY code)
 
@@ -720,13 +858,18 @@ struct option_s
 	   normal extensions[75], so the whole struct stays exactly 896
 	   bytes (== 7 XMODEM blocks). */
 	float mousespeed;
-	unsigned char extensions[66];
+#ifdef PICOMITEPC3
+	uint8_t Radio; // PC3 OPTION RADIO: reclaim one byte from extensions[]
+	unsigned char extensions[56];
 #else
-	unsigned char extensions[74]; // 896 bytes == 7 XMODEM blocks
+	unsigned char extensions[57];
 #endif
-	// #else
-	//                 unsigned char extensions[79];    // 896 bytes == 7 XMODEM blocks
-	// #endif
+#else
+	unsigned char extensions[65]; // preserve the 896-byte options layout
+#endif
+	uint8_t PrintScreenFormat; // PNG (1) or BMP (other)
+	uint8_t CYW43_ON, CYW43_D, CYW43_CS, CYW43_CLK; // OPTION CYW43 PINS
+	uint32_t LIBRARY_HASH; // final 4 bytes, offset 892
 
 #if defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 	/* BLE bond storage. Two virtual flash banks of 1 KB each
@@ -741,6 +884,14 @@ struct option_s
 
 	/* NOTE: To enable older CFunctions to run, any new options MUST be added at the end of the list */
 } __attribute__((packed));
+/* The live firmware stores the options in exactly 7 XMODEM blocks (plus
+   the BLE TLV when present); expose layout errors at CSUB compile time. */
+typedef char PicoCFunctions_OptionsHashOffset[(offsetof(struct option_s, LIBRARY_HASH) == 892) ? 1 : -1];
+#if defined(PICOMITEBT) || defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
+typedef char PicoCFunctions_OptionsSize[(sizeof(struct option_s) == 896 + 2048) ? 1 : -1];
+#else
+typedef char PicoCFunctions_OptionsSize[(sizeof(struct option_s) == 896) ? 1 : -1];
+#endif
 
 // Define the offsets from the PORT address
 // these are used by GetPortAddr(a,b)
@@ -838,5 +989,9 @@ struct option_s
 #define EXT_DS18B20_RESERVED 0x100 // this pin is reserved for DS18B20 and cannot be used
 #define EXT_COM_RESERVED 0x200	   // this pin is reserved and SETPIN and PIN cannot be used
 #define EXT_BOOT_RESERVED 0x400	   // this pin is reserved at bootup and cannot be used
+#ifdef __TINYC__
+#define NOP() ((void)0) /* TinyCC has no ARM inline assembler */
+#else
 #define NOP() __asm volatile("nop")
+#endif
 #define USERLCDPANEL 25

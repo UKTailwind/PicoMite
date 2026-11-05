@@ -44,11 +44,17 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #include "hardware/watchdog.h"
 #include "hardware/pll.h"
 #include "hardware/clocks.h"
+#include "core/pm_api.h"
 #include "hardware/structs/pll.h"
 #include "hardware/structs/clocks.h"
 #include "sys/stat.h"
 #include "picojpeg.h"
 #include "hardware/sync.h"
+#include "core/elf/elf_picomite.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* C CSUBs */
+#include "core/elf/elf_picomite.h" /* shared ELF loader for RAM CSUBs */
+#endif
 #ifdef PICOMITE
 #include "pico/multicore.h"
 extern mutex_t frameBufferMutex;
@@ -528,6 +534,14 @@ void __not_in_flash_func(enable_interrupts_pico)(void)
     irqs = 0;
     irqs_off_pico = false;
 }
+/* FLASH_TARGET_OFFSET as a link-time symbol: cmake/flash_layout_check.ld
+   stops the link when the firmware grows into the flash storage that starts
+   there (options, saved variables, program, A:) instead of the firmware
+   overwriting it - or being overwritten - at run time. */
+#define FLASHCHK_STR2(x) #x
+#define FLASHCHK_STR(x) FLASHCHK_STR2(x)
+__asm__(".global __pm_flash_target_offset\n\t.set __pm_flash_target_offset, " FLASHCHK_STR(FLASH_TARGET_OFFSET));
+
 void ErrorThrow(int e, int type)
 {
     FatFSFileSystem = FatFSFileSystemSave;
@@ -685,7 +699,10 @@ int FileSize(char *p)
         memset(&djd, 0, sizeof(DIR));
         memset(&fnod, 0, sizeof(FILINFO));
         if (!InitSDCard())
+        {
+            FatFSFileSystem = localfilesystemsave;
             return -1;
+        }
         FSerror = f_stat(q, &fnod);
         if (FSerror != FR_OK)
             iret = 0;
@@ -720,7 +737,10 @@ int ExistsFile(char *p)
         memset(&djd, 0, sizeof(DIR));
         memset(&fnod, 0, sizeof(FILINFO));
         if (!InitSDCard())
+        {
+            FatFSFileSystem = localfilesystemsave;
             return -1;
+        }
         FSerror = f_stat(q, &fnod);
         if (FSerror != FR_OK)
             iret = 0;
@@ -994,7 +1014,7 @@ void MIPS16 cmd_psram(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"LOAD")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int j = (Option.PROG_FLASH_SIZE >> 2), i = getint(p, 1, MAXRAMSLOTS);
         uint8_t *q = (uint8_t *)(PSRAMblock + ((i - 1) * MAX_PROG_SIZE));
@@ -1250,7 +1270,7 @@ void MIPS16 cmd_flash(void)
     unsigned char *p;
     if ((p = checkstring(cmdline, (unsigned char *)"ERASE ALL")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         //        uint32_t j = FLASH_TARGET_OFFSET + FLASH_ERASE_SIZE + SAVEDVARS_FLASH_SIZE;
         int k = MAXFLASHSLOTS;
@@ -1374,7 +1394,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"OVERWRITE")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
@@ -1585,7 +1605,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SAVE")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int i = getint(p, 1, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
@@ -1620,7 +1640,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"LOAD")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int j = (Option.PROG_FLASH_SIZE >> 2), i = getint(p, 1, MAXFLASHSLOTS);
         uint8_t *q = (uint8_t *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
@@ -2857,7 +2877,7 @@ void MIPS16 cmd_kill(void)
         }
         if (pp[0] == 0)
             strcpy(pp, "*");
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         FatFSFileSystem = t - 1;
         if (!InitSDCard())
@@ -4097,7 +4117,7 @@ static unsigned char *MIPS16 lib_firstword(unsigned char *s, const char *word)
    and advances 'text' and 'bin' by them for the next file. */
 static int MIPS16 lib_scan(int fnbr, uint32_t *hash, unsigned char *text, uint32_t *textlen,
                            unsigned char *bin, uint32_t *binlen, uint32_t binmax, int *nfixout,
-                           int *nrecout)
+                           int *nrecout, int *rawcsub)
 {
     int c, prevchar = 0, incsub = 0, isfont, nrec = *nrecout, nfix = *nfixout;
     unsigned char *p, *t = text;
@@ -4149,6 +4169,18 @@ static int MIPS16 lib_scan(int fnbr, uint32_t *hash, unsigned char *text, uint32
             }
             else
             {
+                {
+                    unsigned char *q = inpbuf;
+                    skipspace(q);
+                    if (*q == '"')
+                    {
+                        /* Measure/hash first. A quoted CSUB is compiled at
+                           its final XIP address by SaveProgramToFlash. */
+                        if (bin) error("Internal library CSUB mode");
+                        *rawcsub = 1;
+                        continue;
+                    }
+                }
                 if (!lib_hex_line(inpbuf, bin, &bl, binmax))
                 {
                     FileClose(fnbr);
@@ -4346,12 +4378,15 @@ int LibraryImageValid(const unsigned char *lib)
 }
 
 int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashout, unsigned char **image,
-                           unsigned char **binout, uint32_t *binlenout, int *nfixout, uint32_t skiphash)
+                           unsigned char **binout, uint32_t *binlenout, int *nfixout,
+                           int *rawcsub, uint32_t skiphash)
 {
     int fnbr, fsize, nfix = 0, nrec = 0, i;
     unsigned char *bin = NULL, *text, *t, *b;
     uint32_t textlen = 0, binlen = 0, tl, bl, used = 0, h = LIB_HASH_SEED;
+    size_t rawsize = 1;
     char *fp;
+    *rawcsub = 0;
 
     if (!InitSDCard())
         return false;
@@ -4376,10 +4411,19 @@ int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashou
         if (!BasicFileOpen(fp, fnbr, FA_READ))
             return false;
         tl = bl = 0;
-        lib_scan(fnbr, &h, NULL, &tl, NULL, &bl, 0xFFFFFFFF, &nfix, &nrec);
+        /* Upper bound for each source plus its absolute origin header. */
+        rawsize += (size_t)fsize + FF_MAX_LFN + 16u;
+        lib_scan(fnbr, &h, NULL, &tl, NULL, &bl, 0xFFFFFFFF, &nfix, &nrec, rawcsub);
         FileClose(fnbr);
         textlen += tl;
         binlen += bl;
+    }
+    if (*rawcsub)
+    {
+        /* Rebind on firmware changes, even if the .bas is unchanged. */
+        uint32_t id = elf_picomite_firmware_id();
+        for (int k = 0; k < 4; ++k, id >>= 8)
+            h = (h ^ (id & 255u)) * 16777619u;
     }
     *hashout = h;
     /* skiphash is the hash of what the target already holds - the option's
@@ -4389,6 +4433,54 @@ int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashou
        done. */
     if (skiphash && skiphash == h)
         return false; /* already exactly this - nothing to do, and nothing allocated */
+
+    if (*rawcsub)
+    {
+        /* A CSUB built from .c/.elf must be linked AFTER the final library
+           image position is known. Retain its quoted source lines rather
+           than storing a copied (address-bound) CSUB image. */
+        size_t pos = 0;
+        if (rawsize > EDIT_BUFFER_SIZE - 2048u)
+            error("Not enough memory for C/ELF library source");
+        text = GetTempMemory(rawsize);
+        for (i = 0; i < nfiles; i++)
+        {
+            char path[FF_MAX_LFN] = {0};
+            int savedfs, sourcefs, headerlen;
+            fp = (char *)getFstring(fnames[i]);
+            AppendDefaultExtension(fp, ".bas");
+            savedfs = FatFSFileSystem;
+            getfullfilename(fp, path);
+            sourcefs = FatFSFileSystem;
+            FatFSFileSystem = savedfs;
+            /* Record the origin of EACH CSUB, including a second part in a
+               different directory. Linkers use the nearest earlier header. */
+            headerlen = snprintf((char *)text + pos, rawsize - pos,
+                                 "'#%s%s\r\n", filesystem_drive_prefix(sourcefs), path);
+            if (headerlen < 0 || (size_t)headerlen >= rawsize - pos)
+                error("Library filename too long");
+            pos += (size_t)headerlen;
+            fnbr = FindFreeFileNbr();
+            if (!BasicFileOpen(fp, fnbr, FA_READ)) return false;
+            while (!FileEOF(fnbr))
+            {
+                int ch = FileGetChar(fnbr) & 0x7f;
+                if (isprint(ch) || ch == '\r' || ch == '\n' || ch == TAB)
+                {
+                    if (pos + 2 >= rawsize) error("Library source too large");
+                    text[pos++] = ch == TAB ? ' ' : (unsigned char)ch;
+                }
+            }
+            FileClose(fnbr);
+            if (pos && text[pos - 1] != '\n') text[pos++] = '\n';
+        }
+        text[pos] = 0;
+        *image = text;
+        *binout = NULL;
+        *binlenout = 0;
+        *nfixout = 0;
+        return true;
+    }
 
     text = GetTempMemory(textlen + 4);
     if (binlen)
@@ -4407,7 +4499,7 @@ int MIPS16 FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashou
             return false;
         tl = 0;
         bl = binlen - used;
-        lib_scan(fnbr, &h, t, &tl, b, &bl, bl, &nfix, &nrec);
+        lib_scan(fnbr, &h, t, &tl, b, &bl, bl, &nfix, &nrec, rawcsub);
         FileClose(fnbr);
         t += tl;
         if (b)
@@ -4674,7 +4766,21 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
     HeapReleaseForBuffer(); // (after ClearRuntime: the variables are cleared and the interrupts stopped)
     if (!BasicFileOpen(p, fnbr, FA_READ))
         return false;
-    p = buf = GetTempMemory(EDIT_BUFFER_SIZE - 2048); // get all the memory while leaving space for the couple of buffers defined and the file handle
+    /* The source buffer lives through SaveProgramToFlash(), including ELF
+       CSUB linking.  Reserving almost the entire heap here leaves no room
+       even for a tiny object on a board without PSRAM.  The raw file size is
+       an upper bound for the stored source (also with CRUNCH), apart from the
+       generated path header.  Keep the existing 512-byte safety margin. */
+    size_t source_buf_size = EDIT_BUFFER_SIZE - 2048;
+    int source_file_size = filesource[fnbr] == FATFSFILE
+        ? (int)f_size(FileTable[fnbr].fptr)
+        : (int)lfs_file_size(&lfs, FileTable[fnbr].lfsptr);
+    if (source_file_size >= 0) {
+        size_t required = (size_t)source_file_size + strlen(q) + 8u + 512u;
+        if (required < source_buf_size)
+            source_buf_size = required;
+    }
+    p = buf = GetTempMemory(source_buf_size);
     *p++ = '\'';
     *p++ = '#';
     strcpy(p, filesystem_drive_prefix(CurrentFileSystem));
@@ -4693,7 +4799,7 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
         CrunchData((unsigned char **)&p, 0);
     while (!FileEOF(fnbr))
     { // while waiting for the end of file
-        if ((p - buf) >= EDIT_BUFFER_SIZE - 2048 - 512)
+        if ((size_t)(p - buf) >= source_buf_size - 512u)
             StandardError(29);
         c = FileGetChar(fnbr) & 0x7f;
         if (isprint(c) || c == '\r' || c == '\n' || c == TAB)
@@ -4759,15 +4865,23 @@ void MemWriteClose(void)
     }
 }
 
-void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
+static void MIPS16 SaveProgramToRAMImage(unsigned char *pm, int msg, uint8_t *ram, bool library)
 {
     unsigned char *p, fontnbr, prevchar = 0, buf[STRINGSIZE];
     unsigned short endtoken, tkn;
     int nbr, i, n, SaveSizeAddr, toolong = false;
+    const uint32_t limit = MAX_PROG_SIZE - (library ? 32u : 5u);
     const char *refusal = NULL; // a line tokenise refused, and why
     multi = false;
     tokenise_insub = false;
     uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realmemsave;
+#ifdef rp2350
+    uint32_t *cimg[MAXCFUNCTION] = {NULL}; // C CSUBs: the images linked in the first pass
+    int cwords[MAXCFUNCTION] = {0};
+    char cerr[MAXERRMSG], *cline = NULL;
+    unsigned char *csubdecl = NULL;
+    const unsigned char *csub_origin = ram;
+#endif
     initFonts();
     clearrepeat();
     memcpy(buf, tknbuf, STRINGSIZE); // save the token buffer because we are going to use it
@@ -4780,6 +4894,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
         SymTabProg = NULL; // the old program's table is gone
     if (SymBegin(pm))
     {
+        if (library) SymLibSave = 1;
         SymCount(pm);
         if (SymRetry())
             SymCount(pm);
@@ -4832,7 +4947,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
             MemWriteByte(*p++);
             nbr++;
 
-            if (((uint32_t)realmempointer - (uint32_t)ram) >= MAX_PROG_SIZE - 5)
+            if (((uint32_t)realmempointer - (uint32_t)ram) >= limit)
                 goto exiterror;
         }
         MemWriteByte(0);
@@ -4845,7 +4960,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     // the symbol table follows the program text, ahead of the CFunction records
     if (SymTableSize())
     {
-        if (((uint32_t)realmempointer - (uint32_t)ram) + SymTableSize() >= MAX_PROG_SIZE - 5)
+        if (((uint32_t)realmempointer - (uint32_t)ram) + SymTableSize() >= limit)
             goto exiterror;
         nbr += SymTableSize();
         SymTableWrite(MemWriteByte, (uint32_t)realmempointer - (uint32_t)ram);
@@ -4872,6 +4987,8 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
         if (*p == T_NEWLINE)
         {
             CurrentLinePtr = p;
+            if (library && p[T_NEWLINE_HDR] == 39 && p[T_NEWLINE_HDR + 1] == '#')
+                csub_origin = p;
             p += T_NEWLINE_HDR; // skip newline + skip byte
         }
         if (*p == T_LINENBR)
@@ -4907,6 +5024,9 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
             else
             {
                 endtoken = GetCommandValue((unsigned char *)"End CSub");
+#ifdef rp2350
+                csubdecl = p;
+#endif
                 realmempointer += 4;
                 fontnbr = 0;
                 firsthex = 0;
@@ -4940,6 +5060,33 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                         p += 3; // skip over a line number
                 }
             }
+#ifdef rp2350
+            if (!fontnbr)
+            { // same ELF/TinyCC dispatch as flash, linked for the RAM entry word
+                unsigned char *endp;
+                if (cline == NULL)
+                    cline = GetTempMemory(STRINGSIZE * 4);
+                if ((endp = elf_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4)) != NULL)
+                {
+                    if (elf_picomite_csub_single_object(cline, csub_origin))
+                        cimg[updatecount] = elf_picomite_csub_compile(csubdecl, cline, realmempointer,
+                                                                       csub_origin, &cwords[updatecount], cerr);
+                    else
+                        cimg[updatecount] = tcc_picomite_csub_compile(csubdecl, cline, realmempointer,
+                                                                       csub_origin, &cwords[updatecount], cerr);
+                    if (cimg[updatecount] == NULL)
+                    {
+                        refusal = cerr;
+                        goto exiterror;
+                    }
+                    realmempointer += 4 * cwords[updatecount];
+                    if (((uint32_t)realmempointer - (uint32_t)ram) >= limit)
+                        goto exiterror;
+                    p = endp;
+                    goto csub_linked;
+                }
+            }
+#endif
             do
             {
                 while (*p && *p != '\'')
@@ -4952,7 +5099,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                         {
                             error("Invalid hex word");
                         }
-                        if (((uint32_t)realmempointer - (uint32_t)ram) >= MAX_PROG_SIZE - 5)
+                        if (((uint32_t)realmempointer - (uint32_t)ram) >= limit)
                             goto exiterror;
                         n = n << 4;
                         if (*p <= '9')
@@ -4991,6 +5138,9 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                 tkn = p[0] & 0x7f;
                 tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
             } while (tkn != endtoken);
+#ifdef rp2350
+        csub_linked:
+#endif
             storedupdates[updatecount++] = realmempointer - SaveSizeAddr - 4;
         }
         while (*p)
@@ -5083,6 +5233,17 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                         p += 3; // skip over a line number
                 }
             }
+#ifdef rp2350
+            if (!fontnbr && cimg[updatecount - 1] != NULL)
+            { // the C CSUB linked in the first pass
+                p = elf_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4);
+                for (i = 0; i < cwords[updatecount - 1]; i++)
+                    MemWriteWord(cimg[updatecount - 1][i]);
+                FreeMemory(cimg[updatecount - 1]);
+                cimg[updatecount - 1] = NULL;
+                goto csub_written;
+            }
+#endif
             do
             {
                 while (*p && *p != '\'')
@@ -5095,7 +5256,7 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                         {
                             error("Invalid hex word");
                         }
-                        if (((uint32_t)realmempointer - (uint32_t)ram) >= MAX_PROG_SIZE - 5)
+                        if (((uint32_t)realmempointer - (uint32_t)ram) >= limit)
                             goto exiterror;
                         n = n << 4;
                         if (*p <= '9')
@@ -5127,10 +5288,15 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
                 tkn = p[0] & 0x7f;
                 tkn |= ((unsigned short)(p[1] & 0x7f) << 7);
             } while (tkn != endtoken);
+#ifdef rp2350
+        csub_written:;
+#endif
         }
         while (*p)
             p++; // look for the zero marking the start of the next element
     }
+    if (library && (uint32_t)realmempointer - (uint32_t)ram + 4u > limit)
+        goto exiterror; // terminator and 32-byte flush must not overwrite RAMLIB_MAGIC
     MemWriteWord(0xffffffff); // make sure that the end of the CFunctions is terminated with an erased word
     MemWriteClose();          // this will flush the buffer and step the flash write pointer to the next word boundary
     if (msg)
@@ -5145,12 +5311,18 @@ void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
     memcpy(tknbuf, buf, STRINGSIZE); // restore the token buffer in case there are other commands in it
                                      //    initConsole();
     clearrepeat();
-    SymSetProgram(ProgMemory);
+    if (library) SymSetLibrary(ram);
+    else SymSetProgram(ProgMemory);
     return;
 
 // we only get here in an error situation while writing the program to RAM
 exiterror:
     SymEnd();
+#ifdef rp2350
+    for (i = 0; i < MAXCFUNCTION; i++)
+        if (cimg[i] != NULL)
+            FreeMemory(cimg[i]);
+#endif
     MemWriteClose();
     /* An empty program, not the part written so far: that is in symbols
        with no table after it (see SaveProgramToFlash's exiterror). */
@@ -5161,6 +5333,14 @@ exiterror:
     if (toolong)
         error("Line is too long");
     StandardError(29);
+}
+void MIPS16 SaveProgramToRAM(unsigned char *pm, int msg, uint8_t *ram)
+{
+    SaveProgramToRAMImage(pm, msg, ram, false);
+}
+void MIPS16 SaveLibrarySourceToRAM(unsigned char *pm, uint8_t *ram)
+{
+    SaveProgramToRAMImage(pm, false, ram, true);
 }
 int MemLoadProgram(unsigned char *fname, unsigned char *ram)
 {
@@ -5229,7 +5409,7 @@ void MIPS16 loadCMM2(unsigned char *p, bool autorun, bool message)
     if (!(argc & 1) || argc == 0)
         SyntaxError();
     ;
-    if (CurrentLinePtr != NULL && !autorun)
+    if (ProgramRunning() && !autorun)
         StandardError(10);
 
     if (!FileLoadCMM2Program((char *)argv[0], message))
@@ -5267,7 +5447,7 @@ void MIPS16 cmd_loadCMM2(void)
             SyntaxError();
         ;
     }
-    else if (CurrentLinePtr != NULL)
+    else if (ProgramRunning())
         StandardError(10);
 
     loadCMM2(argv[0], autorun, true);
@@ -5478,7 +5658,7 @@ void MIPS16 cmd_load(void)
         else
             crunch = true;
     }
-    if (!autorun && CurrentLinePtr != NULL)
+    if (!autorun && ProgramRunning())
         StandardError(10);
     if (!FileLoadProgram(argv[0], false, crunch))
     {
@@ -5949,7 +6129,20 @@ int BasicFileOpen(char *fname, int fnbr, int mode)
         FileTable[fnbr].fptr = GetMemory(sizeof(FIL)); // allocate the file descriptor
         SDbuffer[fnbr] = GetMemory(SDbufferSize);
         FSerror = f_open(FileTable[fnbr].fptr, q, mode); // open it
-        ErrorCheck(fnbr);
+        if (FSerror != FR_OK)
+        {
+            /* Never opened: give the descriptor and the buffer back here.
+               ErrorCheck(fnbr) would close it as a LittleFS file (filesource
+               is not FATFSFILE yet), hand LittleFS a FIL and leak the buffer. */
+            FreeMemory((void *)SDbuffer[fnbr]);
+            SDbuffer[fnbr] = NULL;
+            FreeMemory((void *)FileTable[fnbr].fptr);
+            FileTable[fnbr].fptr = NULL;
+            clearrepeat();
+            ErrorCheck(0); // the error, without touching the file number
+            FatFSFileSystem = FatFSFileSystemSave;
+            return false;
+        }
         filesource[fnbr] = FATFSFILE;
         buffpointer[fnbr] = 0;
         lastfptr[fnbr] = -1;
@@ -5979,19 +6172,32 @@ int BasicFileOpen(char *fname, int fnbr, int mode)
         if (mode != LFS_O_RDONLY && ExistsFile(q))
             lfs_removeattr(&lfs, q, 'A');
         FSerror = lfs_file_open(&lfs, FileTable[fnbr].lfsptr, q, lfsmode);
-        /* (not after a failed open: the attribute's result replaced the open's
-           error, so a directory opened for writing reported no error) */
-        if (FSerror == 0 && mode != LFS_O_RDONLY)
+        if (FSerror < 0)
+        {
+            /* Never opened: free the descriptor here.  ErrorCheck(fnbr) would
+               lfs_file_close() a file LittleFS does not know. */
+            FreeMemory((void *)FileTable[fnbr].lfsptr);
+            FileTable[fnbr].lfsptr = NULL;
+            clearrepeat();
+            ErrorCheck(0); // the error, without touching the file number
+            FatFSFileSystem = FatFSFileSystemSave;
+            return false;
+        }
+        filesource[fnbr] = FLASHFILE; // open: from here ErrorCheck(fnbr) closes it
+        if (mode != LFS_O_RDONLY)
         {
             int dt = get_fattime();
+            /* (a failed attribute write closes the open file below; it used
+               to be left open in LittleFS's list after the error) */
             FSerror = lfs_setattr(&lfs, q, 'A', &dt, 4);
-            ErrorCheck(0);
-            if (mode != (FA_WRITE | FA_CREATE_ALWAYS))
-                lfs_file_seek(&lfs, FileTable[fnbr].lfsptr, lfs_file_size(&lfs, FileTable[fnbr].lfsptr), LFS_SEEK_SET);
-            lfs_file_sync(&lfs, FileTable[fnbr].lfsptr);
+            if (FSerror == 0)
+            {
+                if (mode != (FA_WRITE | FA_CREATE_ALWAYS))
+                    lfs_file_seek(&lfs, FileTable[fnbr].lfsptr, lfs_file_size(&lfs, FileTable[fnbr].lfsptr), LFS_SEEK_SET);
+                lfs_file_sync(&lfs, FileTable[fnbr].lfsptr);
+            }
         }
         ErrorCheck(fnbr);
-        filesource[fnbr] = FLASHFILE;
     }
     clearrepeat();
     if (FSerror)
@@ -6444,7 +6650,7 @@ void MIPS16 cmd_copy(void)
         }
         if (pp[0] == 0)
             strcpy(pp, "*");
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         FatFSFileSystem = t - 1;
         if (!InitSDCard())
@@ -6855,7 +7061,7 @@ void MIPS16 cmd_files(void)
         *cmdbuf = '"';
     }
     int oldfont = PromptFont;
-    if (!CurrentLinePtr && !stream)
+    if (!ProgramRunning() && !stream)
     {
         ClearVars(0, true);
         ClearRuntime(true);
@@ -7321,7 +7527,7 @@ void cmd_autosave(void)
     int count = 0;
     int noecho = 0;
     uint64_t timeout;
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
     char *tp = (char *)checkstring(cmdline, (unsigned char *)"APPEND");
     if (tp)
@@ -8137,6 +8343,52 @@ void ResetOptions(bool startup)
         Option.AllPins = 1;
     }
 #endif
+#ifdef MURMULATOR_M2P2
+    /* M2P2 HDMI factory wiring, used on a fresh options sector or OPTION RESET. */
+    strcpy((char *)Option.platform, "Murmulator 2");
+    Option.HDMIclock = 1;
+    Option.HDMId0 = 3;
+    Option.HDMId1 = 5;
+    Option.HDMId2 = 7;
+    Option.KEYBOARD_CLOCK = PINMAP[2];
+    Option.KEYBOARD_DATA = PINMAP[3];
+    Option.KeyboardConfig = CONFIG_US;
+    Option.MOUSE_CLOCK = PINMAP[0];
+    Option.MOUSE_DATA = PINMAP[1];
+    Option.SD_CS = PINMAP[5];
+    Option.SD_CLK_PIN = PINMAP[6];
+    Option.SD_MOSI_PIN = PINMAP[7];
+    Option.SD_MISO_PIN = PINMAP[4];
+    Option.AUDIO_L = PINMAP[10];
+    Option.AUDIO_R = PINMAP[11];
+    Option.AUDIO_SLICE = 5; /* GP10/GP11: PWM slice 5 */
+    Option.PSRAM_CS_PIN = PINMAP[rp2350a ? 8 : 47];
+    Option.ColourCode = 1;
+    Option.NoHeartbeat = 1;
+#endif
+#ifdef MURMULATOR_M2P1
+    /* M2P1 VGA: GP12..17 = RGB222, GP18 = HSYNC, GP19 = VSYNC.
+       Keep RGB121 output on the four consecutive GP13..16 lines.
+       GP12 and GP17 remain unconfigured for this temporary test. */
+    strcpy((char *)Option.platform, "Murmulator 2");
+    Option.VGA_HSYNC = PINMAP[18]; /* VSYNC uses GP19 */
+    Option.VGA_BLUE = PINMAP[13];  /* 4-bit PIO output uses GP13..16 */
+    Option.KEYBOARD_CLOCK = PINMAP[2];
+    Option.KEYBOARD_DATA = PINMAP[3];
+    Option.KeyboardConfig = CONFIG_US;
+    Option.MOUSE_CLOCK = PINMAP[0];
+    Option.MOUSE_DATA = PINMAP[1];
+    Option.SD_CS = PINMAP[5];
+    Option.SD_CLK_PIN = PINMAP[6];
+    Option.SD_MOSI_PIN = PINMAP[7];
+    Option.SD_MISO_PIN = PINMAP[4];
+    Option.AUDIO_L = PINMAP[10];
+    Option.AUDIO_R = PINMAP[11];
+    Option.AUDIO_SLICE = 5; /* GP10/GP11: PWM slice 5 */
+    Option.ColourCode = 1;
+    Option.NoHeartbeat = 1;
+#endif
+
     if (!SuppressOptionFlash)
     {
         /* The default-builder (BuildDefaultOptions) drives ResetOptions purely to
@@ -8171,6 +8423,7 @@ void BuildDefaultOptions(struct option_s *dst)
 
 void ResetAllFlash(void)
 {
+    pm_resident_before_library_write();
     ResetOptions(true);
     ClearSavedVars();
     disable_interrupts_pico();
@@ -8189,6 +8442,8 @@ void ResetAllFlash(void)
 }
 void FlashWriteInit(int region)
 {
+    if (region == LIBRARY_FLASH || region == MAXFLASHSLOTS)
+        pm_resident_before_library_write();
     for (int i = 0; i < 64; i++)
         MemWord.i32[i] = 0xFFFFFFFF;
     mi8p = 0;

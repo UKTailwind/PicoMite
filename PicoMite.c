@@ -78,6 +78,8 @@ extern "C"
 #include "class/cdc/cdc_device.h"
 #endif
 #endif
+#include "core/elf/elf_picomite.h"
+#include "core/pm_api.h"
 #ifndef rp2350
 #include "hardware/structs/ssi.h"
 #include "hardware/vreg.h"
@@ -95,6 +97,9 @@ extern "C"
 #include "hardware/vreg.h"
 #include "pico/multicore.h"
 #include "pico/sem.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* tcc_picomite_abandoned */
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include "pico/stdlib.h"
@@ -617,7 +622,17 @@ uint8_t PSRAMpin;
         // PIN(n) and PIN(n) = v. Setting a pin up is a one-off and belongs in
         // BASIC; watching or driving one in a tight loop is what a CSUB is for.
         (void *)PinVal, // 0x1b8 MMFLOAT PinVal(int pin)        PIN(n)
-        (void *)PinPut, // 0x1bc void PinPut(int pin, int val)  PIN(n) = v
+        (void *)PinPut,       // 0x1bc void PinPut(int pin, int val)  PIN(n) = v
+        // RP2040/RP2350-common CSUB-safe additions; no heap/runtime resets.
+        (void *)MMInkey,      // 0x1c0 int MMInkey(void): decoded INKEY$, -1 if empty
+        (void *)kbhitConsole, // 0x1c4 int kbhitConsole(void): raw console RX bytes
+        (void *)DrawRBox,     // 0x1c8 void DrawRBox(x1,y1,x2,y2,r,c,fill)
+        (void *)BasicCallTyped,  // 0x1cc universal typed BASIC SUB/FUNCTION callback
+        (void *)PCMPlay,         // 0x1d0 signed-16 one-shot PCM copy
+        (void *)PCMStart,        // 0x1d4 signed-16 PCM streaming callback
+        (void *)PCMStop,         // 0x1d8 stop PCM and free owned data
+        (void *)PCMPlaying,      // 0x1dc PCM active (including paused)
+        (void *)PCMPoll,         // 0x1e0 service PCM outside the IRQ
     };
 #ifdef rp2350
     // once a frig to place the call table at 0x1000023C as in earlier releases; the
@@ -908,6 +923,7 @@ uint8_t PSRAMpin;
         if (timenow - lastrun < 100)
             return;
         lastrun = timenow;
+        pm_resident_service();
 #if defined(PICOMITEVGA) || defined(GUICONTROLS)
         /* Mouse / virtual-cursor refresh. routinechecks() runs from the
            prompt's getchar loop as well as during program execution, so
@@ -973,7 +989,7 @@ uint8_t PSRAMpin;
                 WITH_FRAMEBUFFER_LOCK(SPIatRisk, checkWAVinput());
             }
             else if (CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY ||
-                     CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC
+                     CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_PCM
 #ifdef rp2350
                      || CurrentlyPlaying == P_SAMPLE
 #endif
@@ -1402,7 +1418,7 @@ uint8_t PSRAMpin;
         if (ConsoleRedirect)
             return c; // output sent to #n leaves the console's column alone (and a listing unwrapped)
 #endif
-        if (isprint(c))
+        if (pm_isprint((unsigned char)c))
             MMCharPos++;
         if (c == '\r')
         {
@@ -1729,10 +1745,10 @@ int __not_in_flash_func(MMInkey)(void)
                     continue; // for files loop around looking for the following newline
             }
 
-            if (filenbr == 0 && !isprint(c))
+            if (filenbr == 0 && !pm_isprint(c))
                 continue; // ignore stray console control codes
 
-            if (isprint(c))
+            if (pm_isprint(c))
             {
                 if (filenbr == 0 && EchoOption)
                     MMputchar(c, 1); // The console requires that chars be echoed
@@ -2256,7 +2272,7 @@ int __not_in_flash_func(MMInkey)(void)
                     break;
 
                 default:
-                    if (buf[0] >= ' ' && buf[0] < 0x7f)
+                    if (pm_isprint(buf[0]))
                     {
                         i = CharIndex;
                         j = strlen((const char *)inpbuf);
@@ -3723,6 +3739,34 @@ uint32_t testPSRAM(void)
         }
     }
 #endif
+#ifdef MMBASIC_FM
+    /* Called only after an FM-launched program has finished.  Keep the output
+     * visible until the user acknowledges it, then permit the FM redraw. */
+    static void fm_wait_before_relaunch(void)
+    {
+        MMAbort = false;
+        clearrepeat();
+        while (MMInkey() != -1)
+            ; /* discard stale Enter/F2 and key repeats */
+        if (Option.DISPLAY_CONSOLE && Option.Height > 0)
+        {
+            int reservedBottom = VRes - (VRes * OptionVResreserved / 100);
+            if (CurrentY + 2 * gui_font_height > reservedBottom)
+            {
+                CurrentX = 0;
+                CurrentY = reservedBottom > gui_font_height ? reservedBottom - gui_font_height : 0;
+                MMPrintString("\r"); /* one status line, never clear the full screen */
+            }
+            else
+                MMPrintString("\r\n");
+            MMPrintString(Option.Width < 35 ? "Any key: FM" : "Press any key to return to FM");
+        }
+        else
+            MMPrintString("\r\nPress any key to return to FM");
+        (void)MMgetchar();
+        MMAbort = false;
+    }
+#endif
     int MIPS16 main()
     {
 #if defined(PICOMITEWEB) && defined(rp2350)
@@ -3811,6 +3855,16 @@ uint32_t testPSRAM(void)
             SetFlashMap();
         }
 #ifndef HDMI
+#ifdef MURMULATOR_M2P1
+        /* Migrate only the incorrect pin defaults of the first M2P1VGA
+           test build, without erasing the flash storage or user data. */
+        if (Option.VGA_HSYNC == PINMAP[12] && Option.VGA_BLUE == PINMAP[15])
+        {
+            Option.VGA_HSYNC = PINMAP[18];
+            Option.VGA_BLUE = PINMAP[13];
+            SaveOptions();
+        }
+#endif
         if (Option.VGA_HSYNC == 0)
         {
             Option.VGA_HSYNC = 21;
@@ -4496,6 +4550,11 @@ uint32_t testPSRAM(void)
         {
             // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
             ConsoleRedirect = 0; // LIST ALL #n etc cut short: the prompt is the console's (SerialPutchar's Ctrl-C jumps here directly)
+            pm_resident_unwind(); // a resident callback may have longjmp'd here
+#ifdef rp2350
+            tcc_picomite_abandoned(); // a C program (RUN "x.c", TCC) left past its cleanup: free its memory
+#endif
+            elf_picomite_abandoned();
             FlashLoad = 0;
             ExecDepth = 0; // (see ExecuteProgram)
             OptionErrorSkip = 0; // the prompt has no ON ERROR of the program's (issue 35)
@@ -4687,6 +4746,8 @@ uint32_t testPSRAM(void)
 #ifdef MMBASIC_FM
             if (fm_program_launched_from_fm || fm_relaunch_status_valid)
             {
+                if (fm_program_launched_from_fm == 1)
+                    fm_wait_before_relaunch();
                 fm_program_launched_from_fm = 0;
                 CurrentLinePtr = NULL;
                 cmdline = (unsigned char *)"";
@@ -4700,9 +4761,10 @@ uint32_t testPSRAM(void)
                 continue;
             }
 #endif
+            bool edit_prompt_inline = false;
             if (Option.DISPLAY_CONSOLE)
             {
-                SetFont(PromptFont);
+                SetFont(pm_console_font_for_prompt());
                 gui_fcolour = PromptFC;
                 gui_bcolour = PromptBC;
                 // The program may have left the cursor on the bottom line while
@@ -4711,7 +4773,20 @@ uint32_t testPSRAM(void)
                 // the screen, clipping the prompt characters.  Make room for the
                 // new font before the prompt is printed.
                 int reservedBottom = VRes - (VRes * OptionVResreserved / 100);
-                if (CurrentY + gui_font_height > reservedBottom)
+                if (edit_f2_preserve_output)
+                {
+                    /* F2 from the in-memory editor: place the prompt without
+                     * emitting a newline or scrolling/clearing the screen.
+                     * Otherwise the normal prompt path may discard the final
+                     * screenful of console output. */
+                    int py = CurrentY + (CurrentX != 0 ? gui_font_height : 0);
+                    if (py + gui_font_height > reservedBottom)
+                        py = reservedBottom - gui_font_height;
+                    CurrentY = py > 0 ? py : 0;
+                    CurrentX = 0;
+                    edit_prompt_inline = true;
+                }
+                else if (CurrentY + gui_font_height > reservedBottom)
                 {
 #ifdef PICOMITEVGA
                     int canscroll = !Option.NoScroll; // framebuffer display always scrolls unless NoScroll
@@ -4733,7 +4808,7 @@ uint32_t testPSRAM(void)
                         CurrentY = 0;
                     }
                 }
-                if (CurrentX != 0)
+                if (CurrentX != 0 && !edit_prompt_inline)
                     MMPrintString("\r\n"); // prompt should be on a new line
             }
 #if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
@@ -4745,7 +4820,7 @@ uint32_t testPSRAM(void)
             g_LocalIndex = 0;      // this should not be needed but it ensures that all space will be cleared
             ClearTempMemory();     // clear temp string space (might have been used by the prompt)
             CurrentLinePtr = NULL; // do not use the line number in error reporting
-            if (MMCharPos > 1)
+            if (MMCharPos > 1 && !edit_prompt_inline)
                 MMPrintString("\r\n"); // prompt should be on a new line
             {
                 /* the stack reached its last 1K above the limit since the last prompt
@@ -4800,6 +4875,7 @@ uint32_t testPSRAM(void)
                 MMPromptPos = 2;     // Save length of prompt
             }
             ErrorInPrompt = false;
+            edit_f2_preserve_output = 0;
             EditInputLine();
             // InsertLastcmd(inpbuf);                                  // save in case we want to edit it later
             if (!*inpbuf)
@@ -4915,9 +4991,61 @@ uint32_t testPSRAM(void)
                 CurrentLinePtr = 0;
             }
             ExecuteProgram(tknbuf); // execute the line straight away
+            if (edit_f2_pending_run)
+            {
+                /* The EDIT "file" F2 handler staged RUN in inpbuf. Execute
+                 * it at the top level, after the editor's stack is gone. */
+                edit_f2_pending_run = 0;
+                edit_f2_preserve_output = 1;
+                CurrentLinePtr = NULL;
+                cmdline = (unsigned char *)"";
+                multi = false;
+                tokenise(true);
+                goto autorun;
+            }
 #ifdef MMBASIC_FM
+            if (fm_program_launched_from_fm == 3)
+            {
+                /* Dispatch FM's EDIT FILE after releasing cmd_fm()'s stack
+                 * frame. A value of 4 marks the editor as in progress. */
+                fm_program_launched_from_fm = 4;
+                CurrentLinePtr = NULL;
+                cmdline = (unsigned char *)"";
+                multi = false;
+                tokenise(true); // inpbuf contains EDIT FILE "path"
+                goto autorun;
+            }
+            if (fm_program_launched_from_fm == 4)
+            {
+                /* EDIT FILE returned: F2 runs the saved file; F1/ESC returns
+                 * to FM. Errors longjmp to mark and relaunch FM as usual. */
+                int run = fm_editor_prepare_run();
+                fm_program_launched_from_fm = run ? 1 : 5; // 5: editor exit, no program output
+                if (run)
+                {
+                    CurrentLinePtr = NULL;
+                    cmdline = (unsigned char *)"";
+                    multi = false;
+                    tokenise(true); // inpbuf now contains RUN "path"
+                    goto autorun;
+                }
+            }
+            if (fm_program_launched_from_fm == 2)
+            {
+                /* FM staged a native RUN. Enter it here, after cmd_fm() has
+                 * returned and its large stack frame is gone. Keep the FM
+                 * relaunch flag armed for normal exit, errors and Ctrl-C. */
+                fm_program_launched_from_fm = 1;
+                CurrentLinePtr = NULL;
+                cmdline = (unsigned char *)"";
+                multi = false;
+                tokenise(true); // inpbuf contains RUN "path" from FM
+                goto autorun;
+            }
             if (fm_program_launched_from_fm || fm_relaunch_status_valid)
             {
+                if (fm_program_launched_from_fm == 1)
+                    fm_wait_before_relaunch();
                 fm_program_launched_from_fm = 0;
                 CurrentLinePtr = NULL;
                 cmdline = (unsigned char *)"";
@@ -4989,7 +5117,12 @@ uint32_t testPSRAM(void)
         multi = false;
         tokenise_insub = false;
         uint32_t storedupdates[MAXCFUNCTION], updatecount = 0, realflashsave;
+        uint32_t *cimg[MAXCFUNCTION] = {NULL}; // linked ELF/TinyCC CSUBs
+        int cwords[MAXCFUNCTION] = {0};
+        char cerr[MAXERRMSG], *cline = NULL;
+        unsigned char *csubdecl = NULL;
         const uint8_t *scanbase = (region == LIBRARY_FLASH) ? flash_libmemory : flash_progmemory;
+        const unsigned char *csub_origin = scanbase;
         uint32_t writebase = (region == LIBRARY_FLASH) ? (uint32_t)(PROGSTART - MAX_PROG_SIZE) : (uint32_t)PROGSTART;
         initFonts();
 #ifdef rp2350
@@ -5013,6 +5146,7 @@ uint32_t testPSRAM(void)
         SymTabProg = NULL; // the old program's table is gone
         if (SymBegin(pm))
         {
+            if (region == LIBRARY_FLASH) SymLibSave = 1;
             SymCount(pm);
             if (SymRetry())
                 SymCount(pm);
@@ -5121,6 +5255,11 @@ uint32_t testPSRAM(void)
             if (*p == T_NEWLINE)
             {
                 CurrentLinePtr = p;
+                /* Multi-file LIBRARY LOAD stores a '#path header before
+                   each part; compile relative to the current part. */
+                if (region == LIBRARY_FLASH &&
+                    p[T_NEWLINE_HDR] == 39 && p[T_NEWLINE_HDR + 1] == '#')
+                    csub_origin = p;
                 p += T_NEWLINE_HDR; // skip newline + skip byte
             }
             if (*p == T_LINENBR)
@@ -5156,6 +5295,7 @@ uint32_t testPSRAM(void)
                 else
                 {
                     endtoken = GetCommandValue((unsigned char *)"End CSub");
+                    csubdecl = p;
                     realflashpointer += 4;
                     fontnbr = 0;
                     firsthex = 0;
@@ -5188,6 +5328,39 @@ uint32_t testPSRAM(void)
                         }
                         if (*p == T_LINENBR)
                             p += 3; // skip over a line number
+                    }
+                }
+                if (!fontnbr)
+                { // quoted files: native ELF on either chip, TinyCC sources on RP2350
+                    unsigned char *endp;
+                    if (cline == NULL)
+                        cline = GetTempMemory(STRINGSIZE * 4);
+                    if ((endp = elf_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4)) != NULL)
+                    {
+                        bool was_disabled = irqs_off_pico;
+                        if (was_disabled) enable_interrupts_pico();
+                        if (elf_picomite_csub_single_object(cline, csub_origin))
+                            cimg[updatecount] = elf_picomite_csub_compile(csubdecl, cline, XIP_BASE + realflashpointer,
+                                                                          csub_origin, &cwords[updatecount], cerr);
+#ifdef rp2350
+                        else
+                            cimg[updatecount] = tcc_picomite_csub_compile(csubdecl, cline, XIP_BASE + realflashpointer,
+                                                                          csub_origin, &cwords[updatecount], cerr);
+#else
+                        else
+                            snprintf(cerr, sizeof(cerr), "CSUB: expected one ELF object (RP2040)");
+#endif
+                        if (was_disabled) disable_interrupts_pico();
+                        if (cimg[updatecount] == NULL)
+                        {
+                            refusal = cerr;
+                            goto exiterror;
+                        }
+                        realflashpointer += 4 * cwords[updatecount];
+                        if ((int)((char *)realflashpointer - writebase) >= MAX_PROG_SIZE - 5)
+                            goto exiterror;
+                        p = endp;
+                        goto csub_linked;
                     }
                 }
                 do
@@ -5243,6 +5416,7 @@ uint32_t testPSRAM(void)
                     skipspace(p);
                     tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
+            csub_linked:
                 storedupdates[updatecount++] = realflashpointer - SaveSizeAddr - 4;
             }
             while (*p)
@@ -5336,6 +5510,15 @@ uint32_t testPSRAM(void)
                             p += 3; // skip over a line number
                     }
                 }
+                if (!fontnbr && cimg[updatecount - 1] != NULL)
+                { // linked CSUB image from the first pass
+                    p = elf_picomite_csub_source(p, endtoken, cline, STRINGSIZE * 4);
+                    for (i = 0; i < cwords[updatecount - 1]; i++)
+                        FlashWriteWord(cimg[updatecount - 1][i]);
+                    FreeMemory(cimg[updatecount - 1]);
+                    cimg[updatecount - 1] = NULL;
+                    goto csub_written;
+                }
                 do
                 {
                     while (*p && *p != '\'')
@@ -5381,6 +5564,7 @@ uint32_t testPSRAM(void)
                     skipspace(p);
                     tkn = commandtbl_at(p); // (a one-letter statement is a name, not a token)
                 } while (tkn != endtoken);
+            csub_written:;
             }
             while (*p)
                 p++; // look for the zero marking the start of the next element
@@ -5400,12 +5584,21 @@ uint32_t testPSRAM(void)
                                          //    initConsole();
         clearrepeat();
         enable_interrupts_pico();
-        SymSetProgram(ProgMemory); // the new program's table
+        if (region == LIBRARY_FLASH)
+        {
+            SymSetLibrary(flash_libmemory);
+            SymSetProgram(ProgMemory); // preserve the dormant program's names
+        }
+        else
+            SymSetProgram(ProgMemory); // the new program's table
         return;
 
     // we only get here in an error situation while writing the program to flash
     exiterror:
         SymEnd();
+        for (i = 0; i < MAXCFUNCTION; i++)
+            if (cimg[i] != NULL)
+                FreeMemory(cimg[i]);
         /* What is in the slot is the part of the program written so far, its
            text already in symbols and no table after it (the table comes
            last).  Kept, it could never be prepared: PrepareProgram runs at

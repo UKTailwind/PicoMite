@@ -1164,7 +1164,7 @@ void cmd_zmodem(void)
     else
     {
         // no file name: the program in memory, as XMODEM and YMODEM
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (send)
         {

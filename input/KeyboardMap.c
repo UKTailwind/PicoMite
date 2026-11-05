@@ -20,6 +20,8 @@
 #include "Hardware_Includes.h"
 #include "tusb.h"
 #include "KeyboardMap.h"
+#include "core/pm_api.h"
+#include "core/tcc/include/picomite/input.h"
 #include "I2C.h"   /* nunstruct[], nunfoundc[] -- shared mouse/gamepad state */
 
 extern volatile int ConsoleRxBufHead;
@@ -1068,6 +1070,18 @@ uint8_t APP_MapKeyToUsage(uint8_t keyCode, int modifier)
 		c = CTRLKEY('\\');
 	return c;
 }
+/* Convert HID modifier-byte ordering to the public KEYDOWN(7) ordering. */
+static uint8_t pm_hid_modifiers(int m)
+{
+	return (m & KEYBOARD_MODIFIER_LEFTALT ? PM_KMOD_LALT : 0) |
+	       (m & KEYBOARD_MODIFIER_LEFTCTRL ? PM_KMOD_LCTRL : 0) |
+	       (m & KEYBOARD_MODIFIER_LEFTGUI ? PM_KMOD_LGUI : 0) |
+	       (m & KEYBOARD_MODIFIER_LEFTSHIFT ? PM_KMOD_LSHIFT : 0) |
+	       (m & KEYBOARD_MODIFIER_RIGHTALT ? PM_KMOD_RALT : 0) |
+	       (m & KEYBOARD_MODIFIER_RIGHTCTRL ? PM_KMOD_RCTRL : 0) |
+	       (m & KEYBOARD_MODIFIER_RIGHTGUI ? PM_KMOD_RGUI : 0) |
+	       (m & KEYBOARD_MODIFIER_RIGHTSHIFT ? PM_KMOD_RSHIFT : 0);
+}
 void USR_KEYBRD_ProcessData(uint8_t data)
 {
 	static uint8_t lastdata;
@@ -1115,6 +1129,16 @@ void USR_KEYBRD_ProcessData(uint8_t data)
 	if (OnKeyGOSUB != NULL)
 		IntSignal(); // ON KEY: a key is waiting
 }
+/* The USB-host software repeat bypasses process_kbd_report(). Reconstruct
+ * its physical identity and modifiers from the last keyboard snapshot. */
+void USR_KEYBRD_ProcessRepeat(uint8_t code)
+{
+	if (code) {
+		code = KeyboardEmit(code, (uint16_t)USBcode, (uint8_t)KeyDown[6],
+		                    PM_REMAP_DOWN | PM_REMAP_EMIT | PM_REMAP_REPEAT);
+		if (code) USR_KEYBRD_ProcessData(code);
+	}
+}
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
 void bt_keyboard_set_leds(uint8_t leds); /* BTKeyboard.c */
 void bt_ckbd_set_leds(uint8_t leds);     /* BTClassicKeyboard.c */
@@ -1158,6 +1182,7 @@ static void kbd_send_leds(uint8_t n)
 
 static void process_key(int key, uint8_t n, int modifier)
 {
+	uint8_t mods = pm_hid_modifiers(modifier);
 	keytimer = 0;
 	/* Caps/Num/Scroll lock toggle the local state (APP_MapKeyToUsage shifts
 	   case by it) and are shown on the keyboard the key came from. */
@@ -1170,15 +1195,20 @@ static void process_key(int key, uint8_t n, int modifier)
 		else
 			scroll_lock = !scroll_lock;
 		kbd_send_leds(n);
+		(void)KeyboardEmit(0, (uint16_t)key, mods, PM_REMAP_DOWN);
 	}
 	else
 	{ // normal key
 		uint8_t c = APP_MapKeyToUsage(key, modifier);
 		if (c != 0)
 		{
-			USR_KEYBRD_ProcessData(c);
+			c = KeyboardEmit(c, (uint16_t)key, mods,
+			                 PM_REMAP_DOWN | PM_REMAP_EMIT);
+			if (c) USR_KEYBRD_ProcessData(c);
 			repeattime = Option.RepeatStart;
 		}
+		else
+			(void)KeyboardEmit(0, (uint16_t)key, mods, PM_REMAP_DOWN);
 	}
 }
 static bool notbefore(int i, uint8_t *current_keys, uint8_t *prev_keys)
@@ -1194,11 +1224,17 @@ static bool notbefore(int i, uint8_t *current_keys, uint8_t *prev_keys)
 void process_kbd_report(hid_keyboard_report_t const *report, uint8_t n)
 {
 	static uint8_t prev_keys[6] = {0}; // previous report to check key released
+#ifdef rp2350
+	static uint8_t prev_modifier __attribute__((section(".scratch_x.pm_hid_modifiers")));
+#else
+	static uint8_t prev_modifier = 0;
+#endif
 	static bool lasterror = false;
 	int total = 0;
 	//	static int lasttotal=0;
 	uint8_t current_keys[6] = {0};
 	int modifier = report->modifier;
+	uint8_t mods = pm_hid_modifiers(modifier);
 	for (int i = 0; i < 6; i++)
 	{
 		if (report->keycode[i])
@@ -1212,6 +1248,19 @@ void process_kbd_report(hid_keyboard_report_t const *report, uint8_t n)
 	}
 	for (int i = 0; i < total; i++)
 		current_keys[i] = report->keycode[total - i - 1]; // Get local copy of keys pressed
+	/* Notify about modifier-only transitions. The callback receives the
+	 * current complete modifier mask; no character is queued. */
+	uint8_t changed = (uint8_t)(prev_modifier ^ modifier);
+	for (unsigned i = 0; i < 8; i++)
+	{
+		if (changed & (1u << i))
+			(void)KeyboardEmit(0, (uint16_t)(0xE0u + i), mods,
+			                  (modifier & (1u << i)) ? PM_REMAP_DOWN : PM_REMAP_UP);
+	}
+	/* Physical key releases also report events, but never enter INKEY$. */
+	for (unsigned i = 0; i < 6; i++)
+		if (prev_keys[i] && notbefore((int)i, prev_keys, current_keys))
+			(void)KeyboardEmit(0, prev_keys[i], mods, PM_REMAP_UP);
 	// now work out if any new keys are pressed
 	if (total)
 	{ // Anything to do
@@ -1239,6 +1288,7 @@ void process_kbd_report(hid_keyboard_report_t const *report, uint8_t n)
 	else
 		keytimer = 0;
 	memcpy(prev_keys, current_keys, sizeof(prev_keys));
+	prev_modifier = (uint8_t)modifier;
 	for (int i = 0; i < 6; i++)
 	{
 		uint8_t c = APP_MapKeyToUsage(current_keys[i], modifier);
@@ -1248,14 +1298,7 @@ void process_kbd_report(hid_keyboard_report_t const *report, uint8_t n)
 			KeyDown[i] = 0;
 	}
 	//    lasttotal=total;
-	KeyDown[6] = (modifier & KEYBOARD_MODIFIER_LEFTALT ? 1 : 0) |
-				 (modifier & KEYBOARD_MODIFIER_LEFTCTRL ? 2 : 0) |
-				 (modifier & KEYBOARD_MODIFIER_LEFTGUI ? 4 : 0) |
-				 (modifier & KEYBOARD_MODIFIER_LEFTSHIFT ? 8 : 0) |
-				 (modifier & KEYBOARD_MODIFIER_RIGHTALT ? 16 : 0) |
-				 (modifier & KEYBOARD_MODIFIER_RIGHTCTRL ? 32 : 0) |
-				 (modifier & KEYBOARD_MODIFIER_RIGHTGUI ? 64 : 0) |
-				 (modifier & KEYBOARD_MODIFIER_RIGHTSHIFT ? 128 : 0);
+	KeyDown[6] = mods;
 }
 
 
@@ -1282,11 +1325,22 @@ bool process_consumer_report(const uint8_t *report, uint16_t len)
 	if (len != 2)
 		return false; /* not a single-usage consumer report */
 
+#ifdef rp2350
+	static uint16_t last_usage __attribute__((section(".scratch_x.pm_media_usage")));
+#else
+	static uint16_t last_usage;
+#endif
 	uint16_t usage = (uint16_t)report[0] | ((uint16_t)report[1] << 8);
 	uint8_t code;
 	switch (usage)
 	{
 	case 0x0000:           /* all media keys released — nothing to emit */
+		if (last_usage)
+		{
+			(void)KeyboardEmit(0, last_usage, (uint8_t)KeyDown[6],
+			                   PM_REMAP_MEDIA | PM_REMAP_UP);
+			last_usage = 0;
+		}
 		return true;
 	case 0x00E9:           /* Volume Increment */
 		code = MM_KEY_VOLUME_UP;
@@ -1316,7 +1370,10 @@ bool process_consumer_report(const uint8_t *report, uint16_t len)
 	default:
 		return false;      /* unrecognised — let the caller log it raw */
 	}
-	USR_KEYBRD_ProcessData(code);
+	last_usage = usage;
+	code = KeyboardEmit(code, usage, (uint8_t)KeyDown[6],
+	                    PM_REMAP_MEDIA | PM_REMAP_DOWN | PM_REMAP_EMIT);
+	if (code) USR_KEYBRD_ProcessData(code);
 	return true;
 }
 

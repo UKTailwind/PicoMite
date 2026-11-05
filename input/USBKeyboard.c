@@ -59,6 +59,10 @@ the non US keyboard layouts
    used to live in this file; they now live in KeyboardMap.c so the
    BLE-HID-host build can share them. */
 #include "KeyboardMap.h"
+/* A C subscription owns the same button-change latch as BASIC, but never
+ * puts a C callback address into BASIC's nunInterruptc[] dispatch table. */
+extern int pm_gamepad_c_owns(int channel);
+extern unsigned pm_gamepad_c_mask(int channel);
 extern volatile int ConsoleRxBufHead;
 extern volatile int ConsoleRxBufTail;
 int justset = 0;
@@ -378,7 +382,7 @@ void process_xbox(uint8_t const *report, uint16_t len, uint8_t n)
 	{
 		// TODO
 	}
-	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
+	if ((b ^ nunstruct[n].x0) & (nunstruct[n].x1 | pm_gamepad_c_mask(n)))
 	{
 		nunfoundc[n] = 1;
 		if (nunInterruptc[n] != NULL) IntSignal();
@@ -2158,7 +2162,7 @@ process:;
 	checkpush(report, len, Gamepad.b_UP, p_UP, &b);
 	checkpush(report, len, Gamepad.b_X, p_X, &b);
 	checkpush(report, len, Gamepad.b_Y, p_Y, &b);
-	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
+	if ((b ^ nunstruct[n].x0) & (nunstruct[n].x1 | pm_gamepad_c_mask(n)))
 	{
 		nunfoundc[n] = 1;
 		if (nunInterruptc[n] != NULL) IntSignal();
@@ -2205,7 +2209,7 @@ void process_sony_ds3(uint8_t const *report, uint16_t len, uint8_t n)
 	nunstruct[n].C = report[9];
 	nunstruct[n].L = report[18];
 	nunstruct[n].R = report[19];
-	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
+	if ((b ^ nunstruct[n].x0) & (nunstruct[n].x1 | pm_gamepad_c_mask(n)))
 	{
 		nunfoundc[n] = 1;
 		if (nunInterruptc[n] != NULL) IntSignal();
@@ -2267,7 +2271,7 @@ void process_sony_ds4(uint8_t const *report, uint16_t len, uint8_t n)
 		nunstruct[n].L = ds4_report.l2_trigger;
 		nunstruct[n].R = ds4_report.r2_trigger;
 		memcpy((void *)nunstruct[n].gyro, ds4_report.gyro, 6 * sizeof(uint16_t));
-		if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
+		if ((b ^ nunstruct[n].x0) & (nunstruct[n].x1 | pm_gamepad_c_mask(n)))
 		{
 			nunfoundc[n] = 1;
 			if (nunInterruptc[n] != NULL) IntSignal();
@@ -2450,7 +2454,7 @@ static void process_switch_pro(uint8_t const *report, uint16_t len, uint8_t n)
 		nunstruct[n].y0 = hat[((l >> 1) & 1) | (((l >> 2) & 1) << 1) | ((l & 1) << 2) | (((l >> 3) & 1) << 3)];
 	}
 	nunstruct[n].type = SWITCHPRO;
-	if ((b ^ nunstruct[n].x0) & nunstruct[n].x1)
+	if ((b ^ nunstruct[n].x0) & (nunstruct[n].x1 | pm_gamepad_c_mask(n)))
 	{
 		nunfoundc[n] = 1;
 		if (nunInterruptc[n] != NULL)
@@ -2492,7 +2496,7 @@ void hid_app_task(void)
 		uint8_t c = KeyDown[0];
 		if (!(c == 0 || c == PDOWN || c == PUP || c == CTRLKEY('P') || c == CTRLKEY('L') || c == 25 || c == F5 || c == F4 || c == CTRLKEY('T') /* || (markmode && (c==DEL || c==CTRLKEY(']')))*/))
 		{
-			USR_KEYBRD_ProcessData(c);
+			USR_KEYBRD_ProcessRepeat(c);
 		}
 		//			if(c==PDOWN || c==PUP || c==CTRLKEY('P') || c==CTRLKEY('L') || c==25 || c==F5  || c==F4 || c==CTRLKEY('T')/* || (markmode && (c==DEL || c==CTRLKEY(']')))*/)mmemset(&last_k_info,0,sizeof(HID_KEYBD_Info_TypeDef));
 		keytimer = 0;
@@ -3276,6 +3280,7 @@ void cmd_gamepad(void)
 			SyntaxError();
 		;
 		n = getint(argv[0], 1, 4);
+		if (pm_gamepad_c_owns(n)) error("Gamepad interrupt owned by C program");
 		if (nunInterruptc[n] == NULL)
 			nunfoundc[n] = 0; // a change only counts while armed: not one from before or an earlier run
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
@@ -3354,6 +3359,7 @@ void cmd_gamepad(void)
 	{
 		getcsargs(&tp, 1);
 		n = getint(argv[0], 1, 4);
+		if (pm_gamepad_c_owns(n)) error("Gamepad interrupt owned by C program");
 		nunInterruptc[n] = NULL;
 	}
 	else
@@ -3371,6 +3377,7 @@ void cmd_mouse(void)
 			SyntaxError();
 		;
 		n = getint(argv[0], 1, 4);
+		if (pm_gamepad_c_owns(n)) error("Gamepad interrupt owned by C program");
 		if (nunInterruptc[n] == NULL)
 			nunfoundc[n] = 0; // set on every button change, so one only counts while armed
 		nunInterruptc[n] = (char *)GetIntAddress(argv[2]); // get the interrupt location
@@ -3393,6 +3400,7 @@ void cmd_mouse(void)
 	{
 		getcsargs(&tp, 1);
 		n = getint(argv[0], 1, 4);
+		if (pm_gamepad_c_owns(n)) error("Gamepad interrupt owned by C program");
 		nunInterruptc[n] = NULL;
 	}
 	else

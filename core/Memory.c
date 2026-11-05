@@ -1899,6 +1899,8 @@ void MIPS16 cmd_memory(void)
 
 void m_alloc(int type)
 {
+    if (type != M_VAR)
+        tcc_picomite_reset_guard(); /* (the heap is wiped: not under a C program) */
     switch (type)
     {
 
@@ -2091,6 +2093,7 @@ void MIPS32 __not_in_flash_func(FreeMemory)(void *addr)
 void InitHeap(bool all)
 {
     int i;
+    tcc_picomite_reset_guard(); /* (not under a C program, whose memory is here) */
     /* The PLAY BBC engine's state block (AudioBBC.c) lives in this heap:
        hand it back while the bitmap is still valid, then wipe.          */
     BBCSoundRelease();

@@ -2913,6 +2913,14 @@ static bool hid_parse_gamepad_report(
 static hid_gamepad_descriptor_t gamepad_info;
 static hid_gamepad_report_t gamepad_report;
 
+/* The BASIC gamepad fields can retain an old report across a BLE disconnect.
+ * Expose actual host/descriptor readiness for native C state queries. */
+bool bt_keyboard_has_gamepad(void)
+{
+    return state == BTK_READY && conn_handle != HCI_CON_HANDLE_INVALID &&
+           gamepad_info.report_bits != 0;
+}
+
 /* Called from hids_client_handler when the HID service has finished
    discovery. Walks the report descriptor a second time looking for a
    Gamepad Application collection; populates gamepad_info if found,

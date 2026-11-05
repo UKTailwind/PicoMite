@@ -4065,7 +4065,10 @@ bool OSK_IsUserDisabled(void) { return osk_user_disabled; }
 // check if the pen has touched or been lifted and animate the GUI elements as required
 // this is called after every command (from check_interrupt()), in the getchar() loop and repeatedly in a pause
 // TouchDown and TouchUp are set in the Timer 4 interrupt
-void ProcessTouch(void)
+extern void pm_gui_event_down_mark(int, int);
+extern void pm_gui_event_down_finish(int);
+extern void pm_gui_event_up_mark(int, int, int);
+static void ProcessTouchImpl(void)
 {
     static int repeat = 0;
     static int waiting = false;
@@ -4185,6 +4188,7 @@ void ProcessTouch(void)
 #endif
 
         gui_int_down = true; // signal that a MMBasic interrupt is valid
+        pm_gui_event_down_mark(TouchX, TouchY);
         if (GuiIntDownVector) IntSignal();
         for (r = 1; r < Option.MaxCtrls; r++)
         {
@@ -4409,6 +4413,7 @@ void ProcessTouch(void)
                 if (InvokingCtrl == 0)
                 {
                     gui_int_up = true; // a selection was committed: fire the GUI up interrupt
+                    pm_gui_event_up_mark(TouchX, TouchY, LastRef);
                     if (GuiIntUpVector)
                         IntSignal();
                 }
@@ -4430,6 +4435,7 @@ void ProcessTouch(void)
 #endif
 
         gui_int_up = true;
+        pm_gui_event_up_mark(TouchX, TouchY, CurrentRef);
         if (GuiIntUpVector) IntSignal();
         if (CurrentRef)
         {
@@ -4460,6 +4466,12 @@ void ProcessTouch(void)
         }
         CurrentRef = 0;
     }
+}
+
+void ProcessTouch(void)
+{
+    ProcessTouchImpl();
+    pm_gui_event_down_finish(CurrentRef);
 }
 
 void SetCtrlState(int r, int state, int err)
@@ -4873,6 +4885,131 @@ void cmd_ctrlval(void)
 
     if (!(Ctrl[r].state & CTRL_DISABLED2))
         UpdateControl(r); // don't update if the gauge is disabled by a keypad (updating may mess they keypad)
+}
+
+/* Native C CTRLVAL access, sharing the live GUI controls and render path.
+   Return -1 for absent controls or a type mismatch; never leak Ctrl[]. */
+static int pm_gui_ctrl_valid(int r)
+{
+    return Ctrl && Option.MaxCtrls && r > 0 && r < Option.MaxCtrls && Ctrl[r].type;
+}
+int pm_gui_ctrl_number(int r, double *out)
+{
+    char tmp[16];
+    if (!out || !pm_gui_ctrl_valid(r)) return -1;
+    switch (Ctrl[r].type) {
+    case CTRL_TEXTBOX: case CTRL_FMTBOX: case CTRL_DISPLAYBOX:
+    case CTRL_CAPTION: case CTRL_FRAME: return -1;
+    case CTRL_NBRBOX:
+        if (r == InvokingCtrl) { *out = atof(CancelValue); return 0; }
+        break;
+    }
+    FloatToStr(tmp, Ctrl[r].value, 1, STR_FLOAT_PRECISION, ' ');
+    *out = atof(tmp);
+    return 0;
+}
+int pm_gui_ctrl_text(int r, char *out, unsigned cap)
+{
+    const char *s;
+    size_t n;
+    if (!pm_gui_ctrl_valid(r) || !out || !cap) return -1;
+    switch (Ctrl[r].type) {
+    case CTRL_TEXTBOX: case CTRL_FMTBOX: case CTRL_DISPLAYBOX: case CTRL_CAPTION:
+        break;
+    default: return -1;
+    }
+    s = (r == InvokingCtrl && (Ctrl[r].type == CTRL_TEXTBOX || Ctrl[r].type == CTRL_FMTBOX))
+        ? CancelValue : (const char *)Ctrl[r].s;
+    if (Ctrl[r].type == CTRL_TEXTBOX || Ctrl[r].type == CTRL_FMTBOX)
+        if (Ctrl[r].s[0] == '#' && Ctrl[r].s[1] == '#') s = "";
+    n = strlen(s);
+    if (n >= cap) return -2;
+    memcpy(out, s, n + 1);
+    return 0;
+}
+int pm_gui_ctrl_set_number(int r, double value)
+{
+    MMFLOAT v = value;
+    int i;
+    struct s_ctrl *c;
+    if (!pm_gui_ctrl_valid(r)) return -1;
+    c = &Ctrl[r];
+    switch (c->type) {
+    case CTRL_BUTTON: case CTRL_SWITCH: case CTRL_CHECKBOX: case CTRL_RADIOBTN:
+        v = v != 0;
+        if (c->value == v) return 0;
+        c->value = v;
+        break;
+    case CTRL_LED:
+        if (v > 1) {
+            c->inc = v;
+            c->value = 1;
+            CheckGuiFlag = true;
+        } else {
+            CheckGuiFlag = false;
+            c->inc = 0;
+            for (i = 1; i < Option.MaxCtrls; ++i)
+                if (Ctrl[i].type == CTRL_LED && Ctrl[i].inc != 0) {
+                    CheckGuiFlag = true;
+                    break;
+                }
+            if (c->value == v) return 0;
+            c->value = v;
+        }
+        break;
+    case CTRL_SPINNER: case CTRL_GAUGE: case CTRL_BARGAUGE: case CTRL_SLIDER:
+        if (v < c->min) v = c->min;
+        if (v > c->max) v = c->max;
+        if (c->value == v) return 0;
+        c->value = v;
+        if (c->type == CTRL_SPINNER)
+            FloatToStr((char *)c->s, v, 0, STR_AUTO_PRECISION, ' ');
+        break;
+    case CTRL_LISTBOX:
+        i = ((struct s_ListBoxS *)c->s)->count;
+        if (!i) v = -1;
+        else {
+            if (v < 0) v = 0;
+            if (v > i - 1) v = i - 1;
+        }
+        if (c->value == v) return 0;
+        c->value = v;
+        break;
+    case CTRL_NBRBOX:
+        if (r != InvokingCtrl && c->value == v) return 0;
+        c->value = v;
+        FloatToStr((char *)c->s, v, 0, STR_AUTO_PRECISION, ' ');
+        break;
+    default: return -1;
+    }
+    if (!(c->state & CTRL_DISABLED2)) UpdateControl(r);
+    return 0;
+}
+int pm_gui_ctrl_set_text(int r, const char *s)
+{
+    struct s_ctrl *c;
+    size_t n;
+    if (!s || !pm_gui_ctrl_valid(r)) return -1;
+    n = strlen(s);
+    if (n >= MAXSTRLEN) return -2;
+    c = &Ctrl[r];
+    switch (c->type) {
+    case CTRL_NBRBOX:
+        if (n < 2 || s[0] != '#' || s[1] != '#') return -1;
+        strcpy((char *)c->s, s);
+        c->value = 0;
+        break;
+    case CTRL_FRAME: case CTRL_CAPTION:
+        memset(c->s, ' ', strlen((char *)c->s));
+        UpdateControl(r);
+        /* fall through */
+    case CTRL_DISPLAYBOX: case CTRL_TEXTBOX: case CTRL_FMTBOX:
+        strcpy((char *)c->s, s);
+        break;
+    default: return -1;
+    }
+    if (!(c->state & CTRL_DISABLED2)) UpdateControl(r);
+    return 0;
 }
 /*
  * @cond

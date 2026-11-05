@@ -40,6 +40,8 @@ toolchain and the Raspberry Pi Pico SDK.
   automatically at link time (see below); no edit to the SDK's `gpio.c` is
   required.
 - **arm-none-eabi GCC 13.3.1**
+- **Python 3** — the RP2350 builds use it to embed the C compiler's headers in
+  the firmware; CMake stops if it cannot find it.
 - **TinyUSB master at e20482387 (patched)** — the USB-**host** driver fixes
   (fast USB flash-drive transfers, and reliable enumeration of several devices
   behind a hub) live in a patched TinyUSB tree kept in a **sibling directory**
@@ -86,12 +88,20 @@ Each variant is selected with `-DCOMPILE=<variant>`, which forces the matching
 
 Valid `<variant>` names:
 
-- **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
-- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB`
+- **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `M2P1VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
+- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `M2P2HDMI` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB` &nbsp; `HDMIBTH` &nbsp; `PC3`
 
 (Variant names are case-insensitive on the command line.)
+
+`M2P2HDMI` and `M2P1VGA` set the factory wiring of the Murmulator 2 boards;
+`M2P1VGA` is a test build.
 
 ## Documentation
 
 User manuals and per-feature guides live in [`docs/`](docs/), including the
 main PicoMite user manual and the Advanced Graphics manual (GUI controls).
+
+Native C on the PicoMite (`RUN "file.c"`, the `TCC` command, ELF programs,
+C CSUBs, resident services and the `<picomite/...>` API) is covered in
+[`docs/PicoMite-native-C-support.md`](docs/PicoMite-native-C-support.md), with
+examples and tests in [`C/`](C/).

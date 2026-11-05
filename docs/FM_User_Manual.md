@@ -8,7 +8,7 @@ It is designed for keyboard-driven workflow on serial terminals, VGA, HDMI, and 
 
 - Browse directories in two panels.
 - Sort each panel by name, datetime, or type then name.
-- Launch `.BAS` programs directly.
+- Launch `.BAS` programs, `.C` sources (RP2350), and ELF binaries (both chips, detected by header).
 - Open files in the built-in editor.
 - Copy, rename, delete, and create directories.
 - Mark multiple items and run batch copy/delete operations.
@@ -149,7 +149,9 @@ Any key that is not a printable character (other than the above) exits type-sele
 Press `Enter` (or `F2`) on the selected item:
 
 - **Directory** — enters the directory.
-- **`.BAS` file** — saves FM context and launches the program. FM relaunches automatically when the program ends (see [Program Launch And Return](#program-launch-and-return)).
+- **ELF binary** — detected by the `7F 45 4C 46` header, regardless of filename extension; launches through the normal `RUN` ELF loader on RP2040/RP2350.
+- **`.C` source (RP2350)** — compiles and runs through the normal `RUN` TinyCC path.
+- **`.BAS` file** — runs as BASIC unless its header identifies an ELF. FM relaunches automatically when the program ends (see [Program Launch And Return](#program-launch-and-return)).
 - **Audio file** (`.WAV`, `.FLAC`, `.MP3`, `.MID`/`.MIDI`, `.MOD`) — starts background playback (see [Audio Playback](#audio-playback)). When every marked item in the panel is an audio file, `Enter` plays the marked files as a track list instead, whatever is selected.
 - **Image file** (`.BMP`, `.JPG`, `.PNG`) — displays a full-screen preview (see [Image Preview](#image-preview)).
 - **Any other file** — no action; the filename is shown on the status line.
@@ -230,7 +232,7 @@ Press `F4` or `E` to open the selected file in the built-in editor. The current 
 ### Exiting The Editor
 
 - `ESC` or `F1` — saves (if modified) and returns directly to FM.
-- `F2` inside the editor on a `.BAS` file — saves and runs the program. FM relaunches when the program ends.
+- `F2` inside the editor on a `.BAS` or RP2350 `.C` file — saves and runs the program. ELF signatures are also recognised. FM relaunches when the program ends.
 
 ### Error Location Seek
 
@@ -273,7 +275,7 @@ Image preview requires a graphical display (VGA, HDMI, or LCD). On a serial-only
 
 ## Program Launch And Return
 
-Pressing `Enter` on a `.BAS` file saves FM context (paths, selection, sort, filters) and runs the program using the active panel's drive and directory as the current working directory.
+Pressing `Enter` on a `.BAS`, RP2350 `.C`, or ELF-signature file saves FM context (paths, selection, sort, filters) and runs the program using the active panel's drive and directory as the current working directory. ELF detection is independent of the extension.
 
 When the program finishes (normally, with `END`, or with an error), FM relaunches automatically and restores the saved context. Any error message from the program is shown on the FM status line.
 

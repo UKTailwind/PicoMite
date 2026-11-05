@@ -35,6 +35,11 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#include "core/pm_api.h"
+#include "core/pm_runtime.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h"
+#endif
 #if !defined(USBKEYBOARD) && !defined(PICOMITEBT)
 #include "class/cdc/cdc_device.h"
 #endif
@@ -53,6 +58,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #define GUI_C_KEYWORD CYAN
 #define GUI_C_QUOTE MAGENTA
 #define GUI_C_NUMBER GREEN
+#define GUI_C_C_UNSAFE RED
+#define GUI_C_C_REFUSED CERULEAN
 #define GUI_C_LINE MAGENTA
 #define GUI_C_STATUS WHITE
 
@@ -64,6 +71,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #define VT100_C_KEYWORD "\033[36m" // Cyan                 Cyan
 #define VT100_C_QUOTE "\033[35m"   // Green                Green
 #define VT100_C_NUMBER "\033[32m"  // Red                  Red
+#define VT100_C_C_UNSAFE "\033[91m"  // Native C: unavailable in CSUB
+#define VT100_C_C_REFUSED "\033[94m" // Native C: refused by TinyCC CSUB
 #define VT100_C_LINE "\033[35m"    // White                Grey
 #define VT100_C_STATUS "\033[37m"  // Black                Brown
 #define VT100_C_ERROR "\033[31m"   // Red                  Red
@@ -446,6 +455,11 @@ int curx, cury;               // column and row of the current cursor (in charac
 unsigned char *txtp;          // position of the current cursor in the text being edited
 int drawstatusline;           // true if the status line needs to be redrawn on the next keystroke
 static bool edit_is_bas;      // true when editing a .bas file or in-memory program (enforces 255-char line limit)
+static bool edit_is_c;        // C syntax colours, not BASIC's command table
+/* One-shot: ordinary EDIT/F2 should not clear console output on returning to the prompt. */
+int edit_f2_preserve_output = 0;
+/* EDIT "file" F2: dispatch RUN only after FullScreenEditor has returned. */
+int edit_f2_pending_run = 0;
 int insert;                   // true if the editor is in insert text mode
 int tempx;                    // used to track the prefered x position when up/down arrowing
 int TextChanged;              // true if the program has been modified and therefor a save might be required
@@ -573,7 +587,11 @@ void edit(unsigned char *cmdline, bool cmdfile)
         strcpy(name, (char *)getFstring(argv[0]));
         filename = name;
     }
-    if (CurrentLinePtr && cmdfile)
+    /* Only in-memory source is unconditionally BASIC. File mode is set
+     * below after resolving the default extension. */
+    edit_is_bas = (filename == NULL);
+    edit_is_c = false;
+    if (ProgramRunning() && cmdfile)
         StandardError(10);
     if (argc == 0 && !cmdfile)
         SyntaxError();
@@ -809,7 +827,10 @@ void edit(unsigned char *cmdline, bool cmdfile)
         {
             AppendDefaultExtension(filename, ".bas");
         }
-        if (!fstrstr(filename, ".bas"))
+        const char *ext = strrchr(filename, '.');
+        edit_is_bas = ext != NULL && strcasecmp(ext, ".bas") == 0;
+        edit_is_c = ext && (!strcasecmp(ext, ".c") || !strcasecmp(ext, ".h"));
+        if (!edit_is_bas && !edit_is_c)
             Option.ColourCode = 0;
         p = EdBuff; // (a file that does not exist yet starts empty)
         nbrlines = 0;
@@ -838,7 +859,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
                 if (c == '\n')
                 {
                     nbrlines++;
-                    if (Option.continuation)
+                    if (edit_is_bas && Option.continuation)
                     {
                         strcpy(buff, q);
                         nbrlines += format_string(&buff[0], Option.Width);
@@ -1192,10 +1213,70 @@ static void fm_flush_keyboard_buffer(void)
         ;
 }
 
-static int fm_name_is_bas(const char *name)
+enum { FM_RUN_NONE, FM_RUN_BASIC, FM_RUN_NATIVE };
+
+/* Read the signature on the selected panel's filesystem. Do not use
+ * elf_picomite_is_elf() here: FileSize/BasicFileOpen interpret paths using
+ * the BASIC command context, which can be empty while FM is active. */
+static int fm_file_is_elf(int filesystem, const char *dir, const char *name)
+{
+    char path[FM_PATH_MAX];
+    unsigned char sig[4];
+    int is_elf = 0;
+
+    if (!fm_make_child_path(dir, name, path, sizeof(path)))
+        return 0;
+    if (filesystem == 0)
+    {
+        lfs_file_t file;
+        memset(&file, 0, sizeof(file));
+        if (lfs_file_open(&lfs, &file, path, LFS_O_RDONLY) >= 0)
+        {
+            is_elf = lfs_file_read(&lfs, &file, sig, sizeof(sig)) == sizeof(sig) &&
+                     memcmp(sig, "\177ELF", sizeof(sig)) == 0;
+            lfs_file_close(&lfs, &file);
+        }
+    }
+    else
+    {
+        int oldfs = FatFSFileSystem;
+        int oldabort = OptionFileErrorAbort;
+        FIL file;
+        UINT got = 0;
+        FRESULT result = FR_NOT_READY;
+
+        FatFSFileSystem = filesystem;
+        OptionFileErrorAbort = 0;
+        if (InitSDCard())
+        {
+            result = f_open(&file, path, FA_READ);
+            if (result == FR_OK)
+            {
+                result = f_read(&file, sig, sizeof(sig), &got);
+                f_close(&file);
+            }
+        }
+        OptionFileErrorAbort = oldabort;
+        FatFSFileSystem = oldfs;
+        is_elf = result == FR_OK && got == sizeof(sig) &&
+                 memcmp(sig, "\177ELF", sizeof(sig)) == 0;
+    }
+    return is_elf;
+}
+
+static int fm_run_kind(int filesystem, const char *dir, const char *name,
+                       uint32_t size)
 {
     const char *dot = strrchr(name, '.');
-    return dot != NULL && fm_stricmp(dot, ".bas") == 0;
+
+    /* Match RUN's signature-before-extension rule without changing CWD. */
+    if (size >= 52 && fm_file_is_elf(filesystem, dir, name))
+        return FM_RUN_NATIVE;
+#ifdef rp2350
+    if (dot && fm_stricmp(dot, ".c") == 0)
+        return FM_RUN_NATIVE;
+#endif
+    return dot && fm_stricmp(dot, ".bas") == 0 ? FM_RUN_BASIC : FM_RUN_NONE;
 }
 
 static int fm_panel_name_limit(const fm_panel_t *panel)
@@ -2550,7 +2631,7 @@ static int fm_prompt_text(const char *label, const char *initial, char *out, int
                 temp[--len] = 0;
             continue;
         }
-        if (isprint(c) && len < FF_MAX_LFN)
+        if (pm_isprint(c) && len < FF_MAX_LFN)
         {
             temp[len++] = c;
             temp[len] = 0;
@@ -3621,7 +3702,7 @@ static int fm_prompt_filter(fm_panel_t *panel)
                 temp[--len] = 0;
             continue;
         }
-        if (isprint(c) && len < FF_MAX_LFN - 1)
+        if (pm_isprint(c) && len < FF_MAX_LFN - 1)
         {
             temp[len++] = c;
             temp[len] = 0;
@@ -4051,27 +4132,19 @@ static int fm_copy_marked(fm_panel_t *src, fm_panel_t *dst, char *status, int st
     return copied > 0;
 }
 
-static int fm_run_bas_program(const char *filename, const char *fullpath)
+static int fm_run_bas_program(const char *fullpath)
 {
     unsigned char runarg[MAXSTRLEN + 1];
     unsigned char *saved_cmdline = cmdline;
     int loaded = 0;
 
-    if (filename && filename[0])
+    /* Use the selected panel's absolute path, not a basename resolved
+     * against whichever drive was active before entering FM. */
+    if (fullpath && fullpath[0] &&
+        snprintf((char *)runarg, sizeof(runarg), "\"%s\",", fullpath) < (int)sizeof(runarg))
     {
-        if (snprintf((char *)runarg, sizeof(runarg), "\"%s\",", filename) < (int)sizeof(runarg))
-            loaded = FileLoadProgram(runarg, false, false);
-    }
-
-    // Fallback for edge cases where current drive/path has not yet been fully applied.
-    if (!loaded && fullpath && fullpath[0])
-    {
-        if (snprintf((char *)runarg, sizeof(runarg), "\"%s\",", fullpath) < (int)sizeof(runarg))
-        {
-            cmdline = (unsigned char *)"FM";
-            loaded = FileLoadProgram(runarg, false, false);
-            cmdline = saved_cmdline;
-        }
+        cmdline = (unsigned char *)"FM";
+        loaded = FileLoadProgram(runarg, false, false);
     }
 
     cmdline = saved_cmdline;
@@ -4581,6 +4654,38 @@ static int fm_saved_valid = 0;
 static int fm_program_run_mode = -1;
 static int fm_program_run_font = -1;
 #endif
+/* F4/N editor is dispatched by the prompt after cmd_fm() returns: keeping
+ * FullScreenEditor below cmd_fm() overflows core0's small stack. */
+static char fm_editor_path[FM_PATH_MAX];
+static int fm_editor_run_kind = FM_RUN_NONE;
+
+/* Called by the prompt after an FM-launched EDIT FILE has returned.
+ * Stage the normal RUN command only for file types FM can execute. */
+int fm_editor_prepare_run(void)
+{
+    int n;
+    if (!fm_edit_wants_run || fm_editor_run_kind == FM_RUN_NONE)
+        return 0;
+    n = snprintf((char *)inpbuf, STRINGSIZE, "RUN \"%s\"", fm_editor_path);
+    if (n < 0 || n >= STRINGSIZE)
+        error("FM: RUN path too long");
+
+    fm_edit_wants_run = 0;
+    fm_error_location_valid = 0;
+    fm_error_file[0] = 0;
+    fm_error_line = fm_error_char = 0;
+    fm_pending_edit_seek_valid = 0;
+    fm_sanitize_next_console_input = 1;
+    strncpy(fm_last_launched_bas, fm_editor_path,
+            sizeof(fm_last_launched_bas) - 1);
+    fm_last_launched_bas[sizeof(fm_last_launched_bas) - 1] = 0;
+#if defined(PICOMITEVGA)
+    fm_program_run_mode = DISPLAY_TYPE;
+    fm_program_run_font = PromptFont;
+#endif
+    return 1;
+}
+
 void cmd_fm(void)
 {
     fm_panel_t panels[2];
@@ -4593,6 +4698,7 @@ void cmd_fm(void)
     int context_state = 0;
     int done = 0;
     int run_from_fm = 0;
+    int run_kind = FM_RUN_NONE;
     int edit_from_fm = 0;
 #if defined(PICOMITEVGA)
     /* Re-entry after a BASIC program launched from FM: the program may
@@ -4655,8 +4761,6 @@ void cmd_fm(void)
     bool mode_changed = false;
 #endif
 
-fm_relaunch:
-
     font_changed = false;
 #ifdef PICOMITEVGA
     mode_changed = false;
@@ -4685,7 +4789,7 @@ fm_relaunch:
     if (FrameBuf != NULL || LayerBuf != NULL)
         closeframebuffer('A');
 
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
     if (*cmdline)
         SyntaxError();
@@ -4761,6 +4865,18 @@ fm_relaunch:
         font_changed = true;
         if (Option.Width < FM_MIN_WIDTH)
             error("FM needs at least % columns", FM_MIN_WIDTH);
+    }
+#endif
+
+#ifdef PICOMITEVGA
+    /* Mode-1 coloured text requires tile rows to match character rows.
+     * ClearRuntime() resets tile geometry, then FM restores PromptFont. */
+    if (Option.DISPLAY_CONSOLE && DISPLAY_TYPE == SCREENMODE1 &&
+        gui_font_height >= 8 && (gui_font_width % 8) == 0 &&
+        ytileheight != gui_font_height)
+    {
+        ytileheight = gui_font_height;
+        Y_TILE = (VRes + ytileheight - 1) / ytileheight;
     }
 #endif
 
@@ -5046,7 +5162,7 @@ fm_relaunch:
                     type_select_prefix[--len] = 0;
                 consumed = 1;
             }
-            else if (isprint(c) && c != '/' && len < FF_MAX_LFN)
+            else if (pm_isprint(c) && c != '/' && len < FF_MAX_LFN)
             {
                 type_select_prefix[len++] = (char)((c >= 'a' && c <= 'z') ? mytoupper(c) : c);
                 type_select_prefix[len] = 0;
@@ -5290,13 +5406,9 @@ fm_relaunch:
                     snprintf(status, sizeof(status), "%c:%s", fm_drive_letter(p->filesystem), p->path);
                     need_full_redraw = 1;
                 }
-                else if (fm_name_is_bas(entry.name))
+                else if (fm_make_full_filename(p->filesystem, p->path, entry.name, run_bas_full, sizeof(run_bas_full)) &&
+                         (run_kind = fm_run_kind(p->filesystem, p->path, entry.name, entry.size)) != FM_RUN_NONE)
                 {
-                    if (!fm_make_full_filename(p->filesystem, p->path, entry.name, run_bas_full, sizeof(run_bas_full)))
-                    {
-                        snprintf(status, sizeof(status), "Path too long");
-                        break;
-                    }
                     if (snprintf(run_bas_file, sizeof(run_bas_file), "%s", entry.name) >= (int)sizeof(run_bas_file))
                     {
                         snprintf(status, sizeof(status), "Path too long");
@@ -5423,6 +5535,7 @@ fm_relaunch:
             }
 
             fm_pending_edit_seek_valid = 0;
+            fm_editor_run_kind = fm_run_kind(p->filesystem, p->path, newname, 0);
             snprintf(status, sizeof(status), "Created %s", newname);
             edit_from_fm = 1;
             done = 1;
@@ -5530,6 +5643,7 @@ fm_relaunch:
             {
                 snprintf(status, sizeof(status), "Editing %s", entry.name);
             }
+            fm_editor_run_kind = fm_run_kind(p->filesystem, p->path, entry.name, entry.size);
             edit_from_fm = 1;
             done = 1;
             break;
@@ -5691,7 +5805,6 @@ fm_relaunch:
 
     BreakKey = break_key_save;
 
-fm_check_run:
     if (run_from_fm)
     {
         if (CurrentlyPlaying != P_NOTHING)
@@ -5719,7 +5832,15 @@ fm_check_run:
         fm_program_run_font = PromptFont;
 #endif
         fm_program_launched_from_fm = 1;
-        if (!fm_run_bas_program(run_bas_file, run_bas_full))
+        if (run_kind == FM_RUN_NATIVE)
+        {
+            /* Defer native RUN until FM's large stack frame has returned. */
+            int n = snprintf((char *)inpbuf, STRINGSIZE, "RUN \"%s\"", run_bas_full);
+            if (n < 0 || n >= STRINGSIZE)
+                error("FM: RUN path too long");
+            fm_program_launched_from_fm = 2;
+        }
+        else if (!fm_run_bas_program(run_bas_full))
         {
             fm_program_launched_from_fm = 0;
             fm_last_launched_bas[0] = 0;
@@ -5734,54 +5855,17 @@ fm_check_run:
     }
     if (edit_from_fm)
     {
-        unsigned char *saved_cmdline = cmdline;
+        int n;
         fm_set_default_drive_dir(&panels[active]);
         fm_edit_wants_run = 0;
-        /* Release any temp-string allocations accumulated during the FM
-         * session so that the editor's huge bottom-up GetTempMemory
-         * (EDIT_BUFFER_SIZE ~ heap_memory_size - 5KB) can find a
-         * contiguous run.  On 100KB heaps (VGA RP2040) even a single
-         * stray temp page would otherwise abort the editor with
-         * "Not enough System Heap memory".                                */
+        /* Launch EDIT FILE at the prompt. FM's large stack frame must not
+         * remain live underneath the fullscreen editor. */
+        n = snprintf((char *)inpbuf, STRINGSIZE, "EDIT FILE %s", run_edit_file);
+        if (n < 0 || n >= STRINGSIZE)
+            error("FM: EDIT path too long");
+        strcpy(fm_editor_path, run_bas_full);
         ClearTempMemory();
-        edit((unsigned char *)run_edit_file, false);
-        // FM calls edit() directly; release command-temporary buffers here.
-        ClearTempMemory();
-        cmdline = (unsigned char *)"";
-        cmdline = saved_cmdline;
-
-        if (fm_edit_wants_run && fstrstr(run_bas_full, ".bas"))
-        {
-            // F2 pressed on a .bas file — run it instead of returning to FM.
-            // run_bas_full is still valid; derive run_bas_file from it.
-            const char *bn = strrchr(run_bas_full, '/');
-            strncpy(run_bas_file, bn ? bn + 1 : run_bas_full, sizeof(run_bas_file) - 1);
-            run_bas_file[sizeof(run_bas_file) - 1] = 0;
-            run_edit_file[0] = 0;
-            type_select_prefix[0] = 0;
-            type_select_active = 0;
-            type_select_dirty = 0;
-            type_select_last_input_us = 0;
-            edit_from_fm = 0;
-            run_from_fm = 1;
-            goto fm_check_run;
-        }
-        else
-        {
-            // ESC/F1 or non-.bas file — return to FM as before.
-            run_bas_file[0] = 0;
-            run_bas_full[0] = 0;
-            run_edit_file[0] = 0;
-            type_select_prefix[0] = 0;
-            type_select_active = 0;
-            type_select_dirty = 0;
-            type_select_last_input_us = 0;
-            done = 0;
-            run_from_fm = 0;
-            edit_from_fm = 0;
-            need_full_redraw = 1;
-            goto fm_relaunch;
-        }
+        fm_program_launched_from_fm = 3;
     }
 }
 
@@ -6466,7 +6550,7 @@ static bool EdSaveFile(void *arg)
         return false;
     for (unsigned char *p = EdBuff; *p && !MMerrno; p++)
     {
-        if (Option.continuation && *p == Option.continuation && p[1] == '\n')
+        if (edit_is_bas && Option.continuation && *p == Option.continuation && p[1] == '\n')
         {
             p++; // step over the continuation characters
             continue;
@@ -6606,7 +6690,6 @@ static void EdExport(unsigned char *from, unsigned char *to)
 
 void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdfile)
 {
-    edit_is_bas = (fname == NULL || fstrstr(fname, ".bas") != NULL);
     int c = -1, i;
     unsigned char buf[MAXCLIP + 2], clipboard[MAXCLIP + 2];
     unsigned char *p, *tp, BreakKeySave;
@@ -7376,7 +7459,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 { // (Esc discards the changes: a long line is no reason to refuse that)
                     int line = 0;
                     int i = find_longest_line_length((char *)EdBuff, &line);
-                    if (i > 255 && (fname == NULL || fstrstr(fname, ".bas")))
+                    if (edit_is_bas && i > 255)
                     {
                         char buff[20] = {};
                         sprintf(buff, " LINE %d TOO LONG", line);
@@ -7471,6 +7554,18 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     RestoreContext(false);
                     return;
                 }
+                if (fname && (c == F2 || c == CTRLKEY('W')))
+                {
+                    /* EDIT "file" must RUN the saved file, not fall into the
+                     * generic fname exit below. Defer execution to the prompt
+                     * so the editor's large stack frame is already gone. */
+                    int n = snprintf((char *)inpbuf, STRINGSIZE, "RUN \"%s\"", fname);
+                    if (n < 0 || n >= STRINGSIZE)
+                        error("EDIT: RUN path too long");
+                    edit_f2_pending_run = 1;
+                    nextstmt = (unsigned char *)"\0\0\0";
+                    return;
+                }
                 if (c == ESC || c == CTRLKEY('Q') || c == F1 || fname)
                 {
                     cmdline = NULL;
@@ -7500,6 +7595,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                 cleanserver();
 #endif
                 nextstmt = ProgMemory;
+                edit_f2_preserve_output = 1;
                 clearrepeat();
                 return;
 
@@ -7701,6 +7797,11 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
             case CTRLKEY('A'):
             case F12:
             {
+                if (!edit_is_bas)
+                {
+                    editDisplayMsg((unsigned char *)" BASIC FILES ONLY ");
+                    break;
+                }
                 int keep_blanks = 0;
                 if (beautify_has_stray_blanks())
                 {
@@ -7754,7 +7855,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
             // a normal character
             default:
                 c = buf[0];
-                if (c < ' ' || c > '~')
+                if (!pm_isprint(c))
                     break; // make sure that this is valid
                 TextChanged = true;
                 if (insert || *txtp == '\n' || *txtp == 0)
@@ -8589,6 +8690,40 @@ void MarkMode(unsigned char *cb, unsigned char *buf)
 char *findLine(int ln, int *inmulti)
 {
     unsigned char *p, *q;
+    if (edit_is_c)
+    {
+        /* Reconstruct only the state at the first character of the line.
+         * No cached per-line state, so edits cannot leave stale colours. */
+        int state = 0, esc = 0; // 1: //, 2: /* */, 3: string, 4: character
+        for (p = EdBuff; ln && *p; ++p)
+        {
+            if (*p == '\n')
+            {
+                if (state == 1 || ((state == 3 || state == 4) && !esc)) state = 0;
+                esc = 0;
+                --ln;
+            }
+            else if (state == 2)
+            {
+                if (p[0] == '*' && p[1] == '/') { state = 0; ++p; }
+            }
+            else if (state == 3 || state == 4)
+            {
+                if (esc) esc = 0;
+                else if (*p == '\\') esc = 1;
+                else if (*p == (state == 3 ? '"' : '\'')) state = 0;
+            }
+            else if (state == 0)
+            {
+                if (p[0] == '/' && p[1] == '*') { state = 2; ++p; }
+                else if (p[0] == '/' && p[1] == '/') { state = 1; ++p; }
+                else if (*p == '"') state = 3;
+                else if (*p == '\'') state = 4;
+            }
+        }
+        *inmulti = state == 2 ? 1 : state == 3 ? 3 : state == 4 ? 4 : 0;
+        return (char *)p;
+    }
     *inmulti = false;
     int inquote = false;
     int incomment = false;
@@ -8659,6 +8794,146 @@ int EditCompStr(char *p, char *tkn)
     return false; // or NULL if not
 }
 
+/* C highlighting is lexical only: no TinyCC parser or duplicate API symbol
+ * table in the firmware.  The resolver already searches pm_core_symbols.
+ * The two CSUB rejection lists are kept in their original modules. */
+static void editCEmitColour(int colour, int vt, int force)
+{
+    if (!force && gui_fcolour == colour) return;
+    gui_fcolour = colour;
+    if (!vt) return;
+    switch (colour)
+    {
+        case GUI_C_COMMENT: PrintString(VT100_C_COMMENT); break;
+        case GUI_C_QUOTE: PrintString(VT100_C_QUOTE); break;
+        case GUI_C_NUMBER: PrintString(VT100_C_NUMBER); break;
+        case GUI_C_KEYWORD: PrintString(VT100_C_KEYWORD); break;
+        case GUI_C_C_UNSAFE: PrintString(VT100_C_C_UNSAFE); break;
+        case GUI_C_C_REFUSED: PrintString(VT100_C_C_REFUSED); break;
+        default: PrintString(VT100_C_NORMAL); break;
+    }
+}
+
+static int editCKeyword(const char *id)
+{
+    /* NUL-separated words are smaller than an array of pointers. */
+    static const char words[] =
+        "auto\0break\0case\0char\0const\0continue\0default\0do\0double\0"
+        "else\0enum\0extern\0float\0for\0goto\0if\0inline\0int\0long\0"
+        "register\0restrict\0return\0short\0signed\0sizeof\0static\0"
+        "struct\0switch\0typedef\0union\0unsigned\0void\0volatile\0while\0"
+        "_Bool\0bool\0size_t\0ptrdiff_t\0int8_t\0int16_t\0int32_t\0"
+        "int64_t\0uint8_t\0uint16_t\0uint32_t\0uint64_t\0";
+    const char *w;
+    for (w = words; *w; w += strlen(w) + 1)
+        if (!strcmp(w, id)) return true;
+    return false;
+}
+
+static void SetCColour(unsigned char *p, int vt)
+{
+    /* 0=code, 1=//, 2=block, 3=string, 4=char, 5=block closing /,
+     * 6=block opening *.  The one-character states keep delimiters coloured. */
+    static unsigned char state, escaped, at_bol, directive;
+    static unsigned char *word_end;
+    static int word_colour;
+    unsigned char *q;
+    int colour;
+
+    if (!p || p == (unsigned char *)1 || p == (unsigned char *)2 ||
+        p == (unsigned char *)3)
+    {
+        state = p == (unsigned char *)1 ? 3 : p == (unsigned char *)2 ? 2 :
+                p == (unsigned char *)3 ? 4 : 0;
+        word_end = NULL;
+        escaped = directive = 0;
+        at_bol = !state;
+        editCEmitColour(state == 2 ? GUI_C_COMMENT : state ? GUI_C_QUOTE :
+                        GUI_C_NORMAL, vt, true);
+        return;
+    }
+    if (state == 1 || state == 2 || state == 5 || state == 6)
+    {
+        if (state == 6) state = 2;
+        else if (state == 5) state = 0;
+        else if (state == 2 && *p == '*' && p[1] == '/') state = 5;
+        editCEmitColour(GUI_C_COMMENT, vt, false);
+        return;
+    }
+    if (state == 3 || state == 4)
+    {
+        if (escaped) escaped = 0;
+        else if (*p == '\\') escaped = 1;
+        else if (*p == (state == 3 ? '"' : '\'')) state = 0;
+        editCEmitColour(GUI_C_QUOTE, vt, false);
+        return;
+    }
+    if (word_end && p < word_end)
+    {
+        editCEmitColour(word_colour, vt, false);
+        return;
+    }
+    word_end = NULL;
+    if (at_bol && *p == '#')
+    {
+        at_bol = 0;
+        directive = 1;
+        editCEmitColour(GUI_C_KEYWORD, vt, false);
+        return;
+    }
+    if (*p != ' ' && *p != '\t') at_bol = 0;
+    if (p[0] == '/' && (p[1] == '/' || p[1] == '*'))
+    {
+        state = p[1] == '/' ? 1 : 6;
+        editCEmitColour(GUI_C_COMMENT, vt, false);
+        return;
+    }
+    if (*p == '"' || *p == '\'')
+    {
+        state = *p == '"' ? 3 : 4;
+        editCEmitColour(GUI_C_QUOTE, vt, false);
+        return;
+    }
+    if (isalpha(*p) || *p == '_')
+    {
+        char id[64];
+        size_t len;
+        for (q = p; isalnum(*q) || *q == '_'; ++q) ;
+        len = (size_t)(q - p);
+        word_end = q;
+        colour = GUI_C_NORMAL;
+        if (directive)
+            colour = GUI_C_KEYWORD;
+        else if (len < sizeof(id))
+        {
+            memcpy(id, p, len);
+            id[len] = 0;
+            if (editCKeyword(id)) colour = GUI_C_KEYWORD;
+#ifdef rp2350
+            else if (tcc_pm_csub_refused(id)) colour = GUI_C_C_REFUSED;
+#endif
+            else if (pm_runtime_csub_forbidden(id)) colour = GUI_C_C_UNSAFE;
+            else if (pm_core_resolve_symbol(id)) colour = GUI_C_KEYWORD;
+        }
+        directive = 0;
+        word_colour = colour;
+        editCEmitColour(colour, vt, false);
+        return;
+    }
+    if (isdigit(*p) || (*p == '.' && isdigit(p[1])))
+    {
+        for (q = p; isalnum(*q) || *q == '.' || *q == '_'; ++q)
+            if ((q[1] == '+' || q[1] == '-') &&
+                (*q == 'e' || *q == 'E' || *q == 'p' || *q == 'P')) ++q;
+        word_end = q;
+        word_colour = GUI_C_NUMBER;
+        editCEmitColour(GUI_C_NUMBER, vt, false);
+        return;
+    }
+    if (*p != ' ' && *p != '\t') directive = 0;
+    editCEmitColour(GUI_C_NORMAL, vt, false);
+}
+
 // this function does the syntax colour coding
 // p = pointer to the current character to be printed
 //     or NULL if the colour coding is to be cmdfile to normal
@@ -8667,6 +8942,11 @@ int EditCompStr(char *p, char *tkn)
 // so it must be fed all chars from the start of the line
 void SetColour(unsigned char *p, int DoVT100)
 {
+    if (edit_is_c)
+    {
+        if (Option.ColourCode) SetCColour(p, DoVT100);
+        return;
+    }
     int i;
     unsigned char **pp;
     static int intext = false;
@@ -8982,14 +9262,18 @@ void restoreColourFromLineStart(unsigned char *target)
             ln++;
     SetColour(NULL, false);
     unsigned char *ls = (unsigned char *)findLine(ln, &inmulti);
-    if (inmulti == 3)
+    if (edit_is_c && inmulti == 1)
+        SetColour((unsigned char *)2, false);
+    else if (inmulti == 3)
         SetColour((unsigned char *)1, false);
     else if (inmulti == 4)
-        SetColour((unsigned char *)2, false);
+        SetColour((unsigned char *)(edit_is_c ? 3 : 2), false);
     for (q = ls; q < target && *q && *q != '\n'; q++)
-        if (!inmulti || inmulti == 3)
+        if (edit_is_c || !inmulti || inmulti == 3)
             SetColour(q, false);
-    if (gui_fcolour == GUI_C_COMMENT)
+    if (edit_is_c)
+        editCEmitColour(gui_fcolour, true, true);
+    else if (gui_fcolour == GUI_C_COMMENT)
         PrintString(VT100_C_COMMENT);
     else if (gui_fcolour == GUI_C_QUOTE)
         PrintString(VT100_C_QUOTE);
@@ -9014,22 +9298,25 @@ void printLine(int ln)
     {
         MX470PutC('\r'); // print on the MX470 display
         p = findLine(ln, &inmulti);
-        // Init colour state for continuation lines split inside a string or comment
-        if (inmulti == 3)
-            SetColour((unsigned char *)1, false); // init quote state
+        // Rebuild the C lexical state at the start of any displayed line.
+        if (edit_is_c) SetColour(NULL, false);
+        if (edit_is_c && inmulti == 1)
+            SetColour((unsigned char *)2, false);
+        else if (inmulti == 3)
+            SetColour((unsigned char *)1, false);
         else if (inmulti == 4)
-            SetColour((unsigned char *)2, false); // init comment state
+            SetColour((unsigned char *)(edit_is_c ? 3 : 2), false);
         // skip edx characters, advancing colour state without displaying
         for (i = edx; i > 0 && *p && *p != '\n'; i--)
         {
-            if (!inmulti || inmulti == 3)
+            if (edit_is_c || !inmulti || inmulti == 3)
                 SetColour((unsigned char *)p, false);
             p++;
         }
         i = VWidth;
         while (i && *p && *p != '\n')
         {
-            if (!inmulti || inmulti == 3)
+            if (edit_is_c || !inmulti || inmulti == 3)
                 SetColour((unsigned char *)p, false); // set the colour for the LCD display only
             else if (Option.ColourCode) // (with it off nothing would set the colour back)
                 gui_fcolour = GUI_C_COMMENT;
@@ -9045,15 +9332,16 @@ void printLine(int ln)
     {
         if (Option.ColourCode)
         {
-            // Init colour state for continuation lines split inside a string or comment
-            if (inmulti == 3)
-                SetColour((unsigned char *)1, true); // init quote state
+            if (edit_is_c && inmulti == 1)
+                SetColour((unsigned char *)2, true);
+            else if (inmulti == 3)
+                SetColour((unsigned char *)1, true);
             else if (inmulti == 4)
-                SetColour((unsigned char *)2, true); // init comment state
+                SetColour((unsigned char *)(edit_is_c ? 3 : 2), true);
             // skip edx characters, advancing colour state without emitting codes
             for (i = edx; i > 0 && *p && *p != '\n'; i--)
             {
-                if (!inmulti || inmulti == 3)
+                if (edit_is_c || !inmulti || inmulti == 3)
                     SetColour((unsigned char *)p, false);
                 p++;
             }
@@ -9062,7 +9350,9 @@ void printLine(int ln)
             // (e.g. a comment ' that has scrolled left of the visible area).
             if (edx > 0)
             {
-                if (gui_fcolour == GUI_C_COMMENT)
+                if (edit_is_c)
+                    editCEmitColour(gui_fcolour, true, true);
+                else if (gui_fcolour == GUI_C_COMMENT)
                     PrintString(VT100_C_COMMENT);
                 else if (gui_fcolour == GUI_C_QUOTE)
                     PrintString(VT100_C_QUOTE);
@@ -9096,7 +9386,7 @@ void printLine(int ln)
     {
         if (Option.ColourCode)
         {
-            if (!inmulti || inmulti == 3)
+            if (edit_is_c || !inmulti || inmulti == 3)
                 SetColour((unsigned char *)p, true); // if colour coding is used set the colour for the VT100 emulator
             else
             {
@@ -9393,7 +9683,7 @@ void GetInputString(unsigned char *prompt)
             }
             continue;
         }
-        if (isprint(ch))
+        if (pm_isprint(ch))
         {
             if (len < maxlen)
             {

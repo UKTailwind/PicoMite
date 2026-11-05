@@ -1359,6 +1359,9 @@ END
     array shared with the BASIC so nothing has to be copied across the boundary
     each call. The mmb2csub tool (`user-tools/mmb2csub.py`, described in
     `mmb2csub.pdf`) does the conversion for you, from the BASIC routine itself.
+    On an RP2350 with PSRAM you can also write the C on the board: a CSUB body
+    can name a `.c` file, which is compiled when the program is saved. See
+    `docs/PicoMite-native-C-support.md`.
 
 ### Finding the hot spots
 

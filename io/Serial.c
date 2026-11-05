@@ -47,6 +47,9 @@ extern uint32_t ticks_per_microsecond;
 
 // variables for com2
 int com2 = 0;		  // true if COM2 is enabled
+/* Incremented on every COM1/COM2 close, invalidating C-side handles if
+   BASIC closes and later reopens a port. */
+static uint32_t serial_epoch[2];
 int com2_buf_size;	  // size of the buffer used to receive chars
 int com2_baud = 0;	  // determines the baud rate
 char *com2_interrupt; // pointer to the interrupt routine
@@ -585,12 +588,40 @@ static void cdc_open_failed(int comnbr, const char *what)
 /***************************************************************************************************
 Initialise the serial function including the timer and interrupts.
 ****************************************************************************************************/
-void MIPS16 SerialOpen(unsigned char *spec)
+typedef struct {
+	int baud, rx_size, bits, parity, stop_bits, invert;
+} serial_direct_config;
+
+/* The native C entry bypasses getargs(); both paths use the same UART
+   setup, pin reservations, ring buffers and teardown below. */
+static void MIPS16 serial_open_impl(unsigned char *spec, const serial_direct_config *direct)
 {
 	int baud, i, s2, parity, b7, bufsize, inv = 0, ilevel = 1;
 	char *interrupt;
 
-	getargs(&spec, 21, (unsigned char *)":,"); // this is a macro and must be the first executable stmt
+	if (direct)
+	{
+		if (spec[3] != '1' && spec[3] != '2')
+			error("Invalid COM port");
+		if (direct->baud < Option.CPU_Speed * 1000 / 16 / 65535 || direct->baud > 921600)
+			error("Invalid baud rate");
+		if (direct->rx_size < 2 || direct->rx_size > 65536 ||
+		    (direct->bits != 7 && direct->bits != 8) ||
+		    (direct->stop_bits != 1 && direct->stop_bits != 2) ||
+		    (direct->parity < UART_PARITY_NONE || direct->parity > UART_PARITY_ODD) ||
+		    (direct->invert != 0 && direct->invert != 1))
+			error("Invalid COM specification");
+		baud = direct->baud;
+		bufsize = direct->rx_size;
+		b7 = direct->bits;
+		parity = direct->parity;
+		s2 = direct->stop_bits;
+		inv = direct->invert;
+		interrupt = NULL;
+	}
+	else
+	{
+	getargs(&spec, 21, (unsigned char *)":,"); // BASIC COM specification
 	if (argc != 2 && (argc & 0x01) == 0)
 		error("COM specification");
 
@@ -681,6 +712,7 @@ void MIPS16 SerialOpen(unsigned char *spec)
 		} else
 			TXinterrupt = NULL;
 	*/
+	}
 
 	if (spec[3] == '1')
 	{
@@ -829,6 +861,39 @@ void MIPS16 SerialOpen(unsigned char *spec)
 #endif
 }
 
+void MIPS16 SerialOpen(unsigned char *spec)
+{
+	serial_open_impl(spec, NULL);
+}
+
+void SerialOpenTyped(int port, int baud, int rx_size, int bits, int parity, int stop_bits, int invert)
+{
+	unsigned char name[] = "COM1:";
+	serial_direct_config direct = {baud, rx_size, bits, parity, stop_bits, invert};
+	if (port < 1 || port > 2)
+		error("Invalid COM port");
+	name[3] = '0' + port;
+	serial_open_impl(name, &direct);
+}
+
+unsigned SerialPortEpoch(int port)
+{
+	return port == 1 || port == 2 ? serial_epoch[port - 1] : 0;
+}
+
+int SerialPortIsOpen(int port)
+{
+	return port == 1 ? com1 : port == 2 ? com2 : 0;
+}
+
+/* Both the software queue and the UART shift register must be empty. */
+int SerialTxIdle(int port)
+{
+	if (!SerialPortIsOpen(port) || SerialTxStatus(port))
+		return 0;
+	return (uart_get_hw(port == 1 ? uart0 : uart1)->fr & UART_UARTFR_BUSY_BITS) == 0;
+}
+
 /***************************************************************************************************
 Close a serial port.
 ****************************************************************************************************/
@@ -837,6 +902,7 @@ void MIPS16 SerialClose(int comnbr)
 
 	if (comnbr == 1 && com1)
 	{
+		serial_epoch[0]++;
 		uart_deinit(uart0);
 		com1 = false;
 		com1_interrupt = NULL;
@@ -858,6 +924,7 @@ void MIPS16 SerialClose(int comnbr)
 
 	else if (comnbr == 2 && com2)
 	{
+		serial_epoch[1]++;
 		uart_deinit(uart1);
 		com2 = false;
 		com2_interrupt = NULL;

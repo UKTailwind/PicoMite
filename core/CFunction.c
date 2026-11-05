@@ -30,6 +30,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
  */
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* C CSUBs */
+#endif
+#include "core/elf/elf_picomite.h"
 // Vector to CFunction static RAM
 
 // Vector to CFunction routine called every mSec
@@ -169,6 +173,13 @@ long long int MIPS16 CallCFunction(unsigned char *CmdPtr, unsigned char *ArgList
 
     // run the function in flash
     ii = *p++;
+    if (ii == 3)
+    {
+        elf_picomite_csub_check((const uint32_t *)p);
+#ifdef rp2350
+        tcc_picomite_csub_check((const uint32_t *)p); // TinyCC CSUB image
+#endif
+    }
     p = (unsigned int *)((unsigned int)p | 0x1);
     // Run the CFunction. The cast's arity is the CALLER's business: AAPCS is
     // caller-cleanup, so a blob compiled to take fewer arguments reads the
