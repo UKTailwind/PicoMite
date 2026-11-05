@@ -97,7 +97,7 @@ value is not reported.
 `EDIT "file.c"` opens a source in the full screen editor. F1 saves it and F2
 saves it and runs it as `RUN` does. The file manager runs `.c` files (RP2350)
 and ELF objects with ENTER, and returns when the program ends; F2 in its editor
-runs the file the same way.
+does the same for a `.c` file.
 
 In `.c` and `.h` files the editor does not capitalise BASIC keywords, ignores
 `OPTION CONTINUATION LINES`, and refuses F12 (beautify) with "BASIC FILES ONLY".
