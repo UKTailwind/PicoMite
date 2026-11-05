@@ -147,7 +147,7 @@ See [PicoMite-native-C-support.md](PicoMite-native-C-support.md) for the whole n
 | `External.c/.h` | Pin / PWM / PIO / `SETPIN` / `PORT` / pulse / one-shot hardware command modules. |
 | `Custom.c/.h` | Custom device + PIO + low-level/`POKE`-style commands. |
 | `FileIO.c/.h` | File-system commands (`OPEN`/`PRINT #`/`LOAD`/`SAVE`/…), flash / LittleFS / FatFs glue, file manager. |
-| `Editor.c/.h` | Full-screen program editor (`EDIT`), syntax colouring. |
+| `Editor.c/.h` | Full-screen program editor (`EDIT`), BASIC and C syntax colouring. |
 | `SDCard.c` | SD-card FatFs disk-IO driver (the `diskio` implementation; formerly `mmc_stm32.c`). |
 | `XModem.c/.h` | XMODEM file transfer. |
 
@@ -177,7 +177,8 @@ See [PicoMite-native-C-support.md](PicoMite-native-C-support.md) for the whole n
 
 Sources run with `RUN "file.c"` on an RP2350, and prebuilt relocatable objects
 (`*.elf`). The matching BASIC test programs are `Bas/elf_loader_smoke.bas`,
-`Bas/pm_library_*.bas` and `Bas/pm_resident_*.bas`.
+`Bas/pm_library_*.bas` and `Bas/pm_resident_*.bas`. `C/key_map/` is a resident
+EN/RU keyboard remapper with a Windows-1251 font.
 
 ## tools/ — host-side / build scripts (not compiled into firmware)
 

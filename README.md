@@ -40,6 +40,8 @@ toolchain and the Raspberry Pi Pico SDK.
   automatically at link time (see below); no edit to the SDK's `gpio.c` is
   required.
 - **arm-none-eabi GCC 13.3.1**
+- **Python 3** — the RP2350 builds use it to embed the C compiler's headers in
+  the firmware; CMake stops if it cannot find it.
 - **TinyUSB master at e20482387 (patched)** — the USB-**host** driver fixes
   (fast USB flash-drive transfers, and reliable enumeration of several devices
   behind a hub) live in a patched TinyUSB tree kept in a **sibling directory**

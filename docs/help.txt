@@ -3140,6 +3140,8 @@ during the edit. If no extension is specified the firmware will assume .bas
 Editing a file from disk allows non-Basic files such as html or sprite files
 to be edited without corruption during the tokenising process that happens
 when stored to flash.
+With EDIT fname$ F2 then runs the saved file as RUN does, so a .C source file
+(RP2350) or an ELF program can be edited and run.
 EDIT and EDIT fname$ can only be invoked at the command prompt.
 If you wish to edit a file in a program you can use the EDIT FILE fname$
 command. The command must be used in the top level program and not from within
