@@ -152,7 +152,11 @@ static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq37
    they expand only at their PicoMite.c use sites, where those are in scope. */
 #ifndef HDMI
 #define QVGA_GPIO_FIRST PinDef[Option.VGA_BLUE].GPno
+#ifdef MURMULATOR_M2_VGA222
+#define QVGA_GPIO_NUM 6
+#else
 #define QVGA_GPIO_NUM 4
+#endif
 #define QVGA_GPIO_LAST (QVGA_GPIO_FIRST + QVGA_GPIO_NUM - 1)
 #define QVGA_GPIO_HSYNC PinDef[Option.VGA_HSYNC].GPno
 #define QVGA_GPIO_VSYNC (QVGA_GPIO_HSYNC + 1)

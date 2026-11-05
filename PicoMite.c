@@ -3856,12 +3856,13 @@ uint32_t testPSRAM(void)
         }
 #ifndef HDMI
 #ifdef MURMULATOR_M2P1
-        /* Migrate only the incorrect pin defaults of the first M2P1VGA
-           test build, without erasing the flash storage or user data. */
-        if (Option.VGA_HSYNC == PINMAP[12] && Option.VGA_BLUE == PINMAP[15])
+        /* Migrate the two old M2P1 VGA default pin layouts to RGB222
+           output without erasing the options or the flash filesystem. */
+        if ((Option.VGA_HSYNC == PINMAP[12] && Option.VGA_BLUE == PINMAP[15]) ||
+            (Option.VGA_HSYNC == PINMAP[18] && Option.VGA_BLUE == PINMAP[13]))
         {
             Option.VGA_HSYNC = PINMAP[18];
-            Option.VGA_BLUE = PINMAP[13];
+            Option.VGA_BLUE = PINMAP[12];
             SaveOptions();
         }
 #endif
@@ -4313,6 +4314,10 @@ uint32_t testPSRAM(void)
         piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 1));
         piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 2));
         piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 3));
+#ifdef MURMULATOR_M2_VGA222
+        piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 4));
+        piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 5));
+#endif
         piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.VGA_HSYNC].GPno);
         piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_HSYNC].GPno + 1));
         if (Option.audio_i2s_bclk)

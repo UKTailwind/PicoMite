@@ -8354,12 +8354,9 @@ void ResetOptions(bool startup)
 #else
     Option.VGA_HSYNC = PINMAP[18]; /* GP19 is VSYNC */
 #ifdef MURMULATOR_M2P2_VGA222
-    Option.VGA_BLUE = PINMAP[12];  /* RGB222: GP12..17 */
-    Option.DISPLAY_TYPE = VGA222;  /* 640x480, full 80-column console */
-    Option.CPU_Speed = 252000;
-    Option.DISPLAY_CONSOLE = 1;
+    Option.VGA_BLUE = PINMAP[12];  /* RGB121 framebuffer -> RGB222 GP12..17 */
 #else
-    Option.VGA_BLUE = PINMAP[13];  /* RGB121: GP13..16 */
+    Option.VGA_BLUE = PINMAP[13];  /* Direct RGB121: GP13..16 */
 #endif
 #endif
     Option.KEYBOARD_CLOCK = PINMAP[2];
@@ -8379,12 +8376,11 @@ void ResetOptions(bool startup)
     Option.NoHeartbeat = 1;
 #endif
 #ifdef MURMULATOR_M2P1
-    /* M2P1 VGA: GP12..17 = RGB222, GP18 = HSYNC, GP19 = VSYNC.
-       Keep RGB121 output on the four consecutive GP13..16 lines.
-       GP12 and GP17 remain unconfigured for this temporary test. */
+    /* M2P1 VGA: 4-bit RGB121 framebuffer, expanded to six physical
+       RGB222 outputs on GP12..17. GP18/GP19 provide HSYNC/VSYNC. */
     strcpy((char *)Option.platform, "Murmulator 2");
     Option.VGA_HSYNC = PINMAP[18]; /* VSYNC uses GP19 */
-    Option.VGA_BLUE = PINMAP[13];  /* 4-bit PIO output uses GP13..16 */
+    Option.VGA_BLUE = PINMAP[12];  /* RGB222 PIO output uses GP12..17 */
     Option.KEYBOARD_CLOCK = PINMAP[2];
     Option.KEYBOARD_DATA = PINMAP[3];
     Option.KeyboardConfig = CONFIG_US;

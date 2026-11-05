@@ -167,6 +167,10 @@ void VGArecovery(int pin)
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 1]] = EXT_BOOT_RESERVED;
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 2]] = EXT_BOOT_RESERVED;
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 3]] = EXT_BOOT_RESERVED;
+#ifdef MURMULATOR_M2_VGA222
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 4]] = EXT_BOOT_RESERVED;
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 5]] = EXT_BOOT_RESERVED;
+#endif
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_HSYNC].GPno + 1]] = EXT_BOOT_RESERVED;
 
     if (pin)
@@ -176,6 +180,10 @@ void VGArecovery(int pin)
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 1));
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 2));
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 3));
+#ifdef MURMULATOR_M2_VGA222
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 4));
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 5));
+#endif
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.VGA_HSYNC].GPno);
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_HSYNC].GPno + 1));
     if (Option.audio_i2s_bclk)
@@ -7076,6 +7084,10 @@ void MIPS16 cmd_option(void)
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 1]] = EXT_NOT_CONFIG;
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 2]] = EXT_NOT_CONFIG;
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 3]] = EXT_NOT_CONFIG;
+#ifdef MURMULATOR_M2_VGA222
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 4]] = EXT_NOT_CONFIG;
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 5]] = EXT_NOT_CONFIG;
+#endif
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_HSYNC].GPno + 1]] = EXT_NOT_CONFIG;
         if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
             VGArecovery(pin1);
@@ -7093,6 +7105,14 @@ void MIPS16 cmd_option(void)
         testpin = PINMAP[PinDef[pin2].GPno + 3];
         if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
             VGArecovery(testpin);
+#ifdef MURMULATOR_M2_VGA222
+        for (int offset = 4; offset <= 5; offset++)
+        {
+            testpin = PINMAP[PinDef[pin2].GPno + offset];
+            if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
+                VGArecovery(testpin);
+        }
+#endif
 #ifdef rp2350
         uint64_t map = 0;
         if (Option.audio_i2s_bclk)
@@ -7105,6 +7125,10 @@ void MIPS16 cmd_option(void)
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 1));
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 2));
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 3));
+#ifdef MURMULATOR_M2_VGA222
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 4));
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 5));
+#endif
         map |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[pin1].GPno);
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin1].GPno + 1));
         if ((map & (uint64_t)0xFFFF) && (map & (uint64_t)0xFFFF00000000))

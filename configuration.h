@@ -275,10 +275,14 @@ extern "C"
 #define HEAP_MEMORY_SIZE (228 * 1024)
 #define MAX_PROG_SIZE (168 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
 #define MagicKey 0x5B915FE2
-#ifdef MURMULATOR_M2P2_VGA121
-/* Distinct options signature for the M2P2 4-bit PIO pinout. */
+#if defined(MURMULATOR_M2P2_VGA121)
+/* M2P2 with direct 4-bit RGB121 output. */
 #undef MagicKey
 #define MagicKey 0x4D325641
+#elif defined(MURMULATOR_M2P2_VGA222)
+/* Different video family and flash layout from the original PicoMite build. */
+#undef MagicKey
+#define MagicKey 0x4D325637
 #endif
 #endif
 #endif
@@ -541,15 +545,6 @@ extern "C"
 #define HEAP_MEMORY_SIZE (364 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #define MagicKey 0x196DA0F9
-#ifdef MURMULATOR_M2P2_VGA222
-/* VGA222 adds a framebuffer scanout driver to the native PicoMite build.
- * Keep flash storage clear of the extra firmware; verify with the linker
- * flash_layout_check and memory report before distributing an image. */
-#undef FLASH_TARGET_OFFSET
-#define FLASH_TARGET_OFFSET (1504 * 1024)
-#undef MagicKey
-#define MagicKey 0x4D325636
-#endif
 #endif
 
 #else                     // RP2040

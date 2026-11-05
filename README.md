@@ -94,11 +94,11 @@ Valid `<variant>` names:
 (Variant names are case-insensitive on the command line.)
 
 `M2P2HDMI`, `M2P2VGA` and `M2P1VGA` set the factory wiring of the
-Murmulator 2 boards. `M2P2VGA` is RP2350 VGA with 6-bit RGB222 at
-640x480 by default; set `-DM2P2_VGA_BITS=4` for the 4-bit RGB121 build.
-`buildpicomite.bat M2P2VGA4` builds the latter; the `M2P2VGA4` name is
-an alias in the batch script, not a separate `-DCOMPILE` value.
-See [M2P2 VGA build and pinout](docs/M2P2VGA.md).
+Murmulator 2 boards. Both M2 VGA variants use PicoMiteVGA's 4-bit RGB121
+framebuffer and expand scanlines to RGB222 on GP12..17. `M2P2VGA` is 6-bit
+output by default; set `-DM2P2_VGA_BITS=4` for direct RGB121 on GP13..16.
+`buildpicomite.bat M2P2VGA4` builds that alternate physical pinout.
+See [M2 VGA RGB222 design and pinout](docs/M2_VGA_RGB222.md).
 
 ## Documentation
 

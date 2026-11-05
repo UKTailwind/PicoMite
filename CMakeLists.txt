@@ -379,15 +379,11 @@ set(USES_SUBPROFILE_VARIANTS
 	PC3
 )
 
+# Both M2 boards use the PicoMiteVGA framebuffer and MODE pipeline.
+# The 6-bit scanout converts each 4-bit pixel when a scanline is prepared.
 if(COMPILE STREQUAL "M2P2VGA")
-	if(M2P2_VGA_BITS STREQUAL "4")
-		list(APPEND VGA_VARIANTS M2P2VGA)
-		list(APPEND VGA_PIO_VARIANTS M2P2VGA)
-	else()
-		# VGA222 uses the PICOMITE framebuffer/display path, not QVgaCore.
-		list(APPEND PICOMITE_VARIANTS M2P2VGA)
-		list(APPEND GUI_VARIANTS M2P2VGA)
-	endif()
+	list(APPEND VGA_VARIANTS M2P2VGA)
+	list(APPEND VGA_PIO_VARIANTS M2P2VGA)
 endif()
 
 compile_is_in(IS_RP2350 ${RP2350_VARIANTS})
@@ -687,8 +683,7 @@ if(HAS_GUI OR IS_HDMI OR (IS_VGA AND IS_RP2350))
 	target_sources(PicoMite PRIVATE graphics/GUI.c)
 endif()
 
-if(COMPILE STREQUAL "PICOUSBRP2350" OR COMPILE STREQUAL "PICORP2350" OR COMPILE STREQUAL "PICOBTRP2350" OR COMPILE STREQUAL "PICOBTHRP2350"
-   OR (COMPILE STREQUAL "M2P2VGA" AND M2P2_VGA_BITS STREQUAL "6"))
+if(COMPILE STREQUAL "PICOUSBRP2350" OR COMPILE STREQUAL "PICORP2350" OR COMPILE STREQUAL "PICOBTRP2350" OR COMPILE STREQUAL "PICOBTHRP2350")
 	target_sources(PicoMite PRIVATE graphics/VGA222.c)
 endif()
 
@@ -828,7 +823,12 @@ if(IS_FULL_RP2040)
 endif()
 
 if(USES_VGA_PIO)
-	pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio)
+	if(COMPILE STREQUAL "M2P1VGA" OR
+	   (COMPILE STREQUAL "M2P2VGA" AND M2P2_VGA_BITS STREQUAL "6"))
+		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA222.pio)
+	else()
+		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio)
+	endif()
 endif()
 
 if(USES_USB_HOST)
@@ -1027,9 +1027,10 @@ if(IS_HDMI)
 	endif()
 endif()
 
-# M2P1 VGA reuses the RP2040 PicoMiteVGA PIO scanout unchanged.
+# M2P1 VGA keeps the existing RP2040 PicoMiteVGA graphics pipeline;
+# only the final scanline pixels are expanded to RGB222.
 if(COMPILE STREQUAL "M2P1VGA")
-	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P1)
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P1 MURMULATOR_M2_VGA222)
 endif()
 
 # M2P2 HDMI uses the standard HDMI firmware with factory pin defaults.
@@ -1040,11 +1041,11 @@ endif()
 if(COMPILE STREQUAL "M2P2VGA")
 	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2 MURMULATOR_M2P2_VGA)
 	if(M2P2_VGA_BITS STREQUAL "6")
-		target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2_VGA222)
+		target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2_VGA222 MURMULATOR_M2_VGA222)
 	else()
 		target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2_VGA121)
 	endif()
-	message(STATUS "M2P2VGA: ${M2P2_VGA_BITS}-bit colour, HSYNC=GP18, VSYNC=GP19")
+	message(STATUS "M2P2VGA: RGB121 framebuffer, ${M2P2_VGA_BITS}-bit output, HSYNC=GP18, VSYNC=GP19")
 endif()
 
 if(COMPILE STREQUAL "HDMIBTH")
