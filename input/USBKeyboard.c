@@ -2496,7 +2496,7 @@ void hid_app_task(void)
 		uint8_t c = KeyDown[0];
 		if (!(c == 0 || c == PDOWN || c == PUP || c == CTRLKEY('P') || c == CTRLKEY('L') || c == 25 || c == F5 || c == F4 || c == CTRLKEY('T') /* || (markmode && (c==DEL || c==CTRLKEY(']')))*/))
 		{
-			USR_KEYBRD_ProcessData(c);
+			USR_KEYBRD_ProcessRepeat(c);
 		}
 		//			if(c==PDOWN || c==PUP || c==CTRLKEY('P') || c==CTRLKEY('L') || c==25 || c==F5  || c==F4 || c==CTRLKEY('T')/* || (markmode && (c==DEL || c==CTRLKEY(']')))*/)mmemset(&last_k_info,0,sizeof(HID_KEYBD_Info_TypeDef));
 		keytimer = 0;

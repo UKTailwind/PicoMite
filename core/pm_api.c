@@ -13,6 +13,39 @@
 #include <stdlib.h>
 extern char *DMAinterruptRX, *DMAinterruptTX;
 
+/* Only physical keyboard paths call KeyboardEmit(). A resident owns the
+ * installed callback and must restore its predecessor before unloading.
+ * NULL is the identity mapping. The pointer is deliberately independent
+ * of pm_resident_start/stop and survives BASIC RUN/END. */
+static uint8_t pm_remap_identity(uint8_t code, uint16_t key,
+                                uint8_t modifiers, uint8_t flags)
+{
+    (void)key; (void)modifiers; (void)flags;
+    return code;
+}
+#ifdef rp2350
+/* Keep the one-word hook out of the tightly packed main SRAM region. */
+static pm_remap_fn volatile pm_remap
+    __attribute__((section(".scratch_x.pm_remap")));
+#else
+static pm_remap_fn volatile pm_remap;
+#endif
+
+pm_remap_fn pm_set_remap_fn(pm_remap_fn fn)
+{
+    pm_remap_fn previous = pm_remap;
+    pm_remap = fn; /* Aligned pointer store; NULL restores identity. */
+    return previous ? previous : pm_remap_identity;
+}
+
+/* May be reached from the PS/2 interrupt: no runtime or BASIC calls here. */
+uint8_t KeyboardEmit(uint8_t code, uint16_t key,
+                     uint8_t modifiers, uint8_t flags)
+{
+    pm_remap_fn fn = pm_remap;
+    return fn ? fn(code, key, modifiers, flags) : code;
+}
+
 /* Resident code is fixed in flash LIBRARY. Its data must survive InitHeap(),
  * which clears the BASIC heap on RUN/END. The descriptor is allocated from
  * the separate newlib heap only when a resident is installed; no resident
@@ -1021,6 +1054,7 @@ static const pm_core_symbol pm_core_symbols[] = {
     PM_CORE_SYM(pm_triangle)
     PM_CORE_SYM(pm_refresh)
     PM_CORE_SYM(pm_inkey)
+    PM_CORE_SYM(pm_set_remap_fn)
     PM_CORE_SYM(pm_pin_mode)
     PM_CORE_SYM(pm_pin_write)
     PM_CORE_SYM(pm_pin_read)

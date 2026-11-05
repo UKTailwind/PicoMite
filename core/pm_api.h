@@ -1,6 +1,8 @@
 #ifndef PICOMITE_CORE_PM_API_H
 #define PICOMITE_CORE_PM_API_H
 
+#include <stdint.h>
+
 /* These entry points have no dependency on the TinyCC compiler or arena.
  * Their error boundary is provided by the active firmware run context. */
 int pm_hres(void);
@@ -18,6 +20,9 @@ void pm_triangle(int x0, int y0, int x1, int y1, int x2, int y2,
                  int colour, int fill);
 void pm_refresh(void);
 int pm_inkey(void);
+/* Physical keyboard only: a character to emit or a notification. */
+uint8_t KeyboardEmit(uint8_t code, uint16_t key,
+                     uint8_t modifiers, uint8_t flags);
 void pm_pin_mode(int gp, int mode);
 void pm_pin_write(int gp, int value);
 int pm_pin_read(int gp);

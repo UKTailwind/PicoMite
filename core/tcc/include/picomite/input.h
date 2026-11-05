@@ -14,6 +14,41 @@ int pm_mouse(int channel, int what);
 int pm_usb_device(int port);
 
 #include <stdint.h>
+/* Modifier bit positions match KEYDOWN(7) on HID; PS/2 also reports
+ * physical right Ctrl independently, which legacy KEYDOWN(7) does not. */
+#define PM_KMOD_LALT    0x01u
+#define PM_KMOD_LCTRL   0x02u
+#define PM_KMOD_LGUI    0x04u
+#define PM_KMOD_LSHIFT  0x08u
+#define PM_KMOD_RALT    0x10u
+#define PM_KMOD_RCTRL   0x20u
+#define PM_KMOD_RGUI    0x40u
+#define PM_KMOD_RSHIFT  0x80u
+
+/* Event flags. EMIT means the returned byte enters the console path;
+ * otherwise the callback is notification-only and its return is ignored.
+ * DOWN/UP describe physical transitions. REPEAT is a repeated DOWN.
+ * Key is a HID usage (USB/BT, including modifiers 0xE0..0xE7), or a
+ * PS/2 set-2 scan with bit 8 set for its E0 prefix (PM_REMAP_PS2).
+ * PM_REMAP_MEDIA uses a HID Consumer usage instead of keyboard usage. */
+#define PM_REMAP_EMIT   0x01u
+#define PM_REMAP_DOWN   0x02u
+#define PM_REMAP_UP     0x04u
+#define PM_REMAP_REPEAT 0x08u
+#define PM_REMAP_PS2    0x10u
+#define PM_REMAP_MEDIA  0x20u
+
+/* Physical keyboards only, not CDC/UART/network terminal input.
+ * On EMIT, code is the legacy PicoMite byte and return 0 suppresses it.
+ * Without EMIT, code=0 and the return value is ignored (including plain
+ * Ctrl/Shift/Alt presses and all key-release notifications).
+ * NULL installs the identity mapping. The previous callback is returned.
+ * The caller owns registration and lifetime; no automatic reset on
+ * BASIC END/RUN or resident stop. A resident must restore its predecessor
+ * before unloading. PS/2 calls from IRQ: no blocking, BASIC or heap. */
+typedef uint8_t (*pm_remap_fn)(uint8_t code, uint16_t key,
+                               uint8_t modifiers, uint8_t flags);
+pm_remap_fn pm_set_remap_fn(pm_remap_fn fn);
 #define PM_GAMEPAD_PS4       128u
 #define PM_GAMEPAD_PS3       129u
 #define PM_GAMEPAD_GENERIC   130u

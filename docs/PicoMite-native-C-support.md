@@ -658,7 +658,7 @@ firmware's services are being opened up further in separate headers under
 `picomite/`, one for each subsystem. They may repeat a few declarations of
 `picomite.h`, so a program can include either or both.
 
-The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 31.
+The API has a version, `PM_API_VERSION` (`<picomite/system.h>`), now 33.
 Each version adds functions without removing earlier ones. Check
 `pm_api_version()` before using a newer API; an ELF linked against a firmware
 that lacks a function reports `undefined symbol`. The common runtime exports
@@ -697,6 +697,8 @@ that lacks a function reports `undefined symbol`. The common runtime exports
 | 29 | `resident.h`: explicit DMA claim/start/halt/release, arbitrary resident-owned buffers, manual resource teardown and LIBRARY write guard |
 | 30 | `resident.h`: multiple explicitly claimed physical GPIOs, independent of PIO blocks and GPIO-edge callbacks; no implicit hardware configuration or cleanup |
 | 31 | `resident.h`: one GPIO ownership path for ordinary native I/O and optional edge subscriptions; claim is mandatory, detach/release explicit |
+| 32 | `input.h`: `pm_set_remap_fn` installs a physical-keyboard byte remapper; the caller restores the previous callback explicitly |
+| 33 | `input.h`: physical key/modifier/down/up/repeat event metadata in the remap callback; notification-only events do not enqueue bytes |
 
 ### Resident CSUB service (API v24-v31)
 
