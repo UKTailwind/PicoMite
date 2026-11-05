@@ -49,6 +49,13 @@ int pm_usb_device(int port);
 typedef uint8_t (*pm_remap_fn)(uint8_t code, uint16_t key,
                                uint8_t modifiers, uint8_t flags);
 pm_remap_fn pm_set_remap_fn(pm_remap_fn fn);
+/* Override firmware console/editor isprint handling (not libc isprint).
+ * Only byte values 0..255 are passed by the firmware; the default uses
+ * isprint((unsigned char)code). NULL restores the default. As with remap,
+ * ownership and explicit restoration are the resident's responsibility. */
+typedef int (*pm_isprint_fn)(int code);
+pm_isprint_fn pm_set_isprint_fn(pm_isprint_fn fn);
+int pm_isprint(int code);
 #define PM_GAMEPAD_PS4       128u
 #define PM_GAMEPAD_PS3       129u
 #define PM_GAMEPAD_GENERIC   130u

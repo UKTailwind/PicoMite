@@ -1,4 +1,4 @@
-/* PicoMite API v33: resident EN/RU keyboard remap, Windows-1251 output.
+/* PicoMite API v35: resident EN/RU keyboard remap, Windows-1251 output.
  * RP2350: LIBRARY LOAD uses TinyCC to compile this source in place.
  * RP2040: compile to ARMv6-M soft-float ET_REL and change the quoted
  * filename in key_rus.bas to key_rus.elf.
@@ -10,6 +10,7 @@
 #include <stdint.h>
 #include <picomite.h>
 #include <picomite/input.h>
+#include <picomite/graphics.h>
 #include <picomite/resident.h>
 
 #define KR_MAGIC 0x4B525553u /* 'KRUS' */
@@ -19,7 +20,9 @@ enum {
     KR_PREVIOUS,       /* previous pm_remap_fn, stored as an ARM pointer */
     KR_SIGNATURE,
     KR_SWITCHES,
-    KR_CAPS            /* physical Caps Lock state for punctuation keys */
+    KR_CAPS,           /* physical Caps Lock state for punctuation keys */
+    KR_PREVIOUS_PRINT, /* previous pm_isprint_fn */
+    KR_PREVIOUS_FONT   /* previous 1-based console font override */
 };
 
 #define KR_CTRL  (PM_KMOD_LCTRL  | PM_KMOD_RCTRL)
@@ -178,6 +181,22 @@ static uint8_t keyrus_remap(uint8_t code, uint16_t key,
     return rus_code(code, hid, modifiers, s[KR_CAPS]);
 }
 
+/* The classification hook is used by the native console/editor; it does
+ * not replace libc isprint(). Leave legacy control-key codes unchanged. */
+static int keyrus_isprint(int code)
+{
+    uint32_t *s = pm_resident_state();
+    if (code >= 0 && code <= 255 &&
+        (code >= 0xC0 || code == 0xA8 || code == 0xB8 || code == 0xB9))
+        return 1; /* CP1251 Russian letters, Yo and Numero sign */
+    if (s && s[KR_SIGNATURE] == KR_MAGIC) {
+        pm_isprint_fn previous =
+            (pm_isprint_fn)(uintptr_t)s[KR_PREVIOUS_PRINT];
+        if (previous) return previous(code);
+    }
+    return code >= ' ' && code <= '~';
+}
+
 /* pm_resident_start() keeps a Flash LIBRARY CSUB protected against rewrite.
  * The keyboard callback itself is independent of this cooperative timer. */
 static void keyrus_service(void *state)
@@ -215,6 +234,8 @@ void KeyRus(long long *command)
         s[KR_CAPS] = (uint32_t)(pm_keydown(8) & 1);
         s[KR_SIGNATURE] = KR_MAGIC;
         s[KR_PREVIOUS] = (uint32_t)(uintptr_t)pm_set_remap_fn(keyrus_remap);
+        s[KR_PREVIOUS_PRINT] = (uint32_t)(uintptr_t)pm_set_isprint_fn(keyrus_isprint);
+        s[KR_PREVIOUS_FONT] = (uint32_t)pm_set_console_font(10);
         pm_print("KEY RUS: INSTALLED, EN (CTRL+SHIFT TO SWITCH)\r\n");
         return;
     case 1: /* status */
@@ -232,11 +253,30 @@ void KeyRus(long long *command)
             return;
         }
         {
+            int previous_font = (int)s[KR_PREVIOUS_FONT];
+            int installed_font = pm_set_console_font(previous_font);
+            if (installed_font != 10) {
+                /* Another owner replaced the font override. */
+                (void)pm_set_console_font(installed_font);
+                pm_print("KEY RUS: CONSOLE FONT CHANGED, STOP REFUSED\r\n");
+                return;
+            }
+            pm_isprint_fn previous_print =
+                (pm_isprint_fn)(uintptr_t)s[KR_PREVIOUS_PRINT];
+            pm_isprint_fn installed_print = pm_set_isprint_fn(previous_print);
+            if (installed_print != keyrus_isprint) {
+                /* Another resident replaced the hook: preserve its handler. */
+                (void)pm_set_isprint_fn(installed_print);
+                (void)pm_set_console_font(10);
+                pm_print("KEY RUS: ISPRINT OWNERSHIP CHANGED, STOP REFUSED\r\n");
+                return;
+            }
             pm_remap_fn previous = (pm_remap_fn)(uintptr_t)s[KR_PREVIOUS];
             pm_remap_fn installed = pm_set_remap_fn(previous);
             if (installed != keyrus_remap) {
-                /* Someone else replaced our callback; do not remove it. */
                 (void)pm_set_remap_fn(installed);
+                (void)pm_set_isprint_fn(keyrus_isprint);
+                (void)pm_set_console_font(10);
                 pm_print("KEY RUS: REMAP OWNERSHIP CHANGED, STOP REFUSED\r\n");
                 return;
             }
@@ -245,10 +285,12 @@ void KeyRus(long long *command)
         if (pm_resident_stop() != 0) {
             s[KR_SIGNATURE] = KR_MAGIC;
             (void)pm_set_remap_fn(keyrus_remap);
+            (void)pm_set_isprint_fn(keyrus_isprint);
+            (void)pm_set_console_font(10);
             pm_print("KEY RUS: RESIDENT STOP REFUSED\r\n");
             return;
         }
-        pm_print("KEY RUS: STOPPED; PREVIOUS REMAP RESTORED\r\n");
+        pm_print("KEY RUS: STOPPED; PREVIOUS HOOKS AND FONT RESTORED\r\n");
         return;
     default:
         pm_print("KEY RUS: USE 0=INSTALL, 1=STATUS, 2=STOP\r\n");

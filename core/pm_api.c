@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 extern char *DMAinterruptRX, *DMAinterruptTX;
 
 /* Only physical keyboard paths call KeyboardEmit(). A resident owns the
@@ -44,6 +45,91 @@ uint8_t KeyboardEmit(uint8_t code, uint16_t key,
 {
     pm_remap_fn fn = pm_remap;
     return fn ? fn(code, key, modifiers, flags) : code;
+}
+
+/* Firmware-only printable-byte classification for console and editor.
+ * The resident owns the callback; no implicit cleanup on RUN/END/STOP. */
+static int pm_isprint_default(int code)
+{
+    return code >= 0 && code <= 255 && isprint((unsigned char)code) != 0;
+}
+#ifdef rp2350
+static pm_isprint_fn volatile pm_isprint_handler
+    __attribute__((section(".scratch_x.pm_isprint")));
+#else
+static pm_isprint_fn volatile pm_isprint_handler;
+#endif
+
+pm_isprint_fn pm_set_isprint_fn(pm_isprint_fn fn)
+{
+    pm_isprint_fn previous = pm_isprint_handler;
+    pm_isprint_handler = fn; /* NULL selects the original classification. */
+    return previous ? previous : pm_isprint_default;
+}
+
+int pm_isprint(int code)
+{
+    pm_isprint_fn fn = pm_isprint_handler;
+    return fn ? fn(code) : pm_isprint_default(code);
+}
+
+/* The console-font override is transient, not Option.DefaultFont in flash.
+ * Font availability changes during PrepareProgram() and LIBRARY removal;
+ * resolve it at the prompt, after fonts have been registered. */
+#ifdef rp2350
+static volatile int pm_console_font_override
+    __attribute__((section(".scratch_x.pm_console_font")));
+static int pm_console_font_saved_prompt
+    __attribute__((section(".scratch_x.pm_console_font_saved")));
+#else
+static volatile int pm_console_font_override;
+static int pm_console_font_saved_prompt;
+#endif
+
+int pm_set_console_font(int font)
+{
+    int previous = pm_console_font_override;
+    int selected;
+    if (font < 0 || font > FONT_TABLE_SIZE)
+        return -1;
+    /* Remember the original prompt font before the first override. */
+    if (!previous && font)
+        pm_console_font_saved_prompt = PromptFont;
+    else if (previous && !font) {
+        int saved = pm_console_font_saved_prompt;
+        PromptFont = saved > 0 && ((unsigned)saved >> 4) < FONT_TABLE_SIZE &&
+                     FontTable[(unsigned)saved >> 4] ? saved : Option.DefaultFont;
+    }
+    pm_console_font_override = font; /* 0: no override; otherwise 1-based. */
+    /* The prompt path applies this override only at the NEXT prompt.  A
+     * resident can also be stopped from within a BASIC program: its next
+     * PRINT must already use the restored font.  Do not change PromptFont
+     * or the VGA/HDMI tile-colour geometry (cmd_font() does both). */
+    selected = pm_console_font_for_prompt();
+    if (Option.DISPLAY_CONSOLE && FontTable[selected >> 4])
+        SetFont(selected);
+    return previous;
+}
+
+int pm_console_font_for_prompt(void)
+{
+    int font = pm_console_font_override;
+    if (font > 0 && font <= FONT_TABLE_SIZE && FontTable[font - 1]) {
+        /* EDIT takes its entry/exit font from PromptFont, not gui_font. */
+        PromptFont = ((font - 1) << 4) | 1;
+        return PromptFont;
+    }
+    /* A removed LIBRARY may make the selected font unavailable. */
+    if (font > 0) {
+        int saved = pm_console_font_saved_prompt;
+        PromptFont = saved > 0 && ((unsigned)saved >> 4) < FONT_TABLE_SIZE &&
+                     FontTable[(unsigned)saved >> 4] ? saved : Option.DefaultFont;
+    } else if (PromptFont <= 0 ||
+               ((unsigned)PromptFont >> 4) >= FONT_TABLE_SIZE ||
+               !FontTable[(unsigned)PromptFont >> 4]) {
+        PromptFont = Option.DefaultFont;
+    }
+    return PromptFont;
 }
 
 /* Resident code is fixed in flash LIBRARY. Its data must survive InitHeap(),
@@ -1055,6 +1141,9 @@ static const pm_core_symbol pm_core_symbols[] = {
     PM_CORE_SYM(pm_refresh)
     PM_CORE_SYM(pm_inkey)
     PM_CORE_SYM(pm_set_remap_fn)
+    PM_CORE_SYM(pm_set_isprint_fn)
+    PM_CORE_SYM(pm_isprint)
+    PM_CORE_SYM(pm_set_console_font)
     PM_CORE_SYM(pm_pin_mode)
     PM_CORE_SYM(pm_pin_write)
     PM_CORE_SYM(pm_pin_read)

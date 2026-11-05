@@ -2631,7 +2631,7 @@ static int fm_prompt_text(const char *label, const char *initial, char *out, int
                 temp[--len] = 0;
             continue;
         }
-        if (isprint(c) && len < FF_MAX_LFN)
+        if (pm_isprint(c) && len < FF_MAX_LFN)
         {
             temp[len++] = c;
             temp[len] = 0;
@@ -3702,7 +3702,7 @@ static int fm_prompt_filter(fm_panel_t *panel)
                 temp[--len] = 0;
             continue;
         }
-        if (isprint(c) && len < FF_MAX_LFN - 1)
+        if (pm_isprint(c) && len < FF_MAX_LFN - 1)
         {
             temp[len++] = c;
             temp[len] = 0;
@@ -5150,7 +5150,7 @@ void cmd_fm(void)
                     type_select_prefix[--len] = 0;
                 consumed = 1;
             }
-            else if (isprint(c) && c != '/' && len < FF_MAX_LFN)
+            else if (pm_isprint(c) && c != '/' && len < FF_MAX_LFN)
             {
                 type_select_prefix[len++] = (char)((c >= 'a' && c <= 'z') ? mytoupper(c) : c);
                 type_select_prefix[len] = 0;
@@ -7843,7 +7843,7 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
             // a normal character
             default:
                 c = buf[0];
-                if (c < ' ' || c > '~')
+                if (!pm_isprint(c))
                     break; // make sure that this is valid
                 TextChanged = true;
                 if (insert || *txtp == '\n' || *txtp == 0)
@@ -9671,7 +9671,7 @@ void GetInputString(unsigned char *prompt)
             }
             continue;
         }
-        if (isprint(ch))
+        if (pm_isprint(ch))
         {
             if (len < maxlen)
             {

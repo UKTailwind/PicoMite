@@ -34,6 +34,12 @@ void pm_text(int x, int y, const char *s, const char *align, int font, int scale
 int pm_font_width(int font, int scale);
 int pm_font_height(int font, int scale);
 
+/* Local console prompt font override: 0 disables, 1..FONT_TABLE_SIZE selects
+ * a registered font. Returns the previous override, or -1 if invalid.
+ * The resident owns and explicitly restores this setting. FONT and the
+ * program's current graphics font are not changed by registration. */
+int pm_set_console_font(int font);
+
 void pm_draw_box(int x, int y, int w, int h, int lw, int c, int fill);
 
 void pm_draw_rbox(int x, int y, int w, int h, int r, int c, int fill);

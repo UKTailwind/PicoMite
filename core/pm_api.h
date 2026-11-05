@@ -23,6 +23,10 @@ int pm_inkey(void);
 /* Physical keyboard only: a character to emit or a notification. */
 uint8_t KeyboardEmit(uint8_t code, uint16_t key,
                      uint8_t modifiers, uint8_t flags);
+/* Console/editor printable-byte classification; defaults to libc isprint. */
+int pm_isprint(int code);
+/* Internal: choose a registered font for the next local console prompt. */
+int pm_console_font_for_prompt(void);
 void pm_pin_mode(int gp, int mode);
 void pm_pin_write(int gp, int value);
 int pm_pin_read(int gp);

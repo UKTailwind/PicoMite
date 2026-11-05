@@ -1418,7 +1418,7 @@ uint8_t PSRAMpin;
         if (ConsoleRedirect)
             return c; // output sent to #n leaves the console's column alone (and a listing unwrapped)
 #endif
-        if (isprint(c))
+        if (pm_isprint((unsigned char)c))
             MMCharPos++;
         if (c == '\r')
         {
@@ -1745,10 +1745,10 @@ int __not_in_flash_func(MMInkey)(void)
                     continue; // for files loop around looking for the following newline
             }
 
-            if (filenbr == 0 && !isprint(c))
+            if (filenbr == 0 && !pm_isprint(c))
                 continue; // ignore stray console control codes
 
-            if (isprint(c))
+            if (pm_isprint(c))
             {
                 if (filenbr == 0 && EchoOption)
                     MMputchar(c, 1); // The console requires that chars be echoed
@@ -2272,7 +2272,7 @@ int __not_in_flash_func(MMInkey)(void)
                     break;
 
                 default:
-                    if (buf[0] >= ' ' && buf[0] < 0x7f)
+                    if (pm_isprint(buf[0]))
                     {
                         i = CharIndex;
                         j = strlen((const char *)inpbuf);
@@ -4764,7 +4764,7 @@ uint32_t testPSRAM(void)
             bool edit_prompt_inline = false;
             if (Option.DISPLAY_CONSOLE)
             {
-                SetFont(PromptFont);
+                SetFont(pm_console_font_for_prompt());
                 gui_fcolour = PromptFC;
                 gui_bcolour = PromptBC;
                 // The program may have left the cursor on the bottom line while

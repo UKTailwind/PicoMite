@@ -1,4 +1,4 @@
-' PicoMite API v33: Flash LIBRARY wrapper for key_rus.c.
+' PicoMite API v34: Flash LIBRARY wrapper for key_rus.c.
 ' On RP2350, TinyCC compiles the C source when LIBRARY LOAD runs.
 ' Copy BOTH files to the same directory on the PicoMite (e.g. B:/key_map/).
 '
@@ -8,12 +8,11 @@
 '   KeyRus 1    ' report EN/RU mode
 '   KeyRus 2    ' restore previous remapper, stop resident
 '
-' RP2040: compile key_rus.c to an ARMv6-M ET_REL key_rus.elf on a PC,
-' then replace the quoted filename below with "key_rus.elf".
+' RP2040: compile key_rus.c to an ARMv6-M ET_REL key_rus.elf on a PC.
 ' Re-loading unchanged BAS will not rebuild a changed C file: after
 ' KeyRus 2 use LIBRARY DELETE, then LIBRARY LOAD to force a rebuild.
 CSUB KeyRus INTEGER
-  "key_rus.c"
+  "key_rus.elf"
 END CSUB
 
 ' 8x16 bitmap font, codes 0x20..0xFF
