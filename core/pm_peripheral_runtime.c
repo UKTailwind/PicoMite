@@ -16,7 +16,8 @@
 static int pm_runtime_adc_pin(int gp, int raw)
 {
     int pin;
-    if (!pm_runtime_is_running()) error("ADC requires a running C program");
+    /* This is a synchronous read of a BASIC-configured pin, with no RUN
+     * allocations or retained callbacks. It is also valid from CSUB. */
     pin = codemap(gp);
     if (IsInvalidPin(pin)) error("Invalid ADC pin");
     if (ADCopen || ADCDualBuffering || dmarunning) error("ADC in use");

@@ -402,14 +402,26 @@ After that:
   `<picomite/memory.h>`, which needs a C program's run).
 - `printf`, `puts` and the other console *output* functions work and print
   on the MMBasic console.
+- **Additional CSUB-compatible services** (also available from a C `RUN`):
+  `pm_adc_read()` and `pm_adc_read_raw()` read an already configured ADC
+  pin, subject to the firmware's normal pin and ADC-busy checks.
+  `pm_ctrlval_set_number()` changes an existing GUI control (where GUI
+  controls are supported). `pm_pio_available()` and `pm_pio_idle()` are
+  read-only PIO availability/idle-state queries. These calls do not create
+  RUN-owned C allocations, callbacks or peripheral handles.
 - **Not available in a CSUB**, because a CSUB runs outside any C program:
   `malloc calloc realloc free strdup exit abort`, console input
   (`getchar fgetc getc fgets`, `stdin`) and files
   (`fopen fclose fread fwrite fseek ftell rewind feof ferror`,
-  `opendir readdir closedir`), `pm_alloc`, `pm_free` and `pm_settick`. Using one is reported as `undefined symbol`
-  when the program is saved. `pm_execute`, `pm_eval_*` and `pm_try` work,
-  and `pm_var` (`<picomite/vars.h>`) reaches the calling program's
-  variables by name.
+  `opendir readdir closedir`), `pm_alloc`, `pm_free` and `pm_settick`.
+  RUN-owned `pm_serial_*`, `pm_i2c_*`, `pm_spi_*`, `pm_pwm_*`, PIO
+  configuration/DMA/callback APIs and `pm_gui_on_event()` also remain
+  restricted. Other prohibited services include `pm_gpio_on_edge()`,
+  `pm_gamepad_on_change()`, `pm_gui()`, `pm_gui_poll()` and
+  `pm_ctrlval_set_text()`. Using a prohibited symbol is reported as
+  `undefined symbol` when the CSUB is linked. `pm_execute`,
+  `pm_eval_*` and `pm_try` work, and `pm_var` (`<picomite/vars.h>`)
+  reaches the calling program's variables by name.
 - An MMBasic error in a `pm_` call (an invalid pin, for example) is reported
   as that error at the CSUB's call, as for any MMBasic command.
 

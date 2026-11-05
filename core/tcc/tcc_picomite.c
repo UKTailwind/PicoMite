@@ -1089,7 +1089,7 @@ static const char *const pm_csub_refused[] = {
     "pm_i2c_open", "pm_i2c_close", "pm_i2c_transfer", "pm_i2c_write",
     "pm_i2c_read", "pm_i2c_probe",
     "pm_spi_open", "pm_spi_close", "pm_spi_transfer", "pm_spi_write",
-    "pm_spi_read", "pm_adc_read", "pm_adc_read_raw",
+    "pm_spi_read",
     "pm_pwm_open", "pm_pwm_set_duty", "pm_pwm_set_frequency", "pm_pwm_close", NULL};
 
 /* Shared with EDIT: use the exact same refusal list as CSUB linking. */

@@ -267,8 +267,8 @@ bool pm_runtime_csub_forbidden(const char *name)
         "pm_gpio_on_edge", "pm_gpio_poll",
         "pm_gamepad_on_change", "pm_gamepad_poll",
         "pm_gui_on_event", "pm_gui_poll", "pm_gui",
-        "pm_ctrlval_set_number", "pm_ctrlval_set_text",
-        "pm_adc_read", "pm_adc_read_raw", "pm_pwm_open",
+        "pm_ctrlval_set_text",
+        "pm_pwm_open",
         "pm_pwm_set_duty", "pm_pwm_set_frequency", "pm_pwm_close",
         "pm_serial_open", "pm_serial_read", "pm_serial_write",
         "pm_serial_available", "pm_serial_flush", "pm_serial_close",
@@ -276,7 +276,7 @@ bool pm_runtime_csub_forbidden(const char *name)
         "pm_i2c_read", "pm_i2c_write", "pm_i2c_probe",
         "pm_spi_open", "pm_spi_close", "pm_spi_transfer",
         "pm_spi_write", "pm_spi_read",
-        "pm_pio_available", "pm_pio_exec", "pm_pio_write", "pm_pio_read",
+        "pm_pio_exec", "pm_pio_write", "pm_pio_read",
         "pm_pio_start", "pm_pio_stop", "pm_pio_init_machine",
         "pm_pio_assemble",
         "pm_pio_dma_rx", "pm_pio_dma_tx", "pm_pio_dma_busy",
@@ -285,7 +285,7 @@ bool pm_runtime_csub_forbidden(const char *name)
         "pm_pio_clear", "pm_pio_flevel", "pm_pio_fstat",
         "pm_pio_fdebug", "pm_pio_readfifo", "pm_pio_dma_pointer",
         "pm_pio_on_fifo", "pm_pio_on_dma_done", "pm_pio_poll",
-        "pm_pio_configure", "pm_pio_sync", "pm_pio_idle",
+        "pm_pio_configure", "pm_pio_sync",
         "pm_pio_writefifo", "pm_pio_set_base", NULL
     };
     const char *const *p;
