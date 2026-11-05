@@ -4868,6 +4868,18 @@ void cmd_fm(void)
     }
 #endif
 
+#ifdef PICOMITEVGA
+    /* Mode-1 coloured text requires tile rows to match character rows.
+     * ClearRuntime() resets tile geometry, then FM restores PromptFont. */
+    if (Option.DISPLAY_CONSOLE && DISPLAY_TYPE == SCREENMODE1 &&
+        gui_font_height >= 8 && (gui_font_width % 8) == 0 &&
+        ytileheight != gui_font_height)
+    {
+        ytileheight = gui_font_height;
+        Y_TILE = (VRes + ytileheight - 1) / ytileheight;
+    }
+#endif
+
     if (Option.Height < 8)
         error("FM needs at least 8 rows");
 
