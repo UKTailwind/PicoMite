@@ -8344,12 +8344,24 @@ void ResetOptions(bool startup)
     }
 #endif
 #ifdef MURMULATOR_M2P2
-    /* M2P2 HDMI factory wiring, used on a fresh options sector or OPTION RESET. */
+    /* M2P2 common board wiring, used on a fresh options sector or OPTION RESET. */
     strcpy((char *)Option.platform, "Murmulator 2");
+#ifndef MURMULATOR_M2P2_VGA
     Option.HDMIclock = 1;
     Option.HDMId0 = 3;
     Option.HDMId1 = 5;
     Option.HDMId2 = 7;
+#else
+    Option.VGA_HSYNC = PINMAP[18]; /* GP19 is VSYNC */
+#ifdef MURMULATOR_M2P2_VGA222
+    Option.VGA_BLUE = PINMAP[12];  /* RGB222: GP12..17 */
+    Option.DISPLAY_TYPE = VGA222;  /* 640x480, full 80-column console */
+    Option.CPU_Speed = 252000;
+    Option.DISPLAY_CONSOLE = 1;
+#else
+    Option.VGA_BLUE = PINMAP[13];  /* RGB121: GP13..16 */
+#endif
+#endif
     Option.KEYBOARD_CLOCK = PINMAP[2];
     Option.KEYBOARD_DATA = PINMAP[3];
     Option.KeyboardConfig = CONFIG_US;

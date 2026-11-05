@@ -34,7 +34,7 @@ if errorlevel 1 (
 
 :: Target lists: space separated "COMPILE:outputfilename" entries
 set "targets_rp2040=PICO:PicoMiteRP2040 PICOMIN:PicoMiteRP2040MIN PICOUSB:PicoMiteRP2040USB VGA:PicoMiteRP2040VGA M2P1VGA:PicoMiteM2P1VGA VGAUSB:PicoMiteRP2040VGAUSB WEB:WebMiteRP2040"
-set "targets_rp2350=WEBRP2350:WebMiteRP2350 VGARP2350:PicoMiteRP2350VGA VGAUSBRP2350:PicoMiteRP2350VGAUSB PICORP2350:PicoMiteRP2350 PICOUSBRP2350:PicoMiteRP2350USB PICOBTRP2350:PicoMiteRP2350BT PICOBTHRP2350:PicoMiteRP2350BTH HDMI:PicoMiteHDMI M2P2HDMI:PicoMiteM2P2HDMI HDMIUSB:PicoMiteHDMIUSB HDMIWEB:PicoMiteHDMIWEB HDMIBTH:PicoMiteHDMIBTH PC3:PicoMitePC3"
+set "targets_rp2350=WEBRP2350:WebMiteRP2350 VGARP2350:PicoMiteRP2350VGA VGAUSBRP2350:PicoMiteRP2350VGAUSB PICORP2350:PicoMiteRP2350 PICOUSBRP2350:PicoMiteRP2350USB PICOBTRP2350:PicoMiteRP2350BT PICOBTHRP2350:PicoMiteRP2350BTH HDMI:PicoMiteHDMI M2P2HDMI:PicoMiteM2P2HDMI M2P2VGA:PicoMiteM2P2VGA M2P2VGA4:PicoMiteM2P2VGA4 HDMIUSB:PicoMiteHDMIUSB HDMIWEB:PicoMiteHDMIWEB HDMIBTH:PicoMiteHDMIBTH PC3:PicoMitePC3"
 
 :: Parse the optional build target argument
 ::   (none)   -> build everything
@@ -89,7 +89,7 @@ if "%valid%"=="0" (
     echo.
     echo Valid variants:
     echo   RP2040: PICO PICOMIN PICOUSB VGA M2P1VGA VGAUSB WEB
-    echo   RP2350: WEBRP2350 VGARP2350 VGAUSBRP2350 PICORP2350 PICOUSBRP2350 PICOBTRP2350 PICOBTHRP2350 HDMI M2P2HDMI HDMIUSB HDMIWEB HDMIBTH PC3
+    echo   RP2350: WEBRP2350 VGARP2350 VGAUSBRP2350 PICORP2350 PICOUSBRP2350 PICOBTRP2350 PICOBTHRP2350 HDMI M2P2HDMI M2P2VGA M2P2VGA4 HDMIUSB HDMIWEB HDMIBTH PC3
     endlocal
     exit /b 1
 )
@@ -245,6 +245,13 @@ exit /b 0
 set "compile=%~1"
 set "filename=%~2"
 set "failed_target=%compile%"
+set "cmake_compile=%compile%"
+set "vga_bits="
+if /i "%compile%"=="M2P2VGA" set "vga_bits=6"
+if /i "%compile%"=="M2P2VGA4" (
+    set "cmake_compile=M2P2VGA"
+    set "vga_bits=4"
+)
 
 echo ========================================
 echo Building %compile%
@@ -254,7 +261,11 @@ rem CMAKE_BUILD_TYPE is pinned: the build dir is reused across variants and can
 rem inherit a stale Debug configuration from a VSCode/CMake-Tools session, which
 rem silently produces larger, less-optimised images. Release is the only thing
 rem this script should ever build.
-cmake -G "%generator%" -DCOMPILE=%compile% -DCMAKE_BUILD_TYPE=Release .. || exit /b 1
+if defined vga_bits (
+    cmake -G "%generator%" -DCOMPILE=%cmake_compile% -DM2P2_VGA_BITS=%vga_bits% -DCMAKE_BUILD_TYPE=Release .. || exit /b 1
+) else (
+    cmake -G "%generator%" -DCOMPILE=%cmake_compile% -DCMAKE_BUILD_TYPE=Release .. || exit /b 1
+)
 nmake || exit /b 1
 
 rem The flash / RAM / heap / lfs-alignment checks run BEFORE the .uf2 is

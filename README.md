@@ -87,12 +87,16 @@ Each variant is selected with `-DCOMPILE=<variant>`, which forces the matching
 Valid `<variant>` names:
 
 - **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `M2P1VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
-- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `M2P2HDMI` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB` &nbsp; `HDMIBTH` &nbsp; `PC3`
+- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `M2P2HDMI` &nbsp; `M2P2VGA` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB` &nbsp; `HDMIBTH` &nbsp; `PC3`
 
 (Variant names are case-insensitive on the command line.)
 
-`M2P2HDMI` and `M2P1VGA` set the factory wiring of the Murmulator 2 boards;
-`M2P1VGA` is a test build.
+`M2P2HDMI`, `M2P2VGA` and `M2P1VGA` set the factory wiring of the
+Murmulator 2 boards. `M2P2VGA` is RP2350 VGA with 6-bit RGB222 at
+640x480 by default; set `-DM2P2_VGA_BITS=4` for the 4-bit RGB121 build.
+`buildpicomite.bat M2P2VGA4` builds the latter; the `M2P2VGA4` name is
+an alias in the batch script, not a separate `-DCOMPILE` value.
+See [M2P2 VGA build and pinout](docs/M2P2VGA.md).
 
 ## Documentation
 
