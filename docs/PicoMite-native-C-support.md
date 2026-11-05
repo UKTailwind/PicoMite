@@ -92,6 +92,30 @@ value is not reported.
 
 ---
 
+### Editing C on the board
+
+`EDIT "file.c"` opens a source in the full screen editor. F1 saves it and F2
+saves it and runs it as `RUN` does. The file manager runs `.c` files (RP2350)
+and ELF objects with ENTER, and returns when the program ends; F2 in its editor
+runs the file the same way.
+
+In `.c` and `.h` files the editor does not capitalise BASIC keywords, ignores
+`OPTION CONTINUATION LINES`, and refuses F12 (beautify) with "BASIC FILES ONLY".
+With `OPTION COLOURCODE ON` the colouring follows C:
+
+| Colour | Meaning |
+|---|---|
+| Yellow | Comments |
+| Magenta | Strings and character constants |
+| Green | Numbers |
+| Cyan | C keywords, preprocessor directives and firmware API names |
+| Red | An API name that a CSUB cannot use |
+| Cerulean | An API name that the built-in compiler refuses in a CSUB (RP2350) |
+
+The colouring is lexical: the editor does not compile the file, so a name is
+coloured wherever it appears, and a program that is not a CSUB can use the red
+and cerulean names freely.
+
 ## TCC "command line"
 
 `TCC` runs TinyCC with the given command line, much as `tcc` runs on a PC.
@@ -1375,6 +1399,18 @@ int main(void)
 }
 ```
 
+```c
+int pm_set_console_font(int font);
+```
+
+Overrides the font of the local console. 0 removes the override; 1 to
+`FONT_TABLE_SIZE` selects a registered font, as `FONT` numbers them. It returns
+the previous override, or -1 if `font` is out of range. A font that is not
+registered falls back to the normal prompt font. The override does not change
+`FONT` or the program's current graphics font, and it is applied again after a
+program or library registers its fonts. It is meant for a resident, which owns
+the setting and must restore the previous value before it stops.
+
 #### `<picomite/input.h>`
 
 ```c
@@ -1435,6 +1471,46 @@ if (ch && pm_execute_try("GUI CURSOR ON 0, 320, 240") == 0 &&
 ...
 if (pm_mouse(ch, 'L')) { int x = pm_mouse(ch, 'X'), y = pm_mouse(ch, 'Y'); ... }
 ```
+
+Physical keyboards can be remapped, for example for another language. This
+covers USB, Bluetooth and PS/2 keyboards, not CDC, UART or network terminals:
+
+```c
+typedef uint8_t (*pm_remap_fn)(uint8_t code, uint16_t key,
+                               uint8_t modifiers, uint8_t flags);
+pm_remap_fn pm_set_remap_fn(pm_remap_fn fn);
+
+typedef int (*pm_isprint_fn)(int code);
+pm_isprint_fn pm_set_isprint_fn(pm_isprint_fn fn);
+int pm_isprint(int code);
+```
+
+`pm_set_remap_fn()` installs the callback and returns the previous one; NULL
+installs the identity mapping. `flags` holds:
+
+| Flag | Meaning |
+|---|---|
+| `PM_REMAP_EMIT` | `code` is about to enter the console path. The return value replaces it, and 0 suppresses it |
+| `PM_REMAP_DOWN`, `PM_REMAP_UP` | A physical press or release |
+| `PM_REMAP_REPEAT` | A repeated press |
+| `PM_REMAP_PS2` | `key` is a PS/2 set-2 scan code, with bit 8 set for its E0 prefix; otherwise it is a HID usage |
+| `PM_REMAP_MEDIA` | `key` is a HID Consumer usage |
+
+Without `PM_REMAP_EMIT` the call is only a notification: `code` is 0 and the
+return value is ignored. That includes plain Ctrl, Shift and Alt presses and
+every release. `modifiers` uses the `PM_KMOD_*` bits, which match `KEYDOWN(7)`
+on HID; PS/2 also reports the right Ctrl key separately. On PS/2 the callback
+runs in an interrupt, so it must not block, call BASIC or use the heap.
+
+`pm_set_isprint_fn()` overrides which byte values the firmware's console and
+editor treat as printable, which lets a code page such as Windows-1251 display.
+It does not change libc's `isprint`. `pm_isprint()` asks the current
+classification, and NULL restores the default.
+
+Neither hook is reset by `END`, `RUN` or stopping a resident. The caller owns
+them and must restore the previous callback before its code goes away.
+[`C/key_map/key_rus.c`](../C/key_map/key_rus.c) is a complete example: a resident
+EN/RU layout switched with Ctrl+Shift.
 
 #### `<picomite/framebuffer.h>`: FRAMEBUFFER and BLIT
 
@@ -1714,9 +1790,9 @@ Both functions reject unconfigured or reserved pins, an active BASIC
 `ADC OPEN` session, and ongoing ADC DMA/buffer capture. These conditions
 raise PicoMite errors (catchable with `pm_try()`), not silent zero readings.
 `pm_adc_read_raw()` returns -1 when the ADC hardware reports a conversion
-fault; this is distinct from those configuration errors. The functions are
-available to TinyCC-linked programs only, not external CSUBs. They have no
-open/close lifetime and do not allocate memory.
+fault; this is distinct from those configuration errors. The functions work
+from a C `RUN` and from a CSUB. They have no open/close lifetime and do not
+allocate memory.
 
 [`C/adc_read.c`](../C/adc_read.c) shows voltage and raw readings for a GPIO
 selected on the command line.
@@ -2013,10 +2089,11 @@ path in it is local, so edit it first.
 | `circle.c`, `try.c`, `vars.c`, `files.c`, `mouse.c`, `blit.c`, `sound.c`, `maze3.c` | The language, files, variables, input, graphics and sound |
 | `serial_echo.c`, `i2c_reg_read.c`, `spi_loopback.c`, `adc_read.c`, `pwm_sweep.c`, `pcm_stream.c` | One peripheral each; the first lines of each file say what to configure or wire |
 | `basic_callback.c` | Calling a BASIC FUNCTION in the library from C |
-| `core_pm_api_smoke.c`, `core_pm_extended_smoke.c`, `core_pm_runtime_smoke.c`, `pm_aeabi_lmul_test.c` | Smoke and regression tests of the common runtime on both chips |
+| `core_pm_api_smoke.c`, `core_pm_extended_smoke.c`, `core_pm_runtime_smoke.c`, `pm_aeabi_lmul_test.c`, `pm_aeabi_coverage_test.c` | Smoke and regression tests of the common runtime on both chips |
 | `pm_gamepad_test.c`, `pm_gpio_edge_test.c`, `pm_gui_test.c`, `pm_pio_probe.c`, `pm_pio_loopback_test.c` | Tests of the input, GUI and PIO APIs |
 | `pm_library_csub_smoke.c`, `pm_library_second_probe.c` | C/ELF CSUBs in the LIBRARY, with `Bas/pm_library_*.bas` |
 | `pm_resident_*_probe.c` | Resident services, with `Bas/pm_resident_*.bas` |
+| `key_map/key_rus.c` | A resident EN/RU keyboard remapper and Windows-1251 console font; `LIBRARY LOAD "key_rus.bas"` installs it. `key_map/test/` holds font tests |
 
 ---
 
