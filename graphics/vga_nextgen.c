@@ -387,18 +387,23 @@ static void m2_scanout_init(void)
 
 void __not_in_flash_func(QVgaCore)(void)
 {
+#ifdef MURMULATOR_M2P2_VGA222
+    multicore_lockout_victim_init();
+#endif
     m2_scanout_init();
     while (true)
     {
         if (m2_render_request)
             m2_render_pending();
         __dmb();
+#ifndef MURMULATOR_M2P2_VGA222
         if (multicore_fifo_rvalid())
         {
             int command = multicore_fifo_pop_blocking();
             if (command == 0x5555) irq_set_enabled(DMA_IRQ_0, false);
             if (command == 0xAAAA) irq_set_enabled(DMA_IRQ_0, true);
         }
+#endif
     }
 }
 

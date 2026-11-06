@@ -412,8 +412,28 @@ static void __not_in_flash_func(restore_psram_settings)(void)
 // Safe flash wrappers: boot2 re-runs inside flash_range_erase/program and
 // sets M0 CLKDIV=2. At 378MHz that means flash SPI=189MHz (above spec).
 // These wrappers save/restore M0 timing from RAM before returning to XIP code.
+/* Same core1 lockout protocol as pico-gameboy: no XIP may run on core1
+ * while core0 erases/programs Flash. The SDK permits lockout before core1
+ * launches and after the VGA worker has installed its victim handler.
+ * Keep the lockout across QMI restoration; only then resume core1. */
+#if defined(MURMULATOR_M2P2_VGA222)
+static inline bool m2_flash_lockout_begin(void)
+{
+    if (!multicore_lockout_ready()) return false;
+    multicore_lockout_start_blocking();
+    return true;
+}
+static inline void m2_flash_lockout_end(bool locked)
+{
+    if (locked) multicore_lockout_end_blocking();
+}
+#endif
+
 void __not_in_flash_func(safe_flash_range_erase)(uint32_t flash_offs, size_t count)
 {
+#if defined(MURMULATOR_M2P2_VGA222)
+    bool locked = m2_flash_lockout_begin();
+#endif
     uint32_t saved_timing = qmi_hw->m[0].timing;
     uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
     flash_range_erase(flash_offs, count);
@@ -421,10 +441,16 @@ void __not_in_flash_func(safe_flash_range_erase)(uint32_t flash_offs, size_t cou
         qmi_hw->m[0].timing = saved_timing;
     if (qmi_hw->m[0].rfmt != saved_rfmt)
         qmi_hw->m[0].rfmt = saved_rfmt;
+#if defined(MURMULATOR_M2P2_VGA222)
+    m2_flash_lockout_end(locked);
+#endif
 }
 
 void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const uint8_t *data, size_t count)
 {
+#if defined(MURMULATOR_M2P2_VGA222)
+    bool locked = m2_flash_lockout_begin();
+#endif
     uint32_t saved_timing = qmi_hw->m[0].timing;
     uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
     flash_range_program(flash_offs, data, count);
@@ -432,11 +458,17 @@ void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const ui
         qmi_hw->m[0].timing = saved_timing;
     if (qmi_hw->m[0].rfmt != saved_rfmt)
         qmi_hw->m[0].rfmt = saved_rfmt;
+#if defined(MURMULATOR_M2P2_VGA222)
+    m2_flash_lockout_end(locked);
+#endif
 }
 
 // flash_do_cmd leaves XIP the same way, so the same restore
 void __not_in_flash_func(safe_flash_do_cmd)(const uint8_t *txbuf, uint8_t *rxbuf, size_t count)
 {
+#if defined(MURMULATOR_M2P2_VGA222)
+    bool locked = m2_flash_lockout_begin();
+#endif
     uint32_t saved_timing = qmi_hw->m[0].timing;
     uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
     flash_do_cmd(txbuf, rxbuf, count);
@@ -444,6 +476,9 @@ void __not_in_flash_func(safe_flash_do_cmd)(const uint8_t *txbuf, uint8_t *rxbuf
         qmi_hw->m[0].timing = saved_timing;
     if (qmi_hw->m[0].rfmt != saved_rfmt)
         qmi_hw->m[0].rfmt = saved_rfmt;
+#if defined(MURMULATOR_M2P2_VGA222)
+    m2_flash_lockout_end(locked);
+#endif
 }
 #endif
 
