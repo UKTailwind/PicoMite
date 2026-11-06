@@ -4578,6 +4578,13 @@ void MIPS16 do_chain(unsigned char *cmdline)
 	unsigned char *pcmd_args = buf + strlen((char *)filename) + 3; // *** THW 16/4/23
 	// (no *cmdline = 0: cmdline is the program itself, which a RAM slot runs in place - the zero
 	// stayed and the next run CHAINed to no file, issue #109)
+#ifdef PICOMITEVGA
+	/* do_end's setmode puts the default font and colours back.  In a program they
+	   stay as they are, as with FLASH CHAIN and RAM CHAIN: see below.  At the prompt
+	   this starts a program, as RUN does. */
+	bool inprogram = CurrentLinePtr != NULL;
+	int font = gui_font, fcolour = gui_fcolour, bcolour = gui_bcolour;
+#endif
 	do_end(false);
 	SaveContext();
 	ClearVars(0, false);
@@ -4614,6 +4621,17 @@ void MIPS16 do_chain(unsigned char *cmdline)
 	SymBindFree();
 	NameIndexFree();
 	PrepareProgram(true);
+#ifdef PICOMITEVGA
+	/* Now the next program's fonts are in the table: a font that went with the
+	   last program leaves the default selected, as FontsChanged does for the others */
+	if (inprogram)
+	{
+		if (FontTable[font >> 4] != NULL)
+			SetFont(font);
+		gui_fcolour = fcolour;
+		gui_bcolour = bcolour;
+	}
+#endif
 	if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
 	{
 		ClearScreen(gui_bcolour);
