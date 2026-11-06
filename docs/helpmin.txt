@@ -3616,11 +3616,11 @@ See DIM for the full syntax.
 ~LOCATION
 LOCATION
 
-RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time for
-use with the ASTRO command. This is one of a set of commands that performs
-high-precision astronomical calculations suitable for telescope pointing or
-navigation and is described in detail in the file GPS_Astro_Reference.pdf
-included in the firmware download zip file.
+RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time
+(UTC, not local time) for use with the ASTRO command. This is one of a set of
+commands that performs high-precision astronomical calculations suitable for
+telescope pointing or navigation and is described in detail in the file
+GPS_Astro_Reference.pdf included in the firmware download zip file.
 
 ~LOF
 LOF( [#]fnbr )
@@ -8044,10 +8044,10 @@ Returns the square root of the argument 'number'.
 STAR
 
 RP2350 VERSIONS ONLY Calculates the position of a celestial object using the
-current time and location from a connected GPS module. This is one of a set of
-commands that performs high-precision astronomical calculations suitable for
-telescope pointing or navigation and is described in detail in the file
-GPS_Astro_Reference.pdf included in the firmware download zip file.
+current time (UTC) and location from a connected GPS module. This is one of a
+set of commands that performs high-precision astronomical calculations
+suitable for telescope pointing or navigation and is described in detail in
+the file GPS_Astro_Reference.pdf included in the firmware download zip file.
 
 ~STATIC
 STATIC variable [, variables]

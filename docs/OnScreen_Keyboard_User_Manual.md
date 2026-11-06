@@ -199,10 +199,15 @@ regardless of the `M` flag.
   programs):** the keyboard is erased and the strip is released. The
   program has the full screen and full control. The on-screen keyboard
   becomes invisible until the program either calls `KEYBOARD ON` or exits.
+- **`FLASH CHAIN` and `RAM CHAIN`:** the keyboard stays as it was: displayed
+  if the program had used `KEYBOARD ON`, hidden if not.
 - **Program calls `KEYBOARD ON`:** the strip is re-reserved (display scrolls
   up first so existing program output is preserved) and the keyboard is
   drawn in *program mode*. Taps reach the program via `INKEY$`, `INPUT`,
   `LINE INPUT`, etc.
+- **Program uses `CLS` or `MODE`:** the keyboard is removed with the rest of
+  the screen and taps stop reaching the program. Call `KEYBOARD ON` after
+  them, not before.
 - **Program ends (`END`, error, Ctrl-C, FM relaunch):** the keyboard is
   restored to the state it had at `RUN` time. If the keyboard was on at
   the prompt before `RUN`, it is on when control returns; if you had

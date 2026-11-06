@@ -6081,7 +6081,9 @@ SCREEN KEYBOARD.
 The on-screen keyboard is automatically displayed at the command prompt and in
 the full screen editor and is removed while a program is running.  A program
 can use KEYBOARD ON to display the keyboard and accept input from it; keys
-tapped on it are read as normal keystrokes (eg, with INKEY$ or INPUT).
+tapped on it are read as normal keystrokes (eg, with INKEY$ or INPUT).  CLS
+and MODE also remove the keyboard, so a program should use KEYBOARD ON after
+them.
 KEYBOARD OFF entered at the command prompt will keep the on-screen keyboard
 hidden until KEYBOARD ON is entered.
 
@@ -6697,8 +6699,8 @@ automatically discarded when the subroutine or function exits.
 ~LOCATION
 LOCATION
 
-RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time for
-use with the ASTRO command.
+RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time
+(UTC, not local time) for use with the ASTRO command.
 This is one of a set of commands that performs high-precision astronomical
 calculations suitable for telescope pointing or navigation and is described in
 detail in the file GPS_Astro_Reference.pdf included in the firmware download
@@ -13837,7 +13839,7 @@ Returns the square root of the argument 'number'.
 STAR
 
 RP2350 VERSIONS ONLY Calculates the position of a celestial object using the
-current time and location from a connected GPS module.
+current time (UTC) and location from a connected GPS module.
 This is one of a set of commands that performs high-precision astronomical
 calculations suitable for telescope pointing or navigation and is described in
 detail in the file GPS_Astro_Reference.pdf included in the firmware download

@@ -5,7 +5,7 @@
 The functionality is split into four commands:
 
 - **STAR**: Calculates the position of a celestial object using the current time and location from the connected GPS module.
-- **LOCATION**: Sets a manual location (latitude/longitude) and time for use with the ASTRO command.
+- **LOCATION**: Sets a manual location (latitude/longitude) and time (UTC) for use with the ASTRO command.
 - **ASTRO**: Calculates the position of a celestial object using the manual time and location set by the LOCATION command.
 - **SLEW**: Computes the motor deltas required to point a polar-aligned German Equatorial Mount (GEM) at a target, automatically detecting and resolving meridian flips.
 
@@ -17,7 +17,7 @@ Both STAR and ASTRO share the same syntax for specifying the target object and o
 
 ### 2.1 The STAR Command
 
-Uses live GPS data. Requires a valid GPS fix.
+Uses live GPS data. Requires a valid GPS fix. The time used is the GPS's UTC time: a time offset given to `OPEN ... AS GPS` is not applied.
 
 **Syntax 1: Named Object**
 
@@ -85,7 +85,7 @@ Sets the context for the ASTRO and SLEW commands.
 LOCATION date$, lat, long [, sidereal_out]
 ```
 
-- `date$`: A string containing the date and time in the format `"dd/mm/yyyy hh:mm:ss"`. The separators can be `-`, `/`, `:`, or space.
+- `date$`: A string containing the date and time in the format `"dd/mm/yyyy hh:mm:ss"`. The separators can be `-`, `/`, `:`, or space. **The time is UTC (Universal Time), not local time.**
 - `lat`: Latitude in degrees (negative for South).
 - `long`: Longitude in degrees (negative for West).
 - `sidereal_out` (Optional): Variable to store the calculated Local Sidereal Time (hours).
@@ -94,6 +94,18 @@ LOCATION date$, lat, long [, sidereal_out]
 
 ```basic
 LOCATION "25/12/2025 22:30:00", -33.86, 151.21, lst
+```
+
+**Local time**
+
+Subtract your time zone's offset from UTC, including any daylight saving, before LOCATION. Times found from ASTRO's results, such as when an object rises or sets, are then in UTC too, so add the offset back. A local time given as it is makes every result wrong by the offset. For example, in a time zone one hour ahead of UTC:
+
+```basic
+tz = 1                                     ' hours ahead of UTC
+' 17:00 local time is 16:00 UTC
+t = EPOCH("01-11-2026 17:00:00") - tz * 3600
+LOCATION DATETIME$(t), 47.50, 19.04
+ASTRO MOON alt, az
 ```
 
 ---
