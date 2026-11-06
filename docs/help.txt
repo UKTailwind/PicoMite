@@ -2152,10 +2152,10 @@ as the built in fonts (i.e. selected using the FONT command or specified in
 the TEXT command).  See the Embedded Fonts folder in the PicoMite firmware
 distribution zip file for a selection of embedded fonts and a full description
 of how to create them.
-'#Nbr' is the font's reference number (from 1 to 16).  It can be the same as a
-built in font and in that case it will replace the built in font.  Each 'hex'
-must be exactly eight hex digits and be separated by spaces or new lines from
-the next.
+'#Nbr' is the font's reference number (2 to 5 or 8 to 16).  It can be the same
+as a built in font and in that case it will replace the built in font.  Each
+'hex' must be exactly eight hex digits and be separated by spaces or new lines
+from the next.
   Multiple lines of 'hex' words can be used with the command terminated by a
   matching END DEFINEFONT.
   Multiple embedded fonts can be used in a program with each defining a
@@ -8467,12 +8467,14 @@ the firmware, options, saved variables, flash slots and program storage.
 ~MM.INFO(FONT ADDRESS)
 MM.INFO(FONT ADDRESS n)
 
-Returns the address of the memory location with the address of FONT n .
+Returns the address of the start of FONT n in memory, or 0 if there is no font
+n.  Its first four bytes are the width, height, first character and number of
+characters.
 
 ~MM.INFO(FONT POINTER)
 MM.INFO(FONT POINTER n)
 
-Returns a POINTER to the start of FONT n in memory.
+Returns the address of the memory location that holds the address of FONT n.
 
 ~MM.INFO(FONT)
 MM.INFO(FONT)

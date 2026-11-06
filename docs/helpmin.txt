@@ -5096,12 +5096,14 @@ the firmware, options, saved variables, flash slots and program storage.
 ~MM.INFO(FONT ADDRESS)
 MM.INFO(FONT ADDRESS n)
 
-Returns the address of the memory location with the address of FONT n .
+Returns the address of the start of FONT n in memory, or 0 if there is no font
+n. Its first four bytes are the width, height, first character and number of
+characters.
 
 ~MM.INFO(FONT POINTER)
 MM.INFO(FONT POINTER n)
 
-Returns a POINTER to the start of FONT n in memory.
+Returns the address of the memory location that holds the address of FONT n.
 
 ~MM.INFO(FONT)
 MM.INFO(FONT)
