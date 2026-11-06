@@ -1069,6 +1069,9 @@ void MIPS16 cmd_psram(void)
             PrintPreprogramError();
             return;
         }
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+        OSK_OnRunStart(); // as RUN: gone until the program uses KEYBOARD ON
+#endif
         // Create a global constant MM.CMDLINE$ containing the empty string.
         //        (void) findvar((unsigned char *)"MM.CMDLINE$", V_FIND | V_DIM_VAR | T_CONST);
         if (LibPresent())
@@ -1701,6 +1704,9 @@ void MIPS16 cmd_flash(void)
             PrintPreprogramError();
             return;
         }
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+        OSK_OnRunStart(); // as RUN: gone until the program uses KEYBOARD ON
+#endif
         // Create a global constant MM.CMDLINE$ containing the empty string.
         //        (void) findvar((unsigned char *)"MM.CMDLINE$", V_FIND | V_DIM_VAR | T_CONST);
         if (LibPresent())
@@ -5246,6 +5252,9 @@ void MIPS16 loadCMM2(unsigned char *p, bool autorun, bool message)
             PrintPreprogramError();
             return;
         }
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+        OSK_OnRunStart(); // as RUN: gone until the program uses KEYBOARD ON
+#endif
         IgnorePIN = false;
         if (LibPresent())
             ExecuteProgram(LibMemory); // run anything that might be in the library
@@ -5499,6 +5508,9 @@ void MIPS16 cmd_load(void)
             PromptFont = oldfont;
             return;
         }
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+        OSK_OnRunStart(); // as RUN: gone until the program uses KEYBOARD ON
+#endif
         IgnorePIN = false;
         if (LibPresent())
             ExecuteProgram(LibMemory); // run anything that might be in the library

@@ -4084,6 +4084,9 @@ static int fm_run_bas_program(const char *filename, const char *fullpath)
         PrintPreprogramError();
         return 0;
     }
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+    OSK_OnRunStart(); // as RUN: gone until the program uses KEYBOARD ON
+#endif
 
     if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
     {
@@ -7490,6 +7493,9 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     PrintPreprogramError();
                     return;
                 }
+#if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
+                OSK_OnRunStart(); // as RUN: gone until the program uses KEYBOARD ON
+#endif
                 // Create a global constant MM.CMDLINE$ containing the empty string.
                 //                            (void) findvar((unsigned char *)"MM.CMDLINE$", V_FIND | V_DIM_VAR | T_CONST);
                 if (LibPresent())
