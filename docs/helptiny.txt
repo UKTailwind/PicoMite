@@ -819,7 +819,7 @@ BLUETOOTH FORGET [addr$]
 BLUETOOTH SCAN [seconds]
 
 ~BLUETOOTH STATUS
-BLUETOOTH STATUS
+BLUETOOTH STATUS [#nbr]
 
 ~BOUND
 BOUND(array() [,dimension]
@@ -4736,7 +4736,7 @@ STEPPER SCURVE 0|1
 STEPPER SPINDLE pin [,invert]
 
 ~STEPPER STATUS
-STEPPER STATUS
+STEPPER STATUS [#nbr]
 
 ~STEPPER TUNE
 STEPPER TUNE axis [, dir_invert] [, steps_per_unit] [, max_vel] [, max_accel]

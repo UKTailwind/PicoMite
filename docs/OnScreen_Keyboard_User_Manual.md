@@ -195,12 +195,13 @@ regardless of the `M` flag.
   mode), and taps reach the editor/FM exactly as if they came from a
   hardware keyboard. The editor's auto-scroll boundary and the FM's row
   count both already respect the reserved strip.
-- **`RUN` (or any program start, including `CHAIN` and FM-launched
+- **`RUN` (or any program start, including FM-launched
   programs):** the keyboard is erased and the strip is released. The
   program has the full screen and full control. The on-screen keyboard
   becomes invisible until the program either calls `KEYBOARD ON` or exits.
-- **`FLASH CHAIN` and `RAM CHAIN`:** the keyboard stays as it was: displayed
-  if the program had used `KEYBOARD ON`, hidden if not.
+- **`CHAIN`, `FLASH CHAIN` and `RAM CHAIN` in a program:** the keyboard stays
+  as it was: displayed if the program had used `KEYBOARD ON`, hidden if not.
+  `CHAIN` typed at the prompt starts a program, as `RUN` does.
 - **Program calls `KEYBOARD ON`:** the strip is re-reserved (display scrolls
   up first so existing program output is preserved) and the keyboard is
   drawn in *program mode*. Taps reach the program via `INKEY$`, `INPUT`,

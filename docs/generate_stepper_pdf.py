@@ -343,9 +343,9 @@ pdf.set_font('Helvetica', '', 11)
 pdf.multi_cell(0, 5, "Clears the G-code buffer (only when motion is idle).")
 pdf.ln(2)
 
-pdf.code_block("STEPPER STATUS")
+pdf.code_block("STEPPER STATUS [#nbr]")
 pdf.set_font('Helvetica', '', 11)
-pdf.multi_cell(0, 5, "Displays detailed system status, including axis positions, buffer state, and configuration (including auto-disable-on-idle mode).")
+pdf.multi_cell(0, 5, "Displays detailed system status, including axis positions, buffer state, and configuration (including auto-disable-on-idle mode). STEPPER STATUS #nbr sends it to the serial port or file opened as 'nbr'.")
 pdf.ln(2)
 
 pdf.code_block("STEPPER BUFFER")

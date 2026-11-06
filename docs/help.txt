@@ -1337,7 +1337,7 @@ Bluetooth LE keyboards, mice and game controllers are not listed - they are
 paired automatically (see the chapter Bluetooth Versions).
 
 ~BLUETOOTH STATUS
-BLUETOOTH STATUS
+BLUETOOTH STATUS [#nbr]
 
 BLUETOOTH HOST VERSIONS ONLY
 Lists the state of the Bluetooth connections: whether a Bluetooth LE keyboard
@@ -1348,6 +1348,8 @@ remembered speaker if it is not connected), and the format of the audio
 stream.
 The lines that follow are diagnostic information which may be useful when
 reporting a problem.
+BLUETOOTH STATUS #nbr sends the list to the serial port or file opened as
+'nbr'.
 
 ~BOUND
 BOUND(array() [,dimension]
@@ -14239,10 +14241,11 @@ until an M3.
 Full details: Stepper_Reference.pdf
 
 ~STEPPER STATUS
-STEPPER STATUS
+STEPPER STATUS [#nbr]
 
 Displays detailed system status, including axis positions, buffer state, and
-configuration (including auto-disable-on-idle mode).
+configuration (including auto-disable-on-idle mode). STEPPER STATUS #nbr sends
+it to the serial port or file opened as 'nbr'.
 
 Full details: Stepper_Reference.pdf
 

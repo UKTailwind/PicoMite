@@ -1018,7 +1018,7 @@ themselves as audio devices are marked 'Audio', keyboards 'Keyboard' and
 Bluetooth LE serial devices 'BLE serial'.
 
 ~BLUETOOTH STATUS
-BLUETOOTH STATUS
+BLUETOOTH STATUS [#nbr]
 
 BLUETOOTH HOST VERSIONS ONLY Lists the state of the Bluetooth connections:
 whether a Bluetooth LE keyboard (or mouse or game controller) is connected,
@@ -8221,10 +8221,11 @@ Configures a spindle control pin used by buffered M3/M5 commands. Pin must not
 conflict with AXIS/HWLIMITS/E-STOP pins.
 
 ~STEPPER STATUS
-STEPPER STATUS
+STEPPER STATUS [#nbr]
 
 Displays detailed system status, including axis positions, buffer state, and
-configuration (including auto-disable-on-idle mode).
+configuration (including auto-disable-on-idle mode). STEPPER STATUS #nbr sends
+it to the serial port or file opened as 'nbr'.
 
 ~STEPPER TUNE
 STEPPER TUNE axis [, dir_invert] [, steps_per_unit] [, max_vel] [, max_accel]
