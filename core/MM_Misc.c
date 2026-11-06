@@ -8480,6 +8480,7 @@ void MIPS16 fun_info(void)
     }
     else if ((tp = checkstring(ep, (unsigned char *)"ADC")))
     {
+        checkend(tp); // (a misspelt ADC DMA comes here)
         targ = T_INT;
         iret = ((adcint == adcint1 && adcint) ? 1 : ((adcint == adcint2 && adcint) ? 2 : 0));
         return;
@@ -8529,8 +8530,9 @@ void MIPS16 fun_info(void)
         iret = boot_count;
         targ = T_INT;
     }
-    else if (checkstring(ep, (unsigned char *)"BOOT"))
+    else if ((tp = checkstring(ep, (unsigned char *)"BOOT")))
     {
+        checkend(tp); // (a misspelt BOOT COUNT comes here)
         if (restart_reason == 0xFFFFFFFF)
             strcpy((char *)sret, "Restart");
         else if (restart_reason == 0xFFFFFFFE)
@@ -8735,12 +8737,14 @@ void MIPS16 fun_info(void)
         if ((tp = checkstring(ep, (unsigned char *)"FONT POINTER")))
         {
             iret = (int64_t)((uint32_t)&FontTable[getint(tp, 1, FONT_TABLE_SIZE) - 1]);
+            checkend(skipexpression(tp));
             targ = T_INT;
             return;
         }
         else if ((tp = checkstring(ep, (unsigned char *)"FONT ADDRESS")))
         {
             iret = (int64_t)((uint32_t)FontTable[getint(tp, 1, FONT_TABLE_SIZE) - 1]);
+            checkend(skipexpression(tp));
             targ = T_INT;
             return;
         }
@@ -8790,8 +8794,9 @@ void MIPS16 fun_info(void)
             targ = T_INT;
             return;
         }
-        else if (checkstring(ep, (unsigned char *)"FLASH"))
+        else if ((tp = checkstring(ep, (unsigned char *)"FLASH")))
         {
+            checkend(tp); // (a misspelt FLASH ADDRESS comes here)
             iret = FlashLoad;
             targ = T_INT;
             return;
@@ -8802,8 +8807,9 @@ void MIPS16 fun_info(void)
             targ = T_INT;
             return;
         }
-        else if (checkstring(ep, (unsigned char *)"FONT"))
+        else if ((tp = checkstring(ep, (unsigned char *)"FONT")))
         {
+            checkend(tp); // (a misspelt FONT ADDRESS or FONT POINTER comes here)
             iret = (gui_font >> 4) + 1;
             targ = T_INT;
             return;
