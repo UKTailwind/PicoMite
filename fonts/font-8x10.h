@@ -1,4 +1,4 @@
-const unsigned char font8x10[] = {
+const unsigned char font8x10[] __attribute__((aligned(4))) = {
     0x08, 0x0A, 0x20, 0x5F,
 
     // 0x20
