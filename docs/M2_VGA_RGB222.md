@@ -16,13 +16,23 @@ The 4-bit input has the form `R G1 G0 B`; the six physical outputs are
 there are still 16 input colour values. Normal palette mapping (`MAP`) and
 all existing `SCREENMODE` layouts stay unchanged.
 
-The alternate PIO image sends five 6-bit pixels per 32-bit FIFO word,
-with two unused bits. It uses an autopull threshold of 30 instead of 32.
-Both scanline buffers expand in place, so no additional full-frame buffer
-is allocated. The additional static scanline memory is 640 bytes on RP2040
-(two 680-byte buffers replacing two 360-byte buffers) and 512 bytes on
-RP2350 (two 680-byte buffers replacing two 424-byte buffers). The per-line conversion runs in the DMA IRQ;
-its latency must be checked on hardware for all supported resolutions.
+The new `graphics/vga_nextgen.c` driver is based on the existing
+`drivers/vga-nextgen/vga.c` from PicoMiteAllVersions. The video output
+is a contiguous eight-bit GPIO bus: RGB222 on bits 0..5, HSYNC on bit 6,
+VSYNC on bit 7. For the M2 board its base is GP12, so the signals occupy
+GP12..GP19. Sync is active-low and is part of every byte in the DMA stream.
+
+The PIO program `graphics/vga_nextgen.pio` contains only `OUT PINS, 8`;
+DMA feeds four output pixels per word (32-bit autopull), including blanking
+and sync samples. This replaces five-pixel/30-bit packing and the old
+`PicoMiteVGA222.pio` pipeline. Two full scanline buffers (1088 bytes each)
+replace the old small line buffers; no full-frame RGB222 framebuffer is used.
+`MODE 1/2/3`, `MAP` and `TILE` continue to consume PicoMiteVGA data.
+
+`vga_nextgen` is not M2-specific: any future target can select it in CMake,
+provided the board has eight consecutive output GPIOs ordered as RGB222,
+HSYNC and VSYNC. Pixel clock timing and DMA IRQ latency require hardware
+verification on each board and supported resolution.
 
 Build:
 

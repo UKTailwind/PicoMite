@@ -825,7 +825,7 @@ endif()
 if(USES_VGA_PIO)
 	if(COMPILE STREQUAL "M2P1VGA" OR
 	   (COMPILE STREQUAL "M2P2VGA" AND M2P2_VGA_BITS STREQUAL "6"))
-		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA222.pio)
+		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/vga_nextgen.pio)
 	else()
 		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio)
 	endif()
@@ -978,8 +978,15 @@ if(IS_PICOMIN)
 endif()
 
 if(IS_VGA)
-	# PIO VGA (QVGA) core1 scanout split out of PicoMite.c (graphics/VGA.c).
-	target_sources(PicoMite PRIVATE graphics/VGA.c)
+	# The generic vga_nextgen eight-bit stream is selected for M2 RGB222.
+	# All other VGA targets retain the existing four-bit QVGA scanout.
+	if(COMPILE STREQUAL "M2P1VGA" OR
+	   (COMPILE STREQUAL "M2P2VGA" AND M2P2_VGA_BITS STREQUAL "6"))
+		target_sources(PicoMite PRIVATE graphics/vga_nextgen.c)
+		target_compile_definitions(PicoMite PRIVATE VGA_NEXTGEN)
+	else()
+		target_sources(PicoMite PRIVATE graphics/VGA.c)
+	endif()
 	target_compile_definitions(PicoMite PRIVATE
 		PICOMITEVGA
 		PICO_HEAP_SIZE=0x800
