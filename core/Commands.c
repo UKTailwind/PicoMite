@@ -4535,9 +4535,11 @@ extern void chdir(char *p);
 void MIPS16 do_chain(unsigned char *cmdline)
 {
 #if defined(USBKEYBOARD) && defined(GUICONTROLS) && defined(PICOMITEVGA)
-	/* Erase OSK and surrender the strip before anything else runs. Mirrors
-	   do_run — see comment there for the rationale. */
-	OSK_OnRunStart();
+	/* In a program the keyboard stays as it was, displayed or hidden, as with
+	   FLASH CHAIN and RAM CHAIN. At the prompt this starts a program: as do_run,
+	   see the comment there. */
+	if (CurrentLinePtr == NULL)
+		OSK_OnRunStart();
 #endif
 	unsigned char *filename = (unsigned char *)"", *cmd_args = (unsigned char *)"";
 	unsigned char *cmdbuf = GetMemory(STRINGSIZE);
