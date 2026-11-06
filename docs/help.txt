@@ -1654,7 +1654,9 @@ the command is recommended to be used in top level program and not from within
 a subroutine. If the optional 'cmdline$ parameter is specified this is passed
 to the chained program in MM.CMDLINE$. If the programs use structures both
 must define the same TYPEs in the same order, as a variable of a structure
-type kept across the CHAIN refers to its type by its number
+type kept across the CHAIN refers to its type by its number.  The font and
+colours stay as they are, as with FLASH CHAIN and RAM CHAIN.  If the font was
+defined in the first program and not in the next the default font is used.
 
 ~CHDIR
 CHDIR dir$
