@@ -111,8 +111,10 @@ extern "C"
       btstack's hid_host.c, ~7.1 KB) went 4.4 KB over.
       +16 KB (2026-10-10): the RC0 build went over.
       +16 KB (2026-10-10): BLE serial devices on COM7 (BTSerial.c, 4.3 KB) went
-      1.8 KB over, the Classic ones (12.8 KB) having taken the rest. */
-#define FLASH_TARGET_OFFSET (1504 * 1024)
+      1.8 KB over, the Classic ones (12.8 KB) having taken the rest.
+      +16 KB (2026-11-07): the USB host's bulk-IN window and interrupt
+      polling (tinyusb-patches/hcd_rp2040.patch) went 376 bytes over. */
+#define FLASH_TARGET_OFFSET (1520 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
    /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
       output added ~12.6 KB of BSS (less what dropping VS1053 and PWM/SPI
@@ -142,7 +144,9 @@ extern "C"
       P3b (compiled SUB calls) on development. */
    /* +16 KB (2026-09-29): Route B's P5c left 832 bytes. */
    /* +16 KB (2026-10-10): ZMODEM SEND was 1.3 KB over. */
-#define FLASH_TARGET_OFFSET (1568 * 1024)
+   /* +16 KB (2026-11-07): the USB host's bulk-IN window and interrupt polling
+      (tinyusb-patches/hcd_rp2040.patch) went 696 bytes over. */
+#define FLASH_TARGET_OFFSET (1584 * 1024)
    /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
       kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
       pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
@@ -183,7 +187,9 @@ extern "C"
       been sized for HDMIWEB. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 4.1 KB over. */
-#define FLASH_TARGET_OFFSET (1136 * 1024)
+   /* +16 KB (2026-11-07): the USB host's bulk-IN window and interrupt polling
+      (tinyusb-patches/hcd_rp2040.patch) went 292 bytes over. */
+#define FLASH_TARGET_OFFSET (1152 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
