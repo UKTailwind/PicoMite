@@ -1754,15 +1754,23 @@ static void fm_fill_padded_line(char *out, int width, const char *text)
     }
 }
 
+/* Pad a formatted line in place, without a second 512-byte stack buffer. */
+static void fm_pad_inplace(char *line, int width)
+{
+    int n;
+    if (width <= 0) return;
+    if (width >= STRINGSIZE * 2) width = STRINGSIZE * 2 - 1;
+    n = (int)strlen(line);
+    if (n > width) n = width;
+    memset(line + n, ' ', width - n);
+    line[width] = 0;
+}
+
 static void fm_serial_repaint_ui(fm_panel_t *panels, int active, const char *status,
                                  int left_ok, const char *left_err,
                                  int right_ok, const char *right_err)
 {
     char line[STRINGSIZE * 2];
-    char left_line[STRINGSIZE * 2];
-    char right_line[STRINGSIZE * 2];
-    char left_text[STRINGSIZE * 2];
-    char right_text[STRINGSIZE * 2];
     int list_rows = Option.Height - 4;
     int left_width = (Option.Width - 1) / 2;
     int right_width = Option.Width - (left_width + 1);
@@ -1781,19 +1789,18 @@ static void fm_serial_repaint_ui(fm_panel_t *panels, int active, const char *sta
     if (Option.Height > 1)
         PrintString("\r\n");
 
-    snprintf(left_text, sizeof(left_text), "%c:%s [%s]",
+    snprintf(line, sizeof(line), "%c:%s [%s]",
              fm_drive_letter(panels[0].filesystem), panels[0].path, panels[0].filter);
-    snprintf(right_text, sizeof(right_text), "%c:%s [%s]",
-             fm_drive_letter(panels[1].filesystem), panels[1].path, panels[1].filter);
-    fm_fill_padded_line(left_line, left_width, left_text);
-    fm_fill_padded_line(right_line, right_width, right_text);
-
+    fm_pad_inplace(line, left_width);
     PrintString((char *)(active == 0 ? FM_ANSI_ACTIVE : FM_ANSI_INACTIVE));
-    PrintString(left_line);
+    PrintString(line);
     PrintString((char *)FM_ANSI_TITLE);
     PrintString("|");
+    snprintf(line, sizeof(line), "%c:%s [%s]",
+             fm_drive_letter(panels[1].filesystem), panels[1].path, panels[1].filter);
+    fm_pad_inplace(line, right_width);
     PrintString((char *)(active == 1 ? FM_ANSI_ACTIVE : FM_ANSI_INACTIVE));
-    PrintString(right_line);
+    PrintString(line);
     PrintString("\033[0m");
 
     for (row = 0; row < list_rows; row++)
@@ -1813,42 +1820,42 @@ static void fm_serial_repaint_ui(fm_panel_t *panels, int active, const char *sta
         if (Option.Height > 2 || row > 0)
             PrintString("\r\n");
 
-        left_text[0] = 0;
+        line[0] = 0;
         if (!left_ok)
         {
             if (row == 0 && left_err)
-                snprintf(left_text, sizeof(left_text), "%s", left_err);
+                snprintf(line, sizeof(line), "%s", left_err);
             left_ansi = FM_ANSI_STATUS;
         }
         else if (li >= 0 && li < panels[0].count)
         {
-            fm_format_panel_entry(&panels[0], li, left_text, sizeof(left_text));
+            fm_format_panel_entry(&panels[0], li, line, sizeof(line));
             if (li == panels[0].selected)
                 left_ansi = active == 0 ? FM_ANSI_ACTIVE : FM_ANSI_INACTIVE;
         }
-        fm_fill_padded_line(left_line, left_width, left_text);
+        fm_pad_inplace(line, left_width);
 
-        right_text[0] = 0;
+        PrintString((char *)left_ansi);
+        PrintString(line);
+        PrintString((char *)FM_ANSI_TITLE);
+        PrintString("|");
+
+        line[0] = 0;
         if (!right_ok)
         {
             if (row == 0 && right_err)
-                snprintf(right_text, sizeof(right_text), "%s", right_err);
+                snprintf(line, sizeof(line), "%s", right_err);
             right_ansi = FM_ANSI_STATUS;
         }
         else if (ri >= 0 && ri < panels[1].count)
         {
-            fm_format_panel_entry(&panels[1], ri, right_text, sizeof(right_text));
+            fm_format_panel_entry(&panels[1], ri, line, sizeof(line));
             if (ri == panels[1].selected)
                 right_ansi = active == 1 ? FM_ANSI_ACTIVE : FM_ANSI_INACTIVE;
         }
-        fm_fill_padded_line(right_line, right_width, right_text);
-
-        PrintString((char *)left_ansi);
-        PrintString(left_line);
-        PrintString((char *)FM_ANSI_TITLE);
-        PrintString("|");
+        fm_pad_inplace(line, right_width);
         PrintString((char *)right_ansi);
-        PrintString(right_line);
+        PrintString(line);
         PrintString("\033[0m");
     }
 
