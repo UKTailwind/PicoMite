@@ -301,7 +301,10 @@ extern "C"
       from standard VGA; 16 KB-aligned, with space for the ELF loader. */
 #define FLASH_TARGET_OFFSET (960 * 1024)
 #define MagicKey 0x4D325031 /* M2P1: invalidate options of other layouts */
-#define HEAP_MEMORY_SIZE (120 * 1024)
+   /* -4 KB (2026-11-07): the vga_nextgen scanout (whole byte-per-pixel
+      lines, 5 x 900 bytes) needs ~3.1 KB more SRAM than the packed QVGA
+      one it replaced. MAX_PROG_SIZE is pinned, so the flash layout stays. */
+#define HEAP_MEMORY_SIZE (116 * 1024)
 #define MAX_PROG_SIZE (100 * 1024)
 #elif defined(USBKEYBOARD)
    /* +16 KB (2026-09-17): the hex-stripping reader for LIBRARY LOAD (FileIO.c).

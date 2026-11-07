@@ -45,7 +45,7 @@ set(VALID_COMPILE_VARIANTS
 # Guard restored: without it, this set() shadows the -DCOMPILE=X passed
 # by buildpicomite.bat and every variant silently builds as the default.
 if(NOT DEFINED COMPILE)
-	set(COMPILE M2P2VGA)
+	set(COMPILE M2P1VGA)
 endif()
 
 # The 4-bit tiled VGA driver and the 6-bit framebuffer VGA222 driver
@@ -807,7 +807,14 @@ if(NOT USES_USB_HOST)
 	endforeach()
 endif()
 
-pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/io/PicoMiteI2S.pio)
+# PIO headers go to a directory of their platform: pioasm writes the PIO
+# version into them (RP2350: 1, RP2040: 0), but the header only depends on
+# its .pio file, so a header left in the build directory by an RP2350 build
+# was reused by the next RP2040 one. pio_add_program() then refused the
+# program (PICO_ERROR_VERSION_MISMATCH, -20) and M2P1VGA set up its state
+# machine with offset -20: wrap 12..31 and side-set on - no picture.
+set(PM_PIO_HEADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/pio_${PICO_PLATFORM})
+pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/io/PicoMiteI2S.pio OUTPUT_DIR ${PM_PIO_HEADER_DIR})
 
 if(IS_FULL_RP2040)
 	set_source_files_properties(input/mouse.c PROPERTIES COMPILE_FLAGS -Os)
@@ -825,9 +832,9 @@ endif()
 if(USES_VGA_PIO)
 	if(COMPILE STREQUAL "M2P1VGA" OR
 	   (COMPILE STREQUAL "M2P2VGA" AND M2P2_VGA_BITS STREQUAL "6"))
-		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/vga_nextgen.pio)
+		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/vga_nextgen.pio OUTPUT_DIR ${PM_PIO_HEADER_DIR})
 	else()
-		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio)
+		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio OUTPUT_DIR ${PM_PIO_HEADER_DIR})
 	endif()
 endif()
 

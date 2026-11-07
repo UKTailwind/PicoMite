@@ -210,7 +210,8 @@ uint8_t PSRAMpin;
 #ifndef USBKEYBOARD
 #include "class/cdc/cdc_device.h"
 #endif
-#include "PicoMiteVGA.pio.h"
+/* No VGA PIO header here: graphics/VGA.c and vga_nextgen.c include the one
+ * their build generates (M2 builds generate no PicoMiteVGA.pio.h). */
 #include "PicoMiteI2S.pio.h"
 /* QVGA scanout config (QVGA_GPIO_*, QVGA_*_F) moved to graphics/Screens.h */
 #endif

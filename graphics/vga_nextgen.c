@@ -29,8 +29,10 @@
 #define M2_VSYNC_BIT 0x80u
 #define M2_NO_SYNC 0xc0u
 
-/* Direct four-bit RGB121 to six-bit RGB222, with both syncs inactive. */
-static uint8_t m2_colour[16] = {
+/* Direct four-bit RGB121 to six-bit RGB222, with both syncs inactive.
+ * In SRAM: never written, so GCC would otherwise put it in .rodata (Flash),
+ * read by the core1 renderer for every pixel (see m2_div3 below). */
+static uint8_t __not_in_flash("m2_colour") m2_colour[16] = {
     0xc0, 0xc3, 0xc4, 0xc7, 0xc8, 0xcb, 0xcc, 0xcf,
     0xf0, 0xf3, 0xf4, 0xf7, 0xf8, 0xfb, 0xfc, 0xff
 };
@@ -57,12 +59,55 @@ static inline __attribute__((always_inline)) void m2_store4(uint8_t *p, uint32_t
     }
 }
 
+/* No division on core1: the Cortex-M0+ (RP2040) has no divide instruction,
+ * so '/' and '%' call the SDK divider in Flash. The scanline IRQ and the
+ * renderer must run from SRAM alone - core0 erases and programs the Flash
+ * (options, A:) with only its own interrupts off, and a core1 fetch from
+ * Flash then stops the IRQ: the line pointer is no longer switched, the
+ * same line repeats and the monitor loses VSYNC. Exact for 0 <= n < 65536
+ * (n * 0xAAAB >> 17 == n / 3); lines and rows stay below 1100. */
+static inline __attribute__((always_inline)) int m2_div3(int n)
+{
+    return (int)(((uint32_t)n * 0xAAABu) >> 17);
+}
+static inline __attribute__((always_inline)) int m2_slot(int line)
+{
+    return line - 3 * m2_div3(line); /* line % M2_ACTIVE_COUNT */
+}
+/* y / ytileheight: the tile height is 12 or 16 after QVgaInit, but TILE
+ * HEIGHT, the editor and the fonts set any 8..VRes, from core0 at any time.
+ * A 2^20 / h reciprocal, rounded up, is exact for y < 1100 and h <= 1024;
+ * it is recomputed by a shift-and-subtract loop (SRAM) when h changes. */
+static int m2_tile_h, m2_tile_recip;
+static void __not_in_flash_func(m2_tile_recip_update)(int h)
+{
+    uint32_t n = (1u << 20) + (uint32_t)h - 1u, q = 0, r = 0;
+    for (int b = 20; b >= 0; b--)
+    {
+        r = (r << 1) | ((n >> b) & 1u);
+        q <<= 1;
+        if (r >= (uint32_t)h) { r -= (uint32_t)h; q |= 1u; }
+    }
+    m2_tile_recip = (int)q;
+    m2_tile_h = h;
+}
+static inline __attribute__((always_inline)) int m2_tile_row(int y)
+{
+    int h = ytileheight;
+    if (h != m2_tile_h)
+    {
+        if (h <= 0) return 0;
+        m2_tile_recip_update(h);
+    }
+    return (int)(((uint32_t)y * (uint32_t)m2_tile_recip) >> 20);
+}
+
 /* Immutable sync templates and three independent pixel-line buffers.
  * Keep the scanout allocation within the existing RP2350 SRAM budget. */
 #define M2_VSYNC_BUFFER 0
 #define M2_BLANK_BUFFER 1
 #define M2_ACTIVE_BUFFER 2
-#define M2_ACTIVE_COUNT 3
+#define M2_ACTIVE_COUNT 3 /* m2_slot() is written for 3 */
 #define M2_RENDER_AHEAD 2
 static uint32_t m2_scanout[M2_ACTIVE_BUFFER + M2_ACTIVE_COUNT][M2_MAX_LINE / 4];
 static uint32_t *m2_line_ptr[2] = {m2_scanout[M2_VSYNC_BUFFER],
@@ -97,7 +142,7 @@ static void __not_in_flash_func(m2_render_active)(uint8_t *dst, int y)
         volatile uint8_t *pp = &LayerBuf[y * vgaloop8];
         /* The renderer may skip a line when overloaded; tile selection
          * must therefore depend on the actual scanline, not past calls. */
-        int pos = (y / ytileheight) * X_TILE;
+        int pos = m2_tile_row(y) * X_TILE;
         /* Every source nibble selects four pixels from the tile mask. */
         uint8_t *out = dst;
         for (i = 0; i < vgaloop16; i++)
@@ -217,7 +262,7 @@ static void __not_in_flash_func(m2_dma_irq)(void)
         m2_line_ptr[next_buffer] = m2_scanout[M2_BLANK_BUFFER];
     else
     {
-        int slot = next % M2_ACTIVE_COUNT;
+        int slot = m2_slot(next);
         /* Only a completely prepared line can be exposed to DMA. */
         m2_line_ptr[next_buffer] =
             m2_render_ready[slot] == next ? m2_scanout[M2_ACTIVE_BUFFER + slot]
@@ -231,7 +276,7 @@ static void __not_in_flash_func(m2_dma_irq)(void)
     if (future >= m2_scanlines) future -= m2_scanlines;
     if (future >= active_start && future < active_start + m2_active_y)
     {
-        int slot = future % M2_ACTIVE_COUNT;
+        int slot = m2_slot(future);
         m2_render_ready[slot] = -1;
         m2_render_request = (uint32_t)future + 1u;
     }
@@ -248,7 +293,7 @@ static void __not_in_flash_func(m2_render_pending)(void)
     int line = (int)job - 1;
     int y = line - m2_vsync_lines - m2_vback_lines;
     if (y < 0 || y >= m2_active_y) return;
-    int slot = line % M2_ACTIVE_COUNT;
+    int slot = m2_slot(line);
     uint8_t *dst = (uint8_t *)m2_scanout[M2_ACTIVE_BUFFER + slot] + m2_active_x;
     m2_render_active(dst, y);
     __dmb();
@@ -316,10 +361,18 @@ static void m2_scanout_init(void)
     X_TILE = Option.X_TILE;
     Y_TILE = Option.Y_TILE;
     ytileheight = (X_TILE == 80 || X_TILE == 90 || X_TILE == 106 || X_TILE == 100) ? 12 : 16;
+#ifdef rp2350
+    /* piomap and the GPIO base exist on the RP2350 only (48 GPIOs) */
     if (piomap[QVGA_PIO_NUM] & (uint64_t)0xFFFF00000000)
         pio_set_gpio_base(QVGA_PIO, 16);
+#endif
     I2SOff = pio_add_program(QVGA_PIO, &i2s_program);
-    m2_pio_offset = pio_add_program(QVGA_PIO, &vga_nextgen_program);
+    int prog = pio_add_program(QVGA_PIO, &vga_nextgen_program);
+    /* A negative result is an error code, not an offset: with -20 (a PIO
+     * version 1 header on an RP2040) the state machine ran garbage. */
+    if (prog < 0)
+        panic("vga_nextgen: pio_add_program %d", prog);
+    m2_pio_offset = (uint32_t)prog;
     for (int pin = QVGA_GPIO_FIRST; pin < QVGA_GPIO_FIRST + 8; pin++)
     {
         pio_gpio_init(QVGA_PIO, pin);
