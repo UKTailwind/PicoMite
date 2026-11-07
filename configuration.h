@@ -283,6 +283,10 @@ extern "C"
 /* Different video family and flash layout from the original PicoMite build. */
 #undef MagicKey
 #define MagicKey 0x4D325637
+#elif defined(MURMULATOR_M1P2)
+/* Murmulator 1.x: same layout as M2P2VGA, other factory pins. */
+#undef MagicKey
+#define MagicKey 0x4D315637
 #endif
 #endif
 #endif
@@ -296,11 +300,15 @@ extern "C"
 #define MAXMODES 2
 #define MAX_CPU 378000
 #define MIN_CPU 252000
-#ifdef MURMULATOR_M2P1
-   /* ELF-enabled RP2040 Murmulator 2 VGA test build. Separate flash map
+#if defined(MURMULATOR_M2P1) || defined(MURMULATOR_M1P1)
+   /* ELF-enabled RP2040 Murmulator 2 / 1.x VGA build. Separate flash map
       from standard VGA; 16 KB-aligned, with space for the ELF loader. */
 #define FLASH_TARGET_OFFSET (960 * 1024)
+#ifdef MURMULATOR_M1P1
+#define MagicKey 0x4D315031 /* M1P1: invalidate options of other layouts */
+#else
 #define MagicKey 0x4D325031 /* M2P1: invalidate options of other layouts */
+#endif
    /* -4 KB (2026-11-07): the vga_nextgen scanout (whole byte-per-pixel
       lines, 5 x 900 bytes) needs ~3.1 KB more SRAM than the packed QVGA
       one it replaced. MAX_PROG_SIZE is pinned, so the flash layout stays. */

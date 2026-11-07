@@ -88,8 +88,8 @@ Each variant is selected with `-DCOMPILE=<variant>`, which forces the matching
 
 Valid `<variant>` names:
 
-- **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `M2P1VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
-- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `M2P2HDMI` &nbsp; `M2P2VGA` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB` &nbsp; `HDMIBTH` &nbsp; `PC3`
+- **RP2040:** `PICO` &nbsp; `PICOMIN` &nbsp; `PICOUSB` &nbsp; `VGA` &nbsp; `M2P1VGA` &nbsp; `M1P1VGA` &nbsp; `VGAUSB` &nbsp; `WEB`
+- **RP2350:** `PICORP2350` &nbsp; `PICOUSBRP2350` &nbsp; `VGARP2350` &nbsp; `VGAUSBRP2350` &nbsp; `WEBRP2350` &nbsp; `PICOBTRP2350` &nbsp; `PICOBTHRP2350` &nbsp; `HDMI` &nbsp; `M2P2HDMI` &nbsp; `M2P2VGA` &nbsp; `M1P2VGA` &nbsp; `HDMIUSB` &nbsp; `HDMIWEB` &nbsp; `HDMIBTH` &nbsp; `PC3`
 
 (Variant names are case-insensitive on the command line.)
 
@@ -98,6 +98,12 @@ Murmulator 2 boards. Both M2 VGA variants use PicoMiteVGA's 4-bit RGB121
 framebuffer and expand scanlines to RGB222 on GP12..17. `M2P2VGA` is 6-bit
 output by default; set `-DM2P2_VGA_BITS=4` for direct RGB121 on GP13..16.
 `buildpicomite.bat M2P2VGA4` builds that alternate physical pinout.
+
+`M1P1VGA` (RP2040) and `M1P2VGA` (RP2350) are the same RGB222 VGA firmware
+with the factory wiring of the Murmulator 1.x: RGB222 on GP6..11, HSYNC GP12,
+VSYNC GP13, PS/2 keyboard GP0 (clock) / GP1 (data), SD card GP2 (CLK), GP3
+(MOSI), GP4 (MISO), GP5 (CS), PWM audio GP26 / GP27 and, on `M1P2VGA`, PSRAM
+CS on GP19 (RP2350A) or GP47 (RP2350B).
 See [M2 VGA RGB222 design and pinout](docs/M2_VGA_RGB222.md).
 
 ## Documentation

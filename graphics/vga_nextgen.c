@@ -29,10 +29,19 @@
 #define M2_VSYNC_BIT 0x80u
 #define M2_NO_SYNC 0xc0u
 
+/* RP2040 only: the scanout on core1 must not touch the Flash (see m2_div3
+ * below). The RP2350 builds lock core1 out around Flash writes instead
+ * (MURMULATOR_RP2350_VGA222) and have no SRAM to spare for it: M1P2VGA and
+ * M2P2VGA ended 128 bytes over when this was in SRAM there too. */
+#ifdef rp2350
+#define M2_RAM_TABLE(name)
+#else
+#define M2_RAM_TABLE(name) __not_in_flash(name)
+#endif
 /* Direct four-bit RGB121 to six-bit RGB222, with both syncs inactive.
- * In SRAM: never written, so GCC would otherwise put it in .rodata (Flash),
- * read by the core1 renderer for every pixel (see m2_div3 below). */
-static uint8_t __not_in_flash("m2_colour") m2_colour[16] = {
+ * On the RP2040 in SRAM: never written, so GCC would otherwise put it in
+ * .rodata (Flash), read by the core1 renderer for every pixel. */
+static uint8_t M2_RAM_TABLE("m2_colour") m2_colour[16] = {
     0xc0, 0xc3, 0xc4, 0xc7, 0xc8, 0xcb, 0xcc, 0xcf,
     0xf0, 0xf3, 0xf4, 0xf7, 0xf8, 0xfb, 0xfc, 0xff
 };
@@ -59,6 +68,17 @@ static inline __attribute__((always_inline)) void m2_store4(uint8_t *p, uint32_t
     }
 }
 
+#ifdef rp2350
+/* The Cortex-M33 divides in hardware: no library call, nothing in Flash. */
+static inline __attribute__((always_inline)) int m2_slot(int line)
+{
+    return line % 3; /* M2_ACTIVE_COUNT */
+}
+static inline __attribute__((always_inline)) int m2_tile_row(int y)
+{
+    return y / ytileheight;
+}
+#else
 /* No division on core1: the Cortex-M0+ (RP2040) has no divide instruction,
  * so '/' and '%' call the SDK divider in Flash. The scanline IRQ and the
  * renderer must run from SRAM alone - core0 erases and programs the Flash
@@ -101,13 +121,14 @@ static inline __attribute__((always_inline)) int m2_tile_row(int y)
     }
     return (int)(((uint32_t)y * (uint32_t)m2_tile_recip) >> 20);
 }
+#endif
 
 /* Immutable sync templates and three independent pixel-line buffers.
  * Keep the scanout allocation within the existing RP2350 SRAM budget. */
 #define M2_VSYNC_BUFFER 0
 #define M2_BLANK_BUFFER 1
 #define M2_ACTIVE_BUFFER 2
-#define M2_ACTIVE_COUNT 3 /* m2_slot() is written for 3 */
+#define M2_ACTIVE_COUNT 3 /* the RP2040 m2_slot() is written for 3 */
 #define M2_RENDER_AHEAD 2
 static uint32_t m2_scanout[M2_ACTIVE_BUFFER + M2_ACTIVE_COUNT][M2_MAX_LINE / 4];
 static uint32_t *m2_line_ptr[2] = {m2_scanout[M2_VSYNC_BUFFER],
@@ -440,7 +461,7 @@ static void m2_scanout_init(void)
 
 void __not_in_flash_func(QVgaCore)(void)
 {
-#ifdef MURMULATOR_M2P2_VGA222
+#ifdef MURMULATOR_RP2350_VGA222
     multicore_lockout_victim_init();
 #endif
     m2_scanout_init();
@@ -449,7 +470,7 @@ void __not_in_flash_func(QVgaCore)(void)
         if (m2_render_request)
             m2_render_pending();
         __dmb();
-#ifndef MURMULATOR_M2P2_VGA222
+#ifndef MURMULATOR_RP2350_VGA222
         if (multicore_fifo_rvalid())
         {
             int command = multicore_fifo_pop_blocking();

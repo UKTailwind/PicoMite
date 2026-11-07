@@ -416,7 +416,7 @@ static void __not_in_flash_func(restore_psram_settings)(void)
  * while core0 erases/programs Flash. The SDK permits lockout before core1
  * launches and after the VGA worker has installed its victim handler.
  * Keep the lockout across QMI restoration; only then resume core1. */
-#if defined(MURMULATOR_M2P2_VGA222)
+#if defined(MURMULATOR_RP2350_VGA222)
 static inline bool m2_flash_lockout_begin(void)
 {
     if (!multicore_lockout_ready()) return false;
@@ -431,7 +431,7 @@ static inline void m2_flash_lockout_end(bool locked)
 
 void __not_in_flash_func(safe_flash_range_erase)(uint32_t flash_offs, size_t count)
 {
-#if defined(MURMULATOR_M2P2_VGA222)
+#if defined(MURMULATOR_RP2350_VGA222)
     bool locked = m2_flash_lockout_begin();
 #endif
     uint32_t saved_timing = qmi_hw->m[0].timing;
@@ -441,14 +441,14 @@ void __not_in_flash_func(safe_flash_range_erase)(uint32_t flash_offs, size_t cou
         qmi_hw->m[0].timing = saved_timing;
     if (qmi_hw->m[0].rfmt != saved_rfmt)
         qmi_hw->m[0].rfmt = saved_rfmt;
-#if defined(MURMULATOR_M2P2_VGA222)
+#if defined(MURMULATOR_RP2350_VGA222)
     m2_flash_lockout_end(locked);
 #endif
 }
 
 void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const uint8_t *data, size_t count)
 {
-#if defined(MURMULATOR_M2P2_VGA222)
+#if defined(MURMULATOR_RP2350_VGA222)
     bool locked = m2_flash_lockout_begin();
 #endif
     uint32_t saved_timing = qmi_hw->m[0].timing;
@@ -458,7 +458,7 @@ void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const ui
         qmi_hw->m[0].timing = saved_timing;
     if (qmi_hw->m[0].rfmt != saved_rfmt)
         qmi_hw->m[0].rfmt = saved_rfmt;
-#if defined(MURMULATOR_M2P2_VGA222)
+#if defined(MURMULATOR_RP2350_VGA222)
     m2_flash_lockout_end(locked);
 #endif
 }
@@ -466,7 +466,7 @@ void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const ui
 // flash_do_cmd leaves XIP the same way, so the same restore
 void __not_in_flash_func(safe_flash_do_cmd)(const uint8_t *txbuf, uint8_t *rxbuf, size_t count)
 {
-#if defined(MURMULATOR_M2P2_VGA222)
+#if defined(MURMULATOR_RP2350_VGA222)
     bool locked = m2_flash_lockout_begin();
 #endif
     uint32_t saved_timing = qmi_hw->m[0].timing;
@@ -476,7 +476,7 @@ void __not_in_flash_func(safe_flash_do_cmd)(const uint8_t *txbuf, uint8_t *rxbuf
         qmi_hw->m[0].timing = saved_timing;
     if (qmi_hw->m[0].rfmt != saved_rfmt)
         qmi_hw->m[0].rfmt = saved_rfmt;
-#if defined(MURMULATOR_M2P2_VGA222)
+#if defined(MURMULATOR_RP2350_VGA222)
     m2_flash_lockout_end(locked);
 #endif
 }
@@ -8428,6 +8428,29 @@ void ResetOptions(bool startup)
     Option.AUDIO_L = PINMAP[10];
     Option.AUDIO_R = PINMAP[11];
     Option.AUDIO_SLICE = 5; /* GP10/GP11: PWM slice 5 */
+    Option.ColourCode = 1;
+    Option.NoHeartbeat = 1;
+#endif
+#if defined(MURMULATOR_M1P1) || defined(MURMULATOR_M1P2)
+    /* Murmulator 1.x factory wiring: RGB222 on GP6..11, HSYNC GP12, VSYNC
+       GP13, PS/2 keyboard GP0 (clock) / GP1 (data), SD card on SPI0 GP2..5,
+       PWM audio GP26 / GP27; the M1 has no PS/2 mouse port. */
+    strcpy((char *)Option.platform, "Murmulator 1");
+    Option.VGA_HSYNC = PINMAP[12]; /* VSYNC uses GP13 */
+    Option.VGA_BLUE = PINMAP[6];   /* RGB222 PIO output uses GP6..11 */
+    Option.KEYBOARD_CLOCK = PINMAP[0];
+    Option.KEYBOARD_DATA = PINMAP[1];
+    Option.KeyboardConfig = CONFIG_US;
+    Option.SD_CS = PINMAP[5];
+    Option.SD_CLK_PIN = PINMAP[2];
+    Option.SD_MOSI_PIN = PINMAP[3];
+    Option.SD_MISO_PIN = PINMAP[4];
+    Option.AUDIO_L = PINMAP[26];
+    Option.AUDIO_R = PINMAP[27];
+    Option.AUDIO_SLICE = 5; /* GP26/GP27: PWM slice 5 */
+#ifdef MURMULATOR_M1P2
+    Option.PSRAM_CS_PIN = PINMAP[rp2350a ? 19 : 47];
+#endif
     Option.ColourCode = 1;
     Option.NoHeartbeat = 1;
 #endif

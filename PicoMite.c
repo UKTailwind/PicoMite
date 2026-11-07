@@ -3927,8 +3927,8 @@ uint32_t testPSRAM(void)
             _excep_code = RESET_CLOCKSPEED;
             watchdog_enable(1000, 1);
         }
-#ifdef MURMULATOR_M2P2_VGA222
-        /* Temporary M2P2VGA scanout test at 378 MHz. Keep saved options
+#ifdef MURMULATOR_RP2350_VGA222
+        /* Temporary M2P2VGA / M1P2VGA scanout test at 378 MHz. Keep saved options
            unchanged, and keep the live speed across options reloads.
            The RP2350 boot voltage policy below already selects 1.60 V
            for speeds above 320 MHz. */

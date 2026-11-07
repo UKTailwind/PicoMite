@@ -8,7 +8,9 @@ own folder.
 Build variants are selected by `-DCOMPILE=<variant>` (see `buildpicomite.bat`)
 and gated by macros: `PICOMITEVGA`, `HDMI`, `HDMICUTDOWN`, `PICOMITEWEB`,
 `PICOMITEWEB_TLS`, `PICOMITEBT`/`PICOMITEBTH`, `USBKEYBOARD`, `PICOMITEMIN`,
-`MURMULATOR_M2P1`/`MURMULATOR_M2P2`, `rp2350`.
+`MURMULATOR_M2P1`/`MURMULATOR_M2P2`/`MURMULATOR_M1P1`/`MURMULATOR_M1P2`
+(`MURMULATOR_M2_VGA222`: the RGB222 vga_nextgen scanout of all four,
+`MURMULATOR_RP2350_VGA222`: its RP2350 builds), `rp2350`.
 
 ---
 
