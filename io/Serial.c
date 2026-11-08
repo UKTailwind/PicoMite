@@ -781,8 +781,10 @@ void MIPS16 SerialOpen(unsigned char *spec)
 
 		// Both requests below block, and res gets the outcome of each one actually sent. One never
 		// sent (an ACM device that declares no line-state support) leaves res at XFER_RESULT_INVALID
-		// and is not an error. One the device failed, stalled or never answered is: without DTR a
-		// PicoMite at the other end ignores what it is sent and sends nothing back.
+		// and is not an error. One the device failed or never answered is: without DTR a PicoMite at
+		// the other end ignores what it is sent and sends nothing back. A stalled DTR/RTS is the device
+		// saying it has no such request (the Microbridge stalls every one), so the port opens without
+		// them (issue #151); a stalled baud rate is still an error.
 		xfer_result_t res = XFER_RESULT_INVALID;
 
 		// Send SET_LINE_CODING with the requested baud rate (essential for USB-UART bridges like CH340)
@@ -796,7 +798,7 @@ void MIPS16 SerialOpen(unsigned char *spec)
 		// Assert DTR (and RTS) to signal the device we are ready
 		res = XFER_RESULT_INVALID;
 		tuh_cdc_set_control_line_state(cdc_idx, CDC_CONTROL_LINE_STATE_DTR | CDC_CONTROL_LINE_STATE_RTS, NULL, (uintptr_t)&res);
-		if (res != XFER_RESULT_INVALID && res != XFER_RESULT_SUCCESS)
+		if (res != XFER_RESULT_INVALID && res != XFER_RESULT_SUCCESS && res != XFER_RESULT_STALLED)
 			cdc_open_failed(comnbr, "DTR/RTS");
 
 		// The device can hand over what it held in more than one transfer: keep USB running 5 ms (five frames) for

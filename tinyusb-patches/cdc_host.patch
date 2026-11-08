@@ -95,7 +95,14 @@
    } else if (ep_addr == p_cdc->ep_notif) {
      // TODO handle notification endpoint
    } else {
-@@ -767,9 +814,11 @@ static void set_config_complete(cdch_int
+@@ -764,12 +811,18 @@ uint16_t cdch_open(uint8_t rhport, uint8
+ }
+ 
+ static void set_config_complete(cdch_interface_t *p_cdc, bool success) {
++  // PicoMite: the failure path clears the entry, and usbh still needs the device and interface: given address 0 it
++  // read a NULL device and set up drivers named by whatever bytes lay there (issue #151; upstream has the same fix)
++  const uint8_t daddr    = p_cdc->daddr;
++  const uint8_t next_itf = p_cdc->bInterfaceNumber + ((p_cdc->serial_drid == SERIAL_DRIVER_ACM) ? 1 : 0);
    if (success) {
      const uint8_t idx = get_idx_by_ptr(p_cdc);
      p_cdc->mounted    = true;
@@ -110,6 +117,28 @@
    } else {
      // clear the interface entry
      p_cdc->daddr            = 0;
+@@ -777,8 +830,7 @@ static void set_config_complete(cdch_int
+   }
+ 
+   // notify usbh that driver enumeration is complete
+-  const uint8_t itf_offset = (p_cdc->serial_drid == SERIAL_DRIVER_ACM) ? 1 : 0;
+-  usbh_driver_set_config_complete(p_cdc->daddr, p_cdc->bInterfaceNumber + itf_offset);
++  usbh_driver_set_config_complete(daddr, next_itf);
+ }
+ 
+ bool cdch_set_config(uint8_t daddr, uint8_t itf_num) {
+@@ -871,7 +923,10 @@ static bool set_line_state_on_enum(cdch_
+ static void cdch_process_line_state_on_enum(tuh_xfer_t *xfer) {
+   cdch_interface_t *p_cdc = get_itf_by_xfer(xfer);
+   TU_ASSERT(p_cdc && p_cdc->serial_drid < SERIAL_DRIVER_COUNT,);
+-  if (xfer->result != XFER_RESULT_SUCCESS || !set_line_state_on_enum(p_cdc, xfer)) {
++  // PicoMite: a STALL is the device declining a request it does not have, so go on to the next one. The Microbridge
++  // (04D8:000A) stalls every SET_CONTROL_LINE_STATE, and failing the mount for it left the port with no device (issue #151).
++  if ((xfer->result != XFER_RESULT_SUCCESS && xfer->result != XFER_RESULT_STALLED) ||
++      !set_line_state_on_enum(p_cdc, xfer)) {
+     set_config_complete(p_cdc, false);
+   }
+ }
 --- a/src/class/cdc/cdc_host.h
 +++ b/src/class/cdc/cdc_host.h
 @@ -117,6 +117,9 @@ bool tuh_cdc_peek(uint8_t idx, uint8_t *
