@@ -493,19 +493,19 @@ PEEK(BYTE)
 ~OPTIONS
 OPTION settings
 
-OPTION                         OPTION LEGACY ON
-OPTION ANGLE                   OPTION LIST
-OPTION AUDIO                   OPTION LOCAL KEYBOARD ON
-OPTION AUDIO BLUETOOTH         OPTION LOCAL VARIABLES
-OPTION AUDIO I2S               OPTION LOGGING ON
-OPTION AUDIO SPI               OPTION MILLISECONDS
-OPTION AUDIO VS1053            OPTION MODBUFF
-OPTION AUTOREFRESH             OPTION MOUSE
-OPTION AUTORUN ON              OPTION MOUSE DISABLE
-OPTION BACKLIGHT KBD           OPTION MOUSE SENSITIVITY
-OPTION BASE                    OPTION NOCHECK
-OPTION BAUDRATE                OPTION PICO
-OPTION BREAK                   OPTION PICO PLUS
+OPTION                         OPTION LIST
+OPTION ANGLE                   OPTION LOCAL KEYBOARD ON
+OPTION AUDIO                   OPTION LOCAL VARIABLES
+OPTION AUDIO BLUETOOTH         OPTION LOGGING ON
+OPTION AUDIO I2S               OPTION MILLISECONDS
+OPTION AUDIO SPI               OPTION MODBUFF
+OPTION AUDIO VS1053            OPTION MOUSE
+OPTION AUTOREFRESH             OPTION MOUSE DISABLE
+OPTION AUTORUN ON              OPTION MOUSE SENSITIVITY
+OPTION BACKLIGHT KBD           OPTION NOCHECK
+OPTION BASE                    OPTION PICO
+OPTION BAUDRATE                OPTION PICO PLUS
+OPTION BREAK                   OPTION PICOMITE
 OPTION CASE                    OPTION PIN
 OPTION CDC POLL RATE           OPTION PLATFORM
 OPTION COLOURCODE ON           OPTION POWER
@@ -537,6 +537,7 @@ OPTION LCDPANEL                OPTION VCC
 OPTION LCDPANEL CONSOLE        OPTION VGA PINS
 OPTION LCDPANEL NOCONSOLE      OPTION WEB MESSAGES
 OPTION LCDPANEL USER           OPTION WIFI
+OPTION LEGACY ON
 
 ~VARIABLES
 Predefined read-only variables
@@ -6125,6 +6126,13 @@ RP2350B VERSIONS ONLY Configures the firmware for the Pimoroni Pico Plus 2 or
 Pico Plus 2 W board with a single command. ON sets the heartbeat to the
 board's LED pin and enables the PSRAM fitted to the board (chip select GP47),
 then saves the options and restarts.
+
+~OPTION PICOMITE
+OPTION PICOMITE ON/OFF
+
+Does nothing on the PicoMite, and gives no error, in a program or at the
+command prompt. Anything else after it, or nothing, is accepted and ignored
+too, so the Colour Maximite 2's own forms of the command work as well.
 
 ~OPTION PIN
 OPTION PIN nbr
