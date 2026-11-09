@@ -5346,6 +5346,11 @@ void MIPS16 cmd_option(void)
         return;
     }
 
+    // OPTION PICOMITE, with anything or nothing after it, does nothing here (Peter): a program can carry it for the
+    // Colour Maximite 2, which has to switch to its PicoMite mode to run a PicoMite program
+    if (checkstring(cmdline, (unsigned char *)"PICOMITE"))
+        return;
+
     tp = checkstring(cmdline, (unsigned char *)"SYMBOLS");
     if (tp)
     { // OPTION SYMBOLS OFF at the top of a program: PrepareProgram found it and
