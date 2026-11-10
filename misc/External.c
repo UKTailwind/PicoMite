@@ -777,6 +777,53 @@ void MIPS16 ExtCfg(int pin, int cfg, int option)
         ExtCurrentConfig[pin] |= cfg; // don't do anything except set the config type
         return;
     }
+    // A UART pin is checked before anything is done to it, so a refused SETPIN ... COM1/COM2 (the console or GPS on
+    // that UART, or the port already on other pins) leaves the pin as it was: checked in the switch below, after
+    // ClearPin and gpio_init, it became a plain input that MMBasic still recorded as before. The port's own pin is
+    // not "in use": ClearPin releases it.
+    switch (cfg)
+    {
+    case EXT_UART0TX:
+        if (!(PinDef[pin].mode & UART0TX))
+            StandardError(8);
+        if (Option.SerialConsole && (Option.SerialConsole & 3) == 1)
+            error("UART0 in use for Console");
+        if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART0TX))
+            error("UART0 in use for GPS");
+        if (UART0TXpin != 99 && UART0TXpin != pin)
+            StandardErrorParam(24, UART0TXpin);
+        break;
+    case EXT_UART0RX:
+        if (!(PinDef[pin].mode & UART0RX))
+            StandardError(8);
+        if (Option.SerialConsole && (Option.SerialConsole & 3) == 1)
+            error("UART0 in use for Console");
+        if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART0TX))
+            error("UART0 in use for GPS");
+        if (UART0RXpin != 99 && UART0RXpin != pin)
+            StandardErrorParam(24, UART0RXpin);
+        break;
+    case EXT_UART1TX:
+        if (!(PinDef[pin].mode & UART1TX))
+            StandardError(8);
+        if (Option.SerialConsole && (Option.SerialConsole & 3) != 1)
+            error("UART1 in use for Console");
+        if (Option.GPSTX && !(PinDef[Option.GPSTX].mode & UART0TX))
+            error("UART1 in use for GPS");
+        if (UART1TXpin != 99 && UART1TXpin != pin)
+            StandardErrorParam(24, UART1TXpin);
+        break;
+    case EXT_UART1RX:
+        if (!(PinDef[pin].mode & UART1RX))
+            StandardError(8);
+        if (Option.SerialConsole && (Option.SerialConsole & 3) != 1)
+            error("UART1 in use for Console");
+        if (Option.GPSTX && !(PinDef[Option.GPSTX].mode & UART0TX))
+            error("UART1 in use for GPS");
+        if (UART1RXpin != 99 && UART1RXpin != pin)
+            StandardErrorParam(24, UART1RXpin);
+        break;
+    }
     ClearPin(pin); // disable the link to any special functions
     if (pin == Option.INT1pin)
     {
@@ -1117,48 +1164,16 @@ void MIPS16 ExtCfg(int pin, int cfg, int option)
         ana = 1;
         break;
 #endif
-    case EXT_UART0TX:
-        if (!(PinDef[pin].mode & UART0TX))
-            StandardError(8);
-        if (Option.SerialConsole && (Option.SerialConsole & 3) == 1)
-            error("UART0 in use for Console");
-        if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART0TX))
-            error("UART0 in use for GPS");
-        if ((UART0TXpin != 99))
-            StandardErrorParam(24, UART0TXpin);
+    case EXT_UART0TX: // checked before the pin was touched, at the top
         UART0TXpin = pin;
         break;
     case EXT_UART0RX:
-        if (!(PinDef[pin].mode & UART0RX))
-            StandardError(8);
-        if (Option.SerialConsole && (Option.SerialConsole & 3) == 1)
-            error("UART0 in use for Console");
-        if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART0TX))
-            error("UART0 in use for GPS");
-        if ((UART0RXpin != 99))
-            StandardErrorParam(24, UART0RXpin);
         UART0RXpin = pin;
         break;
     case EXT_UART1TX:
-        if (!(PinDef[pin].mode & UART1TX))
-            StandardError(8);
-        if (Option.SerialConsole && (Option.SerialConsole & 3) != 1)
-            error("UART1 in use for Console");
-        if (Option.GPSTX && !(PinDef[Option.GPSTX].mode & UART0TX))
-            error("UART1 in use for GPS");
-        if ((UART1TXpin != 99))
-            StandardErrorParam(24, UART1TXpin);
         UART1TXpin = pin;
         break;
     case EXT_UART1RX:
-        if (!(PinDef[pin].mode & UART1RX))
-            StandardError(8);
-        if (Option.SerialConsole && (Option.SerialConsole & 3) != 1)
-            error("UART1 in use for Console");
-        if (Option.GPSTX && !(PinDef[Option.GPSTX].mode & UART0TX))
-            error("UART1 in use for GPS");
-        if ((UART1RXpin != 99))
-            StandardErrorParam(24, UART1RXpin);
         UART1RXpin = pin;
         break;
     case EXT_SPI0TX:

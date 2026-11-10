@@ -6127,7 +6127,9 @@ void MIPS16 cmd_option(void)
         }
         else
         {
-            int pin, pin2;
+            // One pin must be TX and the other RX. The pins used to be checked in Option itself, so two TX pins were
+            // accepted with whatever RX pin Option already held (two RX pins with the old TX pin), and saved.
+            int pin, pin2, tx = 0, rx = 0;
             getcsargs(&tp, 5);
             if (!(argc == 3 || argc == 5))
                 SyntaxError();
@@ -6139,21 +6141,23 @@ void MIPS16 cmd_option(void)
             if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
                 StandardErrorParam2(27, pin2, pin2);
             if (PinDef[pin].mode & UART0TX)
-                Option.SerialTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART0RX)
-                Option.SerialRX = pin;
+                rx = pin;
             else
                 goto checkcom2;
             if (PinDef[pin2].mode & UART0TX)
-                Option.SerialTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART0RX)
-                Option.SerialRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.SerialTX == Option.SerialRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART0TX))
                 error("UART0 in use for GPS");
+            Option.SerialTX = tx;
+            Option.SerialRX = rx;
             Option.SerialConsole = 1;
             if (argc == 5)
                 Option.SerialConsole = ((checkstring(argv[4], (unsigned char *)"B") || checkstring(argv[4], (unsigned char *)"BOTH")) ? 5 : 1);
@@ -6162,21 +6166,23 @@ void MIPS16 cmd_option(void)
             return;
         checkcom2:
             if (PinDef[pin].mode & UART1TX)
-                Option.SerialTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART1RX)
-                Option.SerialRX = pin;
+                rx = pin;
             else
                 StandardError(8);
             if (PinDef[pin2].mode & UART1TX)
-                Option.SerialTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART1RX)
-                Option.SerialRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.SerialTX == Option.SerialRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART1TX))
                 error("UART1 in use for GPS");
+            Option.SerialTX = tx;
+            Option.SerialRX = rx;
             Option.SerialConsole = 2;
             if (argc == 5)
                 Option.SerialConsole = (checkstring(argv[4], (unsigned char *)"B") ? 6 : 2);
@@ -6200,19 +6206,17 @@ void MIPS16 cmd_option(void)
         }
         else
         {
-            int pin, pin2;
+            // As OPTION SERIAL CONSOLE: one TX pin and one RX pin, put into Option (with the baud rate) once checked
+            int pin, pin2, tx = 0, rx = 0, baud = 9600;
             getcsargs(&tp, 5);
             if (!(argc == 3 || argc == 5))
                 SyntaxError();
             if (argc == 5)
             {
-                int i = getint(argv[4], Option.CPU_Speed * 1000 / 16 / 65535, 921600);
-                if (i < 100)
+                baud = getint(argv[4], Option.CPU_Speed * 1000 / 16 / 65535, 921600);
+                if (baud < 100)
                     StandardError(21);
-                Option.GPSBaud = i;
             }
-            else
-                Option.GPSBaud = 9600;
             pin = getpinarg(argv[0]);
             pin2 = getpinarg(argv[2]);
             if (ExtCurrentConfig[pin] != EXT_NOT_CONFIG)
@@ -6220,41 +6224,47 @@ void MIPS16 cmd_option(void)
             if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
                 StandardErrorParam2(27, pin2, pin2);
             if (PinDef[pin].mode & UART0TX)
-                Option.GPSTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART0RX)
-                Option.GPSRX = pin;
+                rx = pin;
             else
                 goto GPScheckcom2;
             if (PinDef[pin2].mode & UART0TX)
-                Option.GPSTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART0RX)
-                Option.GPSRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.GPSTX == Option.GPSRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.SerialConsole && (Option.SerialConsole & 3) == 1)
                 error("UART0 in use for Console");
+            Option.GPSTX = tx;
+            Option.GPSRX = rx;
+            Option.GPSBaud = baud;
             SaveOptions();
             SoftReset(SOFT_RESET);
             return;
         GPScheckcom2:
             if (PinDef[pin].mode & UART1TX)
-                Option.GPSTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART1RX)
-                Option.GPSRX = pin;
+                rx = pin;
             else
                 StandardError(8);
             if (PinDef[pin2].mode & UART1TX)
-                Option.GPSTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART1RX)
-                Option.GPSRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.GPSTX == Option.GPSRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.SerialConsole && (Option.SerialConsole & 3) == 2)
                 error("UART1 in use for Console");
+            Option.GPSTX = tx;
+            Option.GPSRX = rx;
+            Option.GPSBaud = baud;
             SaveOptions();
             SoftReset(SOFT_RESET);
         }
