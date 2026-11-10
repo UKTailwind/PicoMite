@@ -9505,8 +9505,8 @@ OPTION AUDIO PWMnApin, PWMnBpin
 or
 OPTION AUDIO DISABLE
 
-NOT BLUETOOTH HOST VERSIONS Configures one of the PWM channels as an audio
-output.
+NOT RP2350BTH OR HDMIBTH VERSIONS Configures one of the PWM channels as an
+audio output.
 'PWMnApin' is the left audio channel, 'PWMnBpin' is the right.  Both pins must
 belong to the same audio channel.
 Example,  OPTION AUDIO GP18, GP19 would use PWM1A and PWM1B on pins 24 and 25
@@ -9549,9 +9549,9 @@ OPTION AUDIO SPI CSpin, CLKpin, MOSIpin
 or
 OPTION AUDIO DISABLE
 
-NOT PICOMITEMIN OR BLUETOOTH HOST VERSIONS Configures the audio output to be
-directed to a MCP48n2 DAC connected to the specified pins. The LDAC pin on the
-DAC should be connected to GND.
+NOT PICOMITEMIN, RP2350BTH OR HDMIBTH VERSIONS Configures the audio output to
+be directed to a MCP48n2 DAC connected to the specified pins. The LDAC pin on
+the DAC should be connected to GND.
 
 ~OPTION AUDIO VS1053
 OPTION AUDIO VS1053 CLKpin, MOSIpin, MISOpin, XCSpin, XDCSpin, DREQpin,
