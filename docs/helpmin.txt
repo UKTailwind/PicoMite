@@ -6128,11 +6128,11 @@ board's LED pin and enables the PSRAM fitted to the board (chip select GP47),
 then saves the options and restarts.
 
 ~OPTION PICOMITE
-OPTION PICOMITE ON/OFF
+OPTION PICOMITE HDMI/VGA/OFF
 
 Does nothing on the PicoMite, and gives no error, in a program or at the
-command prompt. Anything else after it, or nothing, is accepted and ignored
-too, so the Colour Maximite 2's own forms of the command work as well.
+command prompt. HDMI, VGA, OFF or anything else after it, or nothing, is
+accepted and ignored.
 
 ~OPTION PIN
 OPTION PIN nbr
