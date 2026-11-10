@@ -3721,6 +3721,17 @@ uint32_t testPSRAM(void)
         {
             configure((unsigned char *)"PICO COMPUTER 3", true);
         }
+#ifdef PICOMITEPC3
+        /* No 32 kHz clock on GP27, so not a Pico Computer 3.  This firmware also runs the
+           Pico Computer 2 and the Olimex RP2350pc (no radio on either) and needs PSRAM, so
+           the PSRAM's chip select says which: GP47 on the Pico Computer 2, GP8 on the
+           RP2350pc.  Before anything else touches those pins: on the RP2350pc the default
+           console UART on GP8 would select the PSRAM under the flash's reads. */
+        else if (psram_probe(47))
+            configure((unsigned char *)"HDMIUSBI2S", true);
+        else if (psram_probe(8))
+            configure((unsigned char *)"RP2350PC", true);
+#endif
     }
 #endif
     int MIPS16 main()

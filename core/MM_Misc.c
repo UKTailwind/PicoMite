@@ -4017,6 +4017,9 @@ void MIPS16 configure(unsigned char *p, bool noask)
             MMPrintString("OLIMEX USB\r\n");
             MMPrintString("PICO COMPUTER\r\n");
             MMPrintString("HDMIUSBI2S\r\n");
+#ifdef PICOMITEPC3
+            MMPrintString("RP2350PC\r\n");
+#endif
 #else
             MMPrintString("OLIMEX\r\n");
             MMPrintString("HDMIBasic\r\n");
@@ -4321,9 +4324,14 @@ void MIPS16 configure(unsigned char *p, bool noask)
         {
             if (rp2350a)
                 error("RP350B chips only");
-            format = testMODBUFF(true, 512, false);
+            format = testMODBUFF(true, 512, noask); /* noask: applied at boot by TestPicoComputer3 (PC3 build) */
             strcpy((char *)Option.platform, "HDMIUSBI2S");
+#ifdef PICOMITEPC3
+            Option.Radio = RADIO_WIFI_OFF | RADIO_BT_OFF; /* the Pico Computer 2 has no radio: the heartbeat is GP25 */
+            Option.PSRAM_CS_PIN = PINMAP[47];             /* this firmware runs only with its PSRAM */
+#else
             Option.heartbeatpin = PINMAP[25];
+#endif
             Option.NoHeartbeat = false;
             Option.ColourCode = 1;
             Option.audio_i2s_bclk = PINMAP[10];
@@ -4349,10 +4357,45 @@ void MIPS16 configure(unsigned char *p, bool noask)
             Option.INT3pin = PINMAP[2];
             Option.INT4pin = PINMAP[3];
             SaveOptions();
-            printoptions();
+            if (!noask)
+                printoptions();
             uSec(100000);
             doreset(format);
         }
+#ifdef PICOMITEPC3
+        /* The Olimex RP2350pc: 8 MB PSRAM on GP8, HDMI on GP12-19 in the default order,
+           SD card on GP9-11 and GP24, stereo PWM audio on GP26/GP27, no RTC, no radio, the
+           LED on GP25 and UEXT1's UART0 on GP0/GP1 as the console.  The codec's I2C (GP32/
+           GP33) and the amplifier's volume (GP34) and shutdown (GP35) are set up at boot
+           from the platform name (InitReservedIO).  Applied at boot when there is no 32 kHz
+           clock on GP27 and the PSRAM answers on GP8. */
+        if (checkstring(p, (unsigned char *)"RP2350PC"))
+        {
+            if (rp2350a)
+                error("RP2350B chips only");
+            format = testMODBUFF(true, 512, noask);
+            strcpy((char *)Option.platform, "RP2350PC");
+            Option.Radio = RADIO_WIFI_OFF | RADIO_BT_OFF; /* no radio: the heartbeat is GP25 */
+            Option.NoHeartbeat = false;
+            Option.ColourCode = 1;
+            Option.PSRAM_CS_PIN = PINMAP[8];
+            Option.SD_CS = PINMAP[9];
+            Option.SD_CLK_PIN = PINMAP[10];
+            Option.SD_MOSI_PIN = PINMAP[11];
+            Option.SD_MISO_PIN = PINMAP[24];
+            Option.AUDIO_L = PINMAP[26];
+            Option.AUDIO_R = PINMAP[27];
+            Option.AUDIO_SLICE = checkslice(PINMAP[26], PINMAP[27], 0);
+            Option.SerialTX = PINMAP[0];
+            Option.SerialRX = PINMAP[1];
+            Option.SerialConsole = 1;
+            SaveOptions();
+            if (!noask)
+                printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
         if (checkstring(p, (unsigned char *)"OLIMEXUSB"))
         {
             format = testMODBUFF(true, 192, false);

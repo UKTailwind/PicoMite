@@ -369,6 +369,9 @@ extern uint8_t slice4, slice5, slice6, slice7;
  * External variables - Backlight control
  * ============================================================================ */
 extern int BacklightSlice, BacklightChannel;
+#ifdef PICOMITEPC3
+extern int AmpSlice; /* OPTION RESET RP2350PC: the amplifier's volume PWM slice (9), else -1 */
+#endif
 
 #if PICOMITERP2350
 extern int KeyboardlightSlice, KeyboardlightChannel;

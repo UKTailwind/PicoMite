@@ -3127,6 +3127,10 @@ void MIPS16 cmd_Servo(void)
     if (slice == 10 && stepper_initialized)
         error("Channel in use for Stepper");
 #endif
+#ifdef PICOMITEPC3
+    if (slice == AmpSlice)
+        error("Channel in use for amplifier");
+#endif
     if ((tp = checkstring(argv[2], (unsigned char *)"OFF")))
     {
         uint8_t *slice_flag = pwm_slice_flag_ptr(slice);
@@ -3228,6 +3232,10 @@ void MIPS16 cmd_pwm(void)
             if (KeyboardlightSlice == i)
                 reserved = true;
 #endif
+#ifdef PICOMITEPC3
+            if (AmpSlice == i) /* kept running, never resynchronised */
+                reserved = true;
+#endif
 
             if (reserved)
             {
@@ -3235,6 +3243,9 @@ void MIPS16 cmd_pwm(void)
                 if (counts[i] >= 0.0 && Option.AUDIO_SLICE != i && BacklightSlice != i && CameraSlice != i
 #if PICOMITERP2350
                     && KeyboardlightSlice != i
+#endif
+#ifdef PICOMITEPC3
+                    && AmpSlice != i
 #endif
                 )
                 {
@@ -3273,6 +3284,10 @@ void MIPS16 cmd_pwm(void)
     extern volatile bool stepper_initialized;
     if (slice == 10 && stepper_initialized)
         error("Channel in use for Stepper");
+#endif
+#ifdef PICOMITEPC3
+    if (slice == AmpSlice)
+        error("Channel in use for amplifier");
 #endif
     if ((tp = checkstring(argv[2], (unsigned char *)"OFF")))
     {
@@ -5972,7 +5987,11 @@ void MIPS16 ClearExternalIO(void)
             PWMoff(i);
 #else
     for (i = 0; i <= (rp2350a ? 7 : 11); i++)
+#ifdef PICOMITEPC3
+        if (!(i == Option.AUDIO_SLICE || i == BacklightSlice || i == AmpSlice))
+#else
         if (!(i == Option.AUDIO_SLICE || i == BacklightSlice))
+#endif
             PWMoff(i);
 #endif
 #else

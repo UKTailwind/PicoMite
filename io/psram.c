@@ -443,6 +443,25 @@ void psram_retime(uint32_t fast_hz, uint32_t slow_hz)
 	if (psram_chip && psram_sz)
 		qmi_hw->m[1].timing = psram_timing(psram_chip, fast_hz, slow_hz);
 }
+
+#ifdef PICOMITEPC3
+/* The PC3 firmware's boot names the board from where its PSRAM is (TestPicoComputer3): only the
+   read-ID, with QMI chip select 1 on GPgp, and the pin handed back.  Nothing is set up; the board's
+   OPTION RESET puts the pin in the options and the next boot brings the PSRAM up as usual. */
+bool psram_probe(uint gp)
+{
+	uint32_t sys_clk = clock_get_hz(clk_sys);
+	uint8_t csr_clkdiv = (sys_clk + PSRAM_MAX_CSR_CLK - 1) / PSRAM_MAX_CSR_CLK;
+	psram_id_t id = {0};
+	psram_timed_out = false;
+	gpio_set_function(gp, GPIO_FUNC_XIP_CS1);
+	psram_read_id(csr_clkdiv, (uint8_t *)&id);
+	bool found = !psram_timed_out && id.kgd == KGD_PASS;
+	psram_timed_out = false;
+	gpio_set_function(gp, GPIO_FUNC_NULL);
+	return found;
+}
+#endif
 #endif
 
 void psram_setup()
