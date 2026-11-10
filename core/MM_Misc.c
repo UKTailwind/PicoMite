@@ -4026,8 +4026,9 @@ void MIPS16 configure(unsigned char *p, bool noask)
 #endif
 #endif
 #endif
-#if defined(PICOMITE) || defined(PICOMITEWEB)
-#if defined(rp2350)
+/* The LCD boards' presets: not on the HDMI builds that are also WiFi builds (HDMIWEB, PC3) */
+#if defined(PICOMITE) || (defined(PICOMITEWEB) && !defined(PICOMITEVGA))
+#if PICOMITERP2350 /* where OPTION RESET PALM PICO is compiled, below */
             MMPrintString("Palm Pico\r\n");
 #endif
 #ifndef USBKEYBOARD
@@ -4460,7 +4461,7 @@ void MIPS16 configure(unsigned char *p, bool noask)
 #endif
 #endif
 #endif
-#if defined(PICOMITE) || defined(PICOMITEWEB)
+#if defined(PICOMITE) || (defined(PICOMITEWEB) && !defined(PICOMITEVGA)) /* as in the list above */
 #if PICOMITERP2350
         if (checkstring(p, (unsigned char *)"PALM PICO"))
         {
