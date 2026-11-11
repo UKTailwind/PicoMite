@@ -3589,7 +3589,10 @@ void importfile(char *pp, char *tp, char **p, uint32_t buf, int convertdebug, bo
     q = &fname[strlen(fname) - 4];
     if (strcasecmp(q, ".inc") != 0)
         error("must be a .inc file");
-    if (!(fname[1] == ':' && (fname[0] == 'A' || fname[0] == 'a' || fname[0] == 'B' || fname[0] == 'b' || fname[0] == 'C' || fname[0] == 'c')))
+    /* A drive, or a path from the root ('/' or '\', the current drive's), is used as it is, as on the CMM2;
+       anything else is beside the program (pp, its directory) */
+    if (!(fname[1] == ':' && (fname[0] == 'A' || fname[0] == 'a' || fname[0] == 'B' || fname[0] == 'b' || fname[0] == 'C' || fname[0] == 'c')) &&
+        fname[0] != '/' && fname[0] != '\\')
     {
         strcpy(qq, pp);
         strcat(qq, fname);
@@ -3807,10 +3810,16 @@ int FileLoadCMM2Program(char *fname, bool message)
     getfullfilename(p, q);
     int CurrentFileSystem = FatFSFileSystem;
     FatFSFileSystem = FatFSFileSystemSave;
+    /* pp is the program's own directory, drive included: importfile() puts it in front of a
+       relative #INCLUDE name, so an include is found beside the program wherever it is run from.
+       fullpath() left that directory in the program's drive's entry, not the current drive's.
+       The current directory is not changed: it used to be, to pp, and the program was then opened
+       by its name as given, so CMM2 RUN "tmp/foo.bas" from the parent directory looked for
+       tmp/tmp/foo.bas, a program on another drive gave "Only valid on current drive", and any
+       CMM2 LOAD or RUN left the user in the program's directory. */
     strcpy(pp, filesystem_drive_prefix(CurrentFileSystem));
-    strcat(pp, fullpathname[FatFSFileSystem]);
+    strcat(pp, fullpathname[CurrentFileSystem]);
     strcat(pp, "/");
-    chdir(pp);
     if (!BasicFileOpen(p, fnbr, FA_READ))
         return false;
     p = buf = GetMemory(loadbuffsize);
