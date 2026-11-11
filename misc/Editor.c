@@ -864,13 +864,24 @@ void edit(unsigned char *cmdline, bool cmdfile)
                 target_line = 0;
             if (target_col < 0)
                 target_col = 0;
+            /* The error's line is from the run, and the file may have been
+               cut since (edited and saved, then E again): the seek stops on
+               the last line. Past it, txtp was left beyond the terminator
+               erased below - on a line that does not exist, where PgDn did
+               nothing and a typed character went after the end of the text. */
+            unsigned char *linestart = txtp;
             y = 0;
             while (*txtp && y < target_line)
             {
-                if (*txtp == '\n')
+                if (*txtp++ == '\n')
+                {
+                    if (*txtp == 0)
+                        break; // that was the last line's terminator
                     y++;
-                txtp++;
+                    linestart = txtp;
+                }
             }
+            txtp = linestart;
             x = 0;
             while (*txtp && *txtp != '\n' && x < target_col)
             {
@@ -906,6 +917,8 @@ void edit(unsigned char *cmdline, bool cmdfile)
     if (nbrlines > VHeight)
     {
         edy = y - VHeight / 2; // edy is the line displayed at the top
+        if (edy > nbrlines - VHeight)
+            edy = nbrlines - VHeight; // near the end: the last line at the bottom, no blank rows below it
         if (edy < 0)
             edy = 0; // compensate if we are near the start
         y = y - edy; // y is the line on the screen
@@ -7248,8 +7261,8 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     buf[3] = 0;
                     break;
                 }
-                else if (edy >= VHeight - 1)
-                { // if we can scroll a full screenfull
+                else if (edy >= VHeight)
+                { // if we can scroll a full screenfull (at VHeight - 1 that went to -1: a blank top row, and the next PgUp moved down)
                     i = VHeight + 1;
                     edy -= VHeight;
                 }
