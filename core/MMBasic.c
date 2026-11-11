@@ -8035,6 +8035,10 @@ void MIPS16 ClearRuntime(bool all)
     ContinueLocalIndex = 0;
     for (i = 0; i < MAXSUBFUN; i++)
         subfun[i] = NULL;
+    /* and so has the name index's count of them: NameIndexRebuild (SaveContext, as EDIT FILE
+       from the file manager does after the FM's ClearRuntime) read the names of NameSubs
+       SUBs from these NULLs, at address 2, and stopped with "Program damaged: symbol table" */
+    NameSubs = 0;
 #ifdef GUICONTROLS
     for (i = 1; i < Option.MaxCtrls; i++)
     {
