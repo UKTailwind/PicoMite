@@ -8257,9 +8257,15 @@ void ResetOptions(bool startup)
 #endif
 #endif
     Option.USBKeyboard = CONFIG_US;
+#ifdef MURMULATOR_M2P2
+    Option.SerialConsole = 0;
+    Option.SerialTX = 0;
+    Option.SerialRX = 0;
+#else
     Option.SerialConsole = 2;
     Option.SerialTX = 11;
     Option.SerialRX = 12;
+#endif
     Option.capslock = 0;
     Option.numlock = 1;
     Option.ColourCode = 1;
