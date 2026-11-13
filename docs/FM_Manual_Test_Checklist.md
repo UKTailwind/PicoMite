@@ -26,6 +26,13 @@ Use this sheet during manual validation. Mark each item Pass/Fail and add notes.
 ## 3) Open Behavior
 
 - [ ] Enter on BAS launches program.
+- [ ] Enter on RP2350 `.c` compiles/runs it, then returns to FM.
+- [ ] Enter on RP2040 `.c` does not attempt TinyCC compilation.
+- [ ] Enter on an ELF object launches on RP2040 and RP2350.
+- [ ] ELF with a non-`.elf` extension (including `.bas`) is detected by its header.
+- [ ] ELF named `program.c` takes priority over TinyCC on RP2350.
+- [ ] Editor F2 on an RP2350 `.c` launches it and returns to FM.
+- [ ] Native program error/abort returns to FM with its context restored.
 - [ ] Enter on audio starts playback.
 - [ ] Enter on BMP/JPG/PNG shows preview.
 

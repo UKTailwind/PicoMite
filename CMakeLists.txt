@@ -1,13 +1,32 @@
+# == DO NOT EDIT THE FOLLOWING LINES for the Raspberry Pi Pico VS Code Extension to work ==
+if(WIN32)
+    set(USERHOME $ENV{USERPROFILE})
+else()
+    set(USERHOME $ENV{HOME})
+endif()
+set(sdkVersion 2.3.1)
+set(toolchainVersion 13_3_Rel1)
+set(picotoolVersion 2.3.1)
+set(picoVscode ${USERHOME}/.pico-sdk/cmake/pico-vscode.cmake)
+if (EXISTS ${picoVscode})
+    include(${picoVscode})
+endif()
+# ====================================================================================
 cmake_minimum_required(VERSION 3.13)
 
-# Valid builds are PICO, PICOUSB, PICOMIN, VGA, VGAUSB, WEB,
-# PICORP2350, PICOUSBRP2350, VGARP2350, VGAUSBRP2350, WEBRP2350, HDMI, HDMIUSB,
+# Valid builds are PICO, PICOUSB, PICOMIN, VGA, M2P1VGA, M1P1VGA, VGAUSB, WEB,
+# PICORP2350, PICOUSBRP2350, VGARP2350, VGAUSBRP2350, WEBRP2350, HDMI, M2P2HDMI,
+# M2P2VGA, M1P2VGA, HDMIUSB, M2P2HDMIUSB,
 # PICOBTRP2350, PICOBTHRP2350, HDMIBTH, HDMIWEB.
 set(VALID_COMPILE_VARIANTS
 	PICO
 	PICOUSB
 	PICOMIN
 	VGA
+	M2P1VGA
+	M2P2VGA
+	M1P1VGA
+	M1P2VGA
 	VGAUSB
 	WEB
 	PICORP2350
@@ -16,6 +35,8 @@ set(VALID_COMPILE_VARIANTS
 	VGAUSBRP2350
 	WEBRP2350
 	HDMI
+	M2P2HDMI
+	M2P2HDMIUSB
 	HDMIUSB
 	PICOBTRP2350
 	PICOBTHRP2350
@@ -28,7 +49,16 @@ set(VALID_COMPILE_VARIANTS
 # Guard restored: without it, this set() shadows the -DCOMPILE=X passed
 # by buildpicomite.bat and every variant silently builds as the default.
 if(NOT DEFINED COMPILE)
-	set(COMPILE HDMIWEB)
+	set(COMPILE M2P2HDMIUSB)
+endif()
+
+# The 4-bit tiled VGA driver and the 6-bit framebuffer VGA222 driver
+# belong to different PicoMite firmware families. Select one at build time.
+set(M2P2_VGA_BITS "6" CACHE STRING "M2P2VGA colour output: 4 (RGB121) or 6 (RGB222)")
+set_property(CACHE M2P2_VGA_BITS PROPERTY STRINGS 4 6)
+if(COMPILE STREQUAL "M2P2VGA" AND
+   NOT (M2P2_VGA_BITS STREQUAL "4" OR M2P2_VGA_BITS STREQUAL "6"))
+	message(FATAL_ERROR "M2P2_VGA_BITS must be 4 or 6")
 endif()
 
 list(FIND VALID_COMPILE_VARIANTS "${COMPILE}" COMPILE_INDEX)
@@ -49,6 +79,16 @@ endmacro()
 
 set(COMMON_SOURCES
 	PicoMite.c
+	core/pm_api.c
+	core/pm_api_extra.c
+	core/pm_runtime.c
+	core/pm_runtime_stdio.c
+	core/pm_basic_runtime.c
+	core/pm_peripheral_runtime.c
+	core/pm_pio_shared.c
+	core/pm_pio_runtime.c
+	core/pm_runtime_commands.c
+	core/pm_api_extra.c
 	core/MMBasic.c
 	core/Symbols.c
 	core/Stream.c
@@ -85,6 +125,8 @@ set(COMMON_SOURCES
 	io/Audio.c
 	io/AudioBBC.c
 	core/CFunction.c
+	core/elf/elf_loader.c
+	core/elf/elf_picomite.c
 	third_party_mod/picojpeg.c
 	third_party_mod/lfs.c
 	third_party_mod/lfs_util.c
@@ -157,6 +199,8 @@ set(FULL_RP2040_VARIANTS
 	PICO
 	PICOUSB
 	VGA
+	M2P1VGA
+	M1P1VGA
 	VGAUSB
 	WEB
 	PICOMIN
@@ -164,6 +208,10 @@ set(FULL_RP2040_VARIANTS
 
 set(RP2350_VARIANTS
 	HDMI
+	M2P2HDMI
+	M2P2HDMIUSB
+	M2P2VGA
+	M1P2VGA
 	WEBRP2350
 	HDMIUSB
 	VGARP2350
@@ -221,6 +269,7 @@ set(USB_HOST_VARIANTS
 	HDMIUSB
 	HDMIBTH
 	HDMIWEB
+	M2P2HDMIUSB
 	PC3
 )
 
@@ -229,6 +278,10 @@ set(UPNG_VARIANTS
 	WEBRP2350
 	PICORP2350
 	HDMI
+	M2P2HDMI
+	M2P2HDMIUSB
+	M2P2VGA
+	M1P2VGA
 	HDMIUSB
 	VGAUSBRP2350
 	PICOUSBRP2350
@@ -240,9 +293,13 @@ set(UPNG_VARIANTS
 )
 
 set(RAYCASTER_VARIANTS
+	M2P2HDMIUSB
 	VGARP2350
 	PICORP2350
 	HDMI
+	M2P2HDMI
+	M2P2VGA
+	M1P2VGA
 	HDMIUSB
 	VGAUSBRP2350
 	PICOUSBRP2350
@@ -255,6 +312,8 @@ set(RAYCASTER_VARIANTS
 
 set(VGA_PIO_VARIANTS
 	VGA
+	M2P1VGA
+	M1P1VGA
 	VGAUSB
 	VGARP2350
 	VGAUSBRP2350
@@ -262,6 +321,8 @@ set(VGA_PIO_VARIANTS
 
 set(VGA_VARIANTS
 	VGA
+	M2P1VGA
+	M1P1VGA
 	VGAUSB
 	VGARP2350
 	VGAUSBRP2350
@@ -269,6 +330,8 @@ set(VGA_VARIANTS
 
 set(HDMI_VARIANTS
 	HDMI
+	M2P2HDMI
+	M2P2HDMIUSB
 	HDMIUSB
 	HDMIBTH
 	HDMIWEB
@@ -286,9 +349,15 @@ set(PICOMITE_VARIANTS
 
 set(PICO_MULTICORE_VARIANTS
 	VGA
+	M2P1VGA
+	M1P1VGA
 	PICO
 	PICOMIN
 	HDMI
+	M2P2HDMI
+	M2P2HDMIUSB
+	M2P2VGA
+	M1P2VGA
 	VGARP2350
 	PICORP2350
 	PICOBTRP2350
@@ -300,6 +369,10 @@ set(PICO_RAND_VARIANTS
 	WEBRP2350
 	PICORP2350
 	HDMI
+	M2P2HDMI
+	M2P2HDMIUSB
+	M2P2VGA
+	M1P2VGA
 	HDMIUSB
 	VGAUSBRP2350
 	PICOUSBRP2350
@@ -310,6 +383,7 @@ set(PICO_RAND_VARIANTS
 	PC3
 )
 set(USES_SUBPROFILE_VARIANTS
+	M2P2HDMIUSB
 	HDMIUSB
 	PICO
 	PICORP2350
@@ -317,12 +391,23 @@ set(USES_SUBPROFILE_VARIANTS
 	VGARP2350
 	VGAUSBRP2350
 	HDMI
+	M2P2HDMI
+	M2P2VGA
+	M1P2VGA
 	PICOBTRP2350
 	PICOBTHRP2350
 	HDMIBTH
 	HDMIWEB
 	PC3
 )
+
+# Both M2 boards use the PicoMiteVGA framebuffer and MODE pipeline.
+# The 6-bit scanout converts each 4-bit pixel when a scanline is prepared.
+if(COMPILE STREQUAL "M2P2VGA" OR COMPILE STREQUAL "M1P2VGA")
+	list(APPEND VGA_VARIANTS ${COMPILE})
+	list(APPEND VGA_PIO_VARIANTS ${COMPILE})
+endif()
+
 compile_is_in(IS_RP2350 ${RP2350_VARIANTS})
 compile_is_in(IS_WEB ${WEB_VARIANTS})
 compile_is_in(IS_WEBRP2350 WEBRP2350)
@@ -453,6 +538,47 @@ set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
 
 add_executable(PicoMite ${COMMON_SOURCES})
+
+# The firmware must end before FLASH_TARGET_OFFSET (configuration.h): the link
+# fails instead of the code silently overlapping the options and A:.
+target_link_options(PicoMite PRIVATE ${CMAKE_CURRENT_LIST_DIR}/cmake/flash_layout_check.ld)
+
+# TinyCC is built and linked only for RP2350.  tcc.c includes libtcc.c
+# (ONE_SOURCE), so compiling both would define the compiler twice.
+# The compiler is a library of its own, compiled without the PicoMite
+# headers; core/tcc/tcc_picomite.c, compiled with the firmware, is its
+# PicoMite side (memory, files, console, run-time symbols - tcc_picomite.h),
+# and the system headers it gives compiled programs (core/tcc/include) are
+# built into the firmware.
+if(IS_RP2350)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+    add_library(PicoMiteTinyCC STATIC
+        core/tcc/tcc.c
+        core/tcc/tcc_time.c
+    )
+    target_compile_definitions(PicoMiteTinyCC PRIVATE
+        NO_SEMAPHORE_H=1 TCC_IS_NATIVE=1)
+    target_compile_options(PicoMiteTinyCC PRIVATE -O2)
+
+    # core/tcc/include (with picomite/), and PicoCFunctions.h: the CSUB API
+    file(GLOB_RECURSE TCC_ROM_HEADERS CONFIGURE_DEPENDS ${CMAKE_CURRENT_LIST_DIR}/core/tcc/include/*.h)
+    list(APPEND TCC_ROM_HEADERS ${CMAKE_CURRENT_LIST_DIR}/PicoCFunctions.h)
+    set(TCC_ROM_C ${CMAKE_CURRENT_BINARY_DIR}/tcc_rom_headers.c)
+    add_custom_command(OUTPUT ${TCC_ROM_C}
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC_DIR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/include
+            -DOUT=${TCC_ROM_C}
+            -DHDR=${CMAKE_CURRENT_LIST_DIR}/core/tcc/tcc_picomite.h
+            -DEXTRA=${CMAKE_CURRENT_LIST_DIR}/PicoCFunctions.h
+            -DPYTHON=${Python3_EXECUTABLE}
+            -P ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
+        DEPENDS ${TCC_ROM_HEADERS} ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_rom_headers.cmake
+                ${CMAKE_CURRENT_LIST_DIR}/cmake/tcc_strip_header_comments.py
+        COMMENT "Embedding the TinyCC system headers"
+        VERBATIM)
+    target_sources(PicoMite PRIVATE core/tcc/tcc_picomite.c ${TCC_ROM_C})
+    target_link_libraries(PicoMite PicoMiteTinyCC)
+endif()
 
 # Diagnostic: timing-neutral USB host event ring in the PC3-patched TinyUSB
 # files (four stores per event, no prints - a UART print in the IRQ path is
@@ -705,7 +831,14 @@ if(NOT USES_USB_HOST)
 	endforeach()
 endif()
 
-pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/io/PicoMiteI2S.pio)
+# PIO headers go to a directory of their platform: pioasm writes the PIO
+# version into them (RP2350: 1, RP2040: 0), but the header only depends on
+# its .pio file, so a header left in the build directory by an RP2350 build
+# was reused by the next RP2040 one. pio_add_program() then refused the
+# program (PICO_ERROR_VERSION_MISMATCH, -20) and M2P1VGA set up its state
+# machine with offset -20: wrap 12..31 and side-set on - no picture.
+set(PM_PIO_HEADER_DIR ${CMAKE_CURRENT_BINARY_DIR}/pio_${PICO_PLATFORM})
+pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/io/PicoMiteI2S.pio OUTPUT_DIR ${PM_PIO_HEADER_DIR})
 
 if(IS_FULL_RP2040)
 	set_source_files_properties(input/mouse.c PROPERTIES COMPILE_FLAGS -Os)
@@ -721,7 +854,12 @@ if(IS_FULL_RP2040)
 endif()
 
 if(USES_VGA_PIO)
-	pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio)
+	if(COMPILE STREQUAL "M2P1VGA" OR COMPILE STREQUAL "M1P1VGA" OR COMPILE STREQUAL "M1P2VGA" OR
+	   (COMPILE STREQUAL "M2P2VGA" AND M2P2_VGA_BITS STREQUAL "6"))
+		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/vga_nextgen.pio OUTPUT_DIR ${PM_PIO_HEADER_DIR})
+	else()
+		pico_generate_pio_header(PicoMite ${CMAKE_CURRENT_LIST_DIR}/graphics/PicoMiteVGA.pio OUTPUT_DIR ${PM_PIO_HEADER_DIR})
+	endif()
 endif()
 
 if(USES_USB_HOST)
@@ -871,8 +1009,15 @@ if(IS_PICOMIN)
 endif()
 
 if(IS_VGA)
-	# PIO VGA (QVGA) core1 scanout split out of PicoMite.c (graphics/VGA.c).
-	target_sources(PicoMite PRIVATE graphics/VGA.c)
+	# The generic vga_nextgen eight-bit stream is selected for M2 RGB222.
+	# All other VGA targets retain the existing four-bit QVGA scanout.
+	if(COMPILE STREQUAL "M2P1VGA" OR COMPILE STREQUAL "M1P1VGA" OR COMPILE STREQUAL "M1P2VGA" OR
+	   (COMPILE STREQUAL "M2P2VGA" AND M2P2_VGA_BITS STREQUAL "6"))
+		target_sources(PicoMite PRIVATE graphics/vga_nextgen.c)
+		target_compile_definitions(PicoMite PRIVATE VGA_NEXTGEN)
+	else()
+		target_sources(PicoMite PRIVATE graphics/VGA.c)
+	endif()
 	target_compile_definitions(PicoMite PRIVATE
 		PICOMITEVGA
 		PICO_HEAP_SIZE=0x800
@@ -918,6 +1063,40 @@ if(IS_HDMI)
 	if(COMPILE STREQUAL "HDMIBTH" OR COMPILE STREQUAL "HDMIWEB")
 		target_compile_definitions(PicoMite PRIVATE HDMICUTDOWN)
 	endif()
+endif()
+
+# M2P1 VGA keeps the existing RP2040 PicoMiteVGA graphics pipeline;
+# only the final scanline pixels are expanded to RGB222.
+if(COMPILE STREQUAL "M2P1VGA")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P1 MURMULATOR_M2_VGA222)
+endif()
+
+# M2P2 HDMI uses the standard HDMI firmware with factory pin defaults.
+if(COMPILE STREQUAL "M2P2HDMI" OR COMPILE STREQUAL "M2P2HDMIUSB")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2)
+endif()
+
+if(COMPILE STREQUAL "M2P2VGA")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2 MURMULATOR_M2P2_VGA)
+	if(M2P2_VGA_BITS STREQUAL "6")
+		target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2_VGA222 MURMULATOR_M2_VGA222 MURMULATOR_RP2350_VGA222)
+	else()
+		target_compile_definitions(PicoMite PRIVATE MURMULATOR_M2P2_VGA121)
+	endif()
+	message(STATUS "M2P2VGA: RGB121 framebuffer, ${M2P2_VGA_BITS}-bit output, HSYNC=GP18, VSYNC=GP19")
+endif()
+
+# Murmulator 1.x: the same RGB222 vga_nextgen scanout as M2P1VGA / M2P2VGA
+# (MURMULATOR_M2_VGA222 = that scanout, whatever the board), on GP6..11
+# (RGB222), GP12 (HSYNC) and GP13 (VSYNC). MURMULATOR_RP2350_VGA222 = the
+# RP2350 build of it (378 MHz, core1 lockout around Flash writes).
+if(COMPILE STREQUAL "M1P1VGA")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M1P1 MURMULATOR_M2_VGA222)
+endif()
+
+if(COMPILE STREQUAL "M1P2VGA")
+	target_compile_definitions(PicoMite PRIVATE MURMULATOR_M1P2 MURMULATOR_M2_VGA222 MURMULATOR_RP2350_VGA222)
+	message(STATUS "M1P2VGA: RGB121 framebuffer, 6-bit output GP6..11, HSYNC=GP12, VSYNC=GP13")
 endif()
 
 if(COMPILE STREQUAL "HDMIBTH")

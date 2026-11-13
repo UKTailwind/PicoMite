@@ -455,7 +455,7 @@ void setwifi(unsigned char *tp)
     if (!(argc == 3 || argc == 5 || argc == 7 || argc == 11 || argc == 13))
         SyntaxError();
     ;
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
     char *ssid = GetTempStrMemory();
     char *password = GetTempStrMemory();

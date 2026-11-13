@@ -598,6 +598,8 @@ To find where a whole program spends its time, put `OPTION PROFILING ON` as its 
 
 When the profile shows one or two SUBs or FUNCTIONs taking most of the time, the **mmb2csub** tool can compile them to machine code. It puts each one back into the program as a CSUB, and your calls to it do not change. Loops, arithmetic and array work run 10 to 35 times faster than interpreted. Maths functions and string formatting gain 3 to 4 times. The same CSUB runs on the RP2040 and the RP2350. See mmb2csub.pdf.
 
+If you would rather write the C yourself, an RP2350 with PSRAM can compile it on the board: a CSUB body can name a `.c` file, and `RUN "file.c"` runs a whole C program. See `docs/PicoMite-native-C-support.md`.
+
 ## Appendix A. All the measurements
 
 Every test, as measured. Times are in microseconds per pass of the test's loop, **with the loop included**: subtract test 0, the empty loop, to get the time of a statement alone, as the tables above do. Tests 3a to 3c are per pass of the inner loop, and 14a to 14f per element or pixel.

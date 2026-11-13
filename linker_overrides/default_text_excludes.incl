@@ -22,6 +22,23 @@
 *libgcc.a:_muldc3.o(.text*)
 *libgcc.a:_divsc3.o(.text*)
 *libgcc.a:_mulsc3.o(.text*)
+/* Keep the additional, non-time-critical ARM EABI runtime code in XIP.
+   The default libgcc exclusion otherwise puts these .text sections into
+   .data/SRAM when the native ELF export table takes their addresses.
+   RP2350 HDMI: these objects occupy 6280 bytes of RAM in the 2026-11-03
+   link map.  Preserve the hot divider, shift, and double-precision helpers
+   in RAM as before.  These bytes are already stored in firmware flash as
+   .data initializers, so moving them to .text primarily saves SRAM. */
+*libgcc.a:unwind-arm.o(.text*)
+*libgcc.a:libunwind.o(.text*)
+*libgcc.a:pr-support.o(.text*)
+*libgcc.a:_arm_addsubsf3.o(.text*)
+*libgcc.a:_arm_muldivsf3.o(.text*)
+*libgcc.a:_arm_cmpsf2.o(.text*)
+*libgcc.a:_arm_unordsf2.o(.text*)
+*libgcc.a:_arm_fixsfsi.o(.text*)
+*libgcc.a:_arm_fixunssfsi.o(.text*)
+*libgcc.a:_udivmoddi4.o(.text*)
 /* The RP2040's double-precision wrappers (add, subtract, multiply, divide,
    compare, convert) and the 64-bit multiply run in nearly every BASIC
    expression and were the hottest code left in FLASH in a PC-sample profile

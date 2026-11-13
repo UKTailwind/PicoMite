@@ -25,6 +25,9 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#include "core/pm_pio_shared.h"
+#include "core/elf/elf_picomite.h"
+#include "core/tcc/tcc_picomite.h"
 #ifdef PICOMITEWEB
 #include "WiFi.h" // setwifi() — defined in net/WiFi.c
 #endif
@@ -164,6 +167,10 @@ void VGArecovery(int pin)
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 1]] = EXT_BOOT_RESERVED;
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 2]] = EXT_BOOT_RESERVED;
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 3]] = EXT_BOOT_RESERVED;
+#ifdef MURMULATOR_M2_VGA222
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 4]] = EXT_BOOT_RESERVED;
+    ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 5]] = EXT_BOOT_RESERVED;
+#endif
     ExtCurrentConfig[PINMAP[PinDef[Option.VGA_HSYNC].GPno + 1]] = EXT_BOOT_RESERVED;
 
     if (pin)
@@ -173,6 +180,10 @@ void VGArecovery(int pin)
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 1));
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 2));
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 3));
+#ifdef MURMULATOR_M2_VGA222
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 4));
+    piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_BLUE].GPno + 5));
+#endif
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[Option.VGA_HSYNC].GPno);
     piomap[QVGA_PIO_NUM] |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[Option.VGA_HSYNC].GPno + 1));
     if (Option.audio_i2s_bclk)
@@ -1958,7 +1969,7 @@ void MIPS16 cmd_library(void)
         unsigned short rem, tkn;
         int i, j, k, InCFun, InQuote, CmdExpected;
         unsigned int CFunDefAddr[100], *CFunHexAddr[100];
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (*ProgMemory != 0x01)
             return;
@@ -2180,6 +2191,15 @@ void MIPS16 cmd_library(void)
             while (*(unsigned int *)pp != 0xffffffff)
             {
                 //                CFunHexLibAddr[++k] = (unsigned int *)m;            // save the address for later adjustment
+                /* A linked ELF/TCC CSUB embeds absolute addresses and an
+                   image-base stamp. LIBRARY SAVE moves its record, invalidating
+                   both. Reject before erasing flash; raw hex CSUBs are safe. */
+                if (!(*(uint32_t *)pp & 0x80000000u) &&
+                    *(uint32_t *)(pp + 4) >= 24 &&
+                    *(uint32_t *)(pp + 8) == 3u &&
+                    (*(uint32_t *)(pp + 12) == ELF_CSUB_MAGIC ||
+                     *(uint32_t *)(pp + 12) == TCC_PM_CSUB_MAGIC))
+                    error("LIBRARY SAVE cannot move linked C/ELF CSUB");
                 j = (*(unsigned int *)(pp + 4)) + 8; // calculate the total size of the CFunction
                 while (j--)
                     *m++ = *pp++; // copy it into RAM
@@ -2192,6 +2212,13 @@ void MIPS16 cmd_library(void)
                // while(*(unsigned int *)p != 0xffffffff && (int)p < Option.PROG_FLASH_SIZE) {
         while (*(unsigned int *)p != 0xffffffff)
         {
+            /* Do not copy an address-bound CSUB from the program either. */
+            if (!(*(uint32_t *)p & 0x80000000u) &&
+                *(uint32_t *)(p + 4) >= 24 &&
+                *(uint32_t *)(p + 8) == 3u &&
+                (*(uint32_t *)(p + 12) == ELF_CSUB_MAGIC ||
+                 *(uint32_t *)(p + 12) == TCC_PM_CSUB_MAGIC))
+                error("LIBRARY SAVE cannot move linked C/ELF CSUB");
             CFunHexAddr[++i] = (unsigned int *)m; // save the address for later adjustment
             j = (*(unsigned int *)(p + 4)) + 8;   // calculate the total size of the CFunction
             while (j--)
@@ -2318,7 +2345,7 @@ void MIPS16 cmd_library(void)
 #endif
         unsigned char *image = NULL, *libbin = NULL;
         uint32_t libbinlen = 0;
-        int libnfix = 0;
+        int libnfix = 0, libraw = 0;
         /* Captured before anything else runs.  Loading the file clears
            CurrentLinePtr somewhere down in the file layer, and writing the
            image sets it to a line inside the library, so by the end of this
@@ -2408,7 +2435,8 @@ void MIPS16 cmd_library(void)
             if (haslib)
                 skiphash = Option.LIBRARY_HASH;
         }
-        loaded = FileLoadLibrary(files, nfiles, &hash, &image, &libbin, &libbinlen, &libnfix, skiphash);
+        loaded = FileLoadLibrary(files, nfiles, &hash, &image, &libbin, &libbinlen, &libnfix,
+                                 &libraw, skiphash);
 #ifdef rp2350
         if (rambase)
         {
@@ -2416,7 +2444,8 @@ void MIPS16 cmd_library(void)
                 return; /* attached already: this is the restarted program's second pass */
             if (loaded)
             {
-                SaveLibraryImage(image, libbin, libbinlen, libnfix, rambase);
+                if (libraw) SaveLibrarySourceToRAM(image, rambase);
+                else SaveLibraryImage(image, libbin, libbinlen, libnfix, rambase);
                 uint32_t *tag = (uint32_t *)(rambase + MAX_PROG_SIZE - 8);
                 tag[0] = RAMLIB_MAGIC;
                 tag[1] = hash;
@@ -2461,11 +2490,10 @@ void MIPS16 cmd_library(void)
            rather than at the line we are executing.  Everything after this
            depends on it - error reporting, and the restart below - so put it
            back. */
-        /* NOT SaveProgramToFlash: that stores the hex TEXT of every CSUB as well as
-           the binary built from it, about 3.4x the blob, which is what stopped a
-           large CSUB fitting a library it would otherwise sit in comfortably. The
-           reader above has already split the two; only the binary goes down. */
-        SaveLibraryImage(image, libbin, libbinlen, libnfix, NULL);
+        /* Hex CSUBs use the compact reader/writer. Quoted .c/.elf CSUBs
+           must go through the existing linker at their final flash address. */
+        if (libraw) SaveProgramToFlash(image, false, LIBRARY_FLASH);
+        else SaveLibraryImage(image, libbin, libbinlen, libnfix, NULL);
         CurrentLinePtr = savedline;
         Option.LIBRARY_FLASH_SIZE = MAX_PROG_SIZE;
         Option.LIBRARY_HASH = hash;
@@ -2501,7 +2529,7 @@ void MIPS16 cmd_library(void)
     if (checkstring(cmdline, (unsigned char *)"DELETE"))
     {
         int i;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (Option.LIBRARY_FLASH_SIZE != MAX_PROG_SIZE)
             return;
@@ -2533,7 +2561,7 @@ void MIPS16 cmd_library(void)
 
     if ((tp = checkstring(cmdline, (unsigned char *)"LIST ALL")))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         tp = OutputRedirect(tp); // LIBRARY LIST ALL #n
         checkend(tp);
@@ -2544,7 +2572,7 @@ void MIPS16 cmd_library(void)
     }
     if (checkstring(cmdline, (unsigned char *)"LIST"))
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (!LibPresent())
             return;
@@ -2557,7 +2585,7 @@ void MIPS16 cmd_library(void)
         if (!(argc == 1))
             SyntaxError();
         ;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int fnbr = FindFreeFileNbr();
         if (!InitSDCard())
@@ -2620,7 +2648,7 @@ void MIPS16 cmd_library(void)
         if (!(argc == 1))
             SyntaxError();
         ;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int fnbr = FindFreeFileNbr();
         if (!InitSDCard())
@@ -3606,60 +3634,57 @@ void MIPS16 setterminal(int height, int width)
     strcat(sp, "t");
     SSPrintString(sp);
 }
-#ifdef USBKEYBOARD
-void fun_keydown(void)
+/* KEYDOWN(n) once n (0..8) is checked: also for C (core/tcc: <picomite/input.h>) */
+int KeyDownValue(int n)
 {
-    int i, n = getint(ep, 0, 8);
-    iret = 0;
+    int i, r = 0;
     while (getConsole() != -1)
         ; // clear anything in the input buffer
+#ifdef USBKEYBOARD
     if (n == 8)
     {
-        iret = (caps_lock ? 1 : 0) |
-               (num_lock ? 2 : 0) |
-               (scroll_lock ? 4 : 0);
+        r = (caps_lock ? 1 : 0) |
+            (num_lock ? 2 : 0) |
+            (scroll_lock ? 4 : 0);
     }
     else if (n)
     {
-        iret = KeyDown[n - 1]; // this is the character
+        r = KeyDown[n - 1]; // this is the character
     }
     else
     {
         for (i = 0; i < 6; i++)
         {
             if (KeyDown[i])
-                iret++;
+                r++;
         }
     }
-    targ = T_INT;
-}
 #else
-void fun_keydown(void)
-{
-    int i, n = getint(ep, 0, 8);
-    iret = 0;
-    while (getConsole() != -1)
-        ; // clear anything in the input buffer
     if (n == 8)
     {
-        iret = (CapsLock ? 1 : 0) |
-               (NumLock ? 2 : 0);
+        r = (CapsLock ? 1 : 0) |
+            (NumLock ? 2 : 0);
     }
     else if (n)
     {
-        iret = PS2KeyDown[n - 1];
+        r = PS2KeyDown[n - 1];
     }
     else
     {
         for (i = 0; i < 6; i++)
         {
             if (PS2KeyDown[i])
-                iret++;
+                r++;
         }
     }
+#endif
+    return r;
+}
+void fun_keydown(void)
+{
+    iret = KeyDownValue(getint(ep, 0, 8));
     targ = T_INT;
 }
-#endif
 void MIPS16 disable_systemspi(void)
 {
     if (!IsInvalidPin(Option.SYSTEM_MOSI))
@@ -5835,7 +5860,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 7);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 7)
             SyntaxError();
@@ -5889,7 +5914,7 @@ void MIPS16 cmd_option(void)
         }
         int pin1;
         getcsargs(&tp, 1);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         pin1 = getpinarg(argv[0]);
         if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
@@ -5953,7 +5978,7 @@ void MIPS16 cmd_option(void)
     {
         int pin1, pin2;
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (Option.KEYBOARD_CLOCK)
             error("Keyboard must be disabled to change pins");
@@ -5975,7 +6000,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"MOUSE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
@@ -6009,7 +6034,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"KEYBOARD");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
 /* PICOMITEBTH takes the same code path as USBKEYBOARD here: the BLE
    HID host accepts the same set of layout names, and stores the
@@ -6122,7 +6147,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"BAUDRATE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int i;
         i = getint(tp, Option.CPU_Speed * 1000 / 16 / 65535, 921600);
@@ -6157,7 +6182,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"SERIAL CONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         //        unsigned char *p=NULL;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
@@ -6237,7 +6262,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"GPS");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         //        unsigned char *p=NULL;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
@@ -6631,7 +6656,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"LCDPANEL NOCONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.Height = SCREENHEIGHT;
         Option.Width = SCREENWIDTH;
@@ -6653,7 +6678,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"LCDPANEL CONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.NoScroll = 0;
         if (!(Option.DISPLAY_TYPE == ST7365P || Option.DISPLAY_TYPE == ST7789B || Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ST7365P || Option.DISPLAY_TYPE == ST7796SP || Option.DISPLAY_TYPE == ST7796S || Option.DISPLAY_TYPE == ILI9488P || Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE >= VGADISPLAY))
@@ -6851,7 +6876,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         uint8_t radio = 0;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"BOTH"))
             radio = 0;
@@ -6882,7 +6907,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.TCP_PORT = getint(argv[0], 0, 65535);
         Option.ServerResponceTime = 5000;
@@ -6896,7 +6921,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.UDP_PORT = getint(argv[0], 0, 65535);
         Option.UDPServerResponceTime = 5000;
@@ -6909,7 +6934,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"TELNET CONSOLE");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"OFF"))
             Option.Telnet = 0;
@@ -6927,7 +6952,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"TFTP");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"OFF"))
             Option.disabletftp = 1;
@@ -6960,7 +6985,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 1 && argc != 3)
             SyntaxError();
@@ -7024,7 +7049,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if ((checkstring(argv[0], (unsigned char *)"640")) || (checkstring(argv[0], (unsigned char *)"640x480")))
         {
@@ -7108,7 +7133,7 @@ void MIPS16 cmd_option(void)
     {
         int pin1, pin2, testpin;
         getcsargs(&tp, 3);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         pin1 = getpinarg(argv[0]);
         pin2 = getpinarg(argv[2]);
@@ -7118,6 +7143,10 @@ void MIPS16 cmd_option(void)
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 1]] = EXT_NOT_CONFIG;
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 2]] = EXT_NOT_CONFIG;
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 3]] = EXT_NOT_CONFIG;
+#ifdef MURMULATOR_M2_VGA222
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 4]] = EXT_NOT_CONFIG;
+        ExtCurrentConfig[PINMAP[PinDef[Option.VGA_BLUE].GPno + 5]] = EXT_NOT_CONFIG;
+#endif
         ExtCurrentConfig[PINMAP[PinDef[Option.VGA_HSYNC].GPno + 1]] = EXT_NOT_CONFIG;
         if (ExtCurrentConfig[pin1] != EXT_NOT_CONFIG)
             VGArecovery(pin1);
@@ -7135,6 +7164,14 @@ void MIPS16 cmd_option(void)
         testpin = PINMAP[PinDef[pin2].GPno + 3];
         if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
             VGArecovery(testpin);
+#ifdef MURMULATOR_M2_VGA222
+        for (int offset = 4; offset <= 5; offset++)
+        {
+            testpin = PINMAP[PinDef[pin2].GPno + offset];
+            if (ExtCurrentConfig[testpin] != EXT_NOT_CONFIG)
+                VGArecovery(testpin);
+        }
+#endif
 #ifdef rp2350
         uint64_t map = 0;
         if (Option.audio_i2s_bclk)
@@ -7147,6 +7184,10 @@ void MIPS16 cmd_option(void)
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 1));
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 2));
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 3));
+#ifdef MURMULATOR_M2_VGA222
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 4));
+        map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin2].GPno + 5));
+#endif
         map |= (uint64_t)((uint64_t)1 << (uint64_t)PinDef[pin1].GPno);
         map |= (uint64_t)((uint64_t)1 << (uint64_t)(PinDef[pin1].GPno + 1));
         if ((map & (uint64_t)0xFFFF) && (map & (uint64_t)0xFFFF00000000))
@@ -7238,7 +7279,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         uint32_t speed = 0;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         speed = getint(tp, MIN_CPU, MAX_CPU);
         if (speed > 384000 && Option.PSRAM_CS_PIN != 0)
@@ -7277,7 +7318,7 @@ void MIPS16 cmd_option(void)
     {
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             Option.LCD_CD = Option.LCD_CS = Option.LCD_Reset = Option.DISPLAY_TYPE = Option.SSD_DATA = HRes = VRes = 0;
             Option.SSD_DC = Option.SSD_WR = Option.SSD_RD = SSD1963data = 0;
@@ -7305,7 +7346,7 @@ void MIPS16 cmd_option(void)
             ConfigDisplayUser(tp);
             if (Option.DISPLAY_TYPE)
                 return;
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             if (!Option.DISPLAY_TYPE)
                 ConfigDisplaySPI(tp);
@@ -7329,7 +7370,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"TOUCH");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
@@ -7379,7 +7420,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 1);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         Option.MaxCtrls = getint(argv[0], 0, MAXCONTROLS - 1);
         if (Option.MaxCtrls)
@@ -7575,7 +7616,7 @@ void MIPS16 cmd_option(void)
     {
         unsigned char *p = NULL;
         int i, size = 0;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (FixedFlashMap)
             error("The MOD buffer is fixed at 1024K with 16M of flash");
@@ -7655,7 +7696,7 @@ void MIPS16 cmd_option(void)
     {
         int slice;
         unsigned char *p;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
@@ -7890,7 +7931,7 @@ void MIPS16 cmd_option(void)
         const int board[4] = {CYW43_DEFAULT_PIN_WL_REG_ON, CYW43_DEFAULT_PIN_WL_DATA_OUT, CYW43_DEFAULT_PIN_WL_CS, CYW43_DEFAULT_PIN_WL_CLOCK};
         int gp[4], pin[4];
         bool isboard = true;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (checkstring(tp, (unsigned char *)"DEFAULT"))
             memcpy(gp, board, sizeof(gp));
@@ -7930,7 +7971,7 @@ void MIPS16 cmd_option(void)
         int pin1, pin2, channel = -1;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
 #ifdef PICOMITEVGA
             if (Option.RTC_Clock || Option.RTC_Data)
@@ -7945,7 +7986,7 @@ void MIPS16 cmd_option(void)
             return; // this will restart the processor ? only works when not in debug
         }
         getcsargs(&tp, 5);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc == 1)                                              // *EB*
         {                                                           // *EB*
@@ -7959,7 +8000,7 @@ void MIPS16 cmd_option(void)
             SoftReset(SOFT_RESET);                                  // *EB*
             return;                                                 // *EB*
         } // *EB*
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc < 3)
             SyntaxError();
@@ -8059,7 +8100,7 @@ void MIPS16 cmd_option(void)
         int pin1, pin2, pin3;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             if ((Option.SD_CS && Option.SD_CLK_PIN == 0) || Option.TOUCH_CS || Option.LCD_CS || Option.CombinedCS)
                 error("In use");
@@ -8069,7 +8110,7 @@ void MIPS16 cmd_option(void)
             return; // this will restart the processor ? only works when not in debug
         }
         getcsargs(&tp, 5);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 5)
             SyntaxError();
@@ -8114,7 +8155,7 @@ void MIPS16 cmd_option(void)
         int pin1, pin2, pin3;
         if (checkstring(tp, (unsigned char *)"DISABLE"))
         {
-            if (CurrentLinePtr)
+            if (ProgramRunning())
                 StandardError(10);
             if (Option.LCD_CS)
                 error("In use");
@@ -8124,7 +8165,7 @@ void MIPS16 cmd_option(void)
             return; // this will restart the processor ? only works when not in debug
         }
         getcsargs(&tp, 5);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (argc != 5)
             SyntaxError();
@@ -8158,7 +8199,7 @@ void MIPS16 cmd_option(void)
 #endif
     tp = checkstring(cmdline, (unsigned char *)"SDCARD");
     int pin1, pin2, pin3, pin4;
-    if (CurrentLinePtr)
+    if (ProgramRunning())
         StandardError(10);
     if (tp)
     {
@@ -8255,7 +8296,7 @@ void MIPS16 cmd_option(void)
         if (!(argc == 1))
             SyntaxError();
         ;
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         int fnbr = FindFreeFileNbr();
         if (!InitSDCard())
@@ -8272,7 +8313,7 @@ void MIPS16 cmd_option(void)
     if (tp)
     {
         getcsargs(&tp, 1);
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (!(argc == 1))
             SyntaxError();
@@ -8331,7 +8372,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"RESET");
     if (tp)
     {
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE)
         {
@@ -8430,6 +8471,98 @@ void MIPS16 cmd_keyboard(void)
     error("Syntax");
 }
 #endif
+
+/* Shared, typed MM.INFO backends.  The BASIC parser and the TinyCC API
+   must agree on drive mapping, capacity and modification timestamps. */
+int64_t MMInfoDiskSpace(int free_space)
+{
+    if (FatFSFileSystem)
+    {
+        FATFS *fs = NULL;
+        DWORD free_clusters;
+        const char *volume = FatFSFileSystem == 2 ? "C:" : "B:";
+        FRESULT status;
+        if (!InitSDCard())
+            error((char *)FErrorMsg[20]);
+        status = f_getfree(volume, &free_clusters, &fs);
+        if (status != FR_OK || fs == NULL)
+        {
+            FSerror = status;
+            if (status != FR_OK)
+                ErrorCheck(0);
+            return -1;
+        }
+        return (int64_t)(uint64_t)(free_space ? free_clusters : fs->n_fatent - 2) *
+               (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
+    }
+    if (!free_space)
+        return (int64_t)Option.FlashSize - FlashStoreStart;
+    lfs_ssize_t blocks = lfs_fs_size(&lfs);
+    if (blocks < 0)
+    {
+        FSerror = blocks;
+        ErrorCheck(0);
+        return -1;
+    }
+    return (int64_t)Option.FlashSize - FlashStoreStart - (int64_t)blocks * 4096;
+}
+
+const char *MMInfoDriveName(void)
+{
+    if (FatFSFileSystem == 0)
+        return "A:";
+#if HAS_USB_MSC
+    return FatFSFileSystem == 1 ? "B:" : "C:";
+#else
+    return "B:";
+#endif
+}
+
+/* Return 1 when metadata exists, 0 otherwise; an absent file is an empty
+   string in both APIs.  Restore the selected drive on normal returns. */
+int MMInfoModified(const char *file, char *out, int size)
+{
+    char path[FF_MAX_LFN] = {0};
+    FILINFO info = {0};
+    int was = FatFSFileSystem, waste = 0;
+    int drive = drivecheck((char *)file, &waste) - 1;
+    int found = 0;
+    if (out && size > 0)
+        out[0] = 0;
+    /* InitSDCard may throw for an unconfigured SD card.  Do that check
+       before changing the active filesystem. */
+    if (drive == 1 && !SDCardConfigured())
+        error("SDcard not configured");
+    if (strlen(file + waste) > FF_MAX_LFN)
+        error("Filename > % characters", FF_MAX_LFN);
+    FatFSFileSystem = drive;
+    getfullfilename((char *)file + waste, path);
+    FatFSFileSystem = drive;
+    if (drive == 0)
+    {
+        uint32_t stamp = 0;
+        FSerror = lfs_getattr(&lfs, path, 'A', &stamp, sizeof(stamp));
+        if (FSerror == sizeof(stamp))
+        {
+            info.fdate = (WORD)(stamp >> 16);
+            info.ftime = (WORD)stamp;
+            found = 1;
+        }
+    }
+    else if (InitSDCard())
+    {
+        FSerror = f_stat(path, &info);
+        found = FSerror == FR_OK;
+    }
+    FatFSFileSystem = was;
+    if (found && out && size > 0)
+        snprintf(out, (size_t)size, "%04d-%02d-%02d %02d:%02d:%02d",
+                 ((info.fdate >> 9) & 0x7f) + 1980,
+                 (info.fdate >> 5) & 0xf, info.fdate & 0x1f,
+                 (info.ftime >> 11) & 0x1f, (info.ftime >> 5) & 0x3f,
+                 (info.ftime & 0x1f) * 2);
+    return found;
+}
 
 /* MM.INFO(PIN n)'s text for physical pin n, into s (C string); LIST PINS prints the same */
 void PinStatusText(int pin, char *s)
@@ -8703,14 +8836,7 @@ void MIPS16 fun_info(void)
         }
         else if ((tp = checkstring(ep, (unsigned char *)"DRIVE")))
         {
-            strcpy((char *)sret,
-                   FatFSFileSystem == 0 ? "A:" :
-#if HAS_USB_MSC
-                                        (FatFSFileSystem == 1 ? "B:" : "C:")
-#else
-                                        "B:"
-#endif
-            );
+            strcpy((char *)sret, MMInfoDriveName());
             CtoM(sret);
             targ = T_STR;
             return;
@@ -8723,22 +8849,7 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(ep, (unsigned char *)"DISK SIZE"))
         {
-            if (FatFSFileSystem)
-            {
-                if (!InitSDCard())
-                    error((char *)FErrorMsg[20]); // setup the SD card
-                FATFS *fs;
-                DWORD fre_clust;
-                /* Query the current FatFS volume (B: for SD, C: for USB) */
-                const char *vol = (FatFSFileSystem == 2) ? "C:" : "B:";
-                f_getfree(vol, &fre_clust, &fs);
-                /* Get total sectors and free sectors */
-                iret = (uint64_t)(fs->n_fatent - 2) * (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
-            }
-            else
-            {
-                iret = Option.FlashSize - FlashStoreStart;
-            }
+            iret = MMInfoDiskSpace(0);
             targ = T_INT;
             return;
         }
@@ -8822,22 +8933,7 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(ep, (unsigned char *)"FREE SPACE"))
         {
-            if (FatFSFileSystem)
-            {
-                if (!InitSDCard())
-                    error((char *)FErrorMsg[20]); // setup the SD card
-                FATFS *fs;
-                DWORD fre_clust;
-                /* Query the current FatFS volume (B: for SD, C: for USB) */
-                const char *vol = (FatFSFileSystem == 2) ? "C:" : "B:";
-                f_getfree(vol, &fre_clust, &fs);
-                /* Get total sectors and free sectors */
-                iret = (uint64_t)fre_clust * (uint64_t)fs->csize * (uint64_t)FF_MAX_SS;
-            }
-            else
-            {
-                iret = Option.FlashSize - FlashStoreStart - lfs_fs_size(&lfs) * 4096;
-            }
+            iret = MMInfoDiskSpace(1);
             targ = T_INT;
             return;
         }
@@ -9076,56 +9172,7 @@ void MIPS16 fun_info(void)
     }
     else if ((tp = checkstring(ep, (unsigned char *)"MODIFIED")))
     {
-        //		int i,j;
-        DIR djd;
-        FILINFO fnod;
-        sret = GetTempStrMemory(); // this will last for the life of the command
-        targ = T_STR;
-        memset(&djd, 0, sizeof(DIR));
-        memset(&fnod, 0, sizeof(FILINFO));
-        char *p = (char *)getFstring(tp);
-        char q[FF_MAX_LFN] = {0};
-        int waste = 0, t = FatFSFileSystem + 1;
-        t = drivecheck(p, &waste);
-        p += waste;
-        getfullfilename(p, q);
-        FatFSFileSystem = t - 1;
-        if (FatFSFileSystem == 0)
-        {
-            int dt;
-            FSerror = lfs_getattr(&lfs, q, 'A', &dt, 4);
-            if (FSerror != 4)
-                return;
-            else
-            {
-                WORD *p = (WORD *)&dt;
-                fnod.fdate = (WORD)p[1];
-                fnod.ftime = (WORD)p[0];
-            }
-        }
-        else
-        {
-            if (!InitSDCard())
-            {
-                iret = -1;
-                return;
-            }
-            FSerror = f_stat(p, &fnod);
-            if (FSerror != FR_OK)
-                return;
-        }
-        IntToStr((char *)sret, ((fnod.fdate >> 9) & 0x7F) + 1980, 10);
-        sret[4] = '-';
-        IntToStrPad((char *)sret + 5, (fnod.fdate >> 5) & 0xF, '0', 2, 10);
-        sret[7] = '-';
-        IntToStrPad((char *)sret + 8, fnod.fdate & 0x1F, '0', 2, 10);
-        sret[10] = ' ';
-        IntToStrPad((char *)sret + 11, (fnod.ftime >> 11) & 0x1F, '0', 2, 10);
-        sret[13] = ':';
-        IntToStrPad((char *)sret + 14, (fnod.ftime >> 5) & 0x3F, '0', 2, 10);
-        sret[16] = ':';
-        IntToStrPad((char *)sret + 17, (fnod.ftime & 0x1F) * 2, '0', 2, 10);
-        FatFSFileSystem = FatFSFileSystemSave;
+        MMInfoModified((char *)getFstring(tp), (char *)sret, STRINGSIZE);
         CtoM(sret);
         targ = T_STR;
         return;
@@ -10637,6 +10684,96 @@ void IntPinsClear(void)
     IntPinList();
 }
 
+/* C subscriptions share BASIC's inttbl[] and the INTR edge latches. */
+static uint16_t pm_c_gpio_slots;
+static bool pm_c_gpio_polling;
+extern bool pm_runtime_is_running(void);
+void pm_gpio_drop_slot_hw(int i)
+{
+    if (i >= 0 && i < NBRINTERRUPTS)
+        pm_c_gpio_slots &= ~(1u << i);
+}
+void pm_gpio_runtime_begin(void)
+{
+    pm_c_gpio_slots = 0;
+    pm_c_gpio_polling = false;
+}
+void pm_gpio_runtime_end(void)
+{
+    for (int i = 0; i < NBRINTERRUPTS; ++i)
+        if (pm_c_gpio_slots & (1u << i)) {
+            int pin = inttbl[i].pin;
+            pm_c_gpio_slots &= ~(1u << i);
+            if (pin) ExtCfg(pin, EXT_NOT_CONFIG, 0);
+        }
+    pm_c_gpio_polling = false;
+}
+void pm_gpio_subscribe_hw(int gp, int edge, int pull, void (*cb)(int,int))
+{
+    int pin = codemap(gp), slot = -1, cfg, opt;
+    if (!pm_runtime_is_running()) error("GPIO events require a running C program");
+    if (IsInvalidPin(pin)) error("Invalid GPIO pin");
+    for (int i = 0; i < NBRINTERRUPTS; ++i)
+        if ((pm_c_gpio_slots & (1u << i)) && inttbl[i].pin == pin) {
+            slot = i;
+            break;
+        }
+    if (!cb) {
+        if (slot >= 0) ExtCfg(pin, EXT_NOT_CONFIG, 0);
+        return;
+    }
+    if (edge < 1 || edge > 3 || pull < 0 || pull > 2)
+        error("Invalid GPIO event mode");
+    if (ExtCurrentConfig[pin] != EXT_NOT_CONFIG && slot < 0)
+        error("GPIO pin already configured");
+    CheckPin(pin, CP_IGNORE_INUSE);
+    if (!(PinDef[pin].mode & DIGITAL_IN)) StandardError(8);
+    if (slot < 0) {
+        for (slot = 0; slot < NBRINTERRUPTS; ++slot)
+            if (!inttbl[slot].pin) break;
+        if (slot == NBRINTERRUPTS) error("Too many interrupts");
+    }
+    cfg = edge == 1 ? EXT_INT_HI : edge == 2 ? EXT_INT_LO : EXT_INT_BOTH;
+    opt = pull == 1 ? CNPUSET : pull == 2 ? CNPDSET : 0;
+#ifdef rp2350
+    if (pull == 2) {
+        PinSetBit(pin, TRISCLR);
+        PinSetBit(pin, LATCLR);
+        PinSetBit(pin, TRISSET);
+    }
+#endif
+    ExtCfg(pin, cfg, opt);
+    inttbl[slot].pin = pin;
+    inttbl[slot].intp = (char *)(uintptr_t)cb;
+    inttbl[slot].lohi = edge == 1 ? T_LOHI : edge == 2 ? T_HILO : T_BOTH;
+    IntPinArm(pin);
+    inttbl[slot].last = ExtInp(pin);
+    pm_c_gpio_slots |= 1u << slot;
+}
+void pm_gpio_runtime_poll(void)
+{
+    if (!pm_runtime_is_running() || pm_c_gpio_polling || !pm_c_gpio_slots) return;
+    pm_c_gpio_polling = true;
+    for (int i = 0; i < NBRINTERRUPTS; ++i) {
+        if (!(pm_c_gpio_slots & (1u << i))) continue;
+        int pin = inttbl[i].pin;
+        if (!pin) { pm_c_gpio_slots &= ~(1u << i); continue; }
+        int gp = PinDef[pin].GPno;
+        uint32_t e = io_bank0_hw->intr[gp >> 3] & INTPIN_EDGES(gp);
+        if (!e) continue;
+        io_bank0_hw->intr[gp >> 3] = e;
+        int level = ExtInp(pin), last = inttbl[i].last;
+        inttbl[i].last = level;
+        if ((inttbl[i].lohi == T_HILO && level < last) ||
+            (inttbl[i].lohi == T_LOHI && level > last) ||
+            (inttbl[i].lohi == T_BOTH && level != last)) {
+            void (*cb)(int,int) = (void (*)(int,int))(uintptr_t)inttbl[i].intp;
+            if (cb) cb(gp, level);
+        }
+    }
+    pm_c_gpio_polling = false;
+}
+
 // has an armed interrupt pin latched an edge?
 static __force_inline int IntPinEdge(void) // inlined: check_interrupt() runs from RAM
 {
@@ -10658,8 +10795,10 @@ static int PolledSourceArmed(void)
     for (int i = 1; i <= MAXPID; i++)
         if (PIDchannels[i].interrupt != NULL && PIDchannels[i].active)
             return 1;
-    return piointerrupt || DMAinterruptRX || DMAinterruptTX || (ADCInterrupt && dmarunning) ||
-           KeypadInterrupt || CSubInterrupt;
+    return piointerrupt ||
+           (DMAinterruptRX && !pm_pio_dma_is_c_hw(0)) ||
+           (DMAinterruptTX && !pm_pio_dma_is_c_hw(1)) ||
+           (ADCInterrupt && dmarunning) || KeypadInterrupt || CSubInterrupt;
 }
 
 // clear an I2C slave-ready bit; the I2C interrupt sets bits in the same word,
@@ -10713,66 +10852,38 @@ int checkdetailinterrupts(void)
     { // have any PIO interrupts been set
         for (int pio = 0; pio < PIOMAX; pio++)
         {
-#ifdef rp2350
-            PIO pioinuse = (pio == 0 ? pio0 : (pio == 1 ? pio1 : pio2));
-#else
-            PIO pioinuse = (pio == 0 ? pio0 : pio1);
-#endif
             for (int sm = 0; sm < 4; sm++)
             {
-                int TXlevel = pio_sm_get_tx_fifo_level(pioinuse, sm);
-                int RXlevel = pio_sm_get_rx_fifo_level(pioinuse, sm);
-                if (RXlevel && pioRXinterrupts[sm][pio])
-                { // is there a character in the buffer and has an interrupt been set?
+                if (pioRXinterrupts[sm][pio] &&
+                    !pm_pio_fifo_is_c_hw(pio, sm, 0) &&
+                    pm_pio_fifo_event_hw(pio, sm, 0, NULL))
+                {
                     intaddr = pioRXinterrupts[sm][pio];
                     goto GotAnInterrupt;
                 }
-                if (TXlevel && pioTXinterrupts[sm][pio])
+                if (!pm_pio_fifo_is_c_hw(pio, sm, 1) &&
+                    pm_pio_fifo_event_hw(pio, sm, 1, &pioTXlast[sm][pio]) &&
+                    pioTXinterrupts[sm][pio])
                 {
-                    int full = (pioinuse->sm[sm].shiftctrl & (1 << 30)) ? 8 : 4;
-                    if (TXlevel != full && pioTXlast[sm][pio] == full)
-                    { // was the buffer full last time and not now and is an interrupt set?
-                        intaddr = pioTXinterrupts[sm][pio];
-                        pioTXlast[sm][pio] = TXlevel;
-                        goto GotAnInterrupt;
-                    }
+                    intaddr = pioTXinterrupts[sm][pio];
+                    goto GotAnInterrupt;
                 }
-                pioTXlast[sm][pio] = TXlevel;
             }
         }
     }
-    if (DMAinterruptRX)
+    if (DMAinterruptRX && !pm_pio_dma_is_c_hw(0) && pm_pio_dma_complete_hw(0))
     {
-        if (!dma_channel_is_busy(dma_rx_chan))
-        {
-#ifdef rp2350
-            PIO pio = (dma_rx_pio == 0 ? pio0 : (dma_rx_pio == 1 ? pio1 : pio2));
-#else
-            PIO pio = (dma_rx_pio == 0 ? pio0 : pio1);
-#endif
-            intaddr = (char *)DMAinterruptRX;
-            DMAinterruptRX = NULL;
-            pio_sm_set_enabled(pio, dma_rx_sm, false);
-            goto GotAnInterrupt;
-        }
+        intaddr = (char *)DMAinterruptRX;
+        DMAinterruptRX = NULL;
+        pm_pio_stop_hw(dma_rx_pio, dma_rx_sm);
+        goto GotAnInterrupt;
     }
-    if (DMAinterruptTX)
+    if (DMAinterruptTX && !pm_pio_dma_is_c_hw(1) && pm_pio_dma_complete_hw(1))
     {
-        if (!dma_channel_is_busy(dma_tx_chan))
-        {
-#ifdef rp2350
-            PIO pio = (dma_tx_pio == 0 ? pio0 : (dma_tx_pio == 1 ? pio1 : pio2));
-#else
-            PIO pio = (dma_tx_pio == 0 ? pio0 : pio1);
-#endif
-            if ((pio->flevel >> (dma_tx_sm * 8) & 0xf) == 0)
-            {
-                intaddr = (char *)DMAinterruptTX;
-                DMAinterruptTX = NULL;
-                pio_sm_set_enabled(pio, dma_tx_sm, false);
-                goto GotAnInterrupt;
-            }
-        }
+        intaddr = (char *)DMAinterruptTX;
+        DMAinterruptTX = NULL;
+        pm_pio_stop_hw(dma_tx_pio, dma_tx_sm);
+        goto GotAnInterrupt;
     }
 
 #ifdef GUICONTROLS
@@ -10964,15 +11075,20 @@ int checkdetailinterrupts(void)
     }
 
     for (i = 0; i < IntPinRegs; i++)
-    { // take the pins' latched edges: the loop below compares levels, and any later edge latches again
+    { // take BASIC's latched edges, leaving C-owned pins for the C poller
         int r = IntPinReg[i];
         uint32_t e = io_bank0_hw->intr[r] & IntPinMask[r];
+        if (e && pm_c_gpio_slots)
+            for (int j = 0; j < NBRINTERRUPTS; ++j)
+                if ((pm_c_gpio_slots & (1u << j)) && inttbl[j].pin &&
+                    (PinDef[inttbl[j].pin].GPno >> 3) == r)
+                    e &= ~INTPIN_EDGES(PinDef[inttbl[j].pin].GPno);
         if (e)
             io_bank0_hw->intr[r] = e;
     }
     for (i = 0; i < NBRINTERRUPTS; i++)
     { // scan through the interrupt table
-        if (inttbl[i].pin != 0)
+        if (inttbl[i].pin != 0 && !(pm_c_gpio_slots & (1u << i)))
         {                              // if this entry has an interrupt pin set
             v = ExtInp(inttbl[i].pin); // get the current value of the pin
             // check if interrupt occured

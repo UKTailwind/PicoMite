@@ -618,6 +618,480 @@ static void docompressed332(char *fc, int x1, int y1, int w, int h, int blank)
     }
 }
 #endif
+/* BLIT FRAMEBUFFER: a buffer letter as the command takes it (L F N, and T 2
+   on the RP2350 VGA/HDMI builds), or 0 */
+static int blit_fb_letter(unsigned char *arg)
+{
+    static const char *const letters[] = {"L", "F", "N", "T", "2"};
+    for (int i = 0; i < 5; i++)
+        if (checkstring(arg, (unsigned char *)letters[i]))
+            return letters[i][0];
+    return 0;
+}
+
+/* The buffer of a letter (NULL: the LCD panel itself, N on the LCD builds) */
+static volatile unsigned char *blit_fb_buffer(int letter)
+{
+    switch (letter)
+    {
+    case 'L':
+        return LayerBuf;
+    case 'F':
+        return FrameBuf;
+#ifdef PICOMITEVGA
+    case 'N':
+        return DisplayBuf;
+#ifdef rp2350
+    case 'T':
+        return SecondLayer;
+    case '2':
+        if (SecondFrame == DisplayBuf)
+            error("Frame buffer 2 not created");
+        return SecondFrame;
+#endif
+#else
+    case 'N':
+        return NULL;
+#endif
+    }
+    SyntaxError();
+    return NULL;
+}
+
+static void blit_fb_check(volatile unsigned char *s, volatile unsigned char *d)
+{
+    if (s == d)
+        error("Same framebuffer");
+    if (s == NULL && (void *)ReadBuffer == (void *)DisplayNotSet)
+        StandardError(11);
+}
+
+/* the highest transparent colour the current mode has */
+static int blit_fb_blank_max(void)
+{
+#ifdef HDMI
+    if (DISPLAY_TYPE == SCREENMODE4)
+        return 0x7FFF;
+    if (DISPLAY_TYPE == SCREENMODE5)
+        return 0xFF;
+#endif
+    return 15;
+}
+
+/* The copy itself, the arguments checked (blank -1: none transparent) */
+static void blit_fb_core(volatile unsigned char *s, volatile unsigned char *d, int x1, int y1, int x2, int y2, int w,
+                         int h, int blank)
+{
+#ifndef PICOMITEVGA
+    int otoggle = 0, itoggle = 0; // input will always start on a byte boundary
+    volatile unsigned char c, *to;
+#endif
+
+    if (d != NULL && s != NULL)
+    {
+#ifdef PICOMITEVGA
+        if (DISPLAY_TYPE == SCREENMODE1)
+            error("Not available in mode 1");
+#endif
+#ifdef HDMI
+        if (DISPLAY_TYPE == SCREENMODE4)
+        {
+            // RGB555 blit - 2 bytes per pixel
+            int has_transparency = (blank >= 0);
+            uint16_t tcolor = (uint16_t)blank;
+            int sx_start = 0, sy_start = 0, sx_end = w, sy_end = h;
+            if (x1 < 0)
+                sx_start = -x1;
+            if (y1 < 0)
+                sy_start = -y1;
+            if (x1 + w > HRes)
+                sx_end = HRes - x1;
+            if (y1 + h > VRes)
+                sy_end = VRes - y1;
+            if (x2 < 0)
+            {
+                int adj = -x2;
+                if (adj > sx_start)
+                    sx_start = adj;
+            }
+            if (y2 < 0)
+            {
+                int adj = -y2;
+                if (adj > sy_start)
+                    sy_start = adj;
+            }
+            if (x2 + w > HRes)
+            {
+                int adj = HRes - x2;
+                if (adj < sx_end)
+                    sx_end = adj;
+            }
+            if (y2 + h > VRes)
+            {
+                int adj = VRes - y2;
+                if (adj < sy_end)
+                    sy_end = adj;
+            }
+            if (sx_start >= sx_end || sy_start >= sy_end)
+                return;
+            int num_pixels = sx_end - sx_start;
+            for (int i = sy_start; i < sy_end; i++)
+            {
+                uint16_t *src_row = (uint16_t *)s + (y1 + i) * HRes + (x1 + sx_start);
+                uint16_t *dst_row = (uint16_t *)d + (y2 + i) * HRes + (x2 + sx_start);
+                if (!has_transparency)
+                {
+                    memcpy(dst_row, src_row, num_pixels * sizeof(uint16_t));
+                }
+                else
+                {
+                    for (int j = 0; j < num_pixels; j++)
+                    {
+                        if (src_row[j] != tcolor)
+                            dst_row[j] = src_row[j];
+                    }
+                }
+            }
+            return;
+        }
+        else if (DISPLAY_TYPE == SCREENMODE5)
+        {
+            // RGB332 blit - 1 byte per pixel
+            int has_transparency = (blank >= 0);
+            uint8_t tcolor = (uint8_t)blank;
+            int sx_start = 0, sy_start = 0, sx_end = w, sy_end = h;
+            if (x1 < 0)
+                sx_start = -x1;
+            if (y1 < 0)
+                sy_start = -y1;
+            if (x1 + w > HRes)
+                sx_end = HRes - x1;
+            if (y1 + h > VRes)
+                sy_end = VRes - y1;
+            if (x2 < 0)
+            {
+                int adj = -x2;
+                if (adj > sx_start)
+                    sx_start = adj;
+            }
+            if (y2 < 0)
+            {
+                int adj = -y2;
+                if (adj > sy_start)
+                    sy_start = adj;
+            }
+            if (x2 + w > HRes)
+            {
+                int adj = HRes - x2;
+                if (adj < sx_end)
+                    sx_end = adj;
+            }
+            if (y2 + h > VRes)
+            {
+                int adj = VRes - y2;
+                if (adj < sy_end)
+                    sy_end = adj;
+            }
+            if (sx_start >= sx_end || sy_start >= sy_end)
+                return;
+            int num_pixels = sx_end - sx_start;
+            for (int i = sy_start; i < sy_end; i++)
+            {
+                uint8_t *src_row = (uint8_t *)s + (y1 + i) * HRes + (x1 + sx_start);
+                uint8_t *dst_row = (uint8_t *)d + (y2 + i) * HRes + (x2 + sx_start);
+                if (!has_transparency)
+                {
+                    memcpy(dst_row, src_row, num_pixels);
+                }
+                else
+                {
+                    for (int j = 0; j < num_pixels; j++)
+                    {
+                        if (src_row[j] != tcolor)
+                            dst_row[j] = src_row[j];
+                    }
+                }
+            }
+            return;
+        }
+#endif
+        // RGB121 blit
+        HResD = HRes;
+        VResD = VRes;
+        HResS = HRes;
+        VResS = VRes;
+        /* blit121 clips only the destination, so a source rectangle off
+           the buffer would read the memory around it - check it as
+           BLIT FLASH does */
+        if (x1 < 0 || y1 < 0 || x1 + w > HResS || y1 + h > VResS)
+            StandardError(21);
+        blit121((uint8_t *)s, (uint8_t *)d, x1, y1, w, h, x2, y2, blank);
+        return;
+    }
+#ifndef PICOMITEVGA
+    else if (s != NULL)
+    { // writing to a physical LCD display
+#if PICOMITERP2350
+        if (Option.DISPLAY_TYPE >= NEXTGEN)
+        {
+            if (w < 1 || h < 1)
+                return;
+            for (int sy = y1, dy = y2; sy < y1 + h; sy++, dy++)
+            {
+                if (sy < 0 || sy >= VRes)
+                    continue;
+                uint8_t *src_row = (uint8_t *)s + sy * (HRes >> 1);
+                for (int sx = x1, dx = x2; sx < x1 + w; sx++, dx++)
+                {
+                    uint8_t pix;
+                    if (sx < 0 || sx >= HRes)
+                        continue;
+                    pix = src_row[sx >> 1];
+                    pix = (sx & 1) ? ((pix >> 4) & 0x0F) : (pix & 0x0F);
+                    if (blank != -1 && pix == (uint8_t)blank)
+                        continue;
+                    DrawPixelMEM332(dx, dy, RGB121map[pix]);
+                }
+            }
+            return;
+        }
+#endif
+        if (x1 == 0 && x2 == 0 && w == HRes && blank == -1)
+        {
+            s += y1 * HRes / 2;
+            copyframetoscreen((void *)s, 0, HRes - 1, y2, y2 + h - 1, 0);
+        }
+        else
+        {
+            if (screen320 && Option.DISPLAY_TYPE != SSD1963_4_16)
+                x2 *= 2;
+            char tobuff[(w + 1) / 2], *to; // (an odd width's last pixel takes a byte of its own)
+            for (int y = y1, yo = y2; y < y1 + h; y++, yo++)
+            {
+                char *fc = (char *)s + y * HRes / 2 + x1 / 2;
+                getnextuncompressednibble(&fc, 1 + (x1 & 1)); // reset the decoder
+                int x = x1;
+                while (1)
+                {
+                    to = tobuff;
+                    int otoggle = 0;
+                    char c;
+                    int ww = 0;
+                    int xx = -1;
+                    while ((c = getnextuncompressednibble(&fc, 0)) == blank)
+                    {
+                        x++;
+                        if (x == x1 + w)
+                            break;
+                    }
+                    if (x == x1 + w)
+                        break; // nothing found so exit
+                    *to = c;
+                    otoggle ^= 1;
+                    xx = x;
+                    x++;
+                    ww = 1;
+                    if (xx != x1 + w - 1)
+                    {
+                        while ((c = getnextuncompressednibble(&fc, 0)) != blank)
+                        {
+                            x++;
+                            ww++;
+                            if (otoggle == 0)
+                            {
+                                *to = c;
+                                otoggle ^= 1;
+                            }
+                            else
+                            {
+                                *to |= (c << 4);
+                                otoggle ^= 1;
+                                to++;
+                            }
+                            if (x == x1 + w)
+                                break;
+                        }
+                    }
+                    x++;
+                    if (xx + ww > HRes)
+                    {
+                        ww = HRes - xx;
+                    }
+                    if (x2 >= 0 && ww > 0 && yo >= 0 && yo < VRes)
+                    {
+                        copyframetoscreen((unsigned char *)tobuff, x2, x2 + ww - 1, yo, yo, 0);
+                    }
+                    if (x2 < 0 && x2 + ww >= 0)
+                    {
+                        char *t = tobuff - ((x2) / 2) - (x2 & 1);
+                        ww += x2;
+                        if (ww > 0)
+                        {
+                            copyframetoscreen((unsigned char *)t, 0, ww - 1, yo, yo, x2 & 1);
+                        }
+                    }
+                    if (x >= x1 + w)
+                        break;
+                }
+            }
+        }
+        return;
+    }
+    else if (d != NULL)
+    { // reading from a physical LCD display
+#if PICOMITERP2350
+        if (Option.DISPLAY_TYPE >= NEXTGEN)
+        {
+            union colourmap
+            {
+                char rgbbytes[4];
+                unsigned int rgb;
+            } cb;
+            unsigned char *screen = (unsigned char *)(ScreenBuffer);
+            if (w < 1 || h < 1)
+                return;
+            for (int sy = y1, dy = y2; sy < y1 + h; sy++, dy++)
+            {
+                if (sy < 0 || sy >= VRes)
+                    continue;
+                int scroll_y = sy + ScrollStart;
+                if (scroll_y >= VRes)
+                    scroll_y -= VRes;
+                unsigned char *src_row = screen + scroll_y * HRes;
+                for (int sx = x1, dx = x2; sx < x1 + w; sx++, dx++)
+                {
+                    if (sx < 0 || sx >= HRes)
+                        continue;
+                    if (dx < 0 || dx >= HRes || dy < 0 || dy >= VRes)
+                        continue;
+                    uint8_t p332 = src_row[sx];
+                    cb.rgbbytes[0] = ((p332 & 0x03) << 6);
+                    cb.rgbbytes[1] = ((p332 & 0x1C) << 3);
+                    cb.rgbbytes[2] = (p332 & 0xE0);
+                    cb.rgbbytes[3] = 0;
+                    uint8_t fcolour = (uint8_t)RGB121(cb.rgb);
+                    if (blank != -1 && fcolour == (uint8_t)blank)
+                        continue;
+                    volatile unsigned char *to = d + dy * (HRes >> 1) + (dx >> 1);
+                    if (dx & 1)
+                    {
+                        *to &= 0x0F;
+                        *to |= (fcolour << 4);
+                    }
+                    else
+                    {
+                        *to &= 0xF0;
+                        *to |= fcolour;
+                    }
+                }
+            }
+            return;
+        }
+#endif
+        union colourmap
+        {
+            char rgbbytes[4];
+            unsigned int rgb;
+        } cb;
+        unsigned char *rbuff = (unsigned char *)GetTempMainMemory(w * 4);
+        char *from = GetTempMainMemory((w + 1) / 2);
+        for (int y = y1, toy = y2; y < y1 + h; y++, toy++)
+        { // loop though all of the output lines
+            ReadBuffer(x1, y, x1 + w - 1, y, rbuff);
+            uint8_t *p = rbuff;
+            char *pp = from;
+            for (int x = x1; x < x1 + w; x++)
+            {
+                cb.rgbbytes[0] = *p++; // this order swaps the bytes to match the .BMP file
+                cb.rgbbytes[1] = *p++;
+                cb.rgbbytes[2] = *p++;
+                int fcolour = RGB121(cb.rgb);
+                if (x & 1)
+                {
+                    *pp &= 0x0F;
+                    *pp |= (fcolour << 4);
+                    pp++;
+                }
+                else
+                {
+                    *pp &= 0xF0;
+                    *pp |= fcolour;
+                }
+            }
+            to = d + toy * (HRes >> 1) + (x2 >> 1); // get the byte that will start the output
+            itoggle = 0;
+            pp = from;
+            if (x2 & 1)
+                otoggle = 1; // if x1 is odd then we will start on the high nibble
+            else
+                otoggle = 0;
+            for (int x = x1, tox = x2; x < x1 + w; x++, tox++)
+            {
+                if (itoggle == 0)
+                {
+                    if (tox >= 0 && tox < HRes)
+                        c = *pp & 0x0f;
+                    else
+                        c = 0;
+                    itoggle = 1;
+                }
+                else
+                {
+                    if (tox >= 0 && tox < HRes)
+                        c = *pp >> 4;
+                    else
+                        c = 0;
+                    pp++;
+                    itoggle = 0;
+                }
+                if (y < 0 || y >= VRes)
+                    continue;
+                if (otoggle == 0)
+                {
+                    if (tox >= 0 && tox < HRes)
+                    {
+                        if (c != blank)
+                        {
+                            *to &= 0xF0;
+                            *to |= c;
+                        }
+                    }
+                }
+                else
+                {
+                    if (tox >= 0 && tox < HRes)
+                    {
+                        if (c != blank)
+                        {
+                            *to &= 0x0f;
+                            *to |= (c << 4);
+                        }
+                    }
+                    to++;
+                }
+                otoggle ^= 1;
+            }
+        }
+        return;
+    }
+#endif
+}
+
+/* BLIT FRAMEBUFFER from, to, x1, y1, x2, y2, w, h [, colour] for the C API:
+   from and to the letters ('N', 'F', 'L', 'T', '2'), blank the transparent
+   colour or -1 for none - checked as the command checks them */
+void BlitFramebufferC(int from, int to, int x1, int y1, int x2, int y2, int w, int h, int blank)
+{
+    volatile unsigned char *s, *d;
+    CheckDisplay();
+    s = blit_fb_buffer(toupper(from));
+    d = blit_fb_buffer(toupper(to));
+    blit_fb_check(s, d);
+    if (blank < -1 || blank > blit_fb_blank_max())
+        error("~ is invalid (valid is ~ to ~)", (long long)blank, -1LL, (long long)blit_fb_blank_max());
+    blit_fb_core(s, d, x1, y1, x2, y2, w, h, blank);
+}
+
 int blitother(void)
 {
     int x1, y1, x2, y2, w, h;
@@ -737,67 +1211,14 @@ int blitother(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"FRAMEBUFFER")))
     {
         int blank = -1;
-#ifndef PICOMITEVGA
-        int otoggle = 0, itoggle = 0; // input will always start on a byte boundary
-        volatile unsigned char c, *to;
-#endif
         volatile unsigned char *s = NULL, *d = NULL;
         getcsargs(&p, 17);
         if (argc < 15)
             SyntaxError();
         ;
-        if (checkstring(argv[0], (unsigned char *)"L"))
-            s = LayerBuf;
-        else if (checkstring(argv[0], (unsigned char *)"F"))
-            s = FrameBuf;
-#ifdef PICOMITEVGA
-        else if (checkstring(argv[0], (unsigned char *)"N"))
-            s = DisplayBuf;
-#ifdef rp2350
-        else if (checkstring(argv[0], (unsigned char *)"T"))
-            s = SecondLayer;
-        else if (checkstring(argv[0], (unsigned char *)"2"))
-        {
-            if (SecondFrame == DisplayBuf)
-                error("Frame buffer 2 not created");
-            s = SecondFrame;
-        }
-#endif
-#else
-        else if (checkstring(argv[0], (unsigned char *)"N"))
-            s = NULL;
-#endif
-        else
-            SyntaxError();
-        ;
-        if (checkstring(argv[2], (unsigned char *)"L"))
-            d = LayerBuf;
-        else if (checkstring(argv[2], (unsigned char *)"F"))
-            d = FrameBuf;
-#ifdef PICOMITEVGA
-        else if (checkstring(argv[2], (unsigned char *)"N"))
-            d = DisplayBuf;
-#ifdef rp2350
-        else if (checkstring(argv[2], (unsigned char *)"T"))
-            d = SecondLayer;
-        else if (checkstring(argv[2], (unsigned char *)"2"))
-        {
-            if (SecondFrame == DisplayBuf)
-                error("Frame buffer 2 not created");
-            d = SecondFrame;
-        }
-#endif
-#else
-        else if (checkstring(argv[2], (unsigned char *)"N"))
-            d = NULL;
-#endif
-        else
-            SyntaxError();
-        ;
-        if (s == d)
-            error("Same framebuffer");
-        if (s == NULL && (void *)ReadBuffer == (void *)DisplayNotSet)
-            StandardError(11);
+        s = blit_fb_buffer(blit_fb_letter(argv[0]));
+        d = blit_fb_buffer(blit_fb_letter(argv[2]));
+        blit_fb_check(s, d);
         x1 = (int)getinteger(argv[4]);
         y1 = (int)getinteger(argv[6]);
         x2 = (int)getinteger(argv[8]);
@@ -805,404 +1226,9 @@ int blitother(void)
         w = (int)getinteger(argv[12]);
         h = (int)getinteger(argv[14]);
         if (argc == 17)
-        {
-#ifdef HDMI
-            if (DISPLAY_TYPE == SCREENMODE4)
-                blank = getint(argv[16], -1, 0x7FFF);
-            else if (DISPLAY_TYPE == SCREENMODE5)
-                blank = getint(argv[16], -1, 0xFF);
-            else
-#endif
-                blank = getint(argv[16], -1, 15);
-        }
-        if (d != NULL && s != NULL)
-        {
-#ifdef PICOMITEVGA
-            if (DISPLAY_TYPE == SCREENMODE1)
-                error("Not available in mode 1");
-#endif
-#ifdef HDMI
-            if (DISPLAY_TYPE == SCREENMODE4)
-            {
-                // RGB555 blit - 2 bytes per pixel
-                int has_transparency = (blank >= 0);
-                uint16_t tcolor = (uint16_t)blank;
-                int sx_start = 0, sy_start = 0, sx_end = w, sy_end = h;
-                if (x1 < 0)
-                    sx_start = -x1;
-                if (y1 < 0)
-                    sy_start = -y1;
-                if (x1 + w > HRes)
-                    sx_end = HRes - x1;
-                if (y1 + h > VRes)
-                    sy_end = VRes - y1;
-                if (x2 < 0)
-                {
-                    int adj = -x2;
-                    if (adj > sx_start)
-                        sx_start = adj;
-                }
-                if (y2 < 0)
-                {
-                    int adj = -y2;
-                    if (adj > sy_start)
-                        sy_start = adj;
-                }
-                if (x2 + w > HRes)
-                {
-                    int adj = HRes - x2;
-                    if (adj < sx_end)
-                        sx_end = adj;
-                }
-                if (y2 + h > VRes)
-                {
-                    int adj = VRes - y2;
-                    if (adj < sy_end)
-                        sy_end = adj;
-                }
-                if (sx_start >= sx_end || sy_start >= sy_end)
-                    return 1;
-                int num_pixels = sx_end - sx_start;
-                for (int i = sy_start; i < sy_end; i++)
-                {
-                    uint16_t *src_row = (uint16_t *)s + (y1 + i) * HRes + (x1 + sx_start);
-                    uint16_t *dst_row = (uint16_t *)d + (y2 + i) * HRes + (x2 + sx_start);
-                    if (!has_transparency)
-                    {
-                        memcpy(dst_row, src_row, num_pixels * sizeof(uint16_t));
-                    }
-                    else
-                    {
-                        for (int j = 0; j < num_pixels; j++)
-                        {
-                            if (src_row[j] != tcolor)
-                                dst_row[j] = src_row[j];
-                        }
-                    }
-                }
-                return 1;
-            }
-            else if (DISPLAY_TYPE == SCREENMODE5)
-            {
-                // RGB332 blit - 1 byte per pixel
-                int has_transparency = (blank >= 0);
-                uint8_t tcolor = (uint8_t)blank;
-                int sx_start = 0, sy_start = 0, sx_end = w, sy_end = h;
-                if (x1 < 0)
-                    sx_start = -x1;
-                if (y1 < 0)
-                    sy_start = -y1;
-                if (x1 + w > HRes)
-                    sx_end = HRes - x1;
-                if (y1 + h > VRes)
-                    sy_end = VRes - y1;
-                if (x2 < 0)
-                {
-                    int adj = -x2;
-                    if (adj > sx_start)
-                        sx_start = adj;
-                }
-                if (y2 < 0)
-                {
-                    int adj = -y2;
-                    if (adj > sy_start)
-                        sy_start = adj;
-                }
-                if (x2 + w > HRes)
-                {
-                    int adj = HRes - x2;
-                    if (adj < sx_end)
-                        sx_end = adj;
-                }
-                if (y2 + h > VRes)
-                {
-                    int adj = VRes - y2;
-                    if (adj < sy_end)
-                        sy_end = adj;
-                }
-                if (sx_start >= sx_end || sy_start >= sy_end)
-                    return 1;
-                int num_pixels = sx_end - sx_start;
-                for (int i = sy_start; i < sy_end; i++)
-                {
-                    uint8_t *src_row = (uint8_t *)s + (y1 + i) * HRes + (x1 + sx_start);
-                    uint8_t *dst_row = (uint8_t *)d + (y2 + i) * HRes + (x2 + sx_start);
-                    if (!has_transparency)
-                    {
-                        memcpy(dst_row, src_row, num_pixels);
-                    }
-                    else
-                    {
-                        for (int j = 0; j < num_pixels; j++)
-                        {
-                            if (src_row[j] != tcolor)
-                                dst_row[j] = src_row[j];
-                        }
-                    }
-                }
-                return 1;
-            }
-#endif
-            // RGB121 blit
-            HResD = HRes;
-            VResD = VRes;
-            HResS = HRes;
-            VResS = VRes;
-            /* blit121 clips only the destination, so a source rectangle off
-               the buffer would read the memory around it - check it as
-               BLIT FLASH does */
-            if (x1 < 0 || y1 < 0 || x1 + w > HResS || y1 + h > VResS)
-                StandardError(21);
-            blit121((uint8_t *)s, (uint8_t *)d, x1, y1, w, h, x2, y2, blank);
-            return 1;
-        }
-#ifndef PICOMITEVGA
-        else if (s != NULL)
-        { // writing to a physical LCD display
-#if PICOMITERP2350
-            if (Option.DISPLAY_TYPE >= NEXTGEN)
-            {
-                if (w < 1 || h < 1)
-                    return 1;
-                for (int sy = y1, dy = y2; sy < y1 + h; sy++, dy++)
-                {
-                    if (sy < 0 || sy >= VRes)
-                        continue;
-                    uint8_t *src_row = (uint8_t *)s + sy * (HRes >> 1);
-                    for (int sx = x1, dx = x2; sx < x1 + w; sx++, dx++)
-                    {
-                        uint8_t pix;
-                        if (sx < 0 || sx >= HRes)
-                            continue;
-                        pix = src_row[sx >> 1];
-                        pix = (sx & 1) ? ((pix >> 4) & 0x0F) : (pix & 0x0F);
-                        if (blank != -1 && pix == (uint8_t)blank)
-                            continue;
-                        DrawPixelMEM332(dx, dy, RGB121map[pix]);
-                    }
-                }
-                return 1;
-            }
-#endif
-            if (x1 == 0 && x2 == 0 && w == HRes && blank == -1)
-            {
-                s += y1 * HRes / 2;
-                copyframetoscreen((void *)s, 0, HRes - 1, y2, y2 + h - 1, 0);
-            }
-            else
-            {
-                if (screen320 && Option.DISPLAY_TYPE != SSD1963_4_16)
-                    x2 *= 2;
-                char tobuff[(w + 1) / 2], *to; // (an odd width's last pixel takes a byte of its own)
-                for (int y = y1, yo = y2; y < y1 + h; y++, yo++)
-                {
-                    char *fc = (char *)s + y * HRes / 2 + x1 / 2;
-                    getnextuncompressednibble(&fc, 1 + (x1 & 1)); // reset the decoder
-                    int x = x1;
-                    while (1)
-                    {
-                        to = tobuff;
-                        int otoggle = 0;
-                        char c;
-                        int ww = 0;
-                        int xx = -1;
-                        while ((c = getnextuncompressednibble(&fc, 0)) == blank)
-                        {
-                            x++;
-                            if (x == x1 + w)
-                                break;
-                        }
-                        if (x == x1 + w)
-                            break; // nothing found so exit
-                        *to = c;
-                        otoggle ^= 1;
-                        xx = x;
-                        x++;
-                        ww = 1;
-                        if (xx != x1 + w - 1)
-                        {
-                            while ((c = getnextuncompressednibble(&fc, 0)) != blank)
-                            {
-                                x++;
-                                ww++;
-                                if (otoggle == 0)
-                                {
-                                    *to = c;
-                                    otoggle ^= 1;
-                                }
-                                else
-                                {
-                                    *to |= (c << 4);
-                                    otoggle ^= 1;
-                                    to++;
-                                }
-                                if (x == x1 + w)
-                                    break;
-                            }
-                        }
-                        x++;
-                        if (xx + ww > HRes)
-                        {
-                            ww = HRes - xx;
-                        }
-                        if (x2 >= 0 && ww > 0 && yo >= 0 && yo < VRes)
-                        {
-                            copyframetoscreen((unsigned char *)tobuff, x2, x2 + ww - 1, yo, yo, 0);
-                        }
-                        if (x2 < 0 && x2 + ww >= 0)
-                        {
-                            char *t = tobuff - ((x2) / 2) - (x2 & 1);
-                            ww += x2;
-                            if (ww > 0)
-                            {
-                                copyframetoscreen((unsigned char *)t, 0, ww - 1, yo, yo, x2 & 1);
-                            }
-                        }
-                        if (x >= x1 + w)
-                            break;
-                    }
-                }
-            }
-            return 1;
-        }
-        else if (d != NULL)
-        { // reading from a physical LCD display
-#if PICOMITERP2350
-            if (Option.DISPLAY_TYPE >= NEXTGEN)
-            {
-                union colourmap
-                {
-                    char rgbbytes[4];
-                    unsigned int rgb;
-                } cb;
-                unsigned char *screen = (unsigned char *)(ScreenBuffer);
-                if (w < 1 || h < 1)
-                    return 1;
-                for (int sy = y1, dy = y2; sy < y1 + h; sy++, dy++)
-                {
-                    if (sy < 0 || sy >= VRes)
-                        continue;
-                    int scroll_y = sy + ScrollStart;
-                    if (scroll_y >= VRes)
-                        scroll_y -= VRes;
-                    unsigned char *src_row = screen + scroll_y * HRes;
-                    for (int sx = x1, dx = x2; sx < x1 + w; sx++, dx++)
-                    {
-                        if (sx < 0 || sx >= HRes)
-                            continue;
-                        if (dx < 0 || dx >= HRes || dy < 0 || dy >= VRes)
-                            continue;
-                        uint8_t p332 = src_row[sx];
-                        cb.rgbbytes[0] = ((p332 & 0x03) << 6);
-                        cb.rgbbytes[1] = ((p332 & 0x1C) << 3);
-                        cb.rgbbytes[2] = (p332 & 0xE0);
-                        cb.rgbbytes[3] = 0;
-                        uint8_t fcolour = (uint8_t)RGB121(cb.rgb);
-                        if (blank != -1 && fcolour == (uint8_t)blank)
-                            continue;
-                        volatile unsigned char *to = d + dy * (HRes >> 1) + (dx >> 1);
-                        if (dx & 1)
-                        {
-                            *to &= 0x0F;
-                            *to |= (fcolour << 4);
-                        }
-                        else
-                        {
-                            *to &= 0xF0;
-                            *to |= fcolour;
-                        }
-                    }
-                }
-                return 1;
-            }
-#endif
-            union colourmap
-            {
-                char rgbbytes[4];
-                unsigned int rgb;
-            } cb;
-            unsigned char *rbuff = (unsigned char *)GetTempMainMemory(w * 4);
-            char *from = GetTempMainMemory((w + 1) / 2);
-            for (int y = y1, toy = y2; y < y1 + h; y++, toy++)
-            { // loop though all of the output lines
-                ReadBuffer(x1, y, x1 + w - 1, y, rbuff);
-                uint8_t *p = rbuff;
-                char *pp = from;
-                for (int x = x1; x < x1 + w; x++)
-                {
-                    cb.rgbbytes[0] = *p++; // this order swaps the bytes to match the .BMP file
-                    cb.rgbbytes[1] = *p++;
-                    cb.rgbbytes[2] = *p++;
-                    int fcolour = RGB121(cb.rgb);
-                    if (x & 1)
-                    {
-                        *pp &= 0x0F;
-                        *pp |= (fcolour << 4);
-                        pp++;
-                    }
-                    else
-                    {
-                        *pp &= 0xF0;
-                        *pp |= fcolour;
-                    }
-                }
-                to = d + toy * (HRes >> 1) + (x2 >> 1); // get the byte that will start the output
-                itoggle = 0;
-                pp = from;
-                if (x2 & 1)
-                    otoggle = 1; // if x1 is odd then we will start on the high nibble
-                else
-                    otoggle = 0;
-                for (int x = x1, tox = x2; x < x1 + w; x++, tox++)
-                {
-                    if (itoggle == 0)
-                    {
-                        if (tox >= 0 && tox < HRes)
-                            c = *pp & 0x0f;
-                        else
-                            c = 0;
-                        itoggle = 1;
-                    }
-                    else
-                    {
-                        if (tox >= 0 && tox < HRes)
-                            c = *pp >> 4;
-                        else
-                            c = 0;
-                        pp++;
-                        itoggle = 0;
-                    }
-                    if (y < 0 || y >= VRes)
-                        continue;
-                    if (otoggle == 0)
-                    {
-                        if (tox >= 0 && tox < HRes)
-                        {
-                            if (c != blank)
-                            {
-                                *to &= 0xF0;
-                                *to |= c;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        if (tox >= 0 && tox < HRes)
-                        {
-                            if (c != blank)
-                            {
-                                *to &= 0x0f;
-                                *to |= (c << 4);
-                            }
-                        }
-                        to++;
-                    }
-                    otoggle ^= 1;
-                }
-            }
-            return 1;
-        }
-#endif
+            blank = getint(argv[16], -1, blit_fb_blank_max());
+        blit_fb_core(s, d, x1, y1, x2, y2, w, h, blank);
+        return 1;
     }
     return 0;
 }

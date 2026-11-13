@@ -58,6 +58,8 @@ uint8_t APP_MapKeyToUsage(uint8_t keyCode, int modifier);
    25 ms debounce that filters key-repeat noise, and ring-buffer
    overflow (oldest byte dropped). Safe to call from IRQ context. */
 void USR_KEYBRD_ProcessData(uint8_t data);
+/* Called by USB host autorepeat, with raw scan/modifier metadata. */
+void USR_KEYBRD_ProcessRepeat(uint8_t data);
 
 /* Decode an 8-byte HID boot-keyboard report. Tracks key-up/down
    transitions across calls, populates KeyDown[] (for the KEYDOWN()

@@ -547,6 +547,7 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
         int MMfeof(int filenbr);
         void MMgetline(int filenbr, char *p);
         int ExistsFile(char *p);
+        int SDCardConfigured(void);
         bool FileTry(bool (*fn)(void *), void *arg);
         void FileRename(char *from, char *to);
 #define FileDelete(name) FileRename(name, NULL)
@@ -587,8 +588,12 @@ _Static_assert(sizeof(struct option_s) == 896 + 2048, "struct option_s must stay
            body removed and the binary those bodies became; the writer puts them in
            the library. Split so the hash can be checked before any flash is erased. */
         int FileLoadLibrary(unsigned char *fnames[], int nfiles, uint32_t *hashout, unsigned char **image,
-                            unsigned char **binout, uint32_t *binlenout, int *nfixout, uint32_t skiphash);
+                            unsigned char **binout, uint32_t *binlenout, int *nfixout,
+                            int *rawcsub, uint32_t skiphash);
         void SaveLibraryImage(unsigned char *pm, unsigned char *bin, uint32_t binlen, int nfix, unsigned char *base);
+#ifdef rp2350
+        void SaveLibrarySourceToRAM(unsigned char *pm, uint8_t *ram);
+#endif
         /* ============================================================================
          * Function declarations - Character and string I/O
          * ============================================================================ */

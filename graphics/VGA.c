@@ -20,7 +20,19 @@
 #include "pico/sem.h"
 #include "hardware/clocks.h"
 #include "hardware/vreg.h"
+#ifdef MURMULATOR_M2_VGA222
+#include "PicoMiteVGA222.pio.h"
+#define qvga_program qvga222_program
+#define qvga_program_get_default_config qvga222_program_get_default_config
+#define qvga_offset_entry qvga222_offset_entry
+#define qvga_offset_hsync qvga222_offset_hsync
+#define qvga_offset_vsync qvga222_offset_vsync
+#define qvga_offset_vhsync qvga222_offset_vhsync
+#define qvga_offset_dark qvga222_offset_dark
+#define qvga_offset_output qvga222_offset_output
+#else
 #include "PicoMiteVGA.pio.h"
+#endif
 #include "PicoMiteI2S.pio.h"
 
 #if defined(PICOMITEVGA) && !defined(HDMI)
@@ -115,13 +127,46 @@
     // handler variables
     volatile int QVgaScanLine;   // current processed scan line 0... (next displayed scan line)
     volatile uint32_t QVgaFrame; // frame counter
-#ifdef rp2350
+#ifdef MURMULATOR_M2_VGA222
+    // Max width is 848: ceil(848 / 5) = 170 packed RGB222 words per line.
+    // Rendering uses the SAME memory as a 4-bit byte stream, then expands
+    // it in place from the end so no second full scanline is allocated.
+    uint32_t fbuff[2][170] = {{0}};
+#elif defined(rp2350)
     uint16_t fbuff[2][212] = {0};
 #else
     uint16_t fbuff[2][180] = {0};
 #endif
     volatile int X_TILE = 80, Y_TILE = 40;
     // saved integer divider state
+#ifdef MURMULATOR_M2_VGA222
+    // RGB121 bits [R G1 G0 B] -> RGB222 bits [R R G1 G0 B B].
+    // The PIO consumes 5 six-bit pixels per 32-bit word (30 used bits).
+    static const uint8_t m2_rgb121_to_222[16] = {
+        0x00, 0x03, 0x04, 0x07, 0x08, 0x0b, 0x0c, 0x0f,
+        0x30, 0x33, 0x34, 0x37, 0x38, 0x3b, 0x3c, 0x3f
+    };
+
+    static inline __attribute__((always_inline)) void m2_expand_rgb121_scanline(uint32_t *line, int pixels)
+    {
+        uint8_t *src = (uint8_t *)line;
+        // Reverse traversal prevents expanded words from overwriting
+        // unconsumed 4-bit source pixels in the same buffer.
+        for (int word = (pixels + 4) / 5; word-- > 0;)
+        {
+            uint32_t packed = 0;
+            int first = word * 5;
+            for (int k = 0; k < 5 && first + k < pixels; k++)
+            {
+                int pixel = first + k;
+                uint8_t rgb121 = (src[pixel >> 1] >> ((pixel & 1) * 4)) & 0xf;
+                packed |= (uint32_t)m2_rgb121_to_222[rgb121] << (k * 6);
+            }
+            line[word] = packed;
+        }
+    }
+#endif
+
     // VGA DMA handler - called on end of every scanline
     static int VGAnextbuf = 0, VGAnowbuf = 1, tile = 0, tc = 0;
 
@@ -185,7 +230,7 @@
                 // prepare image line
                 if (DISPLAY_TYPE == SCREENMODE1)
                 {
-                    uint16_t *q = &fbuff[VGAnextbuf][0];
+                    uint16_t *q = (uint16_t *)fbuff[VGAnextbuf];
                     volatile unsigned char *p = &DisplayBuf[line * vgaloop8];
                     volatile unsigned char *pp = &LayerBuf[line * vgaloop8];
                     if (tc == ytileheight)
@@ -304,13 +349,20 @@
                 }
                 VGAnextbuf ^= 1;
                 VGAnowbuf ^= 1;
+#ifdef MURMULATOR_M2_VGA222
+                m2_expand_rgb121_scanline((uint32_t *)fbuff[VGAnowbuf], QVGA_HACT);
+#endif
 
                 // HSYNC ... back porch ... image command
                 *cb++ = 3;
                 *cb++ = (uint32_t)&ScanLineImg[0];
 
                 // image data
+#ifdef MURMULATOR_M2_VGA222
+                *cb++ = (QVGA_HACT + 4) / 5;
+#else
                 *cb++ = vgaloop8;
+#endif
                 *cb++ = (uint32_t)fbuff[VGAnowbuf];
 
                 // front porch
@@ -443,7 +495,11 @@
         sm_config_set_clkdiv(&cfg, QVGA_CLKDIV);
 
         // shift right, autopull, pull threshold
+#ifdef MURMULATOR_M2_VGA222
+        sm_config_set_out_shift(&cfg, true, true, 30);
+#else
         sm_config_set_out_shift(&cfg, true, true, 32);
+#endif
 
         // initialize state machine
         pio_sm_init(QVGA_PIO, QVGA_SM, QVGAOff + qvga_offset_entry, &cfg);
@@ -455,10 +511,19 @@
         // image scanline data buffer: HSYNC ... back porch ... image command
         ScanLineImg[0] = QVGACMD(qvga_offset_hsync, QVGA_HSYNC - 3); // HSYNC
         ScanLineImg[1] = QVGACMD(qvga_offset_dark, QVGA_BP - 4);     // back porch
+#ifdef MURMULATOR_M2_VGA222
+        // FIFO words always hold five pixels. At 848 pixels, output two
+        // black padding pixels; compensate for their 10 PIO clocks in the
+        // front porch to preserve the horizontal timing.
+        int out_pixels = ((QVGA_HACT + 4) / 5) * 5;
+        ScanLineImg[2] = QVGACMD(qvga_offset_output, out_pixels - 2);
+        ScanLineFp = QVGACMD(qvga_offset_dark, QVGA_FP - 4 - (out_pixels - QVGA_HACT) * 5);
+#else
         ScanLineImg[2] = QVGACMD(qvga_offset_output, QVGA_HACT - 2); // image
 
         // front porch
         ScanLineFp = QVGACMD(qvga_offset_dark, QVGA_FP - 4); // front porch
+#endif
 
         // dark scanline: HSYNC ... back porch + dark + front porch
         ScanLineDark[0] = QVGACMD(qvga_offset_hsync, QVGA_HSYNC - 3);             // HSYNC

@@ -14,6 +14,11 @@ SUB or FUNCTION into a CSUB for you, using these same CallTable routines —
 see `docs/mmb2csub.md`. This manual is the one to read when you want control
 over the C, or when what you need is not something MMBasic can express.
 
+You can also leave the hex out altogether. A CSUB body can name C sources
+(RP2350) or a prebuilt ELF object (RP2040 and RP2350), which the firmware
+compiles and links when the program is saved — see *C CSUBs* in
+`docs/PicoMite-native-C-support.md`.
+
 ---
 
 # Part 1 — Writing a CSUB
@@ -618,6 +623,8 @@ working.
 | `uSec` | 0x00 | `void uSec(unsigned long long us)` — busy‑wait microseconds |
 | `putConsole` | 0x04 | `void putConsole(int ch, int flush)` — write a character to the console |
 | `getConsole` | 0x08 | `int getConsole(void)` — read a character, −1 if none waiting |
+| `MMInkey` | 0x1C0 | `int MMInkey(void)` — the decoded key `INKEY$` would give, −1 if none |
+| `kbhitConsole` | 0x1C4 | `int kbhitConsole(void)` — bytes waiting in the raw console queue (not `MMInkey`'s decoded keys) |
 | `MMPrintString` | 0x20 | `void MMPrintString(char *s)` — print a null‑terminated C string |
 | `IntToStr` | 0x24 | `void IntToStr(char *dst, long long n, unsigned int base)` |
 | `FloatToStr` | 0x70 | `void FloatToStr(char *dst, MMFLOAT f, int intDig, int decDig, char pad)` |
@@ -809,6 +816,7 @@ the arguments yourself if you need MMBasic's error.
 | `DrawRectangle` | 0x38 | `void DrawRectangle(int x1,int y1,int x2,int y2,int c)` — filled (inclusive) |
 | `DrawCircle` | 0x94 | `void DrawCircle(int x,int y,int r,int w,int c,int fill,MMFLOAT aspect)` |
 | `DrawTriangle` | 0x98 | `void DrawTriangle(int x0,int y0,int x1,int y1,int x2,int y2,int c,int fill)` |
+| `DrawRBox` | 0x1C8 | `void DrawRBox(int x1,int y1,int x2,int y2,int radius,int colour,int fill)` — rounded box |
 | `DrawBitmap` | 0x3C | `void DrawBitmap(int x,int y,int w,int h,int scale,int fg,int bg,unsigned char *bmp)` |
 | `DrawBuffer` | 0x68 | `void DrawBuffer(int x1,int y1,int x2,int y2,char *src)` — blit a pixel block in |
 | `ReadBuffer` | 0x6C | `void ReadBuffer(int x1,int y1,int x2,int y2,char *dst)` — read a pixel block out |
@@ -833,6 +841,11 @@ the arguments yourself if you need MMBasic's error.
 |---|---|---|
 | `AudioOutput` | 0xC4 | `void AudioOutput(uint16_t left, uint16_t right)` |
 | `AUDIO_WRAP` | 0xCC | `uint16_t` — current audio PWM wrap (full‑scale) value |
+
+`PicoCFunctions.h` also has `Vector_BasicCallTyped` (0x1CC) and
+`Vector_PCMPlay` to `Vector_PCMPoll` (0x1D0–0x1E0), with no named macro over
+them. From C, use `pm_basic_sub()`, `pm_basic_function()` and `pm_pcm_*` — see
+`docs/PicoMite-native-C-support.md`.
 
 ### System data and interrupt vectors
 

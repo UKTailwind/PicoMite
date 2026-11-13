@@ -200,7 +200,7 @@ void MIPS16 cmd_xmodem(void)
     if (*cmdline == 0 || *cmdline == '\'')
     {
         // no file name, so this is a transfer to/from program memory
-        if (CurrentLinePtr)
+        if (ProgramRunning())
             StandardError(10);
         if (rcv)
         {

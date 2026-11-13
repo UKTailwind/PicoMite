@@ -62,6 +62,8 @@ the non US keyboard layouts
 
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#include "core/pm_api.h"
+#include "core/tcc/include/picomite/input.h"
 void setLEDs(int num, int caps, int scroll);
 bool sendCommand(int cmd, int clock, int data);
 volatile char CapsLock;
@@ -93,6 +95,12 @@ static char AltGrDown = 0;
 static char PS2Alt = 0;
 static char KeyUpCode = false;
 static char KeyE0 = false;
+/* Physical modifier state is independent of legacy PS2Ctrl/AltGr handling. */
+#ifdef rp2350
+static uint8_t PS2PhysicalModifiers __attribute__((section(".scratch_x.pm_ps2_modifiers")));
+#else
+static uint8_t PS2PhysicalModifiers;
+#endif
 
 // PS2 KEYDOWN() tracking - up to 6 simultaneous keys + modifier bitmask
 int PS2KeyDown[7] = {0};
@@ -545,6 +553,7 @@ void initKeyboard(void)
       PS2ActiveScancodes[i] = 0;
     for (i = 0; i < 7; i++)
       PS2KeyDown[i] = 0;
+    PS2PhysicalModifiers = 0;
   }
 }
 
@@ -660,6 +669,9 @@ void __not_in_flash_func(CheckKeyboard)(void)
 void processcode(unsigned char Code)
 {
   unsigned char c = 0;
+  uint16_t physical_key = 0;
+  uint8_t event_flags = 0;
+  int dispatched = 0;
   //	unsigned int dly;
   if (!(Code == 0xe0 || Code == 0xf0 || (Code == 0x12 && KeyE0) || (Code == 0x12 && KeyUpCode)) && Code)
   {
@@ -686,6 +698,32 @@ void processcode(unsigned char Code)
     KeyE0 = true;
   else
   {
+    /* Retain physical key identity before legacy US right-Alt handling
+     * folds E0 11 into the left-Alt path. */
+    physical_key = (uint16_t)Code | (KeyE0 ? 0x100u : 0);
+    event_flags = (KeyUpCode ? PM_REMAP_UP : PM_REMAP_DOWN) | PM_REMAP_PS2;
+    uint8_t bit = 0;
+    if (!KeyE0 && Code == L_SHFT) bit = PM_KMOD_LSHIFT;
+    else if (!KeyE0 && Code == R_SHFT) bit = PM_KMOD_RSHIFT;
+    else if (Code == CTRL) bit = KeyE0 ? PM_KMOD_RCTRL : PM_KMOD_LCTRL;
+    else if (Code == 0x11) bit = KeyE0 ? PM_KMOD_RALT : PM_KMOD_LALT;
+    if (bit)
+    {
+      if (KeyUpCode) PS2PhysicalModifiers &= (uint8_t)~bit;
+      else
+      {
+        if (PS2PhysicalModifiers & bit) event_flags |= PM_REMAP_REPEAT;
+        PS2PhysicalModifiers |= bit;
+      }
+    }
+    else if (!KeyUpCode)
+      for (int i = 0; i < 6; i++)
+        if (PS2ActiveScancodes[i] == physical_key)
+        {
+          event_flags |= PM_REMAP_REPEAT;
+          break;
+        }
+
     // Process a scan code from the keyboard into an ASCII character.
     // It then inserts the char into the keyboard queue.
 
@@ -1126,6 +1164,18 @@ void processcode(unsigned char Code)
       }
     }
 
+    if (justset && c == '3')
+    {
+      (void)KeyboardEmit(0, physical_key, PS2PhysicalModifiers, event_flags);
+      dispatched = 1;
+    }
+    else
+    {
+      c = KeyboardEmit(c, physical_key, PS2PhysicalModifiers,
+                       event_flags | PM_REMAP_EMIT);
+      dispatched = 1;
+      if (!c) goto SkipOut;
+    }
     if (BreakKey && c == BreakKey)
     {                                      // if the user wants to stop the progran
       MMAbort = true;                      // set the flag for the interpreter to see
@@ -1161,6 +1211,9 @@ void processcode(unsigned char Code)
     }
 
   SkipOut:
+    /* No byte to enqueue (modifier, release, lock key, etc.). */
+    if (!dispatched)
+      (void)KeyboardEmit(0, physical_key, PS2PhysicalModifiers, event_flags);
     // Update PS2 modifier bitmask for KEYDOWN function
     PS2KeyDown[6] = (PS2Alt ? 1 : 0) |     // Left Alt    (bit 0)
                     (PS2Ctrl ? 2 : 0) |    // Ctrl        (bit 1)
@@ -1198,6 +1251,7 @@ void __not_in_flash_func(CNInterrupt)(uint64_t dd)
       PS2Alt = 0;
       KeyUpCode = false;
       KeyE0 = false;
+      PS2PhysicalModifiers = 0;
       {
         int i;
         for (i = 0; i < 6; i++)

@@ -48,6 +48,19 @@ static int BufferLetter(unsigned char *p, const char *letter)
     unsigned char *tp = checkstring(p, (unsigned char *)letter);
     return tp != NULL && (*tp == 0 || *tp == '\'');
 }
+/* Match the existing BASIC handler's unquoted buffer letter syntax. */
+static int framebuffer_copy_letter(unsigned char *p)
+{
+    if (checkstring(p, (unsigned char *)"N")) return 'N';
+    if (checkstring(p, (unsigned char *)"L")) return 'L';
+    if (checkstring(p, (unsigned char *)"F")) return 'F';
+#ifdef PICOMITEVGA
+    if (checkstring(p, (unsigned char *)"2")) return '2';
+    if (checkstring(p, (unsigned char *)"T")) return 'T';
+#endif
+    SyntaxError();
+    return 0;
+}
 #ifndef PICOMITEWEB
 #include "pico/multicore.h"
 extern mutex_t frameBufferMutex;
@@ -1064,6 +1077,95 @@ void blitmerge(int x0, int y0, int w, int h, uint8_t colour)
 #endif
 }
 /*  @endcond */
+/* Direct LCD framebuffer copying. BASIC and TinyCC share this implementation. */
+void FrameBufferCopyC(int from, int to, int at_blank)
+{
+#ifdef PICOMITE
+    int background = at_blank != 0;
+#else
+    if (at_blank)
+        SyntaxError();
+#endif
+    int complex = 0;
+    unsigned char *buff = WriteBuf;
+    uint8_t *s = NULL, *d = NULL;
+    switch (from)
+    {
+    case 'N':
+        complex = 1;
+        if ((void *)ReadBuffer == (void *)DisplayNotSet)
+            StandardError(11);
+        break;
+    case 'L': s = LayerBuf; break;
+    case 'F': s = FrameBuf; break;
+    default: SyntaxError();
+    }
+    switch (to)
+    {
+    case 'N': complex = 2; break;
+    case 'L': d = LayerBuf; break;
+    case 'F': d = FrameBuf; break;
+    default: SyntaxError();
+    }
+    if (complex != 1)
+    {
+        if (s == NULL)
+            error("Source buffer not created");
+    }
+    if (complex != 2)
+    {
+        if (d == NULL)
+            error("Destination buffer not created");
+    }
+    if (d != s)
+    {
+        if (!complex)
+            memcpy(d, s, HRes * VRes / 2);
+        else if (complex == 1)
+        {   /* copying from the real display */
+            char *LCDBuffer = GetTempMainMemory(HRes * 3);
+            WriteBuf = d;
+            for (int y = 0; y < VRes; y++)
+            {
+                restorepanel();
+                ReadBuffer(0, y, HRes - 1, y, (unsigned char *)LCDBuffer);
+                WriteBuf = d;
+                setframebuffer();
+                DrawBuffer(0, y, HRes - 1, y, (unsigned char *)LCDBuffer);
+            }
+            restorepanel();
+        }
+        else
+        {   /* copying to the real display */
+#ifdef PICOMITE
+            if (background)
+            {
+#ifdef rp2350
+                if (!(((Option.DISPLAY_TYPE > I2C_PANEL && Option.DISPLAY_TYPE < BufferedPanel) || Option.DISPLAY_TYPE >= NEXTGEN || (Option.DISPLAY_TYPE >= SSDPANEL && Option.DISPLAY_TYPE < VIRTUAL))))
+                    StandardError(1);
+                ;
+#else
+                if (!(((Option.DISPLAY_TYPE > I2C_PANEL && Option.DISPLAY_TYPE < BufferedPanel) || (Option.DISPLAY_TYPE >= SSDPANEL && Option.DISPLAY_TYPE < VIRTUAL))))
+                    StandardError(1);
+                ;
+#endif
+                if (diskchecktimer < 100 && SPIatRisk)
+                    diskchecktimer = 100;
+                multicore_fifo_push_blocking(1);
+                multicore_fifo_push_blocking((uint32_t)s);
+            }
+            else
+            {
+#endif
+                copyframetoscreen(s, 0, HRes - 1, 0, VRes - 1, 0);
+#ifdef PICOMITE
+            }
+#endif
+        }
+    }
+    WriteBuf = buff;
+}
+
 void cmd_framebuffer(void)
 {
     unsigned char *p = NULL;
@@ -1297,117 +1399,25 @@ void cmd_framebuffer(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"COPY")))
     {
 #ifdef PICOMITE
-        int complex = 0, background = 0;
-        unsigned char *buff = WriteBuf;
         getcsargs(&p, 5);
-        if (!(argc == 3 || argc == 5))
+        if (argc != 3 && argc != 5)
             SyntaxError();
-        ;
+        int background = 0;
         if (argc == 5)
         {
-            if (checkstring(argv[4], (unsigned char *)"B"))
-                background = 1;
-            else
+            if (!checkstring(argv[4], (unsigned char *)"B"))
                 SyntaxError();
-            ;
+            background = 1;
         }
 #else
-        int complex = 0;
-        unsigned char *buff = WriteBuf;
         getcsargs(&p, 3);
-        if (!(argc == 3))
+        if (argc != 3)
             SyntaxError();
-        ;
+        int background = 0;
 #endif
-        uint8_t *s = NULL, *d = NULL;
-        if (checkstring(argv[0], (unsigned char *)"N"))
-        {
-            complex = 1;
-            if ((void *)ReadBuffer == (void *)DisplayNotSet)
-                StandardError(11);
-        }
-        else if (checkstring(argv[0], (unsigned char *)"L"))
-            s = LayerBuf;
-        else if (checkstring(argv[0], (unsigned char *)"F"))
-            s = FrameBuf;
-        else
-            SyntaxError();
-        ;
-        if (checkstring(argv[2], (unsigned char *)"N"))
-        {
-            complex = 2;
-        }
-        else if (checkstring(argv[2], (unsigned char *)"L"))
-            d = LayerBuf;
-        else if (checkstring(argv[2], (unsigned char *)"F"))
-            d = FrameBuf;
-        else
-            SyntaxError();
-        ;
-
-        if (complex != 1)
-        {
-            if (s == NULL)
-                error("Source buffer not created");
-        }
-        if (complex != 2)
-        {
-            if (d == NULL)
-                error("Destination buffer not created");
-        }
-
-        if (d != s)
-        {
-            if (!complex)
-                memcpy(d, s, HRes * VRes / 2);
-            else
-            {
-                if (complex == 1)
-                { // copying from the real display
-                    char *LCDBuffer = GetTempMainMemory(HRes * 3);
-                    WriteBuf = d;
-                    for (int y = 0; y < VRes; y++)
-                    {
-                        restorepanel();
-                        ReadBuffer(0, y, HRes - 1, y, (unsigned char *)LCDBuffer);
-                        WriteBuf = d;
-                        setframebuffer();
-                        DrawBuffer(0, y, HRes - 1, y, (unsigned char *)LCDBuffer);
-                    }
-                    // Always restore panel callbacks after temporarily switching
-                    // to framebuffer primitives inside the loop.
-                    restorepanel();
-                }
-                else
-                { // copying to the real display
-#ifdef PICOMITE
-                    if (background)
-                    {
-#ifdef rp2350
-                        if (!(((Option.DISPLAY_TYPE > I2C_PANEL && Option.DISPLAY_TYPE < BufferedPanel) || Option.DISPLAY_TYPE >= NEXTGEN || (Option.DISPLAY_TYPE >= SSDPANEL && Option.DISPLAY_TYPE < VIRTUAL))))
-                            StandardError(1);
-                        ;
-#else
-                        if (!(((Option.DISPLAY_TYPE > I2C_PANEL && Option.DISPLAY_TYPE < BufferedPanel) || (Option.DISPLAY_TYPE >= SSDPANEL && Option.DISPLAY_TYPE < VIRTUAL))))
-                            StandardError(1);
-                        ;
-#endif
-                        if (diskchecktimer < 100 && SPIatRisk)
-                            diskchecktimer = 100;
-                        multicore_fifo_push_blocking(1);
-                        multicore_fifo_push_blocking((uint32_t)s);
-                    }
-                    else
-                    {
-#endif
-                        copyframetoscreen(s, 0, HRes - 1, 0, VRes - 1, 0);
-#ifdef PICOMITE
-                    }
-#endif
-                }
-            }
-        }
-        WriteBuf = buff;
+        int from = framebuffer_copy_letter(argv[0]);
+        int to = framebuffer_copy_letter(argv[2]);
+        FrameBufferCopyC(from, to, background);
     }
     else
         SyntaxError();
@@ -1507,6 +1517,46 @@ void closeframebuffer(char layer)
     }
 }
 /*  @endcond */
+
+/* Direct VGA/HDMI framebuffer copy, shared by BASIC and TinyCC. */
+void FrameBufferCopyC(int from, int to, int at_blank)
+{
+    volatile uint8_t *s = NULL, *d = NULL;
+    switch (from)
+    {
+    case 'N': s = DisplayBuf; break;
+    case 'L': s = LayerBuf; break;
+    case 'F': s = FrameBuf; break;
+    case '2': s = SecondFrame; break;
+    case 'T': s = SecondLayer; break;
+    default: SyntaxError();
+    }
+    switch (to)
+    {
+    case 'N': d = DisplayBuf; break;
+    case 'L': d = LayerBuf; break;
+    case 'F': d = FrameBuf; break;
+    case '2': d = SecondFrame; break;
+    case 'T': d = SecondLayer; break;
+    default: SyntaxError();
+    }
+    if (at_blank)
+    {
+#ifdef HDMI
+        while (v_scanline != 0)
+        {
+        }
+#else
+        while (QVgaScanLine != 0)
+        {
+        }
+#endif
+    }
+    if (d != s)
+        memcpy((void *)d, (void *)s, ScreenSize);
+    else
+        error("Buffer not created");
+}
 
 void cmd_framebuffer(void)
 {
@@ -1945,62 +1995,18 @@ void cmd_framebuffer(void)
     else if ((p = checkstring(cmdline, (unsigned char *)"COPY")))
     {
         getcsargs(&p, 5);
-        if (!(argc == 3 || argc == 5))
+        if (argc != 3 && argc != 5)
             SyntaxError();
-        ;
-        volatile uint8_t *s = NULL, *d = NULL;
-        if (checkstring(argv[0], (unsigned char *)"N"))
-            s = DisplayBuf;
-        else if (checkstring(argv[0], (unsigned char *)"L"))
-            s = LayerBuf;
-        else if (checkstring(argv[0], (unsigned char *)"F"))
-            s = FrameBuf;
-        else if (checkstring(argv[0], (unsigned char *)"2"))
-            s = SecondFrame;
-        else if (checkstring(argv[0], (unsigned char *)"T"))
-            s = SecondLayer;
-        else
-            SyntaxError();
-        ;
-        if (checkstring(argv[2], (unsigned char *)"N"))
-            d = DisplayBuf;
-        else if (checkstring(argv[2], (unsigned char *)"L"))
-            d = LayerBuf;
-        else if (checkstring(argv[2], (unsigned char *)"F"))
-            d = FrameBuf;
-        else if (checkstring(argv[2], (unsigned char *)"2"))
-            d = SecondFrame;
-        else if (checkstring(argv[2], (unsigned char *)"T"))
-            d = SecondLayer;
-        else
-            SyntaxError();
-        ;
+        int from = framebuffer_copy_letter(argv[0]);
+        int to = framebuffer_copy_letter(argv[2]);
+        int at_blank = 0;
         if (argc == 5)
         {
-            if (checkstring(argv[4], (unsigned char *)"B"))
-            {
-#ifdef HDMI
-                while (v_scanline != 0)
-                {
-                }
-#else
-                while (QVgaScanLine != 0)
-                {
-                }
-#endif
-            }
-            else
+            if (!checkstring(argv[4], (unsigned char *)"B"))
                 SyntaxError();
-            ;
+            at_blank = 1;
         }
-        if (d != s)
-            //            #ifdef rp2350
-            //                _Z10copy_wordsPKmPmm((uint32_t *)s, (uint32_t *)d, ScreenSize>>2);
-            //            #else
-            memcpy((void *)d, (void *)s, ScreenSize);
-        //            #endif
-        else
-            error("Buffer not created");
+        FrameBufferCopyC(from, to, at_blank);
     }
     else
         SyntaxError();

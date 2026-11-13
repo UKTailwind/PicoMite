@@ -35,6 +35,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#include "core/pm_api.h"
 #include "hardware/flash.h"
 #include "hardware/dma.h"
 #include "hardware/structs/watchdog.h"
@@ -50,6 +51,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifndef PICOMITEWEB
 #include "Turtle.h"
 #endif
+#ifdef rp2350
+#include "core/tcc/tcc_picomite.h" /* RUN "file.c": TinyCC */
+#endif
+#include "core/elf/elf_picomite.h"
 #define overlap (VRes % (FontTable[gui_font >> 4][1] * (gui_font & 0b1111)) ? 0 : 1)
 
 /* Stride-aware array access macros for struct member arrays */
@@ -2304,6 +2309,35 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		break;
 	}
 
+	/* ELF objects are detected from their signature, independently of TinyCC.
+	   Only the source-compilation branch is restricted to RP2350. */
+	if (!CMM2mode && *filename)
+	{
+		size_t len = strlen((const char *)filename);
+		bool is_elf = elf_picomite_is_elf((const char *)filename);
+#ifdef rp2350
+		bool is_c = !is_elf && len >= 2 && filename[len - 2] == '.' &&
+					(filename[len - 1] == 'c' || filename[len - 1] == 'C');
+#else
+		bool is_c = false;
+		(void)len;
+#endif
+		if (is_c || is_elf)
+		{
+			char cfile[MAXSTRLEN + 1], cargs[MAXSTRLEN + 1];
+			snprintf(cfile, sizeof(cfile), "%s", (char *)filename);
+			snprintf(cargs, sizeof(cargs), "%s", (char *)cmd_args);
+			ClearRuntime(true);
+			BasicPrepareLibraryOnly();
+#ifdef rp2350
+			tcc_picomite_run(cfile, cargs, is_c);
+#else
+			elf_picomite_run_file(cfile, cargs);
+#endif
+			return;
+		}
+	}
+
 	// The memory allocated by getCstring() is not preserved across
 	// a call to FileLoadProgram() so we need to cache 'filename' and
 	// 'cmd_args' on the stack.
@@ -2334,6 +2368,21 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		// Error in program - print message and don't run
 		PrintPreprogramError();
 		return;
+	}
+	if (elf_picomite_csub_stale()
+#ifdef rp2350
+	    || tcc_picomite_csub_stale()
+#endif
+	    )
+	{
+		// The linked CSUB image was bound to a different firmware or XIP address.
+		elf_picomite_csub_rebuild();
+		ClearRuntime(true);
+		if (PrepareProgram(true))
+		{
+			PrintPreprogramError();
+			return;
+		}
 	}
 	if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
 	{
@@ -3103,7 +3152,7 @@ void MIPS16 cmd_continue(void)
 	}
 	// must be a normal CONTINUE
 	checkend(cmdline);
-	if (CurrentLinePtr)
+	if (ProgramRunning())
 		StandardError(10);
 	if (ContinuePoint == NULL)
 		error("Cannot continue");
@@ -3423,6 +3472,22 @@ static void iftab_sort_range(int lo, int hi)
  * the table each time it comes back, and a program that stopped with "Not
  * enough memory" leaves the heap full, so an allocation that raised the error
  * itself (GetMemory) sent the prompt round that loop for ever. */
+/* Rebuild the IF jump table for a library-only program context. */
+void IfTableBuildLibraryOnly(void)
+{
+    IfTableFree();
+    if (LibPresent() && LibMemory)
+    {
+        if (!iftab_build_region(LibMemory))
+        {
+            IfTableFree();
+            return;
+        }
+        iftab_lib_count = iftab_count;
+        iftab_sort_range(0, iftab_lib_count);
+    }
+}
+
 void MIPS16 IfTableBuild(void)
 {
 	IfTableFree();
@@ -3899,16 +3964,22 @@ void do_end(bool ecmd)
 		stepper_abort_to_safe_state_on_error();
 #endif
 
-	dma_hw->abort = ((1u << dma_rx_chan2) | (1u << dma_rx_chan));
-	if (dma_channel_is_busy(dma_rx_chan))
-		dma_channel_abort(dma_rx_chan);
-	if (dma_channel_is_busy(dma_rx_chan2))
-		dma_channel_abort(dma_rx_chan2);
-	dma_hw->abort = ((1u << dma_tx_chan2) | (1u << dma_tx_chan));
-	if (dma_channel_is_busy(dma_tx_chan))
-		dma_channel_abort(dma_tx_chan);
-	if (dma_channel_is_busy(dma_tx_chan2))
-		dma_channel_abort(dma_tx_chan2);
+	/* END must preserve resident-owned PIO DMA, as ClearExternalIO does.
+	 * Stop ordinary BASIC/RUN DMA, but leave the resident data/reload pair. */
+	if (!pm_resident_dma_owned(0)) {
+		dma_hw->abort = ((1u << dma_rx_chan2) | (1u << dma_rx_chan));
+		if (dma_channel_is_busy(dma_rx_chan))
+			dma_channel_abort(dma_rx_chan);
+		if (dma_channel_is_busy(dma_rx_chan2))
+			dma_channel_abort(dma_rx_chan2);
+	}
+	if (!pm_resident_dma_owned(1)) {
+		dma_hw->abort = ((1u << dma_tx_chan2) | (1u << dma_tx_chan));
+		if (dma_channel_is_busy(dma_tx_chan))
+			dma_channel_abort(dma_tx_chan);
+		if (dma_channel_is_busy(dma_tx_chan2))
+			dma_channel_abort(dma_tx_chan2);
+	}
 	dma_hw->abort = ((1u << ADC_dma_chan2) | (1u << ADC_dma_chan));
 	if (dma_channel_is_busy(ADC_dma_chan))
 		dma_channel_abort(ADC_dma_chan);
@@ -4004,8 +4075,20 @@ void do_end(bool ecmd)
 	g_myrand = NULL;
 	OptionConsole = 3;
 #ifdef PICOMITEVGA
-	int mode = DISPLAY_TYPE - SCREENMODE1 + 1;
-	setmode(mode, false);
+	if (edit_f2_preserve_output)
+	{
+		/* An in-memory EDIT/F2 run must return to the prompt with its
+		 * console output intact. setmode() reinitialises the mode-1
+		 * tile attributes (through ResetDisplay/settiles), blanking the
+		 * visible text. Still close any off-screen framebuffer so that
+		 * subsequent console output targets the physical display. */
+		closeframebuffer('A');
+	}
+	else
+	{
+		int mode = DISPLAY_TYPE - SCREENMODE1 + 1;
+		setmode(mode, false);
+	}
 #endif
 	SSPrintString("\033[?25h"); // in case application has turned the cursor off
 	SSPrintString("\033[97;40m");

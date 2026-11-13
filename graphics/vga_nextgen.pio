@@ -1,0 +1,7 @@
+; Generic eight-bit VGA output (RGB222 + HSYNC + VSYNC).
+; Compatible with the streaming scanout architecture in vga-nextgen.
+; The DMA byte stream contains colour bits 0..5, HSYNC bit 6, VSYNC bit 7.
+.program vga_nextgen
+.wrap_target
+    out pins, 8
+.wrap

@@ -88,6 +88,8 @@ they may be changed and you would then need to re insert your changes in a new r
 #include "pico/stdlib.h"
 #include "hardware/irq.h"
 #include "hardware/claim.h"
+#include "core/pm_api.h"
+#include "core/pm_pio_shared.h"
 #define CLKMIN ((Option.CPU_Speed * 125) >> 13)
 #define CLKMAX (Option.CPU_Speed * 1000)
 
@@ -98,6 +100,10 @@ char *pioTXinterrupts[4][3] = {0};
 uint8_t pioTXlast[4][3] = {0};
 char *DMAinterruptRX = NULL;
 char *DMAinterruptTX = NULL;
+/* Stable reload-address words for the BASIC/C shared RX and TX DMA channels.
+ * Control DMA may access these after the command handler returns. */
+uint32_t *pio_dma_rx_address = NULL;
+uint32_t *pio_dma_tx_address = NULL;
 uint32_t dma_rx_chan = PIO_RX_DMA;
 uint32_t dma_tx_chan = PIO_TX_DMA;
 uint32_t dma_rx_chan2 = PIO_RX_DMA2;
@@ -259,15 +265,6 @@ void setup_dma_pio_lines(
 }
 
 #endif
-static inline uint32_t pio_sm_calc_wrap(uint wrap_target, uint wrap)
-{
-        uint32_t calc = 0;
-        //    valid_params_if(PIO, wrap < PIO_INSTRUCTION_COUNT);
-        //    valid_params_if(PIO, wrap_target < PIO_INSTRUCTION_COUNT);
-        return (calc & ~(PIO_SM0_EXECCTRL_WRAP_TOP_BITS | PIO_SM0_EXECCTRL_WRAP_BOTTOM_BITS)) |
-               (wrap_target << PIO_SM0_EXECCTRL_WRAP_BOTTOM_LSB) |
-               (wrap << PIO_SM0_EXECCTRL_WRAP_TOP_LSB);
-}
 int calcsideanddelay(char *p, int sidepins, int maxdelaybits)
 {
         int data = 0;
@@ -367,6 +364,9 @@ void startPIO(PIO pio, int sm)
 }
 void syncPIO(int pio, int my, int prev, int next)
 {
+        /* SYNC can also restart neighbouring PIO blocks. Block it while a
+         * resident owns any block, including indirect PREV/NEXT targets. */
+        if (pm_resident_pio_any_owned()) error("PIO SYNC blocked by resident C");
         uint32_t mask = (my << 8); // define the statemachines to be synched in the current PIO
         if (prev)
         {
@@ -402,6 +402,14 @@ void configurePIO(PIO pio, int sm, int clock,
 #endif
 )
 {
+    /* The BASIC parser and native C API both call this shared routine. */
+#ifdef rp2350
+    for (int i = 1; i < (rp2350a ? 44 : NBRPINS); ++i)
+#else
+    for (int i = 1; i < NBRPINS; ++i)
+#endif
+        if (CheckPin(i, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
+            gpio_set_input_enabled(PinDef[i].GPno, true);
 
 #ifdef PIODIAG
         MMPrintString(pio == pio0 ? "pio0" : pio == pio1 ? "pio1"
@@ -841,14 +849,11 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int sm = getint(argv[2], 0, 3);
                 for (i = 4; i < argc; i += 2)
                 {
-                        pio_sm_exec(pio, sm, getint(argv[i], 0, 65535));
+                        pm_pio_exec_hw(pior, sm, (uint16_t)getint(argv[i], 0, 65535));
                 }
                 return;
         }
@@ -871,15 +876,12 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int sm = getint(argv[2], 0, 3);
                 int count = getint(argv[4], 0, MAX_ARG_COUNT - 3);
                 while (count--)
                 {
-                        pio_sm_put_blocking(pio, sm, getint(argv[i], 0, (int64_t)0xFFFFFFFF));
+                        pm_pio_write_hw(pior, sm, (uint32_t)getint(argv[i], 0, (int64_t)0xFFFFFFFF));
                         i += 2;
                 }
                 return;
@@ -888,6 +890,8 @@ void MIPS16 cmd_pio(void)
         if (tp)
         {
                 getcsargs(&tp, 13);
+                if (pm_resident_dma_owned(0)) error("PIO DMA RX owned by resident C");
+                if (pm_pio_dma_is_c_hw(0)) error("PIO DMA RX owned by C program");
                 if (checkstring(argv[0], (unsigned char *)"OFF"))
                 {
                         dma_hw->abort = ((1u << dma_rx_chan2) | (1u << dma_rx_chan));
@@ -916,16 +920,13 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int sm = getint(argv[2], 0, 3);
                 dma_rx_pio = pior;
                 dma_rx_sm = sm;
                 int nbr = getint(argv[4], 0, 0xFFFFFFFF);
                 uint32_t s_nbr = nbr;
-                static uint32_t *a1int = NULL;
+                uint32_t *a1int;
                 int64_t *aint = NULL;
                 int toarraysize = parseintegerarray(argv[6], &aint, 4, 1, dims, true, NULL);
                 RequireGlobal(aint); // DMA uses it after the command returns
@@ -934,7 +935,7 @@ void MIPS16 cmd_pio(void)
                 {
                         if (nbr == 0)
                                 error("Interrupt incopmpatible with continuous running");
-                        DMAinterruptRX = (char *)GetIntAddress(argv[8]);
+                        pm_pio_register_basic_dma_hw(0, (char *)GetIntAddress(argv[8]));
                         IntReady.poll |= INT_POLL_SCAN;
                 }
                 int dmasize = DMA_SIZE_32;
@@ -950,69 +951,27 @@ void MIPS16 cmd_pio(void)
                         else if (dmasize == 32)
                                 dmasize = DMA_SIZE_32;
                 }
-                dma_channel_config c = dma_channel_get_default_config(dma_rx_chan);
-                channel_config_set_read_increment(&c, false);
-                channel_config_set_transfer_data_size(&c, dmasize);
-                // pio_get_dreq() derives the PIO number from the instance address and
-                // the SDK static_asserts the DREQ layout, PIO 2 included, so it needs
-                // no special case here (it yields 20 + sm for PIO 2 RX).
-                channel_config_set_dreq(&c, pio_get_dreq(pio, sm, false));
-                if (argc == 13)
-                {
-                        int size = getinteger(argv[12]);
-                        if (!(size == 1 || size == 2 || size == 4 || size == 8 || size == 16 || size == 32 || size == 64 || size == 128 || size == 256 || size == 512 || size == 1024 || size == 2048 || size == 4096 || size == 8192 || size == 16384 || size == 32768))
-                                error("Not power of 2");
-                        if (size != 1)
-                        {
-                                int i = 0, j = size;
-                                if (((uint32_t)a1int & (j - 1)) && nbr == 0)
-                                        error("Data alignment error");
-                                while (j >>= 1)
-                                        i++;
-                                i += dmasize;
-                                if ((1 << i) > (toarraysize * 8))
-                                        StandardError(17);
-                                if (nbr == 0)
-                                {
-                                        nbr = size;
-                                        dma_channel_config c2 = dma_channel_get_default_config(dma_rx_chan2); // Get configurations for control channel
-                                        channel_config_set_transfer_data_size(&c2, DMA_SIZE_32);              // Set control channel data transfer size to 32 bits
-                                        channel_config_set_read_increment(&c2, false);                        // Set control channel read increment to false
-                                        channel_config_set_write_increment(&c2, false);                       // Set control channel write increment to false
-                                        channel_config_set_dreq(&c2, 0x3F);
-                                        dma_channel_configure(dma_rx_chan2,
-                                                              &c2,
-                                                              &dma_hw->ch[dma_rx_chan].al2_write_addr_trig,
-                                                              &a1int,
-                                                              1,
-                                                              false); // Configure control channel
-                                }
-                                if (s_nbr != 0)
-                                        channel_config_set_ring(&c, true, i);
-                                channel_config_set_write_increment(&c, true);
-                        }
-                        else
-                                channel_config_set_write_increment(&c, false);
+                if (s_nbr && argc != 13) {
+                        pm_pio_dma_transfer_hw(0, pior, sm, a1int,
+                                (size_t)toarraysize * 8u, nbr, 8u << dmasize, 0);
+                        return;
                 }
-                else
-                {
-                        if ((nbr << dmasize) > (toarraysize * 8))
-                                StandardError(17);
-                        channel_config_set_write_increment(&c, true);
+                if (argc != 13)
+                        error("Continuous PIO DMA RX requires SIZE");
+                uint32_t size = (uint32_t)getinteger(argv[12]);
+                if (!size || size > 32768u || (size & (size - 1u)))
+                        error("PIO DMA RX size must be a power of two");
+                if (s_nbr) {
+                        pm_pio_dma_finite_rx_hw(pior, sm, a1int,
+                                (size_t)toarraysize * 8u, s_nbr,
+                                8u << dmasize, size, 0);
+                } else {
+                        if (size == 1u)
+                                error("Continuous PIO DMA RX requires SIZE >= 2");
+                        pm_pio_dma_cyclic_hw(0, pior, sm, a1int,
+                                (size_t)toarraysize * 8u, size,
+                                8u << dmasize, 0, 0);
                 }
-                if (s_nbr == 0)
-                        channel_config_set_chain_to(&c, dma_rx_chan2); // When this channel completes, it will trigger the channel indicated by chain_to
-                dma_channel_configure(dma_rx_chan,
-                                      &c,
-                                      a1int,                      // Destination pointer
-                                      &pio->rxf[sm],              // Source pointer
-                                      nbr,                        // Number of transfers
-                                      (s_nbr == 0 ? false : true) // Start immediately
-                );
-                if (s_nbr == 0)
-                        dma_start_channel_mask(1u << dma_rx_chan2);
-                pio_sm_restart(pio, sm);
-                pio_sm_set_enabled(pio, sm, true);
                 return;
         }
 
@@ -1020,6 +979,8 @@ void MIPS16 cmd_pio(void)
         if (tp)
         {
                 getcsargs(&tp, 13);
+                if (pm_resident_dma_owned(1)) error("PIO DMA TX owned by resident C");
+                if (pm_pio_dma_is_c_hw(1)) error("PIO DMA TX owned by C program");
                 if (checkstring(argv[0], (unsigned char *)"OFF"))
                 {
                         dma_hw->abort = ((1u << dma_tx_chan2) | (1u << dma_tx_chan));
@@ -1048,16 +1009,13 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int sm = getint(argv[2], 0, 3);
                 dma_tx_pio = pior;
                 dma_tx_sm = sm;
                 uint32_t nbr = getint(argv[4], 0, 0xFFFFFFFF);
 
-                static uint32_t *a1int = NULL;
+                uint32_t *a1int;
                 int64_t *aint = NULL;
                 int toarraysize = parseintegerarray(argv[6], &aint, 4, 1, dims, true, NULL);
                 RequireGlobal(aint); // DMA uses it after the command returns
@@ -1128,7 +1086,7 @@ void MIPS16 cmd_pio(void)
                 {
                         if (ring_mode || continuous_retrigger)
                                 error("Interrupt incompatible with continuous running");
-                        DMAinterruptTX = (char *)GetIntAddress(argv[8]);
+                        pm_pio_register_basic_dma_hw(1, (char *)GetIntAddress(argv[8]));
                         IntReady.poll |= INT_POLL_SCAN;
                 }
 
@@ -1163,100 +1121,14 @@ void MIPS16 cmd_pio(void)
                 }
 
                 // Configure primary DMA channel
-                dma_channel_config c = dma_channel_get_default_config(dma_tx_chan);
-                channel_config_set_write_increment(&c, false);
-
-                // As above: pio_get_dreq() handles PIO 2 (it yields 16 + sm for TX).
-                channel_config_set_dreq(&c, pio_get_dreq(pio, sm, true));
-
-                channel_config_set_transfer_data_size(&c, dmasize);
-
-                if (ring_mode)
-                {
-                        // Ring buffer mode: read increment enabled, ring wrapping enabled, continuous operation
-                        channel_config_set_read_increment(&c, true);
-
-                        // Calculate ring size bits
-                        int ring_size_bits = 0;
-                        uint32_t temp_size = size;
-                        while (temp_size >>= 1)
-                                ring_size_bits++;
-                        ring_size_bits += dmasize; // Adjust for transfer size
-
-                        channel_config_set_ring(&c, false, ring_size_bits);
-                        channel_config_set_chain_to(&c, dma_tx_chan2); // Chain to control channel for continuous operation
-
-                        // Configure control channel for retriggering
-                        dma_channel_config c2 = dma_channel_get_default_config(dma_tx_chan2);
-                        channel_config_set_transfer_data_size(&c2, DMA_SIZE_32);
-                        channel_config_set_read_increment(&c2, false);
-                        channel_config_set_write_increment(&c2, false);
-                        channel_config_set_dreq(&c2, 0x3F); // No pacing
-
-                        dma_channel_configure(dma_tx_chan2,
-                                              &c2,
-                                              &dma_hw->ch[dma_tx_chan].al3_read_addr_trig,
-                                              &a1int,
-                                              1,
-                                              false);
-
-                        // Configure primary channel
-                        dma_channel_configure(dma_tx_chan,
-                                              &c,
-                                              &pio->txf[sm],
-                                              a1int,
-                                              nbr,
-                                              false); // Don't start yet
-
-                        // Start control channel to trigger the sequence
-                        dma_start_channel_mask(1u << dma_tx_chan2);
+                if (!ring_mode && !continuous_retrigger) {
+                        pm_pio_dma_transfer_hw(1, pior, sm, a1int,
+                                (size_t)toarraysize * 8u, nbr, 8u << dmasize, 0);
+                        return;
                 }
-                else if (continuous_retrigger)
-                {
-                        // Continuous retrigger mode: use control channel
-                        channel_config_set_read_increment(&c, true);
-                        channel_config_set_chain_to(&c, dma_tx_chan2);
-
-                        // Configure control channel for retriggering
-                        dma_channel_config c2 = dma_channel_get_default_config(dma_tx_chan2);
-                        channel_config_set_transfer_data_size(&c2, DMA_SIZE_32);
-                        channel_config_set_read_increment(&c2, false);
-                        channel_config_set_write_increment(&c2, false);
-                        channel_config_set_dreq(&c2, 0x3F); // No pacing
-
-                        dma_channel_configure(dma_tx_chan2,
-                                              &c2,
-                                              &dma_hw->ch[dma_tx_chan].al3_read_addr_trig,
-                                              &a1int,
-                                              1,
-                                              false);
-
-                        // Configure primary channel
-                        dma_channel_configure(dma_tx_chan,
-                                              &c,
-                                              &pio->txf[sm],
-                                              a1int,
-                                              nbr,
-                                              false); // Don't start yet
-
-                        // Start both channels
-                        dma_start_channel_mask((1u << dma_tx_chan) | (1u << dma_tx_chan2));
-                }
-                else
-                {
-                        // Single transfer mode: read increment enabled, no chaining
-                        channel_config_set_read_increment(&c, true);
-
-                        dma_channel_configure(dma_tx_chan,
-                                              &c,
-                                              &pio->txf[sm],
-                                              a1int,
-                                              nbr,
-                                              true); // Start immediately
-                }
-
-                pio_sm_restart(pio, sm);
-                pio_sm_set_enabled(pio, sm, true);
+                pm_pio_dma_cyclic_hw(1, pior, sm, a1int,
+                        (size_t)toarraysize * 8u, nbr,
+                        8u << dmasize, ring_mode, 0);
                 return;
         }
         tp = checkstring(cmdline, (unsigned char *)"INTERRUPT");
@@ -1280,31 +1152,13 @@ void MIPS16 cmd_pio(void)
 #endif
                 int sm = getint(argv[2], 0, 3);
                 if (*argv[4])
-                {
-                        if (checkstring(argv[4], (unsigned char *)"0"))
-                                pioRXinterrupts[sm][pior] = NULL;
-                        else
-                                pioRXinterrupts[sm][pior] = (char *)GetIntAddress(argv[4]);
-                }
+                    pm_pio_register_basic_fifo_hw(pior, sm, 0,
+                        checkstring(argv[4], (unsigned char *)"0") ? NULL :
+                        (char *)GetIntAddress(argv[4]));
                 if (argc == 7)
-                {
-                        if (checkstring(argv[6], (unsigned char *)"0"))
-                                pioTXinterrupts[sm][pior] = NULL;
-                        else
-                                pioTXinterrupts[sm][pior] = (char *)GetIntAddress(argv[6]);
-                }
-                piointerrupt = 0;
-                for (int i = 0; i < 4; i++)
-                {
-                        for (int j = 0; j < PIOMAX; j++)
-                        {
-                                if (pioRXinterrupts[i][j] || pioTXinterrupts[i][j])
-                                {
-                                        piointerrupt = 1;
-                                        IntReady.poll |= INT_POLL_SCAN;
-                                }
-                        }
-                }
+                    pm_pio_register_basic_fifo_hw(pior, sm, 1,
+                        checkstring(argv[6], (unsigned char *)"0") ? NULL :
+                        (char *)GetIntAddress(argv[6]));
                 return;
         }
         tp = checkstring(cmdline, (unsigned char *)"READ");
@@ -1328,9 +1182,6 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int sm = getint(argv[2], 0, 3);
                 nbr = getinteger(argv[4]);
@@ -1348,17 +1199,10 @@ void MIPS16 cmd_pio(void)
                 else
                         StandardError(6);
 
-                uint32_t rxunder = 1u << (PIO_FDEBUG_RXUNDER_LSB + sm);
                 while (nbr--)
                 {
-                        pio->fdebug = rxunder; // clear sticky underflow before the read
-                        *dd = pio_sm_get(pio, sm);
-                        if (pio->fdebug & rxunder) // this read drained an empty FIFO
-                        {
-                                *dd = -1;              // -> data is invalid, mark it
-                                pio->fdebug = rxunder; // clear the flag we just consumed
-                        }
-                        dd++;
+                        uint32_t sample;
+                        *dd++ = pm_pio_read_hw(pior, sm, &sample) ? (int64_t)sample : -1;
                 }
                 return;
         }
@@ -1368,16 +1212,9 @@ void MIPS16 cmd_pio(void)
         {
                 getcsargs(&tp, 7);
                 int pior = getint(argv[0], 0, PIOMAX - 1);
-                if (PIO0 == false && pior == 0)
-                        StandardError(3);
-                if (PIO1 == false && pior == 1)
-                        StandardError(4);
-                if (PIO2 == false && pior == 2)
-                        StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
                 int sm = getint(argv[2], 0, 3);
                 int fifo = getint(argv[4], 0, 3);
-                pio->rxf_putget[sm][fifo] = getint(argv[6], 0, 0xFFFFFFFF); // jmp pin
+                pm_pio_writefifo_hw(pior, sm, fifo, (uint32_t)getint(argv[6], 0, 0xFFFFFFFF));
                 targ = T_INT;
                 return;
         }
@@ -1397,13 +1234,10 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int slot = getint(argv[2], 0, 31);
                 int instruction = getint(argv[4], 0, 0xFFFF);
-                pio->instr_mem[slot] = instruction;
+                pm_pio_program_line_hw(pior, slot, (uint16_t)instruction);
                 return;
         }
         tp = checkstring(cmdline, (unsigned char *)"ASSEMBLE");
@@ -1415,6 +1249,7 @@ void MIPS16 cmd_pio(void)
                         SyntaxError();
                 ;
                 int pior = getint(argv[0], 0, PIOMAX - 1);
+                if (pm_resident_pio_block_owned(pior)) error("PIO block owned by resident C");
                 if (PIO0 == false && pior == 0)
                         StandardError(3);
                 if (PIO1 == false && pior == 1)
@@ -2338,20 +2173,8 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
-                for (int sm = 0; sm < 4; sm++)
-                {
-                        hw_clear_bits(&pio->ctrl, 1 << (PIO_CTRL_SM_ENABLE_LSB + sm));
-                        pio->sm[sm].pinctrl = (5 << 26);
-                        pio->sm[sm].execctrl = (0x1f << 12);
-                        pio->sm[sm].shiftctrl = (3 << 18);
-                        pio_sm_clear_fifos(pio, sm);
-                }
-                pio->irq = 255; // clear all irq in the statemachines on the pio
-                pio_clear_instruction_memory(pio);
+                pm_pio_clear_hw(pior);
                 return;
         }
         tp = checkstring(cmdline, (unsigned char *)"MAKE RING BUFFER");
@@ -2382,16 +2205,10 @@ void MIPS16 cmd_pio(void)
         tp = checkstring(cmdline, (unsigned char *)"PROGRAM");
         if (tp)
         {
-                struct pio_program program = {0}; // zero pio_version/used_gpio_ranges:
-                                                  // SDK rejects the load (no instructions
-                                                  // written) if pio_version is stack garbage
                 getcsargs(&tp, 3);
                 if (argc != 3)
                         SyntaxError();
                 ;
-                //        void *prt1;
-                program.length = 32;
-                program.origin = 0;
                 int64_t *a1int = NULL;
                 int pior = getint(argv[0], 0, PIOMAX - 1);
                 if (PIO0 == false && pior == 0)
@@ -2401,19 +2218,11 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int toarraysize = parseintegerarray(argv[2], &a1int, 2, 1, dims, true, NULL);
                 if (toarraysize != 8)
                         StandardError(17);
-                program.instructions = (const uint16_t *)a1int;
-                for (int sm = 0; sm < 4; sm++)
-                        hw_clear_bits(&pio->ctrl, 1 << (PIO_CTRL_SM_ENABLE_LSB + sm));
-                pio_clear_instruction_memory(pio);
-                if (pio_add_program(pio, &program) < 0) // negative = SDK refused the load
-                        error("PIO program load failed");
+                pm_pio_program_hw(pior, (const uint16_t *)a1int, 32);
                 return;
         }
         tp = checkstring(cmdline, (unsigned char *)"SYNC");
@@ -2448,12 +2257,9 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int sm = getint(argv[2], 0, 3);
-                startPIO(pio, sm);
+                pm_pio_start_hw(pior, sm);
                 return;
         }
         tp = checkstring(cmdline, (unsigned char *)"STOP");
@@ -2471,12 +2277,9 @@ void MIPS16 cmd_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 int sm = getint(argv[2], 0, 3);
-                pio_sm_set_enabled(pio, sm, false);
+                pm_pio_stop_hw(pior, sm);
                 return;
         }
         tp = checkstring(cmdline, (unsigned char *)"INIT MACHINE");
@@ -2516,7 +2319,7 @@ void MIPS16 cmd_pio(void)
                         setout = getint(argv[16], 0, 1);
                 if (argc > 17 && *argv[18])
                         outout = getint(argv[18], 0, 1);
-                pio_init(pior, sm, pinctrl, execctrl, shiftctrl, start, clock, sideout, setout, outout);
+                pm_pio_init_hw(pior, sm, pinctrl, execctrl, shiftctrl, start, clock, sideout, setout, outout);
                 return;
         }
 #ifdef rp2350
@@ -2528,23 +2331,8 @@ void MIPS16 cmd_pio(void)
                         SyntaxError();
                 ;
                 int pior = getint(argv[0], 0, PIOMAX - 1);
-                if (PIO0 == false && pior == 0)
-                        StandardError(3);
-                if (PIO1 == false && pior == 1)
-                        StandardError(4);
-#ifdef rp2350
-                if (PIO2 == false && pior == 2)
-                        StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
-#endif
                 int i = getinteger(argv[2]);
-                if (!(i == 0 || i == 16))
-                        error("Valid base values are 0 and 16");
-                if (rp2350a && i == 16)
-                        error("Invalid for 60-pin chip");
-                pio_set_gpio_base(pio, i);
+                pm_pio_set_base_hw(pior, i);
                 return;
         }
 #endif
@@ -2652,20 +2440,8 @@ void MIPS16 cmd_pio(void)
                     (jointxfifo && (joinrxfifoget || joinrxfifoput)) ||
                     (joinrxfifo && (joinrxfifoget || joinrxfifoput)))
                         error("Invalid FIFO configuration");
-#else
-                for (int i = 1; i < (NBRPINS); i++)
 #endif
-#ifdef rp2350
-                for (int i = 1; i < (rp2350a ? 44 : NBRPINS); i++)
-                {
-#else
-                {
-#endif
-                        if (CheckPin(i, CP_NOABORT | CP_IGNORE_INUSE | CP_IGNORE_RESERVED))
-                        { // don't reset invalid or boot reserved pins
-                                gpio_set_input_enabled(PinDef[i].GPno, true);
-                        }
-                }
+                if (pm_resident_pio_block_owned(pior)) error("PIO block owned by resident C");
                 configurePIO(pio, sm, clock,
                              startaddress, base,
                              sidesetbase, sidesetno, sidesetout, setbase, setno, setout,
@@ -2686,94 +2462,86 @@ void MIPS16 cmd_pio(void)
 void fun_pio(void)
 {
         unsigned char *tp;
+        tp = checkstring(ep, (unsigned char *)"IDLE");
+        if (tp)
+        {
+                getcsargs(&tp, 1);
+                if (argc != 1) SyntaxError();
+                iret = pm_pio_idle_hw(getinteger(argv[0]));
+                targ = T_INT;
+                return;
+        }
         tp = checkstring(ep, (unsigned char *)"PINCTRL");
         if (tp)
         {
-                int64_t myret = 0;
                 getcsargs(&tp, 13);
                 if (argc < 3)
                         SyntaxError();
                 ;
-                myret = (getint(argv[0], 0, 5) << 29); // no of side set pins
+                unsigned side_count = getint(argv[0], 0, 5);
+                unsigned set_count = 0, out_count = 0;
+                unsigned in_base = 0, side_base = 0, set_base = 0, out_base = 0;
                 if (argc > 1 && *argv[2])
-                        myret |= (getint(argv[2], 0, 5) << 26); // no of set pins
+                        set_count = getint(argv[2], 0, 5);
                 if (argc > 3 && *argv[4])
-                        myret |= (getint(argv[4], 0, 31) << 20); // no of OUT pins
+                        out_count = getint(argv[4], 0, 31);
                 if (argc > 5 && *argv[6])
                 {
-                        if (!(mytoupper((char)*argv[6]) == 'G'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[6]) == 'G')) SyntaxError();
                         argv[6]++;
-                        if (!(mytoupper((char)*argv[6]) == 'P'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[6]) == 'P')) SyntaxError();
                         argv[6]++;
-                        myret |= (getint(argv[6], 0, 31) << 15); // IN base
+                        in_base = getint(argv[6], 0, 31);
                 }
                 if (argc > 7 && *argv[8])
                 {
-                        if (!(mytoupper((char)*argv[8]) == 'G'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[8]) == 'G')) SyntaxError();
                         argv[8]++;
-                        if (!(mytoupper((char)*argv[8]) == 'P'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[8]) == 'P')) SyntaxError();
                         argv[8]++;
-                        myret |= (getint(argv[8], 0, 31) << 10); // SIDE SET base
+                        side_base = getint(argv[8], 0, 31);
                 }
                 if (argc > 9 && *argv[10])
                 {
-                        if (!(mytoupper((char)*argv[10]) == 'G'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[10]) == 'G')) SyntaxError();
                         argv[10]++;
-                        if (!(mytoupper((char)*argv[10]) == 'P'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[10]) == 'P')) SyntaxError();
                         argv[10]++;
-                        myret |= (getint(argv[10], 0, 31) << 5); // SET base
+                        set_base = getint(argv[10], 0, 31);
                 }
                 if (argc == 13)
                 {
-                        if (!(mytoupper((char)*argv[12]) == 'G'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[12]) == 'G')) SyntaxError();
                         argv[12]++;
-                        if (!(mytoupper((char)*argv[12]) == 'P'))
-                                SyntaxError();
-                        ;
+                        if (!(mytoupper((char)*argv[12]) == 'P')) SyntaxError();
                         argv[12]++;
-                        myret |= getint(argv[12], 0, 31); // OUT base
+                        out_base = getint(argv[12], 0, 31);
                 }
-                iret = myret;
+                iret = pm_pio_encode_pinctrl(side_count, set_count, out_count,
+                                              in_base, side_base, set_base, out_base);
                 targ = T_INT;
                 return;
         }
         tp = checkstring(ep, (unsigned char *)"EXECCTRL");
         if (tp)
         {
-                int64_t myret = 0;
                 getcsargs(&tp, 9);
-                if (!(argc == 5 || argc == 7 || argc == 9))
-                        SyntaxError();
+                if (!(argc == 5 || argc == 7 || argc == 9)) SyntaxError();
                 ;
-                if (!(mytoupper((char)*argv[0]) == 'G'))
-                        SyntaxError();
-                ;
+                if (!(mytoupper((char)*argv[0]) == 'G')) SyntaxError();
                 argv[0]++;
-                if (!(mytoupper((char)*argv[0]) == 'P'))
-                        SyntaxError();
-                ;
+                if (!(mytoupper((char)*argv[0]) == 'P')) SyntaxError();
                 argv[0]++;
-                myret = (getint(argv[0], 0, 31) << 24); // jmp pin
-                myret |= pio_sm_calc_wrap(getint(argv[2], 0, 31), getint(argv[4], 0, 31));
+                unsigned jmp_pin = getint(argv[0], 0, 31);
+                unsigned wrap_target = getint(argv[2], 0, 31);
+                unsigned wrap = getint(argv[4], 0, 31);
+                unsigned side_pindir = 0, side_enable = 0;
                 if (argc >= 7 && *argv[6])
-                        myret |= (getint(argv[6], 0, 1) << 29); // SIDE_PINDIR
+                        side_pindir = getint(argv[6], 0, 1);
                 if (argc == 9)
-                        myret |= (getint(argv[8], 0, 1) << 30); // SIDE_EN
-                iret = myret;
+                        side_enable = getint(argv[8], 0, 1);
+                iret = pm_pio_encode_execctrl(jmp_pin, wrap_target, wrap,
+                                              side_pindir, side_enable);
                 targ = T_INT;
                 return;
         }
@@ -2799,31 +2567,26 @@ void fun_pio(void)
 #else
                 getcsargs(&tp, 15);
 #endif
-                if (argc < 1)
-                        SyntaxError();
+                if (argc < 1) SyntaxError();
                 ;
-                int64_t myret = 0;
-                myret = (getint(argv[0], 0, 31) << 20);  // push threshold
-                myret |= (getint(argv[2], 0, 31) << 25); // pull threshold
-                if (argc > 3 && *argv[4])
-                        myret |= (getint(argv[4], 0, 1) << 16); // autopush
-                if (argc > 5 && *argv[6])
-                        myret |= (getint(argv[6], 0, 1) << 17); // autopull
-                if (argc > 7 && *argv[8])
-                        myret |= (getint(argv[8], 0, 1) << 18); // IN_SHIFTDIR
-                if (argc > 9 && *argv[10])
-                        myret |= (getint(argv[10], 0, 1) << 19); // OUT_SHIFTDIR
-                if (argc > 11 && *argv[12])
-                        myret |= (getint(argv[12], 0, 1) << 30); // FJOIN_RX
-                if (argc > 13 && *argv[14])
-                        myret |= (getint(argv[14], 0, 1) << 31); // FJOIN_TX
+                unsigned push_threshold = getint(argv[0], 0, 31);
+                unsigned pull_threshold = getint(argv[2], 0, 31);
+                unsigned autopush = 0, autopull = 0, in_right = 0, out_right = 0;
+                unsigned join_rx = 0, join_tx = 0, rx_get = 0, rx_put = 0;
+                if (argc > 3 && *argv[4]) autopush = getint(argv[4], 0, 1);
+                if (argc > 5 && *argv[6]) autopull = getint(argv[6], 0, 1);
+                if (argc > 7 && *argv[8]) in_right = getint(argv[8], 0, 1);
+                if (argc > 9 && *argv[10]) out_right = getint(argv[10], 0, 1);
+                if (argc > 11 && *argv[12]) join_rx = getint(argv[12], 0, 1);
+                if (argc > 13 && *argv[14]) join_tx = getint(argv[14], 0, 1);
 #ifdef rp2350
-                if (argc > 15 && *argv[16])
-                        myret |= (getint(argv[16], 0, 1) << 14); // FJOIN_RX_GET
-                if (argc > 17 && *argv[18])
-                        myret |= (getint(argv[18], 0, 1) << 15); // FJOIN_RX_PUT
+                if (argc > 15 && *argv[16]) rx_get = getint(argv[16], 0, 1);
+                if (argc > 17 && *argv[18]) rx_put = getint(argv[18], 0, 1);
 #endif
-                iret = myret;
+                iret = pm_pio_encode_shiftctrl(push_threshold, pull_threshold,
+                                               autopush, autopull, in_right,
+                                               out_right, join_rx, join_tx,
+                                               rx_get, rx_put);
                 targ = T_INT;
                 return;
         }
@@ -2832,18 +2595,7 @@ void fun_pio(void)
         {
                 getcsargs(&tp, 1);
                 int pior = getint(argv[0], 0, PIOMAX - 1);
-                if (PIO0 == false && pior == 0)
-                        StandardError(3);
-                if (PIO1 == false && pior == 1)
-                        StandardError(4);
-#ifdef rp2350
-                if (PIO2 == false && pior == 2)
-                        StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
-#endif
-                iret = pio->fstat; // jmp pin
+                iret = pm_pio_fstat_hw(pior);
                 targ = T_INT;
                 return;
         }
@@ -2853,16 +2605,9 @@ void fun_pio(void)
         {
                 getcsargs(&tp, 5);
                 int pior = getint(argv[0], 0, PIOMAX - 1);
-                if (PIO0 == false && pior == 0)
-                        StandardError(3);
-                if (PIO1 == false && pior == 1)
-                        StandardError(4);
-                if (PIO2 == false && pior == 2)
-                        StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
                 int sm = getint(argv[2], 0, 3);
                 int fifo = getint(argv[4], 0, 3);
-                iret = pio->rxf_putget[sm][fifo]; // jmp pin
+                iret = pm_pio_readfifo_hw(pior, sm, fifo);
                 targ = T_INT;
                 return;
         }
@@ -2872,18 +2617,7 @@ void fun_pio(void)
         {
                 getcsargs(&tp, 1);
                 int pior = getint(argv[0], 0, PIOMAX - 1);
-                if (PIO0 == false && pior == 0)
-                        StandardError(3);
-                if (PIO1 == false && pior == 1)
-                        StandardError(4);
-#ifdef rp2350
-                if (PIO2 == false && pior == 2)
-                        StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
-#endif
-                iret = pio->fdebug; // jmp pin
+                iret = pm_pio_fdebug_hw(pior);
                 targ = T_INT;
                 return;
         }
@@ -2920,22 +2654,19 @@ void fun_pio(void)
 #ifdef rp2350
                 if (PIO2 == false && pior == 2)
                         StandardError(5);
-                PIO pio = (pior == 0 ? pio0 : (pior == 1 ? pio1 : pio2));
-#else
-                PIO pio = (pior == 0 ? pio0 : pio1);
 #endif
                 if (argc == 1)
-                        iret = pio->flevel; // jmp pin
+                        iret = pm_pio_flevel_hw(pior, -1, 0);
                 else
                 {
                         if (argc != 5)
                                 SyntaxError();
                         ;
-                        int sm = getint(argv[2], 0, 3) * 8;
+                        int sm = getint(argv[2], 0, 3);
                         if (checkstring(argv[4], (unsigned char *)"TX"))
-                                iret = ((pio->flevel) >> sm) & 0xf;
+                                iret = pm_pio_flevel_hw(pior, sm, 1);
                         else if (checkstring(argv[4], (unsigned char *)"RX"))
-                                iret = ((pio->flevel) >> (sm + 4)) & 0xf;
+                                iret = pm_pio_flevel_hw(pior, sm, 0);
                         else
                                 SyntaxError();
                         ;
@@ -2946,14 +2677,14 @@ void fun_pio(void)
         tp = checkstring(ep, (unsigned char *)"DMA RX POINTER");
         if (tp)
         {
-                iret = dma_hw->ch[dma_rx_chan].write_addr;
+                iret = pm_pio_dma_pointer_hw(0);
                 targ = T_INT;
                 return;
         }
         tp = checkstring(ep, (unsigned char *)"DMA TX POINTER");
         if (tp)
         {
-                iret = dma_hw->ch[dma_tx_chan].read_addr;
+                iret = pm_pio_dma_pointer_hw(1);
                 targ = T_INT;
                 return;
         }
