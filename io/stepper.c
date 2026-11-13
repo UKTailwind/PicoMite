@@ -6600,12 +6600,15 @@ void cmd_stepper(void)
         return;
     }
 
-    // STEPPER STATUS - Show current status
-    if (checkstring(cmdline, (unsigned char *)"STATUS"))
+    // STEPPER STATUS [#n] - Show current status, on the COM port or file open as #n if given
+    if ((tp = checkstring(cmdline, (unsigned char *)"STATUS")) != NULL)
     {
+        tp = OutputRedirect(tp); // STEPPER STATUS #n
+        checkend(tp);
         if (!stepper_initialized)
         {
             MMPrintString("Stepper not initialized\r\n");
+            ConsoleRedirect = 0;
             return;
         }
 
@@ -6731,6 +6734,7 @@ void cmd_stepper(void)
             MMPrintString(buf);
         }
 
+        ConsoleRedirect = 0;
         return;
     }
 

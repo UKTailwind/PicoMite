@@ -6,7 +6,7 @@
 // Font type    : Full (95 characters)
 // Font size    : 24x32 pixels
 // Memory usage : 9124 bytes
-const int Inconsola[2281] = {
+const int Inconsola[2281] __attribute__((aligned(4))) = {
     0x5F202018,
     0x00000000,
     0x00000000,

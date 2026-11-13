@@ -494,19 +494,19 @@ PEEK(BYTE)                  VAL
 ~OPTIONS
 OPTION settings
 
-OPTION                         OPTION LEGACY ON
-OPTION ANGLE                   OPTION LIST
-OPTION AUDIO                   OPTION LOCAL KEYBOARD ON
-OPTION AUDIO BLUETOOTH         OPTION LOCAL VARIABLES
-OPTION AUDIO I2S               OPTION LOGGING ON
-OPTION AUDIO SPI               OPTION MILLISECONDS
-OPTION AUDIO VS1053            OPTION MODBUFF
-OPTION AUTOREFRESH             OPTION MOUSE
-OPTION AUTORUN ON              OPTION MOUSE DISABLE
-OPTION BACKLIGHT KBD           OPTION MOUSE SENSITIVITY
-OPTION BASE                    OPTION NOCHECK
-OPTION BAUDRATE                OPTION PICO
-OPTION BREAK                   OPTION PICO PLUS
+OPTION                         OPTION LIST
+OPTION ANGLE                   OPTION LOCAL KEYBOARD ON
+OPTION AUDIO                   OPTION LOCAL VARIABLES
+OPTION AUDIO BLUETOOTH         OPTION LOGGING ON
+OPTION AUDIO I2S               OPTION MILLISECONDS
+OPTION AUDIO SPI               OPTION MODBUFF
+OPTION AUDIO VS1053            OPTION MOUSE
+OPTION AUTOREFRESH             OPTION MOUSE DISABLE
+OPTION AUTORUN ON              OPTION MOUSE SENSITIVITY
+OPTION BACKLIGHT KBD           OPTION NOCHECK
+OPTION BASE                    OPTION PICO
+OPTION BAUDRATE                OPTION PICO PLUS
+OPTION BREAK                   OPTION PICOMITE
 OPTION CASE                    OPTION PIN
 OPTION CDC POLL RATE           OPTION PLATFORM
 OPTION COLOURCODE ON           OPTION POWER
@@ -538,6 +538,7 @@ OPTION LCDPANEL                OPTION VCC
 OPTION LCDPANEL CONSOLE        OPTION VGA PINS
 OPTION LCDPANEL NOCONSOLE      OPTION WEB MESSAGES
 OPTION LCDPANEL USER           OPTION WIFI
+OPTION LEGACY ON
 
 ~VARIABLES
 Predefined read-only variables
@@ -1019,7 +1020,7 @@ themselves as audio devices are marked 'Audio', keyboards 'Keyboard' and
 Bluetooth LE serial devices 'BLE serial'.
 
 ~BLUETOOTH STATUS
-BLUETOOTH STATUS
+BLUETOOTH STATUS [#nbr]
 
 BLUETOOTH HOST VERSIONS ONLY Lists the state of the Bluetooth connections:
 whether a Bluetooth LE keyboard (or mouse or game controller) is connected,
@@ -3621,11 +3622,11 @@ See DIM for the full syntax.
 ~LOCATION
 LOCATION
 
-RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time for
-use with the ASTRO command. This is one of a set of commands that performs
-high-precision astronomical calculations suitable for telescope pointing or
-navigation and is described in detail in the file GPS_Astro_Reference.pdf
-included in the firmware download zip file.
+RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time
+(UTC, not local time) for use with the ASTRO command. This is one of a set of
+commands that performs high-precision astronomical calculations suitable for
+telescope pointing or navigation and is described in detail in the file
+GPS_Astro_Reference.pdf included in the firmware download zip file.
 
 ~LOF
 LOF( [#]fnbr )
@@ -5101,12 +5102,14 @@ the firmware, options, saved variables, flash slots and program storage.
 ~MM.INFO(FONT ADDRESS)
 MM.INFO(FONT ADDRESS n)
 
-Returns the address of the memory location with the address of FONT n .
+Returns the address of the start of FONT n in memory, or 0 if there is no font
+n. Its first four bytes are the width, height, first character and number of
+characters.
 
 ~MM.INFO(FONT POINTER)
 MM.INFO(FONT POINTER n)
 
-Returns a POINTER to the start of FONT n in memory.
+Returns the address of the memory location that holds the address of FONT n.
 
 ~MM.INFO(FONT)
 MM.INFO(FONT)
@@ -5689,8 +5692,8 @@ OPTION AUDIO PWMnApin, PWMnBpin
 or
 OPTION AUDIO DISABLE
 
-NOT BLUETOOTH HOST VERSIONS Configures one of the PWM channels as an audio
-output. 'PWMnApin' is the left audio channel, 'PWMnBpin' is the right.
+NOT RP2350BTH OR HDMIBTH VERSIONS Configures one of the PWM channels as an
+audio output. 'PWMnApin' is the left audio channel, 'PWMnBpin' is the right.
 
 ~OPTION AUDIO BLUETOOTH
 OPTION AUDIO BLUETOOTH [idle]
@@ -5715,9 +5718,9 @@ OPTION AUDIO SPI CSpin, CLKpin, MOSIpin
 or
 OPTION AUDIO DISABLE
 
-NOT PICOMITEMIN OR BLUETOOTH HOST VERSIONS Configures the audio output to be
-directed to a MCP48n2 DAC connected to the specified pins. The LDAC pin on the
-DAC should be connected to GND.
+NOT PICOMITEMIN, RP2350BTH OR HDMIBTH VERSIONS Configures the audio output to
+be directed to a MCP48n2 DAC connected to the specified pins. The LDAC pin on
+the DAC should be connected to GND.
 
 ~OPTION AUDIO VS1053
 OPTION AUDIO VS1053 CLKpin, MOSIpin, MISOpin, XCSpin, XDCSpin, DREQpin,
@@ -6128,6 +6131,13 @@ RP2350B VERSIONS ONLY Configures the firmware for the Pimoroni Pico Plus 2 or
 Pico Plus 2 W board with a single command. ON sets the heartbeat to the
 board's LED pin and enables the PSRAM fitted to the board (chip select GP47),
 then saves the options and restarts.
+
+~OPTION PICOMITE
+OPTION PICOMITE HDMI/VGA/OFF
+
+Does nothing on the PicoMite, and gives no error, in a program or at the
+command prompt. HDMI, VGA, OFF or anything else after it, or nothing, is
+accepted and ignored.
 
 ~OPTION PIN
 OPTION PIN nbr
@@ -8056,10 +8066,10 @@ Returns the square root of the argument 'number'.
 STAR
 
 RP2350 VERSIONS ONLY Calculates the position of a celestial object using the
-current time and location from a connected GPS module. This is one of a set of
-commands that performs high-precision astronomical calculations suitable for
-telescope pointing or navigation and is described in detail in the file
-GPS_Astro_Reference.pdf included in the firmware download zip file.
+current time (UTC) and location from a connected GPS module. This is one of a
+set of commands that performs high-precision astronomical calculations
+suitable for telescope pointing or navigation and is described in detail in
+the file GPS_Astro_Reference.pdf included in the firmware download zip file.
 
 ~STATIC
 STATIC variable [, variables]
@@ -8233,10 +8243,11 @@ Configures a spindle control pin used by buffered M3/M5 commands. Pin must not
 conflict with AXIS/HWLIMITS/E-STOP pins.
 
 ~STEPPER STATUS
-STEPPER STATUS
+STEPPER STATUS [#nbr]
 
 Displays detailed system status, including axis positions, buffer state, and
-configuration (including auto-disable-on-idle mode).
+configuration (including auto-disable-on-idle mode). STEPPER STATUS #nbr sends
+it to the serial port or file opened as 'nbr'.
 
 ~STEPPER TUNE
 STEPPER TUNE axis [, dir_invert] [, steps_per_unit] [, max_vel] [, max_accel]

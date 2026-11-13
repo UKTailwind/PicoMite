@@ -1616,9 +1616,11 @@ void bt_info(unsigned char *tp, char *out)
         SyntaxError();
 }
 
-/* BLUETOOTH STATUS */
-static void bta_status(void)
+/* BLUETOOTH STATUS [#n]: to the COM port or file open as #n if given */
+static void bta_status(unsigned char *tp)
 {
+    tp = OutputRedirect(tp); // BLUETOOTH STATUS #n
+    checkend(tp);
     MMPrintString("Bluetooth: ");
     MMPrintString(bta_ready && hci_get_state() == HCI_STATE_WORKING ? "on" : "not available");
     MMPrintString("\r\nKeyboard:  ");
@@ -1742,6 +1744,7 @@ static void bta_status(void)
         MMPrintString(buf);
     }
     PRet();
+    ConsoleRedirect = 0;
 }
 
 void cmd_bluetooth(void)
@@ -1760,7 +1763,7 @@ void cmd_bluetooth(void)
     else if ((tp = checkstring(cmdline, (unsigned char *)"TEST")))
         bta_test(tp);
     else if ((tp = checkstring(cmdline, (unsigned char *)"STATUS")))
-        bta_status();
+        bta_status(tp);
     else if ((tp = checkstring(cmdline, (unsigned char *)"FORGET")))
         bta_forget(tp);
     else

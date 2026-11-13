@@ -83,12 +83,12 @@ extern "C"
    /* +272 KB (2026-10-30): TinyCC (RUN "file.c", TCC, C CSUBs, <picomite/...>,
       ~250 KB of flash).  Not linked here: estimated from the builds that were
       (243-254 KB over their old offsets), so the link check may ask for more. */
-#define FLASH_TARGET_OFFSET (2032 * 1024)
+#define FLASH_TARGET_OFFSET (2048 * 1024)
    /* 108 KB: the SRAM heap the review's budget gives with the full 153600-byte
       pool (4.2 KB of RAM margin left for the stack); the boot-time resize for
       800x600, 848x480 and 800x480 takes its pool from this, as on HDMIUSB. */
 #define HEAP_MEMORY_SIZE (108 * 1024)
-#define MAX_PROG_SIZE (252 * 1024) // Four 252 KiB regions keep the system flash below 3 MiB
+#define MAX_PROG_SIZE (248 * 1024) // Four 248 KiB regions keep the system flash below 3 MiB
 #define MagicKey 0x7C3A11E3
 #elif defined(PICOMITEHDMIBTH)
    /* HDMIBTH: HDMIUSB-style display stack + CYW43 wireless + BLE HID

@@ -546,6 +546,7 @@ GAMEPAD CONFIGURE vid, pid, R_idx, R_code, START_idx, START_code, HOME_idx, HOME
 | VID | PID | Description |
 |-----|-----|-------------|
 | 0x0810 | 0xE501 | EasySMX / generic |
+| 0x0810 | 0x0001 | Generic USB gamepad |
 | 0x0079 | 0x0011 | Generic USB gamepad |
 | 0x081F | 0xE401 | Generic USB gamepad |
 | 0x1C59 | 0x0026 | GameSir |

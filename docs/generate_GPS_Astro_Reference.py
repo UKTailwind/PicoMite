@@ -1,6 +1,6 @@
 from fpdf import FPDF
 
-OUTPUT = r'd:\Dropbox\PicoMite\PicoMite\docs\GPS_Astro_Reference.pdf'
+OUTPUT = r'd:\Dropbox\PicoMite\PicoMite\PDF\GPS_Astro_Reference.pdf'
 
 # ---------------------------------------------------------------------------
 # PDF subclass: page header and footer
@@ -60,7 +60,7 @@ h1('1. Overview')
 body('The functionality is split into four commands:')
 body('- STAR: Calculates the position of a celestial object using the current time and location'
      ' from the connected GPS module.')
-body('- LOCATION: Sets a manual location (latitude/longitude) and time for use with the ASTRO command.')
+body('- LOCATION: Sets a manual location (latitude/longitude) and time (UTC) for use with the ASTRO command.')
 body('- ASTRO: Calculates the position of a celestial object using the manual time and location'
      ' set by the LOCATION command.')
 body('- SLEW: Computes the motor deltas required to point a polar-aligned German Equatorial Mount'
@@ -74,7 +74,8 @@ h1('2. Command Syntax')
 
 # 2.1 STAR
 h2('2.1 The STAR Command')
-body('Uses live GPS data. Requires a valid GPS fix.')
+body('Uses live GPS data. Requires a valid GPS fix. The time used is the GPS\'s UTC time: a time'
+     ' offset given to OPEN ... AS GPS is not applied.')
 h3('Syntax 1: Named Object')
 code('STAR object   alt, az [, ra_out, dec_out]\n'
      'STAR "name"   alt, az [, ra_out, dec_out]\n'
@@ -123,12 +124,22 @@ body('Sets the context for the ASTRO and SLEW commands.')
 h3('Syntax')
 code('LOCATION date$, lat, long [, sidereal_out]')
 body('- date$: A string containing the date and time in the format "dd/mm/yyyy hh:mm:ss".'
-     ' The separators can be -, /, :, or space.')
+     ' The separators can be -, /, :, or space. The time is UTC (Universal Time), not local time.')
 body('- lat: Latitude in degrees (negative for South).')
 body('- long: Longitude in degrees (negative for West).')
 body('- sidereal_out (Optional): Variable to store the calculated Local Sidereal Time (hours).')
 h3('Example')
 code('LOCATION "25/12/2025 22:30:00", -33.86, 151.21, lst')
+h3('Local time')
+body("Subtract your time zone's offset from UTC, including any daylight saving, before LOCATION."
+     " Times found from ASTRO's results, such as when an object rises or sets, are then in UTC too,"
+     ' so add the offset back. A local time given as it is makes every result wrong by the offset.'
+     ' For example, in a time zone one hour ahead of UTC:')
+code("tz = 1                                     ' hours ahead of UTC\n"
+     "' 17:00 local time is 16:00 UTC\n"
+     't = EPOCH("01-11-2026 17:00:00") - tz * 3600\n'
+     'LOCATION DATETIME$(t), 47.50, 19.04\n'
+     'ASTRO MOON alt, az')
 
 # 2.3 ASTRO
 h2('2.3 The ASTRO Command')

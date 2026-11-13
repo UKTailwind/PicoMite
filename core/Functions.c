@@ -1757,8 +1757,9 @@ void fun_version(void)
 	   fourth field, so strtol stops on the terminating NUL and p + 1 would read
 	   PAST THE END of the string literal, parsing whatever the linker happened
 	   to put there as the beta number.  So check there is something to step
-	   over.  "6.03.02b8" is unchanged at 6.030208; "6.03.02" is now reliably
-	   6.0302; "6.04.00RC1" is 6.040051. */
+	   over.  "6.03.02b8" is unchanged at 6.030208; "6.04.00RC1" is 6.040051;
+	   and a release, with no fourth field, counts as 99 in it, so "7.00.00"
+	   is 7.000099. */
 	fret = strtol(VERSION, &p, 10);
 	if (*p)
 		fret += (MMFLOAT)strtol(p + 1, &p, 10) / 100;
@@ -1785,6 +1786,13 @@ void fun_version(void)
 		}
 		fret += (MMFLOAT)(strtol(p + 1, &p, 10) + offset) / 1000000;
 	}
+	else
+		/* A release: 99, above every beta (1 to 49) and release candidate
+		   (50 + n) of the same version, so a program that asks for
+		   MM.VER >= 7.000051 (RC1) runs on 7.00.00 too, which as 7.0 it did
+		   not.  It stays below the next version's first beta: 7.00.01b1 is
+		   7.000101. */
+		fret += (MMFLOAT)99 / 1000000;
 	targ = T_NBR;
 }
 

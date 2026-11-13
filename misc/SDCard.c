@@ -125,6 +125,9 @@ uint8_t SPI0locked = 0;
 uint8_t SPI1locked = 0;
 int BacklightSlice = -1;
 int BacklightChannel = -1;
+#ifdef PICOMITEPC3
+int AmpSlice = -1; /* the Olimex RP2350pc's amplifier volume (slice 9, A on GP34), else -1 */
+#endif
 #if PICOMITERP2350
 int KeyboardlightSlice = -1;
 int KeyboardlightChannel = -1;
@@ -3297,6 +3300,44 @@ void InitReservedIO(void)
 		ExtCfg(Option.MOUSE_DATA, EXT_BOOT_RESERVED, 0);
 	}
 #endif
+#ifdef PICOMITEPC3
+	/* OPTION RESET RP2350PC: the Olimex board's own pins. */
+	if (!rp2350a && !strcmp((char *)Option.platform, "RP2350PC"))
+	{
+		/* The ES8311 codec's I2C (with the HDMI DDC) on GP32/GP33: reserved and pulled
+		   high, so the bus stays idle and the codec does nothing.  Not a system I2C, which
+		   would take I2C0 from UEXT2's I2C pins (GP36/GP37). */
+		for (int gp = 32; gp <= 33; gp++)
+			if (CheckPin(PINMAP[gp], CP_NOABORT))
+			{
+				gpio_init(gp);
+				gpio_pull_up(gp);
+				ExtCfg(PINMAP[gp], EXT_BOOT_RESERVED, 0);
+			}
+	}
+	/* The PAM8003 amplifier.  GP35 drives its shutdown through an inverting transistor,
+	   so it is held low and the amplifier stays on.  GP34 (PWM slice 9, A) sets its
+	   volume through another transistor and a filter into the VOL pin, started at 50% at
+	   25 kHz (above the audio band).  Both pins are the board's; ClearExternalIO and the
+	   PWM commands leave slice 9 alone. */
+	if (!rp2350a && !strcmp((char *)Option.platform, "RP2350PC") &&
+		CheckPin(PINMAP[34], CP_NOABORT) && CheckPin(PINMAP[35], CP_NOABORT))
+	{
+		gpio_init(35);
+		gpio_put(35, 0);
+		gpio_set_dir(35, GPIO_OUT);
+		ExtCfg(PINMAP[35], EXT_BOOT_RESERVED, 0);
+		AmpSlice = pwm_gpio_to_slice_num(34);
+		uint32_t wrap = clock_get_hz(clk_sys) / 25000;
+		pwm_config c = pwm_get_default_config();
+		pwm_config_set_wrap(&c, wrap - 1);
+		pwm_init(AmpSlice, &c, false);
+		pwm_set_chan_level(AmpSlice, PWM_CHAN_A, wrap / 2);
+		gpio_set_function(34, GPIO_FUNC_PWM);
+		pwm_set_enabled(AmpSlice, true);
+		ExtCfg(PINMAP[34], EXT_BOOT_RESERVED, 0);
+	}
+#endif
 #if CYW43_PIN_WL_DYNAMIC
 	ReserveCYW43Pins(); // last, so a clash with another option's pins is seen
 #endif
@@ -3476,6 +3517,15 @@ char *pinsearch(int pin)
 #ifdef rp2350
 	else if (pin == Option.PSRAM_CS_PIN)
 		strcpy(buff, "PSRAM CS");
+#ifdef PICOMITEPC3
+	else if (AmpSlice >= 0 && pin == PINMAP[34])
+		strcpy(buff, "AMP VOLUME");
+	else if (AmpSlice >= 0 && pin == PINMAP[35])
+		strcpy(buff, "AMP SHUTDOWN");
+	else if ((pin == PINMAP[32] || pin == PINMAP[33]) && ExtCurrentConfig[pin] == EXT_BOOT_RESERVED &&
+			 !strcmp((char *)Option.platform, "RP2350PC"))
+		strcpy(buff, pin == PINMAP[32] ? "CODEC SDA" : "CODEC SCL");
+#endif
 #if CYW43_PIN_WL_DYNAMIC
 #ifdef PICOMITEPC3
 	else if (!PC3_RADIO_USED && (pin == PINMAP[cyw43_gp[0]] || pin == PINMAP[cyw43_gp[1]] || pin == PINMAP[cyw43_gp[2]] || pin == PINMAP[cyw43_gp[3]]))

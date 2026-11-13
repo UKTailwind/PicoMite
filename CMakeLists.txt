@@ -435,8 +435,10 @@ endif()
 # NOPWMAUDIO builds have no PWM or SPI DAC audio output - only I2S and, on
 # the BT host builds, Bluetooth (OPTION AUDIO BLUETOOTH). It keeps the PWM
 # wrap interrupt down to the I2S path. The define is set further down.
+# The PC3 keeps PWM audio: the same firmware runs the Olimex RP2350pc, whose
+# stereo output is PWM on GP26/GP27.
 set(USES_PWM_AUDIO TRUE)
-if(IS_BTH)
+if(IS_BTH AND NOT IS_PC3)
 	set(USES_PWM_AUDIO FALSE)
 endif()
 

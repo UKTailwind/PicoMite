@@ -1525,18 +1525,38 @@ static inline void TestStackOverflow(void)
 // this routine also looks for embedded fonts and adds them to the font table
 // Returns: 0 = success, 1 = error (error message in PreprogramErrMsg)
 static int MIPS16 PrepareProgramWalk(int ErrAbort);
+/* The font table has changed with the program.  A program's own DefineFont fonts
+   go with it, but the program may have left one selected - it can stop on an
+   error before it selects a built-in font again, and the error handler keeps
+   that font for the prompt.  Fall back to the default font now, or the next
+   SetFont fails with "Invalid font number" and the LOAD after it is lost.  The
+   same number can also be another font now, a built-in the old program had
+   replaced: SetFont takes the size of the one that is there.  'selected' is what
+   the selected font's slot held before. */
+static void MIPS16 FontsChanged(unsigned char *selected)
+{
+    if (FontTable[gui_font >> 4] == NULL)
+        SetFont(Option.DefaultFont);
+    else if (FontTable[gui_font >> 4] != selected)
+        SetFont(gui_font);
+    if (FontTable[PromptFont >> 4] == NULL)
+        PromptFont = Option.DefaultFont;
+}
+
 // SymPreparing tells SymDamaged that a damaged image met here is to be
 // discarded (error() clears it too, for an error that leaves through it)
 int MIPS16 PrepareProgram(int ErrAbort)
 {
+    unsigned char *selected = FontTable[gui_font >> 4];
     SymPreparing = 1;
     int r = PrepareProgramWalk(ErrAbort);
     SymPreparing = 0;
+    FontsChanged(selected);
     return r;
 }
 static int MIPS16 PrepareProgramWalk(int ErrAbort)
 {
-    int i, NbrFuncts;
+    int NbrFuncts;
 
 #ifdef rp2350
     RBLive = 0; // a compiled stream is trusted only after RUN checks its stamp (see Stream.h)
@@ -1546,15 +1566,17 @@ static int MIPS16 PrepareProgramWalk(int ErrAbort)
     PreprogramErrLine = NULL;
     ProgramValid = 1;
 
-    for (i = FONT_BUILTIN_NBR; i < FONT_TABLE_SIZE - 1; i++)
-        FontTable[i] = NULL; // clear the font table
+    /* All of it: RAM RUN, FLASH RUN and their CHAINs come here without ClearProgram,
+       and the last program's fonts must not reach this one, a built-in it replaced
+       included.  PrepareProgramExt adds the fonts of the library and the program. */
+    initFonts();
 
 #ifdef STRUCTENABLED
     // Clear structure type definitions before parsing
     // IMPORTANT: When called from command prompt (not after ClearProgram/InitHeap),
     // memory may have been previously allocated but not freed. We must free it
     // to prevent memory leaks from repeated command line entries.
-    for (i = 0; i < MAX_STRUCT_TYPES; i++)
+    for (int i = 0; i < MAX_STRUCT_TYPES; i++)
     {
         if (g_structtbl[i] != NULL)
         {
@@ -8226,6 +8248,10 @@ void MIPS16 ClearRuntime(bool all)
     ContinueLocalIndex = 0;
     for (i = 0; i < MAXSUBFUN; i++)
         subfun[i] = NULL;
+    /* and so has the name index's count of them: NameIndexRebuild (SaveContext, as EDIT FILE
+       from the file manager does after the FM's ClearRuntime) read the names of NameSubs
+       SUBs from these NULLs, at address 2, and stopped with "Program damaged: symbol table" */
+    NameSubs = 0;
 #ifdef GUICONTROLS
     for (i = 1; i < Option.MaxCtrls; i++)
     {
@@ -8241,16 +8267,9 @@ void MIPS16 ClearRuntime(bool all)
 void MIPS16 ClearProgram(bool psram)
 {
     //    InitHeap(true);
+    unsigned char *selected = FontTable[gui_font >> 4];
     initFonts();
-    /* A program's own DefineFont fonts go with it, but the program may have
-       left one selected - it can stop on an error before it selects a
-       built-in font again, and the error handler keeps that font for the
-       prompt.  Fall back to the default font now, or the next SetFont
-       fails with "Invalid font number" and the LOAD after it is lost. */
-    if (FontTable[gui_font >> 4] == NULL)
-        SetFont(Option.DefaultFont);
-    if (FontTable[PromptFont >> 4] == NULL)
-        PromptFont = Option.DefaultFont;
+    FontsChanged(selected);
     ClearVars(0, true);
     m_alloc(psram ? M_PROG : M_LIMITED); // init the variables for program memory
 #if PICOMITERP2350

@@ -4042,14 +4042,18 @@ void MIPS16 configure(unsigned char *p, bool noask)
             MMPrintString("OLIMEX USB\r\n");
             MMPrintString("PICO COMPUTER\r\n");
             MMPrintString("HDMIUSBI2S\r\n");
+#ifdef PICOMITEPC3
+            MMPrintString("RP2350PC\r\n");
+#endif
 #else
             MMPrintString("OLIMEX\r\n");
             MMPrintString("HDMIBasic\r\n");
 #endif
 #endif
 #endif
-#if defined(PICOMITE) || defined(PICOMITEWEB)
-#if defined(rp2350)
+/* The LCD boards' presets: not on the HDMI builds that are also WiFi builds (HDMIWEB, PC3) */
+#if defined(PICOMITE) || (defined(PICOMITEWEB) && !defined(PICOMITEVGA))
+#if PICOMITERP2350 /* where OPTION RESET PALM PICO is compiled, below */
             MMPrintString("Palm Pico\r\n");
 #endif
 #ifndef USBKEYBOARD
@@ -4346,9 +4350,14 @@ void MIPS16 configure(unsigned char *p, bool noask)
         {
             if (rp2350a)
                 error("RP350B chips only");
-            format = testMODBUFF(true, 512, false);
+            format = testMODBUFF(true, 512, noask); /* noask: applied at boot by TestPicoComputer3 (PC3 build) */
             strcpy((char *)Option.platform, "HDMIUSBI2S");
+#ifdef PICOMITEPC3
+            Option.Radio = RADIO_WIFI_OFF | RADIO_BT_OFF; /* the Pico Computer 2 has no radio: the heartbeat is GP25 */
+            Option.PSRAM_CS_PIN = PINMAP[47];             /* this firmware runs only with its PSRAM */
+#else
             Option.heartbeatpin = PINMAP[25];
+#endif
             Option.NoHeartbeat = false;
             Option.ColourCode = 1;
             Option.audio_i2s_bclk = PINMAP[10];
@@ -4374,10 +4383,45 @@ void MIPS16 configure(unsigned char *p, bool noask)
             Option.INT3pin = PINMAP[2];
             Option.INT4pin = PINMAP[3];
             SaveOptions();
-            printoptions();
+            if (!noask)
+                printoptions();
             uSec(100000);
             doreset(format);
         }
+#ifdef PICOMITEPC3
+        /* The Olimex RP2350pc: 8 MB PSRAM on GP8, HDMI on GP12-19 in the default order,
+           SD card on GP9-11 and GP24, stereo PWM audio on GP26/GP27, no RTC, no radio, the
+           LED on GP25 and UEXT1's UART0 on GP0/GP1 as the console.  The codec's I2C (GP32/
+           GP33) and the amplifier's volume (GP34) and shutdown (GP35) are set up at boot
+           from the platform name (InitReservedIO).  Applied at boot when there is no 32 kHz
+           clock on GP27 and the PSRAM answers on GP8. */
+        if (checkstring(p, (unsigned char *)"RP2350PC"))
+        {
+            if (rp2350a)
+                error("RP2350B chips only");
+            format = testMODBUFF(true, 512, noask);
+            strcpy((char *)Option.platform, "RP2350PC");
+            Option.Radio = RADIO_WIFI_OFF | RADIO_BT_OFF; /* no radio: the heartbeat is GP25 */
+            Option.NoHeartbeat = false;
+            Option.ColourCode = 1;
+            Option.PSRAM_CS_PIN = PINMAP[8];
+            Option.SD_CS = PINMAP[9];
+            Option.SD_CLK_PIN = PINMAP[10];
+            Option.SD_MOSI_PIN = PINMAP[11];
+            Option.SD_MISO_PIN = PINMAP[24];
+            Option.AUDIO_L = PINMAP[26];
+            Option.AUDIO_R = PINMAP[27];
+            Option.AUDIO_SLICE = checkslice(PINMAP[26], PINMAP[27], 0);
+            Option.SerialTX = PINMAP[0];
+            Option.SerialRX = PINMAP[1];
+            Option.SerialConsole = 1;
+            SaveOptions();
+            if (!noask)
+                printoptions();
+            uSec(100000);
+            doreset(format);
+        }
+#endif
         if (checkstring(p, (unsigned char *)"OLIMEXUSB"))
         {
             format = testMODBUFF(true, 192, false);
@@ -4442,7 +4486,7 @@ void MIPS16 configure(unsigned char *p, bool noask)
 #endif
 #endif
 #endif
-#if defined(PICOMITE) || defined(PICOMITEWEB)
+#if defined(PICOMITE) || (defined(PICOMITEWEB) && !defined(PICOMITEVGA)) /* as in the list above */
 #if PICOMITERP2350
         if (checkstring(p, (unsigned char *)"PALM PICO"))
         {
@@ -5371,6 +5415,11 @@ void MIPS16 cmd_option(void)
         return;
     }
 
+    // OPTION PICOMITE, with anything or nothing after it, does nothing here (Peter): a program can carry it for the
+    // Colour Maximite 2, which has to switch to its PicoMite mode to run a PicoMite program
+    if (checkstring(cmdline, (unsigned char *)"PICOMITE"))
+        return;
+
     tp = checkstring(cmdline, (unsigned char *)"SYMBOLS");
     if (tp)
     { // OPTION SYMBOLS OFF at the top of a program: PrepareProgram found it and
@@ -6147,7 +6196,9 @@ void MIPS16 cmd_option(void)
         }
         else
         {
-            int pin, pin2;
+            // One pin must be TX and the other RX. The pins used to be checked in Option itself, so two TX pins were
+            // accepted with whatever RX pin Option already held (two RX pins with the old TX pin), and saved.
+            int pin, pin2, tx = 0, rx = 0;
             getcsargs(&tp, 5);
             if (!(argc == 3 || argc == 5))
                 SyntaxError();
@@ -6159,21 +6210,23 @@ void MIPS16 cmd_option(void)
             if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
                 StandardErrorParam2(27, pin2, pin2);
             if (PinDef[pin].mode & UART0TX)
-                Option.SerialTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART0RX)
-                Option.SerialRX = pin;
+                rx = pin;
             else
                 goto checkcom2;
             if (PinDef[pin2].mode & UART0TX)
-                Option.SerialTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART0RX)
-                Option.SerialRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.SerialTX == Option.SerialRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART0TX))
                 error("UART0 in use for GPS");
+            Option.SerialTX = tx;
+            Option.SerialRX = rx;
             Option.SerialConsole = 1;
             if (argc == 5)
                 Option.SerialConsole = ((checkstring(argv[4], (unsigned char *)"B") || checkstring(argv[4], (unsigned char *)"BOTH")) ? 5 : 1);
@@ -6182,21 +6235,23 @@ void MIPS16 cmd_option(void)
             return;
         checkcom2:
             if (PinDef[pin].mode & UART1TX)
-                Option.SerialTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART1RX)
-                Option.SerialRX = pin;
+                rx = pin;
             else
                 StandardError(8);
             if (PinDef[pin2].mode & UART1TX)
-                Option.SerialTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART1RX)
-                Option.SerialRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.SerialTX == Option.SerialRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.GPSTX && (PinDef[Option.GPSTX].mode & UART1TX))
                 error("UART1 in use for GPS");
+            Option.SerialTX = tx;
+            Option.SerialRX = rx;
             Option.SerialConsole = 2;
             if (argc == 5)
                 Option.SerialConsole = (checkstring(argv[4], (unsigned char *)"B") ? 6 : 2);
@@ -6220,19 +6275,17 @@ void MIPS16 cmd_option(void)
         }
         else
         {
-            int pin, pin2;
+            // As OPTION SERIAL CONSOLE: one TX pin and one RX pin, put into Option (with the baud rate) once checked
+            int pin, pin2, tx = 0, rx = 0, baud = 9600;
             getcsargs(&tp, 5);
             if (!(argc == 3 || argc == 5))
                 SyntaxError();
             if (argc == 5)
             {
-                int i = getint(argv[4], Option.CPU_Speed * 1000 / 16 / 65535, 921600);
-                if (i < 100)
+                baud = getint(argv[4], Option.CPU_Speed * 1000 / 16 / 65535, 921600);
+                if (baud < 100)
                     StandardError(21);
-                Option.GPSBaud = i;
             }
-            else
-                Option.GPSBaud = 9600;
             pin = getpinarg(argv[0]);
             pin2 = getpinarg(argv[2]);
             if (ExtCurrentConfig[pin] != EXT_NOT_CONFIG)
@@ -6240,41 +6293,47 @@ void MIPS16 cmd_option(void)
             if (ExtCurrentConfig[pin2] != EXT_NOT_CONFIG)
                 StandardErrorParam2(27, pin2, pin2);
             if (PinDef[pin].mode & UART0TX)
-                Option.GPSTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART0RX)
-                Option.GPSRX = pin;
+                rx = pin;
             else
                 goto GPScheckcom2;
             if (PinDef[pin2].mode & UART0TX)
-                Option.GPSTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART0RX)
-                Option.GPSRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.GPSTX == Option.GPSRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.SerialConsole && (Option.SerialConsole & 3) == 1)
                 error("UART0 in use for Console");
+            Option.GPSTX = tx;
+            Option.GPSRX = rx;
+            Option.GPSBaud = baud;
             SaveOptions();
             SoftReset(SOFT_RESET);
             return;
         GPScheckcom2:
             if (PinDef[pin].mode & UART1TX)
-                Option.GPSTX = pin;
+                tx = pin;
             else if (PinDef[pin].mode & UART1RX)
-                Option.GPSRX = pin;
+                rx = pin;
             else
                 StandardError(8);
             if (PinDef[pin2].mode & UART1TX)
-                Option.GPSTX = pin2;
+                tx = pin2;
             else if (PinDef[pin2].mode & UART1RX)
-                Option.GPSRX = pin2;
+                rx = pin2;
             else
                 StandardError(8);
-            if (Option.GPSTX == Option.GPSRX)
+            if (!tx || !rx)
                 StandardError(8);
             if (Option.SerialConsole && (Option.SerialConsole & 3) == 2)
                 error("UART1 in use for Console");
+            Option.GPSTX = tx;
+            Option.GPSRX = rx;
+            Option.GPSBaud = baud;
             SaveOptions();
             SoftReset(SOFT_RESET);
         }
@@ -8613,6 +8672,7 @@ void MIPS16 fun_info(void)
     }
     else if ((tp = checkstring(ep, (unsigned char *)"ADC")))
     {
+        checkend(tp); // (a misspelt ADC DMA comes here)
         targ = T_INT;
         iret = ((adcint == adcint1 && adcint) ? 1 : ((adcint == adcint2 && adcint) ? 2 : 0));
         return;
@@ -8662,8 +8722,9 @@ void MIPS16 fun_info(void)
         iret = boot_count;
         targ = T_INT;
     }
-    else if (checkstring(ep, (unsigned char *)"BOOT"))
+    else if ((tp = checkstring(ep, (unsigned char *)"BOOT")))
     {
+        checkend(tp); // (a misspelt BOOT COUNT comes here)
         if (restart_reason == 0xFFFFFFFF)
             strcpy((char *)sret, "Restart");
         else if (restart_reason == 0xFFFFFFFE)
@@ -8846,12 +8907,14 @@ void MIPS16 fun_info(void)
         if ((tp = checkstring(ep, (unsigned char *)"FONT POINTER")))
         {
             iret = (int64_t)((uint32_t)&FontTable[getint(tp, 1, FONT_TABLE_SIZE) - 1]);
+            checkend(skipexpression(tp));
             targ = T_INT;
             return;
         }
         else if ((tp = checkstring(ep, (unsigned char *)"FONT ADDRESS")))
         {
             iret = (int64_t)((uint32_t)FontTable[getint(tp, 1, FONT_TABLE_SIZE) - 1]);
+            checkend(skipexpression(tp));
             targ = T_INT;
             return;
         }
@@ -8886,8 +8949,9 @@ void MIPS16 fun_info(void)
             targ = T_INT;
             return;
         }
-        else if (checkstring(ep, (unsigned char *)"FLASH"))
+        else if ((tp = checkstring(ep, (unsigned char *)"FLASH")))
         {
+            checkend(tp); // (a misspelt FLASH ADDRESS comes here)
             iret = FlashLoad;
             targ = T_INT;
             return;
@@ -8898,8 +8962,9 @@ void MIPS16 fun_info(void)
             targ = T_INT;
             return;
         }
-        else if (checkstring(ep, (unsigned char *)"FONT"))
+        else if ((tp = checkstring(ep, (unsigned char *)"FONT")))
         {
+            checkend(tp); // (a misspelt FONT ADDRESS or FONT POINTER comes here)
             iret = (gui_font >> 4) + 1;
             targ = T_INT;
             return;

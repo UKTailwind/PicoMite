@@ -494,19 +494,19 @@ PEEK(BYTE)                  VAL
 ~OPTIONS
 OPTION settings
 
-OPTION                         OPTION LEGACY ON
-OPTION ANGLE                   OPTION LIST
-OPTION AUDIO                   OPTION LOCAL KEYBOARD ON
-OPTION AUDIO BLUETOOTH         OPTION LOCAL VARIABLES
-OPTION AUDIO I2S               OPTION LOGGING ON
-OPTION AUDIO SPI               OPTION MILLISECONDS
-OPTION AUDIO VS1053            OPTION MODBUFF
-OPTION AUTOREFRESH             OPTION MOUSE
-OPTION AUTORUN ON              OPTION MOUSE DISABLE
-OPTION BACKLIGHT KBD           OPTION MOUSE SENSITIVITY
-OPTION BASE                    OPTION NOCHECK
-OPTION BAUDRATE                OPTION PICO
-OPTION BREAK                   OPTION PICO PLUS
+OPTION                         OPTION LIST
+OPTION ANGLE                   OPTION LOCAL KEYBOARD ON
+OPTION AUDIO                   OPTION LOCAL VARIABLES
+OPTION AUDIO BLUETOOTH         OPTION LOGGING ON
+OPTION AUDIO I2S               OPTION MILLISECONDS
+OPTION AUDIO SPI               OPTION MODBUFF
+OPTION AUDIO VS1053            OPTION MOUSE
+OPTION AUTOREFRESH             OPTION MOUSE DISABLE
+OPTION AUTORUN ON              OPTION MOUSE SENSITIVITY
+OPTION BACKLIGHT KBD           OPTION NOCHECK
+OPTION BASE                    OPTION PICO
+OPTION BAUDRATE                OPTION PICO PLUS
+OPTION BREAK                   OPTION PICOMITE
 OPTION CASE                    OPTION PIN
 OPTION CDC POLL RATE           OPTION PLATFORM
 OPTION COLOURCODE ON           OPTION POWER
@@ -538,6 +538,7 @@ OPTION LCDPANEL                OPTION VCC
 OPTION LCDPANEL CONSOLE        OPTION VGA PINS
 OPTION LCDPANEL NOCONSOLE      OPTION WEB MESSAGES
 OPTION LCDPANEL USER           OPTION WIFI
+OPTION LEGACY ON
 
 ~VARIABLES
 Predefined read-only variables
@@ -1338,7 +1339,7 @@ Bluetooth LE keyboards, mice and game controllers are not listed - they are
 paired automatically (see the chapter Bluetooth Versions).
 
 ~BLUETOOTH STATUS
-BLUETOOTH STATUS
+BLUETOOTH STATUS [#nbr]
 
 BLUETOOTH HOST VERSIONS ONLY
 Lists the state of the Bluetooth connections: whether a Bluetooth LE keyboard
@@ -1349,6 +1350,8 @@ remembered speaker if it is not connected), and the format of the audio
 stream.
 The lines that follow are diagnostic information which may be useful when
 reporting a problem.
+BLUETOOTH STATUS #nbr sends the list to the serial port or file opened as
+'nbr'.
 
 ~BOUND
 BOUND(array() [,dimension]
@@ -1653,7 +1656,9 @@ the command is recommended to be used in top level program and not from within
 a subroutine. If the optional 'cmdline$ parameter is specified this is passed
 to the chained program in MM.CMDLINE$. If the programs use structures both
 must define the same TYPEs in the same order, as a variable of a structure
-type kept across the CHAIN refers to its type by its number
+type kept across the CHAIN refers to its type by its number.  The font and
+colours stay as they are, as with FLASH CHAIN and RAM CHAIN.  If the font was
+defined in the first program and not in the next the default font is used.
 
 ~CHDIR
 CHDIR dir$
@@ -2163,10 +2168,10 @@ as the built in fonts (i.e. selected using the FONT command or specified in
 the TEXT command).  See the Embedded Fonts folder in the PicoMite firmware
 distribution zip file for a selection of embedded fonts and a full description
 of how to create them.
-'#Nbr' is the font's reference number (from 1 to 16).  It can be the same as a
-built in font and in that case it will replace the built in font.  Each 'hex'
-must be exactly eight hex digits and be separated by spaces or new lines from
-the next.
+'#Nbr' is the font's reference number (2 to 5 or 8 to 16).  It can be the same
+as a built in font and in that case it will replace the built in font.  Each
+'hex' must be exactly eight hex digits and be separated by spaces or new lines
+from the next.
   Multiple lines of 'hex' words can be used with the command terminated by a
   matching END DEFINEFONT.
   Multiple embedded fonts can be used in a program with each defining a
@@ -6133,7 +6138,9 @@ SCREEN KEYBOARD.
 The on-screen keyboard is automatically displayed at the command prompt and in
 the full screen editor and is removed while a program is running.  A program
 can use KEYBOARD ON to display the keyboard and accept input from it; keys
-tapped on it are read as normal keystrokes (eg, with INKEY$ or INPUT).
+tapped on it are read as normal keystrokes (eg, with INKEY$ or INPUT).  CLS
+and MODE also remove the keyboard, so a program should use KEYBOARD ON after
+them.
 KEYBOARD OFF entered at the command prompt will keep the on-screen keyboard
 hidden until KEYBOARD ON is entered.
 
@@ -6757,8 +6764,8 @@ automatically discarded when the subroutine or function exits.
 ~LOCATION
 LOCATION
 
-RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time for
-use with the ASTRO command.
+RP2350 VERSIONS ONLY Sets a manual location (latitude/longitude) and time
+(UTC, not local time) for use with the ASTRO command.
 This is one of a set of commands that performs high-precision astronomical
 calculations suitable for telescope pointing or navigation and is described in
 detail in the file GPS_Astro_Reference.pdf included in the firmware download
@@ -8523,12 +8530,14 @@ the firmware, options, saved variables, flash slots and program storage.
 ~MM.INFO(FONT ADDRESS)
 MM.INFO(FONT ADDRESS n)
 
-Returns the address of the memory location with the address of FONT n .
+Returns the address of the start of FONT n in memory, or 0 if there is no font
+n.  Its first four bytes are the width, height, first character and number of
+characters.
 
 ~MM.INFO(FONT POINTER)
 MM.INFO(FONT POINTER n)
 
-Returns a POINTER to the start of FONT n in memory.
+Returns the address of the memory location that holds the address of FONT n.
 
 ~MM.INFO(FONT)
 MM.INFO(FONT)
@@ -9556,8 +9565,8 @@ OPTION AUDIO PWMnApin, PWMnBpin
 or
 OPTION AUDIO DISABLE
 
-NOT BLUETOOTH HOST VERSIONS Configures one of the PWM channels as an audio
-output.
+NOT RP2350BTH OR HDMIBTH VERSIONS Configures one of the PWM channels as an
+audio output.
 'PWMnApin' is the left audio channel, 'PWMnBpin' is the right.  Both pins must
 belong to the same audio channel.
 Example,  OPTION AUDIO GP18, GP19 would use PWM1A and PWM1B on pins 24 and 25
@@ -9600,9 +9609,9 @@ OPTION AUDIO SPI CSpin, CLKpin, MOSIpin
 or
 OPTION AUDIO DISABLE
 
-NOT PICOMITEMIN OR BLUETOOTH HOST VERSIONS Configures the audio output to be
-directed to a MCP48n2 DAC connected to the specified pins. The LDAC pin on the
-DAC should be connected to GND.
+NOT PICOMITEMIN, RP2350BTH OR HDMIBTH VERSIONS Configures the audio output to
+be directed to a MCP48n2 DAC connected to the specified pins. The LDAC pin on
+the DAC should be connected to GND.
 
 ~OPTION AUDIO VS1053
 OPTION AUDIO VS1053 CLKpin, MOSIpin, MISOpin, XCSpin, XDCSpin, DREQpin,
@@ -10235,6 +10244,14 @@ wireless chip, so ON uses that as the heartbeat and OFF leaves the heartbeat
 on (OPTION HEARTBEAT OFF will turn it off).
 This command will generate an error on RP2350A based boards (eg, the Raspberry
 Pi Pico 2).
+
+~OPTION PICOMITE
+OPTION PICOMITE HDMI/VGA/OFF
+
+Does nothing on the PicoMite, and gives no error, in a program or at the
+command prompt. HDMI, VGA, OFF or anything else after it, or nothing, is
+accepted and ignored. A program can include it for the Colour Maximite 2,
+which has to switch to its PicoMite mode to run a PicoMite program.
 
 ~OPTION PIN
 OPTION PIN nbr
@@ -13911,7 +13928,7 @@ Returns the square root of the argument 'number'.
 STAR
 
 RP2350 VERSIONS ONLY Calculates the position of a celestial object using the
-current time and location from a connected GPS module.
+current time (UTC) and location from a connected GPS module.
 This is one of a set of commands that performs high-precision astronomical
 calculations suitable for telescope pointing or navigation and is described in
 detail in the file GPS_Astro_Reference.pdf included in the firmware download
@@ -14311,10 +14328,11 @@ until an M3.
 Full details: Stepper_Reference.pdf
 
 ~STEPPER STATUS
-STEPPER STATUS
+STEPPER STATUS [#nbr]
 
 Displays detailed system status, including axis positions, buffer state, and
-configuration (including auto-disable-on-idle mode).
+configuration (including auto-disable-on-idle mode). STEPPER STATUS #nbr sends
+it to the serial port or file opened as 'nbr'.
 
 Full details: Stepper_Reference.pdf
 

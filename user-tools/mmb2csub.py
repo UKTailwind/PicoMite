@@ -630,6 +630,11 @@ def entry_shim(conv, routine, entry, bodytext, gl, gtab=False):
     # globals: the heap-resident ones first, so they lie over struct __gv
     heap = [(nm, s) for nm, s in gl if s.acc.startswith("H->")]
     flat = [(nm, s) for nm, s in gl if not s.acc.startswith("H->")]
+    # A heap member is assigned from a void *, never cast to its element type:
+    # heap_member() makes a 2-D or 3-D array, and any string array, a pointer
+    # to rows - MMINTEGER (*)[401], char (*)[13] - and an element-type cast to
+    # that is an incompatible pointer type. GCC 13 only warned; GCC 14 and
+    # later stop with an error. C converts void * to any of them silently.
     sets = []
     if gl and gtab:
         # ONE argument for all of them: an INTEGER array of addresses that the
@@ -642,8 +647,8 @@ def entry_shim(conv, routine, entry, bodytext, gl, gtab=False):
         sets.append("    {")
         sets.append("        const MMINTEGER *__t = (const MMINTEGER *)a%d;" % slot)
         for k, (nm, s) in enumerate(heap):
-            sets.append("        H->%s = (%s *)(unsigned)__t[%d];"
-                        % (s.acc[3:], CT[s.ty], k))
+            sets.append("        H->%s = (void *)(unsigned)__t[%d];"
+                        % (s.acc[3:], k))
         for k, (nm, s) in enumerate(flat):
             sets.append("        MMCSUB_G[%d] = (void *)(unsigned)__t[%d];"
                         % (len(heap) + k, len(heap) + k))
@@ -651,7 +656,7 @@ def entry_shim(conv, routine, entry, bodytext, gl, gtab=False):
         slot += 1
     else:
         for k, (nm, s) in enumerate(heap):
-            sets.append("    H->%s = (%s *)a%d;" % (s.acc[3:], CT[s.ty], slot))
+            sets.append("    H->%s = a%d;" % (s.acc[3:], slot))
             decl.append("void *a%d" % slot)
             passed.append(sfx(nm, s.is_array, s.ty))
             slot += 1
@@ -752,14 +757,15 @@ def adapter_sub(name, routine, entry, passed, gl=(), gtab=False, base=0):
     for nm, s in gl:
         if getattr(s, "owner", None) is None:
             continue
-        base = SFX[s.ty](nm, False)
+        # not `base`: that is the OPTION BASE the address table below needs
+        vn = SFX[s.ty](nm, False)
         # "(4)" joins on; "= 1.5" needs the space
         if s.decl.startswith("("):
-            pre.append("  Static %s%s" % (base, s.decl))
+            pre.append("  Static %s%s" % (vn, s.decl))
         elif s.decl:
-            pre.append("  Static %s %s" % (base, s.decl))
+            pre.append("  Static %s %s" % (vn, s.decl))
         else:
-            pre.append("  Static %s" % base)
+            pre.append("  Static %s" % vn)
     if gl and gtab:
         # One argument for every global: an array of their addresses.
         # PEEK(VARADDR x) is findvar with the same flags CallCFunction uses to
