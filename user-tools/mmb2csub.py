@@ -757,14 +757,15 @@ def adapter_sub(name, routine, entry, passed, gl=(), gtab=False, base=0):
     for nm, s in gl:
         if getattr(s, "owner", None) is None:
             continue
-        base = SFX[s.ty](nm, False)
+        # not `base`: that is the OPTION BASE the address table below needs
+        vn = SFX[s.ty](nm, False)
         # "(4)" joins on; "= 1.5" needs the space
         if s.decl.startswith("("):
-            pre.append("  Static %s%s" % (base, s.decl))
+            pre.append("  Static %s%s" % (vn, s.decl))
         elif s.decl:
-            pre.append("  Static %s %s" % (base, s.decl))
+            pre.append("  Static %s %s" % (vn, s.decl))
         else:
-            pre.append("  Static %s" % base)
+            pre.append("  Static %s" % vn)
     if gl and gtab:
         # One argument for every global: an array of their addresses.
         # PEEK(VARADDR x) is findvar with the same flags CallCFunction uses to
