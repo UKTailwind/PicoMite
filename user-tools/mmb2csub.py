@@ -290,13 +290,22 @@ def uses_on_error(conv, routine):
     return False
 
 
-def check_scope(conv, routine, name, routines=None):
+UNTRANSLATED = re.compile(r"/\* MMBASIC line (\d+) not translated: (.*?) \*/")
+
+
+def check_scope(conv, routine, name, routines=None, bodytext=""):
     """Refuse what this knowingly cannot do.  The compiler catches the rest.
 
     Checked over the whole closure: a callee that cannot be converted stops the
     entry just as surely, and saying so here names the real routine.
+
+    The compiler does NOT catch a line mmb2c could not translate: mmb2c leaves
+    a comment in its place and carries on, so the C compiles and the CSUB runs
+    without that statement - a wrong answer with no error. bodytext is every
+    body in the closure, and each such comment in it is a refusal.
     """
-    bad = []
+    bad = ["line %s was not translated, so the CSUB would leave it out: %s"
+           % (ln, why) for ln, why in UNTRANSLATED.findall(bodytext)]
     routines = routines or [routine]
     for r in routines:
         who = r.name if r is not routine else name
@@ -414,11 +423,46 @@ def static_decls(conv, routine):
         m = re.match(r"\s*static\s+(.*)$", ln, re.I)
         if not m:
             continue
-        for dec in split_declarators(m.group(1).rstrip()):
+        # MMBasic (cmd_dim) takes STATIC [AS] [INTEGER|FLOAT|STRING] a, b - one
+        # type for the whole list - or a name's own AS type after its bounds and
+        # LENGTH. The wrapper's name carries the type in its suffix, so both go.
+        # Left in, the type word was read as the first NAME, and that variable
+        # lost its bounds: Static Integer fire2(160,20) became a scalar.
+        names = re.sub(r"(?i)^(?:AS\s+)?" + TYPE_WORD + r"\s+", "", m.group(1).rstrip())
+        for dec in split_declarators(names):
             d2 = re.match(r"\s*([A-Za-z_][A-Za-z_0-9.]*)[$%!]?\s*(.*)$", dec)
             if d2:
-                out[d2.group(1).lower()] = d2.group(2).strip()
+                out[d2.group(1).lower()] = drop_as_type(d2.group(2).strip())
     return out
+
+
+TYPE_WORD = r"(?:INTEGER|FLOAT|STRING)"
+
+
+def drop_as_type(rest):
+    """A declarator's text after the name, without its AS type, if it has one.
+
+    AS comes after the bounds and any LENGTH, before the initialiser's '='; only
+    that part is searched, so a string or an expression in the initialiser is
+    never touched, and a declarator with no AS comes back exactly as written.
+    """
+    depth, quoted, eq = 0, False, len(rest)
+    for i, ch in enumerate(rest):
+        if ch == '"':
+            quoted = not quoted
+        elif not quoted:
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                depth -= 1
+            elif ch == "=" and depth == 0:
+                eq = i
+                break
+    head, tail = rest[:eq], rest[eq:]
+    cut = re.sub(r"(?i)\s*\bAS\s+" + TYPE_WORD + r"\b", "", head)
+    if cut == head:
+        return rest
+    return (cut.strip() + " " + tail).strip()
 
 
 def statics_touched(conv, routines):
@@ -522,8 +566,10 @@ def bind_globals(body, routine, flat, heap):
         # Read the pointer ONCE into a local rather than substituting the
         # CFuncRam expression at every use: the compiler then keeps it in a
         # register. Inlining it cost about 6% on a globals-heavy inner loop.
-        decls.append("    %s *const %s = (%s *)MMCSUB_G[%d];"
-                     % (CT[s.ty], ptr, CT[s.ty], len(heap) + k))
+        # Shaped like the variable, as a heap member is: a 2-D STATIC is
+        # indexed __gp_x[i][j], which a flat MMINTEGER * cannot take.
+        decls.append("    %s = MMCSUB_G[%d];"
+                     % (pointer_to(s, ptr, "const "), len(heap) + k))
     if decls:
         head, rest = body.split("\n", 1)
         body = head + "\n" + "\n".join(decls) + "\n" + rest
@@ -562,15 +608,28 @@ def heap_member(s):
     declares the dimensions reversed; the outermost one is what the pointer
     replaces.
     """
+    return pointer_to(s, s.acc[3:]) + ";"
+
+
+def pointer_to(s, nm, qual=""):
+    """The C declarator for nm, a pointer to s's storage, shaped like s.
+
+    Every pointer the CSUB holds to a caller's variable is declared here - a
+    heap member (H->x) and a flat one (__gp_x, a STATIC or a scalar) alike -
+    because mmb2c indexes an array with its real shape either way. More than
+    one dimension needs a pointer to rows, a string array one to strings of
+    its LENGTH; anything else is a pointer to the element. qual goes on the
+    pointer itself ("const " makes the pointer, not the data, constant).
+    """
     ct = CT[s.ty]
-    nm = s.acc[3:]
     dims = getattr(s, "dims", None) or []
     if s.is_array and len(dims) > 1:
         rest = "".join("[%s]" % d for d in reversed(dims[:-1]))
-        return "%s (*%s)%s;" % (ct, nm, rest)
+        return "%s (*%s%s)%s" % (ct, qual, nm, rest)
     if s.ty == "s" and s.is_array:
-        return "char (*%s)[%s];" % (nm, s.slen + 1 if s.slen else "STRINGSIZE")
-    return "%s *%s;" % (ct, nm)
+        slen = getattr(s, "slen", 0)     # (a STATIC string array is refused)
+        return "char (*%s%s)[%s]" % (qual, nm, slen + 1 if slen else "STRINGSIZE")
+    return "%s *%s%s" % (ct, qual, nm)
 
 
 def bounds_used(text, p):
@@ -867,7 +926,7 @@ def try_build(conv, mmb2c, routine, name, opt="s"):
                 return False, "%s did not translate" % r.name, 0, [], 0
             bodies[r.cname] = b
         bodytext = "\n".join(bodies[r.cname] for r in rs)
-        probs = check_scope(conv, routine, name, rs)
+        probs = check_scope(conv, routine, name, rs, bodytext)
         if probs:
             return False, probs[0], 0, [r.name for r in rs], 0
         gl = globals_touched(conv, rs) + statics_touched(conv, rs)
@@ -1282,7 +1341,7 @@ def main():
         bodies[r.cname] = b
     bodytext = "\n".join(bodies[r.cname] for r in routines)
 
-    problems = check_scope(conv, routine, args.sub[0], routines)
+    problems = check_scope(conv, routine, args.sub[0], routines, bodytext)
     if problems:
         print("error: %s cannot be a CSUB yet:" % args.sub[0])
         for p in problems:
