@@ -1038,17 +1038,24 @@ Returns the number of characters waiting in the buffer
 int SerialTxStatus(int comnbr)
 {
 	int i = 0;
+	// COM1/COM2: the buffer, plus a byte the UART is still sending. With its FIFO off the UART holds one byte
+	// waiting and one going out, and BUSY stays set until the last stop bit has left the pin. Counted, CLOSE and
+	// FLUSH wait for it, as on the Micromite: uart_deinit() resets the UART at once and cut off the last character.
 	if (comnbr == 1)
 	{
 		i = com1Tx_head - com1Tx_tail;
 		if (i < 0)
 			i += TX_BUFFER_SIZE;
+		if (i == 0 && com1 && (uart_get_hw(uart0)->fr & UART_UARTFR_BUSY_BITS))
+			i++;
 	}
 	else if (comnbr == 2)
 	{
 		i = com2Tx_head - com2Tx_tail;
 		if (i < 0)
 			i += TX_BUFFER_SIZE;
+		if (i == 0 && com2 && (uart_get_hw(uart1)->fr & UART_UARTFR_BUSY_BITS))
+			i++;
 	}
 #ifdef USBKEYBOARD
 	else if (comnbr >= 3 && comnbr <= 6)
