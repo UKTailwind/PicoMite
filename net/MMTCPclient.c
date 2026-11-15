@@ -876,6 +876,18 @@ int cmd_tcpclient(void)
                              so cert expiry verification has a real clock.
    WEB TLS NOVERIFY        — Drop any loaded CA, revert to no-verification
                              default (encrypted but not authenticated). */
+/* WEB TLS CA and WEB TLS NOVERIFY free the shared client TLS config, and
+   pico-sdk's altcp_tls_free_config() is not reference-counted: every open TLS
+   session keeps the pointer mbedtls_ssl_setup() gave it.  So neither may run
+   while a TLS connection that uses that config is open. */
+static void tls_config_not_in_use(void)
+{
+    if (TCP_CLIENT != NULL && TCP_CLIENT->tls)
+        error("Close the TLS client connection first");
+    if (mqtt_tls_open())
+        error("Close the MQTT connection first");
+}
+
 int cmd_tls(void)
 {
     unsigned char *tp;
@@ -885,6 +897,7 @@ int cmd_tls(void)
         getcsargs(&tp, 1);
         if (argc != 1)
             SyntaxError();
+        tls_config_not_in_use();
         char *fname = (char *)getCstring(argv[0]);
         if (*fname == 0)
             error("Filename required");
@@ -915,6 +928,7 @@ int cmd_tls(void)
     tp = checkstring(cmdline, (unsigned char *)"TLS NOVERIFY");
     if (tp)
     {
+        tls_config_not_in_use();
         picomite_tls_clear_ca();
         if (!optionsuppressstatus)
             MMPrintString("TLS: peer verification DISABLED\r\n");

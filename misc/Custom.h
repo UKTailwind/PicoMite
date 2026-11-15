@@ -223,6 +223,7 @@ void close_tcpclient(void);
 /* MQTT functions */
 int cmd_mqtt(void);
 void closeMQTT(void);
+bool mqtt_tls_open(void); // an MQTT connection over TLS is open (TLS builds only)
 
 /* TFTP functions */
 int cmd_tftp_server_init(void);
