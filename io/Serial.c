@@ -544,12 +544,12 @@ void invert_serial(int uart)
 }
 void MIPS16 setupuart(int uart, int s2, int parity, int b7, int baud, int inv)
 {
+	if (inv) // before uart_init, so the enabled UART never drives a non-inverted idle level onto TX
+		invert_serial(uart);
 	uart_init(UART_ID, baud);
 	uart_set_hw_flow(UART_ID, false, false);
 	uart_set_format(UART_ID, b7, s2, parity);
 	uart_set_fifo_enabled(UART_ID, false);
-	if (inv)
-		invert_serial(uart);
 	int UART_IRQ = (UART_ID == uart0 ? UART0_IRQ : UART1_IRQ);
 	if (uart)
 	{
