@@ -827,8 +827,13 @@ int cmd_tcpserver(void)
                 if (argc != 1)
                         SyntaxError();
                 ;
-                TCPreceiveInterrupt = (char *)GetIntAddress(argv[0]);
-                IntSignal();
+                if (checkstring(argv[0], (unsigned char *)"0"))
+                        TCPreceiveInterrupt = NULL; // 0: no interrupt (GetIntAddress would take it for line number 0), as WEB UDP INTERRUPT 0
+                else
+                {
+                        TCPreceiveInterrupt = (char *)GetIntAddress(argv[0]);
+                        IntSignal();
+                }
                 TCPreceived = 0;
                 return 1;
         }
