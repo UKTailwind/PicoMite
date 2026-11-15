@@ -481,23 +481,37 @@ static bool tcp_server_open(void *arg)
 
         return true;
 }
-void checksent(void *arg, int fn, int pcb)
+/* Wait until the client has acknowledged everything sent on this connection.
+   Give up only after 5 s with no new acknowledgement, so a slow but live
+   client is served and a dead one is still let go.  This was 1,000,000 passes
+   of CheckAbort(), about 1.1 s on an RP2350 at 315 MHz: a Windows client
+   lost a 59 KB WEB TRANSMIT FILE part way most times (#157).
+   Returns 1 when it gave up: the connection, and file fn if not 0, are then
+   closed, and the caller must not use either again (#158). */
+int checksent(void *arg, int fn, int pcb)
 {
         TCP_SERVER_T *state = (TCP_SERVER_T *)arg;
-        int loopcount = 1000000;
+        int last = state->sent_len[pcb];
+        uint64_t limit = time_us_64() + 5000000;
 
-        while (state->sent_len[pcb] != state->total_sent[pcb] && loopcount && pcb_live(state->client_pcb[pcb]))
+        while (state->sent_len[pcb] != state->total_sent[pcb] && pcb_live(state->client_pcb[pcb]))
         { // (stops if the connection goes: nothing more will be acknowledged)
-                loopcount--;
+                if (state->sent_len[pcb] != last)
+                {
+                        last = state->sent_len[pcb];
+                        limit = time_us_64() + 5000000;
+                }
+                else if (time_us_64() > limit)
+                {
+                        if (fn)
+                                ForceFileClose(fn);
+                        tcp_server_close(state, pcb);
+                        MMPrintString("Warning: LWIP send data timeout\r\n");
+                        return 1;
+                }
                 CheckAbort();
         }
-        if (loopcount == 0)
-        {
-                if (fn)
-                        ForceFileClose(fn);
-                tcp_server_close(state, pcb);
-                MMPrintString("Warning: LWIP send data timeout\r\n");
-        }
+        return 0;
 }
 const char httpheaders[] = "HTTP/1.1 200 OK\r\nServer:CPi\r\nConnection:close\r\nContent-type:";
 const char httptail[] = "\r\nContent-Length:";
@@ -616,7 +630,8 @@ void cmd_transmit(unsigned char *cmd)
                                         state->total_sent[pcb] += n_read;
                                         // DEBUG_printf("sending file content to pcb %d\r\n",pcb);
                                         tcp_server_send_data(state, state->client_pcb[pcb], pcb);
-                                        checksent(state, fn, pcb);
+                                        if (checksent(state, fn, pcb))
+                                                return; // timed out: the file and the connection are closed already (#158)
                                         state->total_sent[pcb] = 0;
                                         state->sent_len[pcb] = 0;
                                 }
