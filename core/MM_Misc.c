@@ -704,9 +704,10 @@ void cmd_pause(void)
 {
     unsigned char *pausetoken = CmdTokenPtr; // this statement, to re-run if an interrupt cuts the pause short
     MMFLOAT f;
+    uint64_t us;
     static uint64_t PauseTimer, IntPauseTimer;
-    f = getnumber(cmdline) * 1000; // get the pulse width
-    if (f < 0)
+    f = getnumber(cmdline) * 1000;    // the delay in microseconds
+    if (f < 0 || f > 2147483647000.0) // up to 2147483647 ms (about 24 days), as the manual says
         StandardError(21);
     if (f < 2)
         return;
@@ -719,6 +720,7 @@ void cmd_pause(void)
         } // if less than 1.5mS do the pause right now
         return; // and exit straight away
     }
+    us = (uint64_t)FloatToInt64(f); // (not 32 bits: that ended PAUSE at 2147483 ms, 36 minutes)
 
     if (InterruptReturn == NULL)
     {
@@ -729,7 +731,7 @@ void cmd_pause(void)
             PauseTimer = time_us_64();
         PauseInterrupted = false;
 
-        while (time_us_64() < FloatToInt32(f) + PauseTimer)
+        while (time_us_64() < us + PauseTimer)
         {
             CheckAbort();
             if (check_interrupt())
@@ -752,7 +754,7 @@ void cmd_pause(void)
         // we are running pause in an interrupt, this is much simpler but note that
         // we use a different timer from the main pause code (above)
         IntPauseTimer = time_us_64();
-        while (time_us_64() < FloatToInt32(f) + IntPauseTimer)
+        while (time_us_64() < us + IntPauseTimer)
             CheckAbort();
     }
 }
