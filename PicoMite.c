@@ -2784,6 +2784,9 @@ int __not_in_flash_func(MMInkey)(void)
 #endif
     }
     /* ProcessWeb() moved to net/WiFi.c */
+#ifdef LOADER
+#include "Loader.h"
+#endif
     void __not_in_flash_func(CheckAbort)(void)
     {
 #ifdef PICOMITEWEB
@@ -2792,7 +2795,11 @@ int __not_in_flash_func(MMInkey)(void)
 #endif
         ProcessBT();
         routinechecks();
+#ifdef LOADER
+        if (MMAbort && !LoaderActive) // (a loadable program's Ctrl-C is its poll()'s to report: misc/Loader.c)
+#else
         if (MMAbort)
+#endif
         {
             MMAbort = false;
             WDTimer = 0; // turn off the watchdog timer

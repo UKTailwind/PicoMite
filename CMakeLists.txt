@@ -253,6 +253,12 @@ set(RAYCASTER_VARIANTS
 	PC3
 )
 
+# Loadable programs, RUN "name.app" (docs/Loader_Plan.md): the PC3 first, the
+# others once their flash margin has been measured (the plan's Phase 11).
+set(LOADER_VARIANTS
+	PC3
+)
+
 set(VGA_PIO_VARIANTS
 	VGA
 	VGAUSB
@@ -334,6 +340,7 @@ compile_is_in(IS_FULL_RP2040 ${FULL_RP2040_VARIANTS})
 compile_is_in(USES_USB_HOST ${USB_HOST_VARIANTS})
 compile_is_in(USES_UPNG ${UPNG_VARIANTS})
 compile_is_in(USES_RAYCASTER ${RAYCASTER_VARIANTS})
+compile_is_in(USES_LOADER ${LOADER_VARIANTS})
 compile_is_in(USES_VGA_PIO ${VGA_PIO_VARIANTS})
 compile_is_in(IS_VGA ${VGA_VARIANTS})
 compile_is_in(IS_HDMI ${HDMI_VARIANTS})
@@ -659,6 +666,11 @@ endif()
 
 if(USES_RAYCASTER)
 	target_sources(PicoMite PRIVATE graphics/Raycaster.c)
+endif()
+
+if(USES_LOADER)
+	target_sources(PicoMite PRIVATE misc/Loader.c)
+	target_compile_definitions(PicoMite PRIVATE LOADER)
 endif()
 
 if(USES_SUBPROFILE)

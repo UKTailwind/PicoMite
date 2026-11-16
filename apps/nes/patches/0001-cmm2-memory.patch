@@ -1,0 +1,80 @@
+diff --git a/src/platform/pico/main_pico.c b/src/platform/pico/main_pico.c
+index bbe1944..39117c9 100644
+--- a/src/platform/pico/main_pico.c
++++ b/src/platform/pico/main_pico.c
+@@ -865,7 +865,7 @@ uint8_t test_pixels[NES_WIDTH * NES_HEIGHT];
+ 
+ /* Try to initialize PSRAM, returns true on success */
+ static bool psram_available = false;
+-#define PSRAM_BASE ((volatile uint8_t *)0x11000000)
++#define PSRAM_BASE ((volatile uint8_t *)cmm2_psram)
+ 
+ static bool try_init_psram(void)
+ {
+@@ -1093,8 +1093,7 @@ static void report_previous_fault(void)
+ 
+ int main(void)
+ {
+-    /* Switch to large stack before doing anything else */
+-    __asm volatile ("MSR MSP, %0" :: "r" (big_stack + sizeof(big_stack)));
++    /* (the CMM2: the loader gave the program its stack) */
+     real_main();
+     __builtin_unreachable();
+ }
+@@ -1187,7 +1186,6 @@ static void real_main(void)
+     vga_hstx_start();
+ #endif
+ 
+-    paint_stack();
+ 
+     printf("\n=== frank-nes (QuickNES) ===\n");
+     printf("sys_clk: %lu Hz\n", (unsigned long)clock_get_hz(clk_sys));
+@@ -1204,7 +1202,7 @@ static void real_main(void)
+ 
+     /* Provide PSRAM for tile cache (large CHR ROMs need ~256KB+) */
+     if (psram_available) {
+-        void *tc = (void *)(0x15000000 + 2 * 1024 * 1024);
++        void *tc = (void *)(cmm2_psram + 2 * 1024 * 1024);
+         qnes_set_tile_cache_buf(tc, 1 * 1024 * 1024);
+     }
+ 
+diff --git a/src/platform/pico/rom_selector.c b/src/platform/pico/rom_selector.c
+index 5d75a6c..904daa3 100644
+--- a/src/platform/pico/rom_selector.c
++++ b/src/platform/pico/rom_selector.c
+@@ -312,7 +312,7 @@ typedef struct {
+ } rom_entry_t;
+ 
+ /* Placed in PSRAM at 4MB offset (after ROM data + tile cache) */
+-#define ROMLIST_PSRAM_BASE (0x11000000 + 4 * 1024 * 1024)
++#define ROMLIST_PSRAM_BASE ((uintptr_t)cmm2_psram + 4 * 1024 * 1024)
+ static rom_entry_t *rom_list;  /* -> PSRAM */
+ static int rom_count = 0;
+ static bool sd_mount_succeeded = false;
+@@ -1050,7 +1050,7 @@ static void show_indexing_progress(const char *label, int current, int total) {
+ }
+ 
+ /* On-demand ROM loading: single ROM loaded to PSRAM base on selection */
+-#define ROM_PSRAM_BASE   0x11000000
++#define ROM_PSRAM_BASE   ((uintptr_t)cmm2_psram)
+ #define ROM_PSRAM_MAX    (2 * 1024 * 1024)
+ 
+ static int selected_rom_idx = 0;
+@@ -1527,7 +1527,7 @@ static bool file_browser_show(long *out_rom_size) {
+                 if (f_open(&rfil, rpath, FA_READ) == FR_OK) {
+                     FSIZE_t rfsz = f_size(&rfil);
+                     if (rfsz >= 16 && rfsz <= ROM_PSRAM_MAX) {
+-                        uint8_t *dst = (uint8_t *)0x15000000;
++                        uint8_t *dst = cmm2_psram;
+                         UINT rbr;
+                         if (f_read(&rfil, dst, (UINT)rfsz, &rbr) == FR_OK
+                             && rbr == (UINT)rfsz)
+@@ -2265,7 +2265,7 @@ bool rom_selector_show(long *out_rom_size) {
+                 if (f_open(&rfil, rpath, FA_READ) == FR_OK) {
+                     FSIZE_t rfsz = f_size(&rfil);
+                     if (rfsz >= 16 && rfsz <= ROM_PSRAM_MAX) {
+-                        uint8_t *dst = (uint8_t *)0x15000000;
++                        uint8_t *dst = cmm2_psram;
+                         UINT rbr;
+                         if (f_read(&rfil, dst, (UINT)rfsz, &rbr) == FR_OK
+                             && rbr == (UINT)rfsz) {

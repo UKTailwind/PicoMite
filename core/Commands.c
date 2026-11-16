@@ -2270,6 +2270,9 @@ void ListProgramPaged(unsigned char *prog)
 	}
 }
 
+#ifdef LOADER
+#include "Loader.h"
+#endif
 bool ProgramRunStarted = false; // set where do_run starts the program; the prompt runs MM.END when it runs off its end
 void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 {
@@ -2313,6 +2316,13 @@ void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 		error("RUN command line too long");
 	}
 	unsigned char *pcmd_args = buf + strlen((char *)filename) + 3; // *** THW 16/4/23
+#ifdef LOADER
+	if (*filename && LoaderIsApp((char *)filename))
+	{ // a loadable program (misc/Loader.c): run, then on with the next statement; nothing of BASIC's is cleared
+		LoaderRun((char *)filename, (char *)pcmd_args);
+		return;
+	}
+#endif
 
 #ifdef rp2350
 	if (CMM2mode)

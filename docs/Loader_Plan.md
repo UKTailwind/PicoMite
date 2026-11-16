@@ -3,7 +3,8 @@
 **Status, 16 November 2026:**
 - The decisions are made: Peter accepted every recommendation in section 2.
 - Branch `loader` exists, created from main at 544be7b, in the worktree `D:\Dropbox\PicoMite\pm_loader`.
-- Nothing has been built or measured yet. Phase 0 step 3 (the flash margins) is next, and needs Peter's OK.
+- Phase 0 is done (16 November): the flash and SRAM margins are in section 10 (Per-variant figures), and the solar_eclipse baseline is in Phase 0 step 4. 
+- **16 November, later:** Phase 1 is done on the PC3 (uncommitted). For Peter's "try the simplest and smallest CMM2 app", parts of Phases 3, 4 and 5 were done ahead of their turn: all the file and directory services (A:, B:), `video_mode`/`video_palette`/`video_wait` with BASIC's screen put back, `keys_held`, `keys_raw`, `gamepad`, and sound as stubs (`audio_start` returns -1). The CMM2's NES (apps/nes, frank-nes) runs Nova the Squirrel at about 55 frames a second at 315 MHz, silent. The loader is about 8 KB of flash; the PC3 has 5.1 KB left.
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -339,9 +340,9 @@ The PicoMite plays sound from the PWM wrap interrupt, one sample per interrupt a
 
 **The CMM2's cost.** `Loader.c.obj` on the CMM2 is 15,170 bytes of text and 2,318 of BSS on the M7 (from its Release map; that includes modules and the extra services). The PicoMite's should be of the same order, about 12-18 KB of flash.
 
-**SRAM.** The PC3 has about 4.2 KB of SRAM margin. So the loader's state lives in a block allocated at RUN or USER LOAD time; only a pointer and a few flags go in BSS. The CMM2's largest BSS items (the 1 KB saved CLUT, the module slots, the block table) all move into that block.
+**SRAM.** The PC3 has 1,996 bytes of SRAM margin (measured 16 November; the 4.2 KB of 4 November is out of date). So the loader's state lives in a block allocated at RUN or USER LOAD time; only a pointer and a few flags go in BSS. The CMM2's largest BSS items (the 1 KB saved CLUT, the module slots, the block table) all move into that block.
 
-**Flash.** Each variant's margin must be measured first (Phase 0). The PC3's offset moved from 1744 to 1760 KB on 10 November, after the build went 2.7 KB over; its margin since then has not been measured. If the loader doesn't fit, the variant moves one 16 KB step (`project_flash_target_offset_alignment`), which reformats A: on that board.
+**Flash.** Measured 16 November (section 10): the PC3 has 13.0 KB at 1760 KB. That is likely enough for Phase 1's smallest loader but not for the full 12-18 KB estimate, so expect one step to 1776 KB before modules and the extra services. If the loader doesn't fit, the variant moves one 16 KB step (`project_flash_target_offset_alignment`), which reformats A: on that board.
 
 **Enabling a variant** follows the existing per-feature pattern (RAYCASTER, CMake 242-254, 336, 660-662, 832-834):
 1. add the variant to a `LOADER_VARIANTS` list;
@@ -420,8 +421,8 @@ Each phase is a series of small changes, each built and run on a board before th
 **Work:**
 1. Peter rules on section 2. *Done 16 November: all recommendations accepted.*
 2. Create the `loader` branch and worktree (section 3) and commit this plan. *Done 16 November.*
-3. With Peter's OK, measure the flash and SRAM margins of PC3, HDMIUSB, HDMI, VGAUSBRP2350 and PICORP2350 from the branch head (private Ninja builds and `GetHighestHexAddress.py`).
-4. Record the solar_eclipse baseline on the PC3 test board.
+3. With Peter's OK, measure the flash and SRAM margins of PC3, HDMIUSB, HDMI, VGAUSBRP2350 and PICORP2350 from the branch head (private Ninja builds and `GetHighestHexAddress.py`). *Done 16 November: see section 10.*
+4. Record the solar_eclipse baseline on the PC3 test board. *Done 16 November* on the COM17 PC3 (192.168.1.251), at 315 MHz, OPTION COMPILE ON, MODE 1, `A:/g/solar_eclipse.bas` with the standard five answers. The branch's PC3 build at 74f51e3 (main 544be7b's code, flashed over SWD) gave 5.988, 6.021, 5.989, 6.064 and 5.988 s: **median 5.989 s, minimum 5.988 s**. RC9 on the same board just before gave 5.997, 6.050, 6.063, 6.028 and 6.044 s (median 6.044 s). Runs on one image spread by about 1%, with a floor that repeats to 1 ms, so compare minimums. Later phases are measured against 5.988 s on this board with these settings.
 
 **Exit:** the decisions are recorded and the margins are known.
 
@@ -625,7 +626,7 @@ Section 3's merge-back, on Peter's go.
 | Risk | Effect | Mitigation |
 |---|---|---|
 | PC3 flash too small for the loader | A: moves on PC3s | Measure in Phase 0. Keep the loader lean (no `cc`, no OPL). One 16 KB step at release, announced in the notes. |
-| PC3 SRAM margin (4.2 KB) | Build fails or stack too small | Loader state in the heap. A BSS check in `GetHighestHexAddress.py`, as for every build. |
+| PC3 SRAM margin (1.9 KB) | Build fails or stack too small | Loader state in the heap. A BSS check in `GetHighestHexAddress.py`, as for every build. |
 | Running from PSRAM is slow | Doom or MicroPython too slow to be worth it | Phase 10 measures before anything else is built on top. `--sram` for hot code. Stack in SRAM. Keep the XIP cache for the app, since the firmware is idle while it runs. |
 | A longjmp path not trapped | Corrupted stacks, crash | The CheckAbort guard, the trap round every service, and the Phase 12 fault path. A Ctrl-C hammered during each service is part of the tests. |
 | Audio glitches | Sound breaks during file writes and slow fills | The refill interrupt and priority change (D8). Glitches during A: writes are documented, as for PLAY. |
@@ -688,22 +689,22 @@ These come from its `docs/Loader_Plan.md`, the code comments and the manual.
 
 ### Per-variant figures (configuration.h)
 
-Margins are not yet measured (Phase 0).
+Margins measured 16 November 2026 at 74f51e3 (the same code as main's 544be7b), private Ninja Release builds and `GetHighestHexAddress.py`. Variants with no figure were not measured.
 
-| Variant | Flash offset | SRAM heap | Program |
-|---|---|---|---|
-| PC3 | 1760 K | 108 K | 256 K |
-| HDMIUSB | 1152 K | 212 K | 152 K |
-| HDMI | 1104 K | 220 K | 160 K |
-| HDMIBTH | 1520 K | 220 K | 180 K |
-| HDMIWEB | 1584 K | 208 K | 156 K |
-| VGARP2350 | 1072 K | 228 K | 168 K |
-| VGAUSBRP2350 | 1104 K | 220 K | 160 K |
-| PICORP2350 | 1152 K | 364 K | 208 K |
-| PICOUSBRP2350 | 1184 K | 360 K | 208 K |
-| PICOBTRP2350 | 1456 K | 336 K | 208 K |
-| PICOBTHRP2350 | 1536 K | 316 K | 208 K |
-| WEBRP2350 | 1536 K | 312 K | 208 K |
+| Variant | Flash offset | SRAM heap | Program | Flash margin | SRAM margin |
+|---|---|---|---|---|---|
+| PC3 | 1760 K | 108 K | 256 K | 13,280 B (13.0 KB) | 1,996 B |
+| HDMIUSB | 1152 K | 212 K | 152 K | 16,508 B (16.1 KB) | 2,072 B |
+| HDMI | 1104 K | 220 K | 160 K | 14,372 B (14.0 KB) | 2,000 B |
+| HDMIBTH | 1520 K | 220 K | 180 K | | |
+| HDMIWEB | 1584 K | 208 K | 156 K | | |
+| VGARP2350 | 1072 K | 228 K | 168 K | | |
+| VGAUSBRP2350 | 1104 K | 220 K | 160 K | **716 B** | 4,240 B |
+| PICORP2350 | 1152 K | 364 K | 208 K | 7,332 B (7.2 KB) | 4,668 B |
+| PICOUSBRP2350 | 1184 K | 360 K | 208 K | | |
+| PICOBTRP2350 | 1456 K | 336 K | 208 K | | |
+| PICOBTHRP2350 | 1536 K | 316 K | 208 K | | |
+| WEBRP2350 | 1536 K | 312 K | 208 K | | |
 
 ### The CMM2 side (CMM2V1.5)
 

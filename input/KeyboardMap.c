@@ -1191,6 +1191,9 @@ static bool notbefore(int i, uint8_t *current_keys, uint8_t *prev_keys)
 	}
 	return true;
 }
+#ifdef LOADER
+extern uint8_t LoaderKeyReport[8];
+#endif
 void process_kbd_report(hid_keyboard_report_t const *report, uint8_t n)
 {
 	static uint8_t prev_keys[6] = {0}; // previous report to check key released
@@ -1210,6 +1213,9 @@ void process_kbd_report(hid_keyboard_report_t const *report, uint8_t n)
 		}
 		lasterror = false;
 	}
+#ifdef LOADER
+	memcpy(LoaderKeyReport, report, 8); // a loadable program's keys_raw (misc/Loader.c)
+#endif
 	for (int i = 0; i < total; i++)
 		current_keys[i] = report->keycode[total - i - 1]; // Get local copy of keys pressed
 	// now work out if any new keys are pressed
