@@ -145,7 +145,12 @@ err_t tcp_client_recv(void *arg, struct altcp_pcb *tpcb, struct pbuf *p, err_t e
             WebInCallback++;
             routinechecks(); // don't know why I'm doing this but it solves a race condition for the RP2350
             WebInCallback--;
-            const uint16_t buffer_left = state->BUF_SIZE - state->buffer_len;
+            /* int, not uint16_t: an array of 8192 elements or more has 64 KB or
+               more of room, which wrapped to 0 (nothing copied: "No response
+               from server") or to less than the packet (the rest acknowledged
+               and lost). The length passed below is still at most p->tot_len,
+               so it fits pbuf_copy_partial's u16. Issue #160. */
+            const int buffer_left = state->BUF_SIZE - state->buffer_len;
             state->buffer_len += pbuf_copy_partial(p, (void *)state->buffer + state->buffer_len,
                                                    p->tot_len > buffer_left ? buffer_left : p->tot_len, 0);
             cyw43_arch_lwip_begin();
