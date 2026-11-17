@@ -857,13 +857,6 @@ void cmd_turtle(void)
         else
             turtle_reset(turtle, 0, 0);
     }
-    else if ((tp = checkstring(cmdline, (unsigned char *)"ARC")))
-    {
-        getcsargs(&tp, 3);
-        if (argc != 3)
-            SyntaxError();
-        turtle_arc(turtle, getnumber(argv[0]), getnumber(argv[2]));
-    }
     else if ((tp = checkstring(cmdline, (unsigned char *)"ARCL")) || (tp = checkstring(cmdline, (unsigned char *)"ARCLEFT")) || (tp = checkstring(cmdline, (unsigned char *)"ARC LEFT")))
     {
         getcsargs(&tp, 3);
@@ -877,6 +870,13 @@ void cmd_turtle(void)
         if (argc != 3)
             SyntaxError();
         turtle_arc(turtle, getnumber(argv[0]), -getnumber(argv[2]));
+    }
+    else if ((tp = checkstring(cmdline, (unsigned char *)"ARC"))) // after ARC LEFT and ARC RIGHT, which it would match first (#159)
+    {
+        getcsargs(&tp, 3);
+        if (argc != 3)
+            SyntaxError();
+        turtle_arc(turtle, getnumber(argv[0]), getnumber(argv[2]));
     }
     else if ((tp = checkstring(cmdline, (unsigned char *)"BEZIER")))
     {
