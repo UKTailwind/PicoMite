@@ -357,7 +357,7 @@
  
    if (status & USB_INTS_HOST_CONN_DIS_BITS) {
      uint8_t speed = dev_speed();
-@@ -446,6 +653,20 @@
+@@ -446,15 +653,40 @@
    if (status & USB_INTS_ERROR_RX_TIMEOUT_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_RX_TIMEOUT_BITS;
  
@@ -374,19 +374,35 @@
 +      pc3_in_grace = (uint32_t)(now - pc3_rx_timeout_start_us) < PC3_CTRL_RX_TIMEOUT_GRACE_US;
 +    }
 +
-+    if (!pc3_in_grace) {
++    /* PicoMite: only stop a transaction EPX really has on the wire. RX_TIMEOUT is shared with the interrupt
++       endpoints the controller polls by itself, so with EPX idle, or its bulk IN parked until the next frame's
++       window (epx_in_waiting), the timeout is an interrupt poll's: a device behind the hub that missed one. Stock
++       wrote STOP_TRANS regardless, with nothing of EPX's to stop - and by then the controller may be in its next
++       poll, perhaps a low-speed one going through the hub. The poll that timed out is retried by the controller. */
++    bool pc3_epx_on_wire = (epx->state == EPSTATE_ACTIVE);
++  #ifdef HAS_STOP_EPX_ON_NAK
++    if (epx_in_waiting) {
++      pc3_epx_on_wire = false;
++    }
++  #endif
++
++    if (!pc3_in_grace && pc3_epx_on_wire) {
      const uint32_t sie_ctrl = (usb_hw->sie_ctrl & SIE_CTRL_BASE_MASK) | USB_SIE_CTRL_STOP_TRANS_BITS;
      usb_hw->sie_ctrl        = sie_ctrl;
      // while (usb_hw->sie_ctrl & USB_SIE_CTRL_STOP_TRANS_BITS) {}
-@@ -455,6 +676,7 @@
-     if (epx->state == EPSTATE_ACTIVE) {
-       xfer_complete_isr(epx, XFER_RESULT_FAILED, false);
-     }
-+    } /* !pc3_in_grace */
+ 
+     // Even if STOP_TRANS bit is clear, controller maybe in middle of retrying and may re-raise timeout once extra time
+-    // Only handle if epx is active, don't carry more epx transfer since STOP_TRANS is raced and not safe.
+-    if (epx->state == EPSTATE_ACTIVE) {
+-      xfer_complete_isr(epx, XFER_RESULT_FAILED, false);
+-    }
++    // Don't carry more epx transfer since STOP_TRANS is raced and not safe.
++    xfer_complete_isr(epx, XFER_RESULT_FAILED, false);
++    } /* !pc3_in_grace && pc3_epx_on_wire */
    }
  
    if (status & USB_INTS_TRANS_COMPLETE_BITS) {
-@@ -479,9 +701,24 @@
+@@ -479,9 +711,24 @@
      // epx may have been retired above (RX timeout) in the same interrupt: never restart or re-queue it
      if (epx->state == EPSTATE_ACTIVE) {
        hw_endpoint_t *next_ep = epx_next_pending(epx);
@@ -411,7 +427,7 @@
        } else {
          usb_hw_clear->nak_poll = USB_NAK_POLL_STOP_EPX_ON_NAK_BITS;
          sie_start_xfer(false, TUSB_DIR_IN == tu_edpt_dir(epx->ep_addr), epx->need_pre);
-@@ -496,14 +733,34 @@
+@@ -496,14 +743,34 @@
  
    if (status & USB_INTS_ERROR_DATA_SEQ_BITS) {
      usb_hw_clear->sie_status = USB_SIE_STATUS_DATA_SEQ_ERROR_BITS;
@@ -449,7 +465,7 @@
  }
  
  //--------------------------------------------------------------------+
-@@ -518,6 +775,13 @@
+@@ -518,6 +785,13 @@
    // Reset any previous state
    rp2usb_init();
  
@@ -463,7 +479,7 @@
    // Force VBUS detect to always present, for now we assume vbus is always provided (without using VBUS En)
    usb_hw->pwr = USB_USB_PWR_VBUS_DETECT_BITS | USB_USB_PWR_VBUS_DETECT_OVERRIDE_EN_BITS;
  
-@@ -531,9 +795,10 @@
+@@ -531,9 +805,10 @@
    // Enable in host mode with SOF / Keep alive on
    usb_hw->main_ctrl = USB_MAIN_CTRL_CONTROLLER_EN_BITS | USB_MAIN_CTRL_HOST_NDEVICE_BITS;
    usb_hw->sie_ctrl  = SIE_CTRL_BASE;
@@ -477,7 +493,7 @@
  
    #ifdef HAS_STOP_EPX_ON_NAK
    usb_hw_set->inte = USB_INTE_EPX_STOPPED_ON_NAK_BITS;
-@@ -645,7 +910,10 @@
+@@ -645,7 +920,10 @@
    } else {
      ep = edpt_alloc();
    }
@@ -489,7 +505,7 @@
  
    const uint8_t  ep_addr         = ep_desc->bEndpointAddress;
    const uint16_t max_packet_size = tu_edpt_packet_size(ep_desc);
-@@ -672,7 +940,11 @@
+@@ -672,7 +950,11 @@
          break;
        }
      }
@@ -502,7 +518,7 @@
      assert(ep_desc->bInterval > 0);
  
      //------------- dpram buf -------------//
-@@ -695,7 +967,9 @@
+@@ -695,7 +977,9 @@
      usb_hw->int_ep_addr_ctrl[int_idx] = addr_ctrl;
  
      // Finally, activate interrupt endpoint
@@ -512,7 +528,7 @@
    }
  
    return true;
-@@ -774,6 +1048,9 @@
+@@ -774,6 +1058,9 @@
      } else {
        rp2usb_xfer_start(ep, dpram_int_ep_ctrl(ep->interrupt_num), dpram_int_ep_buffer_ctrl(ep->interrupt_num), buffer,
                          NULL, buflen);
@@ -522,7 +538,7 @@
      }
      rp2usb_critical_exit();
      return ret;
-@@ -813,7 +1090,14 @@
+@@ -813,7 +1100,14 @@
        epx_ctrl_prepare(ep->transfer_type);
        rp2usb_xfer_start(ep, ep_reg, buf_reg, buffer, NULL, buflen); // prepare bufctrl
        usb_hw->dev_addr_ctrl = (uint32_t)(ep->dev_addr | (tu_edpt_number(ep->ep_addr) << USB_ADDR_ENDP_ENDPOINT_LSB));
@@ -538,7 +554,7 @@
      }
      rp2usb_critical_exit();
    }
-@@ -837,6 +1121,12 @@
+@@ -837,6 +1131,12 @@
    ep->ep_addr       = 0; // setup is OUT
    ep->remaining_len = 8;
    ep->xferred_len   = 0;

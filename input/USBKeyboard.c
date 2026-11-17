@@ -1875,6 +1875,29 @@ void USB_fault_service(void)
 	static int busy = 0;
 	if (busy)
 		return; /* never interleave with a line already going out */
+	/* The controller's bit-stuff, CRC and receive-overflow latches: the host driver enables no interrupt
+	   for them and never clears them, so a garbled packet left no trace. Read and cleared here, off the
+	   interrupt, and counted as codes 5-7. Only the first of each kind asks for a line (a CRC error now
+	   and then is ordinary), so they add three lines at most; the counts go on in any later line. */
+	{
+		const uint32_t e = usb_hw->sie_status & (USB_SIE_STATUS_BIT_STUFF_ERROR_BITS | USB_SIE_STATUS_CRC_ERROR_BITS |
+												 USB_SIE_STATUS_RX_OVERFLOW_BITS);
+		if (e)
+		{
+			static const uint32_t bit[3] = {USB_SIE_STATUS_BIT_STUFF_ERROR_BITS, USB_SIE_STATUS_CRC_ERROR_BITS,
+											USB_SIE_STATUS_RX_OVERFLOW_BITS};
+			hw_clear_bits(&usb_hw->sie_status, e);
+			const uint32_t save = save_and_disable_interrupts(); /* the driver counts its own faults in the USB interrupt */
+			for (int k = 0; k < 3; k++)
+			{
+				if (!(e & bit[k]) || pm_usb_fault_n[5 + k] == 0xFFFFu)
+					continue;
+				if (pm_usb_fault_n[5 + k]++ == 0 && pm_usb_fault_total != 0xFFFFu)
+					pm_usb_fault_total++;
+			}
+			restore_interrupts(save);
+		}
+	}
 	const unsigned short n = pm_usb_fault_total;
 	if (n == reported)
 		return;
@@ -1883,10 +1906,11 @@ void USB_fault_service(void)
 		return; /* stay quiet after the first few */
 	lines++;
 	busy = 1;
-	static const char *const fault_name[5] = {"", " DATA_SEQ ", " BUFCTRL32 ", " BUFCTRL16 ", " EP_FULL "};
+	static const char *const fault_name[8] = {"", " DATA_SEQ ", " BUFCTRL32 ", " BUFCTRL16 ", " EP_FULL ",
+											  " BIT_STUFF ", " CRC ", " RX_OVERFLOW "};
 	char buff[16];
 	MMPrintString("\r\n[USB");
-	for (int c = 1; c <= 4; c++)
+	for (int c = 1; c <= 7; c++)
 	{
 		unsigned short v = pm_usb_fault_n[c];
 		if (v == 0)
@@ -1894,6 +1918,8 @@ void USB_fault_service(void)
 		MMPrintString((char *)fault_name[c]);
 		IntToStr(buff, v, 10);
 		MMPrintString(buff);
+		if (c > 4)
+			continue; /* the controller's latches do not say which endpoint */
 		/* Where it happened.  For BUFCTRL32/16 this is the host DPRAM offset
 		   of the buffer-control register - 80 = EPX (control/bulk), 88 = the
 		   first interrupt endpoint, 90 the second, +8 each - which is the
@@ -3019,6 +3045,7 @@ void tuh_hid_umount_cb(uint8_t dev_addr, uint8_t instance)
 		{
 			if (!CurrentLinePtr)
 				MMPrintString("USB Keyboard Disconnected\r\n> ");
+			clearrepeat(); /* no key-up will come for a key held as it went: without this it repeated for ever */
 			break;
 		}
 		else if (instance == HID[i].Device_instance && dev_addr == HID[i].Device_address && HID[i].Device_type == HID_ITF_PROTOCOL_MOUSE)
