@@ -928,14 +928,10 @@ unsigned char SerialPutchar(int comnbr, unsigned char c)
 				com1Tx_tail = com1Tx_head = 0; // clear the buffer
 				CheckAbort();				   // and abort: do_end closes up, as for any Ctrl-C
 			}
-		int empty = uart_is_writable(uart0);
 		com1Tx_buf[com1Tx_head] = c;					  // add the char
 		com1Tx_head = (com1Tx_head + 1) % TX_BUFFER_SIZE; // advance the head of the queue
-		if (empty)
-		{
-			uart_set_irq_enables(uart0, true, true);
-			irq_set_pending(UART0_IRQ);
-		}
+		uart_set_irq_enables(uart0, true, true);		  // start the transmitter for every byte, once it is queued (#150:
+		irq_set_pending(UART0_IRQ);						  // see SerialConsolePutC); busy, the interrupt does nothing
 	}
 	else if (comnbr == 2)
 	{
@@ -945,14 +941,10 @@ unsigned char SerialPutchar(int comnbr, unsigned char c)
 				com2Tx_tail = com2Tx_head = 0; // clear the buffer
 				CheckAbort();				   // and abort: do_end closes up, as for any Ctrl-C
 			}
-		int empty = uart_is_writable(uart1);
 		com2Tx_buf[com2Tx_head] = c;					  // add the char
 		com2Tx_head = (com2Tx_head + 1) % TX_BUFFER_SIZE; // advance the head of the queue
-		if (empty)
-		{
-			uart_set_irq_enables(uart1, true, true);
-			irq_set_pending(UART1_IRQ);
-		}
+		uart_set_irq_enables(uart1, true, true);		  // start the transmitter for every byte, once it is queued (#150:
+		irq_set_pending(UART1_IRQ);						  // see SerialConsolePutC); busy, the interrupt does nothing
 	}
 #ifdef USBKEYBOARD
 	else if (comnbr >= 3 && comnbr <= 6)

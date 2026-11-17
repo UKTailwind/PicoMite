@@ -1373,19 +1373,19 @@ uint8_t PSRAMpin;
 #endif
             if (Option.SerialConsole)
             {
-                int empty = uart_is_writable((Option.SerialConsole & 3) == 1 ? uart0 : uart1);
                 while (ConsoleTxBufTail == ((ConsoleTxBufHead + 1) % CONSOLE_TX_BUF_SIZE))
                     ;                                                            // wait if buffer full
                 ConsoleTxBuf[ConsoleTxBufHead] = c;                              // add the char
                 ConsoleTxBufHead = (ConsoleTxBufHead + 1) % CONSOLE_TX_BUF_SIZE; // advance the head of the queue
-                if (empty)
+                // Start the transmitter for every byte, once it is queued (#150). A test for an idle UART made
+                // before queueing could see it busy, the interrupt then emptying the queue and switching itself
+                // off, and leave this byte until the next one was sent. If the UART is busy the interrupt does
+                // nothing and runs again when the byte in it has gone.
+                while (irqs)
                 {
-                    while (irqs)
-                    {
-                    }
-                    uart_set_irq_enables((Option.SerialConsole & 3) == 1 ? uart0 : uart1, true, true);
-                    irq_set_pending((Option.SerialConsole & 3) == 1 ? UART0_IRQ : UART1_IRQ);
                 }
+                uart_set_irq_enables((Option.SerialConsole & 3) == 1 ? uart0 : uart1, true, true);
+                irq_set_pending((Option.SerialConsole & 3) == 1 ? UART0_IRQ : UART1_IRQ);
             }
 #ifdef PICOMITEWEB
         }
