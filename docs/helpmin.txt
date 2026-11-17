@@ -4992,7 +4992,8 @@ PicoCalc only: Returns the battery level
 MM.INFO(BBC BUFFER)
 
 Returns the number of free slots in the PLAY BBC SOUND queue for channel n (0
-to 3), or in the emptiest of the four channels if n is omitted.
+to 3). If n is omitted it returns the fewest of the four channels' free slots:
+how many notes can be queued on any channel without waiting.
 
 ~MM.INFO(BCOLOUR)
 MM.INFO(BCOLOUR)
