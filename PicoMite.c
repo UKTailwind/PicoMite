@@ -293,6 +293,7 @@ uint8_t PSRAMpin;
     int busfault = 0;
     int ExitMMBasicFlag = false;
     volatile int MMAbort = false;
+    bool AbortEnd = false; // CheckAbort is ending the program for a Ctrl-C: do_end drops queued COM output
     unsigned int _excep_peek;
     void CheckAbort(void);
     void TryLoadProgram(void);
@@ -2809,6 +2810,7 @@ int __not_in_flash_func(MMInkey)(void)
                 }
             }
 #endif
+            AbortEnd = true; // a Ctrl-C ends at once: what the COM ports still have to send is dropped
             do_end(false);
 #ifdef MMBASIC_FM
             if (fm_program_launched_from_fm)
