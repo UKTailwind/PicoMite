@@ -106,7 +106,7 @@ void DisplayPutClever(char c)
             CurrentY += gui_font_height;
             if (CurrentY + gui_font_height >= VResEdit)
             {
-                ScrollLCD(CurrentY + gui_font_height - VResEdit);
+                ScrollDisplay(CurrentY + gui_font_height - VResEdit);
                 CurrentY -= (CurrentY + gui_font_height - VResEdit);
             }
             return;
@@ -193,14 +193,14 @@ static char (*SSputchar)(char buff, int flush) = SerialConsolePutC;
 // Only SSD1963 displays support H/W scrolling so for other displays it is much quicker to redraw the screen than scroll it
 // However, we don't want to redraw the serial console so we dummy out the serial writes whiole re-drawing the physical screen
 #ifdef PICOMITEVGA
-#define MX470Scroll(n) ScrollLCD(n);
+#define MX470Scroll(n) ScrollDisplay(n);
 #else
 #if PICOMITERP2350
 #define MX470Scroll(n)                                                                                       \
     if (Option.DISPLAY_CONSOLE)                                                                              \
     {                                                                                                        \
         if (!((SPIREAD && ScrollLCD != ScrollLCDSPISCR && ScrollLCD != ScrollLCDMEM332) || Option.NoScroll)) \
-            ScrollLCD(n);                                                                                    \
+            ScrollDisplay(n);                                                                                \
         else                                                                                                 \
         {                                                                                                    \
             PrintString = printnothing;                                                                      \
@@ -215,7 +215,7 @@ static char (*SSputchar)(char buff, int flush) = SerialConsolePutC;
     if (Option.DISPLAY_CONSOLE)                                              \
     {                                                                        \
         if (!((SPIREAD && ScrollLCD != ScrollLCDSPISCR) || Option.NoScroll)) \
-            ScrollLCD(n);                                                    \
+            ScrollDisplay(n);                                                \
         else                                                                 \
         {                                                                    \
             PrintString = printnothing;                                      \

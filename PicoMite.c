@@ -4736,7 +4736,7 @@ uint32_t testPSRAM(void)
                     if (canscroll)
                     {
                         int diff = CurrentY + gui_font_height - reservedBottom;
-                        ScrollLCD(diff); // scroll up so the prompt font fits on screen
+                        ScrollDisplay(diff); // scroll up so the prompt font fits on screen
                         CurrentY -= diff;
                     }
                     else

@@ -3065,7 +3065,7 @@ static void OSK_ScrollForStrip(void)
     if (scroll_amount <= 0)
         return;
     if (ScrollLCD != NULL)
-        ScrollLCD(scroll_amount);
+        ScrollDisplay(scroll_amount);
     if (CurrentY >= scroll_amount)
         CurrentY -= scroll_amount;
     else
