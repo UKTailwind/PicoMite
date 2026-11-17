@@ -7415,8 +7415,10 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     break;
                 }
                 PrintString("\033[?1000l");        // Tera Term turn off mouse click report in vt200 mode
-                PrintString("\033[?7h");           // restore autowrap (was disabled by setterminal on entry)
-                PrintString("\0338\033[2J\033[H"); // vt100 clear screen and home cursor
+                PrintString("\0338\033[2J\033[H"); // vt100 restore cursor, clear screen and home cursor
+                PrintString("\033[?7h");           // autowrap on again (off since entry), AFTER the ESC 8: a terminal
+                                                   // whose saved cursor holds DECAWM (Tera Term) restores the wrap-off
+                                                   // it was saved with, and the prompt's line editor needs wrap on
                 gui_fcolour = GUI_C_NORMAL;
                 PrintString(VT100_C_NORMAL);
                 gui_fcolour = PromptFC;
