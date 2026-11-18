@@ -8550,8 +8550,8 @@ void MIPS16 fun_info(void)
     {
         /* Free slots in a PLAY BBC SOUND note queue: how many more notes the
            channel will take before the command blocks waiting for room.  With
-           no channel given, the emptiest of the four - the count that is safe
-           whichever channel comes next.  This sits in the flat chain because
+           no channel given, the fewest of the four (the fullest queue's) - the
+           count that is safe whichever channel comes next.  This sits in the flat chain because
            fun_info has no 'B' letter group; if one is ever added, this and the
            BCOLOUR / BOOT entries below must move inside it. */
         iret = BBCSoundFree(*tp ? getint(tp, 0, 3) : -1);
