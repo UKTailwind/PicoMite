@@ -422,6 +422,12 @@ After that:
   see [PicoCFunctions.h](#picocfunctionsh-the-classic-csub-interface)) and
   its CallTable (`MMPrintString`, `DrawLine`, `CFuncmSec` and so on). The C
   source of an existing CSUB usually compiles as it is.
+  This includes `GetMemory(size)` and `FreeMemory(ptr)` for dynamic allocation
+  directly from the MMBasic heap. A CSUB must explicitly free such blocks;
+  they are not tracked by the native C `RUN` runtime, and do not survive a
+  BASIC heap reset (`RUN`, `LOAD`, etc.). `GetMemory()` raises an MMBasic
+  out-of-memory error rather than returning `NULL`, and does not let the
+  caller explicitly select SRAM or PSRAM.
 - `<picomite/system.h>` and `<picomite/graphics.h>` (but not
   `<picomite/memory.h>`, which needs a C program's run).
 - `printf`, `puts` and the other console *output* functions work and print
@@ -1308,7 +1314,13 @@ int   pm_get_mem_info(pm_mem_info *m);   /* SRAM and PSRAM: total and free */
   small objects.
 - Like `malloc()` memory, every block is given back when the program ends.
 - `NULL` means there is no room where asked.
-- Not available in a C CSUB.
+- `pm_alloc()` and `pm_free()` are not available in a CSUB: they depend on
+  the allocation scope of a native C `RUN` program. For a CSUB, the classic
+  `PicoCFunctions.h` CallTable provides `GetMemory()` and `FreeMemory()`
+  instead. Those allocate directly from the MMBasic heap, require explicit
+  freeing, cannot select SRAM/PSRAM explicitly, and are invalidated by a
+  BASIC heap reset. `GetMemory()` reports out-of-memory as an MMBasic error,
+  not a `NULL` result.
 
 #### `<picomite/graphics.h>`
 
