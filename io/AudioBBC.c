@@ -524,8 +524,9 @@ int BBCSoundQueue(int chan, int amp, int pitch, int dur)
 }
 
 // Free slots in a channel's note queue - how many more notes PLAY BBC SOUND
-// will take for it without blocking.  chan is 0-3, or -1 for the emptiest of
-// the four.  The note that is playing has already left the queue (try_dequeue
+// will take for it without blocking.  chan is 0-3, or -1 for the fewest of the
+// four (the fullest queue's), which is safe whichever channel comes next.  The
+// note that is playing has already left the queue (try_dequeue
 // advances qr when it starts it), so this counts pending notes only.  A query
 // before the first PLAY BBC must not take the heap block just to answer, so a
 // NULL engine reports the full depth, which is what its empty queues hold.
