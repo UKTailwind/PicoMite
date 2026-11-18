@@ -1868,6 +1868,7 @@ void USB_sound_service(void)
 extern volatile unsigned short pm_usb_fault_n[];
 extern volatile unsigned short pm_usb_fault_ep[];
 extern volatile unsigned short pm_usb_fault_total;
+extern volatile uint32_t pm_usb_rx_timeout_idle; /* interrupt polls that timed out (hcd_rp2040.c); never prints a line itself */
 void USB_fault_service(void)
 {
 	static unsigned short reported = 0;
@@ -1928,6 +1929,15 @@ void USB_fault_service(void)
 		MMPrintString(" @");
 		IntToStr(buff, pm_usb_fault_ep[c], 16);
 		MMPrintString(buff);
+	}
+	{ /* context for the faults above: interrupt polls that went unanswered so far */
+		const uint32_t t = pm_usb_rx_timeout_idle;
+		if (t)
+		{
+			MMPrintString(" RX_TIMEOUT ");
+			IntToStr(buff, t, 10);
+			MMPrintString(buff);
+		}
 	}
 	MMPrintString("]\r\n");
 	busy = 0;

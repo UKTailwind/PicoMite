@@ -135,6 +135,14 @@ reads and clears them from the main loop, with no interrupt added; only the firs
 of each kind prints a line (`[USB CRC 1]`), as a CRC error now and then is
 ordinary, and the counts appear in any later line.
 
+`pm_usb_rx_timeout_idle` (`hcd_rp2040.c`, 32 bits) counts the RX timeouts that
+came while EPX had nothing on the wire, i.e. interrupt polls that nothing
+answered. It never prints a line of its own; any `[USB ...]` line ends with
+`RX_TIMEOUT n` when it is non-zero, and it can be read with `PEEK(WORD ...)` at
+the address the build's map gives. Two reads a few seconds apart during a USB
+freeze tell devices that stopped answering (it climbs) from a controller that
+stopped polling (it does not).
+
 ## Exercising the RP2040 EPX path on RP2350 hardware
 
 `HAS_STOP_EPX_ON_NAK` is RP2350-only, so RP2040 takes the `#else` SOF
