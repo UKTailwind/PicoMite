@@ -1,0 +1,86 @@
+--- a/src/host/hub.c
++++ b/src/host/hub.c
+@@ -339,7 +339,11 @@
+   STATE_HUB_STATUS,
+   STATE_CLEAR_CHANGE,
+   STATE_CHECK_CONN,
+-  STATE_COMPLETE
++  STATE_COMPLETE,
++  // PicoMite: recovery after the change is acknowledged, where stock only acknowledged it
++  STATE_HUB_REPOWER,  // hub over-current change cleared: power the ports again, one a round
++  STATE_PORT_REPOWER, // port over-current change cleared: power that port again
++  STATE_CHECK_ENABLE  // port enable change cleared: a port the hub disabled is enumerated again
+ };
+ 
+ static void process_new_status(tuh_xfer_t* xfer);
+@@ -427,12 +431,50 @@
+                                       process_new_status, STATE_COMPLETE);
+       } else if (hub_status.change.over_current) {
+         TU_LOG_DRV("  Over Current\r\n");
+-        processed = hub_clear_feature(daddr, HUB_FEATURE_HUB_OVER_CURRENT_CHANGE,
+-                                      process_new_status, STATE_COMPLETE);
++        /* PicoMite: a hub that trips on over-current takes the power off its ports, and they stay off until
++           the host powers them again: every device gone, the port lights out, and plugging one back in does
++           nothing. Stock only cleared the change. Power the ports again once the hub says the over-current is
++           over; while it lasts they are left off, and the hub reports another change when it ends. */
++        processed = hub_clear_feature(daddr, HUB_FEATURE_HUB_OVER_CURRENT_CHANGE, process_new_status,
++                                      hub_status.status.over_current ? STATE_COMPLETE : STATE_HUB_REPOWER);
++      }
++      break;
++    }
++
++    case STATE_HUB_REPOWER: {
++      // entered from the hub's CLEAR_FEATURE (wIndex 0), then from each port's SET_FEATURE(PORT_POWER)
++      const hub_interface_t *p_hub = get_hub_itf(daddr);
++      if (port_num < p_hub->bNbrPorts) {
++        processed = hub_port_set_feature(daddr, (uint8_t) (port_num + 1), HUB_FEATURE_PORT_POWER,
++                                         process_new_status, STATE_HUB_REPOWER);
+       }
+       break;
+     }
+ 
++    case STATE_PORT_REPOWER:
++      processed = hub_port_set_feature(daddr, port_num, HUB_FEATURE_PORT_POWER, process_new_status, STATE_COMPLETE);
++      break;
++
++    case STATE_CHECK_ENABLE:
++      /* PicoMite: the hub sets the enable change only when it disables a port by itself, for a port error
++         (babble, or a device still sending at the end of a frame: USB 2.0 11.24.2.7.2.2). The device is still
++         plugged in but nothing reaches it until its port is reset. Stock cleared the change and left it dead
++         until it was unplugged. An attach makes usbh remove what was on the port and enumerate it again, which
++         resets the port. ctrl_buf still holds the port status: CLEAR_FEATURE has no data stage. */
++      if (port_status->status.connection && !port_status->status.port_enable) {
++        const hcd_event_t event = {
++          .rhport     = usbh_get_rhport(daddr),
++          .event_id   = HCD_EVENT_DEVICE_ATTACH,
++          .connection = {
++            .hub_addr = daddr,
++            .hub_port = port_num
++          }
++        };
++        hcd_event_handler(&event, false);
++        processed = true; // usbh queues the status poll when this enumeration ends
++      }
++      break;
++
+     case STATE_CLEAR_CHANGE:
+       // Get port status complete --> clear change
+       if (port_status->change.connection) {
+@@ -445,13 +487,14 @@
+                                            process_new_status, STATE_CHECK_CONN);
+       } else if (port_status->change.port_enable) {
+         processed = hub_port_clear_feature(daddr, port_num, HUB_FEATURE_PORT_ENABLE_CHANGE,
+-                                           process_new_status, STATE_COMPLETE);
++                                           process_new_status, STATE_CHECK_ENABLE);
+       } else if (port_status->change.suspend) {
+         processed = hub_port_clear_feature(daddr, port_num, HUB_FEATURE_PORT_SUSPEND_CHANGE,
+                                            process_new_status, STATE_COMPLETE);
+       } else if (port_status->change.over_current) {
+-        processed = hub_port_clear_feature(daddr, port_num, HUB_FEATURE_PORT_OVER_CURRENT_CHANGE,
+-                                           process_new_status, STATE_COMPLETE);
++        // PicoMite: as for the hub's own over-current above, for a hub that switches each port's power
++        processed = hub_port_clear_feature(daddr, port_num, HUB_FEATURE_PORT_OVER_CURRENT_CHANGE, process_new_status,
++                                           port_status->status.over_current ? STATE_COMPLETE : STATE_PORT_REPOWER);
+       } else if (port_status->change.reset) {
+         processed = hub_port_clear_feature(daddr, port_num, HUB_FEATURE_PORT_RESET_CHANGE,
+                                            process_new_status, STATE_COMPLETE);

@@ -143,40 +143,90 @@ def clean_inline(text):
     return text
 
 
+def _wrap(pdf, text, w):
+    """The words of text as lines that fit width w in the current font; a word longer than a line is
+    broken."""
+    avail = w - 2
+    lines, cur = [], ''
+    for word in text.split(' '):
+        while pdf.get_string_width(word) > avail and len(word) > 1:
+            cut = len(word)
+            while cut > 1 and pdf.get_string_width(word[:cut]) > avail:
+                cut -= 1
+            if cur:
+                lines.append(cur)
+                cur = ''
+            lines.append(word[:cut])
+            word = word[cut:]
+        trial = (cur + ' ' + word).strip()
+        if pdf.get_string_width(trial) <= avail:
+            cur = trial
+        else:
+            if cur:
+                lines.append(cur)
+            cur = word
+    lines.append(cur)
+    return lines or ['']
+
+
 def render_table(pdf, table_lines):
-    """Render a markdown table."""
-    # Parse header
-    headers = [c.strip() for c in table_lines[0].split('|') if c.strip()]
+    """Render a markdown table: columns sized to their text, cells word-wrapped, and a row never split
+    across a page (the header is drawn again on the next). One-line cells at equal widths cut long text
+    off."""
+    def cells(line):
+        return [clean_inline(c.strip()) for c in line.strip().strip('|').split('|')]
 
-    # Skip separator line (row 1)
-    data_rows = []
-    for row_line in table_lines[2:]:
-        cells = [c.strip() for c in row_line.split('|') if c.strip()]
-        data_rows.append(cells)
-
-    n_cols = len(headers)
-    # Calculate column widths proportionally
+    headers = cells(table_lines[0])
+    rows = [cells(l) for l in table_lines[2:]]
+    n = len(headers)
     page_w = pdf.w - pdf.l_margin - pdf.r_margin
-    col_widths = [page_w / n_cols] * n_cols
-
-    # Header row
-    pdf.set_font('Helvetica', 'B', 9)
-    for j, h in enumerate(headers):
-        pdf.cell(col_widths[j], 6, clean_inline(h), 1, 0, 'C')
-    pdf.ln()
-
-    # Data rows
     pdf.set_font('Helvetica', '', 9)
-    for row in data_rows:
-        max_h = 6
-        # Calculate needed height for each cell
-        cell_texts = []
-        for j in range(n_cols):
-            t = clean_inline(row[j]) if j < len(row) else ''
-            cell_texts.append(t)
-        for j, t in enumerate(cell_texts):
-            pdf.cell(col_widths[j], 6, t, 1, 0)
-        pdf.ln()
+    maxw = []
+    for j in range(n):
+        texts = [headers[j]] + [r[j] for r in rows if j < len(r)]
+        maxw.append(max(pdf.get_string_width(t) for t in texts) or 1)
+    widths = [max(16, page_w * m / sum(maxw)) for m in maxw]
+    widths = [w * page_w / sum(widths) for w in widths]
+    line_h = 4.4
+    x0 = pdf.l_margin
+    bottom = pdf.h - pdf.b_margin
+    # set_auto_page_break(False) also zeroes b_margin: keep both to put back
+    saved_auto, saved_b = pdf.auto_page_break, pdf.b_margin
+    pdf.set_auto_page_break(False)
+
+    def wrapped(row, style):
+        pdf.set_font('Helvetica', style, 9)
+        return [_wrap(pdf, row[j] if j < len(row) else '', widths[j]) for j in range(n)]
+
+    def height(row, style):
+        return line_h * max(len(c) for c in wrapped(row, style)) + 1.2
+
+    def draw(row, style, align):
+        w = wrapped(row, style)
+        rh = line_h * max(len(c) for c in w) + 1.2
+        y0 = pdf.get_y()
+        x = x0
+        for j in range(n):
+            pdf.rect(x, y0, widths[j], rh)
+            yy = y0 + 0.6
+            for ln in w[j]:
+                pdf.set_xy(x + 1, yy)
+                pdf.cell(widths[j] - 2, line_h, ln, 0, 0, align)
+                yy += line_h
+            x += widths[j]
+        pdf.set_xy(x0, y0 + rh)
+
+    if pdf.get_y() + height(headers, 'B') + line_h * 2 > bottom:
+        pdf.add_page()
+    draw(headers, 'B', 'C')
+    for r in rows:
+        if pdf.get_y() + height(r, '') > bottom:
+            pdf.add_page()
+            draw(headers, 'B', 'C')
+        draw(r, '', 'L')
+    pdf.set_auto_page_break(saved_auto, saved_b)
+    pdf.set_font('Helvetica', '', 9)
+    pdf.ln(2)
 
 
 pdf = PDF()

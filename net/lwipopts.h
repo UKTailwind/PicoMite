@@ -11,8 +11,13 @@
 // This example uses a common include to avoid repetition
 #include "lwipopts_examples_common.h"
 #include "ffconf.h"
-// #undef TCP_WND
-// #define TCP_WND  16384
+/* The receive window must hold a whole TLS record: altcp_tls_mbedtls.c opens
+   the window again only for decrypted data, and mbedTLS decrypts only whole
+   records (up to 16,413 bytes on the wire).  At 8 * TCP_MSS (11,680) a
+   download stopped dead at the server's first full-size record (#153).
+   This is only the window advertised; the data still arrives in PBUF_POOL. */
+#undef TCP_WND
+#define TCP_WND (16 * TCP_MSS)
 
 /* altcp is always on for PICOMITEWEB so the TCP client code path is the
    same whether TLS is compiled in or not — altcp_tcp_* on plain TCP, and

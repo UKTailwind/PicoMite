@@ -247,6 +247,14 @@ void closeMQTT(void)
     mqtt_client = NULL;
   }
 }
+#if LWIP_ALTCP && LWIP_ALTCP_TLS
+/* True while an MQTT connection made over TLS (port 8883) is open: it uses
+   the shared client TLS config, which WEB TLS CA and WEB TLS NOVERIFY free. */
+bool mqtt_tls_open(void)
+{
+  return mqtt_client != NULL && mqtt_client_info.tls_config != NULL;
+}
+#endif
 // static struct altcp_tls_config *tls_config = NULL;
 
 int cmd_mqtt(void)

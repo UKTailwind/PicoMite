@@ -7935,9 +7935,8 @@ void cmd_flush(void)
         }
         else
         {
-            while (SerialTxStatus(FileTable[fnbr].com) && !MMAbort)
-            {
-            }
+            while (SerialTxStatus(FileTable[fnbr].com))
+                CheckAbort(); // a Ctrl-C, from whichever console, ends the program at once and drops the rest
         }
     }
 }
@@ -8065,8 +8064,8 @@ void cmd_close(void)
             fnbr = getint(argv[i], 1, MAXOPENFILES);
             if (FileTable[fnbr].com == 0)
                 StandardError(19);
-            while (SerialTxStatus(FileTable[fnbr].com) && !MMAbort)
-                ; // wait for anything in the buffer to be transmitted
+            while (SerialTxStatus(FileTable[fnbr].com)) // wait for anything in the buffer to be transmitted
+                CheckAbort();                           // (a Ctrl-C, from whichever console, ends the program at once)
             if (FileTable[fnbr].com > MAXCOMPORTS)
             {
                 FileClose(fnbr);

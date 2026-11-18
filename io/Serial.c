@@ -547,12 +547,12 @@ void invert_serial(int uart)
 }
 void MIPS16 setupuart(int uart, int s2, int parity, int b7, int baud, int inv)
 {
+	if (inv) // before uart_init, so the enabled UART never drives a non-inverted idle level onto TX
+		invert_serial(uart);
 	uart_init(UART_ID, baud);
 	uart_set_hw_flow(UART_ID, false, false);
 	uart_set_format(UART_ID, b7, s2, parity);
 	uart_set_fifo_enabled(UART_ID, false);
-	if (inv)
-		invert_serial(uart);
 	int UART_IRQ = (UART_ID == uart0 ? UART0_IRQ : UART1_IRQ);
 	if (uart)
 	{
@@ -995,14 +995,10 @@ unsigned char SerialPutchar(int comnbr, unsigned char c)
 				com1Tx_tail = com1Tx_head = 0; // clear the buffer
 				CheckAbort();				   // and abort: do_end closes up, as for any Ctrl-C
 			}
-		int empty = uart_is_writable(uart0);
 		com1Tx_buf[com1Tx_head] = c;					  // add the char
 		com1Tx_head = (com1Tx_head + 1) % TX_BUFFER_SIZE; // advance the head of the queue
-		if (empty)
-		{
-			uart_set_irq_enables(uart0, true, true);
-			irq_set_pending(UART0_IRQ);
-		}
+		uart_set_irq_enables(uart0, true, true);		  // start the transmitter for every byte, once it is queued (#150:
+		irq_set_pending(UART0_IRQ);						  // see SerialConsolePutC); busy, the interrupt does nothing
 	}
 	else if (comnbr == 2)
 	{
@@ -1012,14 +1008,10 @@ unsigned char SerialPutchar(int comnbr, unsigned char c)
 				com2Tx_tail = com2Tx_head = 0; // clear the buffer
 				CheckAbort();				   // and abort: do_end closes up, as for any Ctrl-C
 			}
-		int empty = uart_is_writable(uart1);
 		com2Tx_buf[com2Tx_head] = c;					  // add the char
 		com2Tx_head = (com2Tx_head + 1) % TX_BUFFER_SIZE; // advance the head of the queue
-		if (empty)
-		{
-			uart_set_irq_enables(uart1, true, true);
-			irq_set_pending(UART1_IRQ);
-		}
+		uart_set_irq_enables(uart1, true, true);		  // start the transmitter for every byte, once it is queued (#150:
+		irq_set_pending(UART1_IRQ);						  // see SerialConsolePutC); busy, the interrupt does nothing
 	}
 #ifdef USBKEYBOARD
 	else if (comnbr >= 3 && comnbr <= 6)
@@ -1105,17 +1097,24 @@ Returns the number of characters waiting in the buffer
 int SerialTxStatus(int comnbr)
 {
 	int i = 0;
+	// COM1/COM2: the buffer, plus a byte the UART is still sending. With its FIFO off the UART holds one byte
+	// waiting and one going out, and BUSY stays set until the last stop bit has left the pin. Counted, CLOSE and
+	// FLUSH wait for it, as on the Micromite: uart_deinit() resets the UART at once and cut off the last character.
 	if (comnbr == 1)
 	{
 		i = com1Tx_head - com1Tx_tail;
 		if (i < 0)
 			i += TX_BUFFER_SIZE;
+		if (i == 0 && com1 && (uart_get_hw(uart0)->fr & UART_UARTFR_BUSY_BITS))
+			i++;
 	}
 	else if (comnbr == 2)
 	{
 		i = com2Tx_head - com2Tx_tail;
 		if (i < 0)
 			i += TX_BUFFER_SIZE;
+		if (i == 0 && com2 && (uart_get_hw(uart1)->fr & UART_UARTFR_BUSY_BITS))
+			i++;
 	}
 #ifdef USBKEYBOARD
 	else if (comnbr >= 3 && comnbr <= 6)

@@ -540,7 +540,9 @@ the interpreting overhead was costing and no more. See the table in section 1.
 You do not have to memorise that list. **Anything unsupported is refused**, by
 name, before anything is written — either by the tool or by the C compiler,
 which is the real scope check. The tool will not produce a CSUB it cannot
-account for.
+account for. That includes a line the translator cannot handle: rather than
+build a CSUB without it, the tool names it —
+`line 12 was not translated, so the CSUB would leave it out: ...`.
 
 **Appendix A** explains where each restriction comes from, and covers two
 things this list cannot: what a CSUB does *instead* of stopping with an error,
@@ -775,7 +777,11 @@ Static tab%(4)
 ```
 
 becomes a wrapper holding the same three variables and passing all three. The
-cost is one argument each, against the ceiling in A.5.
+cost is one argument each, against the ceiling in A.5. The type can come
+first, as in `Static Integer grid(160,20), n`, and an array can have any
+number of dimensions. One form is not translated yet: `AS` before the type, as
+in `Static As Integer a, b`. It is refused, and `Static Integer a, b` is the
+same thing.
 
 **What you cannot do** is keep state anywhere else. There is no equivalent of
 a C `static` inside the routine, and the 256 bytes of `CFuncRam` that a CSUB

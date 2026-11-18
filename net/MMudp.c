@@ -187,5 +187,6 @@ void cmd_udp(unsigned char *p)
         sendudppcb = NULL;
         return;
     }
+    SyntaxError(); // neither INTERRUPT nor SEND: a typo used to send nothing, silently (#156)
 }
 /*  @endcond */

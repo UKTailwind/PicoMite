@@ -518,6 +518,7 @@ extern "C"
      * External variables - Error handling
      * ============================================================================ */
     extern volatile int MMAbort;
+    extern bool AbortEnd; // CheckAbort is ending the program for a Ctrl-C: do_end drops queued COM output
     extern jmp_buf mark;
     extern jmp_buf jmprun;
     extern jmp_buf ErrNext;

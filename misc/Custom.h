@@ -201,7 +201,7 @@ void cleanserver(void);
 err_t tcp_server_close(void *arg, int pcb);
 void tcp_server_forget(TCP_SERVER_T *state, int pcb);
 err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, int pcb);
-void checksent(void *arg, int fn, int pcb);
+int checksent(void *arg, int fn, int pcb); // 1: timed out, connection (and file fn) closed
 void starttelnet(struct tcp_pcb *client_pcb, int pcb, void *arg);
 
 /* TCP Client functions */
@@ -223,6 +223,7 @@ void close_tcpclient(void);
 /* MQTT functions */
 int cmd_mqtt(void);
 void closeMQTT(void);
+bool mqtt_tls_open(void); // an MQTT connection over TLS is open (TLS builds only)
 
 /* TFTP functions */
 int cmd_tftp_server_init(void);

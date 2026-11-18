@@ -8416,7 +8416,8 @@ PicoCalc only: Returns the battery level
 MM.INFO(BBC BUFFER)
 
 Returns the number of free slots in the PLAY BBC SOUND queue for channel n (0
-to 3), or in the emptiest of the four channels if n is omitted.
+to 3). If n is omitted it returns the fewest of the four channels' free slots:
+how many notes can be queued on any channel without waiting.
 
 ~MM.INFO(BCOLOUR)
 MM.INFO(BCOLOUR)
@@ -15748,6 +15749,7 @@ Start the TCP server running.  'InterruptSub' is the subroutine to call when a
 request is made of the TCP server (ie, an interrupt).
 Note that the OPTION WIFI command must have been used first followed by the
 OPTION TCP SERVER PORT command to enable the TCP server.
+WEB TCP INTERRUPT 0 cancels the interrupt.
 
 ~WEB TCP READ
 WEB TCP READ cb%, buff%()

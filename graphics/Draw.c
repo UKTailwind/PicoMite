@@ -241,6 +241,18 @@ void cmd_ReadTriangle(unsigned char *p);
 void (*DrawRectangle)(int x1, int y1, int x2, int y2, int c) = (void (*)(int, int, int, int, int))DisplayNotSet;
 void (*DrawBitmap)(int x1, int y1, int width, int height, int scale, int fc, int bc, unsigned char *bitmap) = (void (*)(int, int, int, int, int, int, int, unsigned char *))DisplayNotSet;
 void (*ScrollLCD)(int lines) = (void (*)(int))DisplayNotSet;
+/* Scroll the display: the console, the editor and the prompt call this, not ScrollLCD. The GUI cursor
+   comes off the screen first. It is drawn over what is under it, which it saves, and a scroll took the
+   drawn cursor up with the text: two cursors on the screen, and the next move of the mouse put the saved
+   pixels back where the text had been. CursorRefresh() draws it again at its next tick (10 ms at most),
+   not here, so that it saves what is printed after the scroll rather than the blank line. */
+void ScrollDisplay(int lines)
+{
+#if defined(PICOMITEVGA) || defined(GUICONTROLS)
+    CursorHide();
+#endif
+    ScrollLCD(lines);
+}
 void (*DrawBuffer)(int x1, int y1, int x2, int y2, unsigned char *c) = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
 void (*ReadBuffer)(int x1, int y1, int x2, int y2, unsigned char *c) = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
 void (*DrawBLITBuffer)(int x1, int y1, int x2, int y2, unsigned char *c) = (void (*)(int, int, int, int, unsigned char *))DisplayNotSet;
@@ -3948,7 +3960,7 @@ void MIPS16 cmd_font(void)
         PromptFont = gui_font;
         if (CurrentY + gui_font_height >= (VRes - (VRes * OptionVResreserved / 100)))
         {
-            ScrollLCD(CurrentY + gui_font_height - (VRes - (VRes * OptionVResreserved / 100))); // scroll up if the font change split the line over the bottom
+            ScrollDisplay(CurrentY + gui_font_height - (VRes - (VRes * OptionVResreserved / 100))); // scroll up if the font change split the line over the bottom
             CurrentY -= (CurrentY + gui_font_height - (VRes - (VRes * OptionVResreserved / 100)));
         }
     }
@@ -6773,7 +6785,7 @@ void DisplayPutC(char c)
             }
             else
             {
-                ScrollLCD(gui_font_height);
+                ScrollDisplay(gui_font_height);
             }
         }
         else

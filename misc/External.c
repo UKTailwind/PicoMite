@@ -6237,6 +6237,14 @@ void MIPS16 ClearExternalIO(void)
 #ifdef PICOMITEWEB
     MQTTInterrupt = NULL;
     MQTTComplete = 0;
+    /* The web server's and UDP's handlers point into the program that set
+       them, as MQTT's does.  Left set, a request or datagram during the next
+       program jumped to that old address in the new code (#154).  The flags
+       go too: a request at the prompt leaves TCPreceived set. */
+    TCPreceiveInterrupt = NULL;
+    TCPreceived = false;
+    UDPinterrupt = NULL;
+    UDPreceive = false;
     closeMQTT();
     /* The TCP client belongs in this tidy-up as much as MQTT does, and was
        the only one of net/'s four close entry points missing from it.  Its
