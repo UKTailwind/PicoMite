@@ -2024,6 +2024,11 @@ void cmd_sprite(void)
                 m = n;
             if (blank == -2)
                 current = (char *)GetMemory(m);
+#if defined(PICOMITEVGA) || defined(GUICONTROLS)
+            /* The GUI cursor first, as it is drawn over the sprites: left on, it would be scrolled with the
+               screen and drawn again where it was (ScrollDisplay, Draw.c). CursorRefresh puts it back. */
+            CursorHide();
+#endif
             for (i = LIFOpointer - 1; i >= 0; i--)
                 blithide(LIFO[i]);
             for (i = zeroLIFOpointer - 1; i >= 0; i--)

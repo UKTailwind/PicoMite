@@ -3999,6 +3999,27 @@ void do_end(bool ecmd)
 	Keycomplete = false;
 	memset(inpbuf, 0, STRINGSIZE);
 	CloseAudio(1);
+	// What the COM ports still have to send goes before they close, whatever ended the program (END, its
+	// last line, an error, CHAIN, MM.END's own output included), as the Micromite's END left it to go. A
+	// Ctrl-C ends at once (CheckAbort sets AbortEnd), and one pressed during this wait drops the rest, so the
+	// consoles a Ctrl-C can come from are polled here as CheckAbort polls them. COM1/COM2 send at their baud
+	// rate, so their wait is at most 256 bytes long: 8.5 s at 300 baud. MMAbort is left set: the prompt
+	// clears it, and after CHAIN it stops the next program.
+	if (!AbortEnd)
+	{
+		for (int i = 1; i <= MAXOPENFILES; i++)
+			if (FileTable[i].com != 0 && FileTable[i].com <= MAXCOMPORTS)
+				while (SerialTxStatus(FileTable[i].com) && !MMAbort)
+				{
+#ifdef PICOMITEWEB
+					if (WIFIconnected || WebScanActive)
+						ProcessWeb(1);
+#endif
+					ProcessBT();
+					routinechecks();
+				}
+	}
+	AbortEnd = false;
 	CloseAllFiles();
 	ADCDualBuffering = 0;
 	WatchdogSet = false;

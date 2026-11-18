@@ -357,6 +357,7 @@ extern void (*DrawPixel)(int x1, int y1, int c);
 extern void (*DrawRectangle)(int x1, int y1, int x2, int y2, int c);
 extern void (*DrawBitmap)(int x1, int y1, int width, int height, int scale, int fc, int bc, unsigned char *bitmap);
 extern void (*ScrollLCD)(int lines);
+void ScrollDisplay(int lines); /* ScrollLCD with the GUI cursor taken off first (Draw.c) */
 extern void (*DrawBuffer)(int x1, int y1, int x2, int y2, unsigned char *c);
 extern void (*ReadBuffer)(int x1, int y1, int x2, int y2, unsigned char *c);
 extern void (*DrawBLITBuffer)(int x1, int y1, int x2, int y2, unsigned char *c);

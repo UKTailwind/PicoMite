@@ -106,7 +106,7 @@ void DisplayPutClever(char c)
             CurrentY += gui_font_height;
             if (CurrentY + gui_font_height >= VResEdit)
             {
-                ScrollLCD(CurrentY + gui_font_height - VResEdit);
+                ScrollDisplay(CurrentY + gui_font_height - VResEdit);
                 CurrentY -= (CurrentY + gui_font_height - VResEdit);
             }
             return;
@@ -193,14 +193,14 @@ static char (*SSputchar)(char buff, int flush) = SerialConsolePutC;
 // Only SSD1963 displays support H/W scrolling so for other displays it is much quicker to redraw the screen than scroll it
 // However, we don't want to redraw the serial console so we dummy out the serial writes whiole re-drawing the physical screen
 #ifdef PICOMITEVGA
-#define MX470Scroll(n) ScrollLCD(n);
+#define MX470Scroll(n) ScrollDisplay(n);
 #else
 #if PICOMITERP2350
 #define MX470Scroll(n)                                                                                       \
     if (Option.DISPLAY_CONSOLE)                                                                              \
     {                                                                                                        \
         if (!((SPIREAD && ScrollLCD != ScrollLCDSPISCR && ScrollLCD != ScrollLCDMEM332) || Option.NoScroll)) \
-            ScrollLCD(n);                                                                                    \
+            ScrollDisplay(n);                                                                                \
         else                                                                                                 \
         {                                                                                                    \
             PrintString = printnothing;                                                                      \
@@ -215,7 +215,7 @@ static char (*SSputchar)(char buff, int flush) = SerialConsolePutC;
     if (Option.DISPLAY_CONSOLE)                                              \
     {                                                                        \
         if (!((SPIREAD && ScrollLCD != ScrollLCDSPISCR) || Option.NoScroll)) \
-            ScrollLCD(n);                                                    \
+            ScrollDisplay(n);                                                \
         else                                                                 \
         {                                                                    \
             PrintString = printnothing;                                      \
@@ -7415,8 +7415,10 @@ void FullScreenEditor(int xx, int yy, char *fname, int edit_buff_size, bool cmdf
                     break;
                 }
                 PrintString("\033[?1000l");        // Tera Term turn off mouse click report in vt200 mode
-                PrintString("\033[?7h");           // restore autowrap (was disabled by setterminal on entry)
-                PrintString("\0338\033[2J\033[H"); // vt100 clear screen and home cursor
+                PrintString("\0338\033[2J\033[H"); // vt100 restore cursor, clear screen and home cursor
+                PrintString("\033[?7h");           // autowrap on again (off since entry), AFTER the ESC 8: a terminal
+                                                   // whose saved cursor holds DECAWM (Tera Term) restores the wrap-off
+                                                   // it was saved with, and the prompt's line editor needs wrap on
                 gui_fcolour = GUI_C_NORMAL;
                 PrintString(VT100_C_NORMAL);
                 gui_fcolour = PromptFC;
