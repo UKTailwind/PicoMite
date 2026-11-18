@@ -1,10 +1,11 @@
 # Loadable Programs and USER Modules: Implementation Plan
 
-**Status, 16 November 2026:**
-- The decisions are made: Peter accepted every recommendation in section 2.
-- Branch `loader` exists, created from main at 544be7b, in the worktree `D:\Dropbox\PicoMite\pm_loader`.
+**Status, 18 November 2026:**
+- The decisions are made: Peter accepted every recommendation in section 2, and on 17 November settled D13: the loadable programs are part of V8, in line with the Colour Maximite 2.
+- The branch is **`v8`**, on GitHub as `origin/v8`, in the worktree `D:\Dropbox\PicoMite\pm_loader`. It was created as `loader` from main at 544be7b on 16 November, and renamed and pushed on 18 November at Peter's word. Main at the V7.00.00 release (c187ef5) is merged in (a17616d), and the version is 8.00.00b1 (`MM.VER` 8.000001).
 - Phase 0 is done (16 November): the flash and SRAM margins are in section 10 (Per-variant figures), and the solar_eclipse baseline is in Phase 0 step 4. 
-- **16 November, later:** Phase 1 is done on the PC3 (uncommitted). For Peter's "try the simplest and smallest CMM2 app", parts of Phases 3, 4 and 5 were done ahead of their turn: all the file and directory services (A:, B:), `video_mode`/`video_palette`/`video_wait` with BASIC's screen put back, `keys_held`, `keys_raw`, `gamepad`, and sound as stubs (`audio_start` returns -1). The CMM2's NES (apps/nes, frank-nes) runs Nova the Squirrel at about 55 frames a second at 315 MHz, silent. The loader is about 8 KB of flash; the PC3 has 5.1 KB left.
+- **16 November, later:** Phase 1 is done on the PC3 (committed in 96ab930). For Peter's "try the simplest and smallest CMM2 app", parts of Phases 3, 4 and 5 were done ahead of their turn: all the file and directory services (A:, B:), `video_mode`/`video_palette`/`video_wait` with BASIC's screen put back, `keys_held`, `keys_raw`, `gamepad` (a generic pad's sticks read 128, as on the CMM2), and sound as stubs (`audio_start` returns -1). The CMM2's NES (apps/nes, frank-nes) runs Nova the Squirrel at about 55 frames a second at 315 MHz, silent, and its keyboard works. The loader is about 8 KB of flash; with V7.00.00 merged in, the PC3 has 4.7 KB of flash and 1.9 KB of SRAM left.
+- Next: sound (Phase 6) and the phases after it.
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -35,8 +36,8 @@ Two features, ported from the CMM2:
 ## 2. Decisions
 
 **Decided 16 November 2026:** Peter accepted every recommendation below ("accept all recommendations").
-- D7: the branch stays local, which was the recommendation.
-- D13 had no recommendation and is still open.
+- D7: the branch stayed local, which was the recommendation, until Peter had it pushed on 18 November (as `v8`).
+- D13 had no recommendation; Peter decided on 17 November that it goes into V8.
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -46,13 +47,13 @@ Two features, ported from the CMM2:
 | D4 | RUN syntax for the arguments | **PicoMite's existing form**: `RUN "x.app", args$`, a string expression, as `MM.CMDLINE$` already works. The CMM2 takes raw words after the comma, and that tokenised them (`-timedemo` arrived as `\x83TIMEDEMO`). |
 | D5 | RUN "x.app" inside a program | **Carries on** with the next statement, as on the CMM2. The app path branches off before anything is cleared, so returning from `do_run` continues the program. |
 | D6 | The software `WATCHDOG` while an app runs | **Suspended**, and resumed when the app returns. Otherwise a program that set WATCHDOG and then ran an app would be reset in the middle of it. |
-| D7 | Push the branch to GitHub? | **Local only** until Peter says otherwise. Pushing would give a backup, but the repo is public. |
+| D7 | Push the branch to GitHub? | **Local only** until Peter says otherwise. Pushing would give a backup, but the repo is public. *Pushed on 18 November at Peter's word, as `v8`.* |
 | D8 | Priority of the audio wrap interrupt while an app plays sound | **Raised above the refill interrupt** for as long as the app's sound runs (it is 255, the lowest, today). The alternative, refilling from `poll()`, broke music on the CMM2 whenever a frame was slow. |
 | D9 | Lend the PSRAM reserve (context area, Route B stream) as well? | **No** at first. Revisit only if a port runs short of memory. |
 | D10 | Fault recovery (Phase 12) | **Yes, but late.** A fault in an app returns to the prompt with "x.app faulted at +0x1234" instead of rebooting. The CMM2 planned this and never did it. |
 | D11 | Calling BASIC from an app (`basic_cmd` and friends) | **Later**, if at all (Phase 8). None of the big ports needs it. |
 | D12 | USER modules in scope? | **Yes** (Phase 9). They are the part that fits the PicoMite best, and small modules need no PSRAM. |
-| D13 | Which release carries it | **Open.** Peter's call. It changes the PC3's flash map if the loader does not fit, which would move A: (section 4.10). |
+| D13 | Which release carries it | **Open.** Peter's call. It changes the PC3's flash map if the loader does not fit, which would move A: (section 4.10). *Decided 17 November: V8, in line with the Colour Maximite 2; V7.00.00 was released without it.* |
 
 ---
 
@@ -60,9 +61,9 @@ Two features, ported from the CMM2:
 
 The aim is that main stays the release line and keeps taking bug fixes while this work goes on. Nothing from this work reaches main until Peter says so.
 
-**Branch.** `loader`, created on 16 November 2026 from main at 544be7b. Its first commit is this plan, moved from main's working tree, where it was written untracked.
+**Branch.** `v8` (on GitHub as `origin/v8`), created as `loader` on 16 November 2026 from main at 544be7b and renamed and pushed on 18 November. Its first commit is this plan, moved from main's working tree, where it was written untracked. Main stays the V7 release line; `v8` is the V8 development line.
 
-**Worktree.** `D:\Dropbox\PicoMite\pm_loader`, created with `git worktree add ../pm_loader -b loader main`.
+**Worktree.** `D:\Dropbox\PicoMite\pm_loader`, created with `git worktree add ../pm_loader -b loader main`; it follows the branch's new name.
 - It sits beside the main checkout, so `../tinyusb-master` and the other sibling trees resolve as they do for main (the pc3-all branch worked this way in October).
 - Peter's main checkout and `buildpicomite.bat` stay on main, so his full builds never pick up loader work.
 
@@ -73,7 +74,7 @@ The aim is that main stays the release line and keeps taking bug fixes while thi
 
 Test images are named `PicoMitePC3_loader_<sha>.uf2` and are kept in the scratchpad, never in `uf2/`, so the release pre-flight never sees them.
 
-**Keeping up with main.** After every bug fix pushed to main, or at least before each board-test round, run `git merge main` on `loader`. Conflicts are resolved on the branch, never on main. Two things keep conflicts small:
+**Keeping up with main.** After every bug fix pushed to main, or at least before each board-test round, run `git merge main` on `v8`. Conflicts are resolved on the branch, never on main. Two things keep conflicts small:
 - Fencing. Everything new goes into new files, behind one `#ifdef LOADER`:
   - `misc/Loader.c` and `misc/Loader.h`: the loader and the services;
   - `misc/User.c`: the USER command;
@@ -83,7 +84,7 @@ Test images are named `PicoMitePC3_loader_<sha>.uf2` and are kept in the scratch
 - Short hooks. Edits to shared files are hooks of a few lines each, all `#ifdef LOADER`, listed in section 10.
 
 **Merging back.** Only on Peter's go, after Phase 13. The steps:
-1. Merge main into `loader` one last time.
+1. Merge main into `v8` one last time.
 2. Run the full goldens on the PC3.
 3. Peter runs a full `buildpicomite.bat` build from the branch.
 4. Merge to main. This is a fast-forward if nothing landed on main after step 1, otherwise a merge commit.
@@ -420,7 +421,7 @@ Each phase is a series of small changes, each built and run on a board before th
 
 **Work:**
 1. Peter rules on section 2. *Done 16 November: all recommendations accepted.*
-2. Create the `loader` branch and worktree (section 3) and commit this plan. *Done 16 November.*
+2. Create the `loader` branch and worktree (section 3) and commit this plan. *Done 16 November* (the branch is now `v8`).
 3. With Peter's OK, measure the flash and SRAM margins of PC3, HDMIUSB, HDMI, VGAUSBRP2350 and PICORP2350 from the branch head (private Ninja builds and `GetHighestHexAddress.py`). *Done 16 November: see section 10.*
 4. Record the solar_eclipse baseline on the PC3 test board. *Done 16 November* on the COM17 PC3 (192.168.1.251), at 315 MHz, OPTION COMPILE ON, MODE 1, `A:/g/solar_eclipse.bas` with the standard five answers. The branch's PC3 build at 74f51e3 (main 544be7b's code, flashed over SWD) gave 5.988, 6.021, 5.989, 6.064 and 5.988 s: **median 5.989 s, minimum 5.988 s**. RC9 on the same board just before gave 5.997, 6.050, 6.063, 6.028 and 6.044 s (median 6.044 s). Runs on one image spread by about 1%, with a floor that repeats to 1 ms, so compare minimums. Later phases are measured against 5.988 s on this board with these settings.
 
@@ -630,7 +631,7 @@ Section 3's merge-back, on Peter's go.
 | Running from PSRAM is slow | Doom or MicroPython too slow to be worth it | Phase 10 measures before anything else is built on top. `--sram` for hot code. Stack in SRAM. Keep the XIP cache for the app, since the firmware is idle while it runs. |
 | A longjmp path not trapped | Corrupted stacks, crash | The CheckAbort guard, the trap round every service, and the Phase 12 fault path. A Ctrl-C hammered during each service is part of the tests. |
 | Audio glitches | Sound breaks during file writes and slow fills | The refill interrupt and priority change (D8). Glitches during A: writes are documented, as for PLAY. |
-| Main moves on | Merge conflicts | Fencing (section 3) and frequent merges of main into `loader`. |
+| Main moves on | Merge conflicts | Fencing (section 3) and frequent merges of main into `v8`. |
 | Ports drag on | The work never ships | The program half is gated on Phase 10. USER modules (Phase 9) stand on their own and can ship without any port. |
 | GPL code | Licence mixing | As on the CMM2: each app is a separate work on the card. The firmware and SDK ship no GPL code. The SDK's own files are MIT, as the CMM2's `cmm2img.h` is. |
 
