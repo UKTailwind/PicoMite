@@ -29,7 +29,6 @@ vscode-mmbasic/node_modules/
 # ---- Generated docs / extracts ----
 doxygen/html/
 *.pdf
-!PDF/*.pdf
 _docx_extract/
 
 # ---- Packaged VS Code extension builds ----
