@@ -42,7 +42,7 @@ toolchain and the Raspberry Pi Pico SDK.
 - **arm-none-eabi GCC 13.3.1**
 - **Python 3** — the RP2350 builds use it to embed the C compiler's headers in
   the firmware; CMake stops if it cannot find it.
-- **TinyUSB master at e20482387 (patched)** — the USB-**host** driver fixes
+- **TinyUSB master at efab607b8 (patched)** — the USB-**host** driver fixes
   (fast USB flash-drive transfers, and reliable enumeration of several devices
   behind a hub) live in a patched TinyUSB tree kept in a **sibling directory**
   `../tinyusb-master` (next to this repo, not inside it) and selected by
@@ -56,8 +56,9 @@ toolchain and the Raspberry Pi Pico SDK.
   tinyusb-patches\setup-tinyusb.bat     # Windows
   ```
 
-  This fetches TinyUSB master at e20482387 into `../tinyusb-master` and applies
-  the patches in [`tinyusb-patches/`](tinyusb-patches). See
+  This fetches TinyUSB master at efab607b8 into `../tinyusb-master` and applies
+  the five patches in [`tinyusb-patches/`](tinyusb-patches). Recreate an existing
+  sibling TinyUSB checkout after upgrading to this patch set. See
   [`tinyusb-patches/README.md`](tinyusb-patches/README.md) for what each patch
   does, and the [`docs/usb-host-hardening.html`](docs/usb-host-hardening.html)
   guide for the host-driver fixes in depth.
@@ -107,6 +108,12 @@ CS on GP19 (RP2350A) or GP47 (RP2350B).
 See [M2 VGA RGB222 design and pinout](docs/M2_VGA_RGB222.md).
 
 ## Documentation
+
+The fork's **V7.00.00 native C / TCC / ELF RC6** notes (tag
+`PicoMite-V7.00.00-tcc-elf-RC6`) are in
+[`docs/PicoMite-V7.00.00-tcc-elf-RC6.md`](docs/PicoMite-V7.00.00-tcc-elf-RC6.md).
+The upstream V7.00.00 notes are in
+[`docs/V7.00.00_release_notes.md`](docs/V7.00.00_release_notes.md).
 
 User manuals and per-feature guides live in [`docs/`](docs/), including the
 main PicoMite user manual and the Advanced Graphics manual (GUI controls).
