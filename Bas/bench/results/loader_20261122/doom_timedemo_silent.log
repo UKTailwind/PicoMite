@@ -1,0 +1,46 @@
+   0.2  RUN "doom.app", "-timedemo demo1 -nosound"
+   0.8                             Doom Generic 0.1
+   0.8  Z_Init: Init zone memory allocation daemon.
+   0.8  zone memory: 0x110c7c48, 400000 allocated for zone
+   0.8  Using . for configuration and saves
+   0.8  V_Init: allocate screens.
+   0.8  M_LoadDefaults: Load system defaults.
+   0.8  saving config in .default.cfg
+   0.8  W_Init: Init WADfiles.
+   0.8   adding freedoom1.wad
+   1.0   adding demo1.lmp
+   1.0   couldn't open demo1.lmp
+   1.0  Playing demo demo1.lmp.
+   1.0  Using ./.savegame/ for savegames
+   1.0  ===========================================================================
+   1.0                             Freedoom: Phase 1
+   1.0  ===========================================================================
+   1.0   Doom Generic is free software, covered by the GNU General Public
+   1.0   License.  There is NO warranty; not even for MERCHANTABILITY or FITNESS
+   1.0   FOR A PARTICULAR PURPOSE. You are welcome to change and distribute
+   1.0   copies under certain conditions. See the source for more information.
+   1.0  ===========================================================================
+   1.0   WARNING: You are playing using one of the Freedoom IWAD
+   1.0   files, which might not work in this port. See this page
+   1.0   for more information on how to play using Freedoom:
+   1.0     http://www.chocolate-doom.org/wiki/index.php/Freedoom
+   1.0  ===========================================================================
+   1.0  I_Init: Setting up machine state.
+   1.0  M_Init: Init miscellaneous info.
+  28.9  R_Init: Init DOOM refresh daemon - .......................................
+  28.9  P_Init: Init Playloop state.
+  28.9  S_Init: Setting up sound.
+  28.9  D_CheckNetGame: Checking network game status.
+  28.9  startskill 2  deathmatch: 0  startmap: 1  startepisode: 1
+  28.9  player 1 of 1 (1 nodes)
+  28.9  Emulating the behavior of the 'Ultimate Doom' executable.
+  28.9  HU_Init: Setting up heads up display.
+  29.0  ST_Init: Init status bar.
+  30.2  I_InitGraphics: framebuffer: x_res: 320, y_res: 200, x_virtual: 320, y_virtual: 200, bpp: 8
+  30.2  I_InitGraphics: framebuffer: RGBA: 0000, red_off: 0, green_off: 0, blue_off: 0, transp_off: 0
+  30.2  I_InitGraphics: DOOM screen size: w x h: 320 x 200
+  30.2  I_InitGraphics: Auto-scaling factor: 1
+ 283.3  timed 7117 gametics in 8858 realtics (28.120907 fps)
+ 283.3  7155 frames in 282536 ms: 25.3 frames a second
+ 283.3  doom.app ended with code -1
+ 283.3  (prompt)
