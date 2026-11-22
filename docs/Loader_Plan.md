@@ -6,7 +6,8 @@
 - Phase 0 is done (16 November): the flash and SRAM margins are in section 10 (Per-variant figures), and the solar_eclipse baseline is in Phase 0 step 4. 
 - **16 November, later:** Phase 1 is done on the PC3 (committed in 96ab930). For Peter's "try the simplest and smallest CMM2 app", parts of Phases 3, 4 and 5 were done ahead of their turn: all the file and directory services (A:, B:), `video_mode`/`video_palette`/`video_wait` with BASIC's screen put back, `keys_held`, `keys_raw`, `gamepad` (a generic pad's sticks read 128, as on the CMM2), and sound as stubs (`audio_start` returns -1). The CMM2's NES (apps/nes, frank-nes) runs Nova the Squirrel at about 55 frames a second at 315 MHz, silent, and its keyboard works. The loader is about 8 KB of flash; with V7.00.00 merged in, the PC3 has 4.7 KB of flash and 1.9 KB of SRAM left.
 - **22 November:** Phase 6 (sound) is done on the PC3 (see Phase 6): `audio_start`, `audio_stop`, `audio_lock` and `audio_unlock`, with the spare-interrupt refill and D8. Tested by ear on I2S with `sndtest.app`. The PC3 now has 3.3 KB of flash and 1.9 KB of SRAM left.
-- Next: I/O (Phase 7) and the phases after it.
+- **22 November, later:** Phase 7 (I/O) is done on the PC3, with the mouse and `gamepad_axes` (see Phase 7). To fit, Loader.c is now compiled with `-Os` (OPTIMIZED_SOURCES), which left the PC3 352 bytes; then, at Peter's word, the PC3's flash target moved **1760 -> 1776 KB**: 16.3 KB of flash left, 1.9 KB of SRAM. On the PC3's 16 MB map A: stays where it is, but the options and the flash slots move: they reset on the first boot after upgrading from V7.00.00, and on every change between V7 and V8 firmware (a line for V8's release notes). COM10's were saved with OPTION DISK SAVE and loaded back.
+- Next: Phase 8 (optional) and Phase 9 (USER modules).
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -344,7 +345,7 @@ The PicoMite plays sound from the PWM wrap interrupt, one sample per interrupt a
 
 **SRAM.** The PC3 has 1,996 bytes of SRAM margin (measured 16 November; the 4.2 KB of 4 November is out of date). So the loader's state lives in a block allocated at RUN or USER LOAD time; only a pointer and a few flags go in BSS. The CMM2's largest BSS items (the 1 KB saved CLUT, the module slots, the block table) all move into that block.
 
-**Flash.** Measured 16 November (section 10): the PC3 has 13.0 KB at 1760 KB. That is likely enough for Phase 1's smallest loader but not for the full 12-18 KB estimate, so expect one step to 1776 KB before modules and the extra services. If the loader doesn't fit, the variant moves one 16 KB step (`project_flash_target_offset_alignment`), which reformats A: on that board.
+**Flash.** Measured 16 November (section 10): the PC3 has 13.0 KB at 1760 KB. That is likely enough for Phase 1's smallest loader but not for the full 12-18 KB estimate, so expect one step to 1776 KB before modules and the extra services. If the loader doesn't fit, the variant moves one 16 KB step (`project_flash_target_offset_alignment`), which reformats A: on that board. *Moved to 1776 KB on 22 November, in Phase 7. On the PC3 (16 MB, the fixed map) A: is kept; the options and flash slots reset.*
 
 **Enabling a variant** follows the existing per-feature pattern (RAYCASTER, CMake 242-254, 336, 660-662, 832-834):
 1. add the variant to a `LOADER_VARIANTS` list;
@@ -542,6 +543,14 @@ Not yet tested: the PWM output, an 8-voice mix, and the NES with sound by ear (P
 - `iotest.app`: a loop-back on COM1, I2C to the RTC, SPI to a known device, PWM measured with a pin read.
 - System pins are refused.
 - Everything is unconfigured afterwards. `MM.INFO(PINS)` shows it.
+
+*Done 22 November* on the COM10 PC3, with Peter's rulings: a bus's pins are the ones SETPIN or OPTION SYSTEM gave it, or the ones a new PicoMite-only service, `bus_pins(kind, bus, a, b, c)`, names (it runs SETPIN); `com_open` uses OPEN "COMn:"'s numbers (3-6 the USB serial devices, not the CMM2's 4-7); `mouse`, `mouse_set` and `gamepad_axes` came with it. As on the CMM2, SETPIN, PWM, I2C OPEN, SPI OPEN and OPEN "COMn:" run as the interpreter runs them, their arguments as text, under `ld_try`; the transfers are the SDK's calls. A GP the board keeps (`IsInvalidPin`: the PC3's HDMI pins) is -1. An I2C bus already open (OPTION SYSTEM I2C's, or BASIC's) is used as it is and left open; an SPI bus already open is -2. Open drain is an input that `pin_write(0)` drives low. At the end `ld_iotidy` stops the program's PWM, closes its buses and ports (their pins then unconfigured, as I2C CLOSE leaves them) and unconfigures the pins it set up.
+
+The services cost about 4.5 KB at `-O2`, 1.2 KB more than the PC3 had; Loader.c at `-Os` saves 1.6 KB.
+
+`tools/sdk/examples/iotest.c`, with nothing wired: 60 checks pass. System pins (the console's GP8, the PSRAM's GP47, HDMI's GP14) refused; pulls, an output and open drain read back on GP5; PWM at 25% sampled on its own pin (24-25%), unchanged when the slice's other output is set to 75%; an analog input on GP40; the DS3231 on the system bus read against `datetime` (to the second), a NACK from an empty address, and the system bus left open by `i2c_close`; I2C2 on GP6/GP7 and SPI on GP2-GP4 opened, used (NACKs; transfers in all four forms) and closed; COM1 on GP1/GP0 opened, written and closed; COM2 (the console) refused with the firmware's message; `com_connected` 1 for COM3 (a USB serial device on that board) and 0 for COM4. `iotest.app leave` ends with PWM, SPI, I2C2, COM1 and an output all set up: afterwards `MM.INFO(PIN)` shows GP0-GP7 and GP40 OFF, and BASIC opens SPI, I2C2 and COM1 on those pins again. `sndtest`, `filetest` and `hello` run as before.
+
+Not yet tested: COM1 and PWM through a wire (`iotest.app loop`, GP0 to GP1: the COM17 board has it), a USB serial port written to, an SPI device, the mouse and a pad's axes with the devices plugged in.
 
 ### Phase 8 (optional, D11): calling BASIC
 

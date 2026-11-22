@@ -6,7 +6,8 @@ The design is in `docs/Loader_Plan.md`.
 
 So far this is the PC3 build only, and the services are the console, time, `poll`, `leave`, `alloc`, the
 firmware's `memcpy`/`memset`/`memmove`, `psram_size`, the files and directories, the display, the keyboard and
-gamepads, and sound. I/O and USER modules follow in later phases of the plan.
+gamepads, the mouse, sound, and I/O (pins, ADC, PWM, I2C, SPI and the COM ports). USER modules follow in a later
+phase of the plan.
 
 ## Building
 
@@ -58,3 +59,6 @@ Include `cmm2.h`. The names are the Colour Maximite 2's, so a program's portable
   wanted (1024 frames, 23 ms): it must be quick and call no service, `malloc` or stdio. Change what `fill` reads
   between `audio_lock()` and `audio_unlock()`. The sound stops when the program ends. `examples/sndtest.c` tries
   it all.
+- I/O is by GP numbers. A bus (I2C, SPI, COM1/COM2) uses the pins BASIC's SETPIN or OPTION SYSTEM gave it, or the
+  ones `cmm2->bus_pins()` names. Pins the board keeps for itself are refused. Whatever the program sets up is undone
+  when it ends. `examples/iotest.c` tries it all.

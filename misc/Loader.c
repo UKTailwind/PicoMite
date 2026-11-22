@@ -24,7 +24,11 @@ the board, as any fault does.
 ***********************************************************************************************************************/
 #include "MMBasic_Includes.h"
 #include "Hardware_Includes.h"
+#include <stdarg.h>
 #include "hardware/clocks.h"
+#include "hardware/i2c.h"
+#include "hardware/spi.h"
+#include "hardware/pwm.h"
 #include "ff.h"
 #include "loader/pmimg.h"
 #include "Loader.h"
@@ -43,6 +47,10 @@ extern void CloseAudio(int all);
 extern void chdir(char *p);                                         // CHDIR's (FileIO.c)
 extern int KeyDown[7];                                              // KEYDOWN's (KeyboardMap.c)
 extern void setmode(int mode, bool clear);                          // MODE's (Draw.c)
+extern void cmd_setpin(void), cmd_pwm(void), cmd_spi(void), cmd_spi2(void);   // SETPIN's, PWM's, SPI's (I/O services)
+#ifndef USBKEYBOARD
+extern bool mouse0;                                                 // a PS/2 mouse is there (mouse.c)
+#endif
 
 #define LD_BLOCKS  64                                               // the alloc service's blocks
 #define LD_FILES   8                                                // the file services' handles
@@ -81,6 +89,11 @@ typedef struct {
     int vmode, palette;                                             // it set a mode; it changed MAP's colours
     int oldmode, oldfont, oldfc, oldbc;                             // the screen as BASIC had it
     uint16_t oldmap[256];
+    uint64_t pins, od, pwmpins;                                     // its GPs (bit n: GPn), its open-drain outputs, its PWM
+    uint32_t pwmon;                                                 // its PWM outputs running (bit slice * 2 + B)
+    uint16_t pwmduty[24];
+    uint32_t pwmfreq[12];
+    uint8_t buses, coms;                                            // bit 0-1: I2C, I2C2; 2-3: SPI, SPI2; bit n: COMn
     cmm2img_start start;
     char *argv[];                                                   // then the words themselves
 } ldstate_t;
@@ -703,7 +716,10 @@ static int ld_keysraw(uint8_t report[8])
             n++;
     return n;
 }
-static int ld_gamepad(int n, int *lx, int *ly)
+// the pad in USB channel n (1-4): DEVICE(GAMEPAD n, ...)'s LX, LY, RX, RY, L and R in v, and its buttons; -1 if there
+// is none. A generic pad (SNES, 130) has no sticks: its d-pad is in the buttons, and its LX and LY stay 0, which would
+// be a stick held up and left, so its sticks read 128 and its triggers 0 (as on the CMM2)
+static int ld_padaxes(int n, int v[6])
 {
     int t;
     if (n < 1 || n > 4 || !HID[n - 1].active)
@@ -711,17 +727,415 @@ static int ld_gamepad(int n, int *lx, int *ly)
     t = HID[n - 1].Device_type;
     if (t < 128 || t == 133 || t == 134)                            // (a keyboard, a mouse, a touch screen: USBKeyboard.c)
         return -1;
-    if (lx)                                                         // a generic pad (SNES, 130) has no sticks: its d-pad is
-        *lx = t == 130 ? 128 : nunstruct[n].ax;                     // in the bitmap, and its LX and LY stay 0, which would be
-    if (ly)                                                         // a stick held up and left (as on the CMM2)
-        *ly = t == 130 ? 128 : nunstruct[n].ay;
+    v[0] = t == 130 ? 128 : nunstruct[n].ax;
+    v[1] = t == 130 ? 128 : nunstruct[n].ay;
+    v[2] = t == 130 ? 128 : nunstruct[n].Z;
+    v[3] = t == 130 ? 128 : nunstruct[n].C;
+    v[4] = t == 130 ? 0 : nunstruct[n].L;
+    v[5] = t == 130 ? 0 : nunstruct[n].R;
     return nunstruct[n].x0;
+}
+static int ld_gamepad(int n, int *lx, int *ly)
+{
+    int v[6], b = ld_padaxes(n, v);
+    if (b >= 0 && lx)
+        *lx = v[0];
+    if (b >= 0 && ly)
+        *ly = v[1];
+    return b;
+}
+
+// the mouse: DEVICE(MOUSE 2, ...)'s, where a USB mouse (or a PS/2 one) puts it, kept within the screen by the firmware
+static int ld_mouse(int m[4])
+{
+#ifdef USBKEYBOARD
+    int on = HID[1].Device_type == 2;
+#else
+    int on = mouse0;
+#endif
+    m[0] = on ? nunstruct[2].ax : 0;
+    m[1] = on ? nunstruct[2].ay : 0;
+    m[2] = on ? (nunstruct[2].L ? 1 : 0) | (nunstruct[2].R ? 2 : 0) | (nunstruct[2].C ? 4 : 0) : 0;
+    m[3] = on ? nunstruct[2].az : 0;
+    return on;
+}
+static void ld_mouseset(int x, int y)
+{
+    nunstruct[2].ax = x < 0 ? 0 : x >= HRes ? HRes - 1 : x;
+    nunstruct[2].ay = y < 0 ? 0 : y >= VRes ? VRes - 1 : y;
 }
 
 // sound: Audio.c's AppSound, the stream that the program's fill makes (audio_start and audio_stop on the main stack,
 // through the veneer below: they allocate and free, and CloseAudio waits)
 static void ld_alock(void) { AppSoundHold(1); }
 static void ld_aunlock(void) { AppSoundHold(0); }
+
+/* I/O, by GP numbers. SETPIN, PWM, I2C OPEN, SPI OPEN and OPEN "COMn:" run as the interpreter runs them, their arguments
+   as text, under ld_try (so their checks and their errors are BASIC's); the transfers are the SDK's calls on the buses
+   they opened. What the program sets up is noted in ld (pins, pwmon, buses, coms) and undone by ld_iotidy when it
+   ends. A bus's pins are the ones SETPIN or OPTION SYSTEM gave it, or the ones bus_pins names. */
+extern void i2cEnable(unsigned char *p), i2c2Enable(unsigned char *p);
+extern bool tuh_cdc_mounted(uint8_t idx);
+#ifdef USBKEYBOARD
+#define LD_COMS 6                                                   // COM1, COM2, and COM3-6 the USB serial devices
+#else
+#define LD_COMS 2
+#endif
+typedef struct {
+    void (*cmd)(void);                                              // a command, which reads cmdline
+    void (*fn)(unsigned char *);                                    // or a routine given the text
+    char a[64];
+} ldcmd_t;
+static void ld_cmdbody(void *p)
+{
+    ldcmd_t *c = p;
+    if (c->fn)
+        c->fn((unsigned char *)c->a);
+    else
+    {
+        cmdline = (unsigned char *)c->a;
+        c->cmd();
+    }
+}
+static int ld_cmd(void (*cmd)(void), void (*fn)(unsigned char *), const char *fmt, ...)
+{
+    ldcmd_t c = {cmd, fn, ""};
+    unsigned char *line = cmdline;
+    va_list v;
+    int r;
+    va_start(v, fmt);
+    vsnprintf(c.a, sizeof(c.a), fmt, v);
+    va_end(v);
+    r = ld_try(ld_cmdbody, &c);
+    cmdline = line;
+    return r;
+}
+static int ld_pin(int gp)                                           // MMBasic's pin, 0: none (or one the board keeps)
+{
+    return gp < 0 || gp > (rp2350a ? 29 : 47) || IsInvalidPin(PINMAP[gp]) ? 0 : PINMAP[gp];
+}
+static int ld_inuse(int pin) { return pin == 99 || ExtCurrentConfig[pin] >= EXT_COM_RESERVED; }   // (99: not set)
+
+static __attribute__((used, noinline)) int ld_pinsetup(int gp, int mode, int pull)
+{
+    static const char *const m[] = {"OFF", "DIN", "DOUT", "DIN", "AIN"};   // (open drain: an input, driven low for 0)
+    int pin = ld_pin(gp), r;
+    uint64_t b = 1ull << gp;
+    if (!pin)
+        return -1;
+    if (mode < CMM2_PIN_OFF || mode > CMM2_PIN_ANALOG || pull < CMM2_PULL_NONE || pull > CMM2_PULL_DOWN)
+        return -3;
+    if (ld_inuse(pin))
+        return -2;
+    r = ld_cmd(cmd_setpin, NULL, "GP%d,%s%s", gp, m[mode],
+               (mode != CMM2_PIN_IN && mode != CMM2_PIN_OD) || !pull ? "" : pull == CMM2_PULL_UP ? ",PULLUP" : ",PULLDOWN");
+    if (r == 0)
+    {
+        ld->pins = mode ? ld->pins | b : ld->pins & ~b;
+        ld->od = mode == CMM2_PIN_OD ? ld->od | b : ld->od & ~b;
+        ld->pwmpins &= ~b;
+        if (mode == CMM2_PIN_OD)
+            gpio_put(gp, 0);                                        // (what it drives when pin_write gives 0)
+    }
+    return r;
+}
+static int ld_pinread(int gp)
+{
+    int pin = ld_pin(gp);
+    if (!pin)
+        return -1;
+    return ExtCurrentConfig[pin] == EXT_DIG_OUT ? gpio_get_out_level(gp) : gpio_get(gp);
+}
+static void ld_pinwrite(int gp, int v)
+{
+    int pin = ld_pin(gp);
+    if (pin && (ld->od >> gp & 1))
+        gpio_set_dir(gp, !v);                                       // (low, or let go)
+    else if (pin && ExtCurrentConfig[pin] == EXT_DIG_OUT)
+        gpio_put(gp, v != 0);
+}
+static int ld_adcread(int gp, uint32_t *uv)
+{
+    int pin = ld_pin(gp), a;
+    if (!pin)
+        return -1;
+    if (ExtCurrentConfig[pin] != EXT_ANA_IN || (a = (int)ExtInp(pin)) < 0)
+        return -3;
+    if (uv)
+        *uv = (uint32_t)(a * VCC * 1e6 / 4095.0 + 0.5);
+    return (a * 65535 + 2047) / 4095;
+}
+
+// PWM: a slice's A and B share its frequency. The slice's other output, if the program has it running, is given its
+// duty again, as PWM leaves an output it is not given at its old count, made for the old frequency
+static __attribute__((used, noinline)) int ld_pwmset(int gp, uint32_t freq, uint32_t duty)
+{
+    char d[2][12] = {"", ""};
+    int pin = ld_pin(gp), s, o, r;
+    uint64_t b = 1ull << gp;
+    if (!pin)
+        return -1;
+    if (freq < 1)
+        return -3;
+    s = pwm_gpio_to_slice_num(gp);
+    o = s * 2 + pwm_gpio_to_channel(gp);
+    if (!(ld->pwmpins & b))
+    {
+        if (ld_inuse(pin))
+            return -2;
+        if ((r = ld_cmd(cmd_setpin, NULL, "GP%d,PWM", gp)) < 0)
+            return r;
+        ld->pins |= b;
+        ld->pwmpins |= b;
+    }
+    ld->pwmduty[o] = duty > 65535 ? 65535 : duty;
+    ld->pwmon |= 1u << o;
+    for (int i = 0; i < 2; i++)
+        if (ld->pwmon >> (s * 2 + i) & 1)
+        {
+            uint32_t p = (ld->pwmduty[s * 2 + i] * 10000u + 32767) / 65535;   // (hundredths of a percent)
+            snprintf(d[i], sizeof(d[i]), "%u.%02u", (unsigned)(p / 100), (unsigned)(p % 100));
+        }
+    r = ld_cmd(cmd_pwm, NULL, "%d,%u,%s,%s", s, (unsigned)freq, d[0], d[1]);
+    if (r < 0)
+        ld->pwmon &= ~(1u << o);
+    else
+        ld->pwmfreq[s] = freq;
+    return r;
+}
+static __attribute__((used, noinline)) int ld_pwmstop(int gp)
+{
+    int s, o;
+    if (!ld_pin(gp))
+        return -1;
+    s = pwm_gpio_to_slice_num(gp);
+    o = s * 2 + pwm_gpio_to_channel(gp);
+    if (!(ld->pwmon >> o & 1))
+        return 0;
+    ld->pwmon &= ~(1u << o);
+    if (ld->pwmon >> (o ^ 1) & 1)                                   // the other output runs: this one at 0%
+        return ld_cmd(cmd_pwm, NULL, o & 1 ? "%d,%u,,0" : "%d,%u,0", s, (unsigned)ld->pwmfreq[s]);
+    return ld_cmd(cmd_pwm, NULL, "%d,OFF", s);
+}
+
+// a bus's pins (SETPIN's), a bus open (by anyone), and the buses' own
+static int ld_busopen(int kind, int k)
+{
+    if (kind == CMM2_BUS_I2C)
+        return k ? I2C2_enabled : I2C_enabled;
+    if (kind == CMM2_BUS_SPI)
+    {
+        int tx = k ? SPI1TXpin : SPI0TXpin;                         // (open, or the system's: reserved)
+        return tx != 99 && ExtCurrentConfig[tx] >= EXT_COM_RESERVED;
+    }
+    return k ? com2 : com1;
+}
+static __attribute__((used, noinline)) int ld_buspins(int kind, int bus, int a, int b, int c)
+{
+    static const char *const name[3][2] = {{"I2C", "I2C2"}, {"SPI", "SPI2"}, {"COM1", "COM2"}};
+    int k = kind == CMM2_BUS_COM ? bus - 1 : bus, r;
+    if (kind < CMM2_BUS_I2C || kind > CMM2_BUS_COM || k < 0 || k > 1 || !ld_pin(a) || !ld_pin(b) ||
+        (kind == CMM2_BUS_SPI && !ld_pin(c)))
+        return -1;
+    if (ld_busopen(kind, k))
+        return -2;
+    if (kind == CMM2_BUS_SPI)
+        r = ld_cmd(cmd_setpin, NULL, "GP%d,GP%d,GP%d,%s", a, b, c, name[kind][k]);
+    else
+        r = ld_cmd(cmd_setpin, NULL, "GP%d,GP%d,%s", a, b, name[kind][k]);
+    if (r == 0)
+        ld->pins |= 1ull << a | 1ull << b | (kind == CMM2_BUS_SPI ? 1ull << c : 0);
+    return r;
+}
+
+// I2C: bus 0 is I2C, 1 is I2C2. One already open (OPTION SYSTEM I2C's, or BASIC's I2C OPEN) is used as it is
+static __attribute__((used, noinline)) int ld_i2cclose(int bus)
+{
+    if (bus < 0 || bus > 1)
+        return -1;
+    if (ld->buses >> bus & 1)
+    {
+        ld->buses &= ~(1 << bus);
+        if (bus)
+            i2c2_disable();
+        else
+            i2c_disable();
+    }
+    return 0;
+}
+static __attribute__((used, noinline)) int ld_i2copen(int bus, int khz, int timeout)
+{
+    int r;
+    if (bus < 0 || bus > 1)
+        return -1;
+    ld_i2cclose(bus);
+    if (ld_busopen(CMM2_BUS_I2C, bus))
+        return 0;
+    if ((bus ? I2C1SDApin : I2C0SDApin) == 99)
+        return -3;
+    r = ld_cmd(NULL, bus ? i2c2Enable : i2cEnable, "%d,%d", khz, timeout);
+    if (r == 0)
+        ld->buses |= 1 << bus;
+    return r;
+}
+static int ld_i2cxfer(int bus, int addr, const uint8_t *w, uint32_t wn, uint8_t *r, uint32_t rn, int stop)
+{
+    i2c_inst_t *i = bus ? i2c1 : i2c0;
+    uint32_t t;
+    uint8_t probe;
+    int e = 0;
+    if (bus < 0 || bus > 1)
+        return -1;
+    if (!ld_busopen(CMM2_BUS_I2C, bus) || addr < 0 || addr > 127)
+        return -3;
+    t = (bus ? I2C1locked : I2C0locked) ? 1000 : bus ? I2C2_Timeout : I2C_Timeout;   // (ms: the system's bus as BASIC's
+    t = t ? t * 1000 : 60000000;                                    // I2C WRITE has it; 0, none)
+    if (wn)
+        e = i2c_write_timeout_us(i, addr, w, wn, rn || !stop, t);
+    if (e >= 0 && (rn || !wn))                                      // (neither: a byte read, as a scan does)
+        e = i2c_read_timeout_us(i, addr, rn ? r : &probe, rn ? rn : 1, !stop, t);
+    return e == PICO_ERROR_TIMEOUT ? 2 : e < 0 ? 1 : 0;
+}
+
+// SPI: bus 0 is SPI, 1 is SPI2, 8 bits. One already open (the system's, or BASIC's) is refused
+static __attribute__((used, noinline)) int ld_spiclose(int bus)
+{
+    if (bus < 0 || bus > 1)
+        return -1;
+    if (ld->buses >> (bus + 2) & 1)
+    {
+        ld->buses &= ~(4 << bus);
+        if (bus)
+            SPI2Close();
+        else
+            SPIClose();
+    }
+    return 0;
+}
+static __attribute__((used, noinline)) int ld_spiopen(int bus, uint32_t hz, int mode)
+{
+    int r;
+    if (bus < 0 || bus > 1)
+        return -1;
+    ld_spiclose(bus);
+    if (ld_busopen(CMM2_BUS_SPI, bus))
+        return -2;
+    if ((bus ? SPI1TXpin : SPI0TXpin) == 99)
+        return -3;
+    r = ld_cmd(bus ? cmd_spi2 : cmd_spi, NULL, "OPEN %u,%d,8", (unsigned)hz, mode & 3);
+    if (r == 0)
+        ld->buses |= 4 << bus;
+    return r;
+}
+static int ld_spixfer(int bus, const uint8_t *tx, uint8_t *rx, uint32_t n)
+{
+    spi_inst_t *s = bus ? spi1 : spi0;
+    uint8_t junk[16];
+    if (bus < 0 || bus > 1)
+        return -1;
+    if (!(ld->buses >> (bus + 2) & 1))
+        return -3;
+    if (tx && rx)
+        spi_write_read_blocking(s, tx, rx, n);
+    else if (tx)
+        spi_write_blocking(s, tx, n);
+    else if (rx)
+        spi_read_blocking(s, 0, rx, n);
+    else
+        for (uint32_t k; n; n -= k)
+            spi_read_blocking(s, 0, junk, k = n > sizeof(junk) ? sizeof(junk) : n);
+    return 0;
+}
+
+// COM: OPEN "COMn:"'s numbers, COM3-6 the USB serial devices
+static __attribute__((used, noinline)) int ld_comclose(int com)
+{
+    if (com < 1 || com > LD_COMS)
+        return -1;
+    if (ld->coms >> com & 1)
+    {
+        ld->coms &= ~(1 << com);
+        SerialClose(com);
+    }
+    return 0;
+}
+static __attribute__((used, noinline)) int ld_comopen(int com, uint32_t baud, int bits, int parity, int stop,
+                                                       uint32_t rxbuf)
+{
+    int r;
+    if (com < 1 || com > LD_COMS)
+        return -1;
+    ld_comclose(com);
+    r = ld_cmd(NULL, SerialOpen, "COM%d:%u,%u%s%s%s", com, (unsigned)baud, (unsigned)(rxbuf ? rxbuf : COM_DEFAULT_BUF_SIZE),
+               parity == 1 ? ",EVEN" : parity == 2 ? ",ODD" : "", stop == 2 ? ",S2" : "", bits == 7 ? ",7BIT" : "");
+    if (r == 0)
+        ld->coms |= 1 << com;
+    return r;
+}
+typedef struct {
+    int com;
+    const uint8_t *buf;
+    uint32_t n;
+} ldcomw_t;
+static void ld_comwbody(void *p)
+{
+    ldcomw_t *w = p;
+    for (uint32_t i = 0; i < w->n; i++)
+        SerialPutchar(w->com, w->buf[i]);
+}
+static __attribute__((used, noinline)) int ld_comwrite(int com, const uint8_t *buf, uint32_t n)
+{
+    ldcomw_t w = {com, buf, n};
+    if (com < 1 || com > LD_COMS)
+        return -1;
+    if (!(ld->coms >> com & 1))
+        return -3;
+    return ld_try(ld_comwbody, &w) < 0 ? -4 : (int)n;
+}
+static int ld_comread(int com, uint8_t *buf, uint32_t n)
+{
+    uint32_t i = 0;
+    int c;
+    if (com < 1 || com > LD_COMS)
+        return -1;
+    if (!(ld->coms >> com & 1))
+        return -3;
+    while (i < n && (c = SerialGetchar(com)) >= 0)
+        buf[i++] = c;
+    return (int)i;
+}
+static int ld_comavail(int com)
+{
+    if (com < 1 || com > LD_COMS)
+        return -1;
+    if (!(ld->coms >> com & 1))
+        return -3;
+    return SerialRxStatus(com);
+}
+static int ld_comconnected(int com)
+{
+    if (com < 1 || com > LD_COMS)
+        return -1;
+    return com <= 2 ? 1 : tuh_cdc_mounted(com - 3);
+}
+
+// what the program set up, undone (its end): its PWM stopped, its buses and ports closed, then its pins unconfigured
+static void ld_iotidy(void)
+{
+    for (int s = 0; s < 12; s++)
+        if (ld->pwmon >> (s * 2) & 3)
+            ld_cmd(cmd_pwm, NULL, "%d,OFF", s);
+    for (int b = 0; b < 2; b++)
+    {
+        ld_i2cclose(b);
+        ld_spiclose(b);
+    }
+    for (int c = 1; c <= LD_COMS; c++)
+        ld_comclose(c);
+    for (int gp = 0; gp < 48; gp++)
+        if ((ld->pins >> gp & 1) && !ld_inuse(PINMAP[gp]))
+            ld_cmd(cmd_setpin, NULL, "GP%d,OFF", gp);
+}
 
 /*******************************************************************************************
  calling the program on its own stack
@@ -833,6 +1247,17 @@ LD_VENEER(v_getcwd, ld_getcwd)
 LD_VENEER(v_vmode, ld_vmode)
 LD_VENEER(v_astart, AppSoundStart)
 LD_VENEER(v_astop, AppSoundStop)
+LD_VENEER(v_pinsetup, ld_pinsetup)
+LD_VENEER(v_pwmset, ld_pwmset)
+LD_VENEER(v_pwmstop, ld_pwmstop)
+LD_VENEER(v_buspins, ld_buspins)
+LD_VENEER(v_i2copen, ld_i2copen)
+LD_VENEER(v_i2cclose, ld_i2cclose)
+LD_VENEER(v_spiopen, ld_spiopen)
+LD_VENEER(v_spiclose, ld_spiclose)
+LD_VENEER(v_comopen, ld_comopen)
+LD_VENEER(v_comclose, ld_comclose)
+LD_VENEER(v_comwrite, ld_comwrite)
 
 static const struct cmm2_services ldsvc = {
     .version = PMIMG_API_VERSION,
@@ -883,6 +1308,28 @@ static const struct cmm2_services ldsvc = {
     .audio_stop = (void (*)(void))v_astop,
     .audio_lock = ld_alock,
     .audio_unlock = ld_aunlock,
+    .mouse = ld_mouse,
+    .mouse_set = ld_mouseset,
+    .gamepad_axes = ld_padaxes,
+    .pin_setup = (int (*)(int, int, int))v_pinsetup,
+    .pin_read = ld_pinread,
+    .pin_write = ld_pinwrite,
+    .adc_read = ld_adcread,
+    .pwm_set = (int (*)(int, uint32_t, uint32_t))v_pwmset,
+    .pwm_stop = (int (*)(int))v_pwmstop,
+    .bus_pins = (int (*)(int, int, int, int, int))v_buspins,
+    .i2c_open = (int (*)(int, int, int))v_i2copen,
+    .i2c_close = (int (*)(int))v_i2cclose,
+    .i2c_xfer = ld_i2cxfer,
+    .spi_open = (int (*)(int, uint32_t, int))v_spiopen,
+    .spi_close = (int (*)(int))v_spiclose,
+    .spi_xfer = ld_spixfer,
+    .com_open = (int (*)(int, uint32_t, int, int, int, uint32_t))v_comopen,
+    .com_close = (int (*)(int))v_comclose,
+    .com_write = (int (*)(int, const uint8_t *, uint32_t))v_comwrite,
+    .com_read = ld_comread,
+    .com_avail = ld_comavail,
+    .com_connected = ld_comconnected,
 };
 
 /*******************************************************************************************
@@ -1189,6 +1636,7 @@ void LoaderRun(char *fname, char *args)
     LoaderActive = 0;
     AppSoundStop();                                                 // (its fill is in the memory given back below)
     AppSoundHold(0);
+    ld_iotidy();                                                    // its PWM, buses, ports and pins
 
     // what it left: its blocks, the memory it borrowed, the keys it had (not typed into BASIC). A Ctrl-C stays: the
     // BASIC program that ran it stops next.

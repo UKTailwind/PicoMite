@@ -197,6 +197,64 @@ struct cmm2_services {
     void     (*audio_stop)(void);              /* (ended for it when the program ends) */
     void     (*audio_lock)(void);              /* fill held off, while the program changes what fill reads: briefly */
     void     (*audio_unlock)(void);
+    /* the mouse, and a gamepad's other axes */
+    int      (*mouse)(int m[4]);               /* 1 with m: x, y, the buttons (1 left, 2 right, 4 middle), the wheel's
+                                                  count; 0 if there is no mouse (m all 0). A USB or PS/2 mouse, as
+                                                  DEVICE(MOUSE 2, ...) gives it, kept within the screen */
+    void     (*mouse_set)(int x, int y);       /* its position moved there */
+    int      (*gamepad_axes)(int n, int v[6]); /* gamepad's buttons, and in v DEVICE(GAMEPAD n, ...)'s LX, LY, RX, RY
+                                                  (0-255, 128 centred: always 128 on a generic pad) and L, R (the
+                                                  analogue triggers, 0-255; 0 on a generic pad); -1 if no pad is there */
+    /* I/O, by GP numbers. Each returns 0 (or a value) or a negative error: -1 no such GP (or one the board keeps, as
+       the PC3 its HDMI's), bus or port, -2 its pins are in use (the system's, or a bus already open), -3 not possible (a bus with no pins set, or not open...), -4 the
+       firmware's error, whose message io_error() gives. A bus's pins are the ones SETPIN or OPTION SYSTEM gave it, or
+       the ones bus_pins names. What a program sets up is undone when it ends: its PWM stopped, its buses and ports
+       closed (their pins then unconfigured, as I2C CLOSE leaves them), the pins it set up unconfigured */
+    int      (*pin_setup)(int gp, int mode, int pull);   /* CMM2_PIN_*; pull CMM2_PULL_* for an input or an open-drain
+                                                  output (an input that pin_write drives low for 0) */
+    int      (*pin_read)(int gp);              /* 0 or 1 (an output's level too) */
+    void     (*pin_write)(int gp, int v);      /* an output's level (an open-drain one: 1 lets go) */
+    int      (*adc_read)(int gp, uint32_t *uv);   /* an analog input (CMM2_PIN_ANALOG): 0-65535, and its microvolts
+                                                  (from 3.3 V or OPTION VCC's) */
+    int      (*pwm_set)(int gp, uint32_t freq, uint32_t duty);   /* freq Hz (a slice's A and B share theirs), duty
+                                                  0-65535; the GP set up for PWM first if need be */
+    int      (*pwm_stop)(int gp);              /* that output stopped (the slice, when neither runs) */
+    int      (*bus_pins)(int kind, int bus, int a, int b, int c);   /* SETPIN's, for a bus: CMM2_BUS_I2C (bus 0 I2C,
+                                                  1 I2C2; a SDA, b SCL), CMM2_BUS_SPI (0 SPI, 1 SPI2; a RX, b TX, c
+                                                  SCK), CMM2_BUS_COM (1 COM1, 2 COM2; a RX, b TX) */
+    int      (*i2c_open)(int bus, int khz, int timeout_ms);   /* bus 0: I2C, 1: I2C2; 100, 400 or 1000 kHz; timeout 0
+                                                  (none) or 100 ms up. A bus already open (OPTION SYSTEM I2C's, or
+                                                  BASIC's I2C OPEN): 0, and it is used as it is */
+    int      (*i2c_close)(int bus);
+    int      (*i2c_xfer)(int bus, int addr, const uint8_t *w, uint32_t wn, uint8_t *r, uint32_t rn, int stop);   /*
+                                                  wn bytes written, then rn read (a repeated start between), the bus
+                                                  released at the end if stop; neither: the address alone. 0, 1 a NACK,
+                                                  2 timed out (MM.I2C's), or negative */
+    int      (*spi_open)(int bus, uint32_t hz, int mode);   /* bus 0: SPI, 1: SPI2; mode 0-3, 8 bits */
+    int      (*spi_close)(int bus);
+    int      (*spi_xfer)(int bus, const uint8_t *tx, uint8_t *rx, uint32_t n);   /* n bytes, tx NULL: 0s out, rx
+                                                  NULL: what comes in dropped */
+    int      (*com_open)(int com, uint32_t baud, int bits, int parity, int stop, uint32_t rxbuf);   /* OPEN "COMn:"'s
+                                                  numbers: 1 or 2, 3-6 a USB serial device; bits 7 or 8, parity 0
+                                                  none, 1 even, 2 odd, stop 1 or 2; rxbuf 0: 1024 */
+    int      (*com_close)(int com);
+    int      (*com_write)(int com, const uint8_t *buf, uint32_t n);   /* queued (waiting while the queue is full) */
+    int      (*com_read)(int com, uint8_t *buf, uint32_t n);   /* the bytes waiting, up to n: 0 if none (no wait) */
+    int      (*com_avail)(int com);            /* the bytes waiting */
+    int      (*com_connected)(int com);        /* 1 if its device is there (COM1 and COM2 always), 0 if a USB serial
+                                                  device is not, open or not; -1 if there is no such port */
 };
+
+#define CMM2_PIN_OFF     0                     /* pin_setup's modes */
+#define CMM2_PIN_IN      1
+#define CMM2_PIN_OUT     2
+#define CMM2_PIN_OD      3                     /* open drain */
+#define CMM2_PIN_ANALOG  4
+#define CMM2_PULL_NONE   0
+#define CMM2_PULL_UP     1
+#define CMM2_PULL_DOWN   2
+#define CMM2_BUS_I2C     0                     /* bus_pins' kinds (the PicoMite's own) */
+#define CMM2_BUS_SPI     1
+#define CMM2_BUS_COM     2
 
 #endif
