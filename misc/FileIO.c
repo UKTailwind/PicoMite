@@ -957,9 +957,16 @@ void MIPS16 cmd_psram(void)
             error("Already programmed");
         memset(c, 0xFF, MAX_PROG_SIZE);
         ClearTempMemory();
+        unsigned char *running = ProgMemory; // the program that goes on after this (RAM RUN / FLASH RUN: a slot)
         SaveContext();
         MemLoadProgram(argv[2], c);
         RestoreContext(false);
+        /* MemLoadProgram's m_alloc(M_LIMITED) points ProgMemory at program memory.  A program run from a
+           RAM or flash slot then carried on with its tables, symbols and line numbers rebuilt below from
+           whatever program memory held: its names looked up in that program's symbol table (MM.INFO$(LINE)
+           listed as MM.Info(?), "Invalid syntax") and its lines reported as the library's. */
+        ProgMemory = running;
+        SymSetProgram(ProgMemory);
         /* RAM FILE LOAD is meant to be used from inside a running program -
            that is how a launcher loads the overlays it is about to CHAIN to -
            but MemLoadProgram() calls ClearRuntime(), which NULLs the whole of
