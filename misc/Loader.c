@@ -718,13 +718,10 @@ static int ld_gamepad(int n, int *lx, int *ly)
     return nunstruct[n].x0;
 }
 
-// sound: the plan's Phase 6
-static int ld_astart(void (*fill)(int16_t *buf, uint32_t frames))
-{
-    (void)fill;
-    return -1;
-}
-static void ld_anone(void) {}
+// sound: Audio.c's AppSound, the stream that the program's fill makes (audio_start and audio_stop on the main stack,
+// through the veneer below: they allocate and free, and CloseAudio waits)
+static void ld_alock(void) { AppSoundHold(1); }
+static void ld_aunlock(void) { AppSoundHold(0); }
 
 /*******************************************************************************************
  calling the program on its own stack
@@ -834,6 +831,8 @@ LD_VENEER(v_closedir, ld_closedir)
 LD_VENEER(v_chdir, ld_chdir)
 LD_VENEER(v_getcwd, ld_getcwd)
 LD_VENEER(v_vmode, ld_vmode)
+LD_VENEER(v_astart, AppSoundStart)
+LD_VENEER(v_astop, AppSoundStop)
 
 static const struct cmm2_services ldsvc = {
     .version = PMIMG_API_VERSION,
@@ -880,10 +879,10 @@ static const struct cmm2_services ldsvc = {
     .keys_held = ld_keysheld,
     .keys_raw = ld_keysraw,
     .gamepad = ld_gamepad,
-    .audio_start = ld_astart,
-    .audio_stop = ld_anone,
-    .audio_lock = ld_anone,
-    .audio_unlock = ld_anone,
+    .audio_start = (int (*)(void (*)(int16_t *, uint32_t)))v_astart,
+    .audio_stop = (void (*)(void))v_astop,
+    .audio_lock = ld_alock,
+    .audio_unlock = ld_aunlock,
 };
 
 /*******************************************************************************************
@@ -1188,6 +1187,8 @@ void LoaderRun(char *fname, char *args)
     LoaderActive = 1;
     code = LoaderCall(L->base + L->h.entry, &ld->start, L->psp, L->psplim);
     LoaderActive = 0;
+    AppSoundStop();                                                 // (its fill is in the memory given back below)
+    AppSoundHold(0);
 
     // what it left: its blocks, the memory it borrowed, the keys it had (not typed into BASIC). A Ctrl-C stays: the
     // BASIC program that ran it stops next.

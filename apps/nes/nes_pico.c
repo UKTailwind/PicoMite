@@ -117,7 +117,7 @@ static void pace(int count) {
     if(due > now) usleep((useconds_t)(due - now));
 }
 
-/* in PendSV: no services */
+/* in an interrupt: no services */
 static void fill(int16_t *buf, uint32_t frames) {
     uint32_t out = ring_out, in = ring_in;
     static int16_t last;

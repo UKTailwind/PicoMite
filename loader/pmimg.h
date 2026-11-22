@@ -186,10 +186,16 @@ struct cmm2_services {
     int      (*gamepad)(int n, int *lx, int *ly);   /* the pad in USB channel n (1-4): DEVICE(GAMEPAD n, B)'s bitmap, and
                                                   its left stick (LX and LY) in lx and ly if they are not NULL, 128 on a
                                                   generic pad, which has none; -1 if no pad is there */
-    /* sound: not yet (the plan's Phase 6). audio_start returns -1 */
-    int      (*audio_start)(void (*fill)(int16_t *buf, uint32_t frames));
-    void     (*audio_stop)(void);
-    void     (*audio_lock)(void);
+    /* sound, through OPTION AUDIO's output (PWM, an SPI DAC or I2S). The stream is 16-bit stereo, made by the
+       program's fill, which the firmware calls from an interrupt (below every other) each time a buffer is wanted:
+       1024 frames, 23 ms, the first two before audio_start returns. fill runs on MMBasic's stack, not the program's:
+       it must be quick, keep its locals small and call no service, malloc or stdio. A fill that is late makes the
+       last buffer play again. Its sound goes out at PLAY VOLUME's level. */
+    int      (*audio_start)(void (*fill)(int16_t *buf, uint32_t frames));   /* the rate in Hz (44.1 kHz as the output
+                                                  makes it), or negative: -1 no output for it (no OPTION AUDIO, or a
+                                                  VS1053), -2 sound already playing, -3 no room */
+    void     (*audio_stop)(void);              /* (ended for it when the program ends) */
+    void     (*audio_lock)(void);              /* fill held off, while the program changes what fill reads: briefly */
     void     (*audio_unlock)(void);
 };
 

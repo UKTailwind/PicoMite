@@ -1,11 +1,12 @@
 # Loadable Programs and USER Modules: Implementation Plan
 
-**Status, 18 November 2026:**
+**Status, 22 November 2026:**
 - The decisions are made: Peter accepted every recommendation in section 2, and on 17 November settled D13: the loadable programs are part of V8, in line with the Colour Maximite 2.
 - The branch is **`v8`**, on GitHub as `origin/v8`, in the worktree `D:\Dropbox\PicoMite\pm_loader`. It was created as `loader` from main at 544be7b on 16 November, and renamed and pushed on 18 November at Peter's word. Main at the V7.00.00 release (c187ef5) is merged in (a17616d), and the version is 8.00.00b1 (`MM.VER` 8.000001).
 - Phase 0 is done (16 November): the flash and SRAM margins are in section 10 (Per-variant figures), and the solar_eclipse baseline is in Phase 0 step 4. 
 - **16 November, later:** Phase 1 is done on the PC3 (committed in 96ab930). For Peter's "try the simplest and smallest CMM2 app", parts of Phases 3, 4 and 5 were done ahead of their turn: all the file and directory services (A:, B:), `video_mode`/`video_palette`/`video_wait` with BASIC's screen put back, `keys_held`, `keys_raw`, `gamepad` (a generic pad's sticks read 128, as on the CMM2), and sound as stubs (`audio_start` returns -1). The CMM2's NES (apps/nes, frank-nes) runs Nova the Squirrel at about 55 frames a second at 315 MHz, silent, and its keyboard works. The loader is about 8 KB of flash; with V7.00.00 merged in, the PC3 has 4.7 KB of flash and 1.9 KB of SRAM left.
-- Next: sound (Phase 6) and the phases after it.
+- **22 November:** Phase 6 (sound) is done on the PC3 (see Phase 6): `audio_start`, `audio_stop`, `audio_lock` and `audio_unlock`, with the spare-interrupt refill and D8. Tested by ear on I2S with `sndtest.app`. The PC3 now has 3.3 KB of flash and 1.9 KB of SRAM left.
+- Next: I/O (Phase 7) and the phases after it.
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -312,7 +313,7 @@ The PicoMite has three kinds of display, and the services cover them differently
 The PicoMite plays sound from the PWM wrap interrupt, one sample per interrupt at priority 255, with no DMA (SDCard.c:405-575). It plays from two swing buffers that `PLAY ARRAY` fills (Audio.c:1743-1811; refilled in `checkWAVinput`, 3603).
 
 **The app's sound** uses the same swing buffers:
-1. `audio_start(fill)` allocates the two buffers (8192 bytes each, `WAV_BUFFER_SIZE`) and returns the rate (44,100).
+1. `audio_start(fill)` allocates the two buffers and returns the rate (44,100). *As built: 1024 frames each (4 KB, 23 ms), the CMM2's size rather than `WAV_BUFFER_SIZE`, in the SRAM heap; both are made by `fill` before `audio_start` returns.*
 2. When `on_pwm_wrap` finishes a buffer, it pends a **spare user interrupt** (the RP2350's `SPARE_IRQ_n`, claimed with `user_irq_claim_unused`) at the lowest priority.
 3. That interrupt's handler calls the app's `fill(int16_t *buf, frames)`, then converts the result to 12-bit unsigned for PWM (`iconvert`) or signed 16-bit for I2S (`i2sconvert`).
 4. While the app's sound runs, the wrap interrupt is raised above the refill interrupt's priority (D8), so a slow fill cannot starve it.
@@ -520,6 +521,18 @@ Each phase is a series of small changes, each built and run on a board before th
 - Sound during reads from B: (expected clean) and writes to A: (expected short glitches).
 - Sound stopped at the end and after Ctrl-C.
 - BASIC's PLAY works normally afterwards.
+
+*Done 22 November* on the COM10 PC3 (I2S, headphones). Built as section 4.8 describes: a new playing state `P_APP`; `advance_swing_buffer` (SDCard.c) pends the claimed spare interrupt on each change of buffer; its handler (`AppSoundRefill`, Audio.c) has `fill` make the buffer just played and converts it at PLAY VOLUME's level. The wrap interrupt goes from 0xF0 to 0xE0 while the program's sound plays, and back at `audio_stop`. `audio_lock`/`audio_unlock` disable and enable the spare interrupt, and a lock is kept across `audio_start` (as the CMM2's BASEPRI). `audio_start` returns -1 (no output for it: no OPTION AUDIO, a VS1053), -2 (already playing) or -3 (no room). The loader stops the sound when a program ends, before its memory (which holds `fill`) is freed. `sound_state` is left for Phase 9: until a program can start BASIC's PLAY there is nothing for it to report.
+
+`tools/sdk/examples/sndtest.c` measures the fills a second (43.07 expected) and the longest gap between fills (23.2 ms; over 40 ms means a buffer played twice):
+- a scale, left and right a fifth apart, the note changed under `audio_lock`: 43.4 a second, longest gap 23.3 ms. Peter: clean.
+- under load (sums, `poll` every 10 ms, 5 s): 43.3, 23.3 ms.
+- 1 MB written to B: and read back: 43.3 and 43.4, 23.3 ms; data PASS.
+- 1 MB written to A:: 2.8 a second, gaps up to 407 ms (the flash writes have the interrupts off: BASIC's PLAY has the same); read back at 43.6.
+- `audio_start` twice: -2; after `audio_stop` it starts again.
+- Ending without `audio_stop`, and Ctrl-C from `poll()`: the sound stops; `MM.INFO(SOUND)` is OFF and `PLAY TONE` works afterwards.
+
+Not yet tested: the PWM output, an 8-voice mix, and the NES with sound by ear (Peter was away: "assume all OK").
 
 ### Phase 7: I/O
 

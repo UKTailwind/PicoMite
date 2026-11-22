@@ -48,6 +48,13 @@ void modcallback(char *p);
 void audioInterrupt(void);
 void CheckAudio(void); /* keeps playback fed from a long C loop (image decoders) */
 void checkWAVinput(void);
+#ifdef LOADER
+/* A loadable program's sound (Loader.c's audio_start, audio_stop, audio_lock and audio_unlock): Audio.c */
+int AppSoundStart(void (*fill)(int16_t *buf, uint32_t frames));
+void AppSoundStop(void);
+void AppSoundHold(int hold);
+extern int AppSoundIRQ; /* the spare interrupt that the wrap interrupt pends for a refill (SDCard.c) */
+#endif
 
 /* ============================================================================
  * Constants
@@ -114,7 +121,8 @@ typedef enum
    P_ARRAY,
    P_SAMPLE,
    P_WAVOPEN,
-   P_BBC
+   P_BBC,
+   P_APP /* a loadable program's sound: its fill makes the stream (AppSoundStart) */
 } e_CurrentlyPlaying;
 
 /* ============================================================================

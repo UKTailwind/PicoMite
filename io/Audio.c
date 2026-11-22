@@ -149,7 +149,7 @@ commands and functions
 // define the PWM output frequency for making a tone
 const char *const PlayingStr[] = {"PAUSED TONE", "PAUSED FLAC", "PAUSED MP3", "PAUSED SOUND", "PAUSED MOD", "PAUSED ARRAY", "PAUSED WAV", "PAUSED SAMPLE", "PAUSED BBC", "OFF",
 								  "OFF", "TONE", "SOUND", "WAV", "FLAC", "MP3",
-								  "MIDI", "", "MOD", "STREAM", "ARRAY", "SAMPLE", "", "BBC"};
+								  "MIDI", "", "MOD", "STREAM", "ARRAY", "SAMPLE", "", "BBC", "PROGRAM"};
 volatile unsigned char PWM_count = 0;
 volatile float PhaseM_left, PhaseM_right;
 volatile uint64_t SoundPlay;
@@ -688,6 +688,107 @@ static inline void i2sconvert(int16_t *fbuff, int16_t *sbuff, int count)
 		sbuff[i + 1] = (int16_t)((int)(fbuff[i + 1]) * mapping[vol_right] / 2048);
 	}
 }
+#ifdef LOADER
+/* A loadable program's sound (docs/Loader_Plan.md 4.8): a 16-bit stereo stream that the program's fill makes, played
+   through the two swing buffers as PLAY ARRAY's. Each time the wrap interrupt moves to the other buffer it pends
+   AppSoundIRQ (advance_swing_buffer, SDCard.c), a spare interrupt at the lowest priority, whose handler has fill make
+   the buffer that has just played and converts it, as checkWAVinput does for PLAY ARRAY. While it plays the wrap
+   interrupt is raised above that one (the plan's D8): a fill that is late makes the buffer playing play again, it
+   never holds up the output. fill runs from the program's code in the PSRAM, on the main stack: a flash write has
+   the interrupts off. */
+#define APP_FRAMES 1024 /* a buffer: 23 ms */
+int AppSoundIRQ = -1;	/* claimed the first time */
+static void (*volatile AppFill)(int16_t *buf, uint32_t frames);
+static volatile int AppHeld; /* audio_lock: fill held off (kept across audio_start, as the CMM2's BASEPRI) */
+static void AppSoundMake(int b)
+{ // buffer b (1 or 2) made by the program and converted for the output
+	int16_t *p = b == 1 ? g_buff1 : g_buff2;
+	AppFill(p, APP_FRAMES);
+	if (AUDIO_SIGNED16)
+		i2sconvert(p, p, APP_FRAMES * 2);
+	else
+		iconvert((uint16_t *)p, p, APP_FRAMES * 2);
+	bcount[b] = APP_FRAMES * 2;
+}
+static void AppSoundRefill(void)
+{
+	int s = swingbuf; // the buffer playing: the other one is made
+	if (CurrentlyPlaying != P_APP || AppFill == NULL || s == 0 || s == nextbuf)
+		return;
+	AppSoundMake(3 - s);
+	nextbuf = s; // (s, not swingbuf read again: if the wrap interrupt has moved on meanwhile, it has pended this again)
+}
+/* the rate in Hz, or -1 no output for it (no OPTION AUDIO, a VS1053), -2 sound already playing, -3 no room */
+int AppSoundStart(void (*fill)(int16_t *buf, uint32_t frames))
+{
+	if (fill == NULL || !AUDIO_CONFIGURED || AUDIO_USES_VS1053 || AUDIO_BLUETOOTH)
+		return -1;
+	if (CurrentlyPlaying != P_NOTHING && CurrentlyPlaying != P_STOP)
+		return -2;
+	if (AppSoundIRQ < 0)
+	{
+		if ((AppSoundIRQ = user_irq_claim_unused(false)) < 0)
+			return -3;
+		irq_set_exclusive_handler(AppSoundIRQ, AppSoundRefill);
+		irq_set_priority(AppSoundIRQ, PICO_LOWEST_IRQ_PRIORITY);
+	}
+	FreeMemorySafe((void **)&sbuff1);
+	FreeMemorySafe((void **)&sbuff2);
+	sbuff1 = GetSRAMMemoryNull(APP_FRAMES * 4); // (in the SRAM: the wrap interrupt reads them, a sample at a time)
+	sbuff2 = GetSRAMMemoryNull(APP_FRAMES * 4);
+	if (sbuff1 == NULL || sbuff2 == NULL)
+	{
+		FreeMemorySafe((void **)&sbuff1);
+		FreeMemorySafe((void **)&sbuff2);
+		return -3;
+	}
+	ubuff1 = (uint16_t *)sbuff1;
+	ubuff2 = (uint16_t *)sbuff2;
+	g_buff1 = (int16_t *)sbuff1;
+	g_buff2 = (int16_t *)sbuff2;
+	mono = 0;
+	WAVInterrupt = NULL; // (a finished earlier sound's BASIC interrupt must not fire when this ends)
+	audiorepeat = 1;
+	setrate(44100);
+	AppFill = fill;
+	playreadcomplete = 0;
+	AppSoundMake(1); // both made before it starts: nothing to make until the first has played
+	AppSoundMake(2);
+	swingbuf = 1;
+	nextbuf = 1;
+	ppos = 0;
+	CurrentlyPlaying = P_APP;
+	irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY - 0x10); // (D8: above the refill)
+	irq_clear(AppSoundIRQ);
+	irq_set_enabled(AppSoundIRQ, !AppHeld);
+	pwm_set_irq0_enabled(AUDIO_SLICE, true);
+	pwm_set_enabled(AUDIO_SLICE, true);
+	if (AUDIO_SIGNED16)
+		return 44100; // (I2S: the PIO's clock divider makes it)
+	return (int)((Option.CPU_Speed * 1000u) / (AUDIO_WRAP + 1u)); // (PWM: a sample each wrap)
+}
+void AppSoundStop(void)
+{
+	if (AppSoundIRQ >= 0)
+	{
+		irq_set_enabled(AppSoundIRQ, false);
+		irq_clear(AppSoundIRQ);
+	}
+	if (CurrentlyPlaying == P_APP)
+		CloseAudio(1); // (the wrap interrupt stopped, the buffers freed)
+	AppFill = NULL;
+	irq_set_priority(PWM_IRQ_WRAP, PICO_LOWEST_IRQ_PRIORITY); // (BASIC's PLAY's)
+}
+void AppSoundHold(int hold)
+{
+	AppHeld = hold;
+	if (AppSoundIRQ < 0)
+		return;
+	irq_set_enabled(AppSoundIRQ, !hold && AppFill != NULL);
+	__dsb();
+	__isb();
+}
+#endif
 
 // PLAY BBC: fill swing buffer idx (1 or 2) from the BBC engine (AudioBBC.c) and
 // shape it for the output, as the PLAY TONE branches do inline.  One copy of the

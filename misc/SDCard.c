@@ -398,6 +398,10 @@ static int __no_inline_not_in_flash_func(advance_swing_buffer)(int *pleft, int *
 			bcount[swingbuf] = psave;
 			ppos = 0;
 		}
+#ifdef LOADER
+		if (CurrentlyPlaying == P_APP) // the buffer just played made again by the loadable program's fill (Audio.c)
+			nvic_hw->ispr[AppSoundIRQ / 32] = 1u << (AppSoundIRQ % 32);
+#endif
 	}
 
 	return result;
@@ -418,6 +422,9 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 		if (CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_ARRAY
 #ifdef rp2350
 			|| CurrentlyPlaying == P_SAMPLE
+#endif
+#ifdef LOADER
+			|| CurrentlyPlaying == P_APP
 #endif
 		)
 		{
@@ -540,6 +547,9 @@ void MIPS16 __not_in_flash_func(on_pwm_wrap)(void)
 		if (CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_TONE || CurrentlyPlaying == P_SOUND || CurrentlyPlaying == P_BBC || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_ARRAY
 #ifdef rp2350
 			|| CurrentlyPlaying == P_SAMPLE
+#endif
+#ifdef LOADER
+			|| CurrentlyPlaying == P_APP
 #endif
 			|| CurrentlyPlaying == P_MP3)
 		{

@@ -4,9 +4,9 @@ A loadable program is C or C++ built separately from the firmware and run with `
 firmware's services through a table (`loader/pmimg.h`) and runs at full speed from the PSRAM, then returns to MMBasic.
 The design is in `docs/Loader_Plan.md`.
 
-So far (Phase 1 of the plan) this is the PC3 build only, and the services are the console, time, `poll`, `leave`,
-`alloc`, the firmware's `memcpy`/`memset`/`memmove`, and `psram_size`. Files, the display, input, sound and I/O follow
-in later phases.
+So far this is the PC3 build only, and the services are the console, time, `poll`, `leave`, `alloc`, the
+firmware's `memcpy`/`memset`/`memmove`, `psram_size`, the files and directories, the display, the keyboard and
+gamepads, and sound. I/O and USER modules follow in later phases of the plan.
 
 ## Building
 
@@ -53,3 +53,8 @@ Include `cmm2.h`. The names are the Colour Maximite 2's, so a program's portable
 - A program cannot use SVC or PendSV (the firmware owns them), and must leave the interrupts, DMA, PIO and core 1
   alone.
 - A fault in a program restarts the board.
+- Sound: `cmm2->audio_start(fill)` plays a 16-bit stereo stream through OPTION AUDIO's output and returns its rate
+  (44.1 kHz) or a negative error. The firmware calls `fill(buf, frames)` from an interrupt each time a buffer is
+  wanted (1024 frames, 23 ms): it must be quick and call no service, `malloc` or stdio. Change what `fill` reads
+  between `audio_lock()` and `audio_unlock()`. The sound stops when the program ends. `examples/sndtest.c` tries
+  it all.
