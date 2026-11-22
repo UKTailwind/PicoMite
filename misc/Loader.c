@@ -71,6 +71,7 @@ typedef struct {
         FIL fat;
         lfs_file_t lfs;
     } u;
+    DWORD *map;                                                     // a FatFs file's cluster map (ld_map), or NULL
 } ldfile_t;
 typedef struct {
     int fs;
@@ -282,6 +283,41 @@ static int ld_resolve(const char *name, char *q)
     return FatFSFileSystem;
 }
 
+// a FatFs file opened as it is (read, or read and written in place) is given a map of its clusters (FatFs's fast seek),
+// as the CMM2's are: a seek, or the next cluster, is then found in the table, not by following the FAT from the file's
+// start over the card's SPI each time (Doom seeks to each lump of a 28 MB WAD: 65 s to start without it). A write or a
+// seek that would make the file longer, or a truncate, drops it first (with it a file cannot change its length). 64
+// entries first, then as many as FatFs says it needs; without room the file is read as before
+static void ld_map(ldfile_t *f)
+{
+    DWORD n = 64, *t;
+    FRESULT r;
+    while ((t = GetMemoryNull(n * sizeof(DWORD))) != NULL)
+    {
+        t[0] = n;
+        f->u.fat.cltbl = t;
+        if ((r = f_lseek(&f->u.fat, CREATE_LINKMAP)) == FR_OK)
+        {
+            f->map = t;
+            return;
+        }
+        f->u.fat.cltbl = NULL;
+        n = t[0];
+        FreeMemory(t);
+        if (r != FR_NOT_ENOUGH_CORE)
+            return;
+    }
+}
+static void ld_unmap(ldfile_t *f)
+{
+    if (f->map)
+    {
+        f->u.fat.cltbl = NULL;
+        FreeMemory(f->map);
+        f->map = NULL;
+    }
+}
+
 static void ld_filebody(void *a)
 {
     ldfop_t *o = a;
@@ -318,6 +354,8 @@ static void ld_filebody(void *a)
             if (o->mode & CMM2_O_WRITE)
                 m |= FA_WRITE | ((o->mode & CMM2_O_APPEND) ? FA_OPEN_APPEND : (o->mode & CMM2_O_CREATE) ? FA_CREATE_ALWAYS : FA_OPEN_EXISTING);
             o->r = -(int)f_open(&f->u.fat, q, m);
+            if (o->r == 0 && !(m & (FA_CREATE_ALWAYS | FA_OPEN_APPEND)))
+                ld_map(f);
         }
         else
         {
@@ -490,6 +528,7 @@ static void ld_filebody(void *a)
         case LF_CLOSE:
             o->r = f->fs ? -(int)f_close(&f->u.fat) : ld_lfserr(lfs_file_close(&lfs, &f->u.lfs));
             ld->file[o->h] = NULL;
+            FreeMemory(f->map);
             FreeMemory(f);
             return;
         case LF_READ:
@@ -499,12 +538,16 @@ static void ld_filebody(void *a)
                 o->r = (o->r = lfs_file_read(&lfs, &f->u.lfs, o->buf, o->n)) < 0 ? ld_lfserr(o->r) : o->r;
             return;
         case LF_WRITE:
+            if (f->fs && f->map && f_tell(&f->u.fat) + o->n > f_size(&f->u.fat))
+                ld_unmap(f);                                        // (it grows)
             if (f->fs)
                 o->r = (o->r = -(int)f_write(&f->u.fat, o->buf, o->n, &got)) ? o->r : (int32_t)got;
             else
                 o->r = (o->r = lfs_file_write(&lfs, &f->u.lfs, o->buf, o->n)) < 0 ? ld_lfserr(o->r) : o->r;
             return;
         case LF_SEEK:
+            if (f->fs && f->map && o->n > f_size(&f->u.fat))
+                ld_unmap(f);                                        // (past the end: a seek there grows it)
             o->r = f->fs ? -(int)f_lseek(&f->u.fat, o->n) : (o->r = lfs_file_seek(&lfs, &f->u.lfs, o->n, LFS_SEEK_SET)) < 0 ? ld_lfserr(o->r) : 0;
             return;
         case LF_TELL:
@@ -517,6 +560,8 @@ static void ld_filebody(void *a)
             o->r = f->fs ? -(int)f_sync(&f->u.fat) : ld_lfserr(lfs_file_sync(&lfs, &f->u.lfs));
             return;
         case LF_TRUNC:
+            if (f->fs)
+                ld_unmap(f);
             o->r = f->fs ? -(int)f_truncate(&f->u.fat) : ld_lfserr(lfs_file_truncate(&lfs, &f->u.lfs, lfs_file_tell(&lfs, &f->u.lfs)));
             return;
         }

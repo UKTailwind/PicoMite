@@ -8,7 +8,8 @@
 - **22 November:** Phase 6 (sound) is done on the PC3 (see Phase 6): `audio_start`, `audio_stop`, `audio_lock` and `audio_unlock`, with the spare-interrupt refill and D8. Tested by ear on I2S with `sndtest.app`. The PC3 now has 3.3 KB of flash and 1.9 KB of SRAM left.
 - **22 November, later:** Phase 7 (I/O) is done on the PC3, with the mouse and `gamepad_axes` (see Phase 7). To fit, Loader.c is now compiled with `-Os` (OPTIMIZED_SOURCES), which left the PC3 352 bytes; then, at Peter's word, the PC3's flash target moved **1760 -> 1776 KB**: 16.3 KB of flash left, 1.9 KB of SRAM. On the PC3's 16 MB map A: stays where it is, but the options and the flash slots move: they reset on the first boot after upgrading from V7.00.00, and on every change between V7 and V8 firmware (a line for V8's release notes). COM10's were saved with OPTION DISK SAVE and loaded back.
 - **22 November, evening:** Phase 9 (USER modules) is done on the PC3 (see Phase 9): 2.5 KB, leaving 13.5 KB of flash and 1.8 KB of SRAM. Phase 8 (calling BASIC) was skipped at Peter's word.
-- Next: Phase 10 (first ports) and the phases after it.
+- **22 November, night:** Phase 10's first port, Doom, runs on the PC3: the timedemo at **28.1 fps silent and 25.9 with sound effects** (Bas/bench/results/loader_20261122). The file services now build FatFs's fast-seek map (start-up 66 s -> 29 s). This is the plan's go/no-go point for the program half: Peter's to decide.
+- Next: the go/no-go decision; then MicroPython and a SCUMM-only ScummVM (Phase 10's others).
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -599,6 +600,16 @@ Not tested: a board without PSRAM (the loader is only in the PC3 build).
 - **A SCUMM-only ScummVM image** of about 1.5 MB. The full 3 MB image would leave about 2.5 MB of heap on the PC3.
 
 **Results** go in `Bas/bench/results/loader_<date>/`.
+
+*Doom done 22 November* on the COM10 PC3 (315 MHz, I2S): `apps/doom` (make.py fetches doomgeneric at the CMM2's commit,
+e257a095; `doomgeneric_pico.c` from the CMM2's `doomgeneric_cmm2.c`). MODE 5 with Doom's 320x200 frame in the middle of
+320x240 (the bands black, its messages to the serial console only: con_screen(0)), MAP's palette, KEYDOWN's keys, 16
+voices of effects mixed in the stream's fill; no music (no synth). The WAD (freedoom1.wad, 28.8 MB) is on B:. The
+timedemo of demo1: **28.1 fps silent** (twice: 8852 and 8858 realtics) and **25.9 fps with sound effects**; the CMM2 Gen 1
+gives 77.8 and 33.2 (with OPL3 music), and the 4 November estimate for the PC3 was 25-40. The start-up took 66 s to R_Init
+without a fast-seek map; Loader.c's `ld_map` (as the CMM2's: a FatFs file opened as it is gets its cluster map, dropped
+before a write or seek that would grow it, or a truncate) made it 29 s, and the silent timedemo 27.0 -> 28.1. What is
+left is probably the cost of each read, not yet profiled. Results: `Bas/bench/results/loader_20261122/`.
 
 ### Phase 11: more variants, `--sram`
 
