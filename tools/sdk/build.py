@@ -1,5 +1,5 @@
 """build.py OUT.app SOURCE.c|.cpp|.o [...] [--base ADDR] [--stack BYTES] [--heap BYTES] [--api N] [--psram]
-            [--module] [--no-printf-float] [--libc nano|full] [--cflag FLAG ...] [--cxxflag FLAG ...] [--ldflag FLAG ...]
+            [--module] [--user] [--no-printf-float] [--libc nano|full] [--cflag FLAG ...] [--cxxflag FLAG ...] [--ldflag FLAG ...]
             [-I DIR ...] [-j JOBS] [--sources FILE]
 
 Builds a loadable program for the PicoMite (RP2350) with the firmware's own toolchain (the folder in
@@ -9,6 +9,9 @@ registers; C++ as C++14 without exceptions or RTTI, and then linked by g++ for i
 --base (default 0x11000000, the bottom of the PSRAM, where the loader usually puts a program, so nothing is moved), and
 makes OUT.app with mkimage.py.
 --psram marks the program as needing PSRAM (a board without refuses it).
+--module makes a module (PMIMG_KIND_MODULE): crt0.c calls module_main(), which returns its table. --user makes a USER
+module (loader/pmuser.h, for USER LOAD): --module, with userlib.c's snprintf, sprintf and printf, which format with
+the firmware's own vsnprintf, so the module carries no printf of its own (examples/user/proforma.c is 3 KB).
 --no-printf-float leaves out newlib's printf of floats (dtoa, 4 KB), which a program that formats its own does not
 need: printf's %f is otherwise always there.
 --libc full links the whole newlib instead of newlib-nano (the default).
@@ -90,6 +93,8 @@ def main():
     ap.add_argument('--fixed', action='store_true')
     ap.add_argument('--module', action='store_true')               # a module (PMIMG_KIND_MODULE): crt0.c's
                                                                     # entry calls module_main(), not main()
+    ap.add_argument('--user', action='store_true')                 # a USER module (loader/pmuser.h): --module, and
+                                                                    # userlib.c's printf family (the firmware's)
     ap.add_argument('--no-printf-float', dest='pfloat', action='store_false')
     ap.add_argument('--libc', choices=('nano', 'full'), default='nano')
     ap.add_argument('--cflag', action='append', default=[])
@@ -98,6 +103,9 @@ def main():
     ap.add_argument('-I', dest='incs', action='append', default=[])
     ap.add_argument('-j', dest='jobs', type=int, default=os.cpu_count() or 4)
     a = ap.parse_args()
+    if a.user:
+        a.module = True
+        a.pfloat = False                                            # (its printf is the firmware's: userlib.c)
     libc = NANO if a.libc == 'nano' else []                         # (compile and link alike: the headers match the archive)
     if a.module:
         a.cflag += ['-DCMM2_MODULE']
@@ -109,6 +117,8 @@ def main():
     if a.listfile:
         sources += [l.strip() for l in open(a.listfile) if l.strip() and not l.startswith('#')]
     sources += [os.path.join(SDK, 'crt0.c'), os.path.join(SDK, 'syscalls.c')]
+    if a.user:
+        sources.append(os.path.join(SDK, 'userlib.c'))
     # the flags as they were: a change rebuilds everything
     key = hashlib.md5(json.dumps([CFLAGS, CXXFLAGS, libc, a.cflag, a.cxxflag, incs]).encode()).hexdigest()
     keyfile = os.path.join(objdir, 'flags.md5')

@@ -145,6 +145,7 @@ set(OPTIMIZED_SOURCES
 	misc/FileIO.c
 	core/Stream.c
 	misc/Loader.c
+	misc/User.c
 )
 # misc/FileIO.c is here for ~3.7 KB of flash, which is what lets VGA's
 # FLASH_TARGET_OFFSET sit at 800 KB rather than 816 KB.
@@ -670,7 +671,7 @@ if(USES_RAYCASTER)
 endif()
 
 if(USES_LOADER)
-	target_sources(PicoMite PRIVATE misc/Loader.c)
+	target_sources(PicoMite PRIVATE misc/Loader.c misc/User.c)
 	target_compile_definitions(PicoMite PRIVATE LOADER)
 endif()
 

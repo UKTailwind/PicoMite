@@ -257,4 +257,12 @@ struct cmm2_services {
 #define CMM2_BUS_SPI     1
 #define CMM2_BUS_COM     2
 
+/* A module's table (PMIMG_KIND_MODULE: build.py --module), the one its module_main() returns, starts with this */
+typedef struct {
+    uint32_t magic;                            /* CMM2MOD_MAGIC */
+    uint32_t version;                          /* the table's version, the firmware command's to check */
+    void     (*forget)(void);                  /* called before the module goes: its files closed, its work given up */
+} cmm2mod_head;
+#define CMM2MOD_MAGIC        0x444F4D43u       /* "CMOD" */
+
 #endif

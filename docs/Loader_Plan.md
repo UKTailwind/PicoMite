@@ -7,7 +7,8 @@
 - **16 November, later:** Phase 1 is done on the PC3 (committed in 96ab930). For Peter's "try the simplest and smallest CMM2 app", parts of Phases 3, 4 and 5 were done ahead of their turn: all the file and directory services (A:, B:), `video_mode`/`video_palette`/`video_wait` with BASIC's screen put back, `keys_held`, `keys_raw`, `gamepad` (a generic pad's sticks read 128, as on the CMM2), and sound as stubs (`audio_start` returns -1). The CMM2's NES (apps/nes, frank-nes) runs Nova the Squirrel at about 55 frames a second at 315 MHz, silent, and its keyboard works. The loader is about 8 KB of flash; with V7.00.00 merged in, the PC3 has 4.7 KB of flash and 1.9 KB of SRAM left.
 - **22 November:** Phase 6 (sound) is done on the PC3 (see Phase 6): `audio_start`, `audio_stop`, `audio_lock` and `audio_unlock`, with the spare-interrupt refill and D8. Tested by ear on I2S with `sndtest.app`. The PC3 now has 3.3 KB of flash and 1.9 KB of SRAM left.
 - **22 November, later:** Phase 7 (I/O) is done on the PC3, with the mouse and `gamepad_axes` (see Phase 7). To fit, Loader.c is now compiled with `-Os` (OPTIMIZED_SOURCES), which left the PC3 352 bytes; then, at Peter's word, the PC3's flash target moved **1760 -> 1776 KB**: 16.3 KB of flash left, 1.9 KB of SRAM. On the PC3's 16 MB map A: stays where it is, but the options and the flash slots move: they reset on the first boot after upgrading from V7.00.00, and on every change between V7 and V8 firmware (a line for V8's release notes). COM10's were saved with OPTION DISK SAVE and loaded back.
-- Next: Phase 8 (optional) and Phase 9 (USER modules).
+- **22 November, evening:** Phase 9 (USER modules) is done on the PC3 (see Phase 9): 2.5 KB, leaving 13.5 KB of flash and 1.8 KB of SRAM. Phase 8 (calling BASIC) was skipped at Peter's word.
+- Next: Phase 10 (first ports) and the phases after it.
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -571,6 +572,19 @@ Not yet tested: COM1 and PWM through a wire (`iotest.app loop`, GP0 to GP1: the 
 - Reload after RUN, NEW, CHAIN, EDIT and the file manager.
 - A module on a board without PSRAM.
 - Goldens with a module loaded.
+
+*Done 22 November* on the COM10 PC3. As 4.6 and the CMM2's Src/User.c, almost line for line: `misc/User.c` (USER LOAD, USER CLOSE, USER ..., USER(...), the interpreter's routines as `loader/pmuser.h`'s `struct cmm2_basic`, `usercall` saving and restoring `mark` and `ErrNext`), `LoaderModuleLoad`, `LoaderModuleDrop` and `LoaderModuleTable` in Loader.c, "User" and "User(" in AllCommands.h. As built:
+- The module's image and .bss are one block of the heap (GetMemoryNull: the SRAM heap for a small one), its C library's heap another (64 KB unless `--heap`). It has no stack: its start, like its functions, runs on MMBasic's.
+- The services' state for a module (files, blocks, io_error's message, its start block) is a block of its own, `ldmod`, which is `ld` whenever no program runs; `LoaderRun` keeps it and puts it back, so a module survives a program run.
+- The hook is at the top of `InitHeap` (as the CMM2's HeapWipe), not in ClearRuntime: every heap wipe goes through it (RUN, NEW, LOAD, CHAIN, EDIT, the file manager, and FILES in a program). The module's `forget()` runs under `ld_try`, then the program end's tidy-up (`ld_tidy`: sound, I/O, files, directories, blocks).
+- Three loader changes a module needed: the veneer passes a call made on the main stack straight to the service (it used to switch to the process stack on the way out); `leave()` from a module is MMBasic's error "A USER module cannot leave()"; `poll()` in a module calls CheckAbort outside `ld_try`, so Ctrl-C breaks the statement and ON ERROR SKIP's state is not left on at the prompt.
+- USER LOAD keeps the full path (`getfullfilename` and the drive letter), so a reload after CHDIR or DRIVE finds the same file.
+- `vsnprintf` is the firmware's, the Pico SDK's compact printf: measured on the board through `modtest`'s FMT$, `%f` is right but `%e` and `%g` of 1e6 give 10.000000e+05, and `%g` of 0.5 gives 0.500000. pmuser.h, userlib.c and the README say to format those with `float_to_str`.
+- SDK: `build.py --user` (a module with `userlib.c`'s printf family and no newlib float printf), `tools/sdk/cmm2user.h`, `examples/user/proforma.c` (3.1 KB) and `examples/user/modtest.c`.
+
+Tests on COM10, all as expected: the pro-forma's eight (HELLO with and without a name; SWAP of numbers and of strings; FILL of an integer and a float array; TOTAL; ADD giving an integer or a float; REVERSE$; FIXED$; CALLS); `USER(` inside USER FILL's arguments and inside a FUNCTION; errors at the prompt (Unknown USER command / function) and in a program under ON ERROR SKIP (MM.ERRNO 16 and the module's message), and an error inside the module reported at the program's line; reload after RUN, NEW, LOAD, CHAIN, EDIT and the file manager (CALLS back to 1); USER CLOSE, then "USER LOAD first"; `modtest`: con_puts, micros, alloc, a file on A: written, read back and removed, `leave()` refused, Ctrl-C through `poll()` with errors reported normally after it, a file the module left open closed by USER CLOSE; a module kept across an app run; iotest, sndtest, filetest and hello unchanged after the veneer change. Goldens (compiled, `goldens_pc3_v8_phase9_compiled`) against V7.00.00's: the same counts (MATCH 115, DIFF 20, ERROR 66); changed only the timing programs and `i2c0`, whose "nothing at &h76" has a device there on COM10's board (a scan finds 0x68 and 0x76). The module load before the run collided with the run's start, so the run began with none loaded; the heap wipe with a module loaded is covered by the reload tests above. Afterwards the DS3231's registers were put back (14 = 28, 15 = 8: rtcreg.bas clears EN32kHz).
+
+Not tested: a board without PSRAM (the loader is only in the PC3 build).
 
 ### Phase 10: first ports, and the go/no-go measurement
 

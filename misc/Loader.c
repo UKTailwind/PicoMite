@@ -55,6 +55,7 @@ extern bool mouse0;                                                 // a PS/2 mo
 #define LD_BLOCKS  64                                               // the alloc service's blocks
 #define LD_FILES   8                                                // the file services' handles
 #define LD_DIRS    4                                                // and the directories'
+#define LD_MOD_HEAP 0x10000                                         // a USER module's C library's heap if it asks none
 #define LD_RESERVE 0x40000                                          // the PSRAM run's top left free: the services' blocks
 #define LD_CHUNK   4096                                             // the image read through SRAM this much at a time
 
@@ -187,7 +188,10 @@ static void ld_pollbody(void *a)
 }
 static __attribute__((used, noinline)) int ld_poll(void)
 {
-    ld_try(ld_pollbody, NULL);
+    if (!LoaderActive)                                              // a USER module, inside a statement: Ctrl-C breaks
+        ld_pollbody(NULL);                                          // it, as in any command (not under ld_try, which
+    else                                                            // would leave ON ERROR SKIP's state on at the prompt)
+        ld_try(ld_pollbody, NULL);
     return MMAbort != 0;
 }
 static uint32_t ld_cpuhz(void) { return clock_get_hz(clk_sys); }
@@ -1137,6 +1141,23 @@ static void ld_iotidy(void)
             ld_cmd(cmd_setpin, NULL, "GP%d,OFF", gp);
 }
 
+// what a program or a USER module leaves, given back: its sound stopped (its fill is in the memory freed next), its
+// PWM, buses, ports and pins, its files and directories closed, its blocks of the heap freed
+static void ld_tidy(void)
+{
+    AppSoundStop();
+    AppSoundHold(0);
+    ld_iotidy();
+    for (int i = 0; i < LD_FILES; i++)                              // (A:'s are in littlefs's list of open files)
+        if (ld->file[i])
+            ld_close(i);
+    for (int i = 0; i < LD_DIRS; i++)
+        if (ld->dir[i])
+            ld_closedir(i);
+    for (int i = 0; i < LD_BLOCKS; i++)
+        FreeMemory(ld->block[i]);
+}
+
 /*******************************************************************************************
  calling the program on its own stack
 *******************************************************************************************/
@@ -1177,24 +1198,38 @@ __attribute__((naked)) static int LoaderCall(void *entry, cmm2img_start *start, 
         "pop    {r4-r11, pc}        \n"
         ".ltorg                     \n");
 }
+static __attribute__((used, noinline)) void ld_leaveerr(void) { error("A USER module cannot leave()"); }
 __attribute__((naked, noreturn)) static void ld_leave(int code)
 {
-    __asm volatile("b LoaderReturn"); // (r0 is already the code)
+    __asm volatile(
+        "ldr    r1, =LoaderActive   \n" /* a program's: back to MMBasic (r0 is already the code) */
+        "ldr    r1, [r1]            \n"
+        "cbz    r1, 1f              \n"
+        "b      LoaderReturn        \n"
+        "1:                         \n" /* a USER module's (MMBasic's stack, inside a statement): an error */
+        "b      ld_leaveerr         \n"
+        ".ltorg                     \n");
 }
 
 // A service run on the main stack: the program calls a stub, which puts the service in ip and branches here. Its
 // arguments are r0-r3 and up to four words on the program's stack, which are copied to the main stack (a service has
 // at most eight). The main stack is where LoaderCall left it (ldmsp: the interrupts that came meanwhile have put it
-// back), so the firmware runs on its own stack, in the SRAM; a flash write there cannot take it away.
+// back), so the firmware runs on its own stack, in the SRAM; a flash write there cannot take it away. A USER module
+// runs on the main stack already: its call goes straight to the service.
 __attribute__((naked, used)) static void ld_veneerfn(void)
 {
     __asm volatile(
         ".thumb_func                \n"
         "ld_veneer:                 \n"
         "push   {r4, r5, r6, lr}    \n"
+        "mrs    r6, control         \n"
+        "tst    r6, #2              \n"
+        "bne    1f                  \n"
+        "pop    {r4, r5, r6, lr}    \n" /* the main stack (a USER module): the service as it is */
+        "bx     ip                  \n"
+        "1:                         \n"
         "mov    r4, sp              \n" /* the process stack: the stacked arguments at r4+16 */
         "mov    r5, ip              \n"
-        "mrs    r6, control         \n"
         "bic    r6, r6, #2          \n"
         "msr    control, r6         \n"
         "isb                        \n"
@@ -1345,8 +1380,9 @@ int LoaderIsApp(const char *fname)
 // what loading a program needs, from the file to the place it runs (ld_load, under FileTry)
 typedef struct {
     char *fname;
+    int module;                                                     // a USER module, not a program
     pmimg_header h;
-    unsigned char *area;                                            // the PSRAM borrowed, or NULL
+    unsigned char *area;                                            // the PSRAM borrowed (a module's block), or NULL
     uint32_t areasize;
     unsigned char *stack;                                           // its stack in the SRAM heap, or NULL
     uint32_t stacksize;
@@ -1440,7 +1476,8 @@ static bool ld_load(void *a)
     buf = GetTempMemory(LD_CHUNK);
     if (!ld_get(fnbr, h, sizeof(*h), buf) || memcmp(h->magic, PMIMG_MAGIC, 8))
         return ld_refuse(L, "Not a loadable program");
-    if (h->hdr_version != PMIMG_HDR_VERSION || h->kind != PMIMG_KIND_APP || h->target != PMIMG_TARGET ||
+    if (h->hdr_version != PMIMG_HDR_VERSION || h->kind != (L->module ? PMIMG_KIND_MODULE : PMIMG_KIND_APP) ||
+        h->target != PMIMG_TARGET ||
         h->image_size == 0 || !(h->entry & 1) || h->entry >= h->image_size || h->align_log2 > 16 ||
         h->reloc_count > 0x1000000 || fsize != sizeof(*h) + h->image_size + h->reloc_count * 4)
         return ld_refuse(L, "Not a program this firmware can load");
@@ -1448,15 +1485,28 @@ static bool ld_load(void *a)
         return ld_refuse(L, "Needs a newer firmware");
 
     // its place: the image, its .bss, then its heap; the relocations read in where the heap will be
-    L->stacksize = h->stack_size ? (h->stack_size + 7) & ~7u : PMIMG_STACK;
     end = (h->image_size + h->bss_size + 7) & ~7u;
     rel = h->reloc_count * 4;
+    align = (h->flags & PMIMG_FLAG_MOVT) ? 0x10000 : (1u << h->align_log2) < 8 ? 8 : 1u << h->align_log2;
+    if (L->module)
+    {   // a module: a block of the heap for the image, its .bss and the relocations, and one for its C library's heap.
+        // It has no stack of its own: its functions run on MMBasic's
+        L->heapsize = ((h->heap_min ? h->heap_min : LD_MOD_HEAP) + 7) & ~7u;
+        if ((L->area = GetMemoryNull(end + rel + align)) == NULL || (L->heap = GetMemoryNull(L->heapsize)) == NULL)
+        {
+            snprintf(L->msg, sizeof(L->msg), "Needs %u KB of the heap",
+                     (unsigned)((end + rel + align + L->heapsize + 1023) / 1024));
+            return false;
+        }
+        L->base = (unsigned char *)(((uint32_t)L->area + align - 1) & ~(align - 1));
+        goto read;
+    }
+    L->stacksize = h->stack_size ? (h->stack_size + 7) & ~7u : PMIMG_STACK;
     if ((L->stack = GetSRAMMemoryNull(L->stacksize)) == NULL) // (else the stack at the top of the PSRAM borrowed)
         place = end + (rel > L->stacksize ? rel : L->stacksize);
     else
         place = end + rel;
     L->area = ld_claim(&L->areasize);
-    align = (h->flags & PMIMG_FLAG_MOVT) ? 0x10000 : (1u << h->align_log2) < 8 ? 8 : 1u << h->align_log2;
     if (L->area)
     {
         unsigned char *areaend = L->area + L->areasize;
@@ -1488,7 +1538,7 @@ fits:
         L->psplim = L->psp - L->stacksize;
     }
 
-    // the image straight into its place, the relocations after its .bss
+read: // the image straight into its place, the relocations after its .bss
     if (!ld_get(fnbr, L->base, h->image_size, buf) || !ld_get(fnbr, L->base + end, rel, buf))
         return ld_refuse(L, "Cannot read the program");
     ForceFileClose(fnbr);
@@ -1556,6 +1606,7 @@ static int ld_words(const char *text, int *len)
 void LoaderRun(char *fname, char *args)
 {
     ldload_t *L;
+    ldstate_t *was = ld;                                            // a USER module's, kept while the program runs
     char *p, *s, name[STRINGSIZE];
     unsigned char *area, *stack;
     int argc, len, code;
@@ -1612,7 +1663,7 @@ void LoaderRun(char *fname, char *args)
         FreeMemory(L->area);
         FreeMemory(L->stack);
         FreeMemory(ld);
-        ld = NULL;
+        ld = was;
         if (MMAbort)
             return;
         error("$", msg);
@@ -1634,25 +1685,15 @@ void LoaderRun(char *fname, char *args)
     LoaderActive = 1;
     code = LoaderCall(L->base + L->h.entry, &ld->start, L->psp, L->psplim);
     LoaderActive = 0;
-    AppSoundStop();                                                 // (its fill is in the memory given back below)
-    AppSoundHold(0);
-    ld_iotidy();                                                    // its PWM, buses, ports and pins
 
-    // what it left: its blocks, the memory it borrowed, the keys it had (not typed into BASIC). A Ctrl-C stays: the
-    // BASIC program that ran it stops next.
-    for (int i = 0; i < LD_FILES; i++)                              // (A:'s are in littlefs's list of open files)
-        if (ld->file[i])
-            ld_close(i);
-    for (int i = 0; i < LD_DIRS; i++)
-        if (ld->dir[i])
-            ld_closedir(i);
-    for (int i = 0; i < LD_BLOCKS; i++)
-        FreeMemory(ld->block[i]);
+    // what it left: its sound, I/O, files and blocks, the memory it borrowed, the keys it had (not typed into BASIC).
+    // A Ctrl-C stays: the BASIC program that ran it stops next.
+    ld_tidy();
     ld_try(ld_screenbody, NULL);                                    // (BASIC's screen, if the program changed it)
     FreeMemory(area);
     FreeMemory(stack);
     FreeMemory(ld);
-    ld = NULL;
+    ld = was;
     ConsoleRxBufTail = ConsoleRxBufHead;
     WDTimer = wd;
     if (code)
@@ -1661,5 +1702,78 @@ void LoaderRun(char *fname, char *args)
         snprintf(b, sizeof(b), "%s ended with code %d\r\n", name, code);
         MMPrintString(b);
     }
+}
+
+/*******************************************************************************************
+ a USER module (misc/User.c): loaded into the heap beside the BASIC program, and kept until USER CLOSE, another USER
+ LOAD, or the heap's wipe (InitHeap: RUN, NEW, LOAD, CHAIN...). Its code and .bss are one block of the heap, its C
+ library's heap another; it has no stack of its own, as its functions (and its start) run on MMBasic's, inside a
+ statement. Its services' state is ldmod, which is ld whenever no program is running.
+*******************************************************************************************/
+static ldstate_t *ldmod;
+static const cmm2mod_head *ldmodhead;
+static void *ldmodarea, *ldmodheap;
+
+const void *LoaderModuleTable(void) { return ldmodhead; }
+
+// the module gone: its forget() called (an error in it ignored), what it left given back, its memory freed
+void LoaderModuleDrop(void)
+{
+    const cmm2mod_head *t = ldmodhead;
+    if (!ldmod)
+        return;
+    ldmodhead = NULL;
+    ld = ldmod;
+    if (t && t->forget)
+        ld_try((void (*)(void *))t->forget, NULL);
+    ld_tidy();
+    FreeMemory(ldmodarea);
+    FreeMemory(ldmodheap);
+    FreeMemory(ldmod);
+    ldmod = NULL;
+    ldmodarea = ldmodheap = NULL;
+    ld = NULL;
+}
+
+// the module in fname loaded (the one loaded before dropped first), basic its start block's: its table, or an
+// MMBasic error
+const void *LoaderModuleLoad(char *fname, const void *basic)
+{
+    ldload_t *L;
+    const cmm2mod_head *t;
+    LoaderModuleDrop();
+    if (LoaderActive)
+        error("A loadable program is running");
+    L = GetTempMemory(sizeof(ldload_t));
+    L->fname = fname;
+    L->module = 1;
+    ldmod = GetMemory(sizeof(ldstate_t));
+    if (!FileTry(ld_load, L))
+    {
+        char msg[MAXERRMSG];
+        strcpy(msg, *L->msg ? L->msg : *MMErrMsg ? MMErrMsg : "Cannot read the module");
+        FreeMemory(L->area);
+        FreeMemory(L->heap);
+        FreeMemory(ldmod);
+        ldmod = NULL;
+        error("$", msg);
+    }
+    ldmodarea = L->area;
+    ldmodheap = L->heap;
+    ld = ldmod;
+    ld->screen = 1;
+    ld->start.svc = &ldsvc;
+    ld->start.heap = L->heap;
+    ld->start.heap_size = L->heapsize;
+    ld->start.base = (uint32_t)L->base;
+    ld->start.basic = basic;
+    t = ((const cmm2mod_head *(*)(cmm2img_start *))(L->base + L->h.entry))(&ld->start);
+    if (t == NULL || t->magic != CMM2MOD_MAGIC)
+    {
+        LoaderModuleDrop();
+        error("$ is not a module", fname);
+    }
+    ldmodhead = t;
+    return t;
 }
 #endif

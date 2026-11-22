@@ -180,6 +180,10 @@ void cmd_spi(void);
 void cmd_spi2(void);
 void cmd_xmodem(void);
 void cmd_zmodem(void);
+#ifdef LOADER
+void cmd_user(void); /* USER and USER(: a USER module's (misc/User.c) */
+void fun_user(void);
+#endif
 void cmd_ctrlval(void);
 void cmd_GUIpage(unsigned char *p);
 void cmd_gamepad(void);
@@ -720,6 +724,9 @@ void fun_frame(void);
 	{(unsigned char *)"Bluetooth", T_CMD, 0, cmd_bluetooth},
 #endif
 	{(unsigned char *)"ZModem", T_CMD, 0, cmd_zmodem},
+#ifdef LOADER
+	{(unsigned char *)"User", T_CMD, 0, cmd_user},
+#endif
 
 {
 	(unsigned char *)"", 0, 0, cmd_null
@@ -901,6 +908,9 @@ void fun_frame(void);
 #endif
 #if !defined(PICOMITEWEB) || defined(PICOMITEHDMIWEB)
 	{(unsigned char *)"Tilemap(", T_FUN | T_INT, 0, fun_tilemap},
+#endif
+#ifdef LOADER
+	{(unsigned char *)"User(", T_FUN | T_INT | T_NBR | T_STR, 0, fun_user},
 #endif
 
 {

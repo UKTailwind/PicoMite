@@ -6,8 +6,7 @@ The design is in `docs/Loader_Plan.md`.
 
 So far this is the PC3 build only, and the services are the console, time, `poll`, `leave`, `alloc`, the
 firmware's `memcpy`/`memset`/`memmove`, `psram_size`, the files and directories, the display, the keyboard and
-gamepads, the mouse, sound, and I/O (pins, ADC, PWM, I2C, SPI and the COM ports). USER modules follow in a later
-phase of the plan.
+gamepads, the mouse, sound, and I/O (pins, ADC, PWM, I2C, SPI and the COM ports); and USER modules (below).
 
 ## Building
 
@@ -62,3 +61,35 @@ Include `cmm2.h`. The names are the Colour Maximite 2's, so a program's portable
 - I/O is by GP numbers. A bus (I2C, SPI, COM1/COM2) uses the pins BASIC's SETPIN or OPTION SYSTEM gave it, or the
   ones `cmm2->bus_pins()` names. Pins the board keeps for itself are refused. Whatever the program sets up is undone
   when it ends. `examples/iotest.c` tries it all.
+
+## USER modules
+
+A USER module adds commands and functions of your own to MMBasic, written in C. Build it with `--user`:
+
+```
+python build.py out/proforma.mod examples/user/proforma.c --user
+```
+
+copy the `.mod` to A: or B:, then:
+
+```
+USER LOAD "proforma"           (.mod is added to a name without an extension)
+USER HELLO "Peter"
+PRINT USER(ADD 2, 3.5)
+USER CLOSE
+```
+
+`examples/user/proforma.c` is the one to start from: its comments explain how a module reads its part of the statement
+with the interpreter's own routines (`cmm2_start->basic`, `loader/pmuser.h`). `examples/user/modtest.c` tries the
+services from inside a module.
+
+- A module's functions run on MMBasic's stack, inside the statement: keep big buffers in `B->temp()` or `malloc`'s
+  memory. An error (`B->error()`) leaves the module as it leaves any command, and `ON ERROR SKIP` catches it.
+- It goes with the heap: RUN, NEW, LOAD, CHAIN, EDIT and the file manager drop it (its `forget()` is called first, and
+  the files it left open are closed). The next USER loads it again from the same file, so its variables start again.
+- It can call the services (`cmm2->...`) as a program does, but not `leave()`, and it should not change the screen's
+  mode. `poll()` lets Ctrl-C break the statement, as in any command.
+- `--user` gives it the firmware's `snprintf`, `sprintf` and `printf`, so it carries no printf of its own. `%f` is
+  right, but `%e` and `%g` are not (1e6 comes out as 10.000000e+05, and `%g` keeps trailing zeros: 0.5 as 0.500000):
+  format those with `B->float_to_str()`.
+- Its C library's heap is 64 KB unless `--heap` says otherwise.

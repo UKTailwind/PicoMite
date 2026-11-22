@@ -2091,6 +2091,13 @@ void MIPS32 __not_in_flash_func(FreeMemory)(void *addr)
 void InitHeap(bool all)
 {
     int i;
+#ifdef LOADER
+    /* A USER module (misc/Loader.c, User.c) lives in this heap: its forget()
+       called and its files closed while its code is still there.  The next
+       USER loads it again. */
+    extern void LoaderModuleDrop(void);
+    LoaderModuleDrop();
+#endif
     /* The PLAY BBC engine's state block (AudioBBC.c) lives in this heap:
        hand it back while the bitmap is still valid, then wipe.          */
     BBCSoundRelease();
