@@ -1721,6 +1721,28 @@
             MODE5SIZE = MODE5SIZE_4;
             PIXELS_PER_WORD = 2;
         }
+        else if (Option.Resolution == R720x576)
+        {
+            MODE_H_SYNC_POLARITY = MODE_H_P_SYNC_POLARITY;
+            MODE_ACTIVE_LINES = MODE_V_P_ACTIVE_LINES;
+            MODE_ACTIVE_PIXELS = MODE_H_P_ACTIVE_PIXELS;
+            MODE_V_TOTAL_LINES = MODE_V_P_TOTAL_LINES;
+            MODE_H_ACTIVE_PIXELS = MODE_H_P_ACTIVE_PIXELS;
+            MODE_H_FRONT_PORCH = MODE_H_P_FRONT_PORCH;
+            MODE_H_SYNC_WIDTH = MODE_H_P_SYNC_WIDTH;
+            MODE_H_BACK_PORCH = MODE_H_P_BACK_PORCH;
+            MODE_V_SYNC_POLARITY = MODE_V_P_SYNC_POLARITY;
+            MODE_V_ACTIVE_LINES = MODE_V_P_ACTIVE_LINES;
+            MODE_V_FRONT_PORCH = MODE_V_P_FRONT_PORCH;
+            MODE_V_SYNC_WIDTH = MODE_V_P_SYNC_WIDTH;
+            MODE_V_BACK_PORCH = MODE_V_P_BACK_PORCH;
+            MODE1SIZE = MODE1SIZE_P;
+            MODE2SIZE = MODE2SIZE_P;
+            MODE3SIZE = MODE3SIZE_P;
+            MODE4SIZE = MODE4SIZE_P;
+            MODE5SIZE = MODE5SIZE_P;
+            PIXELS_PER_WORD = 2;
+        }
         else if (Option.Resolution == R1024x600)
         {
             MODE_H_SYNC_POLARITY = MODE_H_X_SYNC_POLARITY;
@@ -1816,6 +1838,8 @@
             else if (Option.Resolution == R640x480x8 && hstx_input > 350000000)
                 hstx_target = (uint32_t)(((uint64_t)hstx_input * 332) / 1000);
 #endif
+            else if (Option.Resolution == R720x576)
+                hstx_target = hstx_input / 3; // 576p: 404 MHz / 3, the pixel clock a fifth of it: 26.93 MHz
             else if (FullColour || (MediumRes && Option.Resolution != R1024x600))
                 hstx_target = hstx_input / 2;
             else
@@ -2028,7 +2052,7 @@
         else
             HDMIloopX();
 #else
-        if (Option.Resolution == R640x480f315 || Option.Resolution == R640x480f378 || Option.Resolution == R640x480f252 || Option.Resolution == R720x400)
+        if (Option.Resolution == R640x480f315 || Option.Resolution == R640x480f378 || Option.Resolution == R640x480f252 || Option.Resolution == R720x400 || Option.Resolution == R720x576)
             HDMIloop0();
         else if (Option.Resolution == R1280x720)
             HDMIloop1();

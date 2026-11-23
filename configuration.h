@@ -69,7 +69,7 @@ extern "C"
 
 #ifdef HDMI // RP2350 HDMI
 #define MAXMODES 5
-#define MAX_CPU Freq378P
+#define MAX_CPU Freq576 // 576p's 404 MHz (graphics/Screens.h)
 #define MIN_CPU FreqX
 #ifdef USBKEYBOARD
 #if defined(PICOMITEPC3)
@@ -216,7 +216,7 @@ extern "C"
 #endif
 #else // rp2350 VGA
 #define MAXMODES 3
-#define MAX_CPU 378000
+#define MAX_CPU 404000 // the nearest to 405 MHz the PLL makes, for 576p (graphics/Screens.h's Freq576)
 #define MIN_CPU 252000
 #ifdef USBKEYBOARD
    /* +32 KB (2026-09-29): Route B (P1-P5) went 19.5 KB over. */
@@ -321,7 +321,11 @@ extern "C"
    so the two definitions don't collide; MaxPcb and the lwipopts include
    below are still shared. */
 #ifndef PICOMITEHDMIWEB
+#ifdef rp2350
+#define MAX_CPU 444000 // (see the PICOMITE block)
+#else
 #define MAX_CPU 396000
+#endif
 #define MIN_CPU 126000
 
 #ifdef rp2350
@@ -386,7 +390,12 @@ extern "C"
 #define MAXGLOBALVARS 576 // Configurable split (the total as before 192 locals: see the VGA block)
 #define MAXLOCALVARS 192
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
-#define MAX_CPU 420000
+   /* RP2350 CPU speed limits (23 November 2026): measured on a PC3 (its core at a fixed 1.3 V) with the flash
+      written in direct mode at its own clock (FileIO.c) and its read timing worked out from clk_sys (PicoMite.c's
+      flash_m0_timing): A: writes, the flash and a PSRAM test good at every 12 MHz step from 378 to 456 MHz; at 468
+      the CPU failed (a branch to a bad address in an interrupt) with the flash slowed to a crawl. So 444 MHz, a step
+      below 456, for the builds without a display, PSRAM or not */
+#define MAX_CPU 444000
 #define MAXSUBFUN 512
 
 #ifdef USBKEYBOARD
@@ -427,7 +436,7 @@ extern "C"
 #undef MIN_CPU
 #define MIN_CPU 200000
 #undef MAX_CPU
-#define MAX_CPU 396000
+#define MAX_CPU 444000 // (see the PICOMITE block above)
 #define MagicKey 0xEA895E8B
    /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
@@ -446,7 +455,7 @@ extern "C"
 #undef MIN_CPU
 #define MIN_CPU 200000
 #undef MAX_CPU
-#define MAX_CPU 396000
+#define MAX_CPU 444000 // (see the PICOMITE block above)
 #define MagicKey 0x8D8186E6
    /* +32 KB (2026-09-29): Route B (P1-P5) went 15.7 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and

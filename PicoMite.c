@@ -3875,7 +3875,7 @@ uint32_t testPSRAM(void)
         SaveOptions();
     }
 #else
-    if (!(Option.Resolution == R1280x720 || Option.Resolution == R640x480f378 || Option.Resolution == R640x480f252 || Option.Resolution == R848x480 || Option.Resolution == R720x400 || Option.Resolution == R800x600 || Option.Resolution == R640x480f315 || Option.Resolution == R1024x768 || Option.Resolution == R1024x600 || Option.Resolution == R800x480))
+    if (!(Option.Resolution == R1280x720 || Option.Resolution == R640x480f378 || Option.Resolution == R640x480f252 || Option.Resolution == R848x480 || Option.Resolution == R720x400 || Option.Resolution == R800x600 || Option.Resolution == R640x480f315 || Option.Resolution == R1024x768 || Option.Resolution == R1024x600 || Option.Resolution == R800x480 || Option.Resolution == R720x576))
     {
         Option.CPU_Speed = Freq480P;
         SaveOptions();
@@ -4053,6 +4053,12 @@ uint32_t testPSRAM(void)
     if (Option.Resolution == R800x480)
     { // adjust the size of the heap
         framebuffersize = 400 * 240 * 2;
+        heap_memory_size = HEAP_MEMORY_SIZE - MRoundUp(framebuffersize) + 320 * 240 * 2;
+        FRAMEBUFFER = AllMemory + heap_memory_size + 256;
+    }
+    if (Option.Resolution == R720x576)
+    { // adjust the size of the heap: 576p's modes need 360 x 288 x 2 (MODE 1's bitmap, its layers and tiles; MODE 3 at 720x576)
+        framebuffersize = 360 * 288 * 2;
         heap_memory_size = HEAP_MEMORY_SIZE - MRoundUp(framebuffersize) + 320 * 240 * 2;
         FRAMEBUFFER = AllMemory + heap_memory_size + 256;
     }

@@ -5185,6 +5185,8 @@ void cmd_resolution(void)
         newres = R1024x768;
     else if (checkstring(argv[0], (unsigned char *)"1024x600"))
         newres = R1024x600;
+    else if (checkstring(argv[0], (unsigned char *)"720x576"))
+        newres = R720x576;
     else if (checkstring(argv[0], (unsigned char *)"720") || checkstring(argv[0], (unsigned char *)"720x400"))
         newres = R720x400;
     else if (checkstring(argv[0], (unsigned char *)"800") || checkstring(argv[0], (unsigned char *)"800x600"))
@@ -5200,6 +5202,7 @@ void cmd_resolution(void)
        the framebuffer pool main() would have allocated for it at boot.
        Must fit the pool the CURRENT boot actually allocated. */
     uint32_t need = (newres == R800x600)   ? 400 * 300 * 2
+                    : (newres == R720x576) ? 360 * 288 * 2
                     : (newres == R848x480) ? 424 * 240 * 2
                     : (newres == R800x480) ? 400 * 240 * 2
                                            : 320 * 240 * 2;
@@ -6253,6 +6256,8 @@ void MIPS16 ResetDisplay(void)
 #endif
     )
         HRes = ((DISPLAY_TYPE == SCREENMODE1 || DISPLAY_TYPE == SCREENMODE3) ? 720 : 360);
+    else if (Option.Resolution == R720x576)
+        HRes = ((DISPLAY_TYPE == SCREENMODE1 || DISPLAY_TYPE == SCREENMODE3) ? 720 : 360);
     else if (Option.Resolution == R800x600 || Option.Resolution == R800x480)
         HRes = ((DISPLAY_TYPE == SCREENMODE1 || DISPLAY_TYPE == SCREENMODE3) ? 800 : 400);
     else
@@ -6270,6 +6275,8 @@ void MIPS16 ResetDisplay(void)
     )
         VRes = ((DISPLAY_TYPE == SCREENMODE1 || DISPLAY_TYPE == SCREENMODE3) ? 400 : 200);
 #ifdef rp2350
+    else if (Option.Resolution == R720x576)
+        VRes = ((DISPLAY_TYPE == SCREENMODE1 || DISPLAY_TYPE == SCREENMODE3) ? 576 : 288);
     else if (Option.Resolution == R800x600)
         VRes = ((DISPLAY_TYPE == SCREENMODE1 || DISPLAY_TYPE == SCREENMODE3) ? 600 : 300);
 #endif

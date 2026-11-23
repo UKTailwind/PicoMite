@@ -3040,6 +3040,8 @@ void MIPS16 printoptions(void)
         PO2StrInt("RESOLUTION", "1024x600", Option.CPU_Speed);
     if (Option.Resolution == R800x480)
         PO2StrInt("RESOLUTION", "800x480", Option.CPU_Speed);
+    if (Option.Resolution == R720x576)
+        PO2StrInt("RESOLUTION", "720x576", Option.CPU_Speed);
     if (Option.Resolution == R640x480f315 || Option.Resolution == R640x480f252 || Option.Resolution == R640x480f378)
         PO2StrInt("RESOLUTION", "640x480", Option.CPU_Speed);
 #endif
@@ -5898,8 +5900,6 @@ void MIPS16 cmd_option(void)
             error("Pin | is in use", pin1);
         if (!(pin1 == 1 || pin1 == 11 || pin1 == 25 || pin1 == 62))
             error("Invalid pin for PSRAM chip select (GP0,GP8,GP19,GP47)");
-        if (Option.CPU_Speed > 384000)
-            error("PSRAM cannot be enabled when CPUSPEED exceeds 384000 KHz");
         Option.PSRAM_CS_PIN = pin1;
         SaveOptions();
         SoftReset(SOFT_RESET);
@@ -7068,6 +7068,11 @@ void MIPS16 cmd_option(void)
             Option.Resolution = R800x480;
             Option.DefaultFont = 1;
         }
+        else if (checkstring(argv[0], (unsigned char *)"720x576"))
+        {
+            Option.Resolution = R720x576;
+            Option.DefaultFont = 1;
+        }
 #endif
 #ifdef rp2350
         else if (checkstring(argv[0], (unsigned char *)"800") || checkstring(argv[0], (unsigned char *)"800x600"))
@@ -7243,8 +7248,6 @@ void MIPS16 cmd_option(void)
         if (CurrentLinePtr)
             StandardError(10);
         speed = getint(tp, MIN_CPU, MAX_CPU);
-        if (speed > 384000 && Option.PSRAM_CS_PIN != 0)
-            error("CPUSPEED cannot exceed 384000 KHz when PSRAM is enabled");
         uint vco, postdiv1, postdiv2;
         if (!check_sys_clock_khz(speed, &vco, &postdiv1, &postdiv2))
             error("Invalid clock speed");
@@ -9875,8 +9878,6 @@ void MIPS16 cmd_cpu(void)
         error("Not available on this version");
 #else
         uint32_t speed = getint(p, MIN_CPU, MAX_CPU);
-        if (speed > 384000 && Option.PSRAM_CS_PIN != 0)
-            error("CPUSPEED cannot exceed 384000 KHz when PSRAM is enabled");
         if (UserPIOActive())
             error("Invalid while PIO in use");
         if (CPUSpeedRuntime(speed))

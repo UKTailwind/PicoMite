@@ -18,6 +18,8 @@
 #define Freq480P 315000
 #define Freq252P 252000
 #define Freq378P 378000
+#define Freq576 404000 // 576p: 12 MHz x 101 / 3; HSTX at clk_sys / 3, the pixel clock a fifth of that: 26.93 MHz, 0.25%
+                       // under CEA-861's 27 MHz (405 MHz would need the PLL's VCO at 1620 MHz, above its 1600)
 #define FreqXGA 375000
 #define FreqSVGA 360000
 #define Freq848 336000
@@ -52,11 +54,15 @@ typedef enum
        283.2 MHz (Freq400); selected by OPTION/RESOLUTION. */
     R720x400x8 = 12,
 #endif
+    /* 576p: 720x576 at 50 Hz (CEA-861's 864 x 625), the full HDMI builds: 404 MHz (Freq576) with HSTX at clk_sys / 3,
+       and, as 800x600, a framebuffer pool of 360 x 288 x 2 taken from the heap at boot (OPTION RESOLUTION) */
+    R720x576 = 13,
 } Resolution_TypeDef;
-static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq378P, FreqXGA, FreqSVGA, Freq848, Freq400, FreqY, FreqX};
+static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq378P, FreqXGA, FreqSVGA, Freq848, Freq400, FreqY, FreqX,
+                               Freq480P /* (11, R640x480x8: its speed is its own) */, Freq400 /* (12, R720x400x8) */, Freq576};
 /* Display capability macros */
 #define FullColour (Option.Resolution == R640x480f252 || Option.Resolution == R640x480f378 || \
-                    Option.Resolution == R640x480f315 || Option.Resolution == R720x400)
+                    Option.Resolution == R640x480f315 || Option.Resolution == R720x400 || Option.Resolution == R720x576)
 #ifdef HDMICUTDOWN
 /* R640x480x8 behaves like 1024x600 (8-bit/RGB332, tile-based) so it is
    treated as a MediumRes mode for font/tile-height selection. */
@@ -85,6 +91,15 @@ static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq37
 #define MODE3SIZE_4 ((MODE_H_4_ACTIVE_PIXELS) * (MODE_V_4_ACTIVE_LINES) / 2)
 #define MODE4SIZE_4 ((MODE_H_4_ACTIVE_PIXELS / 2) * (MODE_V_4_ACTIVE_LINES / 2) * 2)
 #define MODE5SIZE_4 ((MODE_H_4_ACTIVE_PIXELS / 2) * (MODE_V_4_ACTIVE_LINES / 2))
+
+/* HDMI display mode definitions - 720x576 (576p) */
+#define MODE_H_P_ACTIVE_PIXELS 720
+#define MODE_V_P_ACTIVE_LINES 576
+#define MODE1SIZE_P (MODE_H_P_ACTIVE_PIXELS * MODE_V_P_ACTIVE_LINES / 8)
+#define MODE2SIZE_P ((MODE_H_P_ACTIVE_PIXELS / 2) * (MODE_V_P_ACTIVE_LINES / 2) / 2)
+#define MODE3SIZE_P ((MODE_H_P_ACTIVE_PIXELS) * (MODE_V_P_ACTIVE_LINES) / 2)
+#define MODE4SIZE_P ((MODE_H_P_ACTIVE_PIXELS / 2) * (MODE_V_P_ACTIVE_LINES / 2) * 2)
+#define MODE5SIZE_P ((MODE_H_P_ACTIVE_PIXELS / 2) * (MODE_V_P_ACTIVE_LINES / 2))
 
 /* VGA display mode definitions - 1280x720 */
 #define MODE_H_W_ACTIVE_PIXELS 1280
@@ -226,6 +241,16 @@ static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq37
 #define MODE_V_4_SYNC_WIDTH 2
 #define MODE_V_4_BACK_PORCH 35
 
+#define MODE_H_P_SYNC_POLARITY 0 // 576p: CEA-861's (VIC 17), both syncs negative
+#define MODE_H_P_FRONT_PORCH 12
+#define MODE_H_P_SYNC_WIDTH 64
+#define MODE_H_P_BACK_PORCH 68
+
+#define MODE_V_P_SYNC_POLARITY 0
+#define MODE_V_P_FRONT_PORCH 5
+#define MODE_V_P_SYNC_WIDTH 5
+#define MODE_V_P_BACK_PORCH 39
+
 #define MODE_H_W_SYNC_POLARITY 1
 #define MODE_H_W_FRONT_PORCH 110
 #define MODE_H_W_SYNC_WIDTH 40
@@ -318,6 +343,12 @@ static const int CPUFreqs[] = {FreqDefault, Freq720P, Freq480P, Freq252P, Freq37
 #define MODE_V_4_TOTAL_LINES (                   \
     MODE_V_4_FRONT_PORCH + MODE_V_4_SYNC_WIDTH + \
     MODE_V_4_BACK_PORCH + MODE_V_4_ACTIVE_LINES)
+#define MODE_H_P_TOTAL_PIXELS (                  \
+    MODE_H_P_FRONT_PORCH + MODE_H_P_SYNC_WIDTH + \
+    MODE_H_P_BACK_PORCH + MODE_H_P_ACTIVE_PIXELS)
+#define MODE_V_P_TOTAL_LINES (                   \
+    MODE_V_P_FRONT_PORCH + MODE_V_P_SYNC_WIDTH + \
+    MODE_V_P_BACK_PORCH + MODE_V_P_ACTIVE_LINES)
 #define MODE_H_X_TOTAL_PIXELS (                  \
     MODE_H_X_FRONT_PORCH + MODE_H_X_SYNC_WIDTH + \
     MODE_H_X_BACK_PORCH + MODE_H_X_ACTIVE_PIXELS)
