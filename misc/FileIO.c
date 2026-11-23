@@ -55,6 +55,7 @@ extern mutex_t frameBufferMutex;
 #endif
 #ifdef rp2350
 #include "hardware/structs/qmi.h"
+#include "hardware/xip_cache.h"
 #endif
 #if !defined(USBKEYBOARD) && !defined(PICOMITEBT)
 #include "class/cdc/cdc_device.h"
@@ -380,9 +381,9 @@ volatile bool irqs_off_pico = false; // interrupts are off for a flash write (er
 #ifdef rp2350
 static void __not_in_flash_func(save_psram_settings)(void)
 {
-    // No XIP cache clean here: the SDK's flash_range_erase, flash_range_program and
-    // flash_do_cmd clean it themselves (at safe offsets, RP2350-E11) before they flush it,
-    // and the other callers (WS2812, BITSTREAM, serial, Onewire) never flush it.  The
+    // No XIP cache clean here: the flash writers below invalidate only the flash lines they
+    // change (by address), and the other callers (WS2812, BITSTREAM, serial, Onewire) never
+    // touch the cache.  The
     // clean that was here used offsets 0..16K, which E11 turns into dirty PSRAM lines
     // reading back as flash 0x10000000-0x10003FFF.
     m1_timing = qmi_hw->m[1].timing;
@@ -403,41 +404,179 @@ static void __not_in_flash_func(restore_psram_settings)(void)
         qmi_hw->m[0].rfmt = m0_rfmt;
 }
 
-// Safe flash wrappers: boot2 re-runs inside flash_range_erase/program and
-// sets M0 CLKDIV=2. At 378MHz that means flash SPI=189MHz (above spec).
-// These wrappers save/restore M0 timing from RAM before returning to XIP code.
+/* The flash written in the QMI's direct mode at a clock of our own (RP2350).
+
+   The SDK's flash_range_erase, flash_range_program and flash_do_cmd go through the boot ROM, which knows nothing of
+   clk_sys: flash_exit_xip puts direct mode at a fixed divider with no sample delay (RXDELAY 0), and the erase or
+   program runs its commands and its busy polls (status register 05h) there; then the ROM's XIP setup, left in boot RAM
+   at boot, puts the flash's (and the PSRAM's) read timing back to its own boot-time CLKDIV 3, RXDELAY 2. Read with
+   RXDELAY 0, the flash's answers are good only while half an SCK period covers its output delay and the pads' (about
+   6.3 ns on a PC3's W25Q128, measured with tools/sdk/examples/flashprobe.c at 252, 315 and 378 MHz): an SCK of about
+   78 MHz at most. So a write to A: (or SaveOptions, SAVE, the library...) was the first thing to fail as the clock went
+   up, and at a cold start the erase and its address were clocked in at that speed while the supply settled.
+
+   Here every command is sent at FLASH_CMD_HZ or less (FLASH_CMD_RXDELAY half cycles of sample delay, inside the window
+   at any divider that slow), whatever clk_sys is: write enable (06h), 64 KB block erase (D8h) where the range allows,
+   else 4 KB sector erase (20h), page program (02h), and the busy polls (05h). The flash's read mode leaves it taking
+   commands between reads (EBh with mode bits 00: no continuous read), so nothing has to take it out of XIP or put it
+   back: the read timing (M0) is never touched. After an erase or program only the lines of the range written are
+   invalidated in the XIP cache, by address (the PSRAM's lines, dirty ones included, are left alone).
+
+   While direct mode is on the QMI serves no memory-mapped access, the PSRAM's included: everything these use then is
+   in the SRAM (the code, the stack, the page buffer), as before. Interrupts are off around them (the callers'
+   disable_interrupts_pico) and core 1 runs from the SRAM, as it did for the ROM's. */
+#define FLASH_CMD_HZ 50000000u                       // the commands' SCK at most: any flash takes every command at this
+#define FLASH_CMD_RXDELAY 1u                         // half system clock cycles of sample delay
+#define QSPI_PAGE 256u
+static uint8_t flash_page_buf[QSPI_PAGE];            // a page to program, copied here while the flash is readable
+
+static uint32_t __not_in_flash_func(qspi_csr)(void) // (called before direct mode: clock_get_hz may be in the flash)
+{
+    uint32_t div = (clock_get_hz(clk_sys) + FLASH_CMD_HZ - 1) / FLASH_CMD_HZ;
+    if (div < 2)
+        div = 2;
+    if (div > 255)
+        div = 255;
+    return (FLASH_CMD_RXDELAY << QMI_DIRECT_CSR_RXDELAY_LSB) | (div << QMI_DIRECT_CSR_CLKDIV_LSB);
+}
+
+static void __not_in_flash_func(qspi_begin)(uint32_t csr) // direct mode on, once the last read's cooldown is over
+{
+    qmi_hw->direct_csr = csr | QMI_DIRECT_CSR_EN_BITS;
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_BUSY_BITS)
+        ;
+}
+
+static void __not_in_flash_func(qspi_end)(uint32_t csr) // direct mode off: reads from the flash again
+{
+    qmi_hw->direct_csr = csr;
+}
+
+static void __not_in_flash_func(qspi_deselect)(void) // the chip select up at least 50 ns (a W25Q's tSHSL2) before the next
+{
+    for (volatile int i = 0; i < 24; i++) // (a few system clocks each: above 100 ns at 600 MHz)
+        ;
+}
+
+// one command: ntx bytes of tx, then nrx more clocked in to rx (either may be NULL with its count 0)
+static void __not_in_flash_func(qspi_xfer)(uint32_t csr, const uint8_t *tx, uint32_t ntx, uint8_t *rx, uint32_t nrx)
+{
+    uint32_t total = ntx + nrx, ti = 0, ri = 0;
+    qmi_hw->direct_csr = csr | QMI_DIRECT_CSR_EN_BITS | QMI_DIRECT_CSR_ASSERT_CS0N_BITS;
+    while (ti < total || ri < total)
+    {
+        uint32_t f = qmi_hw->direct_csr;
+        if (!(f & QMI_DIRECT_CSR_TXFULL_BITS) && ti < total)
+        {
+            qmi_hw->direct_tx = ti < ntx ? tx[ti] : 0;
+            ti++;
+        }
+        if (!(f & QMI_DIRECT_CSR_RXEMPTY_BITS) && ri < total)
+        {
+            uint8_t b = (uint8_t)qmi_hw->direct_rx;
+            if (ri >= ntx)
+                rx[ri - ntx] = b;
+            ri++;
+        }
+    }
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_BUSY_BITS)
+        ;
+    qmi_hw->direct_csr = csr | QMI_DIRECT_CSR_EN_BITS; // (chip select up)
+    qspi_deselect();
+}
+
+static void __not_in_flash_func(qspi_wren)(uint32_t csr)
+{
+    uint8_t c = 0x06; // (on the stack: a constant would be in the flash, unreadable now)
+    qspi_xfer(csr, &c, 1, NULL, 0);
+}
+
+static void __not_in_flash_func(qspi_wait)(uint32_t csr) // until the flash's erase or program is done
+{
+    uint8_t c = 0x05;
+    uint8_t s;
+    do
+        qspi_xfer(csr, &c, 1, &s, 1);
+    while (s & 1);
+}
+
+static void __not_in_flash_func(qspi_cmd_addr)(uint32_t csr, uint8_t cmd, uint32_t addr, const uint8_t *data, uint32_t n)
+{
+    uint8_t h[4] = {cmd, (uint8_t)(addr >> 16), (uint8_t)(addr >> 8), (uint8_t)addr};
+    uint32_t ti = 0, total = 4 + n, ri = 0;
+    qmi_hw->direct_csr = csr | QMI_DIRECT_CSR_EN_BITS | QMI_DIRECT_CSR_ASSERT_CS0N_BITS;
+    while (ti < total || ri < total)
+    {
+        uint32_t f = qmi_hw->direct_csr;
+        if (!(f & QMI_DIRECT_CSR_TXFULL_BITS) && ti < total)
+        {
+            qmi_hw->direct_tx = ti < 4 ? h[ti] : data[ti - 4];
+            ti++;
+        }
+        if (!(f & QMI_DIRECT_CSR_RXEMPTY_BITS) && ri < total)
+        {
+            (void)qmi_hw->direct_rx;
+            ri++;
+        }
+    }
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_BUSY_BITS)
+        ;
+    qmi_hw->direct_csr = csr | QMI_DIRECT_CSR_EN_BITS;
+    qspi_deselect();
+}
+
+// The flash from flash_offs (a multiple of 4 KB) for count bytes (one too) erased
 void __not_in_flash_func(safe_flash_range_erase)(uint32_t flash_offs, size_t count)
 {
-    uint32_t saved_timing = qmi_hw->m[0].timing;
-    uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
-    flash_range_erase(flash_offs, count);
-    if (qmi_hw->m[0].timing != saved_timing)
-        qmi_hw->m[0].timing = saved_timing;
-    if (qmi_hw->m[0].rfmt != saved_rfmt)
-        qmi_hw->m[0].rfmt = saved_rfmt;
+    uint32_t csr = qspi_csr(), offs = flash_offs, end = flash_offs + count;
+    qspi_begin(csr);
+    while (offs < end)
+    {
+        bool block = !(offs & 0xFFFF) && end - offs >= 0x10000;
+        qspi_wren(csr);
+        qspi_cmd_addr(csr, block ? 0xD8 : 0x20, offs, NULL, 0);
+        qspi_wait(csr);
+        offs += block ? 0x10000 : 0x1000;
+    }
+    qspi_end(csr);
+    xip_cache_invalidate_range(flash_offs, count);
 }
 
+// count bytes (a multiple of 256) of data programmed at flash_offs (a multiple of 256), a page at a time: each copied
+// to the SRAM first, while the flash and the PSRAM (data may be in either) can be read
 void __not_in_flash_func(safe_flash_range_program)(uint32_t flash_offs, const uint8_t *data, size_t count)
 {
-    uint32_t saved_timing = qmi_hw->m[0].timing;
-    uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
-    flash_range_program(flash_offs, data, count);
-    if (qmi_hw->m[0].timing != saved_timing)
-        qmi_hw->m[0].timing = saved_timing;
-    if (qmi_hw->m[0].rfmt != saved_rfmt)
-        qmi_hw->m[0].rfmt = saved_rfmt;
+    uint32_t csr = qspi_csr();
+    for (uint32_t done = 0; done < count; done += QSPI_PAGE)
+    {
+        for (uint32_t k = 0; k < QSPI_PAGE; k++)
+            flash_page_buf[k] = data[done + k];
+        qspi_begin(csr);
+        qspi_wren(csr);
+        qspi_cmd_addr(csr, 0x02, flash_offs + done, flash_page_buf, QSPI_PAGE);
+        qspi_wait(csr);
+        qspi_end(csr);
+    }
+    xip_cache_invalidate_range(flash_offs, count);
 }
 
-// flash_do_cmd leaves XIP the same way, so the same restore
+// a command of count bytes, its answer in rxbuf as it is clocked in (txbuf and rxbuf in the SRAM, as the stack is)
 void __not_in_flash_func(safe_flash_do_cmd)(const uint8_t *txbuf, uint8_t *rxbuf, size_t count)
 {
-    uint32_t saved_timing = qmi_hw->m[0].timing;
-    uint32_t saved_rfmt = qmi_hw->m[0].rfmt;
-    flash_do_cmd(txbuf, rxbuf, count);
-    if (qmi_hw->m[0].timing != saved_timing)
-        qmi_hw->m[0].timing = saved_timing;
-    if (qmi_hw->m[0].rfmt != saved_rfmt)
-        qmi_hw->m[0].rfmt = saved_rfmt;
+    uint32_t csr = qspi_csr(), ti = 0, ri = 0;
+    qspi_begin(csr);
+    qmi_hw->direct_csr = csr | QMI_DIRECT_CSR_EN_BITS | QMI_DIRECT_CSR_ASSERT_CS0N_BITS;
+    while (ti < count || ri < count)
+    {
+        uint32_t f = qmi_hw->direct_csr;
+        if (!(f & QMI_DIRECT_CSR_TXFULL_BITS) && ti < count)
+            qmi_hw->direct_tx = txbuf[ti++];
+        if (!(f & QMI_DIRECT_CSR_RXEMPTY_BITS) && ri < count)
+            rxbuf[ri++] = (uint8_t)qmi_hw->direct_rx;
+    }
+    while (qmi_hw->direct_csr & QMI_DIRECT_CSR_BUSY_BITS)
+        ;
+    qspi_end(csr);
 }
 #endif
 
