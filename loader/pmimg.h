@@ -39,6 +39,7 @@
 
 #define PMIMG_MAGIC          "PICOIMG"         /* the header's first 8 bytes, its NUL included */
 #define PMIMG_HDR_VERSION    1
+#define PMIMG_HDR_SRAM       2                 /* a program with an SRAM part: its pmimg_sram follows the header */
 #define PMIMG_API_VERSION    1                 /* the services below. Version 1 grows until the first release that
                                                   has it; after that each addition raises it */
 #define PMIMG_TARGET         0x2350            /* the header's target: an RP2350 */
@@ -49,6 +50,7 @@
 #define PMIMG_BASE           0x11000000u       /* where a program is linked: the bottom of the PSRAM, where it usually
                                                   loads with nothing moved */
 #define PMIMG_STACK          0x00008000u       /* the stack when the header asks for none: 32 KB */
+#define PMIMG_SRAM_LINK      0x20000000u       /* where a program's SRAM part is linked (app.ld's .sram and .sram_bss) */
 
 #define PMIMG_REL_ABS32      0u                /* add the difference to the word */
 #define PMIMG_REL_MOVT       1u                /* add the difference's top half to a Thumb-2 MOVT's immediate */
@@ -73,6 +75,20 @@ typedef struct {
     char     name[15];                         /* NUL padded */
     uint8_t  align_log2;                       /* its sections' largest alignment, as a power of 2 */
 } pmimg_header;                                /* 64 bytes */
+
+/* After a version 2 header (PMIMG_HDR_SRAM): the program's SRAM part, code and data that run from a block of the SRAM
+   heap the loader takes for the run (a program only: never a module). Its bytes are in the image, which is loaded
+   whole; once the relocations are made it copies them into the block and zeroes bss bytes after them. A relocated
+   word holding an address from link to link + size + bss is moved by the block's difference from link, any other by
+   the image's. The relocation offsets are the image's, the SRAM part's words included (where they are stored) */
+typedef struct {
+    uint32_t link;                             /* the address it was linked at (PMIMG_SRAM_LINK) */
+    uint32_t offset;                           /* where its bytes are in the image (a multiple of 8) */
+    uint32_t size;                             /* its bytes, copied into the block */
+    uint32_t bss;                              /* zeroed after them */
+    uint8_t  align_log2;                       /* the block's alignment, as a power of 2 (at most 12: 4 KB) */
+    uint8_t  pad[3];
+} pmimg_sram;                                  /* 20 bytes */
 
 struct cmm2_services;
 struct cmm2_basic;

@@ -1,6 +1,6 @@
 """build.py OUT.app SOURCE.c|.cpp|.o [...] [--base ADDR] [--stack BYTES] [--heap BYTES] [--api N] [--psram]
             [--module] [--user] [--no-printf-float] [--libc nano|full] [--cflag FLAG ...] [--cxxflag FLAG ...] [--ldflag FLAG ...]
-            [-I DIR ...] [-j JOBS] [--sources FILE]
+            [-I DIR ...] [-j JOBS] [--sources FILE] [--sram SOURCE ...]
 
 Builds a loadable program for the PicoMite (RP2350) with the firmware's own toolchain (the folder in
 ARM_TOOLCHAIN_DIR, else the PATH's, else the Arm GNU Toolchain 13.3's usual folder): compiles the sources with crt0.c
@@ -15,6 +15,9 @@ the firmware's own vsnprintf, so the module carries no printf of its own (exampl
 --no-printf-float leaves out newlib's printf of floats (dtoa, 4 KB), which a program that formats its own does not
 need: printf's %f is otherwise always there.
 --libc full links the whole newlib instead of newlib-nano (the default).
+--sram SOURCE (or an object among the sources) puts that file's code in the program's SRAM part (app.ld's .sram:
+the loader copies it into a block of the SRAM heap for the run), as __attribute__((section(".sram"))) does a
+function's: for the hot code that the PSRAM's 16 KB XIP cache, which code and data share, cannot hold.
 The ELF and its map are left beside OUT.app. --base 0x11400000 makes a copy that the loader must move (its
 relocations are then used): the test of the relocations.
 
@@ -80,6 +83,23 @@ def stale(o):
     return False
 
 
+def to_sram(o):
+    """a copy of object o with its code (.text and .time_critical sections) renamed .sram.<name>: app.ld puts it in the
+    SRAM part. Made again only when o is newer"""
+    out = o[:-2] + '.sram.o'
+    if os.path.exists(out) and os.path.getmtime(out) >= os.path.getmtime(o):
+        return out
+    sys.path.insert(0, SDK)
+    import mkimage
+    d = open(o, 'rb').read()
+    names = [s['name'] for s in mkimage.sections(d) if s['name'].startswith(('.text', '.time_critical'))]
+    cmd = [os.path.join(tooldir, 'arm-none-eabi-objcopy' + EXE)]
+    for n in names:
+        cmd += ['--rename-section', '%s=.sram%s' % (n, n)]
+    subprocess.run(cmd + [o, out], check=True)
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('out')
@@ -101,6 +121,7 @@ def main():
     ap.add_argument('--cxxflag', action='append', default=[])
     ap.add_argument('--ldflag', action='append', default=[])
     ap.add_argument('-I', dest='incs', action='append', default=[])
+    ap.add_argument('--sram', action='append', default=[])         # a source or object whose code goes in the SRAM part
     ap.add_argument('-j', dest='jobs', type=int, default=os.cpu_count() or 4)
     a = ap.parse_args()
     if a.user:
@@ -149,6 +170,17 @@ def main():
     if failed:
         sys.exit('%d failed: %s' % (len(failed), ' '.join(os.path.basename(f) for f in failed[:20])))
     open(keyfile, 'w').write(key)
+    if a.sram:                                                      # their code in the SRAM part
+        want = set(os.path.normcase(os.path.abspath(s)) for s in a.sram)
+        srcs = [s for s in sources]
+        found = set()
+        for i, s in enumerate(srcs):
+            if os.path.normcase(os.path.abspath(s)) in want:
+                objs[i] = to_sram(objs[i])
+                found.add(os.path.normcase(os.path.abspath(s)))
+        missing = want - found
+        if missing:
+            sys.exit('--sram names no source of this program: ' + ' '.join(sorted(missing)))
     rsp = stem + '.rsp'
     open(rsp, 'w').write('\n'.join('"%s"' % o.replace('\\', '/') for o in objs) + '\n')
     cmd = ([GXX if cxx else GCC] + FLAGS + libc + a.cflag + ['@' + rsp] +

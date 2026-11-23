@@ -1510,6 +1510,8 @@ typedef struct {
     uint32_t areasize;
     unsigned char *stack;                                           // its stack in the SRAM heap, or NULL
     uint32_t stacksize;
+    pmimg_sram s;                                                   // its SRAM part (a version 2 header), or all 0
+    unsigned char *sram;                                            // that part's block of the SRAM heap, or NULL
     unsigned char *base;                                            // where the image goes
     unsigned char *heap;
     uint32_t heapsize;
@@ -1600,10 +1602,18 @@ static bool ld_load(void *a)
     buf = GetTempMemory(LD_CHUNK);
     if (!ld_get(fnbr, h, sizeof(*h), buf) || memcmp(h->magic, PMIMG_MAGIC, 8))
         return ld_refuse(L, "Not a loadable program");
-    if (h->hdr_version != PMIMG_HDR_VERSION || h->kind != (L->module ? PMIMG_KIND_MODULE : PMIMG_KIND_APP) ||
-        h->target != PMIMG_TARGET ||
+    memset(&L->s, 0, sizeof(L->s));
+    if (h->hdr_version == PMIMG_HDR_SRAM && !ld_get(fnbr, &L->s, sizeof(L->s), buf))
+        return ld_refuse(L, "Not a program this firmware can load");
+    if ((h->hdr_version != PMIMG_HDR_VERSION && h->hdr_version != PMIMG_HDR_SRAM) ||
+        h->kind != (L->module ? PMIMG_KIND_MODULE : PMIMG_KIND_APP) || h->target != PMIMG_TARGET ||
         h->image_size == 0 || !(h->entry & 1) || h->entry >= h->image_size || h->align_log2 > 16 ||
-        h->reloc_count > 0x1000000 || fsize != sizeof(*h) + h->image_size + h->reloc_count * 4)
+        h->reloc_count > 0x1000000 ||
+        fsize != sizeof(*h) + (h->hdr_version == PMIMG_HDR_SRAM ? sizeof(L->s) : 0) + h->image_size + h->reloc_count * 4 ||
+        (h->hdr_version == PMIMG_HDR_SRAM &&
+         (L->module || (h->flags & PMIMG_FLAG_MOVT) || L->s.align_log2 > 12 || (L->s.offset & 7) ||
+          L->s.offset > h->image_size || L->s.size > h->image_size - L->s.offset || L->s.bss > 0x80000 ||
+          (L->s.link & ((1u << L->s.align_log2) - 1)))))
         return ld_refuse(L, "Not a program this firmware can load");
     if (h->api_version > PMIMG_API_VERSION)
         return ld_refuse(L, "Needs a newer firmware");
@@ -1624,6 +1634,16 @@ static bool ld_load(void *a)
         }
         L->base = (unsigned char *)(((uint32_t)L->area + align - 1) & ~(align - 1));
         goto read;
+    }
+    if (h->hdr_version == PMIMG_HDR_SRAM)
+    {   // its SRAM part's block: first, as it cannot run without it, where its stack can go in the PSRAM
+        uint32_t need = L->s.size + L->s.bss + (1u << L->s.align_log2);
+        if ((L->sram = GetSRAMMemoryNull(need)) == NULL)
+        {
+            snprintf(L->msg, sizeof(L->msg), "Needs %u KB of the SRAM heap in one block",
+                     (unsigned)((need + 1023) / 1024));
+            return false;
+        }
     }
     L->stacksize = h->stack_size ? (h->stack_size + 7) & ~7u : PMIMG_STACK;
     if ((L->stack = GetSRAMMemoryNull(L->stacksize)) == NULL) // (else the stack at the top of the PSRAM borrowed)
@@ -1670,9 +1690,13 @@ read: // the image straight into its place, the relocations after its .bss
     crc = lfs_crc(crc, L->base + end, rel) ^ 0xFFFFFFFF;
     if (crc != h->crc32)
         return ld_refuse(L, "The program file is damaged");
-    if ((uint32_t)L->base != h->link_base)
+    unsigned char *sbase = L->sram ? (unsigned char *)(((uint32_t)L->sram + (1u << L->s.align_log2) - 1) &
+                                                       ~((1u << L->s.align_log2) - 1))
+                                   : NULL;
+    if ((uint32_t)L->base != h->link_base || sbase)
     {
         uint32_t delta = (uint32_t)L->base - h->link_base, w, *r = (uint32_t *)(L->base + end);
+        uint32_t sdelta = (uint32_t)sbase - L->s.link, sspan = L->s.size + L->s.bss;
         for (i = 0; i < h->reloc_count; i++)
         {
             uint32_t off = PMIMG_REL_OFFSET(r[i]);
@@ -1681,7 +1705,7 @@ read: // the image straight into its place, the relocations after its .bss
             if (PMIMG_REL_KIND(r[i]) == PMIMG_REL_ABS32)
             {
                 memcpy(&w, L->base + off, 4);
-                w += delta;
+                w += (sbase && w - L->s.link <= sspan) ? sdelta : delta;   // (an address of the SRAM part, or the image's)
                 memcpy(L->base + off, &w, 4);
             }
             else if (PMIMG_REL_KIND(r[i]) == PMIMG_REL_MOVT && !(delta & 0xFFFF))
@@ -1696,6 +1720,12 @@ read: // the image straight into its place, the relocations after its .bss
         }
     }
     memset(L->base + h->image_size, 0, h->bss_size);
+    if (sbase)
+    {   // the SRAM part where it runs (its copy in the image stays, unused)
+        memcpy(sbase, L->base + L->s.offset, L->s.size);
+        memset(sbase + L->s.size, 0, L->s.bss);
+        __asm volatile("dsb; isb" ::: "memory");                    // (before it runs from there)
+    }
     return true;
 }
 
@@ -1732,7 +1762,7 @@ void LoaderRun(char *fname, char *args)
     ldload_t *L;
     ldstate_t *was = ld;                                            // a USER module's, kept while the program runs
     char *p, *s, name[STRINGSIZE];
-    unsigned char *area, *stack;
+    unsigned char *area, *stack, *sram;
     int argc, len, code;
     unsigned int wd;
     if (LoaderActive)
@@ -1786,6 +1816,7 @@ void LoaderRun(char *fname, char *args)
         strcpy(msg, *L->msg ? L->msg : *MMErrMsg ? MMErrMsg : "Cannot read the program");
         FreeMemory(L->area);
         FreeMemory(L->stack);
+        FreeMemory(L->sram);
         FreeMemory(ld);
         ld = was;
         if (MMAbort)
@@ -1803,6 +1834,7 @@ void LoaderRun(char *fname, char *args)
     ld->start.base = (uint32_t)L->base;
     area = L->area;                                                 // (L is temporary memory: kept here for the end)
     stack = L->stack;
+    sram = L->sram;
     ld_screensave();
     wd = WDTimer;                                                   // the software watchdog held while it runs
     WDTimer = 0;
@@ -1816,6 +1848,7 @@ void LoaderRun(char *fname, char *args)
     ld_try(ld_screenbody, NULL);                                    // (BASIC's screen, if the program changed it)
     FreeMemory(area);
     FreeMemory(stack);
+    FreeMemory(sram);
     FreeMemory(ld);
     ld = was;
     ConsoleRxBufTail = ConsoleRxBufHead;

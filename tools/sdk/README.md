@@ -36,6 +36,7 @@ Options:
 | `--base ADDR` | the link address (default 0x11000000). `--base 0x30000000` makes a copy the loader must move: the test of the relocations |
 | `--no-printf-float` | leaves out printf's `%f` (4 KB) |
 | `--libc full` | the whole newlib rather than newlib-nano |
+| `--sram FILE` | that source's (or object's) code in the program's SRAM part (below); may be given more than once |
 | `--cflag`, `--cxxflag`, `--ldflag`, `-I` | passed on |
 
 Do not put the firmware's include folders on `-I`: Windows ignores case, so its headers would be taken in place of a
@@ -68,6 +69,14 @@ Include `cmm2.h`. The names are the Colour Maximite 2's, so a program's portable
   and the others in `loader/pmdouble.h`). `sin()` is about 2.5 times faster. They may be used in a sound's `fill` too.
 - `cmm2->datetime_set(t)` sets the clock, and the RTC with it (as RTC SETTIME), and `cmm2->watchdog(ms)` is MMBasic's
   WATCHDOG (0 stops it; it goes on counting after the program ends).
+- The SRAM part: code and data that run from the SRAM rather than the PSRAM, for the hot code that the PSRAM's 16 KB
+  XIP cache (which code and data share) cannot hold. A function goes there with `__attribute__((section(".sram")))`
+  (or any `.sram.` name), initialised data with a section of its own (`.sram.data`: code and data cannot share one),
+  zeroed data with `.sram_bss`, and a whole file's code with `build.py --sram FILE`. It is linked at 0x20000000 and
+  stored in the image; the loader takes a block of the SRAM heap for the run, moves its addresses there and copies it
+  in (a version 2 header: `pmimg_sram` in `loader/pmimg.h`). Calls between the parts go through the linker's veneers.
+  The SRAM heap is shared with the stack and the sound's buffers (8 KB, taken at `audio_start`): RUN refuses a
+  program whose part does not fit ("Needs n KB of the SRAM heap in one block"). `examples/sramtest.c` tries it.
 - The network: the Colour Maximite 2's services, the same names and meanings (`net_poll`, `net_join`, `net_dns`,
   `sock_open` ... `sock_close`: eight TCP and UDP handles over the firmware's lwIP and OPTION WIFI's Wi-Fi). Call
   `net_poll()` while waiting on the network. A build without Wi-Fi answers -19 (ENODEV). Handles are closed when the
