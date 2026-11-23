@@ -386,13 +386,13 @@ SPRITE SCROLL x, y [, fill_color]
 |-----------|-------------|
 | `x` | Horizontal scroll amount (positive = right) |
 | `y` | Vertical scroll amount (positive = up) |
-| `fill_color` | Color to fill exposed areas, or -1 for no fill, or -2 (default) for wrap-around |
+| `fill_color` | Color to fill exposed areas, or -1 to leave them as they are. Omit it for wrap-around |
 
 **Notes:**
 - Layer 0 sprites scroll with the background
 - Layers 1-4 remain stationary
 - Static objects also scroll with the background
-- With wrap-around (-2), content wraps from one edge to the opposite
+- With wrap-around (no `fill_color`), content wraps from one edge to the opposite
 
 ---
 

@@ -458,7 +458,7 @@ SPRITE(N)            ' Number of displayed sprites
 For side-scrolling games, SPRITE SCROLL moves the background and all layer-0 sprites together:
 
 ```basic
-SPRITE SCROLL 2, 0, -2    ' Scroll right by 2 pixels, wrap-around
+SPRITE SCROLL 2, 0        ' Scroll right by 2 pixels, wrap-around (no fill colour)
 ' Layer 0 sprites scroll with background
 ' Layers 1-4 remain fixed (good for HUD elements)
 ```
