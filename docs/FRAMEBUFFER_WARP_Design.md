@@ -1,8 +1,9 @@
 # FRAMEBUFFER WARPH and WARPV: per-row and per-column scrolling
 
-*23 November 2026. Design only: nothing is built yet. It covers the PicoMite's VGA and HDMI builds and the
-Colour Maximite 2, so that one BASIC program gives the same picture on both. Decisions marked **(Peter)** are his,
-from the review on 23 Nov. Section 11 lists what is still open.*
+*23 November 2026. It covers the PicoMite's VGA and HDMI builds and the Colour Maximite 2, so that one BASIC
+program gives the same picture on both. Decisions marked **(Peter)** are his, from the review on 23 Nov; section 11
+lists them all. Built the same day: the PicoMite in V8.00.00b1 (graphics/Warp.c), the CMM2 on v8-dev (Src/Warp.c,
+9.2).*
 
 ## 1. What it is for
 
@@ -146,7 +147,9 @@ offsets can then be stacked into one buffer. The value is given as FRAMEBUFFER M
 - the 4-bit modes: 0 to 15;
 - the 8-bit modes: 0 to 255;
 - the 16-bit modes: an RGB colour converted to the buffer's format (the PicoMite's MODE 4: RGB555());
-- the CMM2's 12-bit and 32-bit modes: section 9.2.
+- the CMM2's 32-bit modes: an RGB colour, compared without its alpha, as PIXEL( and FILL do;
+- the CMM2's 12-bit modes (Peter): the pixels of alpha 0 are the transparent ones. The argument only turns this on;
+  its value is not used, and the manual says to give 0.
 
 ## 6. Errors
 
@@ -358,15 +361,19 @@ destination row at `dx`, skipping the transparent value, plus a fill for the edg
   same wait (pagesetdone, as WaitFrame in Src/Rgb121.c).
 - **No deferred ("D") form,** unlike PAGE COPY's: the program could change or ERASE the arrays before the frame
   ended.
-- **12-bit:** to be settled when it is built: whether a pixel whose alpha is 0 counts as transparent, and how the
-  edge colour's alpha is set.
+- **12-bit (Peter):** transparent pixels are those of alpha 0 (5.4); the edge colour is the pixel BOX draws, alpha
+  included (5.2).
+- **As built (CMM2 v8-dev 1659cba, 23 Nov):** Src/Warp.c is the PicoMite core with 32-bit pixels, doubled rows, a
+  source and destination of different sizes, routinechecks every 16 rows, and FRAMEBUFFER WAIT in the native modes.
+  PAGE WARPH/WARPV also take a comma in place of TO, as PAGE COPY does. Every CMM2 DrawRectangle already returned
+  early for a rectangle wholly off the page, so the PicoMite's ClipRectangle change was not needed there.
 
 ## 10. Testing
 
-One test program serves both machines:
-- on the PicoMite, warp.bas with its warp.expected in the goldens corpus (the mmb2c tests, run by
-  Bas/bench/goldens.py);
-- on the CMM2, the same file as tests/picomite/warp.bas, run under OPTION PICOMITE.
+As built, one test program serves both machines: Bas/bench/warp_test.bas. It runs on the PicoMite as it is, and on
+the CMM2 under OPTION PICOMITE; the CMM2 adds a native version of it for the 8, 12, 16 and 32-bit modes and the PAGE
+form. Its core is also checked on a PC against a pixel model (400,000 random cases), and Bas/bench/warp_time.bas
+measures it.
 
 It draws known patterns, warps them, and checks the result with PIXEL() for:
 - step 1, 2, 3 and a step that does not divide the size (the cut last band);
@@ -382,10 +389,17 @@ It draws known patterns, warps them, and checks the result with PIXEL() for:
 It runs in MODE 2 and 3, in MODE 4 and 5 on HDMI, and on the CMM2 also in the 8, 16 and 32-bit modes through the
 PAGE form. Both machines must print the same results.
 
-## 11. To confirm
+## 11. Decisions
 
-Everything else was settled by Peter on 23 Nov: the branches, the directions, rows%() in a band, the CMM2's F,
-FRAMEBUFFER WAIT in every CMM2 mode, the argument order, the PAGE form with TO and no D, and a plain syntax error on
-the LCD builds. The SPRITE SCROLL −2 error in the manuals was fixed the same day. Still open:
+All settled by Peter on 23 Nov 2026:
+- the branches;
+- the directions;
+- rows%() in a band;
+- the CMM2's F;
+- FRAMEBUFFER WAIT in every CMM2 mode;
+- the argument order;
+- the PAGE form with TO and no D;
+- a plain syntax error on the LCD builds;
+- the CMM2's 12-bit transparency (alpha 0).
 
-1. **The CMM2's 12-bit transparency and edge alpha:** to be settled when it is built.
+The SPRITE SCROLL −2 error in the manuals was fixed the same day. Nothing is open.
