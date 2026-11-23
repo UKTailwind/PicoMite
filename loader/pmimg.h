@@ -174,8 +174,9 @@ struct cmm2_services {
     int      (*video_mode)(int mode, int depth, cmm2_video *v);   /* MODE mode, depth the mode's own (MODE 1: 1, MODE 2
                                                   and 3: 4, MODE 4: 16, RGB555; MODE 5: 8, MAP's 256 colours): 0 with v
                                                   filled and the page cleared, or negative */
-    int      (*video_palette)(int start, int count, const uint8_t *rgb);   /* MODE 5's colours (MAP's) from R,G,B bytes,
-                                                  shown from the next frame: 0, or -1 if the mode has none (MODE 5 at
+    int      (*video_palette)(int start, int count, const uint8_t *rgb);   /* MAP's colours from R,G,B bytes, shown from
+                                                  the next frame: MODE 5's 256, or MODE 2 and 3's 16 (on HDMI each
+                                                  index can be any colour); 0, or -1 if the mode has none (MODE 5 at
                                                   1280x720 and the like shows each byte as RGB332) */
     void     (*video_wait)(void);              /* until the display starts its next frame (50 ms at most) */
     /* the keyboard and the gamepads */

@@ -93,6 +93,7 @@ typedef struct {
     int vmode, palette;                                             // it set a mode; it changed MAP's colours
     int oldmode, oldfont, oldfc, oldbc;                             // the screen as BASIC had it
     uint16_t oldmap[256];
+    uint32_t oldmap16[2][16];                                       // MODE 2 and 3's: map16pairs, map16quads
     uint64_t pins, od, pwmpins;                                     // its GPs (bit n: GPn), its open-drain outputs, its PWM
     uint32_t pwmon;                                                 // its PWM outputs running (bit slice * 2 + B)
     uint16_t pwmduty[24];
@@ -727,7 +728,23 @@ static void ld_frame(void)
 }
 static int ld_palette(int start, int count, const uint8_t *rgb)
 {
-    if (DISPLAY_TYPE != SCREENMODE5 || !FullColour || start < 0 || count < 0 || start + count > 256)
+    if (start < 0 || count < 0)
+        return -1;
+    if (DISPLAY_TYPE == SCREENMODE2 || DISPLAY_TYPE == SCREENMODE3)
+    { // the 16 colours, as MAP and MAP SET give them (the scanout reads one table or the other)
+        if (start + count > 16)
+            return -1;
+        ld_frame();
+        for (int i = 0; i < count; i++, rgb += 3)
+        {
+            int c = (uint32_t)rgb[0] << 16 | rgb[1] << 8 | rgb[2];
+            map16pairs[start + i] = RGB555(c) | (RGB555(c) << 16);
+            map16quads[start + i] = RGB332(c) * 0x01010101u;
+        }
+        ld->palette = 1;
+        return 0;
+    }
+    if (DISPLAY_TYPE != SCREENMODE5 || !FullColour || start + count > 256)
         return -1;
     ld_frame();
     for (int i = 0; i < count; i++, rgb += 3)
@@ -742,6 +759,8 @@ static void ld_screensave(void)
     ld->oldfc = gui_fcolour;
     ld->oldbc = gui_bcolour;
     memcpy(ld->oldmap, map256, sizeof(ld->oldmap));
+    memcpy(ld->oldmap16[0], map16pairs, sizeof(ld->oldmap16[0]));
+    memcpy(ld->oldmap16[1], map16quads, sizeof(ld->oldmap16[1]));
 }
 static void ld_screenbody(void *a)
 {
@@ -759,6 +778,8 @@ static void ld_screenbody(void *a)
     {
         ld_frame();
         memcpy(map256, ld->oldmap, sizeof(ld->oldmap));
+        memcpy(map16pairs, ld->oldmap16[0], sizeof(ld->oldmap16[0]));
+        memcpy(map16quads, ld->oldmap16[1], sizeof(ld->oldmap16[1]));
     }
 }
 

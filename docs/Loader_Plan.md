@@ -15,8 +15,8 @@
   `fwdouble.S`), `datetime_set`, `watchdog`, and the network services (the CMM2's version-21 set, `misc/LoaderNet.c`).
   The PC3 has 10.3 KB of flash left. Every book example runs except one in 1024x600 (RGB1024), which Peter decided to
   leave refused; RGB640 (640x480 in 256 colours) cannot have its 307 KB page in the PC3's SRAM and is shown in 16
-  colours (an adaptive palette is next).
-- Next: RGB640's adaptive palette; then a SCUMM-only ScummVM (Phase 10's last).
+  colours chosen from each picture (video_palette now sets MODE 2 and 3's 16 too: exact for 16 colours or fewer).
+- Next: a SCUMM-only ScummVM (Phase 10's last).
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -620,7 +620,11 @@ COM10 (315 MHz): solar_eclipse.py 12.1 s (the PC3's own MicroPython 8.8-9.25 s a
 all run but ch16/03 (RGB1024: 1024x600, refused at 640x480); the PC3's own test suite passes 201 checks and fails 3,
 all in the 1024x600 modes. RGB320_8, RGB320 and RGB640_4 are shown pixel for pixel (MODE 5, 4 and 3); RGB640 has no
 PicoMite mode (307 KB; the PC3's SRAM heap and framebuffer pool together are 264 KB, and what follows them is live
-while a program runs), so it is shown on MODE 3 in 16 colours.
+while a program runs), so it is shown on MODE 3 in 16 colours chosen from the picture: `video_palette` now sets
+MODE 2 and 3's 16 (on HDMI each index can be any colour; saved and put back at the program's end as MAP's 256 are),
+so a picture of 16 colours or fewer is exact and a photograph gets a median cut's 16. An RGB640 copy is 12 ms (300 KB
+read from the PSRAM), so the copies are spaced to take a third of the time at most (Peter saw a demo starved by the
+first version, whose copy took 22 ms every 16.7).
 
 *Doom done 22 November* on the COM10 PC3 (315 MHz, I2S): `apps/doom` (make.py fetches doomgeneric at the CMM2's commit,
 e257a095; `doomgeneric_pico.c` from the CMM2's `doomgeneric_cmm2.c`). MODE 5 with Doom's 320x200 frame in the middle of
