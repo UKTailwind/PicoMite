@@ -222,7 +222,9 @@ extern "C"
    /* +32 KB (2026-09-29): Route B (P1-P5) went 19.5 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 3.9 KB over. */
-#define FLASH_TARGET_OFFSET (1104 * 1024)
+   /* +16 KB (2026-11-23, Peter): FRAMEBUFFER WARPH and WARPV (Warp.c, 3.5 KB) went
+      3,292 bytes over. Moves A: and the options on the upgrade. */
+#define FLASH_TARGET_OFFSET (1120 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
