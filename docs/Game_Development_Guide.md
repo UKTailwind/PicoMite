@@ -277,6 +277,8 @@ LOOP
 
 The arcade machines and home computers of the 1980s scrolled each line of the screen by its own amount, with a raster interrupt or a copper list changing the scroll register as the beam went down the screen. That is how a racing game bends its road into curves and hills, how a landscape scrolls in parallax bands, and how water ripples. Doing it in BASIC, one BLIT per line, is far too slow: 240 lines are hundreds of interpreted statements every frame.
 
+On the hardware that did it this is called *row scroll* or *line scroll*, and *column scroll* for columns (the names of the arcade video chips, and of MAME); demo coders call a logo wobbled sideways line by line a *tech-tech*, and the racing games' road a *pseudo-3D road*.
+
 From V8, the VGA and HDMI builds (MODE 2 to 5) have two commands that do the whole job in one statement each:
 
 ```

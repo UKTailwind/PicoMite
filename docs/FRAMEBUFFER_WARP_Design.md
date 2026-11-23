@@ -15,6 +15,8 @@ Many old games scrolled each line or column of the screen by its own amount:
 
 The hardware of the day did this at no cost, with a raster interrupt or a copper list that changed the scroll
 register at chosen lines.
+The technique is known as *row scroll* (or *line scroll*) and *column scroll*, the names of the arcade video
+chips and of MAME; demo coders call a sideways sine wobble a *tech-tech*.
 
 MMBasic can do this today only with a BLIT FRAMEBUFFER for each line, and two of them for a line that wraps. That is
 about 480 interpreted statements a frame in a 320x240 mode, and the time goes on interpreting them, not on moving

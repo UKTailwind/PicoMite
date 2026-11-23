@@ -246,6 +246,7 @@ pdf.table_row('x', 'Horizontal scroll amount (positive = right)')
 pdf.table_row('y', 'Vertical scroll amount (positive = up)')
 pdf.table_row('fill_color', 'Color for exposed areas, -1 leaves them; omit it for wrap-around')
 pdf.body_text("Layer 0 sprites scroll with the background. Layers 1-4 remain stationary. Static objects also scroll.")
+pdf.body_text("To scroll each row at its own speed instead (parallax bands, a rippling reflection, a curving road), draw the background into a framebuffer and use FRAMEBUFFER WARPH (V8, VGA and HDMI builds; see the User Manual and the Game Development Guide).")
 
 # Closing Sprites
 pdf.section_title('Closing Sprites')

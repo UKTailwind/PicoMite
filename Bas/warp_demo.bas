@@ -229,7 +229,8 @@ SUB scene3
   BOX 110, 191, 100, 4, 0, cl(14), cl(14)
   BOX 120, 201, 16, 6, 0, cl(15), cl(15) : BOX 184, 201, 16, 6, 0, cl(15), cl(15)
   BOX 150, 210, 20, 6, 0, cl(11), cl(11)
-  TEXT 6, 6, "SPEED", "LT", 1, 1, cl(12), -1
+  BOX 2, 3, 124, 16, 0, cl(14), cl(14)  ' a dark panel, so the clouds behind cannot hide it
+  TEXT 6, 6, "SPEED", "LT", 1, 1, cl(12), cl(14)
   FRAMEBUFFER WRITE N
   FOR k = 0 TO 69
     cp!(k) = (1 - k / 69) ^ 2 * 110     ' a curve moves the far rows most
@@ -257,7 +258,7 @@ SUB scene3
     IF fr <= 25 THEN setpal pal(), fr / 25
     IF fr MOD 10 = 0 THEN
       FRAMEBUFFER WRITE L
-      TEXT 54, 6, STR$(240 + INT(20 * SIN(fr * 0.02)), 3) + " km/h", "LT", 1, 1, cl(15), cl(0)
+      TEXT 54, 6, STR$(240 + INT(20 * SIN(fr * 0.02)), 3) + " km/h", "LT", 1, 1, cl(15), cl(14)
       FRAMEBUFFER WRITE N
     ENDIF
     IF fr <= 25 THEN MAP SET ELSE FRAMEBUFFER WAIT

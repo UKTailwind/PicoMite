@@ -415,6 +415,8 @@ TILEMAP DRAW 1, F, camX\2, camY\2, 0, 0, 320, 240      ' BG at half speed
 TILEMAP DRAW 2, F, camX, camY, 0, 0, 320, 240, 0        ' FG with transparency
 ```
 
+A background that repeats across the width of the screen (sky, hills, a skyline) can instead be drawn once into a framebuffer and moved by `FRAMEBUFFER WARPH`, every band of rows at its own speed, for as many parallax layers as there are rows (V8, VGA and HDMI builds; see Raster Effects in the Game Development Guide).
+
 ### Attribute-Based Collision
 
 ```

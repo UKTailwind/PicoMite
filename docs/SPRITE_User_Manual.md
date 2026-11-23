@@ -393,6 +393,7 @@ SPRITE SCROLL x, y [, fill_color]
 - Layers 1-4 remain stationary
 - Static objects also scroll with the background
 - With wrap-around (no `fill_color`), content wraps from one edge to the opposite
+- To scroll each row at its own speed instead (parallax bands, a rippling reflection, a curving road), draw the background into a framebuffer and use `FRAMEBUFFER WARPH` (V8, VGA and HDMI builds; see the User Manual and the Game Development Guide)
 
 ---
 

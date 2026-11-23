@@ -397,6 +397,10 @@ BLIT FRAMEBUFFER F, L, 0, 0, 0, 0, 320, 240
 BLIT FRAMEBUFFER L, F, 10, 10, 50, 50, 100, 80, 0
 ```
 
+### Moving Every Row or Column
+
+Copying a whole buffer with each row or column moved by its own offset - parallax bands, a curving road, rippling water, a melt - is the job of `FRAMEBUFFER WARPH` and `FRAMEBUFFER WARPV` (V8, VGA and HDMI builds): one command instead of a BLIT FRAMEBUFFER for every line. The offsets come from an integer array. They are described in the User Manual under FRAMEBUFFER, with worked examples in the Game Development Guide (*Raster Effects*).
+
 ---
 
 ## BLIT COMPRESSED
