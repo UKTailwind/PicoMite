@@ -1,0 +1,36 @@
+diff --git a/src/bem/model.c b/src/bem/model.c
+index 7eb4902..069fa49 100644
+--- a/src/bem/model.c
++++ b/src/bem/model.c
+@@ -45,8 +45,10 @@ static const char fdc_names[FDC_MAX][8] =
+ #define NUM_ROM_SETUP 5
+ static rom_setup_t rom_setups[NUM_ROM_SETUP] =
+ {
++#if !defined(PICO_BUILD) || defined(CMM2_APP)
++    { "swram",   mem_romsetup_swram   },   // CMM2: the Model B's empty slots sideways RAM (the heap has room for them)
++#endif
+ #ifndef PICO_BUILD
+-    { "swram",   mem_romsetup_swram   },
+     { "os01",    mem_romsetup_os01    },
+ #endif
+     { "std",     mem_romsetup_std     },
+diff --git a/src/bem/thumb_cpu/src/adapter.c b/src/bem/thumb_cpu/src/adapter.c
+index 61e7d2d..6c47abe 100644
+--- a/src/bem/thumb_cpu/src/adapter.c
++++ b/src/bem/thumb_cpu/src/adapter.c
+@@ -118,7 +118,15 @@ int get_i() {
+ }
+ 
+ void m6502_init(void) {
++#ifdef CMM2_APP
++    // CMM2: the CPU's time kept across CPUInit's memset (main_restart, a change of model, inits it again): the hardware's events are timed
++    // against it, and advance_hardware asserts when it goes back
++    int32_t clk = g_cpu.clk;
+     CPUInit();
++    g_cpu.clk = clk;
++#else
++    CPUInit();
++#endif
+     g_cpu.memHandlers = MemMapInit();
+ }
+ 

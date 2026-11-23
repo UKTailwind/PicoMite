@@ -16,7 +16,13 @@
   The PC3 has 10.3 KB of flash left. Every book example runs except one in 1024x600 (RGB1024), which Peter decided to
   leave refused; RGB640 (640x480 in 256 colours) cannot have its 307 KB page in the PC3's SRAM and is shown in 16
   colours chosen from each picture (video_palette now sets MODE 2 and 3's 16 too: exact for 16 colours or fewer).
-- Next: a SCUMM-only ScummVM (Phase 10's last).
+- **23 November, later:** ScummVM's SCUMM engine (apps/scummvm) runs DOTT with speech. Phase 11's `--sram` is done
+  on the PC3: a program's SRAM part (app.ld's `.sram` and `.sram_bss`, a version 2 header, `build.py --sram FILE`;
+  calls between the parts through the linker's veneers, which mkimage.py relocates). With it the BBC Micro
+  (apps/bbc) runs at 49.8 frames a second at 576p (the new OPTION RESOLUTION 720x576, 404 MHz) with a third of the
+  time to spare at MODE 7's prompt. The flash is now written in direct mode at a clock of the firmware's own and its
+  read timing worked out from clk_sys, so flash writes no longer limit the clock (a PC3 ran everything to 456 MHz).
+- Next: the BBC's menus (drawn into the PSRAM each frame); the other variants (Phase 11).
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;

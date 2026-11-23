@@ -1,0 +1,210 @@
+diff --git a/src/bem/pico/sector_read/sector_read.h b/src/bem/pico/sector_read/sector_read.h
+index 1321de5..f3b8c4e 100644
+--- a/src/bem/pico/sector_read/sector_read.h
++++ b/src/bem/pico/sector_read/sector_read.h
+@@ -4,6 +4,7 @@
+ #ifndef B_EM_PICO_SECTOR_READ_H
+ #define B_EM_PICO_SECTOR_READ_H
+ 
++#include <stdbool.h>
+ #include "pico/types.h"
+ #include "pico/util/buffer.h"
+ 
+@@ -35,6 +36,8 @@ typedef void (*sector_read_release_buffer_func)(struct sector_read *sr, struct s
+ typedef uint (*sector_read_check_available_func)(struct sector_read *sr, struct sector_buffer *buffer, uint wanted,
+                                                  uint32_t timeout_ms);
+ typedef void (*sector_read_close_func)(struct sector_read *sector_read);
++/* CMM2: a sector written back to the image (data NULL: whether the image can be written); false if it cannot be */
++typedef bool (*sector_read_write_sector_func)(struct sector_read *sr, uint32_t sector, const uint8_t *data);
+ 
+ #ifndef NDEBUG
+ // only used by debug atm
+@@ -55,6 +58,7 @@ struct sector_read_funcs {
+ #ifndef NDEBUG
+     enum sector_read_type type;
+ #endif
++    sector_read_write_sector_func write_sector;  /* CMM2: NULL for a reader that cannot write */
+ };
+ 
+ struct sector_read {
+@@ -94,6 +98,10 @@ inline static void sector_read_close(struct sector_read *sector_read) {
+     sector_read->funcs->close(sector_read);
+ }
+ 
++inline static bool sector_read_write_sector(struct sector_read *sr, uint32_t sector, const uint8_t *data) {
++    return sr->funcs->write_sector && sr->funcs->write_sector(sr, sector, data);
++}
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/src/bem/sdf-acc.c b/src/bem/sdf-acc.c
+index 93cadc4..55fcc30 100644
+--- a/src/bem/sdf-acc.c
++++ b/src/bem/sdf-acc.c
+@@ -39,6 +39,7 @@ static struct sector_read *sr[NUM_DRIVES];
+ static struct sector_buffer *sr_sector[NUM_DRIVES];
+ static int8_t sr_counter[NUM_DRIVES]; // so we can detect disc change
+ static int8_t sr_counter_last[NUM_DRIVES];
++static uint32_t sr_sector_num[NUM_DRIVES]; // CMM2: the image's sector in sr_sector, for writing it back
+ #endif
+ static const struct sdf_geometry *geometry[NUM_DRIVES];
+ static uint8_t current_track[NUM_DRIVES];
+@@ -210,6 +211,7 @@ static bool __time_critical_func(io_seek)(const struct sdf_geometry *geo, uint8_
+                 assert(!(offset % geo->sector_size));
+             }
+             sr_sector[drive] = sector_read_acquire_buffer(sr[drive], offset / geo->sector_size);
++            sr_sector_num[drive] = offset / geo->sector_size;
+ #endif
+             return true;
+         }
+@@ -417,8 +419,30 @@ static void __time_critical_func(sdf_poll)()
+                 }
+             }
+ #else
+-            fdc_writeprotect();
+-            state = ST_IDLE;
++            // CMM2: the sector's bytes into its buffer (read when the head was put on it), and the whole sector written back to the image
++            {
++                struct sector_buffer *b = sr_sector[sdf_drive];
++                if (!b || (count == b->buffer.size && !sector_read_write_sector(sr[sdf_drive], sr_sector_num[sdf_drive], NULL))) {
++                    fdc_writeprotect();
++                    state = ST_IDLE;
++                    break;
++                }
++                uint offset = b->buffer.size - count;
++                int c = fdc_getdata(--count == 0);
++                if (c == -1) {
++                    log_warn("sdf: data underrun on write");
++                    count++;
++                } else {
++                    b->buffer.bytes[offset] = (uint8_t)c;
++                    if (count == 0) {
++                        if (sector_read_write_sector(sr[sdf_drive], sr_sector_num[sdf_drive], b->buffer.bytes))
++                            fdc_finishread();
++                        else
++                            fdc_writeprotect();
++                        state = ST_IDLE;
++                    }
++                }
++            }
+ #endif
+             break;
+ 
+@@ -486,9 +510,28 @@ static void __time_critical_func(sdf_poll)()
+                 count = 500;
+             }
+ #else
+-//            panic_unsupported();
+-            fdc_writeprotect();
+-            state = ST_IDLE;
++            // CMM2: each sector of the track written back blank
++            if (!sector_read_write_sector(sr[sdf_drive], sr_sector_num[sdf_drive], NULL)) {
++                fdc_writeprotect();
++                state = ST_IDLE;
++                break;
++            }
++            if (--count == 0) {
++                static const uint8_t blank[1024];
++                if (geometry[sdf_drive]->sector_size > sizeof(blank) ||
++                    !sector_read_write_sector(sr[sdf_drive], sr_sector_num[sdf_drive], blank)) {
++                    fdc_writeprotect();
++                    state = ST_IDLE;
++                    break;
++                }
++                if (++sdf_sector >= geometry[sdf_drive]->sectors_per_track) {
++                    state = ST_IDLE;
++                    fdc_finishread();
++                    break;
++                }
++                io_seek(geometry[sdf_drive], sdf_drive, sdf_sector, sdf_track, sdf_side);
++                count = 500;
++            }
+ #endif
+             break;
+     }
+diff --git a/src/frank/frank_disc.c b/src/frank/frank_disc.c
+index 2b6ee70..67c9256 100644
+--- a/src/frank/frank_disc.c
++++ b/src/frank/frank_disc.c
+@@ -39,10 +39,12 @@ struct fatfs_drive {
+     uint8_t            secdata[1024] __attribute__((aligned(4)));
+     const struct sdf_geometry *geo;
+     bool               have_image;
++    bool               writable;                 /* CMM2: the file opened for writing too */
+     char               path[160];
+ };
+ 
+ static struct fatfs_drive s_drv[2];
++bool g_frank_disc_readonly;                      /* CMM2: the images opened for reading only (RUN's -ro) */
+ 
+ static struct sector_buffer *fatfs_acquire(struct sector_read *sr, uint32_t sector) {
+     struct fatfs_drive *d = (struct fatfs_drive *)sr;
+@@ -72,6 +74,27 @@ static uint fatfs_check_available(struct sector_read *sr, struct sector_buffer *
+     return buffer->buffer.size;
+ }
+ 
++/* CMM2: a sector the BBC wrote, back to the image file and on the card at once (f_sync); an image that stops short of it (a .dsd often
++   does) first lengthened by blank sectors. data NULL asks whether the image can be written */
++static bool fatfs_write(struct sector_read *sr, uint32_t sector, const uint8_t *data) {
++    struct fatfs_drive *d = (struct fatfs_drive *)sr;
++    static const uint8_t blank[1024];
++    UINT bw;
++    if (!d->have_image || !d->writable || sector >= sr->sector_count || sr->sector_size > sizeof(blank)) return false;
++    if (!data) return true;
++    while (d->file_sectors < sector) {
++        if (f_lseek(&d->fil, (FSIZE_t)d->file_sectors * sr->sector_size) != FR_OK ||
++            f_write(&d->fil, blank, sr->sector_size, &bw) != FR_OK || bw != sr->sector_size)
++            return false;
++        d->file_sectors++;
++    }
++    if (f_lseek(&d->fil, (FSIZE_t)sector * sr->sector_size) != FR_OK ||
++        f_write(&d->fil, data, sr->sector_size, &bw) != FR_OK || bw != sr->sector_size)
++        return false;
++    if (sector >= d->file_sectors) d->file_sectors = sector + 1;
++    return f_sync(&d->fil) == FR_OK;
++}
++
+ static void fatfs_close(struct sector_read *sr) {
+     struct fatfs_drive *d = (struct fatfs_drive *)sr;
+     if (d->have_image) {
+@@ -88,6 +111,7 @@ static const struct sector_read_funcs fatfs_funcs = {
+ #ifndef NDEBUG
+     .type = memory,
+ #endif
++    .write_sector    = fatfs_write,
+ };
+ 
+ /* Pick a DFS/ADFS geometry from the image size + extension (mirrors b-em
+@@ -155,6 +179,19 @@ int frank_disc_mount(int drive, const char *path) {
+     uint32_t full = (uint32_t)geo->tracks * geo->sectors_per_track * geo->sector_size;
+     if (geo->sides != SDF_SIDES_SINGLE) full *= 2;
+ 
++    /* CMM2: opened again to be written as well (FA_OPEN_APPEND: the file is there; the loader then keeps no link map, which would stop
++       a short image being lengthened), unless -ro or it cannot be (a read-only file): then the BBC finds the disc write protected */
++    d->writable = false;
++    if (!g_frank_disc_readonly) {
++        f_close(&d->fil);
++        if (f_open(&d->fil, path, FA_READ | FA_WRITE | FA_OPEN_APPEND) == FR_OK)
++            d->writable = true;
++        else if ((fr = f_open(&d->fil, path, FA_READ)) != FR_OK) {
++            printf("DISC: open '%s' failed (%d)\n", path, (int)fr);
++            return -1;
++        }
++    }
++
+     d->sr.funcs        = &fatfs_funcs;
+     d->sr.sector_size  = geo->sector_size;
+     d->sr.sector_count = full / geo->sector_size;
+@@ -165,9 +202,9 @@ int frank_disc_mount(int drive, const char *path) {
+ 
+     disc_close(drive);
+     sdf_load_image(drive, geo, &d->sr);
+-    printf("DISC: drive %d = '%s' (%s, %lu bytes, %lu sectors)\n",
++    printf("DISC: drive %d = '%s' (%s, %lu bytes, %lu sectors%s)\n",
+            drive, path, geo->name, (unsigned long)fsize,
+-           (unsigned long)d->sr.sector_count);
++           (unsigned long)d->sr.sector_count, d->writable ? "" : ", read only");
+     return 0;
+ }
+ 

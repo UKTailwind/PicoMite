@@ -1,0 +1,162 @@
+diff --git a/src/bem/pico/video/macros.S b/src/bem/pico/video/macros.S
+index de80562..c8bf17d 100644
+--- a/src/bem/pico/video/macros.S
++++ b/src/bem/pico/video/macros.S
+@@ -1,7 +1,16 @@
+ /*
+  * B-em Pico version (C) 2021 Graham Sanderson
+  */
+-#ifndef PI_ASM32
++#if defined(CMM2_APP)
++/* CMM2: the Cortex-M7, Thumb-2 only: PI_ASM32's instructions, as Thumb functions */
++.thumb
++.macro public_func name
++.type \name, %function
++.thumb_func
++.global \name
++\name:
++.endm
++#elif !defined(PI_ASM32)
+ .cpu cortex-m0plus
+ .thumb
+ .macro public_func name
+diff --git a/src/bem/thumb_cpu/gen/gen_asm.rb b/src/bem/thumb_cpu/gen/gen_asm.rb
+index a661c61..c8e20b5 100755
+--- a/src/bem/thumb_cpu/gen/gen_asm.rb
++++ b/src/bem/thumb_cpu/gen/gen_asm.rb
+@@ -70,6 +70,8 @@ CPUNAME = "g_cpu"
+ OUTPUT_C_FILE = ARGV[1] || "6502_c.inl"
+ OUTPUT_ASM_FILE = ARGV[0] || "6502_asm.inl"
+ PI_ASM = ARGV[2] || false
++# CMM2: PI_ASM's code as Thumb-2 (the Cortex-M7): a function's handler is the C function's own odd address, called as it is
++THUMB2 = ARGV[3] || false
+ 
+ class Gen6502
+ 
+@@ -565,7 +567,7 @@ class Gen6502
+         raise "Balls" if( out_reg == "r0" )
+ 
+         if (true)
+-            if (PI_ASM)
++            if (PI_ASM && !THUMB2)
+                 post_asm( "subs #{tmp0}, #1")
+             end
+             post_asm( "mov r0, REG_ACC" )
+@@ -812,7 +814,7 @@ class Gen6502
+         emit_asm( "strb #{val_reg}, [ #{tmp0}, #{addr_reg} ]" )       
+         emit_asm( "#{continue}:" )
+         post_asm( "#{do_func}:" )
+-        if (PI_ASM)
++        if (PI_ASM && !THUMB2)
+             post_asm( "subs #{tmp0}, #1")
+         end
+         raise "balls" if( addr_reg == "r0" )
+diff --git a/src/bem/thumb_cpu/src/cpu/cpu.c b/src/bem/thumb_cpu/src/cpu/cpu.c
+index 6ac6c1a..0390022 100644
+--- a/src/bem/thumb_cpu/src/cpu/cpu.c
++++ b/src/bem/thumb_cpu/src/cpu/cpu.c
+@@ -285,7 +285,7 @@ void __time_critical_func(CPURun)( bool c6512 )
+ {
+     DEBUG_PINS_SET(core_use, 1);
+     extern void entry_6502( C6502* cpu );
+-#if PICO_ON_DEVICE
++#if PICO_ON_DEVICE && !PI_ASM32
+ //    interp_configure_none( mm_interp0, 0, 7, 3, 8 );
+     interp_config config = interp_default_config();
+     interp_config_set_shift(&config, 7);
+diff --git a/src/bem/thumb_cpu/src/cpu/cpu_asm.S b/src/bem/thumb_cpu/src/cpu/cpu_asm.S
+index 9896303..aa07cb5 100644
+--- a/src/bem/thumb_cpu/src/cpu/cpu_asm.S
++++ b/src/bem/thumb_cpu/src/cpu/cpu_asm.S
+@@ -8,7 +8,9 @@
+ #else
+ .section .text.c6512_@ "ax"
+ #endif
++#ifndef CMM2_APP
+ .arm
++#endif
+ #else
+ #ifndef MODEL_MASTER
+ .section .time_critical.n6502_@ "ax"
+@@ -528,6 +530,9 @@ public_func cmos_sbc_decimal_guts // this one mostly shared with non decimal as
+ .section .time_critical.c6512_asm_execute_cmos_badop_\clks\()_\pc\()
+ #endif
+ .global asm_execute_cmos_badop_\clks\()_\pc\()
++#ifdef CMM2_APP
++.thumb_func
++#endif
+ asm_execute_cmos_badop_\clks\()_\pc\():
+         adds      REG_PC, REG_PC, #\pc
+         movs      r0, #\clks
+diff --git a/src/board_config.h b/src/board_config.h
+index 1435d15..1ac689b 100644
+--- a/src/board_config.h
++++ b/src/board_config.h
+@@ -77,8 +77,12 @@ static inline uint get_psram_pin(void) {
+ /* BBC Micro framebuffer: 320×256 8-bit indexed colour.
+  * BBC native modes: 640×256 (2MHz) or 320×256 (1MHz).
+  * We down-sample to 320 wide, keep 256 lines. */
++#ifndef MICRO_FB_WIDTH          /* CMM2: 640, the BBC's whole line (make.py) */
+ #define MICRO_FB_WIDTH    320
++#endif
++#ifndef MICRO_FB_HEIGHT
+ #define MICRO_FB_HEIGHT   256
++#endif
+ #define MICRO_SCREEN_LINES 256
+ 
+ /* Legacy aliases kept for board_config consumers */
+diff --git a/src/frank/frank_screenshot.c b/src/frank/frank_screenshot.c
+index 1aaa242..7c433f1 100644
+--- a/src/frank/frank_screenshot.c
++++ b/src/frank/frank_screenshot.c
+@@ -59,7 +59,11 @@ int frank_screenshot_save(const uint8_t *fb) {
+     f_mkdir("/micro/screenshot");
+ 
+     const int W = MICRO_FB_WIDTH;   /* 320 */
++#ifdef CMM2_APP
++    const int H = MICRO_FB_HEIGHT * 2;  /* CMM2: each of the BBC's lines twice, as it is shown */
++#else
+     const int H = MICRO_FB_HEIGHT;  /* 256 */
++#endif
+     const int row_bytes = (W + 3) & ~3;
+     const uint32_t palette_size    = 256 * 4;
+     const uint32_t pixel_offset    = 14 + 40 + palette_size;
+@@ -106,7 +110,11 @@ int frank_screenshot_save(const uint8_t *fb) {
+     uint8_t row_pad[4] = {0, 0, 0, 0};
+     int pad = row_bytes - W;
+     for (int y = H - 1; y >= 0; y--) {
++#ifdef CMM2_APP
++        const uint8_t *src = fb + (size_t)(y / 2) * W;
++#else
+         const uint8_t *src = fb + (size_t)y * W;
++#endif
+         f_write(&f, src, (UINT)W, &bw);
+         if (pad > 0)
+             f_write(&f, row_pad, (UINT)pad, &bw);
+diff --git a/src/frank/frank_settings.c b/src/frank/frank_settings.c
+index 654eb0e..8d407cc 100644
+--- a/src/frank/frank_settings.c
++++ b/src/frank/frank_settings.c
+@@ -345,9 +345,22 @@ void frank_settings_do_restart(void) {
+         s_pending_restart = 0;
+         printf("settings: rebooting to apply model = %s\n",
+                MODEL_LABELS[g_frank_settings.model % FRANK_MODEL_COUNT]);
++#ifdef CMM2_APP
++        /* CMM2: no reboot - B-em's own way to another model, as its menus have it (main_restart: model_init, main_reset); the
++         * sideways RAM banks the old model took are not given back, 16 KB each, of a heap of megabytes */
++        {
++            extern int8_t curmodel;
++            extern void main_restart(void);
++            curmodel = (int8_t)frank_boot_model();
++            main_restart();
++            frank_settings_apply_live();
++            return;
++        }
++#else
+         sleep_ms(60);
+         watchdog_reboot(0, 0, 0);
+         while (1) tight_loop_contents();
++#endif
+     }
+ 
+     /* A plain reset of the emulated machine applies the remaining changes

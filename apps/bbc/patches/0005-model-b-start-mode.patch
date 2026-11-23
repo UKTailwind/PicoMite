@@ -1,0 +1,31 @@
+diff --git a/src/frank/frank_settings.c b/src/frank/frank_settings.c
+index 8d407cc..d72b055 100644
+--- a/src/frank/frank_settings.c
++++ b/src/frank/frank_settings.c
+@@ -216,7 +216,7 @@ void frank_settings_apply_live(void) {
+     g_frank_limit_speed = (g_frank_settings.limit_speed != 0);
+     sound_dac           = (g_frank_settings.dac != 0);
+     keyas               = (g_frank_settings.caps_ctrl != 0);
+-    kbdips              = g_frank_settings.start_mode & 7;
++    kbdips              = ~g_frank_settings.start_mode & 7;   /* CMM2: the links are the mode inverted (none fitted: MODE 7) */
+ }
+ 
+ void frank_settings_step(frank_setting_id_t id, int delta) {
+@@ -263,7 +263,7 @@ void frank_settings_step(frank_setting_id_t id, int delta) {
+             break;
+         case FRANK_SETTING_START_MODE:
+             step_u8(&g_frank_settings.start_mode, delta, n);
+-            kbdips = g_frank_settings.start_mode & 7;   /* takes effect on reset */
++            kbdips = ~g_frank_settings.start_mode & 7;  /* takes effect on reset (CMM2: inverted, as the links are) */
+             break;
+         case FRANK_SETTING_CAPS_CTRL:
+             step_u8(&g_frank_settings.caps_ctrl, delta, n);
+@@ -328,7 +328,7 @@ int frank_gamepad_key_for(frank_pad_action_t action) {
+ }
+ 
+ int frank_boot_kbdips(void) {
+-    return g_frank_settings.start_mode & 7;
++    return ~g_frank_settings.start_mode & 7;   /* CMM2: a link fitted is a 0 bit of the mode: MODE 7 has none */
+ }
+ 
+ void frank_settings_do_restart(void) {
