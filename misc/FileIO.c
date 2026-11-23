@@ -4247,7 +4247,13 @@ static unsigned char *MIPS16 lib_firstword(unsigned char *s, const char *word)
    text and bin may be NULL, which is the measuring pass - what comes out of a library file
    is wildly lopsided (sefunc.bas is 86 KB of which 752 bytes are BASIC), so guessing a size
    for either would mean reserving far more than the whole file to be safe. */
-#define LIB_HASH_SEED 2166136261u /* FNV-1a, folded across every file in order */
+/* The hash covers the token tables' format too: LIB_TOKEN_FORMAT goes up whenever a token moves (a function folded, or
+   a table entry added or removed before the end of its table).  LIBRARY LOAD skips its work when the hash it recorded
+   (the option for the flash library, the tag of a RAM library, which PSRAM can keep across a restart) matches the
+   files', so without it a library an earlier firmware tokenised from the same files would be kept and run with the
+   wrong tokens.  1: EOF( LOC( LOF( one token, RAY( sprite('s (7384d21, 23 Nov 2026). */
+#define LIB_TOKEN_FORMAT 1u
+#define LIB_HASH_SEED (2166136261u ^ LIB_TOKEN_FORMAT) /* FNV-1a, folded across every file in order */
 /* Scan one library source file.  'hash', 'nfixout' and 'nrecout' are RUNNING
    TOTALS, seeded by the caller and updated here, so several files can be fed
    through in turn and come out as one library: the hash then covers every file
