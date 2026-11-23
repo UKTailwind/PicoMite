@@ -478,6 +478,9 @@ NOT_A_MANUAL = (
     # a keyword ("Not in V7 with symbols...") became that keyword's topic
     # (~NOT), so it was filtered out by hand at every regeneration
     "performance_guide",
+    # a design for a command not built yet (FRAMEBUFFER_WARP_Design.md): its
+    # syntax blocks became topics (~FRAMEBUFFER WARPH, ~CMM2)
+    "design",
 )
 EXTRA_SOURCES = ["generate_stepper_pdf.py", "Advanced Graphics Functions.docx"]
 
