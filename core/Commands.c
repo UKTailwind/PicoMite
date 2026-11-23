@@ -2877,7 +2877,11 @@ void MIPS16 cmd_list(void)
 		}
 		static const char *dummy_funcs[] = {
 			"Bin$(", "Oct$(", "Hex$(", "LCase$(", "UCase$(",
-			"Min(", "Max(", "Left$(", "Right$("};
+			"Min(", "Max(", "Left$(", "Right$(", "Eof(", "Loc(", "Lof(",
+#ifdef RAYCASTER
+			"Ray(", // (sprite('s token: tokenise() writes SPRITE(RAY,)
+#endif
+		};
 		const int dummy_count = sizeof(dummy_funcs) / sizeof(dummy_funcs[0]);
 		int x = 3 + MMEND + dummy_count;
 		char **c = GetTempMainMemory((TokenTableSize + x) * sizeof(*c) + (TokenTableSize + x) * 20);
@@ -2888,7 +2892,8 @@ void MIPS16 cmd_list(void)
 			{
 				// skip the consolidated stubs — the user-facing names are added as dummies below
 				if (as_strcmpi((char *)tokentbl[i].name, "SChange$(") == 0 ||
-					as_strcmpi((char *)tokentbl[i].name, "TopBottom(") == 0)
+					as_strcmpi((char *)tokentbl[i].name, "TopBottom(") == 0 ||
+					as_strcmpi((char *)tokentbl[i].name, "EofLocLof(") == 0)
 					continue;
 				strcpy(c[m], (char *)tokentbl[i].name);
 			}
@@ -11122,6 +11127,12 @@ unsigned char *llist(unsigned char *b, unsigned char *p)
 		STR_REPLACE((char *)b_start, "TOPBOTTOM(A,", "MAX(", 2);
 		STR_REPLACE((char *)b_start, "SCHANGE$(E,", "LEFT$(", 2);
 		STR_REPLACE((char *)b_start, "SCHANGE$(R,", "RIGHT$(", 2);
+		STR_REPLACE((char *)b_start, "EOFLOCLOF(1,", "EOF(", 2);
+		STR_REPLACE((char *)b_start, "EOFLOCLOF(2,", "LOC(", 2);
+		STR_REPLACE((char *)b_start, "EOFLOCLOF(3,", "LOF(", 2);
+#ifdef RAYCASTER
+		STR_REPLACE((char *)b_start, "SPRITE(RAY,", "RAY(", 2);
+#endif
 		return ++p;
 	} // end while
 }

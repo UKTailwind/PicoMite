@@ -2146,6 +2146,19 @@ void cmd_sprite(void)
 }
 void fun_sprite(void)
 {
+#ifdef RAYCASTER
+    { // RAY( has no function token of its own: tokenise() writes it SPRITE(RAY, and the rest is RAY('s (Raycaster.c)
+        unsigned char *p = checkstring(ep, (unsigned char *)"RAY");
+        if (p)
+        {
+            if (*p != ',')
+                SyntaxError();
+            ep = p + 1;
+            fun_ray();
+            return;
+        }
+    }
+#endif
     int bnbr = 0, w = -1, h = -1, t = 0, x = SPRITE_POS_INACTIVE, y = SPRITE_POS_INACTIVE, l = 0, n, c = 0;
     getcsargs(&ep, 5);
     // Static object queries

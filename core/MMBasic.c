@@ -2087,6 +2087,12 @@ int MIPS16 tokenise(int console)
         STR_REPLACE((char *)inpbuf, "MAX(", "TOPBOTTOM(A,", 6);
         STR_REPLACE((char *)inpbuf, "LEFT$(", "SCHANGE$(E,", 6);
         STR_REPLACE((char *)inpbuf, "RIGHT$(", "SCHANGE$(R,", 6);
+        STR_REPLACE((char *)inpbuf, "EOF(", "EOFLOCLOF(1,", 6); // (a digit: no symbol is made of it)
+        STR_REPLACE((char *)inpbuf, "LOC(", "EOFLOCLOF(2,", 6);
+        STR_REPLACE((char *)inpbuf, "LOF(", "EOFLOCLOF(3,", 6);
+#ifdef RAYCASTER
+        STR_REPLACE((char *)inpbuf, "RAY(", "SPRITE(RAY,", 6); // (sprite( is given its arguments spelt out)
+#endif
         if (str_replace_toolong)
             goto toolong; // a rewrite (MIN( to TOPBOTTOM(I, say) would not fit the line
     }

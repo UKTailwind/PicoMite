@@ -7920,6 +7920,29 @@ void fun_lof(void)
     targ = T_INT;
 }
 
+/* EOF(, LOC( and LOF( are one function token, to free two of the one-byte function tokens (as the CMM2 did,
+   15 Nov 2026): tokenise() writes them EOFLOCLOF(1, EOFLOCLOF(2, and EOFLOCLOF(3, before the file number, and LIST
+   turns them back.  Each is limited by its file or serial port, so the selector costs nothing that shows. */
+void fun_eofloclof(void)
+{
+    int which;
+    skipspace(ep);
+    which = *ep - '0';
+    if (which < 1 || which > 3)
+        SyntaxError();
+    ep++;
+    skipspace(ep);
+    if (*ep != ',')
+        SyntaxError();
+    ep++;
+    if (which == 1)
+        fun_eof();
+    else if (which == 2)
+        fun_loc();
+    else
+        fun_lof();
+}
+
 void cmd_close(void)
 {
     int i, fnbr;

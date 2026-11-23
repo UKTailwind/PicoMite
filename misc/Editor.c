@@ -8724,6 +8724,10 @@ void SetColour(unsigned char *p, int DoVT100)
     // the list must be terminated with a NULL
     char *hiddenfunctions[] = {
         "BIN$(", "OCT$(", "HEX$(", "LCASE$(", "UCASE$(", "LEFT$(", "RIGHT$(", "MIN(", "MAX(", "MM.INFO$(",
+        "EOF(", "LOC(", "LOF(",
+#ifdef RAYCASTER
+        "RAY(",
+#endif
         NULL};
 
     // cmdfile everything back to normal

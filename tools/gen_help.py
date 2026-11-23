@@ -879,7 +879,7 @@ def internal_tokens(mmbasic_c, documented, tokens):
     if not os.path.exists(mmbasic_c):
         return set()
     src = open(mmbasic_c, encoding="utf-8", errors="replace").read()
-    m = re.search(r"void\s+(?:MIPS16\s+)?tokenise\s*\([^)]*\)\s*\{", src)
+    m = re.search(r"(?:void|int)\s+(?:MIPS16\s+)?tokenise\s*\([^)]*\)\s*\{", src)
     if not m:                       # only the rewrites tokenise() itself does:
         return set()                # elsewhere STR_REPLACE handles board names
     depth, i = 1, m.end()

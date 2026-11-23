@@ -324,6 +324,7 @@ void fun_sprite(void);
 void fun_eof(void);
 void fun_loc(void);
 void fun_lof(void);
+void fun_eofloclof(void); // EOF( LOC( LOF(: one function token (FileIO.c)
 void fun_cwd(void);
 void fun_inputstr(void);
 void fun_mmfname(void);
@@ -829,9 +830,8 @@ void fun_frame(void);
 	{(unsigned char *)"To", T_NA, 0, op_invalid},
 	{(unsigned char *)"Until", T_NA, 0, op_invalid},
 	{(unsigned char *)"While", T_NA, 0, op_invalid},
-	{(unsigned char *)"Eof(", T_FUN | T_INT, 0, fun_eof},
-	{(unsigned char *)"Loc(", T_FUN | T_INT, 0, fun_loc},
-	{(unsigned char *)"Lof(", T_FUN | T_INT, 0, fun_lof},
+	// EOF( LOC( LOF(: one token, which tokenise() writes EOFLOCLOF(1, 2 or 3 (as the CMM2 does: function tokens are one byte)
+	{(unsigned char *)"EofLocLof(", T_FUN | T_INT, 0, fun_eofloclof},
 	{(unsigned char *)"Cwd$", T_FNA | T_STR, 0, fun_cwd},
 	{(unsigned char *)"As", T_NA, 0, op_invalid},
 	{(unsigned char *)"Input$(", T_FUN | T_STR, 0, fun_inputstr},
@@ -903,9 +903,7 @@ void fun_frame(void);
 #ifdef rp2350
 	{(unsigned char *)"Frame(", T_FUN | T_INT | T_NBR | T_STR, 0, fun_frame},
 #endif
-#ifdef RAYCASTER
-	{(unsigned char *)"Ray(", T_FUN | T_INT | T_NBR, 0, fun_ray},
-#endif
+	// RAY( has no token of its own: tokenise() writes it SPRITE(RAY, and fun_sprite hands it to fun_ray (as on the CMM2)
 #if !defined(PICOMITEWEB) || defined(PICOMITEHDMIWEB)
 	{(unsigned char *)"Tilemap(", T_FUN | T_INT, 0, fun_tilemap},
 #endif
