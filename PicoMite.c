@@ -3481,6 +3481,32 @@ uint32_t testPSRAM(void)
     }
 #endif
 
+#ifdef rp2350
+    /* The flash's read timing (QMI M0) for clk_sys at khz. Measured on a PC3's W25Q128 with
+       tools/sdk/examples/flashprobe.c at 252, 315 and 378 MHz: the data is good from about 6.0-6.6 ns
+       after SCK's falling edge (the flash's output delay and the pads') until about 5.3-6 ns after the
+       next, so the middle of the window is about 6 ns after the rising edge at any divider. RXDELAY
+       counts half system clocks: round(clk_sys x 12 ns) puts the sample there (2 at 150 MHz, the
+       SDK's, 3 at 252, 4 at 315, 5 at 378-420). CLKDIV keeps SCK within 133 MHz, a W25Q-JV's rating
+       (the PC3's ran at 157.5). COOLDOWN 1 and MIN_DESELECT 6 as before (at least 10 ns below 600 MHz).
+       both: a timing that holds at this clock and any slower one, for the moment a clock changes (it
+       passes through clk_ref): RXDELAY no more than CLKDIV, so the sample is never later than a whole
+       SCK period. */
+    uint32_t flash_m0_timing(uint32_t khz, bool both)
+    {
+        uint32_t div = (khz + 132999) / 133000;
+        uint32_t rx = (khz * 12 + 500000) / 1000000;
+        if (div < 2)
+            div = 2;
+        if (both && rx > div)
+            rx = div;
+        if (rx > 7)
+            rx = 7;
+        return (1u << QMI_M0_TIMING_COOLDOWN_LSB) | (6u << QMI_M0_TIMING_MIN_DESELECT_LSB) |
+               (rx << QMI_M0_TIMING_RXDELAY_LSB) | (div << QMI_M0_TIMING_CLKDIV_LSB);
+    }
+#endif
+
 #if !defined(PICOMITEVGA) || defined(HDMI)
     /* ------------------------------------------------------------------
        Change the system clock (PLL_SYS) at runtime, without rebooting.
@@ -3514,31 +3540,6 @@ uint32_t testPSRAM(void)
        make the on-chip regulator under/overshoot and brown the core out; a
        stepped ramp avoids that. Harmless on boards with an external fixed
        DVDD - the register tracks what we set but the rail ignores it. */
-#ifdef rp2350
-    /* The flash's read timing (QMI M0) for clk_sys at khz. Measured on a PC3's W25Q128 with
-       tools/sdk/examples/flashprobe.c at 252, 315 and 378 MHz: the data is good from about 6.0-6.6 ns
-       after SCK's falling edge (the flash's output delay and the pads') until about 5.3-6 ns after the
-       next, so the middle of the window is about 6 ns after the rising edge at any divider. RXDELAY
-       counts half system clocks: round(clk_sys x 12 ns) puts the sample there (2 at 150 MHz, the
-       SDK's, 3 at 252, 4 at 315, 5 at 378-420). CLKDIV keeps SCK within 133 MHz, a W25Q-JV's rating
-       (the PC3's ran at 157.5). COOLDOWN 1 and MIN_DESELECT 6 as before (at least 10 ns below 600 MHz).
-       both: a timing that holds at this clock and any slower one, for the moment a clock changes (it
-       passes through clk_ref): RXDELAY no more than CLKDIV, so the sample is never later than a whole
-       SCK period. */
-    uint32_t flash_m0_timing(uint32_t khz, bool both)
-    {
-        uint32_t div = (khz + 132999) / 133000;
-        uint32_t rx = (khz * 12 + 500000) / 1000000;
-        if (div < 2)
-            div = 2;
-        if (both && rx > div)
-            rx = div;
-        if (rx > 7)
-            rx = 7;
-        return (1u << QMI_M0_TIMING_COOLDOWN_LSB) | (6u << QMI_M0_TIMING_MIN_DESELECT_LSB) |
-               (rx << QMI_M0_TIMING_RXDELAY_LSB) | (div << QMI_M0_TIMING_CLKDIV_LSB);
-    }
-#endif
     static void ramp_core_voltage(enum vreg_voltage target)
     {
         vreg_disable_voltage_limit();
