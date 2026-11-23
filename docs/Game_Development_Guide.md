@@ -273,6 +273,179 @@ LOOP
 
 ---
 
+## Raster Effects — Moving Every Row or Column
+
+The arcade machines and home computers of the 1980s scrolled each line of the screen by its own amount, with a raster interrupt or a copper list changing the scroll register as the beam went down the screen. That is how a racing game bends its road into curves and hills, how a landscape scrolls in parallax bands, and how water ripples. Doing it in BASIC, one BLIT per line, is far too slow: 240 lines are hundreds of interpreted statements every frame.
+
+From V8, the VGA and HDMI builds (MODE 2 to 5) have two commands that do the whole job in one statement each:
+
+```
+FRAMEBUFFER WARPH from, to, xoff%() [, step] [, first] [, phase] [, edge] [, transparent] [, rows%()]
+FRAMEBUFFER WARPV from, to, yoff%() [, step] [, first] [, phase] [, edge] [, transparent]
+```
+
+Both copy buffer `from` to buffer `to` (N, F, L, and on the RP2350 also 2 and T; the two must differ). WARPH moves each **row** sideways by its own offset; WARPV moves each **column** vertically. The offsets come from a one-dimensional integer array, and the trick that makes it fast is that a program never loops over the lines: it updates the whole array with one MATH command, and the warp moves every line in C.
+
+### The Arguments
+
+- **`xoff%()` / `yoff%()`** — one element for each band. A positive offset moves a row **right** (WARPH) or a column **up** (WARPV), as `SPRITE SCROLL` does. Any value is allowed: a camera position that keeps growing simply wraps round.
+- **`step`** (default 1) — how many rows or columns each element covers. With step 2 a 240-line screen needs only 120 elements. The last band is cut off at the edge of the screen.
+- **`first`** (default 0) — the first row or column moved. The array's length decides how many bands there are, so rows before `first` and after the last band are left alone: a score line can stay still at the top or the bottom.
+- **`phase`** (default 0) — band b uses element (b + phase) MOD n. Count `phase` up each frame and a precomputed table (a sine wave, say) moves along with no other work. A table that holds a whole number of waves wraps round without a seam.
+- **`edge`** — what the pixels that nothing moves onto become. Omitted, the picture wraps round; -1 leaves them as they were in `to`; a colour fills them.
+- **`transparent`** — source pixels of this colour are not copied, so several warps can be stacked into one buffer (given as for `FRAMEBUFFER MERGE`: 0-15 in modes 2 and 3, 0-255 in mode 5, a colour in mode 4).
+- **`rows%()`** (WARPH only) — the same size as `xoff%()`: the source row for the first row of each band (the rest of the band follows on), or -1 to leave the band alone. This is how a road gets its hills, a lake its reflection, and a track its alternating kerb stripes.
+
+Everything is checked before a pixel is written, with a precise message, for example `Array has 241 elements, step 1 from row 0 fits 240`.
+
+### Building the Tables with MATH
+
+The offsets usually depend on one or two numbers that change each frame (a camera position, a curvature, a time). Work out once, outside the game loop, how much each row responds to that number, and let MATH do the rest:
+
+| What | How |
+|------|-----|
+| Parallax: each row moves at its own speed | `MATH SCALE speed!(), camx, xoff%()` |
+| Add a constant (sway, a second camera) | `MATH ADD xoff%(), sway, xoff%()` |
+| Add two tables | `MATH C_ADD a%(), b%(), xoff%()` |
+| Keep values in a range | `MATH CLAMP t!(), -240, 0, yoff%()` |
+| Pick one of several precomputed tables | `MATH SLICE tables%(), , k, rows%()` |
+| A moving wave of constant size | a sine table and the `phase` argument |
+
+`MATH SCALE` with a float array in and an integer array out rounds as it goes, which is exactly what a table of offsets wants.
+
+### Example: Parallax with a Fixed Score Line
+
+The scenery is drawn once into F. Every row below the score line moves at its own speed, the far rows slowly and the near ones fast:
+
+```basic
+MODE 2
+FRAMEBUFFER CREATE
+FRAMEBUFFER WRITE F
+' ... draw the scenery into F once ...
+FRAMEBUFFER WRITE N
+DIM speed!(111), xoff%(111)                ' 112 bands of 2 rows = rows 16-239
+FOR i = 0 TO 111 : speed!(i) = -(0.1 + i / 112) : NEXT
+DO
+  camx = camx + 2
+  MATH SCALE speed!(), camx, xoff%()       ' every row's offset, one statement
+  FRAMEBUFFER WAIT
+  FRAMEBUFFER WARPH F, N, xoff%(), 2, 16   ' rows 0-15 (the score) are untouched
+LOOP
+```
+
+### Example: A Lake that Reflects the Scene
+
+Buffer 2 holds the landscape (sky, mountains, trees) in rows 0-149, and F holds the same picture drawn in the water's darker colours. The water (rows 150-239) shows F's rows upside down, rippling more the nearer they are to the viewer. The ripple is `amp(k) * SIN(ph(k) + w * t)`, which splits into two precomputed tables, so each frame costs four MATH statements:
+
+```basic
+DIM mir%(89), wsn!(89), wcs!(89), wa!(89), wb!(89), ripple%(89), bg%(0)
+FOR k = 0 TO 89
+  mir%(k) = 149 - k                        ' water row 150+k shows scene row 149-k
+  amp! = 0.3 + k * 0.075                   ' ripples grow towards the viewer...
+  ph! = 9 * SQR(k + 1)                     ' ...and spread out
+  wsn!(k) = amp! * SIN(ph!) : wcs!(k) = amp! * COS(ph!)
+NEXT
+DO
+  t = t + 1
+  bg%(0) = -t \ 4                          ' the scene pans slowly
+  MATH SCALE wsn!(), COS(t * 0.12), wa!()
+  MATH SCALE wcs!(), SIN(t * 0.12), wb!()
+  MATH C_ADD wa!(), wb!(), wa!()
+  MATH ADD wa!(), bg%(0), wa!()
+  MATH SCALE wa!(), 1, ripple%()
+  FRAMEBUFFER WAIT
+  FRAMEBUFFER WARPH 2, N, bg%(), 150                      ' the scene: one band of 150 rows
+  FRAMEBUFFER WARPH F, N, ripple%(), 1, 150, , , , mir%()  ' its reflection
+LOOP
+```
+
+### Example: A Road with Curves, Hills and Kerbs
+
+This is the classic "pseudo-3D" road of the arcade racers.
+
+- **The picture:** F holds a straight, flat road in perspective, drawn twice. Rows 120-239 have red kerbs, light grass and a lane line; rows 0-119 have white kerbs and dark grass. Row r of each copy is the road at one distance.
+- **Curves:** the far rows move furthest, so `xoff%()` is a curvature times a fixed profile.
+- **Steering:** the near rows move with the car.
+- **Hills:** move the horizon, and squeeze or stretch the road rows into the space below it.
+- **Kerb stripes:** each screen row picks the light or the dark copy of its road row, by which segment of the track that distance falls in. The stripes then stream towards the viewer.
+
+```basic
+DIM zz%(119), cp!(69), sp!(69), t1!(69), t2!(69), ro%(69), rm%(69)
+FOR r = 0 TO 119 : zz%(r) = 2400 \ (r + 6) : NEXT    ' how far away road row r is
+FOR k = 0 TO 69
+  cp!(k) = (1 - k / 69) ^ 2 * 110                    ' a curve moves the far rows most
+  sp!(k) = (k + 1) / 70                              ' steering moves the near rows most
+NEXT
+DO
+  t = t + 1
+  curve! = 1.3 * SIN(t * 0.009)
+  camx! = curve! * 12
+  hy = 120 + 16 * SIN(t * 0.013)                     ' the horizon rises and falls: hills
+  dist = dist + 5                                    ' how far the car has gone
+  MATH SCALE cp!(), curve!, t1!()
+  MATH SCALE sp!(), -camx!, t2!()
+  MATH C_ADD t1!(), t2!(), t1!()
+  MATH SCALE t1!(), 1, ro%()
+  FOR k = 0 TO 69                                    ' each band of 2 screen rows from row 100
+    y = 100 + 2 * k
+    IF y < hy THEN
+      rm%(k) = -1                                    ' sky: leave it alone
+    ELSE
+      rr = MIN((y - hy) * 120 \ (240 - hy), 118)     ' the road row squeezed into the space
+      rm%(k) = rr + 120 * (((zz%(rr) + dist) >> 4) AND 1)   ' light or dark copy
+    ENDIF
+  NEXT
+  FRAMEBUFFER WAIT
+  ' ... the sky and mountains first, e.g. a WARPH from buffer 2 panned by the curve ...
+  FRAMEBUFFER WARPH F, N, ro%(), 2, 100, , , , rm%()
+LOOP
+```
+
+The car itself lives in the layer `L`, drawn once: the VGA and HDMI output puts it over the road every frame for nothing.
+
+### Example: Melting a Picture Away
+
+WARPV with each column falling at its own speed, and `edge` -1 so that the uncovered pixels keep whatever is underneath (here a blank screen, or the next picture):
+
+```basic
+FRAMEBUFFER COPY N, F                      ' the picture to melt
+DIM st!(159), tm!(159), drop%(159)         ' 160 bands of 2 columns
+FOR k = 0 TO 159 : st!(k) = RND * 40 : NEXT
+FOR fr = 1 TO 80
+  MATH ADD st!(), -0.35 * fr * fr, tm!()   ' each column waits a little, then falls faster
+  MATH CLAMP tm!(), -MM.VRES, 0, drop%()   ' (negative is down)
+  FRAMEBUFFER WAIT
+  CLS
+  FRAMEBUFFER WARPV F, N, drop%(), 2, , , -1
+  IF MATH(MAX drop%()) <= -MM.VRES THEN EXIT FOR
+NEXT
+```
+
+### Timing
+
+Measured on a PicoComputer 3 at 315 MHz, for the whole 320×240 screen:
+
+| | MODE 2 (16 colours) | MODE 5 (256 colours) |
+|---|---|---|
+| FRAMEBUFFER COPY, for comparison | 0.08 ms | 1.95 ms |
+| WARPH | 0.9 ms | 2.4 ms |
+| WARPH with a transparent colour | 2.9 ms | 5.7 ms |
+| WARPV, step 1 | 4.7 ms | 9.6 ms |
+| WARPV, step 8 | 1.6 ms | 6.2 ms |
+
+In MODE 5 the framebuffers are in PSRAM, which sets the speed. A frame at 640×480 and 75 Hz is 13.3 ms, so two to four warps a frame run at the full frame rate in MODE 2.
+
+### Tips
+
+- **Call `FRAMEBUFFER WAIT` first** when writing to N. Both commands write the destination from the top down, so they stay ahead of the beam.
+- **`MAP SET` waits for the frame too.** If you change the palette in a frame, use `MAP SET` instead of `FRAMEBUFFER WAIT`, not as well, or every such frame costs two.
+- **One buffer can hold many strips.** With `rows%()` the source rows can be anywhere, so a single framebuffer can hold the sky, the mountains, a second copy of the road and a text strip at once.
+- **A warp is also a compositor.** `FRAMEBUFFER WARPH L, F, z%(), MM.VRES, , , , 0`, with `z%(0) = 0`, puts the layer over F, transparent pixels and all.
+- **Two warps make a 2D wave.** A WARPH into buffer 2, then a WARPV from 2 into N, waves text both ways.
+- **The demo** `warp_demo.bas` (in the firmware repository's `Bas` folder) shows all of this at the full frame rate: a starfield with a waving logo and a sine scroller, a lake from day to dusk, the road, and a melt between each.
+
+---
+
 ## Approach 1: Sprite-Based Games
 
 The SPRITE engine is ideal for **arcade-style games** with individual moving objects — shooters, platformers, Pong, Breakout, top-down RPGs, and similar. It provides hardware-accelerated sprite management with automatic collision detection.
@@ -463,6 +636,8 @@ SPRITE SCROLL 2, 0        ' Scroll right by 2 pixels, wrap-around (no fill colou
 ' Layers 1-4 remain fixed (good for HUD elements)
 ```
 
+For rows that each scroll at their own speed (parallax bands, a rippling reflection, a curving road) use `FRAMEBUFFER WARPH` - see *Raster Effects* above.
+
 ---
 
 ## Approach 2: Tile Map Games
@@ -617,6 +792,8 @@ TILEMAP DRAW 1, F, camX\2, camY\2, 0, 0, 320, 240          ' BG at half speed
 TILEMAP DRAW 2, F, camX, camY, 0, 0, 320, 240, 0            ' FG with transparency
 TILEMAP SPRITE DRAW F, 0                                      ' Sprites on top
 ```
+
+A background that repeats across the width of the screen (sky, hills, a skyline) need not be drawn every frame at all: draw it once into a framebuffer and let `FRAMEBUFFER WARPH` move every band of rows at its own speed, as many parallax layers as there are rows - see *Raster Effects*.
 
 ### Dynamic Maps
 
@@ -1359,6 +1536,7 @@ END
     array shared with the BASIC so nothing has to be copied across the boundary
     each call. The mmb2csub tool (`user-tools/mmb2csub.py`, described in
     `mmb2csub.pdf`) does the conversion for you, from the BASIC routine itself.
+13. **Let one command move many lines.** An effect that changes from line to line (parallax, a road, ripples, a melt) belongs in `FRAMEBUFFER WARPH` or `WARPV`, with its table made by MATH, not in a BASIC loop over the lines - see *Raster Effects*.
 
 ### Finding the hot spots
 
@@ -1469,6 +1647,7 @@ goes.** If it moves, the thing you suspected was innocent.
 | Text adventure / RPG menus | FRAME system |
 | Board games / card games | Drawing primitives + BLIT |
 | Rhythm game | PLAY SAMPLE + drawing primitives |
+| Racing game with a curving, hilly road | FRAMEBUFFER WARPH + a layer for the car |
 
 ### Combining Systems
 

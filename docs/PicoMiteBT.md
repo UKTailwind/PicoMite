@@ -611,7 +611,7 @@ with a stale LTK. Re-pair fixes it.
 `bluetoothctl remove <PicoMAC>` then re-pair (`scan on`, `pair`, `trust`).
 
 ### "DBusError: Not authorized" (Linux)
-User isn't in the `bluetooth` group. `sudo usermod -aG bluetooth $USER`
+Your user isn't in the `bluetooth` group. `sudo usermod -aG bluetooth $USER`
 then log out / back in.
 
 ### Tera Term shows weird block characters / nothing

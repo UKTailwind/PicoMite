@@ -225,152 +225,154 @@ FRAMEBUFFER LAYER TOP      SETTICK PAUSE
 FRAMEBUFFER MERGE          SETTICK RESUME
 FRAMEBUFFER SYNC           SLEW
 FRAMEBUFFER WAIT           SORT
-FRAMEBUFFER WRITE          SPI OPEN
-FUNCTION                   SPI2
-GAMEPAD                    SPRITE
-GAMEPAD COLOUR             SPRITE CLOSE
-GAMEPAD CONFIGURE          SPRITE CLOSE ALL
-GAMEPAD HAPTIC             SPRITE COPY
-GAMEPAD INTERRUPT DISABLE  SPRITE HIDE
-GAMEPAD INTERRUPT ENABLE   SPRITE HIDE ALL
-GAMEPAD MONITOR            SPRITE HIDE SAFE
-GOSUB                      SPRITE INTERRUPT
-GOTO                       SPRITE LOAD
-GUI                        SPRITE LOADARRAY
-GUI AREA                   SPRITE LOADBMP
-GUI BARGAUGE               SPRITE LOADPNG
-GUI BCOLOUR                SPRITE MOVE
-GUI BEEP                   SPRITE NEXT
-GUI BITMAP                 SPRITE NOINTERRUPT
-GUI BUTTON                 SPRITE NOSTINTERRUPT
-GUI CALIBRATE              SPRITE READ
-GUI CAPTION                SPRITE RESTORE
-GUI CHECKBOX               SPRITE SCROLL
-GUI CLICK                  SPRITE SET TRANSPARENT
-GUI CLICK DOWN             SPRITE SHOW
-GUI CLICK PIN              SPRITE SHOW SAFE
-GUI CURSOR                 SPRITE STATIC
-GUI CURSOR COLOUR          SPRITE STATIC CLEAR
-GUI CURSOR HIDE            SPRITE STINTERRUPT
-GUI CURSOR LINK MOUSE      SPRITE SWAP
-GUI CURSOR LOAD            SPRITE WRITE
-GUI CURSOR OFF             STAR
-GUI CURSOR ON              STATIC
-GUI CURSOR SHOW            STEP
-GUI DELETE                 STEPPER
-GUI DISABLE                STEPPER ARC
-GUI DISPLAYBOX             STEPPER AXIS
-GUI ENABLE                 STEPPER BUFFER
-GUI FCOLOUR                STEPPER CLEAR
-GUI FORMATBOX              STEPPER CLOSE
-GUI FORMATBOX CANCEL       STEPPER ENABLE
-GUI FRAME                  STEPPER ESTOP
-GUI GAUGE                  STEPPER GC
-GUI HIDE                   STEPPER GC G28
-GUI INTERRUPT              STEPPER GCODE
-GUI LED                    STEPPER GS
-GUI LISTBOX                STEPPER HWLIMITS
-GUI LISTBOX CANCEL         STEPPER INIT
-GUI NUMBERBOX              STEPPER INVERT
-GUI NUMBERBOX CANCEL       STEPPER JERK
-GUI PAGE                   STEPPER LIMITS
-GUI RADIO                  STEPPER POSITION
-GUI REDRAW                 STEPPER POSITION HOME
-GUI RESET LCDPANEL         STEPPER RECOVER
-GUI SETUP                  STEPPER RESET
-GUI SHOW                   STEPPER RUN
-GUI SLIDER                 STEPPER SCURVE
-GUI SPINBOX                STEPPER SPINDLE
-GUI SWITCH                 STEPPER STATUS
-GUI TEST LCDPANEL          STEPPER TUNE
-GUI TEST TOUCH             STRUCT
-GUI TEXTBOX                STRUCT COPY
-GUI TEXTBOX CANCEL         STRUCT LOAD
-HELP                       STRUCT SAVE
-HUMID                      SUB
-I2C                        SYNC
-I2C CHECK                  TEMPR START
-I2C CLOSE                  TEXT
-I2C OPEN                   THEN
-I2C READ                   TILE
-I2C SLAVE                  TILE HEIGHT
-I2C WRITE                  TILEMAP
-I2C2                       TILEMAP ATTR
-I2CLCD                     TILEMAP CLOSE
-I2CLCD CLOSE               TILEMAP CREATE
-I2CLCD CREATECHAR          TILEMAP DESTROY
-I2CLCD INIT                TILEMAP DRAW
-IF                         TILEMAP LOAD
-IF ALARM THEN              TILEMAP SCROLL
-IF ASC                     TILEMAP SET
-IN                         TILEMAP SPRITE CLOSE
-INC                        TILEMAP SPRITE CREATE
-INPUT                      TILEMAP SPRITE DESTROY
-INTERRUPT                  TILEMAP SPRITE DRAW
-INV                        TILEMAP SPRITE MOVE
-IR                         TILEMAP SPRITE SET
-IR SEND                    TILEMAP VIEW
-IRETURN                    TIME$
-KEYBOARD                   TIMER
-KEYBOARD OFF               TMC22XX
-KEYBOARD ON                TO
-KEYPAD                     TOUCH
-KILL                       TRACE
-LCD                        TRACE ON
-LCD CMD                    TRIANGLE
-LCD INIT                   TRIANGLE RESTORE
-LET                        TRIANGLE SAVE
-LIBRARY                    TURTLE
-LIBRARY DELETE             TYPE
-LIBRARY DISK SAVE          UNTIL
-LIBRARY LIST               UPDATE FIRMWARE
-LIBRARY LOAD               VAR SAVE
-LIBRARY SAVE               WATCHDOG
-LINE                       WEB
-LINE AA                    WEB CLOSE TCP CLIENT
-LINE GRAPH                 WEB CONNECT
-LINE INPUT                 WEB MQTT CLOSE
-LINE PLOT                  WEB MQTT CONNECT
-LIST                       WEB MQTT PUBLISH
-LIST COLLISIONS            WEB MQTT SUBSCRIBE
-LIST COMMANDS              WEB MQTT UNSUBSCRIBE
-LIST PINS                  WEB NTP
-LIST SYSTEM I2C            WEB OPEN TCP CLIENT
-LIST TYPE                  WEB OPEN TCP STREAM
-LIST VARIABLES             WEB OPEN TLS CLIENT
-LMID                       WEB OPEN TLS STREAM
-LOAD                       WEB PING
-LOAD CONTEXT               WEB SCAN
-LOAD DATA                  WEB TCP CLIENT READ
-LOAD JPG                   WEB TCP CLIENT REQUEST
-LOAD PNG                   WEB TCP CLIENT STREAM
-LOCAL                      WEB TCP CLIENT WRITE
-LOCATION                   WEB TCP INTERRUPT
-LONGSTRING                 WEB TCP READ
-LONGSTRING AES128          WEB TCP SEND
-LONGSTRING APPEND          WEB TLS
-LONGSTRING BASE64          WEB TLS CA
-LONGSTRING CLEAR           WEB TLS NOVERIFY
-LONGSTRING CONCAT          WEB TRANSMIT CODE
-LONGSTRING COPY            WEB TRANSMIT FILE
-LONGSTRING LCASE           WEB TRANSMIT PAGE
-LONGSTRING LEFT            WEB UDP INTERRUPT
-LONGSTRING LOAD            WEB UDP SEND
-LONGSTRING MID             WHILE
-LONGSTRING PRINT           WII
-LONGSTRING REPLACE         WII CLASSIC
-LONGSTRING RESIZE          WII CLASSIC OPEN
-LONGSTRING RIGHT           WII NUNCHUCK
-LONGSTRING SETBYTE         WII NUNCHUCK CLOSE
-LONGSTRING TRIM            WII NUNCHUCK OPEN
-LONGSTRING UCASE           WS2812
-LOOP                       XMODEM
-MANDELBROT                 XMODEM SEND
-MANDELBROT CENTRE          XOR
-MANDELBROT DRAW            YMODEM
-MANDELBROT PAN             YMODEM SEND
-MANDELBROT RESET           ZMODEM
-MANDELBROT ZOOM            ZMODEM SEND
+FRAMEBUFFER WARPH          SPI OPEN
+FRAMEBUFFER WARPV          SPI2
+FRAMEBUFFER WRITE          SPRITE
+FUNCTION                   SPRITE CLOSE
+GAMEPAD                    SPRITE CLOSE ALL
+GAMEPAD COLOUR             SPRITE COPY
+GAMEPAD CONFIGURE          SPRITE HIDE
+GAMEPAD HAPTIC             SPRITE HIDE ALL
+GAMEPAD INTERRUPT DISABLE  SPRITE HIDE SAFE
+GAMEPAD INTERRUPT ENABLE   SPRITE INTERRUPT
+GAMEPAD MONITOR            SPRITE LOAD
+GOSUB                      SPRITE LOADARRAY
+GOTO                       SPRITE LOADBMP
+GUI                        SPRITE LOADPNG
+GUI AREA                   SPRITE MOVE
+GUI BARGAUGE               SPRITE NEXT
+GUI BCOLOUR                SPRITE NOINTERRUPT
+GUI BEEP                   SPRITE NOSTINTERRUPT
+GUI BITMAP                 SPRITE READ
+GUI BUTTON                 SPRITE RESTORE
+GUI CALIBRATE              SPRITE SCROLL
+GUI CAPTION                SPRITE SET TRANSPARENT
+GUI CHECKBOX               SPRITE SHOW
+GUI CLICK                  SPRITE SHOW SAFE
+GUI CLICK DOWN             SPRITE STATIC
+GUI CLICK PIN              SPRITE STATIC CLEAR
+GUI CURSOR                 SPRITE STINTERRUPT
+GUI CURSOR COLOUR          SPRITE SWAP
+GUI CURSOR HIDE            SPRITE WRITE
+GUI CURSOR LINK MOUSE      STAR
+GUI CURSOR LOAD            STATIC
+GUI CURSOR OFF             STEP
+GUI CURSOR ON              STEPPER
+GUI CURSOR SHOW            STEPPER ARC
+GUI DELETE                 STEPPER AXIS
+GUI DISABLE                STEPPER BUFFER
+GUI DISPLAYBOX             STEPPER CLEAR
+GUI ENABLE                 STEPPER CLOSE
+GUI FCOLOUR                STEPPER ENABLE
+GUI FORMATBOX              STEPPER ESTOP
+GUI FORMATBOX CANCEL       STEPPER GC
+GUI FRAME                  STEPPER GC G28
+GUI GAUGE                  STEPPER GCODE
+GUI HIDE                   STEPPER GS
+GUI INTERRUPT              STEPPER HWLIMITS
+GUI LED                    STEPPER INIT
+GUI LISTBOX                STEPPER INVERT
+GUI LISTBOX CANCEL         STEPPER JERK
+GUI NUMBERBOX              STEPPER LIMITS
+GUI NUMBERBOX CANCEL       STEPPER POSITION
+GUI PAGE                   STEPPER POSITION HOME
+GUI RADIO                  STEPPER RECOVER
+GUI REDRAW                 STEPPER RESET
+GUI RESET LCDPANEL         STEPPER RUN
+GUI SETUP                  STEPPER SCURVE
+GUI SHOW                   STEPPER SPINDLE
+GUI SLIDER                 STEPPER STATUS
+GUI SPINBOX                STEPPER TUNE
+GUI SWITCH                 STRUCT
+GUI TEST LCDPANEL          STRUCT COPY
+GUI TEST TOUCH             STRUCT LOAD
+GUI TEXTBOX                STRUCT SAVE
+GUI TEXTBOX CANCEL         SUB
+HELP                       SYNC
+HUMID                      TEMPR START
+I2C                        TEXT
+I2C CHECK                  THEN
+I2C CLOSE                  TILE
+I2C OPEN                   TILE HEIGHT
+I2C READ                   TILEMAP
+I2C SLAVE                  TILEMAP ATTR
+I2C WRITE                  TILEMAP CLOSE
+I2C2                       TILEMAP CREATE
+I2CLCD                     TILEMAP DESTROY
+I2CLCD CLOSE               TILEMAP DRAW
+I2CLCD CREATECHAR          TILEMAP LOAD
+I2CLCD INIT                TILEMAP SCROLL
+IF                         TILEMAP SET
+IF ALARM THEN              TILEMAP SPRITE CLOSE
+IF ASC                     TILEMAP SPRITE CREATE
+IN                         TILEMAP SPRITE DESTROY
+INC                        TILEMAP SPRITE DRAW
+INPUT                      TILEMAP SPRITE MOVE
+INTERRUPT                  TILEMAP SPRITE SET
+INV                        TILEMAP VIEW
+IR                         TIME$
+IR SEND                    TIMER
+IRETURN                    TMC22XX
+KEYBOARD                   TO
+KEYBOARD OFF               TOUCH
+KEYBOARD ON                TRACE
+KEYPAD                     TRACE ON
+KILL                       TRIANGLE
+LCD                        TRIANGLE RESTORE
+LCD CMD                    TRIANGLE SAVE
+LCD INIT                   TURTLE
+LET                        TYPE
+LIBRARY                    UNTIL
+LIBRARY DELETE             UPDATE FIRMWARE
+LIBRARY DISK SAVE          USER
+LIBRARY LIST               VAR SAVE
+LIBRARY LOAD               WATCHDOG
+LIBRARY SAVE               WEB
+LINE                       WEB CLOSE TCP CLIENT
+LINE AA                    WEB CONNECT
+LINE GRAPH                 WEB MQTT CLOSE
+LINE INPUT                 WEB MQTT CONNECT
+LINE PLOT                  WEB MQTT PUBLISH
+LIST                       WEB MQTT SUBSCRIBE
+LIST COLLISIONS            WEB MQTT UNSUBSCRIBE
+LIST COMMANDS              WEB NTP
+LIST PINS                  WEB OPEN TCP CLIENT
+LIST SYSTEM I2C            WEB OPEN TCP STREAM
+LIST TYPE                  WEB OPEN TLS CLIENT
+LIST VARIABLES             WEB OPEN TLS STREAM
+LMID                       WEB PING
+LOAD                       WEB SCAN
+LOAD CONTEXT               WEB TCP CLIENT READ
+LOAD DATA                  WEB TCP CLIENT REQUEST
+LOAD JPG                   WEB TCP CLIENT STREAM
+LOAD PNG                   WEB TCP CLIENT WRITE
+LOCAL                      WEB TCP INTERRUPT
+LOCATION                   WEB TCP READ
+LONGSTRING                 WEB TCP SEND
+LONGSTRING AES128          WEB TLS
+LONGSTRING APPEND          WEB TLS CA
+LONGSTRING BASE64          WEB TLS NOVERIFY
+LONGSTRING CLEAR           WEB TRANSMIT CODE
+LONGSTRING CONCAT          WEB TRANSMIT FILE
+LONGSTRING COPY            WEB TRANSMIT PAGE
+LONGSTRING LCASE           WEB UDP INTERRUPT
+LONGSTRING LEFT            WEB UDP SEND
+LONGSTRING LOAD            WHILE
+LONGSTRING MID             WII
+LONGSTRING PRINT           WII CLASSIC
+LONGSTRING REPLACE         WII CLASSIC OPEN
+LONGSTRING RESIZE          WII NUNCHUCK
+LONGSTRING RIGHT           WII NUNCHUCK CLOSE
+LONGSTRING SETBYTE         WII NUNCHUCK OPEN
+LONGSTRING TRIM            WS2812
+LONGSTRING UCASE           XMODEM
+LOOP                       XMODEM SEND
+MANDELBROT                 XOR
+MANDELBROT CENTRE          YMODEM
+MANDELBROT DRAW            YMODEM SEND
+MANDELBROT PAN             ZMODEM
+MANDELBROT RESET           ZMODEM SEND
+MANDELBROT ZOOM
 
 ~FUNCTIONS
 MMBasic functions
@@ -2579,6 +2581,23 @@ ILI9341, ST7789_320 and ILI9488 displays.
 FRAMEBUFFER WAIT
 
 Pauses processing until the next frame blanking starts
+
+~FRAMEBUFFER WARPH
+FRAMEBUFFER WARPH from, to, xoff%() [,step] [,first] [,phase] [,edge]
+[,transparent] [,rows%()]
+
+Copies framebuffer "from" to "to" with each row moved sideways by its own
+offset, for raster effects such as a racing road with curves and hills,
+parallax scrolling and rippling water. "from" and "to" can be N, F, 2, T, or L
+where N is the physical display, and must be different.
+
+~FRAMEBUFFER WARPV
+FRAMEBUFFER WARPV from, to, yoff%() [,step] [,first] [,phase] [,edge]
+[,transparent]
+
+As FRAMEBUFFER WARPH except that each column, or band of 'step' columns
+starting at column 'first', is moved vertically by its element of 'yoff%()'. A
+positive offset moves the band up.
 
 ~FRAMEBUFFER WRITE
 FRAMEBUFFER WRITE where/where$
@@ -8753,6 +8772,11 @@ UPDATE FIRMWARE
 Causes the PicoMite firmware to enter the firmware update mode (the same as
 applying power while holding down the BOOTSEL button). This command is only
 available at the command prompt.
+
+~USER
+USER
+
+Described with the rest of its family:  HELP OPTION LCDPANEL USER
 
 ~VAL
 VAL( string$ )
