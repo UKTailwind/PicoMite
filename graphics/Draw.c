@@ -4187,36 +4187,10 @@ void cmd_tile(void)
  */
 void DrawRectangle555(int x1, int y1, int x2, int y2, int c)
 {
-    int x, y, t;
+    int x, y;
     uint16_t col = ((c & 0xf8) >> 3) | ((c & 0xf800) >> 6) | ((c & 0xf80000) >> 9);
-    if (x1 < 0)
-        x1 = 0;
-    if (x1 >= HRes)
-        x1 = HRes - 1;
-    if (x2 < 0)
-        x2 = 0;
-    if (x2 >= HRes)
-        x2 = HRes - 1;
-    if (y1 < 0)
-        y1 = 0;
-    if (y1 >= VRes)
-        y1 = VRes - 1;
-    if (y2 < 0)
-        y2 = 0;
-    if (y2 >= VRes)
-        y2 = VRes - 1;
-    if (x2 <= x1)
-    {
-        t = x1;
-        x1 = x2;
-        x2 = t;
-    }
-    if (y2 <= y1)
-    {
-        t = y1;
-        y1 = y2;
-        y2 = t;
-    }
+    if (!ClipRectangle(&x1, &y1, &x2, &y2))
+        return;
     for (y = y1; y <= y2; y++)
     {
         uint16_t *p = (uint16_t *)((uint8_t *)(WriteBuf + ((y * HRes + x1) * 2)));
@@ -4472,36 +4446,10 @@ void ScrollLCD555(int lines)
 }
 void DrawRectangle256(int x1, int y1, int x2, int y2, int c)
 {
-    int y, t;
+    int y;
     uint8_t colour = RGB332(c);
-    if (x1 < 0)
-        x1 = 0;
-    if (x1 >= HRes)
-        x1 = HRes - 1;
-    if (x2 < 0)
-        x2 = 0;
-    if (x2 >= HRes)
-        x2 = HRes - 1;
-    if (y1 < 0)
-        y1 = 0;
-    if (y1 >= VRes)
-        y1 = VRes - 1;
-    if (y2 < 0)
-        y2 = 0;
-    if (y2 >= VRes)
-        y2 = VRes - 1;
-    if (x2 <= x1)
-    {
-        t = x1;
-        x1 = x2;
-        x2 = t;
-    }
-    if (y2 <= y1)
-    {
-        t = y1;
-        y1 = y2;
-        y2 = t;
-    }
+    if (!ClipRectangle(&x1, &y1, &x2, &y2))
+        return;
     for (y = y1; y <= y2; y++)
     {
         volatile uint8_t *p = WriteBuf + (y * HRes + x1);
@@ -5372,7 +5320,7 @@ void DrawPixel2(int x, int y, int c)
 }
 void DrawRectangle2(int x1, int y1, int x2, int y2, int c)
 {
-    int x, y, x1p, x2p, t;
+    int x, y, x1p, x2p;
     unsigned char mask;
     volatile unsigned char *p;
 #if PICOMITERP2350
@@ -5382,46 +5330,8 @@ void DrawRectangle2(int x1, int y1, int x2, int y2, int c)
     if ((Option.DISPLAY_TYPE >= VIRTUAL) && WriteBuf == NULL)
         WriteBuf = FRAMEBUFFER;
 #endif
-    if (x1 < 0)
-        x1 = 0;
-    if (x1 >= HRes)
-        x1 = HRes - 1;
-    if (x2 < 0)
-        x2 = 0;
-    if (x2 >= HRes)
-        x2 = HRes - 1;
-    if (y1 < 0)
-        y1 = 0;
-    if (y1 >= VRes)
-        y1 = VRes - 1;
-    if (y2 < 0)
-        y2 = 0;
-    if (y2 >= VRes)
-        y2 = VRes - 1;
-    if (x2 <= x1)
-    {
-        t = x1;
-        x1 = x2;
-        x2 = t;
-    }
-    if (y2 <= y1)
-    {
-        t = y1;
-        y1 = y2;
-        y2 = t;
-    }
-    if (x2 <= x1)
-    {
-        t = x1;
-        x1 = x2;
-        x2 = t;
-    }
-    if (y2 <= y1)
-    {
-        t = y1;
-        y1 = y2;
-        y2 = t;
-    }
+    if (!ClipRectangle(&x1, &y1, &x2, &y2))
+        return;
     if (x1 == x2)
     {
         for (y = y1; y <= y2; y++)
@@ -6214,29 +6124,8 @@ void fun_getscanline(void)
 //    c - the colour
 void MIPS16 DrawRectangleUser(int x1, int y1, int x2, int y2, int c)
 {
-    // Clamp coordinates (branchless where beneficial)
-    x1 = (x1 < 0) ? 0 : (x1 >= HRes) ? HRes - 1
-                                     : x1;
-    x2 = (x2 < 0) ? 0 : (x2 >= HRes) ? HRes - 1
-                                     : x2;
-    y1 = (y1 < 0) ? 0 : (y1 >= VRes) ? VRes - 1
-                                     : y1;
-    y2 = (y2 < 0) ? 0 : (y2 >= VRes) ? VRes - 1
-                                     : y2;
-
-    // Swap if needed
-    if (x2 < x1)
-    {
-        int t = x1;
-        x1 = x2;
-        x2 = t;
-    }
-    if (y2 < y1)
-    {
-        int t = y1;
-        y1 = y2;
-        y2 = t;
-    }
+    if (!ClipRectangle(&x1, &y1, &x2, &y2)) // (MM.USER_RECTANGLE is not called for one wholly off the screen)
+        return;
     char callstr[256];
     unsigned char *nextstmtSaved = nextstmt;
     if (FindSubFun((unsigned char *)"MM.USER_RECTANGLE", 0) >= 0)

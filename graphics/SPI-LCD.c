@@ -1435,35 +1435,8 @@ void DrawRectangleSPI(int x1, int y1, int x2, int y2, int c)
 	{
 		int i, t, y;
 		unsigned char *p;
-		// make sure the coordinates are kept within the display area
-		if (x2 <= x1)
-		{
-			t = x1;
-			x1 = x2;
-			x2 = t;
-		}
-		if (y2 <= y1)
-		{
-			t = y1;
-			y1 = y2;
-			y2 = t;
-		}
-		if (x1 < 0)
-			x1 = 0;
-		if (x1 >= HRes)
-			x1 = HRes - 1;
-		if (x2 < 0)
-			x2 = 0;
-		if (x2 >= HRes)
-			x2 = HRes - 1;
-		if (y1 < 0)
-			y1 = 0;
-		if (y1 >= VRes)
-			y1 = VRes - 1;
-		if (y2 < 0)
-			y2 = 0;
-		if (y2 >= VRes)
-			y2 = VRes - 1;
+		if (!ClipRectangle(&x1, &y1, &x2, &y2))
+			return;
 		DefineRegionSPI(x1, y1, x2, y2, 1);
 		if (Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ILI9488P || Option.DISPLAY_TYPE == ILI9481IPS)
 		{
@@ -1625,37 +1598,9 @@ void PhysicalDrawRectSPI(int x1, int y1, int x2, int y2, int c)
 }
 void DrawRectangleSPISCR(int x1, int y1, int x2, int y2, int c)
 {
-	// convert the colours to 565 format
 	int t;
-	// make sure the coordinates are kept within the display area
-	if (x2 <= x1)
-	{
-		t = x1;
-		x1 = x2;
-		x2 = t;
-	}
-	if (y2 <= y1)
-	{
-		t = y1;
-		y1 = y2;
-		y2 = t;
-	}
-	if (x1 < 0)
-		x1 = 0;
-	if (x1 >= HRes)
-		x1 = HRes - 1;
-	if (x2 < 0)
-		x2 = 0;
-	if (x2 >= HRes)
-		x2 = HRes - 1;
-	if (y1 < 0)
-		y1 = 0;
-	if (y1 >= VRes)
-		y1 = VRes - 1;
-	if (y2 < 0)
-		y2 = 0;
-	if (y2 >= VRes)
-		y2 = VRes - 1;
+	if (!ClipRectangle(&x1, &y1, &x2, &y2))
+		return;
 	t = y2 - y1; // get the distance between the top and bottom
 	// set y1 to the physical location in the frame buffer (only really has an effect when scrolling is in action)
 	y1 = (y1 + ScrollStart) % VRes;
@@ -2775,34 +2720,8 @@ void DrawRectangleMEM(int x1, int y1, int x2, int y2, int c)
 	unsigned char *p = (void *)((unsigned int)LCDBuffer);
 	int x, y, loc, t;
 	unsigned char mask;
-	if (x1 < 0)
-		x1 = 0;
-	if (x1 >= HRes)
-		x1 = HRes - 1;
-	if (x2 < 0)
-		x2 = 0;
-	if (x2 >= HRes)
-		x2 = HRes - 1;
-	if (y1 < 0)
-		y1 = 0;
-	if (y1 >= VRes)
-		y1 = VRes - 1;
-	if (y2 < 0)
-		y2 = 0;
-	if (y2 >= VRes)
-		y2 = VRes - 1;
-	if (x2 <= x1)
-	{
-		t = x1;
-		x1 = x2;
-		x2 = t;
-	}
-	if (y2 <= y1)
-	{
-		t = y1;
-		y1 = y2;
-		y2 = t;
-	}
+	if (!ClipRectangle(&x1, &y1, &x2, &y2)) // (in the program's coordinates, before they are turned)
+		return;
 	if (Option.DISPLAY_ORIENTATION == PORTRAIT)
 	{
 		t = x1;
@@ -2884,36 +2803,14 @@ void DrawPixelMEM(int x1, int y1, int c)
 	DrawRectangleMEM(x1, y1, x1, y1, c);
 }
 #if PICOMITERP2350
-#define CLAMP(val, min, max) ((val) < (min) ? (min) : ((val) > (max) ? (max) : (val)))
-#define SWAP_IF_GREATER(a, b) \
-	do                        \
-	{                         \
-		if ((a) > (b))        \
-		{                     \
-			int _t = (a);     \
-			(a) = (b);        \
-			(b) = _t;         \
-		}                     \
-	} while (0)
 
 void DrawRectangleMEM332(int x1, int y1, int x2, int y2, int c)
 {
 	unsigned char *screen = (unsigned char *)(ScreenBuffer);
 	unsigned char colour = RGB332(c);
 
-	// Ensure correct ordering (x1 <= x2, y1 <= y2)
-	SWAP_IF_GREATER(x1, x2);
-	SWAP_IF_GREATER(y1, y2);
-
-	// Early exit if completely off-screen
-	if (x2 < 0 || x1 >= HRes || y2 < 0 || y1 >= VRes)
+	if (!ClipRectangle(&x1, &y1, &x2, &y2))
 		return;
-
-	// Clamp to screen bounds
-	x1 = CLAMP(x1, 0, HRes - 1);
-	x2 = CLAMP(x2, 0, HRes - 1);
-	y1 = CLAMP(y1, 0, VRes - 1);
-	y2 = CLAMP(y2, 0, VRes - 1);
 
 	// Update dirty rectangle
 	if (y1 < low_y)

@@ -1867,35 +1867,8 @@ void DrawRectangleSSD1963(int x1, int y1, int x2, int y2, int c)
 {
     int t;
 
-    // make sure the coordinates are kept within the display area
-    if (x2 <= x1)
-    {
-        t = x1;
-        x1 = x2;
-        x2 = t;
-    }
-    if (y2 <= y1)
-    {
-        t = y1;
-        y1 = y2;
-        y2 = t;
-    }
-    if (x1 < 0)
-        x1 = 0;
-    if (x1 >= HRes)
-        x1 = HRes - 1;
-    if (x2 < 0)
-        x2 = 0;
-    if (x2 >= HRes)
-        x2 = HRes - 1;
-    if (y1 < 0)
-        y1 = 0;
-    if (y1 >= VRes)
-        y1 = VRes - 1;
-    if (y2 < 0)
-        y2 = 0;
-    if (y2 >= VRes)
-        y2 = VRes - 1;
+    if (!ClipRectangle(&x1, &y1, &x2, &y2))
+        return;
 
     t = y2 - y1; // get the distance between the top and bottom
 
@@ -1915,6 +1888,10 @@ void DrawRectangleSSD1963(int x1, int y1, int x2, int y2, int c)
 }
 void DrawRectangle320(int x1, int y1, int x2, int y2, int c)
 {
+    // clipped to the 320x240 screen first, so the panel's coordinates below are all on it (this tested only the left
+    // edge, and a box off the right, top or bottom drew a line along the panel's edge)
+    if (!ClipRectangle(&x1, &y1, &x2, &y2))
+        return;
     if (Option.DISPLAY_TYPE != SSD1963_4_16)
     {
         y1 *= 2;
@@ -1932,15 +1909,7 @@ void DrawRectangle320(int x1, int y1, int x2, int y2, int c)
         x2 += 80;
         y1 += 16;
         y2 += 16;
-        if (y1 < 16 && y2 < 16)
-            return;
     }
-    if (x1 < 80 && x2 < 80)
-        return;
-    if (x1 < 80)
-        x1 = 80;
-    if (x2 < 80)
-        x2 = 80;
     DrawRectangleSSD1963(x1, y1, x2, y2, c);
     HRes = 320;
     VRes = 240;

@@ -241,39 +241,11 @@ void DrawPixel222(int x, int y, int c)
 
 void DrawRectangle222(int x1, int y1, int x2, int y2, int c)
 {
-    int y, t;
+    int y;
     unsigned char colour = RGB222(c);
 
-    // Clamp coordinates
-    if (x1 < 0)
-        x1 = 0;
-    if (x1 >= HRes)
-        x1 = HRes - 1;
-    if (x2 < 0)
-        x2 = 0;
-    if (x2 >= HRes)
-        x2 = HRes - 1;
-    if (y1 < 0)
-        y1 = 0;
-    if (y1 >= VRes)
-        y1 = VRes - 1;
-    if (y2 < 0)
-        y2 = 0;
-    if (y2 >= VRes)
-        y2 = VRes - 1;
-
-    if (x2 <= x1)
-    {
-        t = x1;
-        x1 = x2;
-        x2 = t;
-    }
-    if (y2 <= y1)
-    {
-        t = y1;
-        y1 = y2;
-        y2 = t;
-    }
+    if (!ClipRectangle(&x1, &y1, &x2, &y2))
+        return;
 
     int words_per_line = HRes / RGB222_PIXELS_PER_WORD;
 

@@ -304,6 +304,30 @@ extern short DisplayHRes, DisplayVRes; // Resolution of the display
 extern short HRes, VRes;               // Programming characteristics of the display
 extern volatile short low_y, high_y, low_x, high_x;
 
+/* The clipping that every display's DrawRectangle does, in one place (V8): the corners put in order, nothing drawn
+   for a rectangle wholly off the screen, the rest clamped to the screen. Each version used to clamp the two ends of a
+   span apart, so a rectangle off one edge (BOX, or a row of a filled TRIANGLE or CIRCLE running off the screen) drew
+   a line of pixels along that edge. 0: nothing to draw. */
+static inline int ClipRectangle(int *x1, int *y1, int *x2, int *y2)
+{
+    int t;
+    if (*x2 < *x1)
+        t = *x1, *x1 = *x2, *x2 = t;
+    if (*y2 < *y1)
+        t = *y1, *y1 = *y2, *y2 = t;
+    if (*x2 < 0 || *x1 >= HRes || *y2 < 0 || *y1 >= VRes)
+        return 0;
+    if (*x1 < 0)
+        *x1 = 0;
+    if (*x2 >= HRes)
+        *x2 = HRes - 1;
+    if (*y1 < 0)
+        *y1 = 0;
+    if (*y2 >= VRes)
+        *y2 = VRes - 1;
+    return 1;
+}
+
 /* ============================================================================
  * External variables - Display state
  * ============================================================================ */
