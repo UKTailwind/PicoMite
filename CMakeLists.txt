@@ -69,6 +69,7 @@ set(COMMON_SOURCES
 	graphics/Sprite.c
 	graphics/Blit.c
 	graphics/FrameBuffer.c
+	graphics/Warp.c
 	misc/Editor.c
 	misc/XModem.c
 	misc/ZModem.c
@@ -128,6 +129,7 @@ set(OPTIMIZED_SOURCES
 	graphics/Sprite.c
 	graphics/Blit.c
 	graphics/FrameBuffer.c
+	graphics/Warp.c
 	graphics/Raycaster.c
 	io/GPS.c
 	io/I2C.c

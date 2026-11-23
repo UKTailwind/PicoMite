@@ -1508,6 +1508,8 @@ void closeframebuffer(char layer)
 }
 /*  @endcond */
 
+void cmd_warp(unsigned char *p, int vertical); // FRAMEBUFFER WARPH and WARPV (Warp.c)
+
 void cmd_framebuffer(void)
 {
     /*
@@ -1930,6 +1932,10 @@ void cmd_framebuffer(void)
         CursorSuspend = false;
     }
 #endif
+    else if ((p = checkstring(cmdline, (unsigned char *)"WARPH"))) // each row moved by its own offset (Warp.c)
+        cmd_warp(p, 0);
+    else if ((p = checkstring(cmdline, (unsigned char *)"WARPV"))) // each column
+        cmd_warp(p, 1);
     else if ((p = checkstring(cmdline, (unsigned char *)"WAIT")))
     {
 #ifdef HDMI

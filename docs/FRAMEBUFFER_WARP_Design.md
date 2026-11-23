@@ -309,21 +309,34 @@ destination row at `dx`, skipping the transparent value, plus a fill for the edg
 
 - **Code:** a new file, graphics/Warp.c, in OPTIMIZED_SOURCES (-Os). It is called from the VGA/HDMI cmd_framebuffer
   (graphics/FrameBuffer.c:1511) and reads the buffer letters as FRAMEBUFFER COPY does.
-- **Row copies by depth:**
-  - 4 bits: an even shift is a byte copy, and an odd shift moves nibbles across the row. The rows are whole 32-bit
-    words in every mode and resolution, because the widths are multiples of 8.
-  - 8 bits: bytes.
-  - 16 bits: half-words.
-  - Transparency, at every depth: a pixel at a time, as blit121 does.
-- **The GUI cursor:** when `to` is N, use CursorHide and CursorSuspend around the writes, as MERGE does.
-- **Flash:** VGAUSBRP2350 had 716 bytes of flash left on 16 Nov (the loader plan's measurement of main's code). Every
-  VGA and HDMI variant is measured with the command in. If one does not fit, Peter chooses between a
-  FLASH_TARGET_OFFSET change and leaving that build out.
-- **Memory:** no SRAM or BSS cost, and nothing from the heap.
-- **Speed** (estimates, to be measured on a board):
-  - MODE 2 WARPH moves 38,400 bytes, well under a millisecond at 252 MHz or more.
-  - WARPV with step 1 is a few milliseconds, at a pixel at a time.
-  - MODE 4's 150 KB buffers may be in PSRAM, and then PSRAM's speed sets the time.
+- **Row copies by depth (as built, 23 Nov):**
+  - 4 bits, WARPH: an even shift is a memcpy; an odd shift makes each byte from two. With a transparent colour each
+    byte is merged whole through a nibble mask.
+  - 4 bits, WARPV: a band keeps its x, so it copies whole bytes between its ends. Step 1 has a loop of its own,
+    which in the usual case (wrapping, no transparency) makes each byte from two columns at once.
+  - 8 and 16 bits: memcpy, or a loop that skips the transparent value.
+  - The WARPV loops are made once for each depth, with the pixel access inlined: a call for each pixel cost more
+    than the pixel (WARPV with step 1 took 37 ms in MODE 2 before).
+- **The GUI cursor:** CursorHide, and CursorSuspend around the writes, every time, as MERGE does.
+- **Memory:** no SRAM or BSS. The band tables take 4 bytes a band (8 with rows%()) of temporary memory.
+- **Flash, measured 23 Nov on v8 with private builds:** Warp.c is 3,515 to 3,592 bytes. Every VGA and HDMI variant
+  fits (PC3 +7.3 KB, VGA +7.8 KB, VGAUSB +1.8 KB, VGARP2350 +9.7 KB, HDMI +10.6 KB, HDMIUSB +12.3 KB, HDMIBTH
+  +12.2 KB, HDMIWEB +11.2 KB) **except VGAUSBRP2350: -3,292 bytes** (it had 223 bytes left without it). Peter
+  chooses between a FLASH_TARGET_OFFSET change and leaving that build out.
+- **Speed, measured on the PC3 at 315 MHz** (Bas/bench/warp_time.bas, ms for the whole 320x240 screen):
+
+| | MODE 2 (4 bits, SRAM) | MODE 5 (8 bits, PSRAM) |
+|---|---|---|
+| FRAMEBUFFER COPY F, N, for comparison | 0.08 | 1.95 |
+| WARPH, odd offsets | 0.92 | 2.40 |
+| WARPH with a transparent colour | 2.93 | 5.66 |
+| WARPV step 1 | 4.67 | 9.56 |
+| WARPV step 2 | 3.57 | 8.62 |
+| WARPV step 4 | 2.25 | 7.04 |
+| WARPV step 8 | 1.58 | 6.23 |
+
+  In MODE 5 the framebuffer is in PSRAM, which sets the time. A frame at 640x480 75 Hz is 13.3 ms: the demo
+  (Bas/warp_demo.bas) runs every scene at 75 fps with two to four warps a frame.
 
 ### 9.2 CMM2
 
