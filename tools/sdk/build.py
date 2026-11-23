@@ -116,7 +116,7 @@ def main():
     sources = list(a.sources)
     if a.listfile:
         sources += [l.strip() for l in open(a.listfile) if l.strip() and not l.startswith('#')]
-    sources += [os.path.join(SDK, 'crt0.c'), os.path.join(SDK, 'syscalls.c')]
+    sources += [os.path.join(SDK, 'crt0.c'), os.path.join(SDK, 'syscalls.c'), os.path.join(SDK, 'fwdouble.S')]
     if a.user:
         sources.append(os.path.join(SDK, 'userlib.c'))
     # the flags as they were: a change rebuilds everything

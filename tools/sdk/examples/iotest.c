@@ -36,11 +36,11 @@ static int duty_of(int gp) {
 
 static void leave_it_all(void) {
     checkr("pwm_set GP5 1 kHz", cmm2->pwm_set(5, 1000, 32768), 0);
-    checkr("bus_pins SPI GP4/GP3/GP2", cmm2->bus_pins(CMM2_BUS_SPI, 0, 4, 3, 2), 0);
+    checkr("bus_pins SPI GP4/GP3/GP2", cmm2->bus_pins(PM_BUS_SPI, 0, 4, 3, 2), 0);
     checkr("spi_open 0", cmm2->spi_open(0, 1000000, 0), 0);
-    checkr("bus_pins I2C2 GP6/GP7", cmm2->bus_pins(CMM2_BUS_I2C, 1, 6, 7, 0), 0);
+    checkr("bus_pins I2C2 GP6/GP7", cmm2->bus_pins(PM_BUS_I2C, 1, 6, 7, 0), 0);
     checkr("i2c_open 1", cmm2->i2c_open(1, 100, 100), 0);
-    checkr("bus_pins COM1 GP1/GP0", cmm2->bus_pins(CMM2_BUS_COM, 1, 1, 0, 0), 0);
+    checkr("bus_pins COM1 GP1/GP0", cmm2->bus_pins(PM_BUS_COM, 1, 1, 0, 0), 0);
     checkr("com_open 1", cmm2->com_open(1, 9600, 8, 0, 1, 0), 0);
     checkr("pin_setup GP40 OUT", cmm2->pin_setup(40, CMM2_PIN_OUT, 0), 0);
     cmm2->pin_write(40, 1);
@@ -135,14 +135,14 @@ int main(int argc, char **argv) {
 
     /* I2C2 on GP6/GP7, nothing on it */
     checkr("i2c_open 1, no pins", cmm2->i2c_open(1, 100, 100), -3);
-    checkr("bus_pins I2C2 GP6/GP7", cmm2->bus_pins(CMM2_BUS_I2C, 1, 6, 7, 0), 0);
+    checkr("bus_pins I2C2 GP6/GP7", cmm2->bus_pins(PM_BUS_I2C, 1, 6, 7, 0), 0);
     checkr("i2c_open 1", cmm2->i2c_open(1, 100, 100), 0);
-    checkr("bus_pins I2C2 again while open: in use", cmm2->bus_pins(CMM2_BUS_I2C, 1, 6, 7, 0), -2);
+    checkr("bus_pins I2C2 again while open: in use", cmm2->bus_pins(PM_BUS_I2C, 1, 6, 7, 0), -2);
     checkr("i2c_xfer 0x50 on an empty bus: a NACK", cmm2->i2c_xfer(1, 0x50, w, 1, NULL, 0, 1), 1);
     checkr("i2c_close 1", cmm2->i2c_close(1), 0);
 
     /* SPI on GP2-GP4, nothing on it */
-    checkr("bus_pins SPI GP4/GP3/GP2", cmm2->bus_pins(CMM2_BUS_SPI, 0, 4, 3, 2), 0);
+    checkr("bus_pins SPI GP4/GP3/GP2", cmm2->bus_pins(PM_BUS_SPI, 0, 4, 3, 2), 0);
     checkr("spi_open 0 1 MHz", cmm2->spi_open(0, 1000000, 0), 0);
     memcpy(w, "\x55\xAA\x00\xFF", 4);
     checkr("spi_xfer 4 bytes", cmm2->spi_xfer(0, w, r, 4), 0);
@@ -152,7 +152,7 @@ int main(int argc, char **argv) {
     checkr("spi_close 0", cmm2->spi_close(0), 0);
 
     /* COM1 on GP1 (RX) / GP0 (TX) */
-    checkr("bus_pins COM1 GP1/GP0", cmm2->bus_pins(CMM2_BUS_COM, 1, 1, 0, 0), 0);
+    checkr("bus_pins COM1 GP1/GP0", cmm2->bus_pins(PM_BUS_COM, 1, 1, 0, 0), 0);
     checkr("com_open 1 115200 8N1", cmm2->com_open(1, 115200, 8, 0, 1, 0), 0);
     checkr("com_write 5 bytes", cmm2->com_write(1, (const uint8_t *)"hello", 5), 5);
     cmm2->delay_us(2000);

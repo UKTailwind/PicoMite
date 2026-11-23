@@ -8,6 +8,7 @@
 
 const struct cmm2_services *cmm2;
 cmm2img_start *cmm2_start;
+const void *const *cmm2_doubles;              /* the firmware's doubles, which fwdouble.S jumps through */
 
 extern void (*__preinit_array_start[])(void), (*__preinit_array_end[])(void);
 extern void (*__init_array_start[])(void), (*__init_array_end[])(void);
@@ -35,6 +36,7 @@ const void *_start(cmm2img_start *s) {
     void (**f)(void);
     cmm2 = s->svc;
     cmm2_start = s;
+    cmm2_doubles = s->svc->doubles;
     cmm2_mem_bind();
     for(f = __preinit_array_start; f < __preinit_array_end; f++) (*f)();
     for(f = __init_array_start; f < __init_array_end; f++) (*f)();
@@ -46,6 +48,7 @@ int _start(cmm2img_start *s) {
     int r;
     cmm2 = s->svc;
     cmm2_start = s;
+    cmm2_doubles = s->svc->doubles;
     cmm2_mem_bind();
     for(f = __preinit_array_start; f < __preinit_array_end; f++) (*f)();
     for(f = __init_array_start; f < __init_array_end; f++) (*f)();

@@ -9,7 +9,14 @@
 - **22 November, later:** Phase 7 (I/O) is done on the PC3, with the mouse and `gamepad_axes` (see Phase 7). To fit, Loader.c is now compiled with `-Os` (OPTIMIZED_SOURCES), which left the PC3 352 bytes; then, at Peter's word, the PC3's flash target moved **1760 -> 1776 KB**: 16.3 KB of flash left, 1.9 KB of SRAM. On the PC3's 16 MB map A: stays where it is, but the options and the flash slots move: they reset on the first boot after upgrading from V7.00.00, and on every change between V7 and V8 firmware (a line for V8's release notes). COM10's were saved with OPTION DISK SAVE and loaded back.
 - **22 November, evening:** Phase 9 (USER modules) is done on the PC3 (see Phase 9): 2.5 KB, leaving 13.5 KB of flash and 1.8 KB of SRAM. Phase 8 (calling BASIC) was skipped at Peter's word.
 - **22 November, night:** Phase 10's first port, Doom, runs on the PC3: the timedemo at **28.1 fps silent and 25.9 with sound effects** (Bas/bench/results/loader_20261122). The file services now build FatFs's fast-seek map (start-up 66 s -> 29 s). This is the plan's go/no-go point for the program half: Peter's to decide.
-- Next: the go/no-go decision; then MicroPython and a SCUMM-only ScummVM (Phase 10's others).
+- **23 November:** Peter said go (22 November): MicroPython is the second port, with his objective that it runs every
+  example of his MicroPython book as the PC3's uf2 and the CMM2 app do. The port is `ports/picomite` on branch
+  `picomite` of his MicroPython repository (see Phase 10). For it: the firmware's doubles for programs (`doubles`,
+  `fwdouble.S`), `datetime_set`, `watchdog`, and the network services (the CMM2's version-21 set, `misc/LoaderNet.c`).
+  The PC3 has 10.3 KB of flash left. Every book example runs except one in 1024x600 (RGB1024), which Peter decided to
+  leave refused; RGB640 (640x480 in 256 colours) cannot have its 307 KB page in the PC3's SRAM and is shown in 16
+  colours (an adaptive palette is next).
+- Next: RGB640's adaptive palette; then a SCUMM-only ScummVM (Phase 10's last).
 
 This plan was written against:
 - PicoMite `main` at db2c2d7;
@@ -600,6 +607,20 @@ Not tested: a board without PSRAM (the loader is only in the PC3 build).
 - **A SCUMM-only ScummVM image** of about 1.5 MB. The full 3 MB image would leave about 2.5 MB of heap on the PC3.
 
 **Results** go in `Bas/bench/results/loader_<date>/`.
+
+*MicroPython started 22-23 November* (`ports/picomite` on branch `picomite`, from `cmm2`, of Peter's MicroPython
+repository; its README has the details). It builds the CMM2 port's back ends and the PC3's modules (`ports/rp2`)
+unchanged where it can, with PicoMite versions of the display (`hdmi_pico.c`: each PC3 mode on the PicoMite MODE of its
+size, copied about 60 times a second from the VM's hook), the pins and buses (rp2's pins, through `bus_pins`), the
+clock, the watchdog and the network. Firmware added for it: `doubles` (the DCP routines the firmware already has, 172
+bytes of table; `sin()` 2.5 times faster in a program), `datetime_set`, `watchdog`, and the network services
+(`misc/LoaderNet.c`, the CMM2's `Src/net/LoaderNet.c` on the PicoMite's Wi-Fi), about 3.3 KB in all. Measured on
+COM10 (315 MHz): solar_eclipse.py 12.1 s (the PC3's own MicroPython 8.8-9.25 s at 378 MHz, about 10.6-11.1 s at 315);
+2.2 MB of GC heap after SQLite's 1 MB pool. The book's examples (run with the CMM2 run's harness, the examples on B:)
+all run but ch16/03 (RGB1024: 1024x600, refused at 640x480); the PC3's own test suite passes 201 checks and fails 3,
+all in the 1024x600 modes. RGB320_8, RGB320 and RGB640_4 are shown pixel for pixel (MODE 5, 4 and 3); RGB640 has no
+PicoMite mode (307 KB; the PC3's SRAM heap and framebuffer pool together are 264 KB, and what follows them is live
+while a program runs), so it is shown on MODE 3 in 16 colours.
 
 *Doom done 22 November* on the COM10 PC3 (315 MHz, I2S): `apps/doom` (make.py fetches doomgeneric at the CMM2's commit,
 e257a095; `doomgeneric_pico.c` from the CMM2's `doomgeneric_cmm2.c`). MODE 5 with Doom's 320x200 frame in the middle of

@@ -31,6 +31,8 @@ the board, as any fault does.
 #include "hardware/pwm.h"
 #include "ff.h"
 #include "loader/pmimg.h"
+#include "loader/pmdouble.h"
+#include "LoaderNet.h"
 #include "Loader.h"
 
 #ifdef LOADER
@@ -177,6 +179,22 @@ static __attribute__((used, noinline)) void ld_datetime(int t[6])
 {
     gettimefromepoch(&t[0], &t[1], &t[2], &t[3], &t[4], &t[5]);
 }
+static int ld_cmd(void (*cmd)(void), void (*fn)(unsigned char *), const char *fmt, ...);
+// the clock set: by RTC SETTIME when an RTC answers (it sets the RTC, then the clock from it), else the clock alone,
+// as DATE$ and TIME$ set it
+static __attribute__((used, noinline)) int ld_settime(const int t[6])
+{
+    static const uint8_t mdays[12] = {31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    int y = t[0], mo = t[1], d = t[2];
+    if (y < 2000 || y > 2099 || mo < 1 || mo > 12 || d < 1 || d > mdays[mo - 1] || (mo == 2 && d == 29 && y % 4) ||
+        t[3] < 0 || t[3] > 23 || t[4] < 0 || t[4] > 59 || t[5] < 0 || t[5] > 59)
+        return -3;
+    if (ld_cmd(cmd_rtc, NULL, "SETTIME %d,%d,%d,%d,%d,%d", y, mo, d, t[3], t[4], t[5]) == 0)
+        return 0;
+    set_time_epoch(get_epoch(y, mo, d, t[3], t[4], t[5]), true);
+    return 1;
+}
+static void ld_watchdog(int ms) { WDTimer = ms > 0 ? ms : 0; }
 
 // the system: what the interpreter does between statements (the USB devices and keyboards, the network, Bluetooth),
 // with CheckAbort's Ctrl-C left to the program (LoaderActive); 1 once Ctrl-C has been pressed. MMAbort is left set,
@@ -970,9 +988,9 @@ static __attribute__((used, noinline)) int ld_pwmstop(int gp)
 // a bus's pins (SETPIN's), a bus open (by anyone), and the buses' own
 static int ld_busopen(int kind, int k)
 {
-    if (kind == CMM2_BUS_I2C)
+    if (kind == PM_BUS_I2C)
         return k ? I2C2_enabled : I2C_enabled;
-    if (kind == CMM2_BUS_SPI)
+    if (kind == PM_BUS_SPI)
     {
         int tx = k ? SPI1TXpin : SPI0TXpin;                         // (open, or the system's: reserved)
         return tx != 99 && ExtCurrentConfig[tx] >= EXT_COM_RESERVED;
@@ -982,18 +1000,18 @@ static int ld_busopen(int kind, int k)
 static __attribute__((used, noinline)) int ld_buspins(int kind, int bus, int a, int b, int c)
 {
     static const char *const name[3][2] = {{"I2C", "I2C2"}, {"SPI", "SPI2"}, {"COM1", "COM2"}};
-    int k = kind == CMM2_BUS_COM ? bus - 1 : bus, r;
-    if (kind < CMM2_BUS_I2C || kind > CMM2_BUS_COM || k < 0 || k > 1 || !ld_pin(a) || !ld_pin(b) ||
-        (kind == CMM2_BUS_SPI && !ld_pin(c)))
+    int k = kind == PM_BUS_COM ? bus - 1 : bus, r;
+    if (kind < PM_BUS_I2C || kind > PM_BUS_COM || k < 0 || k > 1 || !ld_pin(a) || !ld_pin(b) ||
+        (kind == PM_BUS_SPI && !ld_pin(c)))
         return -1;
     if (ld_busopen(kind, k))
         return -2;
-    if (kind == CMM2_BUS_SPI)
+    if (kind == PM_BUS_SPI)
         r = ld_cmd(cmd_setpin, NULL, "GP%d,GP%d,GP%d,%s", a, b, c, name[kind][k]);
     else
         r = ld_cmd(cmd_setpin, NULL, "GP%d,GP%d,%s", a, b, name[kind][k]);
     if (r == 0)
-        ld->pins |= 1ull << a | 1ull << b | (kind == CMM2_BUS_SPI ? 1ull << c : 0);
+        ld->pins |= 1ull << a | 1ull << b | (kind == PM_BUS_SPI ? 1ull << c : 0);
     return r;
 }
 
@@ -1018,7 +1036,7 @@ static __attribute__((used, noinline)) int ld_i2copen(int bus, int khz, int time
     if (bus < 0 || bus > 1)
         return -1;
     ld_i2cclose(bus);
-    if (ld_busopen(CMM2_BUS_I2C, bus))
+    if (ld_busopen(PM_BUS_I2C, bus))
         return 0;
     if ((bus ? I2C1SDApin : I2C0SDApin) == 99)
         return -3;
@@ -1035,7 +1053,7 @@ static int ld_i2cxfer(int bus, int addr, const uint8_t *w, uint32_t wn, uint8_t 
     int e = 0;
     if (bus < 0 || bus > 1)
         return -1;
-    if (!ld_busopen(CMM2_BUS_I2C, bus) || addr < 0 || addr > 127)
+    if (!ld_busopen(PM_BUS_I2C, bus) || addr < 0 || addr > 127)
         return -3;
     t = (bus ? I2C1locked : I2C0locked) ? 1000 : bus ? I2C2_Timeout : I2C_Timeout;   // (ms: the system's bus as BASIC's
     t = t ? t * 1000 : 60000000;                                    // I2C WRITE has it; 0, none)
@@ -1067,7 +1085,7 @@ static __attribute__((used, noinline)) int ld_spiopen(int bus, uint32_t hz, int 
     if (bus < 0 || bus > 1)
         return -1;
     ld_spiclose(bus);
-    if (ld_busopen(CMM2_BUS_SPI, bus))
+    if (ld_busopen(PM_BUS_SPI, bus))
         return -2;
     if ((bus ? SPI1TXpin : SPI0TXpin) == 99)
         return -3;
@@ -1193,6 +1211,7 @@ static void ld_tidy(void)
     AppSoundStop();
     AppSoundHold(0);
     ld_iotidy();
+    LoaderNetClose();
     for (int i = 0; i < LD_FILES; i++)                              // (A:'s are in littlefs's list of open files)
         if (ld->file[i])
             ld_close(i);
@@ -1303,6 +1322,21 @@ __attribute__((naked, used)) static void ld_veneerfn(void)
 LD_VENEER(v_putc, ld_putc)
 LD_VENEER(v_puts, ld_puts)
 LD_VENEER(v_datetime, ld_datetime)
+LD_VENEER(v_settime, ld_settime)
+LD_VENEER(v_netpoll, LoaderNetPoll)
+LD_VENEER(v_netjoin, LoaderNetJoin)
+LD_VENEER(v_netleave, LoaderNetLeave)
+LD_VENEER(v_netifconfig, LoaderNetIfconfig)
+LD_VENEER(v_netdns, LoaderNetDns)
+LD_VENEER(v_sockopen, LoaderSockOpen)
+LD_VENEER(v_sockbind, LoaderSockBind)
+LD_VENEER(v_sockconnect, LoaderSockConnect)
+LD_VENEER(v_socklisten, LoaderSockListen)
+LD_VENEER(v_sockaccept, LoaderSockAccept)
+LD_VENEER(v_socksend, LoaderSockSend)
+LD_VENEER(v_sockrecv, LoaderSockRecv)
+LD_VENEER(v_sockstate, LoaderSockState)
+LD_VENEER(v_sockclose, LoaderSockClose)
 LD_VENEER(v_poll, ld_poll)
 LD_VENEER(v_alloc, ld_alloc)
 LD_VENEER(v_release, ld_release)
@@ -1338,6 +1372,13 @@ LD_VENEER(v_spiclose, ld_spiclose)
 LD_VENEER(v_comopen, ld_comopen)
 LD_VENEER(v_comclose, ld_comclose)
 LD_VENEER(v_comwrite, ld_comwrite)
+
+/* the doubles: the firmware's own (the SDK's DCP routines, through the --wrap the build gives each name, so each
+   is the __wrap_ one), named by their symbols so that no C prototype has to match */
+#define LD_DBLDECL(f) extern const char ld_dbl_##f[] __asm__(#f);
+PMDOUBLE_LIST(LD_DBLDECL)
+#define LD_DBLREF(f) ld_dbl_##f,
+static const void *const lddoubles[] = { PMDOUBLE_LIST(LD_DBLREF) };
 
 static const struct cmm2_services ldsvc = {
     .version = PMIMG_API_VERSION,
@@ -1410,6 +1451,23 @@ static const struct cmm2_services ldsvc = {
     .com_read = ld_comread,
     .com_avail = ld_comavail,
     .com_connected = ld_comconnected,
+    .doubles = lddoubles,
+    .datetime_set = (int (*)(const int *))v_settime,
+    .watchdog = ld_watchdog,
+    .net_poll = (int (*)(void))v_netpoll,
+    .net_join = (int (*)(const char *, const char *))v_netjoin,
+    .net_leave = (int (*)(void))v_netleave,
+    .net_ifconfig = (int (*)(uint8_t *))v_netifconfig,
+    .net_dns = (int (*)(const char *, uint8_t *))v_netdns,
+    .sock_open = (int (*)(int))v_sockopen,
+    .sock_bind = (int (*)(int, int))v_sockbind,
+    .sock_connect = (int (*)(int, const uint8_t *, int))v_sockconnect,
+    .sock_listen = (int (*)(int, int))v_socklisten,
+    .sock_accept = (int (*)(int, uint8_t *, int *))v_sockaccept,
+    .sock_send = (int (*)(int, const uint8_t *, int, const uint8_t *, int))v_socksend,
+    .sock_recv = (int (*)(int, uint8_t *, int, uint8_t *, int *))v_sockrecv,
+    .sock_state = (int (*)(int))v_sockstate,
+    .sock_close = (int (*)(int))v_sockclose,
 };
 
 /*******************************************************************************************

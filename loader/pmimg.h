@@ -219,9 +219,9 @@ struct cmm2_services {
     int      (*pwm_set)(int gp, uint32_t freq, uint32_t duty);   /* freq Hz (a slice's A and B share theirs), duty
                                                   0-65535; the GP set up for PWM first if need be */
     int      (*pwm_stop)(int gp);              /* that output stopped (the slice, when neither runs) */
-    int      (*bus_pins)(int kind, int bus, int a, int b, int c);   /* SETPIN's, for a bus: CMM2_BUS_I2C (bus 0 I2C,
-                                                  1 I2C2; a SDA, b SCL), CMM2_BUS_SPI (0 SPI, 1 SPI2; a RX, b TX, c
-                                                  SCK), CMM2_BUS_COM (1 COM1, 2 COM2; a RX, b TX) */
+    int      (*bus_pins)(int kind, int bus, int a, int b, int c);   /* SETPIN's, for a bus: PM_BUS_I2C (bus 0 I2C,
+                                                  1 I2C2; a SDA, b SCL), PM_BUS_SPI (0 SPI, 1 SPI2; a RX, b TX, c
+                                                  SCK), PM_BUS_COM (1 COM1, 2 COM2; a RX, b TX) */
     int      (*i2c_open)(int bus, int khz, int timeout_ms);   /* bus 0: I2C, 1: I2C2; 100, 400 or 1000 kHz; timeout 0
                                                   (none) or 100 ms up. A bus already open (OPTION SYSTEM I2C's, or
                                                   BASIC's I2C OPEN): 0, and it is used as it is */
@@ -243,6 +243,48 @@ struct cmm2_services {
     int      (*com_avail)(int com);            /* the bytes waiting */
     int      (*com_connected)(int com);        /* 1 if its device is there (COM1 and COM2 always), 0 if a USB serial
                                                   device is not, open or not; -1 if there is no such port */
+    /* data, not a service: the firmware's double-precision routines, in loader/pmdouble.h's order, which
+       tools/sdk/fwdouble.S puts in place of libgcc's and newlib's */
+    const void *const *doubles;
+    /* the clock and the watchdog */
+    int      (*datetime_set)(const int t[6]);  /* the clock (DATE$ and TIME$) set to year (2000-2099), month, day, hour,
+                                                  minute, second, and the RTC with it (OPTION RTC's DS3231...), as RTC
+                                                  SETTIME sets it: 0, 1 if no RTC answered (the clock alone), -3 a bad
+                                                  date or time */
+    void     (*watchdog)(int ms);              /* MMBasic's WATCHDOG: the board restarts unless this is called again within
+                                                  ms; 0 stops it. It goes on counting after the program ends, as
+                                                  WATCHDOG in a BASIC program does */
+    /* the network: the Colour Maximite 2's services (its version 21), the same names and meanings, on the firmware's
+       Wi-Fi (OPTION WIFI joins at power-up) and lwIP (misc/LoaderNet.c), as eight BSD-style handles over TCP and UDP.
+       The network moves in poll() and net_poll: call net_poll while waiting on it. Errors are negative errno values
+       (Linux's numbers, as MicroPython's): -11 EAGAIN nothing yet, -19 ENODEV no Wi-Fi (or a build without it), -107
+       ENOTCONN, -111 ECONNREFUSED... A program's handles are closed when it ends; its joins and leaves change no
+       option */
+    int      (*net_poll)(void);                /* the network pumped: 0 no Wi-Fi here, 1 not joined, 2 joined (with an
+                                                  address) */
+    int      (*net_join)(const char *ssid, const char *password);   /* that network joined (password "" or NULL: an open
+                                                  one), waiting up to 30 s for an address: 0, -13 a wrong password,
+                                                  -110 timed out, -113 not joined */
+    int      (*net_leave)(void);               /* the network left */
+    int      (*net_ifconfig)(uint8_t a[16]);   /* address, mask, gateway and DNS server, 4 bytes each */
+    int      (*net_dns)(const char *name, uint8_t ip[4]);   /* a name's address (or a dotted address's): 0 in ip; 1
+                                                  asked: net_poll, then ask again with the same name; -2 not found */
+    int      (*sock_open)(int type);           /* 1 TCP, 2 UDP: a handle 0-7, or -24 none free */
+    int      (*sock_bind)(int h, int port);    /* the local port (any address) */
+    int      (*sock_connect)(int h, const uint8_t ip[4], int port);   /* TCP: started, sock_state says when it is made
+                                                  (or its error); UDP: the peer for sock_send without an address */
+    int      (*sock_listen)(int h, int backlog);   /* TCP: listening on its bound port */
+    int      (*sock_accept)(int h, uint8_t ip[4], int *port);   /* a connection to a listening handle: its own handle
+                                                  and the peer's address, or -11 none yet */
+    int      (*sock_send)(int h, const uint8_t *buf, int n, const uint8_t *ip, int port);   /* TCP: the bytes taken (0:
+                                                  no room now; ip unused); UDP: one datagram to ip:port, or the
+                                                  connected peer if ip is NULL */
+    int      (*sock_recv)(int h, uint8_t *buf, int n, uint8_t *ip, int *port);   /* TCP: up to n bytes, 0 once the
+                                                  peer has closed and all is taken; UDP: one datagram (cut to n) and,
+                                                  if ip and port are not NULL, its sender; -11 nothing yet */
+    int      (*sock_state)(int h);             /* bits: 1 connected, 2 data (or, listening, a connection) waiting, 4
+                                                  room to send, 8 the peer closed; or its error */
+    int      (*sock_close)(int h);
 };
 
 #define CMM2_PIN_OFF     0                     /* pin_setup's modes */
@@ -253,9 +295,10 @@ struct cmm2_services {
 #define CMM2_PULL_NONE   0
 #define CMM2_PULL_UP     1
 #define CMM2_PULL_DOWN   2
-#define CMM2_BUS_I2C     0                     /* bus_pins' kinds (the PicoMite's own) */
-#define CMM2_BUS_SPI     1
-#define CMM2_BUS_COM     2
+#define PM_BUS_I2C       0                     /* bus_pins' kinds (the PicoMite's own: PM_, as
+                                                  the CMM2 has no bus_pins) */
+#define PM_BUS_SPI       1
+#define PM_BUS_COM       2
 
 /* A module's table (PMIMG_KIND_MODULE: build.py --module), the one its module_main() returns, starts with this */
 typedef struct {

@@ -6,7 +6,8 @@ The design is in `docs/Loader_Plan.md`.
 
 So far this is the PC3 build only, and the services are the console, time, `poll`, `leave`, `alloc`, the
 firmware's `memcpy`/`memset`/`memmove`, `psram_size`, the files and directories, the display, the keyboard and
-gamepads, the mouse, sound, and I/O (pins, ADC, PWM, I2C, SPI and the COM ports); and USER modules (below).
+gamepads, the mouse, sound, I/O (pins, ADC, PWM, I2C, SPI and the COM ports), setting the clock, the watchdog and the
+network (Wi-Fi, DNS, TCP and UDP); and USER modules (below).
 
 ## Building
 
@@ -59,8 +60,18 @@ Include `cmm2.h`. The names are the Colour Maximite 2's, so a program's portable
   between `audio_lock()` and `audio_unlock()`. The sound stops when the program ends. `examples/sndtest.c` tries
   it all.
 - I/O is by GP numbers. A bus (I2C, SPI, COM1/COM2) uses the pins BASIC's SETPIN or OPTION SYSTEM gave it, or the
-  ones `cmm2->bus_pins()` names. Pins the board keeps for itself are refused. Whatever the program sets up is undone
-  when it ends. `examples/iotest.c` tries it all.
+  ones `cmm2->bus_pins()` names (its kinds `PM_BUS_I2C`, `PM_BUS_SPI`, `PM_BUS_COM`: the PicoMite's own). Pins the
+  board keeps for itself are refused. Whatever the program sets up is undone when it ends. `examples/iotest.c` tries
+  it all.
+- Doubles: `fwdouble.S` (always linked) puts the firmware's own double-precision routines in place of libgcc's and
+  newlib's: the Pico SDK's, accelerated by the RP2350's DCP (arithmetic, compares, conversions, `sqrt`, `sin`, `pow`
+  and the others in `loader/pmdouble.h`). `sin()` is about 2.5 times faster. They may be used in a sound's `fill` too.
+- `cmm2->datetime_set(t)` sets the clock, and the RTC with it (as RTC SETTIME), and `cmm2->watchdog(ms)` is MMBasic's
+  WATCHDOG (0 stops it; it goes on counting after the program ends).
+- The network: the Colour Maximite 2's services, the same names and meanings (`net_poll`, `net_join`, `net_dns`,
+  `sock_open` ... `sock_close`: eight TCP and UDP handles over the firmware's lwIP and OPTION WIFI's Wi-Fi). Call
+  `net_poll()` while waiting on the network. A build without Wi-Fi answers -19 (ENODEV). Handles are closed when the
+  program ends.
 
 ## USER modules
 
