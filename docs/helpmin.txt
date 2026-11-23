@@ -1440,7 +1440,7 @@ CPU SPEED n
 
 NOT VGA OR HDMI VERSIONS Changes the CPU clock speed to 'n' KHz immediately
 and without restarting the firmware. 'n' has the same range as OPTION CPUSPEED
-(eg, 48000 to 420000 for the PicoMite).
+(eg, 48000 to 444000 for the PicoMite on the RP2350).
 
 ~CSUB
 CSUB name [type  [, type]  ...]
@@ -6252,10 +6252,11 @@ OPTION RESOLUTION nn [,cpuspeedinKhz]
 VGA AND HDMI VERSIONS ONLY For firmware with HDMI video set the video
 resolution to 'nn'. Where 'nn' is: 640x480 or 640 720x400 or 720 800x600 or
 800 (RP2350 only) 848x480 or 848 (RP2350 only) 1280x720 or 1280 (HDMI only)
-1024x768 or 1024 (HDMI only) 1024x600 (HDMI only) 800x480 (HDMI only) On the
-PicoMiteHDMIWEB version 1280x720 and 1024x768 are not available and the
-abbreviated form 1024 selects 1024x600, so write the resolution out in full if
-a program has to run on more than one HDMI version.
+1024x768 or 1024 (HDMI only) 1024x600 (HDMI only) 800x480 (HDMI only) 720x576
+(HDMI only, not the PicoMiteHDMIWEB or PicoMiteHDMIBTH) On the PicoMiteHDMIWEB
+version 1280x720 and 1024x768 are not available and the abbreviated form 1024
+selects 1024x600, so write the resolution out in full if a program has to run
+on more than one HDMI version.
 
 See also: RESOLUTION
 
@@ -7500,8 +7501,9 @@ RESOLUTION nn [,cpuspeedinKHz]
 
 HDMI VERSIONS ONLY Changes the video resolution to 'nn' immediately and
 without restarting the firmware. 'nn' is one of the resolutions supported by
-OPTION RESOLUTION: 640x480 or 640 720x400 or 720 800x600 or 800 848x480 or 848
-800x480 1024x768 or 1024 1024x600 1280x720 or 1280 The CPU clock speed is
+OPTION RESOLUTION: 640x480 or 640 720x400 or 720 720x576 (not the
+PicoMiteHDMIWEB or PicoMiteHDMIBTH) 800x600 or 800 848x480 or 848 800x480
+1024x768 or 1024 1024x600 1280x720 or 1280 The CPU clock speed is
 automatically changed to that required by the new resolution and the display
 restarts in MODE 1 (use the MODE command to select another mode).
 

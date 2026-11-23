@@ -2006,17 +2006,16 @@ CPU SPEED n
 
 NOT VGA OR HDMI VERSIONS
 Changes the CPU clock speed to 'n' KHz immediately and without restarting the
-firmware.  'n' has the same range as OPTION CPUSPEED (eg, 48000 to 420000 for
-the PicoMite).  The console and COM serial ports, the ADC and the audio output
-are automatically re-timed to suit the new clock speed and USB is unaffected,
-so the USB console connection is retained.
+firmware.  'n' has the same range as OPTION CPUSPEED (eg, 48000 to 444000 for
+the PicoMite on the RP2350).  The console and COM serial ports, the ADC and
+the audio output are automatically re-timed to suit the new clock speed and
+USB is unaffected, so the USB console connection is retained.
 Unlike OPTION CPUSPEED the new speed is not saved; on reset or power up the
 clock speed will return to that set by OPTION CPUSPEED.  The command can be
 used in a program (eg, to reduce the clock speed, and with it the power
 consumption, when full speed is not needed).
 The command cannot be used while a PIO is in use as any PIO timing programmed
-in BASIC would become invalid, and the speed cannot exceed 384000 if PSRAM is
-enabled.
+in BASIC would become invalid.
 On the VGA/HDMI versions the CPU clock is set by the video resolution; on the
 HDMI versions it can be changed at run time using the RESOLUTION command.
 
@@ -6966,9 +6965,10 @@ MAP( n ) = rgb%
 
 This will assign the 24-bit colour 'rgb% to all pixels with the 4 or 8-bit
 colour value of 'n'.  The change is activated after the MAP SET command.
-In MODE 5 (8-bit colour) the map is used only at 640x480 and 720x400, and not
-at all on the PicoMiteHDMIBTH or PicoMiteHDMIWEB.  At the other resolutions
-MODE 5 shows each pixel's 8-bit value directly as an RGB332 colour.
+In MODE 5 (8-bit colour) the map is used only at 640x480, 720x400 and 720x576,
+and not at all on the PicoMiteHDMIBTH or PicoMiteHDMIWEB.  At the other
+resolutions MODE 5 shows each pixel's 8-bit value directly as an RGB332
+colour.
 
 MAP
 
@@ -9124,6 +9124,47 @@ command will select the mode 'n' depending on the resolution:
   available.  Each of the 256 colours can be mapped to any RGB555 colour.  A
   second layer buffer (T) can also be created; it is applied on top of the
   first layer.
+
+  OPTION RESOLUTION 720 x 576 (NB: reduces heap memory available; not the
+  PicoMiteHDMIWEB or PicoMiteHDMIBTH)
+  MODE 1     720 x 576 x 2-colours (monochrome).   Default at startup.   Use
+  the TILE command as normal.  Tiles width is fixed at 8 pixels. Tile height
+  defaults to 12 pixels but can be from 8 to MM.VRES. Tiles colours are
+  specified using the standard RGB888 notation. This is converted to RGB555. A
+  framebuffer (F) and a layer buffer (L) can be created. These can be used for
+  creating images and copying to the display screen (N)
+  MODE 2    360 x 288 x 16 colours.  A framebuffer (F) can be created. This
+  can be used for creating images and copying to the display screen (N). In
+  addition a layer buffer can be created.  Any pixels written to the layer
+  buffer will automatically appear on the display sitting on top of whatever
+  may be in the main display buffer. A colour can be specified (0-15: defaults
+  to 0) which does not show allowing the main display buffer to show through.
+  Map functionality is available to override the default colours.  A second
+  layer buffer (T) can also be created; it is applied on top of the first
+  layer.
+  MODE 3    720 x 576 x 16 colours. Colour mapping to RGB555 palette.  A
+  framebuffer (F) can be created.  It can be used for creating images and
+  copying to the display screen (N).  In addition a layer buffer can be
+  created. Any pixels written to the layer buffer will automatically appear on
+  the display sitting on top of whatever may be in the main display buffer.  A
+  colour can be specified (0-15: defaults to 0) which does not show allowing
+  the main display buffer to show through.
+  MODE 4    360 x 288 x 32768 colours. This is full RGB555 allowing good
+  quality colour images to be displayed.  A framebuffer (F) and a layer buffer
+  (L) can be created. These have no impact on the display and can be used for
+  creating images and copying to the display screen (N). Only one can be
+  created
+  MODE 5    360 x 288 x 256 colours. A framebuffer (F) can be created. This
+  has no impact on the display. It can be used for creating images and copying
+  to the display screen (N).  In addition a layer buffer can be created. This
+  does not use user memory. Any pixels written to the layer buffer will
+  automatically appear on the display sitting on top of whatever may be in the
+  main display buffer. A colour can be specified (0-255: defaults to 0) which
+  does not show allowing the main display buffer to show through.  Map
+  functionality is available to override the default colours of the 256
+  available.  Each of the 256 colours can be mapped to any RGB555 colour.  A
+  second layer buffer (T) can also be created; it is applied on top of the
+  first layer.
   OPTION RESOLUTION 800 x 600 (NB: reduces heap memory available)
   MODE 1    800 x 600 x 2-colours with RGB332 tiles (use the TILE command as normal)
   MODE 2    400 x 300 x 16colours with optional layer and colour mapping to RGB332 palette
@@ -9171,13 +9212,14 @@ OPTION RESOLUTION 800 x 480 (NB: reduces heap memory available)
   these resolutions.  The reduced framebuffer cannot hold MODE 3 or MODE 5.
   1024x600 - MODE 1, MODE 2, MODE 3 and MODE 5, exactly as listed above.
   PicoMitePC3: this version has all the modes and resolutions listed above,
-  but its SRAM heap is 108 KB (less at 800x600, 848x480 and 800x480), and a
-  layer buffer that is not in the pre-allocated video memory must come from
-  that heap because PSRAM is too slow for the display.  So no layer buffer can
-  be created in MODE 3 at 640x480, 720x400, 1280x720, 800x600, 848x480 or
-  800x480, in MODE 5 at 800x600, 848x480 or 800x480, or as the layer (L) in
-  MODE 4.  In MODE 3 at 1024x600 and in MODE 5 at 640x480 one of the two
-  layers can be created if the program leaves enough of the heap free.
+  but its SRAM heap is 108 KB (less at 800x600, 848x480, 800x480 and 720x576),
+  and a layer buffer that is not in the pre-allocated video memory must come
+  from that heap because PSRAM is too slow for the display.  So no layer
+  buffer can be created in MODE 3 at 640x480, 720x400, 720x576, 1280x720,
+  800x600, 848x480 or 800x480, in MODE 5 at 720x576, 800x600, 848x480 or
+  800x480, or as the layer (L) in MODE 4.  In MODE 3 at 1024x600 and in MODE 5
+  at 640x480 one of the two layers can be created if the program leaves enough
+  of the heap free.
 
 MODE 400
 or
@@ -9740,10 +9782,11 @@ OPTION CPUSPEED speed
 NOT VGA OR HDMI VERSIONS
 Change the CPU clock speed.
 'speed' is the CPU clock in KHz.  The permitted range depends on the version:
-48000 to 420000 on the PicoMite versions, 126000 to 396000 on the WebMite
-versions, and 200000 to 396000 on the Bluetooth versions.  Speeds above 200MHz
-(150MHz on the RP2350) are regarded as overclocking as those are the chip
-manufacturer's specified maximums.
+48000 to 420000 on the PicoMite versions (48000 to 444000 on the RP2350),
+126000 to 396000 on the WebMite versions (126000 to 444000 on the RP2350), and
+200000 to 444000 on the Bluetooth versions, with or without PSRAM.  Speeds
+above 200MHz (150MHz on the RP2350) are regarded as overclocking as those are
+the chip manufacturer's specified maximums.
 The default speed is 200000 on both the RP2040 and the RP2350.
 This command must be run at the command prompt (not in a program).
 See also the CPU SPEED command which changes the clock speed immediately,
@@ -10399,6 +10442,7 @@ Where 'nn' is:
   1024x768 or 1024 (HDMI only)
   1024x600 (HDMI only)
   800x480 (HDMI only)
+  720x576 (HDMI only, not the PicoMiteHDMIWEB or PicoMiteHDMIBTH)
 On the PicoMiteHDMIWEB version 1280x720 and 1024x768 are not available and the
 abbreviated form 1024 selects 1024x600, so write the resolution out in full if
 a program has to run on more than one HDMI version.  For 640x480 the display
@@ -10408,6 +10452,9 @@ Each VGA and HDMI resolution can operate in a number of modes which are set
 using the MODE command.
 Note that the 800x600, 848x480 and 800x480 resolutions reduce both the maximum
 program size and the variable space available to the Basic programs
+720x576 is the 576p television standard at 50Hz.  It runs the CPU at 404MHz
+and, like 800x600, needs a larger framebuffer, which reduces the variable
+space available to the Basic programs.
 See also the RESOLUTION command which changes the resolution immediately
 without saving it or restarting the firmware.
 On the PicoMiteHDMIWEB version everything is 8-bit colour and the choices are
@@ -11322,9 +11369,9 @@ PIXEL( x, y)
 
 Returns the colour of a pixel on the video output or LCD display.  'x' is the
 horizontal coordinate and 'y' is the vertical coordinate of the pixel.  In
-MODE 5 on the HDMI versions at 640x480 and 720x400 it is the colour shown,
-after any MAP, with each of red, green and blue to the nearest 8 below it
-(white is &HF8F8F8).
+MODE 5 on the HDMI versions at 640x480, 720x400 and 720x576 it is the colour
+shown, after any MAP, with each of red, green and blue to the nearest 8 below
+it (white is &HF8F8F8).
 If an LCD display is used it must use one of the SSD1963, ILI9341, ILI9488, or
 ST7789_320 controllers.
 
@@ -12602,6 +12649,7 @@ Changes the video resolution to 'nn' immediately and without restarting the
 firmware.  'nn' is one of the resolutions supported by OPTION RESOLUTION:
 640x480 or 640
 720x400 or 720
+720x576 (not the PicoMiteHDMIWEB or PicoMiteHDMIBTH)
 800x600 or 800
 848x480 or 848
 800x480
@@ -12615,13 +12663,13 @@ or 378MHz) or 75Hz (315MHz) by appending 'cpuspeedinKHz' to the command (ie,
 252000, 378000 or 315000) as per OPTION RESOLUTION.
 The change is not saved; on reset or power up the resolution will return to
 that set by OPTION RESOLUTION.
-The 800x600, 848x480 and 800x480 resolutions need a larger framebuffer than
-the other resolutions and this can only be allocated when the firmware starts.
-These resolutions can therefore only be selected with this command if the
-resolution set by OPTION RESOLUTION also uses the larger framebuffer;
-otherwise the command will report an error and OPTION RESOLUTION (which
-restarts the firmware) must be used.  Switching away from these resolutions is
-always possible.
+The 800x600, 848x480, 800x480 and 720x576 resolutions need a larger
+framebuffer than the other resolutions and this can only be allocated when the
+firmware starts.  These resolutions can therefore only be selected with this
+command if the resolution set by OPTION RESOLUTION also uses the larger
+framebuffer; otherwise the command will report an error and OPTION RESOLUTION
+(which restarts the firmware) must be used.  Switching away from these
+resolutions is always possible.
 If the new resolution requires a different clock speed the command cannot be
 used while a PIO is in use.
 On the PicoMiteHDMIWEB version everything is 8-bit colour and the choices are
