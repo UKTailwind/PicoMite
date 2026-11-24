@@ -10351,69 +10351,168 @@ void fun_peek(void)
     iret = *(char *)(((int)getinteger(argv[0]) << 16) + (int)getinteger(argv[2]));
     targ = T_INT;
 }
-// corrected decimal exponent of a non-zero magnitude (libm log10 can be a hair
-// off at exact powers of ten, so nudge it back into [10^X, 10^(X+1)) )
-static int format_decexp(double av)
+// The decimal digits of |val| as C's printf makes them: exact, and rounded half to even on the binary value, which the
+// firmware's own FloatToStr is not past about 15 digits (it adds 0.5/10^n and multiplies by 10 for each digit). Done
+// with newlib's big-number routines, which its strtod links already (newlib's own _dtoa_r would add 4 KB): the value
+// is M * 2^E exactly (__d2b), made r / s in [1, 10) by 10^X, and each digit taken by subtracting s. mode 2: ndig
+// significant digits; mode 3: ndig digits after the point. Trailing zeros are left out; the count is returned,
+// *decpt is where the point goes (9999 for an infinity or a NaN: D is then "I" or "N"), *neg the sign.
+extern struct _Bigint *_Balloc(struct _reent *, int);
+extern void _Bfree(struct _reent *, struct _Bigint *);
+extern struct _Bigint *__d2b(struct _reent *, double, int *, int *);
+extern struct _Bigint *__i2b(struct _reent *, int);
+extern struct _Bigint *__pow5mult(struct _reent *, struct _Bigint *, int);
+extern struct _Bigint *__lshift(struct _reent *, struct _Bigint *, int);
+extern struct _Bigint *__multadd(struct _reent *, struct _Bigint *, int, int);
+extern struct _Bigint *__multiply(struct _reent *, struct _Bigint *, struct _Bigint *);
+extern struct _Bigint *__mdiff(struct _reent *, struct _Bigint *, struct _Bigint *);
+extern int __mcmp(struct _Bigint *, struct _Bigint *);
+__attribute__((optimize("Os"))) static int format_digits(char *D, double val, int mode, int ndig, int *decpt, int *neg)
 {
-    int X = (int)floor(log10(av));
-    double p10 = pow(10.0, (double)X);
-    if (av < p10)
+    struct _reent *re = _REENT;
+    struct _Bigint *r, *s, *t;
+    int e, bits, X, S, i, n, c;
+    *neg = signbit(val) != 0;
+    val = fabs(val);
+    if (isinf(val) || isnan(val))
+    {
+        D[0] = isnan(val) ? 'N' : 'I';
+        *decpt = 9999;
+        return 1;
+    }
+    if (val == 0)
+    {
+        D[0] = '0';
+        *decpt = 1;
+        return 1;
+    }
+    r = __d2b(re, val, &e, &bits); // val = r * 2^e
+    s = __i2b(re, 1);
+    if (e > 0)
+        r = __lshift(re, r, e);
+    else if (e < 0)
+        s = __lshift(re, s, -e);
+    X = (int)floor(log10(val)); // (an estimate: put right below)
+    if (X > 0)
+        s = __lshift(re, __pow5mult(re, s, X), X);
+    else if (X < 0)
+        r = __lshift(re, __pow5mult(re, r, -X), -X);
+    if (__mcmp(r, s) < 0) // r / s below 1
+    {
         X--;
-    else if (av >= p10 * 10.0)
-        X++;
-    return X;
-}
-
-// strip trailing zeros (and a bare trailing '.') from a fixed-notation string
-static void format_striptz(char *s)
-{
-    char *dot = strchr(s, '.');
-    char *e;
-    if (!dot)
-        return;
-    e = s + strlen(s);
-    while (e > dot + 1 && e[-1] == '0')
-        e--;
-    if (e == dot + 1)
-        e--; // drop the '.' as well
-    *e = '\0';
-}
-
-// render 'val' in exponential form "<mantissa>e<sign><exp>" with 'mantdec'
-// mantissa decimals, using FloatToStr for the mantissa (its exponent handling is
-// correct at powers of ten, unlike pico printf).  Optionally trims the mantissa.
-static void format_exp(char *num, double val, int mantdec, int trimz)
-{
-    double av = fabs(val);
-    int X = (av == 0.0) ? 0 : format_decexp(av);
-    double mant = (av == 0.0) ? 0.0 : val / pow(10.0, (double)X);
-    char *d;
-    FloatToStr(num, mant, 0, mantdec, ' ');
-    d = (num[0] == '-') ? num + 1 : num;
-    if (d[0] == '1' && d[1] == '0') // rounding pushed |mantissa| up to 10.x
+        r = __multadd(re, r, 10, 0);
+    }
+    struct _Bigint *k = __i2b(re, 10);
+    t = __multiply(re, s, k);
+    _Bfree(re, k);
+    if (__mcmp(r, t) >= 0) // r / s 10 or more
     {
         X++;
-        mant = val / pow(10.0, (double)X);
-        FloatToStr(num, mant, 0, mantdec, ' ');
+        _Bfree(re, s);
+        s = t;
     }
-    if (trimz)
-        format_striptz(num);
-    num += strlen(num);
-    *num++ = 'e';
-    IntToStrPad(num, X, '0', -3, 10); // sign + at least 2 exponent digits, e.g. "+05"
+    else
+        _Bfree(re, t);
+    S = mode == 2 ? ndig : X + 1 + ndig; // the digits wanted
+    if (S > 79)
+        S = 79;
+    n = 0;
+    if (S <= 0)
+    { // %f of a value below its last decimal: 0, or 1 in that decimal if more than half of it (r / s / 10 > 0.5)
+        c = -1;
+        if (S == 0)
+        {
+            k = __i2b(re, 5);
+            t = __multiply(re, s, k);
+            c = __mcmp(r, t);
+            _Bfree(re, k);
+            _Bfree(re, t);
+        }
+        if (c > 0)
+        {
+            D[n++] = '1';
+            X++;
+        }
+        else
+            X = -ndig - 1;
+    }
+    else
+    {
+        for (i = 0; i < S; i++)
+        {
+            int d = 0;
+            while (__mcmp(r, s) >= 0)
+            {
+                t = __mdiff(re, r, s);
+                _Bfree(re, r);
+                r = t;
+                d++;
+            }
+            D[n++] = '0' + d;
+            if (i < S - 1)
+                r = __multadd(re, r, 10, 0);
+        }
+        r = __lshift(re, r, 1); // the rest against half of the last digit: up, or to even on a tie
+        c = __mcmp(r, s);
+        if (c > 0 || (c == 0 && (D[n - 1] & 1)))
+        {
+            for (i = n - 1; i >= 0 && D[i] == '9'; i--)
+                D[i] = '0';
+            if (i >= 0)
+                D[i]++;
+            else
+            { // 99..9 became 100..0: one more place before the point
+                D[0] = '1';
+                X++;
+            }
+        }
+    }
+    _Bfree(re, r);
+    _Bfree(re, s);
+    while (n > 1 && D[n - 1] == '0')
+        n--;
+    D[n] = 0;
+    *decpt = X + 1;
+    return n;
 }
 
-// Render a floating point value per a printf-style spec, using the in-built
-// FloatToStr (NOT pico printf, whose float conversions are broken).  Handles
-// %f/%e/%g (and E/G uppercase), the -, 0, + and space flags, field width,
-// precision (default 4 per the manual) and any literal text around the
-// specifier.  'fmt' is validated by the caller to contain exactly one specifier.
-static void format_float(char *out, const unsigned char *fmt, double val)
+// D's n digits as d.ddd and an exponent X ("e+05": sign and two digits at least), with dec decimals (zeros added)
+__attribute__((optimize("Os"))) static char *format_e(char *o, const char *D, int n, int X, int dec)
+{
+    *o++ = D[0];
+    if (dec > 0)
+        *o++ = '.';
+    for (int i = 1; i <= dec; i++)
+        *o++ = i < n ? D[i] : '0';
+    *o++ = 'e';
+    IntToStrPad(o, X, '0', -3, 10);
+    return o + strlen(o);
+}
+
+// D's n digits with the point decpt digits in, and dec decimals (zeros added before and after as needed)
+__attribute__((optimize("Os"))) static void format_fixed(char *o, const char *D, int n, int decpt, int dec)
+{
+    if (decpt <= 0)
+        *o++ = '0';
+    for (int i = 0; i < decpt; i++)
+        *o++ = i < n ? D[i] : '0';
+    if (dec > 0)
+        *o++ = '.';
+    for (int i = decpt; i < decpt + dec; i++)
+        *o++ = (i >= 0 && i < n) ? D[i] : '0';
+    *o = 0;
+}
+
+// Render a floating point value per a printf-style spec, as C's printf does (format_digits: newlib's dtoa, not pico
+// printf, whose float conversions are broken, nor FloatToStr, inexact past 15 digits). Handles %f/%e/%g (and E/G
+// uppercase), the -, 0, + and space flags, field width, precision (default 4 per the manual), inf and nan, and any
+// literal text around the specifier. 'fmt' is validated by the caller to contain exactly one specifier.
+__attribute__((optimize("Os"))) static void format_float(char *out, const unsigned char *fmt, double val)
 {
     const unsigned char *pct = (const unsigned char *)strchr((const char *)fmt, '%');
     const unsigned char *q;
     char flagbuf[8], num[80], body[88];
-    int nf = 0, width = 0, prec = 4, type, upper, bl, pad; // manual: default precision is 4
+    int nf = 0, width = 0, prec = 4, type, upper, bl, pad, finite = 1; // manual: default precision is 4
 
     // copy any literal text before the '%'
     size_t pre = (size_t)(pct - fmt);
@@ -10449,37 +10548,45 @@ static void format_float(char *out, const unsigned char *fmt, double val)
     if (width > 250)
         width = 250; // keep the result inside the caller's STRINGSIZE buffer
 
-    // generate the core number string (FloatToStr emits '-' for negatives and no
-    // leading character for positives; flags/width are applied afterwards)
-    if (type == 'e' || type == 'E')
+    // generate the core number string ('-' for negatives and no leading character for positives; flags/width are
+    // applied afterwards)
     {
-        format_exp(num, val, prec, 0);
-    }
-    else if (type == 'g' || type == 'G')
-    {
-        int P = prec ? prec : 1;
-        double av = fabs(val);
-        int X = (av == 0.0) ? 0 : format_decexp(av);
-        if (X >= -4 && X < P) // fixed notation, trimmed
-        {
-            int dec = P - 1 - X;
-            if (dec < 0)
-                dec = 0;
-            FloatToStr(num, val, 0, dec, ' ');
-            format_striptz(num);
+        char D[80], *o = num;
+        int n, decpt, neg, alt = strchr(flagbuf, '#') != NULL;
+        int P = prec ? prec : 1; // (%g: significant digits)
+        if (type == 'e' || type == 'E')
+            n = format_digits(D, val, 2, prec + 1, &decpt, &neg);
+        else if (type == 'g' || type == 'G')
+            n = format_digits(D, val, 2, P, &decpt, &neg);
+        else // 'f' / 'F'
+            n = format_digits(D, val, 3, prec, &decpt, &neg);
+        if (neg)
+            *o++ = '-';
+        if (decpt == 9999)
+        { // an infinity or a NaN: "inf" or "nan" as C has them (no zeros padded)
+            strcpy(o, D[0] == 'N' ? "nan" : "inf");
+            finite = 0;
         }
-        else // exponential notation, trimmed
-            format_exp(num, val, P - 1, 1);
-    }
-    else // 'f' / 'F'
-    {
-        FloatToStr(num, val, 0, prec, ' ');
+        else if (type == 'e' || type == 'E')
+            format_e(o, D, n, decpt - 1, prec);
+        else if (type == 'g' || type == 'G')
+        { // exponential below 1e-4 or from 10^P, else fixed; trailing zeros left out unless the # flag
+            int X = decpt - 1;
+            if (X < -4 || X >= P)
+                format_e(o, D, n, X, alt ? P - 1 : n - 1);
+            else
+                format_fixed(o, D, n, decpt, alt ? P - 1 - X : (n > decpt ? n - decpt : 0));
+        }
+        else if (decpt + prec < (int)sizeof(num) - 4)
+            format_fixed(o, D, n, decpt, prec);
+        else // (a %f of more digits than num holds: the firmware's own conversion, as before)
+            FloatToStr(num, val, 0, prec, ' ');
     }
 
     if (upper)
         for (char *s = num; *s; s++)
-            if (*s == 'e')
-                *s = 'E';
+            if (*s >= 'a' && *s <= 'z')
+                *s -= 'a' - 'A';
 
     // sign: FloatToStr already emitted '-' for negatives; add '+'/' ' for positives
     {
@@ -10500,7 +10607,7 @@ static void format_float(char *out, const unsigned char *fmt, double val)
     pad = width - bl;
     if (pad > 0 && strchr(flagbuf, '-') == NULL)
     {
-        if (strchr(flagbuf, '0'))
+        if (strchr(flagbuf, '0') && finite)
         {
             int sgn = (body[0] == '+' || body[0] == '-' || body[0] == ' ') ? 1 : 0;
             memcpy(out, body, (size_t)sgn);
