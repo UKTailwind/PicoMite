@@ -1594,11 +1594,12 @@ static int OptionLetter(unsigned char *p, const char *letter)
 	return tp != NULL && *tp == 0;
 }
 
-// PLAY MODSAMPLE, as the CMM2's (76c2869):
-//   PLAY MODSAMPLE sampleno, channel [, volume] [, samplerate] [, LOOP]    a sample of the MOD file playing over it
-//   PLAY MODSAMPLE CHANGE channel [, volume] [, samplerate]               a playing one's volume or rate, where it is
-//   PLAY MODSAMPLE STOP [channel]                                         one channel stopped, or all four
+// PLAY MODSAMPLE, as the CMM2's (76c2869, and the pan):
+//   PLAY MODSAMPLE sampleno, channel [, volume] [, samplerate] [, pan] [, LOOP]   a sample of the MOD file over it
+//   PLAY MODSAMPLE CHANGE channel [, volume] [, samplerate] [, pan]   a playing one's volume, rate or pan, where it is
+//   PLAY MODSAMPLE STOP [channel]                                     one channel stopped, or all four
 // LOOP may end the list after any argument from the channel on. The rate is the MOD player's period, 3579545 / rate.
+// pan is -100 (the left speaker only) to 100 (the right only), 0 (both, the default) between: a simple balance.
 static void MIPS16 __attribute__((noinline)) ModSampleCommand(unsigned char *tp)
 {
 	unsigned char *q;
@@ -1613,8 +1614,8 @@ static void MIPS16 __attribute__((noinline)) ModSampleCommand(unsigned char *tp)
 	}
 	if ((q = checkstring(tp, (unsigned char *)"CHANGE")))
 	{
-		getcsargs(&q, 5);
-		if (!(argc == 1 || argc == 3 || argc == 5))
+		getcsargs(&q, 7);
+		if (!(argc == 1 || argc == 3 || argc == 5 || argc == 7))
 			StandardError(2);
 		if (!(CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_PAUSE_MOD))
 			error("Samples play over MOD file");
@@ -1625,24 +1626,27 @@ static void MIPS16 __attribute__((noinline)) ModSampleCommand(unsigned char *tp)
 			int vol = getint(argv[2], 0, 64);
 			volume = vol ? vol - 1 : 0; // (as the start's: 1 to 64 is 0 to 63)
 		}
-		if (argc == 5 && *argv[4])
+		if (argc >= 5 && *argv[4])
 			period = 3579545 / getint(argv[4], 150, 500000);
-		hxcmod_changesoundeffect(mcontext, ch, volume, period); // (a channel that has ended: no matter)
+		int pan = HXCMOD_PAN_KEEP;
+		if (argc == 7 && *argv[6])
+			pan = getint(argv[6], -100, 100);
+		hxcmod_changesoundeffect(mcontext, ch, volume, period, pan); // (a channel that has ended: no matter)
 		return;
 	}
 	unsigned short sampnum, seffectnum;
 	unsigned char volume;
 	unsigned int samprate;
-	int loop = 0;
-	getcsargs(&tp, 9);
-	if (!(argc == 3 || argc == 5 || argc == 7 || argc == 9))
+	int loop = 0, pan = 0;
+	getcsargs(&tp, 11);
+	if (!(argc == 3 || argc == 5 || argc == 7 || argc == 9 || argc == 11))
 		StandardError(2);
 	if (argc >= 5 && OptionLetter(argv[argc - 1], "LOOP"))
 	{
 		loop = 1;
 		argc -= 2;
 	}
-	if (argc > 7)
+	if (argc > 9)
 		StandardError(2);
 
 	if (!(CurrentlyPlaying == P_MOD))
@@ -1659,10 +1663,12 @@ static void MIPS16 __attribute__((noinline)) ModSampleCommand(unsigned char *tp)
 		volume = vol ? vol - 1 : 0; // 0 to 63 for hxcmod; volume is unsigned, so not 0 - 1
 	}
 	samprate = 16000;
-	if (argc == 7 && *argv[6])
+	if (argc >= 7 && *argv[6])
 		samprate = getint(argv[6], 150, 500000);
+	if (argc == 9 && *argv[8])
+		pan = getint(argv[8], -100, 100);
 
-	hxcmod_playsoundeffect(mcontext, sampnum, seffectnum, volume, 3579545 / samprate, loop);
+	hxcmod_playsoundeffect(mcontext, sampnum, seffectnum, volume, 3579545 / samprate, loop, pan);
 }
 
 void MIPS16 cmd_play(void)
