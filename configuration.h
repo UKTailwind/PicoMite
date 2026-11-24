@@ -77,12 +77,13 @@ extern "C"
       (153600-byte pool); docs/PC3_All_In_Build_Design_Review.md.
       The flash map: firmware to 1776 KB (1728 until 2026-10-17: the RC2 PC3 had 48 bytes left; 1744 until 2026-11-10:
       PWM audio for the Olimex RP2350pc and the boot's board detection went 2.7 KB over; 1760 in V7.00.00, until V8's
-      loadable programs' I/O left 352 bytes, 2026-11-22), options, saved variables, three
-      256 KB flash slots and the 256 KB program, ending at 2820 KB under the
+      loadable programs' I/O left 352 bytes, 2026-11-22; 1776 in V8.00.00b2, until the SQL
+      command and its module's own stack, 2026-11-24), options, saved variables, three
+      256 KB flash slots and the 256 KB program, ending at 2836 KB under the
       16 MB fixed map's 3 MB system top.  There is no Route B flash stream
       (RB_STREAM_FLASH_SLOTS below): this build has PSRAM, and the stream
       lives in the PSRAM reserve, which is 2.5 MB here (PSRAM_RESERVE). */
-#define FLASH_TARGET_OFFSET (1776 * 1024)
+#define FLASH_TARGET_OFFSET (1792 * 1024)
    /* 108 KB: the SRAM heap the review's budget gives with the full 153600-byte
       pool (4.2 KB of RAM margin left for the stack); the boot-time resize for
       800x600, 848x480 and 800x480 takes its pool from this, as on HDMIUSB. */

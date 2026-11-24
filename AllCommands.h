@@ -183,6 +183,8 @@ void cmd_zmodem(void);
 #ifdef LOADER
 void cmd_user(void); /* USER and USER(: a USER module's (misc/User.c) */
 void fun_user(void);
+void cmd_sql(void); /* SQL and SQL(: SQLite, the SQL module's (misc/SQL.c) */
+void fun_sql(void);
 #endif
 void cmd_ctrlval(void);
 void cmd_GUIpage(unsigned char *p);
@@ -727,6 +729,7 @@ void fun_frame(void);
 	{(unsigned char *)"ZModem", T_CMD, 0, cmd_zmodem},
 #ifdef LOADER
 	{(unsigned char *)"User", T_CMD, 0, cmd_user},
+	{(unsigned char *)"SQL", T_CMD, 0, cmd_sql},
 #endif
 
 {
@@ -909,6 +912,7 @@ void fun_frame(void);
 #endif
 #ifdef LOADER
 	{(unsigned char *)"User(", T_FUN | T_INT | T_NBR | T_STR, 0, fun_user},
+	{(unsigned char *)"SQL(", T_FUN | T_INT | T_NBR | T_STR, 0, fun_sql},
 #endif
 
 {

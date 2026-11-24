@@ -62,7 +62,9 @@ extern bool mouse0;                                                 // a PS/2 mo
 #define LD_CHUNK   4096                                             // the image read through SRAM this much at a time
 
 volatile int LoaderActive;
-uint8_t LoaderKeyReport[8];                                         // the keyboard's last report (process_kbd_report)
+volatile int LoaderModBusy;                                         // 1 while the SQL module runs (LoaderSqlCall): a
+                                                                    // Ctrl-C is its poll()'s to report, as a program's
+uint8_t LoaderKeyReport[8];                                        // the keyboard's last report (process_kbd_report)
 static uint32_t ldmsp __attribute__((used));                        // the main stack inside LoaderCall, for LoaderReturn
 
 // a file or directory the program has open, on A: (littlefs, fs 0) or on B: or C: (FatFs): the file systems' own, not
@@ -208,10 +210,10 @@ static void ld_pollbody(void *a)
 }
 static __attribute__((used, noinline)) int ld_poll(void)
 {
-    if (!LoaderActive)                                              // a USER module, inside a statement: Ctrl-C breaks
+    if (!LoaderActive && !LoaderModBusy)                            // a USER module, inside a statement: Ctrl-C breaks
         ld_pollbody(NULL);                                          // it, as in any command (not under ld_try, which
-    else                                                            // would leave ON ERROR SKIP's state on at the prompt)
-        ld_try(ld_pollbody, NULL);
+    else                                                            // would leave ON ERROR SKIP's state on at the prompt);
+        ld_try(ld_pollbody, NULL);                                  // a program's, or the SQL module's, on its own stack
     return MMAbort != 0;
 }
 static uint32_t ld_cpuhz(void) { return clock_get_hz(clk_sys); }
@@ -1504,7 +1506,8 @@ int LoaderIsApp(const char *fname)
 // what loading a program needs, from the file to the place it runs (ld_load, under FileTry)
 typedef struct {
     char *fname;
-    int module;                                                     // a USER module, not a program
+    int module;                                                     // a module (USER's or SQL's), not a program
+    uint32_t modheap;                                               // a module's C library's heap if not 0 (SQL's: its pool)
     pmimg_header h;
     unsigned char *area;                                            // the PSRAM borrowed (a module's block), or NULL
     uint32_t areasize;
@@ -1624,8 +1627,8 @@ static bool ld_load(void *a)
     align = (h->flags & PMIMG_FLAG_MOVT) ? 0x10000 : (1u << h->align_log2) < 8 ? 8 : 1u << h->align_log2;
     if (L->module)
     {   // a module: a block of the heap for the image, its .bss and the relocations, and one for its C library's heap.
-        // It has no stack of its own: its functions run on MMBasic's
-        L->heapsize = ((h->heap_min ? h->heap_min : LD_MOD_HEAP) + 7) & ~7u;
+        // A USER module has no stack of its own: its functions run on MMBasic's (SQL's: LoaderSqlLoad gives it one)
+        L->heapsize = ((L->modheap ? L->modheap : h->heap_min ? h->heap_min : LD_MOD_HEAP) + 7) & ~7u;
         if ((L->area = GetMemoryNull(end + rel + align)) == NULL || (L->heap = GetMemoryNull(L->heapsize)) == NULL)
         {
             snprintf(L->msg, sizeof(L->msg), "Needs %u KB of the heap",
@@ -1931,6 +1934,148 @@ const void *LoaderModuleLoad(char *fname, const void *basic)
         error("$ is not a module", fname);
     }
     ldmodhead = t;
+    return t;
+}
+
+/*******************************************************************************************
+ the SQL module (misc/SQL.c): SQLite, apps/sql's sql.mod, loaded by SQL OPEN into the heap beside the BASIC program, as
+ a USER module is (its code and .bss one block, its C library's heap, SQLite's pool in it, another), and kept until SQL
+ CLOSE or the heap's wipe. Unlike a USER module it has a stack of its own, its header's stack_size of the SRAM heap
+ (apps/sql/make.py: 16 KB; SQLite's recursion is not for MMBasic's stack), and its functions run there, on the process
+ stack as a program does (LoaderSqlCall): the services go back to the main stack through ld_veneer, and while it runs
+ CheckAbort leaves a Ctrl-C to its poll() (LoaderModBusy), which reports it, so that SQL.c raises it as an SQL error.
+ Its services' state is ldsql, made ld for each call (a USER module's, or none, put back after it).
+*******************************************************************************************/
+static ldstate_t *ldsql;
+static const cmm2mod_head *ldsqlhead;
+static void *ldsqlarea, *ldsqlheap, *ldsqlstack;
+static uint32_t ldsqlpsp __attribute__((used)), ldsqlpsplim __attribute__((used));   // its stack: top, and limit
+static void *ldsqlfn __attribute__((used));                         // the function LoaderSqlCall calls
+
+// ldsqlfn called on the SQL module's stack, with r0-r3 as they came and its results (r0-r1) as it leaves them: so cast
+// to the function's own type, LoaderSqlFn(f) calls f with any arguments that fit in four words (the PicoMite's ABI is
+// softfp: a double is two). ld is ldsql while it runs; the process stack is taken as LoaderCall takes it. A module's
+// function is never called from inside another's, and never raises an MMBasic error.
+__attribute__((naked)) static void LoaderSqlCall(void)
+{
+    __asm volatile(
+        "push   {r4, r5, r6, lr}    \n"
+        "ldr    r4, =ld             \n" /* ld kept in r5, ldsql made ld */
+        "ldr    r5, [r4]            \n"
+        "ldr    r6, =ldsql          \n"
+        "ldr    r6, [r6]            \n"
+        "str    r6, [r4]            \n"
+        "ldr    r6, =LoaderModBusy  \n"
+        "mov    r12, #1             \n"
+        "str    r12, [r6]           \n"
+        "ldr    r12, =ldsqlpsplim   \n" /* the module's stack taken */
+        "ldr    r12, [r12]          \n"
+        "msr    psplim, r12         \n"
+        "ldr    r12, =ldsqlpsp      \n"
+        "ldr    r12, [r12]          \n"
+        "msr    psp, r12            \n"
+        "mrs    r12, control        \n"
+        "orr    r12, r12, #2        \n"
+        "msr    control, r12        \n"
+        "isb                        \n"
+        "ldr    r12, =ldsqlfn       \n"
+        "ldr    r12, [r12]          \n"
+        "blx    r12                 \n"
+        "mrs    r12, control        \n" /* the main stack again (r0-r1 are the results) */
+        "bic    r12, r12, #2        \n"
+        "msr    control, r12        \n"
+        "isb                        \n"
+        "mov    r12, #0             \n"
+        "msr    psplim, r12         \n"
+        "str    r12, [r6]           \n" /* LoaderModBusy 0 */
+        "str    r5, [r4]            \n" /* ld put back */
+        "pop    {r4, r5, r6, pc}    \n"
+        ".ltorg                     \n");
+}
+
+void *LoaderSqlFn(const void *fn)
+{
+    ldsqlfn = (void *)fn;
+    return (void *)LoaderSqlCall;
+}
+
+const void *LoaderSqlTable(void) { return ldsqlhead; }
+
+// the bytes of the SQL module's own heap (its C library's: SQLite's pool is in it)
+uint32_t LoaderSqlHeapSize(void) { return ldsqlhead ? ldsql->start.heap_size : 0; }
+
+// the SQL module gone: its forget() called (the database closed), its files closed, its memory freed
+void LoaderSqlDrop(void)
+{
+    const cmm2mod_head *t = ldsqlhead;
+    ldstate_t *old;
+    if (!ldsql)
+        return;
+    ldsqlhead = NULL;
+    if (t && t->forget)
+        ((void (*)(void))LoaderSqlFn((const void *)t->forget))();
+    old = ld;
+    ld = ldsql;
+    ld_tidy();
+    ld = old;
+    FreeMemory(ldsqlarea);
+    FreeMemory(ldsqlheap);
+    FreeMemory(ldsqlstack);
+    FreeMemory(ldsql);
+    ldsql = NULL;
+    ldsqlarea = ldsqlheap = ldsqlstack = NULL;
+}
+
+// the module in fname loaded as SQL's (the one loaded before dropped first), heap bytes its C library's heap: its
+// table, or an MMBasic error
+const void *LoaderSqlLoad(char *fname, uint32_t heap)
+{
+    ldload_t *L;
+    const cmm2mod_head *t;
+    uint32_t stacksize;
+    LoaderSqlDrop();
+    if (LoaderActive)
+        error("A loadable program is running");
+    L = GetTempMemory(sizeof(ldload_t));
+    L->fname = fname;
+    L->module = 1;
+    L->modheap = heap;
+    ldsql = GetMemory(sizeof(ldstate_t));
+    if (!FileTry(ld_load, L))
+    {
+        char msg[MAXERRMSG];
+        strcpy(msg, *L->msg ? L->msg : *MMErrMsg ? MMErrMsg : "Cannot read the module");
+        FreeMemory(L->area);
+        FreeMemory(L->heap);
+        FreeMemory(ldsql);
+        ldsql = NULL;
+        error("$", msg);
+    }
+    ldsqlarea = L->area;
+    ldsqlheap = L->heap;
+    stacksize = L->h.stack_size ? (L->h.stack_size + 7) & ~7u : PMIMG_STACK;
+    // its stack in the SRAM heap, or, as a program's, in the PSRAM if the BASIC program's variables have left no
+    // block there (mmsql's arrays do): the services run on the main stack either way (ld_veneer), so a flash write
+    // never has the stack in the PSRAM
+    if ((ldsqlstack = GetSRAMMemoryNull(stacksize + 8)) == NULL && (ldsqlstack = GetMemoryNull(stacksize + 8)) == NULL)
+    {
+        LoaderSqlDrop();
+        error("$ needs % KB of the heap for its stack", fname, (int)((stacksize + 1023) / 1024));
+    }
+    ldsqlpsplim = ((uint32_t)ldsqlstack + 7) & ~7u;
+    ldsqlpsp = ldsqlpsplim + stacksize;
+    ldsql->screen = 1;
+    ldsql->start.svc = &ldsvc;
+    ldsql->start.heap = L->heap;
+    ldsql->start.heap_size = L->heapsize;
+    ldsql->start.base = (uint32_t)L->base;
+    t = ((const cmm2mod_head *(*)(cmm2img_start *))LoaderSqlFn(L->base + L->h.entry))(&ldsql->start);
+    if (t == NULL || t->magic != CMM2MOD_MAGIC)
+    {
+        LoaderSqlDrop();
+        error("$ is not a module", fname);
+    }
+    ldsqlhead = t;
     return t;
 }
 #endif

@@ -1,5 +1,5 @@
-"""make.py: builds apps/sql/out/sql.app, SQLite run from MMBasic's RUN on the PicoMitePC3 (and later the
-PicoMiteHDMIUSB): step 1 of the Colour Maximite 2's docs/SQL_Plan.md, before the SQL command and its module.
+"""make.py: builds apps/sql/out/sql.app, SQLite run from MMBasic's RUN, and apps/sql/out/mod/sql.mod, the module the
+SQL command loads (misc/SQL.c), for the PicoMitePC3 and the PicoMiteHDMIUSB (the Colour Maximite 2's docs/SQL_Plan.md).
 
 The sources are the Colour Maximite 2's apps/sql (CMM2V1.5 v8-dev 5e9721f): sqlite_cmm2.h (SQLite's settings,
 usqlite's, MIT), sqlite_unit.c (the amalgamation compiled as usqlite compiles it), sqlcore.c (its OS layer on the
@@ -19,8 +19,10 @@ SRC = os.path.join(HERE, 'sqlite')
 URL = 'https://www.sqlite.org/2024/sqlite-amalgamation-3470000.zip'
 SHA256 = '2842fddbb1cc33f66c7da998a57535f14a6bfee159676a07bb4bf3e59375d93e'
 FILES = ('sqlite3.c', 'sqlite3.h')
-STACK = 0x10000                  # the program's stack, from the SRAM heap: the CMM2's 64 KB until sql.app -stack has
-                                 # measured what SQLite uses (the SQL module will need a stack of its own of that size)
+STACK = 0x10000                  # sql.app's stack, from the SRAM heap: the CMM2's 64 KB (-stack reports what is used)
+MOD_STACK = 0x4000               # sql.mod's own stack, from the SRAM heap while it is loaded: sql.app -stack measured
+                                 # 8.6 KB at most (24 Nov 2026: 50,000 rows, a sort to temporary files, an index,
+                                 # triggers, json, integrity_check), so 16 KB
 
 
 def fetch():
@@ -71,6 +73,11 @@ def main():
     # sql.app: the PicoMite's services version 1 (file_truncate and dir_current are in it); PSRAM; 1 MB of heap at least
     build(os.path.join(out, 'sql.app'), core + [os.path.join(HERE, 'sql_app.c')],
           ['--api', '1', '--psram', '--heap', str(1 << 20), '--stack', str(STACK), '--cflag=-DSQL_STACK=%d' % STACK])
+    # sql.mod, the SQL command's module, in a folder of its own (build.py's objects and map are named after it): its
+    # heap is what SQL OPEN gives it, its stack MOD_STACK of the SRAM heap (the header's stack_size: misc/Loader.c)
+    os.makedirs(os.path.join(out, 'mod'), exist_ok=True)
+    build(os.path.join(out, 'mod', 'sql.mod'), core + [os.path.join(HERE, 'sql_mod.c')],
+          ['--api', '1', '--psram', '--module', '--stack', str(MOD_STACK)])
 
 
 if __name__ == '__main__':

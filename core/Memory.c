@@ -2096,7 +2096,9 @@ void InitHeap(bool all)
        called and its files closed while its code is still there.  The next
        USER loads it again. */
     extern void LoaderModuleDrop(void);
+    extern void LoaderSqlDrop(void);
     LoaderModuleDrop();
+    LoaderSqlDrop(); /* (the SQL module's the same way: its database closed by its forget()) */
 #endif
     /* The PLAY BBC engine's state block (AudioBBC.c) lives in this heap:
        hand it back while the bitmap is still valid, then wipe.          */

@@ -2797,7 +2797,7 @@ int __not_in_flash_func(MMInkey)(void)
         ProcessBT();
         routinechecks();
 #ifdef LOADER
-        if (MMAbort && !LoaderActive) // (a loadable program's Ctrl-C is its poll()'s to report: misc/Loader.c)
+        if (MMAbort && !LoaderActive && !LoaderModBusy) // (a loadable program's Ctrl-C, or the SQL module's, is its poll()'s to report: misc/Loader.c)
 #else
         if (MMAbort)
 #endif
