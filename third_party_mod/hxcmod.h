@@ -205,6 +205,7 @@ typedef struct
 
 	mint last_r_sample;
 	mint last_l_sample;
+	int last_el_sample, last_er_sample; // MMBasic: the effects' filter history (they are filtered apart from the music)
 
 	mint stereo;
 	mint stereo_separation;

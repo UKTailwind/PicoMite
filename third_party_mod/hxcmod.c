@@ -1363,6 +1363,7 @@ int hxcmod_fillbuffer(modcontext *modctx, msample *outbuffer, unsigned long nbsa
 #ifndef HXCMOD_MONO_OUTPUT
 	int l, ll, tl;
 	int el, er; // MMBasic: the effects (PLAY MODSAMPLE), added after the stereo separation so that their pan is exact
+	int pel, per, tel; // MMBasic: their filter history, as ll and lr are the music's
 #endif
 	int r, lr, tr;
 
@@ -1391,6 +1392,8 @@ int hxcmod_fillbuffer(modcontext *modctx, msample *outbuffer, unsigned long nbsa
 
 #ifndef HXCMOD_MONO_OUTPUT
 			ll = modctx->last_l_sample;
+			pel = modctx->last_el_sample;
+			per = modctx->last_er_sample;
 #endif
 			lr = modctx->last_r_sample;
 
@@ -1683,6 +1686,13 @@ int hxcmod_fillbuffer(modcontext *modctx, msample *outbuffer, unsigned long nbsa
 					// Filter
 					l = (l + ll) >> 1;
 					r = (r + lr) >> 1;
+					// MMBasic: the effects too, as when they were mixed in with the music
+					tel = el;
+					el = (el + pel) >> 1;
+					pel = tel;
+					tel = er;
+					er = (er + per) >> 1;
+					per = tel;
 				}
 
 				if (modctx->stereo_separation == 1)
@@ -1737,6 +1747,8 @@ int hxcmod_fillbuffer(modcontext *modctx, msample *outbuffer, unsigned long nbsa
 
 #ifndef HXCMOD_MONO_OUTPUT
 			modctx->last_l_sample = ll;
+			modctx->last_el_sample = pel;
+			modctx->last_er_sample = per;
 #endif
 			modctx->last_r_sample = lr;
 
@@ -1795,6 +1807,9 @@ void hxcmod_unload(modcontext *modctx)
 
 		modctx->last_r_sample = 0;
 		modctx->last_l_sample = 0;
+#ifndef HXCMOD_MONO_OUTPUT
+		modctx->last_el_sample = modctx->last_er_sample = 0;
+#endif
 	}
 }
 /*  @endcond */
