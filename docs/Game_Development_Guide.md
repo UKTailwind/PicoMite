@@ -1360,7 +1360,7 @@ PLAY MODFILE "chiptune.mod"        ' Amiga MOD tracker files!
 
 Amiga MOD tracker files are an excellent choice for game background music — they are compact, loop naturally, and have an authentic retro sound. MMBasic plays them via `PLAY MODFILE`, which uses 4 tracker channels to mix the music in real time.
 
-The key advantage for game developers is `PLAY MODSAMPLE`, which lets you trigger individual samples *from the loaded MOD file* as one-shot sound effects **while the music continues playing**. MOD files contain up to 32 embedded instrument samples (explosions, bleeps, thuds, etc.), and you can play any of them on demand over the top of the background music using up to 4 dedicated sound-effect channels.
+The key advantage for game developers is `PLAY MODSAMPLE`, which lets you trigger individual samples *from the loaded MOD file* as one-shot sound effects **while the music continues playing**. MOD files contain up to 31 embedded instrument samples (explosions, bleeps, thuds, etc.), and you can play any of them on demand over the top of the background music using up to 4 dedicated sound-effect channels.
 
 **Syntax:**
 ```basic
@@ -1369,7 +1369,7 @@ PLAY MODSAMPLE sample_number, channel [, volume]
 
 | Parameter | Description |
 |-----------|-------------|
-| `sample_number` | Sample number within the MOD file (1–32) |
+| `sample_number` | Sample number within the MOD file (1–31) |
 | `channel` | Sound effect channel (1–4) |
 | `volume` | Optional playback volume (0–64, default 63) |
 
@@ -1387,7 +1387,7 @@ PLAY MODSAMPLE 12, 3           ' Trigger sample 12 (e.g., explosion) on channel 
 ```
 
 **Tips for using MODSAMPLE in games:**
-- Compose your MOD file in a tracker (e.g., OpenMPT, MilkyTracker) with samples designated for sound effects — put them in higher sample slots (e.g., 17–32) so they are easy to identify
+- Compose your MOD file in a tracker (e.g., OpenMPT, MilkyTracker) with samples designated for sound effects — put them in higher sample slots (e.g., 17–31) so they are easy to identify
 - Use different effect channels for different sound categories (e.g., channel 1 for weapons, channel 2 for pickups, channel 3 for UI) so that rapid-fire sounds replace only their own category
 - The sound effects mix with the MOD music automatically — no additional code for mixing is needed
 - If you trigger a new sample on a channel that is already playing an effect, the new sample replaces the previous one on that channel

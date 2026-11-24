@@ -164,6 +164,9 @@ typedef struct
 	mulong samppos;
 	muint period;
 	muchar volume;
+	muchar loop;	// MMBasic: PLAY MODSAMPLE ..., LOOP: from the end ('length') back to 'loopstart', until stopped
+	mulong loopstart; // (in samples: the sample's own loop when it has one, else 0, the whole sample)
+	mulong step;	// samppos's step for each sample made (<<10), from the period
 } seffect;
 
 typedef struct
@@ -281,7 +284,9 @@ typedef struct tracker_buffer_state_
 int hxcmod_init(modcontext *modctx);
 int hxcmod_setcfg(modcontext *modctx, int samplerate, int stereo_separation, int filter);
 int hxcmod_load(modcontext *modctx, void *mod_data, int mod_data_size);
-void hxcmod_playsoundeffect(modcontext *modctx, unsigned short sampnum, unsigned short seffectnum, unsigned char volume, unsigned int period);
+void hxcmod_playsoundeffect(modcontext *modctx, unsigned short sampnum, unsigned short seffectnum, unsigned char volume, unsigned int period, int loop);
+void hxcmod_changesoundeffect(modcontext *modctx, unsigned short seffectnum, int volume, unsigned int period); // MMBasic: volume -1, period 0: kept
+void hxcmod_stopsoundeffect(modcontext *modctx, int seffectnum);											   // MMBasic: -1 all of them
 extern int hxcmod_effectplaying(modcontext *modctx, unsigned short seffectnum);
 int hxcmod_fillbuffer(modcontext *modctx, msample *outbuffer, unsigned long nbsample, tracker_buffer_state *trkbuf, int noloop);
 void hxcmod_unload(modcontext *modctx);

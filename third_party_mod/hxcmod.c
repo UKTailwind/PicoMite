@@ -1271,18 +1271,64 @@ int hxcmod_load(modcontext *modctx, void *mod_data, int mod_data_size)
 	return 0;
 }
 
-void hxcmod_playsoundeffect(modcontext *modctx, unsigned short sampnum, unsigned short seffectnum, unsigned char volume, unsigned int period)
+// MMBasic: PLAY MODSAMPLE's start (loop: LOOP), CHANGE and STOP, as the CMM2's (76c2869).
+// A looped effect plays to the end of the sample's own loop (repeat point + repeat length, when it has one longer than
+// the 2 bytes trackers use for none) and goes back to its repeat point; a sample without a loop is looped whole.
+// samppos's step is worked out here, not for each sample made (it was a division a sample).
+void hxcmod_playsoundeffect(modcontext *modctx, unsigned short sampnum, unsigned short seffectnum, unsigned char volume, unsigned int period, int loop)
+{
+	seffect *effectptr;
+	mulong length, reppnt, replen;
+	effectptr = modctx->seffects + seffectnum;
+
+	effectptr->active = 0; // (made active last, with everything else in place)
+	length = GET_BGI_W(modctx->song.samples[sampnum].length) * 2;
+	effectptr->loop = 0;
+	effectptr->loopstart = 0;
+	if (loop && length > 0)
+	{
+		reppnt = GET_BGI_W(modctx->song.samples[sampnum].reppnt) * 2;
+		replen = GET_BGI_W(modctx->song.samples[sampnum].replen) * 2;
+		if (replen > 2 && reppnt < length)
+		{
+			if (reppnt + replen < length)
+				length = reppnt + replen; // (a loop past the end, as some files have: to the end)
+			effectptr->loopstart = reppnt;
+		}
+		effectptr->loop = 1;
+	}
+	effectptr->sampdata = modctx->sampledata[sampnum];
+	effectptr->length = length;
+	effectptr->sampnum = sampnum;
+	effectptr->samppos = 0;
+	effectptr->period = period;
+	effectptr->step = (modctx->sampleticksconst << 10) / period;
+	effectptr->volume = volume;
+	effectptr->active = 1;
+}
+
+// MMBasic: a playing effect's volume (-1: kept) and period (0: kept) changed where it is, not started again
+void hxcmod_changesoundeffect(modcontext *modctx, unsigned short seffectnum, int volume, unsigned int period)
 {
 	seffect *effectptr;
 	effectptr = modctx->seffects + seffectnum;
 
-	effectptr->active = 1;
-	effectptr->sampdata = modctx->sampledata[sampnum];
-	effectptr->length = GET_BGI_W(modctx->song.samples[sampnum].length) * 2;
-	effectptr->sampnum = sampnum;
-	effectptr->samppos = 0;
-	effectptr->period = period;
-	effectptr->volume = volume;
+	if (volume >= 0)
+		effectptr->volume = volume;
+	if (period)
+	{
+		effectptr->period = period;
+		effectptr->step = (modctx->sampleticksconst << 10) / period;
+	}
+}
+
+// MMBasic: an effect stopped (-1: all of them)
+void hxcmod_stopsoundeffect(modcontext *modctx, int seffectnum)
+{
+	int i;
+	for (i = 0; i < NUMMAXSEFFECTS; i++)
+		if (seffectnum < 0 || i == seffectnum)
+			modctx->seffects[i].active = 0;
 }
 
 int hxcmod_effectplaying(modcontext *modctx, unsigned short seffectnum)
@@ -1533,13 +1579,16 @@ int hxcmod_fillbuffer(modcontext *modctx, msample *outbuffer, unsigned long nbsa
 				{
 					if (seffectptr->active)
 					{
-						seffectptr->samppos += ((modctx->sampleticksconst << 10) / seffectptr->period);
+						seffectptr->samppos += seffectptr->step;
 
 						if ((seffectptr->samppos >> 10) >= seffectptr->length)
 						{
-							seffectptr->active = 0;
+							if (seffectptr->loop) // MMBasic: LOOP, back to the repeat point
+								seffectptr->samppos = (seffectptr->loopstart << 10) + (seffectptr->samppos - (seffectptr->length << 10)) % ((seffectptr->length - seffectptr->loopstart) << 10);
+							else
+								seffectptr->active = 0;
 						}
-						else
+						if (seffectptr->active)
 						{
 							k = seffectptr->samppos >> 10;
 

@@ -63,8 +63,14 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
 #ifdef rp2350
 #include "dr_mp3.h"
 #define MOD_BUFFER_SIZE WAV_BUFFER_SIZE
+/* The frames in each refill of a MOD file's two buffers: 512, as on the RP2040 (and the CMM2), so PLAY MODSAMPLE is
+   heard one to two buffers after the command, 12 to 23 ms at 44100, not 46 to 93 ms (they were 2048). A statement
+   longer than a buffer that does not run the routine checks makes the music repeat a piece. Bluetooth keeps 2048:
+   its bursts are up to 1024 frames (below). */
+#define MOD_FRAMES (AUDIO_BLUETOOTH ? MOD_BUFFER_SIZE / 4 : 512)
 #else
 #define MOD_BUFFER_SIZE (WAV_BUFFER_SIZE / 4)
+#define MOD_FRAMES (MOD_BUFFER_SIZE / 4)
 #endif
 /* Bluetooth output takes samples in bursts of up to 1024 frames (BTAudio.c's
    encoder tick) where the PWM interrupt takes one at a time, so each swing
@@ -1586,6 +1592,77 @@ static int OptionLetter(unsigned char *p, const char *letter)
 {
 	unsigned char *tp = checkstring(p, (unsigned char *)letter);
 	return tp != NULL && *tp == 0;
+}
+
+// PLAY MODSAMPLE, as the CMM2's (76c2869):
+//   PLAY MODSAMPLE sampleno, channel [, volume] [, samplerate] [, LOOP]    a sample of the MOD file playing over it
+//   PLAY MODSAMPLE CHANGE channel [, volume] [, samplerate]               a playing one's volume or rate, where it is
+//   PLAY MODSAMPLE STOP [channel]                                         one channel stopped, or all four
+// LOOP may end the list after any argument from the channel on. The rate is the MOD player's period, 3579545 / rate.
+static void MIPS16 __attribute__((noinline)) ModSampleCommand(unsigned char *tp)
+{
+	unsigned char *q;
+	if ((q = checkstring(tp, (unsigned char *)"STOP")))
+	{
+		int ch = -1;
+		if (*q)
+			ch = getint(q, 1, NUMMAXSEFFECTS) - 1;
+		if (CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_PAUSE_MOD)
+			hxcmod_stopsoundeffect(mcontext, ch);
+		return; // (no MOD file: nothing is playing, and no error)
+	}
+	if ((q = checkstring(tp, (unsigned char *)"CHANGE")))
+	{
+		getcsargs(&q, 5);
+		if (!(argc == 1 || argc == 3 || argc == 5))
+			StandardError(2);
+		if (!(CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_PAUSE_MOD))
+			error("Samples play over MOD file");
+		int ch = getint(argv[0], 1, NUMMAXSEFFECTS) - 1, volume = -1;
+		unsigned int period = 0;
+		if (argc >= 3 && *argv[2])
+		{
+			int vol = getint(argv[2], 0, 64);
+			volume = vol ? vol - 1 : 0; // (as the start's: 1 to 64 is 0 to 63)
+		}
+		if (argc == 5 && *argv[4])
+			period = 3579545 / getint(argv[4], 150, 500000);
+		hxcmod_changesoundeffect(mcontext, ch, volume, period); // (a channel that has ended: no matter)
+		return;
+	}
+	unsigned short sampnum, seffectnum;
+	unsigned char volume;
+	unsigned int samprate;
+	int loop = 0;
+	getcsargs(&tp, 9);
+	if (!(argc == 3 || argc == 5 || argc == 7 || argc == 9))
+		StandardError(2);
+	if (argc >= 5 && OptionLetter(argv[argc - 1], "LOOP"))
+	{
+		loop = 1;
+		argc -= 2;
+	}
+	if (argc > 7)
+		StandardError(2);
+
+	if (!(CurrentlyPlaying == P_MOD))
+		error("Samples play over MOD file");
+
+	sampnum = getint(argv[0], 1, 31) - 1; // (a MOD file's 31 samples: 32 read past the player's tables)
+
+	seffectnum = getint(argv[2], 1, NUMMAXSEFFECTS) - 1;
+
+	volume = 63;
+	if (argc >= 5 && *argv[4])
+	{
+		int vol = getint(argv[4], 0, 64);
+		volume = vol ? vol - 1 : 0; // 0 to 63 for hxcmod; volume is unsigned, so not 0 - 1
+	}
+	samprate = 16000;
+	if (argc == 7 && *argv[6])
+		samprate = getint(argv[6], 150, 500000);
+
+	hxcmod_playsoundeffect(mcontext, sampnum, seffectnum, volume, 3579545 / samprate, loop);
 }
 
 void MIPS16 cmd_play(void)
@@ -3189,31 +3266,7 @@ void MIPS16 cmd_play(void)
 	}
 	if ((tp = checkstring(cmdline, (unsigned char *)"MODSAMPLE")))
 	{
-		unsigned short sampnum, seffectnum;
-		unsigned char volume;
-		unsigned int samprate, period;
-		getcsargs(&tp, 5); // this MUST be the first executable line in the function
-		if (!(argc == 5 || argc == 3))
-			StandardError(2);
-
-		if (!(CurrentlyPlaying == P_MOD))
-			error("Samples play over MOD file");
-
-		sampnum = getint(argv[0], 1, 32) - 1;
-
-		seffectnum = getint(argv[2], 1, NUMMAXSEFFECTS) - 1;
-
-		volume = 63;
-		if (argc >= 5 && *argv[4])
-		{
-			int vol = getint(argv[4], 0, 64);
-			volume = vol ? vol - 1 : 0; // 0 to 63 for hxcmod; volume is unsigned, so not 0 - 1
-		}
-		samprate = 16000;
-
-		period = 3579545 / samprate;
-
-		hxcmod_playsoundeffect(mcontext, sampnum, seffectnum, volume, period);
+		ModSampleCommand(tp); // (above)
 		return;
 	}
 	StandardError(36);
@@ -3656,10 +3709,10 @@ void checkWAVinput(void)
 			{
 				if (swingbuf == 2)
 				{
-					if (hxcmod_fillbuffer(mcontext, (msample *)sbuff1, MOD_BUFFER_SIZE / 4, NULL, noloop))
+					if (hxcmod_fillbuffer(mcontext, (msample *)sbuff1, MOD_FRAMES, NULL, noloop))
 						playreadcomplete = 1;
-					wav_filesize = MOD_BUFFER_SIZE / 2;
-					bcount[1] = MOD_BUFFER_SIZE / 2;
+					wav_filesize = MOD_FRAMES * 2;
+					bcount[1] = MOD_FRAMES * 2;
 					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff1, (int16_t *)sbuff1, bcount[1]);
 					else
@@ -3667,10 +3720,10 @@ void checkWAVinput(void)
 				}
 				else
 				{
-					if (hxcmod_fillbuffer(mcontext, (msample *)sbuff2, MOD_BUFFER_SIZE / 4, NULL, noloop))
+					if (hxcmod_fillbuffer(mcontext, (msample *)sbuff2, MOD_FRAMES, NULL, noloop))
 						playreadcomplete = 1;
-					wav_filesize = MOD_BUFFER_SIZE / 2;
-					bcount[2] = MOD_BUFFER_SIZE / 2;
+					wav_filesize = MOD_FRAMES * 2;
+					bcount[2] = MOD_FRAMES * 2;
 					if (AUDIO_SIGNED16)
 						i2sconvert(g_buff2, (int16_t *)sbuff2, bcount[2]);
 					else
