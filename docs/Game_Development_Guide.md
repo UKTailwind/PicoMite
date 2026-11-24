@@ -1360,18 +1360,22 @@ PLAY MODFILE "chiptune.mod"        ' Amiga MOD tracker files!
 
 Amiga MOD tracker files are an excellent choice for game background music — they are compact, loop naturally, and have an authentic retro sound. MMBasic plays them via `PLAY MODFILE`, which uses 4 tracker channels to mix the music in real time.
 
-The key advantage for game developers is `PLAY MODSAMPLE`, which lets you trigger individual samples *from the loaded MOD file* as one-shot sound effects **while the music continues playing**. MOD files contain up to 31 embedded instrument samples (explosions, bleeps, thuds, etc.), and you can play any of them on demand over the top of the background music using up to 4 dedicated sound-effect channels.
+The key advantage for game developers is `PLAY MODSAMPLE`, which lets you play individual samples *from the loaded MOD file* as sound effects **while the music continues playing**. MOD files contain up to 31 embedded instrument samples (explosions, bleeps, thuds, engines, etc.), and you can play any of them on demand over the top of the background music using up to 4 dedicated sound-effect channels. A sample can be a one-shot effect, or a continuous sound — an engine, the wind — whose pitch and volume follow the game.
 
 **Syntax:**
 ```basic
-PLAY MODSAMPLE sample_number, channel [, volume]
+PLAY MODSAMPLE sample_number, channel [, volume] [, samplerate] [, LOOP]
+PLAY MODSAMPLE CHANGE channel [, volume] [, samplerate]
+PLAY MODSAMPLE STOP [channel]
 ```
 
 | Parameter | Description |
 |-----------|-------------|
 | `sample_number` | Sample number within the MOD file (1–31) |
 | `channel` | Sound effect channel (1–4) |
-| `volume` | Optional playback volume (0–64, default 63) |
+| `volume` | Optional playback volume (0–64, default 64) |
+| `samplerate` | Optional playback rate (150–500000, default 16000). It sets the pitch and the length together: twice the rate is an octave higher and half as long |
+| `LOOP` | Optional: the sample plays until it is stopped, round its own loop in the MOD file (or the whole sample over and over if it has none). It can follow any argument from `channel` on |
 
 This means you can design your MOD file to serve double duty: the tracker patterns provide background music, while unused or dedicated samples in the same file provide your entire sound-effect library. No additional WAV files, no extra memory, no audio channel conflicts.
 
@@ -1386,11 +1390,57 @@ PLAY MODSAMPLE 8, 2, 40        ' Trigger sample 8 (e.g., coin) on channel 2 at v
 PLAY MODSAMPLE 12, 3           ' Trigger sample 12 (e.g., explosion) on channel 3
 ```
 
+#### Continuous Sounds: LOOP, CHANGE and STOP
+
+With `LOOP` a sample keeps playing until you stop it, which suits engines, wind, rain or a tyre's squeal. `PLAY MODSAMPLE CHANGE` then changes its volume or rate *where it is*, without starting it again, so the sound can follow the game every frame. An argument that is left out or empty is kept, so `PLAY MODSAMPLE CHANGE 1, , r` changes just the rate. `PLAY MODSAMPLE STOP` stops one channel, or all four; the music carries on.
+
+```basic
+' A car engine whose note follows its revs (sample 10 is a looped engine sound)
+PLAY MODSAMPLE 10, 1, 40, 8000, LOOP        ' ticking over
+
+DO
+  ' ... game logic sets revs% from 0 to 1000 ...
+  PLAY MODSAMPLE CHANGE 1, 30 + revs% \ 30, 8000 + revs% * 16
+  ' ... draw the frame ...
+LOOP UNTIL crashed%
+
+PLAY MODSAMPLE STOP 1                       ' engine off
+```
+
+Because the rate sets the speed at which the sample is played, a higher rate raises the pitch *and* plays the sample faster — exactly what an engine does as it revs. A change is heard one or two of the MOD file's buffers after the command: within 12–23 ms on most builds, and longer with Bluetooth audio or a VS1053, which are given bigger buffers.
+
+#### The Doppler Effect
+
+A car, train or spaceship that goes past sounds higher as it approaches and lower as it moves away. For a source moving at `away` m/s directly away from you (negative while it approaches), the pitch you hear is the source's own multiplied by `c / (c + away)`, where `c` is the speed of sound, 343 m/s. Its volume falls with its distance. Both can be applied every frame with `PLAY MODSAMPLE CHANGE`:
+
+```basic
+' A car passes 10 m away at v m/s, from 4 s before its closest point to 4 s after it
+CONST sound = 343, closest = 10, rate = 16000
+
+SUB CarPasses s, v
+  LOCAL t, x, d, away
+  PLAY MODSAMPLE s, 1, 0, rate, LOOP        ' start it silent
+  FOR t = -4 TO 4 STEP 0.02
+    x = v * t : d = SQR(x * x + closest * closest)
+    away = v * x / d                        ' its speed away from us
+    PLAY MODSAMPLE CHANGE 1, MIN(64, 640 / d), rate * sound / (sound + away)
+    PAUSE 20
+  NEXT
+  PLAY MODSAMPLE STOP 1
+END SUB
+```
+
+`CarPasses 10, 40` plays sample 10 going by at 40 m/s (144 km/h): its pitch starts about 13% high, falls through its own pitch as it passes, and ends about 10% low, while its volume rises to full at the closest point and dies away. In a game, work out `away` and `d` from the positions of the object and the player each frame instead of from `t`. A looped sample with a steady pitch — an engine or a horn — makes the effect easiest to hear. The samples of a MOD file are mixed equally into both speakers, so they cannot be panned from side to side.
+
 **Tips for using MODSAMPLE in games:**
 - Compose your MOD file in a tracker (e.g., OpenMPT, MilkyTracker) with samples designated for sound effects — put them in higher sample slots (e.g., 17–31) so they are easy to identify
-- Use different effect channels for different sound categories (e.g., channel 1 for weapons, channel 2 for pickups, channel 3 for UI) so that rapid-fire sounds replace only their own category
+- Give a continuous sound its own loop in the tracker (or loop the whole sample), with a whole number of cycles in the loop so that it repeats without a click
+- A MOD file stores no rate for its samples. 16000 is close to the tracker note C-3 (16574): use 16574 to hear a sample at its tracker pitch, and 8287 for C-2
+- Use different effect channels for different sound categories (e.g., channel 1 for the engine, channel 2 for weapons, channel 3 for pickups) so that rapid-fire sounds replace only their own category
 - The sound effects mix with the MOD music automatically — no additional code for mixing is needed
+- An effect at volume 64 is as loud as one of the music's four channels at full volume. To make effects stand out, keep the music quieter: lower its samples' levels in the tracker
 - If you trigger a new sample on a channel that is already playing an effect, the new sample replaces the previous one on that channel
+- The MOD file is mixed 512 samples at a time (about 12 ms), so that effects are heard quickly. A single command that takes longer than that to run (clearing a large screen, for example) can make the music repeat a short piece
 
 ### Wavetable Synthesis with ADSR (RP2350)
 
