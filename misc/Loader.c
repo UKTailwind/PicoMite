@@ -1768,7 +1768,7 @@ void LoaderRun(char *fname, char *args)
     if (LoaderActive)
         error("A loadable program is running");
     if (!PSRAMsize)
-        error("Needs PSRAM");
+        error("Loadable programs need PSRAM, enabled with OPTION PSRAM PIN");
     CloseAudio(1);                                                  // (its refills would stop while the program runs)
     strncpy(name, fname, sizeof(name) - 1);
     name[sizeof(name) - 1] = 0;

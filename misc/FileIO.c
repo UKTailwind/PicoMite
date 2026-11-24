@@ -4827,6 +4827,16 @@ int FileLoadProgram(unsigned char *fname, bool chain, bool crunch)
     fnbr = FindFreeFileNbr();
     p = (char *)getFstring(fname);
     AppendDefaultExtension(p, ".bas");
+    { // a loadable program (a name ending .APP, the loader's rule) is code: read as BASIC it was "Line is too long"
+        size_t n = strlen(p);
+        if (n > 4 && p[n - 4] == '.' && mytoupper(p[n - 3]) == 'A' && mytoupper(p[n - 2]) == 'P' &&
+            mytoupper(p[n - 1]) == 'P')
+#ifdef LOADER
+            error("Start a loadable program with RUN"); // (RUN takes it to the loader before this)
+#else
+            error("This firmware cannot run loadable programs (.app)");
+#endif
+    }
     char q[FF_MAX_LFN] = {0};
     FatFSFileSystemSave = FatFSFileSystem;
     getfullfilename(p, q);

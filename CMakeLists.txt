@@ -262,6 +262,7 @@ set(RAYCASTER_VARIANTS
 # others once their flash margin has been measured (the plan's Phase 11).
 set(LOADER_VARIANTS
 	PC3
+	HDMIUSB
 )
 
 set(VGA_PIO_VARIANTS

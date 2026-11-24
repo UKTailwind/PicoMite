@@ -191,7 +191,8 @@ extern "C"
       BLIT went 4.1 KB over. */
    /* +16 KB (2026-11-07): the USB host's bulk-IN window and interrupt polling
       (tinyusb-patches/hcd_rp2040.patch) went 292 bytes over. */
-#define FLASH_TARGET_OFFSET (1152 * 1024)
+   /* +16 KB (2026-11-24): the loader (RUN "name.app", USER modules) went 5.1 KB over. */
+#define FLASH_TARGET_OFFSET (1168 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
