@@ -1,3 +1,4 @@
 sqlite/
 out/
 __pycache__/
+sample/computers.db
