@@ -11600,7 +11600,7 @@ is heard quickly. A single command that takes longer than this to run (for
 example, clearing a large screen) can cause the music to repeat a short piece.
 
 ~PLAY MODSAMPLE
-PLAY MODSAMPLE sampleno, channel [,volume] [,samplerate] [,LOOP]
+PLAY MODSAMPLE sampleno, channel [,volume] [,samplerate] [,pan] [,LOOP]
 
 Plays a specific sample in the mod file on the channel specified. This command
 can only be used when there is a mod file already playing and allows sound
@@ -11613,24 +11613,31 @@ The volume is optional and can be between 0 and 64 (the default is 64).
 between 150 and 500000 (the default is 16000). It changes the pitch and the
 length together: doubling the rate raises the pitch by an octave and halves
 the length.
+'pan' is optional and places the sample between the speakers: -100 is the left
+speaker only, 100 is the right speaker only and 0 (the default) is both
+speakers at the full volume. Between these the far speaker is turned down in
+proportion, so -50 plays the sample at the full volume on the left and at half
+volume on the right.
 If LOOP is specified the sample plays until it is stopped with PLAY MODSAMPLE
 STOP: to the end of the loop that the sample has in the mod file and back to
 the start of the loop, as the MOD player plays it, or the whole sample over
 and over if it has no loop. LOOP can follow any of the arguments from
 'channel' on, so PLAY MODSAMPLE 5, 1, LOOP plays sample 5 on channel 1 at full
 volume, looped. This is intended for continuous sounds such as an engine or
-the wind. PLAY MODSAMPLE CHANGE changes its volume and rate while it plays.
+the wind. PLAY MODSAMPLE CHANGE changes its volume, rate and pan while it
+plays.
 
 ~PLAY MODSAMPLE CHANGE
-PLAY MODSAMPLE CHANGE channel [,volume] [,samplerate]
+PLAY MODSAMPLE CHANGE channel [,volume] [,samplerate] [,pan]
 
-Changes the volume or the rate (or both) of the sample that is playing on
-'channel' (1 to 4) without starting it again, so that the sound of an engine
-can follow its revs or a passing car can give a Doppler effect. An argument
-that is omitted or left empty is unchanged, so PLAY MODSAMPLE CHANGE 1, ,
-20000 changes just the rate. 'volume' and 'samplerate' are as for PLAY
-MODSAMPLE. A channel that is not playing is left alone. This command can only
-be used when there is a mod file playing (or paused).
+Changes the volume, the rate or the pan (or any of them) of the sample that is
+playing on 'channel' (1 to 4) without starting it again, so that the sound of
+an engine can follow its revs or a passing car can give a Doppler effect and
+cross from one speaker to the other. An argument that is omitted or left empty
+is unchanged, so PLAY MODSAMPLE CHANGE 1, , 20000 changes just the rate and
+PLAY MODSAMPLE CHANGE 1, , , 50 just the pan. 'volume', 'samplerate' and 'pan'
+are as for PLAY MODSAMPLE. A channel that is not playing is left alone. This
+command can only be used when there is a mod file playing (or paused).
 
 ~PLAY MODSAMPLE STOP
 PLAY MODSAMPLE STOP [channel]

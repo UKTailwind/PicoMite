@@ -4067,10 +4067,10 @@ Described with the rest of its family:  HELP PLAY
 PLAY MODFILE file$ [,interrupt]
 
 ~PLAY MODSAMPLE
-PLAY MODSAMPLE sampleno, channel [,volume] [,samplerate] [,LOOP]
+PLAY MODSAMPLE sampleno, channel [,volume] [,samplerate] [,pan] [,LOOP]
 
 ~PLAY MODSAMPLE CHANGE
-PLAY MODSAMPLE CHANGE channel [,volume] [,samplerate]
+PLAY MODSAMPLE CHANGE channel [,volume] [,samplerate] [,pan]
 
 ~PLAY MODSAMPLE STOP
 PLAY MODSAMPLE STOP [channel]

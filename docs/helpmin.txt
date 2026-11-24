@@ -6930,20 +6930,21 @@ Will play a MOD file on the sound output. 'file$' is the MOD file to play (the
 extension of .mod will be appended if missing).
 
 ~PLAY MODSAMPLE
-PLAY MODSAMPLE sampleno, channel [,volume] [,samplerate] [,LOOP]
+PLAY MODSAMPLE sampleno, channel [,volume] [,samplerate] [,pan] [,LOOP]
 
 Plays a specific sample in the mod file on the channel specified. This command
 can only be used when there is a mod file already playing and allows sound
 effects to be output whilst the background music is still playing.
 
 ~PLAY MODSAMPLE CHANGE
-PLAY MODSAMPLE CHANGE channel [,volume] [,samplerate]
+PLAY MODSAMPLE CHANGE channel [,volume] [,samplerate] [,pan]
 
-Changes the volume or the rate (or both) of the sample that is playing on
-'channel' (1 to 4) without starting it again, so that the sound of an engine
-can follow its revs or a passing car can give a Doppler effect. An argument
-that is omitted or left empty is unchanged, so PLAY MODSAMPLE CHANGE 1, ,
-20000 changes just the rate.
+Changes the volume, the rate or the pan (or any of them) of the sample that is
+playing on 'channel' (1 to 4) without starting it again, so that the sound of
+an engine can follow its revs or a passing car can give a Doppler effect and
+cross from one speaker to the other. An argument that is omitted or left empty
+is unchanged, so PLAY MODSAMPLE CHANGE 1, , 20000 changes just the rate and
+PLAY MODSAMPLE CHANGE 1, , , 50 just the pan.
 
 ~PLAY MODSAMPLE STOP
 PLAY MODSAMPLE STOP [channel]
