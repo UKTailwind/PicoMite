@@ -216,13 +216,21 @@ err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err
                 }
                 else
                 {
-                        OptionErrorSkip = 1;
                         if (state->buffer_recv[pcb] != NULL)
                         {
                                 FreeMemorySafe((void **)&state->buffer_recv[pcb]);
                                 //                                MMPrintString("Internal error in tcp_server_recv - Attempting recovery");
                         }
-                        state->buffer_recv[pcb] = GetMemory(p->tot_len);
+                        /* GetMemoryNull, not GetMemory: an error() here would longjmp out of lwIP. (This used to set
+                           OptionErrorSkip = 1 first, which also made the program skip every later error of its own
+                           when ON ERROR SKIP had not been used since reset, and could longjmp to a stale ErrNext.) */
+                        state->buffer_recv[pcb] = GetMemoryNull(p->tot_len);
+                        if (state->buffer_recv[pcb] == NULL)
+                        { // no room for it now: refuse the data, which lwIP keeps and offers again (refused_data)
+                                state->recv_len[pcb] = 0;
+                                state->inttrig[pcb] = 0;
+                                return ERR_MEM;
+                        }
                         state->inttrig[pcb] = 1;
                         // DEBUG_printf("Tcp_HTTP_recv on pcb %d / %d\r\n",pcb, p->tot_len);
                         state->recv_len[pcb] = pbuf_copy_partial(p, state->buffer_recv[pcb], p->tot_len, 0);
