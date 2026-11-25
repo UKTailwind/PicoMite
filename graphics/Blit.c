@@ -1525,27 +1525,35 @@ void cmd_blit(void)
                 }
             }
 
-            int64_t y_step = ((int64_t)sh << 16) / dh;
-            int64_t y_fp = (((int64_t)(start_y - dy) * sh) << 16) / dh;
+            /* Pixel k of the destination rectangle (0 to dw-1 across; likewise down) shows pixel k * sw / dw of the
+               source rectangle, rounded down. The place is kept exactly, as a whole part and a remainder out of dw
+               that carries: a 16.16 step is rounded down itself, which put every block's edge a pixel late whenever
+               sw / dw (or dw / sw) was not a power of two (2026-11-25). */
+            unsigned int x_whole = sw / dw, x_rem = sw % dw, y_whole = sh / dh, y_rem = sh % dh;
+            int64_t t = (int64_t)(start_y - dy) * sh;
+            int src_y = (int)(t / dh);
+            unsigned int y_part = (unsigned int)(t % dh);
+            t = (int64_t)(start_x - dx) * sw;
+            int src_x0 = (int)(t / dw);
+            unsigned int x_part0 = (unsigned int)(t % dw);
 
-            for (int y = start_y; y < end_y; y++, y_fp += y_step)
+            for (int y = start_y; y < end_y; y++, src_y += y_whole, y_part += y_rem)
             {
-                int src_y = (int)(y_fp >> 16);
-                if (src_y < 0)
-                    src_y = 0;
-                else if (src_y >= sh)
-                    src_y = sh - 1;
-
-                int64_t x_step = ((int64_t)sw << 16) / dw;
-                int64_t x_fp = (((int64_t)(start_x - dx) * sw) << 16) / dw;
-
-                for (int x = start_x; x < end_x; x++, x_fp += x_step)
+                if (y_part >= (unsigned int)dh)
                 {
-                    int src_x = (int)(x_fp >> 16);
-                    if (src_x < 0)
-                        src_x = 0;
-                    else if (src_x >= sw)
-                        src_x = sw - 1;
+                    y_part -= dh;
+                    src_y++;
+                }
+                int src_x = src_x0;
+                unsigned int x_part = x_part0;
+
+                for (int x = start_x; x < end_x; x++, src_x += x_whole, x_part += x_rem)
+                {
+                    if (x_part >= (unsigned int)dw)
+                    {
+                        x_part -= dw;
+                        src_x++;
+                    }
 
                     uint8_t src_byte;
                     uint8_t pix;
