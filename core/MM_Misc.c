@@ -2360,6 +2360,10 @@ void MIPS16 cmd_library(void)
         }
         if (nfiles == 0)
             SyntaxError();
+        /* The restart below clears the runtime, and with it the variables a
+           chain kept (see ChainedProgram in Commands.c). */
+        if (savedline && ChainedProgram)
+            error("Invalid in a chained program");
         (void)wantram; /* only read on the RP2350, where the RAM slot exists */
         /* Must be the program's first statement.  Counting variables cannot
            tell us that: by the time the program's first line runs, the

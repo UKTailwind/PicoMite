@@ -1665,6 +1665,9 @@ must define the same TYPEs in the same order, as a variable of a structure
 type kept across the CHAIN refers to its type by its number.  The font and
 colours stay as they are, as with FLASH CHAIN and RAM CHAIN.  If the font was
 defined in the first program and not in the next the default font is used.
+A program started by CHAIN, FLASH CHAIN or RAM CHAIN cannot use LIBRARY LOAD,
+as loading a library clears the variables that the chain has preserved.  The
+command gives the error "Invalid in a chained program".
 
 ~CHDIR
 CHDIR dir$

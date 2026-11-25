@@ -55,6 +55,7 @@ extern struct s_forstack g_forstack[MAXFORLOOPS + 1];
 extern int g_forindex;
 unsigned char *ForFindNext(unsigned char *p, unsigned char *vname, int vlen, unsigned char *errmsg);
 extern unsigned char cmdlinebuff[STRINGSIZE];
+extern bool ChainedProgram; // the running program was started by CHAIN, RAM CHAIN or FLASH CHAIN
 #ifdef MMBASIC_FM
 extern int fm_program_launched_from_fm;
 extern char fm_relaunch_status[STRINGSIZE];

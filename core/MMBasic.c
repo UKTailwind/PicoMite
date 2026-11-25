@@ -8004,6 +8004,7 @@ void MIPS16 ClearRuntime(bool all)
       // (not on CHAIN, whose saved variables were placed with the split in force)
         maxlocalvars = MAXLOCALVARS;
         maxglobalvars = MAXGLOBALVARS;
+        ChainedProgram = false; // a new program, not a chained one (see Commands.c)
     }
     ClearVars(0, true);
 #if !(defined(PICOMITEWEB) || defined(PICOMITEMIN))

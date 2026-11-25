@@ -1197,6 +1197,7 @@ void MIPS16 cmd_psram(void)
             PrintPreprogramError();
             return;
         }
+        ChainedProgram = true; /* LIBRARY LOAD refuses to run in it (Commands.c) */
         nextstmt = (unsigned char *)ProgMemory;
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
@@ -1830,6 +1831,7 @@ void MIPS16 cmd_flash(void)
             PrintPreprogramError();
             return;
         }
+        ChainedProgram = true; /* LIBRARY LOAD refuses to run in it (Commands.c) */
         nextstmt = (unsigned char *)ProgMemory;
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))

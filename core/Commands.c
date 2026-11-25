@@ -2274,6 +2274,11 @@ void ListProgramPaged(unsigned char *prog)
 #include "Loader.h"
 #endif
 bool ProgramRunStarted = false; // set where do_run starts the program; the prompt runs MM.END when it runs off its end
+/* Set where CHAIN, RAM CHAIN and FLASH CHAIN start the next program, cleared by
+   ClearRuntime(true), which every other way of starting one goes through.
+   LIBRARY LOAD refuses to run in a chained program: its restart clears the
+   runtime, and with it the variables the chain kept. */
+bool ChainedProgram = false;
 void MIPS16 do_run(unsigned char *cmdline, bool CMM2mode)
 {
 	extern void ResetPerfCounters(void);
@@ -4691,6 +4696,7 @@ void MIPS16 do_chain(unsigned char *cmdline)
 	if (mouse0 == false && Option.MOUSE_CLOCK)
 		initMouse0(0); // see if there is a mouse to initialise
 #endif
+	ChainedProgram = true;
 	nextstmt = ProgMemory;
 }
 void cmd_chain(void)
