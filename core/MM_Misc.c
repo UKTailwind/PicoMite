@@ -1949,6 +1949,18 @@ void cmd_ireturn(void)
 /* How many source files one LIBRARY LOAD may concatenate.  Only bounds the
    local array of argument pointers; the real ceiling is the library slot. */
 #define MAXLIBFILES 8
+#ifndef PICOMITEMIN
+/* LIBRARY LOAD's restart clears the runtime as RUN does, but RUN has already
+   set MM.CMDLINE$ by then and ClearRuntime empties it: keep it across, or a
+   program that starts by loading its library never sees its arguments. */
+static void LibraryRestartClear(void)
+{
+    unsigned char keep[STRINGSIZE];
+    memcpy(keep, cmdlinebuff, sizeof(keep));
+    ClearRuntime(true);
+    memcpy(cmdlinebuff, keep, sizeof(keep));
+}
+#endif
 void MIPS16 cmd_library(void)
 {
     unsigned char *tp;
@@ -2425,7 +2437,7 @@ void MIPS16 cmd_library(void)
             }
             CurrentLinePtr = savedline;
             if (savedline)
-                ClearRuntime(true); /* as RUN does - and this releases any RAM library */
+                LibraryRestartClear(); /* as RUN does - and this releases any RAM library */
             RamLibMemory = rambase;
             LibMemory = rambase;
             if (PrepareProgram(true))
@@ -2480,8 +2492,8 @@ void MIPS16 cmd_library(void)
                loaded then its declarations are still there and the new ones
                would collide.  The guard above has already established that the
                program itself has declared nothing, so there is nothing of the
-               program's to lose. */
-            ClearRuntime(true);
+               program's to lose - except MM.CMDLINE$, which RUN has set. */
+            LibraryRestartClear();
         }
         if (PrepareProgram(true))
         {
