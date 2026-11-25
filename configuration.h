@@ -193,7 +193,8 @@ extern "C"
    /* +16 KB (2026-11-07): the USB host's bulk-IN window and interrupt polling
       (tinyusb-patches/hcd_rp2040.patch) went 292 bytes over. */
    /* +16 KB (2026-11-24): the loader (RUN "name.app", USER modules) went 5.1 KB over. */
-#define FLASH_TARGET_OFFSET (1168 * 1024)
+   /* +16 KB (2026-11-25, Peter): FRAMEBUFFER AFFINE and SPAN (Warp.c, 3.2 KB) with 1.8 KB left. */
+#define FLASH_TARGET_OFFSET (1184 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -273,7 +274,8 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 1.4 KB over 848 KB. */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 2.2 KB over 864 KB. */
-#define FLASH_TARGET_OFFSET (880 * 1024)
+   /* +16 KB (2026-11-25, Peter): FRAMEBUFFER AFFINE and SPAN (Warp.c, 3.3 KB) with 0.5 KB left. */
+#define FLASH_TARGET_OFFSET (896 * 1024)
 #define MagicKey 0x561D3FB6
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -

@@ -12,6 +12,16 @@ sy being y or from rows%(), and (x, y + off) in WARPV: positive moves right, and
 edge the source wraps round; edge -1 leaves the pixels nothing moves onto, and a colour fills them. A source pixel of
 the transparent value is not written.
 
+FRAMEBUFFER SPAN and AFFINE (docs/FRAMEBUFFER_AFFINE_SPAN_Design.md, 25 Nov 2026) are here too, on the same pieces.
+
+    FRAMEBUFFER SPAN from, to, left%(), right%() [, step] [, first] [, fill] [, transparent] [, outside]
+    FRAMEBUFFER AFFINE from, to, u%(), v%(), du%(), dv%() [, step] [, first] [, left] [, width] [, edge] [, transparent]
+
+SPAN copies, on each row of band b, the columns left(b) to right(b) (or, with outside, the others); the pixels it does
+not copy are left, or get the fill colour. AFFINE reads each row from the source along a straight line: column i of row
+j of band b shows the source's pixel at (u - j*dv + i*du, v + j*du + i*dv) / 65536, rounded down, so one element
+turns and scales a whole picture and an element a row makes a floor in perspective. Its edge and transparent are WARPH's.
+
 VGA and HDMI builds only, MODE 2, 3, 4 and 5 (MODE 1 is refused). The core below (WARP_HOST_TEST) is plain C so that
 it can be checked on a PC against a pixel-by-pixel model of the design.
 ***********************************************************************************************************************/
@@ -238,11 +248,24 @@ WARP_INLINE void warp_v1(const warp_t *a, int bpp)
 
 static void warp_fill(uint8_t *row, int x, int w, int bpp, int c)
 {
-    if (bpp == 8 && w > 0)
+    if (w <= 0)
+        return;
+    if (bpp == 8)
         memset(row + x, c, w);
+    else if (bpp == 4) // whole bytes between an odd start and an odd end (SPAN fills most of a screen)
+    {
+        if (x & 1)
+        {
+            warp_put(row, x, 4, c);
+            x++, w--;
+        }
+        memset(row + (x >> 1), c * 0x11, w >> 1);
+        if (w & 1)
+            warp_put(row, x + w - 1, 4, c);
+    }
     else
         for (int i = 0; i < w; i++)
-            warp_put(row, x + i, bpp, c);
+            ((uint16_t *)row)[x + i] = (uint16_t)c;
 }
 
 // one row of WARPH: the destination's pixel x is the source's x - o
@@ -333,6 +356,272 @@ void warp_bands(int *boff, int *brow, const int64_t *off, const int64_t *rows, i
     }
 }
 
+/* ---------------------------------------------------------------------------------------------------------------------
+FRAMEBUFFER SPAN: band b is the step rows from first + b * step (those off the buffer are not drawn), and its span is
+the columns lf[b] to rt[b], cut to the row and empty when lf > rt. The span's pixels (outside: the row's others) are
+copied from the same place in the source, those of the transparent value excepted; the row's other pixels get the fill
+colour, if there is one. The source may be the destination: nothing is copied then, and only the fill is drawn.
+--------------------------------------------------------------------------------------------------------------------- */
+typedef struct
+{
+    uint8_t *dst;
+    const uint8_t *src;
+    int w, h, stride, bpp;
+    int n, step, first;       // the bands
+    const int64_t *lf, *rt;   // each band's first and last column
+    int fill, trans, outside; // -1 or a pixel value; -1 or a pixel value; 0 or 1
+} span_t;
+
+void span_run(const span_t *a)
+{
+    int w = a->w, bpp = a->bpp;
+    for (int b = 0; b < a->n; b++)
+    {
+        int64_t y0 = a->first + (int64_t)b * a->step, y1 = y0 + a->step;
+        if (y0 >= a->h)
+            break;
+        if (y1 <= 0)
+            continue;
+        if (y0 < 0)
+            y0 = 0;
+        if (y1 > a->h)
+            y1 = a->h;
+        int64_t l = a->lf[b], r = a->rt[b];
+        int lo = l < 0 ? 0 : l > w ? w : (int)l, hi = r < 0 ? 0 : r >= w ? w : (int)r + 1; // the span is lo to hi-1
+        if (hi < lo)
+            hi = lo;
+        for (int y = (int)y0; y < (int)y1; y++)
+        {
+            uint8_t *d = a->dst + y * a->stride;
+            const uint8_t *s = a->src + y * a->stride;
+            if (!a->outside)
+            {
+                if (s != d)
+                    warp_seg(d, lo, s, lo, hi - lo, bpp, a->trans);
+                if (a->fill >= 0)
+                {
+                    warp_fill(d, 0, lo, bpp, a->fill);
+                    warp_fill(d, hi, w - hi, bpp, a->fill);
+                }
+            }
+            else
+            {
+                if (s != d)
+                {
+                    warp_seg(d, 0, s, 0, lo, bpp, a->trans);
+                    warp_seg(d, hi, s, hi, w - hi, bpp, a->trans);
+                }
+                if (a->fill >= 0)
+                    warp_fill(d, lo, hi - lo, bpp, a->fill);
+            }
+        }
+    }
+}
+
+/* ---------------------------------------------------------------------------------------------------------------------
+FRAMEBUFFER AFFINE: band b is the step rows from first + b * step, and the window is the width columns from left; what
+is off the buffer is not drawn. Column i of row j of the band shows the source's pixel (sx, sy):
+
+    U = u[b] - j * dv[b] + i * du[b]      sx = U / 65536, rounded down
+    V = v[b] + j * du[b] + i * dv[b]      sy = V / 65536, rounded down
+
+With no edge (WARP_WRAP) sx and sy are taken round the source, and any value is allowed. With an edge a pixel whose
+place is outside the source is left (WARP_LEAVE) or gets the edge colour, and a place beyond +-AFF_POS or a step beyond
++-AFF_STEP is taken as that limit, so that no sum here can overflow. A source pixel of the transparent value is not
+written.
+--------------------------------------------------------------------------------------------------------------------- */
+#define AFF_POS ((int64_t)1 << 60)
+#define AFF_STEP ((int64_t)1 << 35)
+#define WARP_FAR (1 << 24) // first, left and width go no further than this either way
+
+typedef struct
+{
+    uint8_t *dst;
+    const uint8_t *src;
+    int w, h, stride, bpp;
+    int n, step, first, left, width; // the bands, and the window's first column and its width
+    const int64_t *u, *v, *du, *dv;  // each band: the place its first pixel shows, and the step along a row
+    int edge, trans;                 // as warp_t
+} affine_t;
+
+static int64_t aff_mod(int64_t a, int64_t m) // 0 to m-1
+{
+    a %= m;
+    return a < 0 ? a + m : a;
+}
+
+static int64_t aff_floor(int64_t a, int64_t b) // a / b rounded down, for b > 0
+{
+    int64_t q = a / b;
+    return a % b < 0 ? q - 1 : q;
+}
+
+static int64_t aff_clamp(int64_t a, int64_t m)
+{
+    return a > m ? m : a < -m ? -m : a;
+}
+
+// the columns *i0 to *i1-1 cut down to those i for which f + i * d is 0 to m-1 (a straight line: one run of them)
+static void aff_inside(int64_t f, int64_t d, int64_t m, int64_t *i0, int64_t *i1)
+{
+    int64_t lo, hi;
+    if (d == 0)
+    {
+        if (f < 0 || f >= m)
+            *i1 = *i0;
+        return;
+    }
+    if (d > 0)
+        lo = -aff_floor(f, d), hi = aff_floor(m - 1 - f, d);
+    else
+        lo = -aff_floor(m - 1 - f, -d), hi = aff_floor(f, -d);
+    if (lo > *i0)
+        *i0 = lo;
+    if (hi + 1 < *i1)
+        *i1 = hi + 1;
+}
+
+typedef struct
+{
+    uint32_t du, dv, mw, mh; // the steps along a row, and the source's size: all in 1/65536 pixel
+    const uint8_t *src;
+    int stride, trans;
+} aff_step_t;
+
+/* cnt pixels of a destination row from pixel x: each is the source's pixel at (U >> 16, V >> 16), and U and V then
+   step by du and dv round the source. All four are 0 to mw-1 or mh-1, so a step is an addition and one compare, and
+   no pixel needs a division. Made once for each depth, each a function of its own: inlined into affine_run the loop
+   had no registers left and read its steps from the stack for every pixel (5.5 ms a MODE 2 screen). */
+WARP_INLINE void aff_row(uint8_t *d, int x, int cnt, uint32_t U, uint32_t V, const aff_step_t *s, int bpp)
+{
+    uint32_t du = s->du, dv = s->dv, mw = s->mw, mh = s->mh; // in locals, as in warp_v
+    const uint8_t *src = s->src;
+    int stride = s->stride, trans = s->trans;
+#define AFF_NEXT(c)                                           \
+    {                                                         \
+        c = warp_get(src + (V >> 16) * stride, U >> 16, bpp); \
+        if ((U += du) >= mw)                                  \
+            U -= mw;                                          \
+        if ((V += dv) >= mh)                                  \
+            V -= mh;                                          \
+    }
+    int c, c2;
+    if (bpp == 4 && trans < 0) // two pixels gathered for each whole byte of the destination
+    {
+        if (cnt && (x & 1))
+        {
+            AFF_NEXT(c);
+            warp_put(d, x, 4, c);
+            x++, cnt--;
+        }
+        uint8_t *q = d + (x >> 1);
+        for (; cnt >= 2; cnt -= 2)
+        {
+            AFF_NEXT(c);
+            AFF_NEXT(c2);
+            *q++ = (uint8_t)(c | (c2 << 4));
+        }
+        if (cnt)
+        {
+            AFF_NEXT(c);
+            *q = (uint8_t)((*q & 0xF0) | c);
+        }
+        return;
+    }
+    for (; cnt > 0; cnt--, x++)
+    {
+        AFF_NEXT(c);
+        if (c != trans)
+            warp_put(d, x, bpp, c);
+    }
+#undef AFF_NEXT
+}
+
+static __attribute__((noinline)) void aff_row4(uint8_t *d, int x, int cnt, uint32_t U, uint32_t V, const aff_step_t *s)
+{
+    aff_row(d, x, cnt, U, V, s, 4);
+}
+
+#if defined(HDMI) || defined(WARP_HOST_TEST) // (a VGA build has only the 4-bit modes)
+static __attribute__((noinline)) void aff_row8(uint8_t *d, int x, int cnt, uint32_t U, uint32_t V, const aff_step_t *s)
+{
+    aff_row(d, x, cnt, U, V, s, 8);
+}
+
+static __attribute__((noinline)) void aff_row16(uint8_t *d, int x, int cnt, uint32_t U, uint32_t V, const aff_step_t *s)
+{
+    aff_row(d, x, cnt, U, V, s, 16);
+}
+#endif
+
+void affine_run(const affine_t *a)
+{
+    int w = a->w, h = a->h, wrap = a->edge == WARP_WRAP;
+    int64_t mw = (int64_t)w << 16, mh = (int64_t)h << 16;
+    aff_step_t st = {0, 0, (uint32_t)mw, (uint32_t)mh, a->src, a->stride, a->trans};
+    int64_t ia = a->left < 0 ? -(int64_t)a->left : 0, ib = a->width; // the window's columns that are on the buffer
+    if (ib > (int64_t)w - a->left)
+        ib = (int64_t)w - a->left;
+    if (ia >= ib)
+        return;
+    for (int b = 0; b < a->n; b++)
+    {
+        int64_t y0 = a->first + (int64_t)b * a->step;
+        if (y0 >= h)
+            break;
+        if (y0 + a->step <= 0)
+            continue;
+        int64_t u = a->u[b], v = a->v[b], du = a->du[b], dv = a->dv[b];
+        int64_t dvu = dv, duv = du; // the steps down the band: dv as U takes it, du as V does
+        if (wrap)
+        {
+            u = aff_mod(u, mw), v = aff_mod(v, mh);
+            dvu = aff_mod(dv, mw), duv = aff_mod(du, mh);
+        }
+        else
+        {
+            u = aff_clamp(u, AFF_POS), v = aff_clamp(v, AFF_POS);
+            dvu = dv = aff_clamp(dv, AFF_STEP), duv = du = aff_clamp(du, AFF_STEP);
+        }
+        // the steps along a row, round the source. With an edge these serve only for a run of two pixels or more
+        // inside the source, whose step is then smaller than the source: the same step, a negative one made positive
+        st.du = (uint32_t)aff_mod(du, mw), st.dv = (uint32_t)aff_mod(dv, mh);
+        int j1 = y0 + a->step > h ? (int)(h - y0) : a->step;
+        for (int j = y0 < 0 ? (int)-y0 : 0; j < j1; j++)
+        {
+            uint8_t *d = a->dst + (int)(y0 + j) * a->stride;
+            int64_t U = u - j * dvu, V = v + j * duv, i0 = ia, i1 = ib; // the row's column 0
+            if (wrap)
+            {
+                U = aff_mod(U + i0 * st.du, mw);
+                V = aff_mod(V + i0 * st.dv, mh);
+            }
+            else
+            {
+                aff_inside(U, du, mw, &i0, &i1);
+                aff_inside(V, dv, mh, &i0, &i1);
+                if (i0 >= i1)
+                    i0 = i1 = ia; // none of the row is in the source
+                if (a->edge >= 0)
+                {
+                    warp_fill(d, a->left + (int)ia, (int)(i0 - ia), a->bpp, a->edge);
+                    warp_fill(d, a->left + (int)i1, (int)(ib - i1), a->bpp, a->edge);
+                }
+                U += i0 * du, V += i0 * dv;
+            }
+            int x = a->left + (int)i0, cnt = (int)(i1 - i0);
+#if defined(HDMI) || defined(WARP_HOST_TEST)
+            if (a->bpp == 8)
+                aff_row8(d, x, cnt, (uint32_t)U, (uint32_t)V, &st);
+            else if (a->bpp == 16)
+                aff_row16(d, x, cnt, (uint32_t)U, (uint32_t)V, &st);
+            else
+#endif
+                aff_row4(d, x, cnt, (uint32_t)U, (uint32_t)V, &st);
+        }
+    }
+}
+
 #ifndef WARP_HOST_TEST
 // a framebuffer letter as FRAMEBUFFER COPY takes it, refused if it was not created
 static uint8_t *warp_buffer(unsigned char *p)
@@ -369,35 +658,122 @@ static uint8_t *warp_buffer(unsigned char *p)
     return NULL;
 }
 
-void cmd_warp(unsigned char *p, int vertical)
+// the bits of a pixel in this mode; MODE 1 is refused
+static int warp_depth(void)
 {
-    getcsargs(&p, 17);
-#ifdef rp2350
-    int dims[MAXDIM];
-#else
-    short dims[MAXDIM];
-#endif
-    warp_t a;
-    int64_t *off, *rows = NULL, phase = 0;
-    if (argc < 5 || (vertical && argc > 15))
-        SyntaxError();
     switch (DISPLAY_TYPE)
     {
     case SCREENMODE2:
     case SCREENMODE3:
-        a.bpp = 4;
-        break;
+        return 4;
 #ifdef HDMI
     case SCREENMODE4:
-        a.bpp = 16;
-        break;
+        return 16;
     case SCREENMODE5:
-        a.bpp = 8;
-        break;
+        return 8;
 #endif
     default:
         error("Not available in mode 1");
     }
+    return 0;
+}
+
+// an edge or fill argument: -1 (WARP_LEAVE), or a colour as the pixel that BOX would draw with it
+static int warp_edge(unsigned char *p, int bpp)
+{
+    int c = getColour((char *)p, 1);
+    return c < 0 ? WARP_LEAVE : bpp == 4 ? RGB121(c) : bpp == 8 ? RGB332(c) : RGB555(c);
+}
+
+// a transparent argument, as FRAMEBUFFER MERGE takes it
+static int warp_trans(unsigned char *p, int bpp)
+{
+    return bpp == 4 ? getint(p, 0, 15) : bpp == 8 ? getint(p, 0, 255) : RGB555(getColour((char *)p, 0));
+}
+
+#ifdef rp2350
+typedef int warp_dims_t;
+#else
+typedef short warp_dims_t;
+#endif
+
+void cmd_span(unsigned char *p)
+{
+    getcsargs(&p, 17);
+    warp_dims_t dims[MAXDIM];
+    span_t a;
+    int64_t *lf, *rt;
+    if (argc < 7)
+        SyntaxError();
+    a.bpp = warp_depth();
+    a.src = warp_buffer(argv[0]);
+    a.dst = warp_buffer(argv[2]);
+    a.w = HRes;
+    a.h = VRes;
+    a.stride = HRes * a.bpp / 8;
+    a.n = parseintegerarray(argv[4], &lf, 3, 1, dims, false, NULL);
+    int m = parseintegerarray(argv[6], &rt, 4, 1, dims, false, NULL);
+    if (m != a.n)
+        error("Right array has % elements, left array has %", m, a.n);
+    a.lf = lf;
+    a.rt = rt;
+    a.step = (argc >= 9 && *argv[8]) ? getint(argv[8], 1, VRes) : 1;
+    a.first = (argc >= 11 && *argv[10]) ? getint(argv[10], -WARP_FAR, WARP_FAR) : 0;
+    a.fill = (argc >= 13 && *argv[12]) ? warp_edge(argv[12], a.bpp) : -1;
+    a.trans = (argc >= 15 && *argv[14]) ? warp_trans(argv[14], a.bpp) : -1;
+    a.outside = (argc >= 17 && *argv[16]) ? getint(argv[16], 0, 1) : 0;
+    CursorHide(); // as cmd_warp
+    CursorSuspend = true;
+    span_run(&a);
+    CursorSuspend = false;
+}
+
+void cmd_affine(unsigned char *p)
+{
+    getcsargs(&p, 23);
+    warp_dims_t dims[MAXDIM];
+    affine_t a;
+    int64_t *q[4];
+    if (argc < 11)
+        SyntaxError();
+    a.bpp = warp_depth();
+    a.src = warp_buffer(argv[0]);
+    a.dst = warp_buffer(argv[2]);
+    if (a.src == a.dst)
+        error("Same framebuffer");
+    a.w = HRes;
+    a.h = VRes;
+    a.stride = HRes * a.bpp / 8;
+    for (int i = 0; i < 4; i++) // u, v, du, dv
+    {
+        int m = parseintegerarray(argv[4 + 2 * i], &q[i], 3 + i, 1, dims, false, NULL);
+        if (i == 0)
+            a.n = m;
+        else if (m != a.n)
+            error("Array % has % elements, array 1 has %", i + 1, m, a.n);
+    }
+    a.u = q[0], a.v = q[1], a.du = q[2], a.dv = q[3];
+    a.step = (argc >= 13 && *argv[12]) ? getint(argv[12], 1, VRes) : 1;
+    a.first = (argc >= 15 && *argv[14]) ? getint(argv[14], -WARP_FAR, WARP_FAR) : 0;
+    a.left = (argc >= 17 && *argv[16]) ? getint(argv[16], -WARP_FAR, WARP_FAR) : 0;
+    a.width = (argc >= 19 && *argv[18]) ? getint(argv[18], 1, WARP_FAR) : HRes;
+    a.edge = (argc >= 21 && *argv[20]) ? warp_edge(argv[20], a.bpp) : WARP_WRAP;
+    a.trans = (argc >= 23 && *argv[22]) ? warp_trans(argv[22], a.bpp) : -1;
+    CursorHide(); // as cmd_warp
+    CursorSuspend = true;
+    affine_run(&a);
+    CursorSuspend = false;
+}
+
+void cmd_warp(unsigned char *p, int vertical)
+{
+    getcsargs(&p, 17);
+    warp_dims_t dims[MAXDIM];
+    warp_t a;
+    int64_t *off, *rows = NULL, phase = 0;
+    if (argc < 5 || (vertical && argc > 15))
+        SyntaxError();
+    a.bpp = warp_depth();
     a.src = warp_buffer(argv[0]);
     a.dst = warp_buffer(argv[2]);
     if (a.src == a.dst)
@@ -412,15 +788,8 @@ void cmd_warp(unsigned char *p, int vertical)
     a.first = (argc >= 9 && *argv[8]) ? getint(argv[8], 0, bands - 1) : 0;
     if (argc >= 11 && *argv[10])
         phase = getinteger(argv[10]);
-    a.edge = WARP_WRAP;
-    if (argc >= 13 && *argv[12])
-    {
-        int c = getColour((char *)argv[12], 1);
-        a.edge = c < 0 ? WARP_LEAVE : a.bpp == 4 ? RGB121(c) : a.bpp == 8 ? RGB332(c) : RGB555(c);
-    }
-    a.trans = -1;
-    if (argc >= 15 && *argv[14]) // as FRAMEBUFFER MERGE takes it
-        a.trans = a.bpp == 4 ? getint(argv[14], 0, 15) : a.bpp == 8 ? getint(argv[14], 0, 255) : RGB555(getColour((char *)argv[14], 0));
+    a.edge = (argc >= 13 && *argv[12]) ? warp_edge(argv[12], a.bpp) : WARP_WRAP;
+    a.trans = (argc >= 15 && *argv[14]) ? warp_trans(argv[14], a.bpp) : -1;
     if ((int64_t)(a.n - 1) * a.step + a.first >= bands) // every element must start on the buffer
         error(vertical ? "Array has % elements, step % from column % fits %" : "Array has % elements, step % from row % fits %",
               a.n, a.step, a.first, (bands - a.first + a.step - 1) / a.step);

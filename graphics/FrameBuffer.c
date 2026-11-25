@@ -1509,6 +1509,8 @@ void closeframebuffer(char layer)
 /*  @endcond */
 
 void cmd_warp(unsigned char *p, int vertical); // FRAMEBUFFER WARPH and WARPV (Warp.c)
+void cmd_span(unsigned char *p);               // FRAMEBUFFER SPAN (Warp.c)
+void cmd_affine(unsigned char *p);             // FRAMEBUFFER AFFINE (Warp.c)
 
 void cmd_framebuffer(void)
 {
@@ -1936,6 +1938,10 @@ void cmd_framebuffer(void)
         cmd_warp(p, 0);
     else if ((p = checkstring(cmdline, (unsigned char *)"WARPV"))) // each column
         cmd_warp(p, 1);
+    else if ((p = checkstring(cmdline, (unsigned char *)"AFFINE"))) // each row read along a line of the source (Warp.c)
+        cmd_affine(p);
+    else if ((p = checkstring(cmdline, (unsigned char *)"SPAN"))) // each row between its own two columns
+        cmd_span(p);
     else if ((p = checkstring(cmdline, (unsigned char *)"WAIT")))
     {
 #ifdef HDMI
