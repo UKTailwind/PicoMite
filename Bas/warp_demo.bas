@@ -1,12 +1,19 @@
-' warp_demo.bas - FRAMEBUFFER WARPH and WARPV: every row or column of a picture moved by its own offset
+' warp_demo.bas - FRAMEBUFFER WARPH, WARPV, AFFINE and SPAN: the rows and columns of a picture moved, turned,
+' scaled and cut to shape, each by its own entry in an integer array
 ' PicoMite V8, VGA or HDMI, RP2350 (it uses framebuffers F and 2 and both layers), MODE 2 at 320x240.
 '  1. 240 stars, each row at its own speed; a logo waving in the layer; a sine scroller in the top layer
 '  2. a lake from day to dusk: parallax hills, and a reflection that ripples more the nearer it is
 '  3. a road in the style of the arcade racers: curves, hills, kerbs, and the mountains panning
-'  4. the credits, waved both ways (a WARPH into a WARPV)
+'  4. a playing card turned through any angle by three shears (WARPH, WARPV, WARPH); it arrives and
+'     leaves as a mosaic (BLIT RESIZE shrinks it, and a WARPH row map stretches it back)
+'  5. a map turned and zoomed: one AFFINE, from four arrays of one element
+'  6. the same map as the ground, seen from a car going round the track: an AFFINE element for each row
+'     below the horizon; the sky is a WARPH, and the compass a picture turned through AFFINE's window
+'  7. a torch in the dark, and an iris that closes and opens: SPAN, a left and a right column for each row
+'  8. the credits, waved both ways (a WARPH into a WARPV)
 ' Each picture melts away column by column into the next. Any key ends it.
-' No per-pixel BASIC in the frame loops: each layer is one command, and the offset tables are made
-' with MATH (SCALE, ADD, C_ADD, CLAMP) or animated with the phase argument.
+' No per-pixel BASIC in the frame loops: each layer is one command, and the tables are made with MATH
+' (SCALE, ADD, C_ADD, CLAMP, SLICE, POWER) or animated with the phase argument.
 OPTION EXPLICIT
 OPTION DEFAULT INTEGER
 MODE 2
@@ -15,10 +22,13 @@ IF MM.HRES <> 320 OR MM.VRES <> 240 THEN
   PRINT "This demo needs MODE 2 at 320x240 (OPTION RESOLUTION 640x480)"
   END
 ENDIF
-CONST W = 320, H = 240
+CONST W = 320, H = 240, FP = 65536  ' FP: AFFINE's places and steps are in 1/65536 of a pixel
 DIM cl(15), quit, i
 FOR i = 0 TO 15 : cl(i) = MAP(i) : NEXT  ' the colour that draws in each of the 16 palette slots
 DIM rbw(7) = (&HFF2020, &HFF9000, &HFFF000, &H30FF30, &H20E0FF, &H3070FF, &HA040FF, &HFF40C0)
+' scenes 5 to 7: the map's palette, and its colours lit and in the dark (ground, its squares, road, kerb, water)
+DIM mpal(15) = (0, &H1C7A30, &H2A9A40, &H707070, &HE8E8E8, &H2850D0, &H4070D8, &H78A8F0, &HE02020, &H506090, &HC8D8F0, &H901010, &HFFD820, &H303030, &H0A3012, &HFFFFFF)
+DIM mlit(4) = (1, 2, 3, 4, 5), mdark(4) = (14, 0, 13, 13, 0)
 FRAMEBUFFER CREATE
 FRAMEBUFFER CREATE 2
 FRAMEBUFFER LAYER
@@ -32,11 +42,19 @@ DO
   IF NOT quit THEN melt
   IF NOT quit THEN scene4
   IF NOT quit THEN melt
+  IF NOT quit THEN scene5
+  IF NOT quit THEN melt
+  IF NOT quit THEN scene6
+  IF NOT quit THEN melt
+  IF NOT quit THEN scene7
+  IF NOT quit THEN melt
+  IF NOT quit THEN scene8
+  IF NOT quit THEN melt
 LOOP UNTIL quit
 FRAMEBUFFER CLOSE
 MAP RESET
 MODE 1
-PRINT "FRAMEBUFFER WARPH and WARPV demo ended"
+PRINT "FRAMEBUFFER WARPH, WARPV, AFFINE and SPAN demo ended"
 END
 
 ' ---------------------------------------------------------------- 1: stars, logo, scroller
@@ -268,21 +286,243 @@ SUB scene3
   LOOP UNTIL quit OR fr > 2000
 END SUB
 
-' ---------------------------------------------------------------- 4: the credits
+' ---------------------------------------------------------------- 4: the card
+' A turn by the angle a is three shears:
+'  - every row moved sideways by -TAN(a / 2) times its distance from the middle row;
+'  - every column moved down by SIN(a) times its distance from the middle column;
+'  - the rows again, as the first time.
+' Each shear is one WARP, so the picture goes F -> 2 -> N -> T, and no pixel is lost or made on the way.
+' N is only a workspace here: the layer L, the table, has no transparent pixel, so it hides N.
+' A constant added to a shear's table moves the picture as well as turning it.
+' The picture must stay on the screen through all three shears, because a row that wraps is sheared
+' wrongly: for -90 to 90 degrees that is a picture within 113 pixels of the middle of the screen.
+' A playing card is the same upside down, so -90 to 90 degrees is every angle it needs.
 SUB scene4
+  LOCAL pal(15) = (0, &H0C5830, &H126A3C, 0, 0, 0, 0, 0, &HE01020, 0, 0, &HC0E8D0, &HFFD040, &H203050, &H282828, &HFFFFFF)
+  LOCAL ms(7) = (2, 4, 5, 8, 10, 16, 20, 40), mt(H - 1, 7), mr(H - 1), z(H - 1)
+  LOCAL ry!(H - 1), rx!(W - 1), ha(H - 1), hb(H - 1), va(W - 1)
+  LOCAL k, n, x, x2, y, fr, dx, dy, a!, t!, e!, c$
+  setpal pal(), 0 : MAP SET
+  FRAMEBUFFER WRITE T : CLS
+  ' L: the table, every pixel of it drawn (slot 0 is the layer's transparent colour)
+  FRAMEBUFFER WRITE L : CLS cl(1)
+  FOR k = -220 TO 300 STEP 20  ' a lattice, each line cut to the screen
+    x = MAX(k, 0) : x2 = MIN(k + 239, W - 1)
+    LINE x, x - k, x2, x2 - k, 1, cl(2) : LINE x, 239 - (x - k), x2, 239 - (x2 - k), 1, cl(2)
+  NEXT
+  TEXT 160, 4, "A MOSAIC, AND A TURN BY THREE SHEARS", "CT", 1, 1, cl(12), cl(1)
+  ' F: the card, on slot 0. Each part is drawn twice, the second time turned 180 degrees about (160, 120)
+  FRAMEBUFFER WRITE F : CLS cl(0)
+  RBOX 105, 43, 111, 155, 8, cl(14), cl(15)
+  RBOX 109, 47, 103, 147, 6, cl(8), -1
+  pip 160, 120, 15, 21
+  pip 160, 68, 11, 15 : pip 160, 172, 11, 15
+  pip 121, 78, 4, 6 : pip 199, 162, 4, 6
+  TEXT 121, 54, "3", "CT", 1, 1, cl(8), -1 : TEXT 199, 186, "3", "CTI", 1, 1, cl(8), -1
+  TEXT 160, 97, "PicoMite", "CB", 1, 1, cl(13), -1 : TEXT 160, 143, "PicoMite", "CBI", 1, 1, cl(13), -1
+  FRAMEBUFFER WRITE N
+  FOR y = 0 TO H - 1 : ry!(y) = y - 120 : NEXT
+  FOR x = 0 TO W - 1 : rx!(x) = x - 160 : NEXT
+  FOR k = 0 TO 7  ' the mosaic's row map for each size of block: the rows from 120 on, each shown ms(k) times
+    FOR y = 0 TO H - 1 : mt(y, k) = 120 + y \ ms(k) : NEXT
+  NEXT
+  DO
+    fr = fr + 1
+    IF fr <= 25 THEN setpal pal(), fr / 25
+    IF fr = 1249 THEN FRAMEBUFFER COPY T, F  ' the card as it stopped, to leave as it came
+    IF fr = 1 OR fr = 49 OR fr = 1249 THEN   ' the table says which commands are at work
+      c$ = CHOICE(fr = 49, "WARPH, then WARPV, then WARPH", "BLIT RESIZE twice, then WARPH")
+      FRAMEBUFFER WRITE L : TEXT 160, 224, c$, "CT", 1, 1, cl(11), cl(1) : FRAMEBUFFER WRITE N
+    ENDIF
+    IF fr <= 48 OR fr >= 1249 THEN
+      ' A mosaic of n x n blocks: the picture shrunk to 1/n in the corner of 2, then made full width
+      ' again in the rows from 120 on, and then a WARPH whose row map shows each of those rows n times.
+      IF fr <= 48 THEN k = 7 - (fr - 1) \ 6 ELSE k = (fr - 1249) \ 6
+      n = ms(k)
+      BLIT RESIZE F, 2, 0, 0, W, H, 0, 0, W \ n, H \ n
+      BLIT RESIZE 2, 2, 0, 0, W \ n, H \ n, 0, 120, W, H \ n
+      MATH SLICE mt(), , k, mr()
+      IF fr <= 25 THEN MAP SET ELSE FRAMEBUFFER WAIT
+      FRAMEBUFFER WARPH 2, T, z(), 1, 0, , , , mr()
+    ELSE
+      e! = MIN((fr - 48) / 150, 1)                 ' it starts gently
+      a! = a! + e! * (1.7 + 1.2 * SIN(fr * 0.012)) ' degrees clockwise
+      IF a! > 90 THEN a! = a! - 180                ' the same card, by its symmetry
+      dx = e! * 50 * SIN(fr * 0.019) : dy = e! * 14 * SIN(fr * 0.031)
+      t! = TAN(RAD(a!) / 2)
+      MATH SCALE ry!(), -t!, ha() : MATH ADD ha(), dx + t! * dy, hb()    ' the rows: first and third shears
+      MATH SCALE rx!(), -SIN(RAD(a!)), va() : MATH ADD va(), -dy, va()  ' the columns: the second
+      FRAMEBUFFER WARPH F, 2, ha()
+      FRAMEBUFFER WARPV 2, N, va()
+      FRAMEBUFFER WAIT
+      FRAMEBUFFER WARPH N, T, hb()
+    ENDIF
+    IF INKEY$ <> "" THEN quit = 1
+  LOOP UNTIL quit OR fr >= 1296
+END SUB
+
+' a diamond, which is the same upside down
+SUB pip x, y, a, b
+  TRIANGLE x - a, y, x + a, y, x, y - b, cl(8), cl(8)
+  TRIANGLE x - a, y, x + a, y, x, y + b, cl(8), cl(8)
+END SUB
+
+' ---------------------------------------------------------------- 5: the map turned and zoomed
+' AFFINE reads each row of the screen from the source along a straight line: its first pixel shows the
+' source's (u, v) / 65536, and each pixel to the right is (du, dv) / 65536 further on. With one element and
+' step = the screen's height, each next row starts one step on at right angles, (-dv, du): so these four
+' numbers turn and zoom the whole picture. The screen's centre shows the map's (sx!, sy!).
+SUB scene5
+  LOCAL u(0), v(0), du(0), dv(0), fr, a!, z!, sx!, sy!
+  setpal mpal(), 0 : MAP SET
+  FRAMEBUFFER WRITE T : CLS
+  FRAMEBUFFER WRITE L : CLS
+  caption "A MAP TURNED AND ZOOMED", "one AFFINE, four arrays of one element"
+  FRAMEBUFFER WRITE F : drawmap mlit()
+  FRAMEBUFFER WRITE N
+  DO
+    fr = fr + 1
+    IF fr <= 25 THEN setpal mpal(), fr / 25
+    a! = fr * 0.017 : z! = 1.5 + 1.1 * SIN(fr * 0.021)  ' the angle, and the size
+    sx! = 160 + 70 * COS(fr * 0.011) : sy! = 120 + 50 * SIN(fr * 0.014)
+    du(0) = FP * COS(a!) / z! : dv(0) = -FP * SIN(a!) / z!
+    u(0) = FP * sx! - 160 * du(0) + 120 * dv(0)
+    v(0) = FP * sy! - 160 * dv(0) - 120 * du(0)
+    IF fr <= 25 THEN MAP SET ELSE FRAMEBUFFER WAIT
+    FRAMEBUFFER AFFINE F, N, u(), v(), du(), dv(), H
+    IF INKEY$ <> "" THEN quit = 1
+  LOOP UNTIL quit OR fr >= 900
+END SUB
+
+' ---------------------------------------------------------------- 6: the map as the ground
+' Row hz + 1 + k of the screen is zt!(k) map pixels wide for each of its own, which is made once. Each frame,
+' six MATH statements turn that table into the four arrays for where the camera is and which way it looks:
+' an element for each row, from a line through the map at the camera's distance for that row.
+SUB scene6
+  LOCAL hz = 90, n = 149                       ' the horizon's row, and the rows below it
+  LOCAL zt!(n - 1), fu(n - 1), fv(n - 1), fdu(n - 1), fdv(n - 1), so(0), u(0), v(0), du(0), dv(0)
+  LOCAL k, x, r, fr, t!, a!, ca!, sa!, camx!, camy!, d! = 160
+  setpal mpal(), 0 : MAP SET
+  FRAMEBUFFER WRITE T : CLS
+  FRAMEBUFFER WRITE L : CLS
+  caption "THE MAP AS THE GROUND", "an AFFINE element for each row"
+  FRAMEBUFFER WRITE F : drawmap mlit()
+  ' 2: the sky and the mountains in rows 0-89, which repeat every 320 pixels; the compass alone lower down
+  FRAMEBUFFER WRITE 2 : CLS cl(0)
+  BOX 0, 0, W, 50, 0, cl(6), cl(6) : BOX 0, 50, W, 40, 0, cl(7), cl(7)
+  FOR x = 0 TO W - 1
+    r = 62 + 12 * SIN(2 * PI * x / W * 3 + 0.4) + 7 * SIN(2 * PI * x / W * 7 + 2)
+    LINE x, r, x, 89, 1, cl(9)
+    IF r < 58 THEN LINE x, r, x, r + 2, 1, cl(10)
+  NEXT
+  CIRCLE 124, 168, 22, 2, 1, cl(15), cl(13)
+  TRIANGLE 124, 148, 114, 170, 134, 170, cl(8), cl(8)
+  TRIANGLE 124, 188, 114, 170, 134, 170, cl(4), cl(4)
+  FRAMEBUFFER WRITE N : CLS cl(10)               ' row 90, between the sky and the ground, stays as haze
+  FOR k = 0 TO n - 1 : zt!(k) = 14 / (k + 1) : NEXT
+  DO
+    fr = fr + 1
+    IF fr <= 25 THEN setpal mpal(), fr / 25
+    t! = fr * 0.011                              ' round the track
+    camx! = 160 + 118 * COS(t!) : camy! = 120 + 74 * SIN(t!)
+    a! = ATAN2(74 * COS(t!), -118 * SIN(t!)) + 0.25 * SIN(fr * 0.05)
+    ca! = COS(a!) : sa! = SIN(a!)
+    MATH SCALE zt!(), -FP * sa!, fdu() : MATH SCALE zt!(), FP * ca!, fdv()
+    MATH SCALE zt!(), FP * (d! * ca! + 160 * sa!), fu() : MATH ADD fu(), FP * camx!, fu()
+    MATH SCALE zt!(), FP * (d! * sa! - 160 * ca!), fv() : MATH ADD fv(), FP * camy!, fv()
+    so(0) = -a! * 4 * W / (2 * PI)               ' the screen shows a quarter of the way round
+    ' the compass, turned as the camera is: a 69x69 window round the 48x48 picture at (124, 168) of 2
+    du(0) = FP * COS(a! + PI / 2) : dv(0) = -FP * SIN(a! + PI / 2)
+    u(0) = FP * 124 - 34 * (du(0) - dv(0)) : v(0) = FP * 168 - 34 * (dv(0) + du(0))
+    IF fr <= 25 THEN MAP SET ELSE FRAMEBUFFER WAIT
+    FRAMEBUFFER WARPH 2, N, so(), hz
+    FRAMEBUFFER AFFINE F, N, fu(), fv(), fdu(), fdv(), 1, hz + 1
+    FRAMEBUFFER AFFINE 2, N, u(), v(), du(), dv(), 69, 4, 247, 69, -1, 0
+    IF INKEY$ <> "" THEN quit = 1
+  LOOP UNTIL quit OR fr >= 1200
+END SUB
+
+' ---------------------------------------------------------------- 7: a torch, and an iris
+' SPAN copies, on each row, only the columns from its left to its right entry. The torch is a circle of one
+' size, so its half-widths are made once for its 2 * r + 1 rows: three MATH statements move it across, and
+' SPAN's first row moves it down (and off the screen). The iris is a circle whose size changes, so its
+' half-widths are made each frame, with MATH POWER for the square root; SPAN fills the rest with black.
+SUB scene7
+  LOCAL r = 46
+  LOCAL hw!(2 * r), q!(2 * r), lf(2 * r), rt(2 * r)
+  LOCAL d2!(H - 1), wk!(H - 1), ih!(H - 1), iq!(H - 1), il(H - 1), ir(H - 1)
+  LOCAL k, fr, cx, cy, ri
+  setpal mpal(), 0 : MAP SET
+  FRAMEBUFFER WRITE T : CLS
+  FRAMEBUFFER WRITE L : CLS
+  caption "A TORCH IN THE DARK", "SPAN: two columns for each row"
+  FRAMEBUFFER WRITE F : drawmap mlit()
+  FRAMEBUFFER WRITE 2 : drawmap mdark()
+  FRAMEBUFFER WRITE N
+  FOR k = 0 TO 2 * r : hw!(k) = SQR(r * r - (k - r) * (k - r)) : NEXT
+  FOR k = 0 TO H - 1 : d2!(k) = (k - 120) * (k - 120) : NEXT
+  DO
+    fr = fr + 1
+    IF fr <= 25 THEN setpal mpal(), fr / 25
+    IF fr = 701 THEN
+      FRAMEBUFFER WRITE L : CLS
+      caption "AN IRIS", "SPAN, and a fill colour for the rest"
+      FRAMEBUFFER WRITE N
+    ENDIF
+    IF fr <= 700 THEN
+      cx = 160 + 150 * SIN(fr * 0.021) : cy = 120 + 130 * SIN(fr * 0.033)
+      MATH SCALE hw!(), -1, q!() : MATH ADD q!(), cx, lf() : MATH ADD hw!(), cx - 1, rt()
+      IF fr <= 25 THEN MAP SET ELSE FRAMEBUFFER WAIT
+      FRAMEBUFFER COPY 2, N
+      FRAMEBUFFER SPAN F, N, lf(), rt(), 1, cy - r
+    ELSE
+      ' a circle of radius ri about (160, 120): its half-width on row y is SQR(ri^2 - (y - 120)^2), or 0
+      ri = ABS(fr - 850) * 1.4
+      MATH SCALE d2!(), -1, wk!() : MATH ADD wk!(), ri * ri, wk!() : MATH CLAMP wk!(), 0, 1000000, wk!()
+      MATH POWER wk!(), 0.5, ih!()
+      MATH SCALE ih!(), -1, iq!() : MATH ADD iq!(), 160, il() : MATH ADD ih!(), 159, ir()
+      FRAMEBUFFER WAIT
+      FRAMEBUFFER SPAN F, N, il(), ir(), 1, 0, cl(0)
+    ENDIF
+    IF INKEY$ <> "" THEN quit = 1
+  LOOP UNTIL quit OR fr >= 1000
+END SUB
+
+' the map, in the colours tc() (ground, its squares, road, kerb, water): a track round a pond
+SUB drawmap tc()
+  LOCAL x, y, k
+  CLS cl(tc(0))
+  FOR y = 0 TO 220 STEP 20
+    FOR x = ((y \ 20) AND 1) * 20 TO 300 STEP 40 : BOX x, y, 20, 20, 0, cl(tc(1)), cl(tc(1)) : NEXT
+  NEXT
+  CIRCLE 160, 120, 92, 36, 1.55, cl(tc(3))
+  CIRCLE 160, 120, 88, 28, 1.55, cl(tc(2))
+  FOR k = 0 TO 6 : BOX 156 + (k AND 1) * 4, 32 + k * 4, 4, 4, 0, cl(tc(3)), cl(tc(3)) : NEXT
+  BOX 140, 104, 40, 32, 0, cl(tc(4)), cl(tc(4))
+END SUB
+
+' a title at the top of the layer, and a line under the picture (the map's palette: 12 yellow, 13 grey)
+SUB caption t$, s$
+  TEXT 160, 3, t$, "CT", 1, 1, cl(12), cl(13)
+  TEXT 160, 226, s$, "CT", 1, 1, cl(15), cl(13)
+END SUB
+
+' ---------------------------------------------------------------- 8: the credits
+SUB scene8
   LOCAL pal(15) = (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, &H404040, &HFFFFFF)
   LOCAL hx(239), vy(159), k, fr, cyc, c
   FOR k = 4 TO 11 : pal(k) = rbw(k - 4) : NEXT
   setpal pal(), 0 : MAP SET
   FRAMEBUFFER WRITE L : CLS : FRAMEBUFFER WRITE T : CLS
   FRAMEBUFFER WRITE F : CLS cl(0)
-  TEXT 160, 30, "FRAMEBUFFER", "CT", 1, 2, cl(4), -1
-  TEXT 160, 58, "WARPH  &  WARPV", "CT", 1, 2, cl(6), -1
-  TEXT 160, 100, "every row or column of a picture", "CT", 1, 1, cl(15), -1
-  TEXT 160, 116, "moved by its own offset,", "CT", 1, 1, cl(15), -1
-  TEXT 160, 132, "read from an integer array", "CT", 1, 1, cl(15), -1
-  TEXT 160, 164, "PicoMite V8", "CT", 1, 2, cl(8), -1
-  TEXT 160, 206, "press any key", "CT", 1, 1, cl(14), -1
+  TEXT 160, 22, "FRAMEBUFFER", "CT", 1, 2, cl(4), -1
+  TEXT 160, 50, "WARPH  WARPV", "CT", 1, 2, cl(6), -1
+  TEXT 160, 76, "AFFINE  SPAN", "CT", 1, 2, cl(10), -1
+  TEXT 160, 112, "every row or column of a picture", "CT", 1, 1, cl(15), -1
+  TEXT 160, 128, "moved, turned, scaled or cut", "CT", 1, 1, cl(15), -1
+  TEXT 160, 144, "by tables in integer arrays", "CT", 1, 1, cl(15), -1
+  TEXT 160, 174, "PicoMite V8", "CT", 1, 2, cl(8), -1
+  TEXT 160, 212, "press any key", "CT", 1, 1, cl(14), -1
   FRAMEBUFFER WRITE N
   FOR k = 0 TO 239 : hx(k) = 7 * SIN(2 * PI * k / 80) : NEXT
   FOR k = 0 TO 159 : vy(k) = 6 * SIN(2 * PI * k / 80) : NEXT
