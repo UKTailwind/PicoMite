@@ -444,7 +444,179 @@ In MODE 5 the framebuffers are in PSRAM, which sets the speed. A frame at 640×4
 - **One buffer can hold many strips.** With `rows%()` the source rows can be anywhere, so a single framebuffer can hold the sky, the mountains, a second copy of the road and a text strip at once.
 - **A warp is also a compositor.** `FRAMEBUFFER WARPH L, F, z%(), MM.VRES, , , , 0`, with `z%(0) = 0`, puts the layer over F, transparent pixels and all.
 - **Two warps make a 2D wave.** A WARPH into buffer 2, then a WARPV from 2 into N, waves text both ways.
-- **The demo** `warp_demo.bas` (in the firmware repository's `Bas` folder) shows all of this at the full frame rate: a starfield with a waving logo and a sine scroller, a lake from day to dusk, the road, and a melt between each.
+- **A mosaic in three commands** (MODE 2 or 3, where BLIT RESIZE works). `BLIT RESIZE F, 2, 0, 0, 320, 240, 0, 0, 320 \ n, 240 \ n` shrinks the picture into the corner of buffer 2; `BLIT RESIZE 2, 2, 0, 0, 320 \ n, 240 \ n, 0, 120, 320, 240 \ n` makes it full width again from row 120; and a WARPH into N with all its offsets 0 and a row map that shows each of those rows n times (`rows%(y) = 120 + y \ n`) makes it full height. Blocks of 4 to 40 pixels take 4.6 to 1.2 ms, against 11 ms for two BLIT RESIZEs of the whole screen.
+- **The demo** `warp_demo.bas` (in the firmware repository's `Bas` folder) shows all of this at the full frame rate: a starfield with a waving logo and a sine scroller, a lake from day to dusk, the road, a playing card turned by three shears (a WARPH, a WARPV and a WARPH) that comes and goes as a mosaic, and the AFFINE and SPAN examples below, with a melt between each.
+
+---
+
+## Turning, Scaling and Floors — FRAMEBUFFER AFFINE
+
+WARPH and WARPV move rows and columns, but they never change the size of anything along a row. The consoles of the 1990s could also read each screen line from a picture along a straight line of any direction and length: the Super Nintendo's *Mode 7*, and the Game Boy Advance's *affine* backgrounds. One such command turns and zooms a whole picture, turns a sprite, and, with a different line for each row of the screen, draws a floor in perspective: the track of a karting game, or the ground under a plane.
+
+From V8, the VGA and HDMI builds (MODE 2 to 5) have that command:
+
+```
+FRAMEBUFFER AFFINE from, to, u%(), v%(), du%(), dv%() [, step] [, first] [, left] [, width] [, edge] [, transparent]
+```
+
+It copies buffer `from` to buffer `to` (N, F, L, and on the RP2350 also 2 and T; the two must differ), reading each row of `to` from `from` along a line given by four integer arrays.
+
+### How Each Row Is Read
+
+Positions and steps are in 1/65536 of a pixel, so a program usually starts with `CONST FP = 65536`.
+
+- **`u%()`, `v%()`** — where in the source the row's first pixel comes from: x = u / 65536, y = v / 65536.
+- **`du%()`, `dv%()`** — how far that place moves for each pixel to the right.
+- **`step`** (default 1) — each element covers a band of `step` rows. Each further row of a band starts one step on at right angles to the row, at (u - dv, v + du), which is exactly what a turned picture needs.
+- **`first`** (default 0) — the first row drawn. Rows before it, and after the last band, are left alone.
+- **`left`, `width`** (default 0 and the screen's width) — only these columns are drawn, which makes a window for a sprite. `first` and `left` may be negative or past the edge: what falls off the screen is not drawn.
+- **`edge`** — what a pixel gets when its place is outside the source. Omitted, the source wraps round, so any value of u and v is allowed and a camera can keep going; -1 leaves the pixel alone; a colour fills it.
+- **`transparent`** — source pixels of this colour are not copied, as for WARPH.
+
+So:
+
+| du | dv | The picture is |
+|----|----|----------------|
+| FP | 0 | at its own size and angle |
+| FP / 2 | 0 | twice the size |
+| FP * 2 | 0 | half the size |
+| -FP | 0 | mirrored |
+| FP * COS(a) / z | -FP * SIN(a) / z | turned clockwise by a and z times the size |
+
+A place is rounded down to its pixel; add `FP \ 2` to u and v to sample from the middle of a pixel instead.
+
+### Example: Turning and Zooming a Picture
+
+One element, and `step` equal to the screen's height, turn and zoom the whole picture. The screen's centre (160, 120) shows the picture's (sx, sy):
+
+```basic
+CONST FP = 65536
+DIM u%(0), v%(0), du%(0), dv%(0)
+DO
+  a! = a! + 0.02 : z! = 1.5 + SIN(a! * 0.7)         ' the angle and the size
+  du%(0) = FP * COS(a!) / z! : dv%(0) = -FP * SIN(a!) / z!
+  u%(0) = FP * sx - 160 * du%(0) + 120 * dv%(0)
+  v%(0) = FP * sy - 160 * dv%(0) - 120 * du%(0)
+  FRAMEBUFFER WAIT
+  FRAMEBUFFER AFFINE F, N, u%(), v%(), du%(), dv%(), MM.VRES
+LOOP
+```
+
+### Example: A Floor in Perspective
+
+F holds a map seen from above. The camera stands at (camx, camy) on the map, `hgt` pixels above it, looking along the angle `a`; the horizon is row 90, and `d` is the distance from the eye to the screen in pixels (160 gives a view 90 degrees wide). Screen row 91 + k then shows the ground `hgt / (k + 1)` map pixels wide for each screen pixel. That table is made once, and each frame six MATH statements turn it into the four arrays:
+
+```basic
+CONST FP = 65536, hz = 90, n = 149                   ' rows 91 to 239
+DIM zt!(n - 1), fu%(n - 1), fv%(n - 1), fdu%(n - 1), fdv%(n - 1)
+FOR k = 0 TO n - 1 : zt!(k) = 14 / (k + 1) : NEXT   ' hgt = 14
+d = 160
+DO
+  ' ... the game moves camx, camy and a ...
+  ca! = COS(a) : sa! = SIN(a)
+  MATH SCALE zt!(), -FP * sa!, fdu%() : MATH SCALE zt!(), FP * ca!, fdv%()
+  MATH SCALE zt!(), FP * (d * ca! + 160 * sa!), fu%() : MATH ADD fu%(), FP * camx, fu%()
+  MATH SCALE zt!(), FP * (d * sa! - 160 * ca!), fv%() : MATH ADD fv%(), FP * camy, fv%()
+  FRAMEBUFFER WAIT
+  FRAMEBUFFER AFFINE F, N, fu%(), fv%(), fdu%(), fdv%(), 1, hz + 1
+LOOP
+```
+
+The rows above the horizon are not touched. Put the sky there with a WARPH from a strip that is as wide as the screen and repeats: `so%(0) = -a * 4 * MM.HRES / (2 * PI)` pans it by the camera's angle, since the screen shows a quarter of the way round.
+
+The map wraps round, so the track is seen again in the distance. A map made to repeat (fields, sea, a city grid) hides that; an `edge` colour instead shows the ground stopping at the edge of the map. Near the horizon many map pixels fall on each screen pixel and the picture shimmers, as it did on the consoles: a band of haze, or a horizon a little lower, hides it.
+
+### Example: Turning a Sprite
+
+A sprite of 48x48 pixels sits in buffer 2 with its centre at (124, 124), on colour 0. It is drawn turned by `a`, with its centre at (px, py), through a window of 69x69 pixels, enough for its diagonal. Edge -1 and transparent 0 leave everything round it alone:
+
+```basic
+du%(0) = FP * COS(a) : dv%(0) = -FP * SIN(a)
+u%(0) = FP * 124 - 34 * (du%(0) - dv%(0))
+v%(0) = FP * 124 - 34 * (dv%(0) + du%(0))
+FRAMEBUFFER AFFINE 2, N, u%(), v%(), du%(), dv%(), 69, py - 34, px - 34, 69, -1, 0
+```
+
+The window reads whatever lies round the sprite in its buffer, so give each sprite a margin of the transparent colour, a fifth of its size on every side.
+
+### Timing
+
+Measured on a PicoComputer 3 at 315 MHz:
+
+| | MODE 2 (16 colours) | MODE 5 (256 colours) |
+|---|---|---|
+| The whole 320x240 screen, at any angle and size | 4.8 ms | 6.3 to 17.5 ms |
+| A floor of 149 rows | 3.4 ms | 6.9 ms |
+| Its six MATH statements | 0.7 ms | 0.7 ms |
+| A sprite through a 69x69 window | 0.5 ms | 0.5 ms |
+
+In MODE 2 the time is the same whatever the angle. In MODE 3, 4 and 5 the framebuffers are in PSRAM, which is quick to read in order and slow to read at random: a picture made larger costs little more than in MODE 2, but one made smaller or turned far reads a different part for nearly every pixel. A whole-screen turn or zoom is best done in MODE 2.
+
+---
+
+## Windows of Any Shape — FRAMEBUFFER SPAN
+
+The window registers of the Super Nintendo could change their left and right edges on every line. That is how its games close a circle on the hero at the end of a level, light a cave with a torch, and wipe from one scene to the next along a curve. From V8 the VGA and HDMI builds do it with:
+
+```
+FRAMEBUFFER SPAN from, to, left%(), right%() [, step] [, first] [, fill] [, transparent] [, outside]
+```
+
+- **`left%()`, `right%()`** — for each band of `step` rows from row `first`, the first and the last column copied from `from` to the same place in `to`. A left greater than the right copies nothing on those rows. No value is an error: a span is cut to the screen, and `first` may be negative, so a shape can move off any edge.
+- **`fill`** — a colour for the rest of each row. Omitted or -1, the rest is left alone.
+- **`outside`** — 1 copies the pixels *outside* each span instead (and fills those inside).
+- **`transparent`** — as for WARPH.
+- `from` and `to` may be the same buffer: then nothing is copied and only the fill is drawn, which blanks a picture outside (or inside) a shape where it stands.
+
+### Example: An Iris
+
+A circle of radius r about (cx, cy) is `SQR(r^2 - (y - cy)^2)` wide on each side on row y. With the squares worked out once, seven MATH statements make both arrays for any radius; rows outside the circle get an empty span, and `fill` blacks them out:
+
+```basic
+DIM d2!(239), w!(239), hw!(239), q!(239), lf%(239), rt%(239)
+FOR y = 0 TO 239 : d2!(y) = (y - cy) ^ 2 : NEXT
+FOR r = 200 TO 0 STEP -3
+  MATH SCALE d2!(), -1, w!() : MATH ADD w!(), r * r, w!() : MATH CLAMP w!(), 0, 1000000, w!()
+  MATH POWER w!(), 0.5, hw!()
+  MATH SCALE hw!(), -1, q!() : MATH ADD q!(), cx, lf%() : MATH ADD hw!(), cx - 1, rt%()
+  FRAMEBUFFER WAIT
+  FRAMEBUFFER SPAN F, N, lf%(), rt%(), 1, 0, RGB(BLACK)
+NEXT
+```
+
+### Example: A Torch in the Dark
+
+Buffer 2 holds the scene drawn in dark colours and F the same scene lit. A torch of one size needs its table only once, for its own 2r + 1 rows: three MATH statements move it across, and `first` moves it up and down.
+
+```basic
+DIM hw!(2 * r), q!(2 * r), lf%(2 * r), rt%(2 * r)
+FOR k = 0 TO 2 * r : hw!(k) = SQR(r * r - (k - r) ^ 2) : NEXT
+DO
+  ' ... the torch moves to (cx, cy) ...
+  MATH SCALE hw!(), -1, q!() : MATH ADD q!(), cx, lf%() : MATH ADD hw!(), cx - 1, rt%()
+  FRAMEBUFFER WAIT
+  FRAMEBUFFER COPY 2, N
+  FRAMEBUFFER SPAN F, N, lf%(), rt%(), 1, cy - r
+LOOP
+```
+
+### Example: A Wipe
+
+A slanted edge that crosses the screen: `lf%()` stays all 0, and the right edge is a ramp moved on each frame.
+
+```basic
+DIM ramp!(239), lf%(239), rt%(239)
+FOR y = 0 TO 239 : ramp!(y) = y / 2 - 120 : NEXT
+FOR t = 0 TO MM.HRES + 120 STEP 4
+  MATH ADD ramp!(), t, rt%()
+  FRAMEBUFFER WAIT
+  FRAMEBUFFER SPAN 2, N, lf%(), rt%()        ' the next picture, from buffer 2
+NEXT
+```
+
+### Timing
+
+A SPAN costs about what a copy of the pixels in its spans costs: 0.2 to 0.4 ms for a whole 320x240 MODE 2 screen on a PicoComputer 3 at 315 MHz, and 1.2 to 2.1 ms in MODE 5.
 
 ---
 
@@ -1145,6 +1317,8 @@ BLIT RESIZE F, L, 32, 16, 64, 64, 100, 40, 128, 96
 BLIT RESIZE F, L, 32, 16, 64, 64, 100, 40, 128, 96, 0
 ```
 
+To turn a picture as well as scale it, use `FRAMEBUFFER AFFINE` with a window - see *Turning, Scaling and Floors*.
+
 ---
 
 ## Input Handling
@@ -1593,7 +1767,7 @@ END
     array shared with the BASIC so nothing has to be copied across the boundary
     each call. The mmb2csub tool (`user-tools/mmb2csub.py`, described in
     `mmb2csub.pdf`) does the conversion for you, from the BASIC routine itself.
-13. **Let one command move many lines.** An effect that changes from line to line (parallax, a road, ripples, a melt) belongs in `FRAMEBUFFER WARPH` or `WARPV`, with its table made by MATH, not in a BASIC loop over the lines - see *Raster Effects*.
+13. **Let one command move many lines.** An effect that changes from line to line (parallax, a road, ripples, a melt, a floor in perspective, an iris) belongs in `FRAMEBUFFER WARPH`, `WARPV`, `AFFINE` or `SPAN`, with its table made by MATH, not in a BASIC loop over the lines - see *Raster Effects* and the two sections after it.
 
 ### Finding the hot spots
 
@@ -1705,6 +1879,9 @@ goes.** If it moves, the thing you suspected was innocent.
 | Board games / card games | Drawing primitives + BLIT |
 | Rhythm game | PLAY SAMPLE + drawing primitives |
 | Racing game with a curving, hilly road | FRAMEBUFFER WARPH + a layer for the car |
+| Kart racer or flight game over a flat map | FRAMEBUFFER AFFINE (a floor) + a layer for the car |
+| Turning maps, zooming titles, turned sprites | FRAMEBUFFER AFFINE |
+| Iris, spotlight and wipe transitions | FRAMEBUFFER SPAN |
 
 ### Combining Systems
 
