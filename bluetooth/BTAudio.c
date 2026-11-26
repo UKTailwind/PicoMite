@@ -221,7 +221,7 @@ static bool bta_wait(bool (*cond)(void), uint32_t timeout_ms)
     uint64_t end = time_us_64() + (uint64_t)timeout_ms * 1000u;
     while (!cond())
     {
-        CheckAbort();
+        { CheckAbort(); NetYield(); }
         if (time_us_64() > end)
             return false;
     }
@@ -1747,7 +1747,20 @@ static void bta_status(unsigned char *tp)
     ConsoleRedirect = 0;
 }
 
+#ifdef USE_THREADS
+static void cmd_bluetooth_body(void);
+/* BLUETOOTH: Bluetooth is the running thread's for the command, as WEB is the network (Thread.c, ThreadNetEnter) */
 void cmd_bluetooth(void)
+{
+    if (!ThreadNetEnter(1))
+        return; // (an interrupt first: the statement runs again after it)
+    cmd_bluetooth_body();
+    ThreadNetLeave(1);
+}
+static void cmd_bluetooth_body(void)
+#else
+void cmd_bluetooth(void)
+#endif
 {
     unsigned char *tp;
 #ifdef PICOMITEPC3

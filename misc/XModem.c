@@ -167,6 +167,7 @@ char *ProgramToText(char *name)
 
 void MIPS16 cmd_xmodem(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     char *buf, BreakKeySave;
     int rcv = 0, fnbr, crunch = false;
     char *fname;

@@ -4251,7 +4251,7 @@ static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union
     unsigned char *def = subfun[idx], *callers = CurrentLinePtr;
     const uint16_t *pp = pc + 3;
     // what would stop DefinedSubFun before it starts sends the call there
-    if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
+    if (gosubindex >= GosubLimit || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
         return 0;
     RBCode++;
     if (g_option_profiling)
@@ -4285,7 +4285,6 @@ static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union
 // parameters.  The body runs in a nested ExecuteProgram, as DefinedSubFun
 // runs it.  Returns 0, before anything has happened, if DefinedSubFun must
 // do it.  In flash, as RBCallSub.
-extern uint32_t stackwarn;           // MMBasic.c: 1K above the stack's floor
 void StackNearLimit(uint32_t stack); // MMBasic.c: the overflow error, or a note for the prompt's warning
 // RC_GUARD's check for a record's FUNCTION calls (see RBFinish), and RBCallFun's:
 // OPTION DEFAULT is not what they need (bit 0: a number, 1: float, 2: integer);
@@ -4309,10 +4308,10 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
     uint32_t stack;
     // TestStackOverflow (MMBasic.c), which the text path's evaluator makes at every
     // value: a recursion through compiled calls never reaches it
-    __asm volatile("MRS %0, msp" : "=r"(stack));
+    READ_STACK_POINTER(stack);
     if (stack < stackwarn)
         StackNearLimit(stack);
-    if (gosubindex >= MAXGOSUB)
+    if (gosubindex >= GosubLimit)
         return 0; // (the same at every call of the statement: only its first can find it so)
     if ((pc[2] >> 8) && RBDefaultBad(pc[2] >> 8))
         error("OPTION DEFAULT changed by a FUNCTION in this statement"); // (the record's guard held at its start)
@@ -4469,7 +4468,11 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
    same XIP cache sets as each other (pixart 18% slower when Stream.c's -Os
    moved them). */
 #define RBSPLICETEXT __attribute__((section(".text.RBSplice")))
+#ifdef USE_THREADS
+union cell *RBSplice; // (each thread's: Thread.c saves it at a switch)
+#else
 static union cell *RBSplice;
+#endif
 extern char CMM1; // Draw.c: OPTION LEGACY
 
 RBSPLICETEXT unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *ta)
@@ -4749,7 +4752,7 @@ static __attribute__((noinline)) void RBForPush(void *vptr, int vartype)
             g_forindex--;
             break;
         }
-    if (g_forindex == MAXFORLOOPS)
+    if (g_forindex == ForLimit)
         error("Too many nested FOR loops");
     g_forstack[g_forindex].var = vptr;
     g_forstack[g_forindex].vartype = vartype; // the loop variable's type
@@ -4800,7 +4803,7 @@ static __attribute__((noinline)) void RBDoPush(unsigned char *doptr, unsigned ch
             g_doindex--;
             break;
         }
-    if (g_doindex == MAXDOLOOPS)
+    if (g_doindex == DoLimit)
         error("Too many nested DO or WHILE loops");
     ds = &g_dostack[g_doindex];
     ds->evalptr = evalptr;

@@ -1,0 +1,11 @@
+ok  thread0: four pauses of60 ms, each within 4 ms
+ok  thread1: four pauses of70 ms, each within 4 ms
+ok  thread2: four pauses of80 ms, each within 4 ms
+ok  thread3: four pauses of90 ms, each within 4 ms
+ok  side by side: the longest four, not all sixteen
+ok  thread0: the same with a busy thread running
+ok  thread1: the same with a busy thread running
+ok  thread2: the same with a busy thread running
+ok  thread3: the same with a busy thread running
+ok  the busy thread ran meanwhile
+tpause: 10 of 10 passed

@@ -1526,6 +1526,7 @@ bool click_handle_gui_subcommand(unsigned char *cmdline_in)
        Refuse loudly so the programmer notices early. */
     if (InterruptReturn != NULL)
         error("GUI CLICK / DOWN / UP cannot be used in an interrupt routine");
+    THREAD_MAIN_ONLY(); // (its wait takes interrupts, with the one saved state: the main program's, Thread.c)
 
     if (checkstring(p, (unsigned char *)"DOWN"))
     {

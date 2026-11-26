@@ -1,0 +1,11 @@
+ok  thread0: every sum and every local right
+ok  thread0: it ran
+ok  thread1: every sum and every local right
+ok  thread1: it ran
+ok  thread2: every sum and every local right
+ok  thread2: it ran
+ok  thread3: every sum and every local right
+ok  thread3: it ran
+ok  thread4: every sum and every local right
+ok  thread4: it ran
+tbind: 10 of 10 passed

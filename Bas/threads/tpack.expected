@@ -1,0 +1,4 @@
+ok  eight threads of LOCALS 24 kept their locals
+ok  the main program's locals are its own
+ok  a ninth is refused
+tpack: 3 of 3 passed

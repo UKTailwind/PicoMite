@@ -1,0 +1,7 @@
+ok  SQL in a thread: three rows
+ok  their sum
+ok  their names, in order
+ok  and the busy thread ran
+ok  SQL in the main program while a thread runs
+ok  and the thread ran
+tsql: 6 of 6 passed

@@ -246,8 +246,16 @@ static inline __attribute__((always_inline)) void PSFreed(unsigned char *last)
         ps_top_hint = (unsigned char *)PSRAMbase + ((unsigned int)(last - (unsigned char *)PSRAMbase) & ~(PAGESIZE - 1));
 }
 #endif
+#ifdef USE_THREADS
+char *g_StrTmp_main[MAXTEMPSTRINGS];          // used to track temporary string space on the heap
+char g_StrTmpLocalIndex_main[MAXTEMPSTRINGS]; // used to track the g_LocalIndex for each temporary string space on the heap
+char **g_StrTmp = g_StrTmp_main;              // (the running thread's own: Memory.h)
+char *g_StrTmpLocalIndex = g_StrTmpLocalIndex_main;
+int TempLimit = MAXTEMPSTRINGS;
+#else
 char *g_StrTmp[MAXTEMPSTRINGS];          // used to track temporary string space on the heap
 char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalIndex for each temporary string space on the heap
+#endif
 
 void *getheap(int size);
 unsigned int UsedHeap(void);
@@ -1855,6 +1863,19 @@ void MIPS16 cmd_memory(void)
     IntToStrPad((char *)inpbuf + strlen((char *)inpbuf), 100 - VarPercent - GeneralPercent, ' ', 2, 10);
     strcat((char *)inpbuf, "%) Free\r\n");
     MMPrintString((char *)inpbuf);
+#ifdef USE_THREADS
+    { // the program's threads, run from a program (Thread.c): their stacks and records, part of General
+        int tk, tn = ThreadMemory(&tk);
+        if (tn)
+        {
+            IntToStrPad((char *)inpbuf, tk, ' ', 4, 10);
+            strcat((char *)inpbuf, "K      ");
+            IntToStr((char *)inpbuf + strlen((char *)inpbuf), tn, 10);
+            strcat((char *)inpbuf, tn == 1 ? " Thread (its stack and the records)\r\n" : " Threads (their stacks and the records)\r\n");
+            MMPrintString((char *)inpbuf);
+        }
+    }
+#endif
 }
 
 /*
@@ -1930,7 +1951,7 @@ void m_alloc(int type)
 // A pointer to the space is saved in an array so that it can be returned at the end of the command
 void __not_in_flash_func (*GetTempMemory)(int NbrBytes)
 {
-    if (g_StrTmpIndex >= MAXTEMPSTRINGS)
+    if (g_StrTmpIndex >= TempLimit)
         StandardError(29);
     g_StrTmpLocalIndex[g_StrTmpIndex] = g_LocalIndex;
     g_StrTmp[g_StrTmpIndex] = GetSystemMemory(NbrBytes);
@@ -1940,7 +1961,7 @@ void __not_in_flash_func (*GetTempMemory)(int NbrBytes)
 #if defined(rp2350)
 void __not_in_flash_func (*GetTempStrMemory)(void)
 {
-    if (g_StrTmpIndex >= MAXTEMPSTRINGS)
+    if (g_StrTmpIndex >= TempLimit)
         StandardError(29);
     g_StrTmpLocalIndex[g_StrTmpIndex] = g_LocalIndex;
     g_StrTmp[g_StrTmpIndex] = GetSystemMemory(STRINGSIZE);
@@ -1950,7 +1971,7 @@ void __not_in_flash_func (*GetTempStrMemory)(void)
 
 void __not_in_flash_func (*GetTempMainMemory)(int NbrBytes)
 {
-    if (g_StrTmpIndex >= MAXTEMPSTRINGS)
+    if (g_StrTmpIndex >= TempLimit)
         StandardError(29);
     g_StrTmpLocalIndex[g_StrTmpIndex] = g_LocalIndex;
     g_StrTmp[g_StrTmpIndex] = GetMemory(NbrBytes);
@@ -2137,7 +2158,7 @@ void InitHeap(bool all)
     if (all)
         memset(psmap, 0, sizeof(psmap));
 #endif
-    for (i = 0; i < MAXTEMPSTRINGS; i++)
+    for (i = 0; i < TempLimit; i++)
         g_StrTmp[i] = NULL;
 #ifdef PICOMITEVGA
     WriteBuf = (unsigned char *)FRAMEBUFFER;

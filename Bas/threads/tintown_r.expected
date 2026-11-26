@@ -1,0 +1,11 @@
+the main program waits for a line? hello
+
+ok  a thread's SETTICK ran while the main program was in INPUT
+ok  in the thread that set it up
+ok  with that thread's colour
+ok  the main program's own SETTICK waited for its INPUT to end
+ok  and runs in the main program
+ok  a paused thread's interrupt waits for it
+ok  and runs when it is resumed
+ok  a routine whose thread has ended runs in the main program
+tintown: 8 of 8 passed

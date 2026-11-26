@@ -1950,6 +1950,10 @@ static ldstate_t *ldsql;
 static const cmm2mod_head *ldsqlhead;
 static void *ldsqlarea, *ldsqlheap, *ldsqlstack;
 static uint32_t ldsqlpsp __attribute__((used)), ldsqlpsplim __attribute__((used));   // its stack: top, and limit
+#ifdef USE_THREADS
+static uint32_t ldsqlthpsp __attribute__((used)), ldsqlthlim __attribute__((used));  // a thread's PSP and PSPLIM while
+                                                                                    // it calls the module (0: none)
+#endif
 static void *ldsqlfn __attribute__((used));                         // the function LoaderSqlCall calls
 
 // ldsqlfn called on the SQL module's stack, with r0-r3 as they came and its results (r0-r1) as it leaves them: so cast
@@ -1959,7 +1963,11 @@ static void *ldsqlfn __attribute__((used));                         // the funct
 __attribute__((naked)) static void LoaderSqlCall(void)
 {
     __asm volatile(
+#ifdef USE_THREADS
+        "push   {r4, r5, r6, r7, r8, lr} \n" /* (r7, r8: a thread's call, below; r0-r3 are the arguments) */
+#else
         "push   {r4, r5, r6, lr}    \n"
+#endif
         "ldr    r4, =ld             \n" /* ld kept in r5, ldsql made ld */
         "ldr    r5, [r4]            \n"
         "ldr    r6, =ldsql          \n"
@@ -1968,6 +1976,21 @@ __attribute__((naked)) static void LoaderSqlCall(void)
         "ldr    r6, =LoaderModBusy  \n"
         "mov    r12, #1             \n"
         "str    r12, [r6]           \n"
+#ifdef USE_THREADS
+        "mrs    r12, control        \n" /* called from a thread, on the process stack: its PSP and PSPLIM kept, */
+        "tst    r12, #2             \n" /* and the main stack taken, as the main program's call is made */
+        "beq    1f                  \n"
+        "mrs    r7, psplim          \n"
+        "ldr    r8, =ldsqlthlim     \n"
+        "str    r7, [r8]            \n"
+        "mrs    r7, psp             \n"
+        "ldr    r8, =ldsqlthpsp     \n"
+        "str    r7, [r8]            \n"
+        "bic    r12, r12, #2        \n"
+        "msr    control, r12        \n"
+        "isb                        \n"
+        "1:                         \n"
+#endif
         "ldr    r12, =ldsqlpsplim   \n" /* the module's stack taken */
         "ldr    r12, [r12]          \n"
         "msr    psplim, r12         \n"
@@ -1989,7 +2012,25 @@ __attribute__((naked)) static void LoaderSqlCall(void)
         "msr    psplim, r12         \n"
         "str    r12, [r6]           \n" /* LoaderModBusy 0 */
         "str    r5, [r4]            \n" /* ld put back */
+#ifdef USE_THREADS
+        "ldr    r8, =ldsqlthpsp     \n" /* a thread's call: its stack again, from which the pop is made */
+        "ldr    r7, [r8]            \n"
+        "cbz    r7, 2f              \n"
+        "msr    psp, r7             \n" /* (PSPLIM is 0 here: the module's was cleared above) */
+        "ldr    r12, =ldsqlthlim    \n"
+        "ldr    r12, [r12]          \n"
+        "msr    psplim, r12         \n"
+        "mov    r12, #0             \n"
+        "str    r12, [r8]           \n"
+        "mrs    r12, control        \n"
+        "orr    r12, r12, #2        \n"
+        "msr    control, r12        \n"
+        "isb                        \n"
+        "2:                         \n"
+        "pop    {r4, r5, r6, r7, r8, pc} \n"
+#else
         "pop    {r4, r5, r6, pc}    \n"
+#endif
         ".ltorg                     \n");
 }
 

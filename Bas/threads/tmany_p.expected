@@ -1,0 +1,9 @@
+ok  400 threads ran to their end
+ok  the heap is as it was
+ok  and the on-chip heap
+ok  no variable left behind
+ok  a number in use is refused
+ok  a name that is not a SUB is refused
+ok  THREAD EXIT in the main program is refused
+ok  ERASE is refused while a thread is running
+tmany: 8 of 8 passed

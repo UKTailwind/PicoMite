@@ -934,6 +934,7 @@ void edit(unsigned char *cmdline, bool cmdfile)
 /*  @endcond */
 void cmd_edit(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     edit(cmdline, true);
 }
 void cmd_editfile(void)

@@ -204,7 +204,9 @@ void CallExecuteProgram(char *p)
 #ifdef SUBPROFILE
     EnterLocalFrame();
 #endif
+    THREAD_HOLD_BEGIN(); // (no thread switch in the BASIC the CSUB runs: its own state is not a thread's, Thread.h)
     ExecuteProgram((unsigned char *)p);
+    THREAD_HOLD_END();
     nextstmt = nextstmtSaved;
     g_LocalIndex--;
 #ifdef SUBPROFILE

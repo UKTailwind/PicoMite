@@ -248,10 +248,12 @@ static void usercall(const cmm2user_head *t, char *text, cmm2_value *v)
         longjmp(ErrNext, 1);
     }
     userdepth = depth + 1;
+    THREAD_HOLD_BEGIN(); // (no thread switch in BASIC the module runs: its call has its own mark, as the CMM2's)
     if (v)
         t->function(text, v);
     else
         t->command(text);
+    THREAD_HOLD_END();
     userdepth = depth;
     memcpy(ErrNext, savenext, sizeof(jmp_buf));
     memcpy(mark, savemark, sizeof(jmp_buf));

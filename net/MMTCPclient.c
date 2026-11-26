@@ -372,7 +372,7 @@ int cmd_tcpclient(void)
                 Timer4 = timeout;
                 while (!state->complete && Timer4 && !(err == ERR_OK))
                     if (startupcomplete)
-                        cyw43_arch_poll();
+                        { cyw43_arch_poll(); NetYield(); }
                 web_async_check_error();
                 if (!Timer4)
                     error("Failed to convert web address");
@@ -389,7 +389,7 @@ int cmd_tcpclient(void)
         Timer4 = timeout;
         while (!state->connected && Timer4)
             if (startupcomplete)
-                cyw43_arch_poll();
+                { cyw43_arch_poll(); NetYield(); }
         web_async_check_error();
         if (!Timer4)
         {
@@ -438,7 +438,7 @@ int cmd_tcpclient(void)
             {
                 Timer4 = timeout;
                 while (!state->complete && Timer4 && !(err == ERR_OK))
-                    ProcessWeb(0);
+                    { ProcessWeb(0); NetYield(); }
                 if (!Timer4)
                     error("Failed to convert web address");
                 state->complete = 0;
@@ -456,7 +456,7 @@ int cmd_tcpclient(void)
         {
             {
                 if (startupcomplete)
-                    ProcessWeb(0);
+                    { ProcessWeb(0); NetYield(); }
             }
         }
         if (!Timer4)
@@ -516,7 +516,7 @@ int cmd_tcpclient(void)
                 Timer4 = timeout;
                 while (!state->complete && Timer4 && !(err == ERR_OK))
                     if (startupcomplete)
-                        cyw43_arch_poll();
+                        { cyw43_arch_poll(); NetYield(); }
                 web_async_check_error();
                 if (!Timer4)
                     error("Failed to convert web address");
@@ -533,7 +533,7 @@ int cmd_tcpclient(void)
         Timer4 = timeout;
         while (!state->connected && Timer4)
             if (startupcomplete)
-                cyw43_arch_poll();
+                { cyw43_arch_poll(); NetYield(); }
         if (!state->connected)
         {
             /* Handshake never completed (timeout or async TLS error). Tear the
@@ -591,7 +591,7 @@ int cmd_tcpclient(void)
             {
                 Timer4 = timeout;
                 while (!state->complete && Timer4 && !(err == ERR_OK))
-                    ProcessWeb(0);
+                    { ProcessWeb(0); NetYield(); }
                 if (!Timer4)
                     error("Failed to convert web address");
                 state->complete = 0;
@@ -608,7 +608,7 @@ int cmd_tcpclient(void)
         while (!state->connected && Timer4)
         {
             if (startupcomplete)
-                ProcessWeb(0);
+                { ProcessWeb(0); NetYield(); }
         }
         if (!state->connected)
         {
@@ -658,7 +658,7 @@ int cmd_tcpclient(void)
             error("write failed %", err);
         Timer4 = timeout;
         while (!state->buffer_len && Timer4)
-            ProcessWeb(0);
+            { ProcessWeb(0); NetYield(); }
         if (!Timer4)
         {
             tcp_client_disarm(state); /* the reply may still be coming */
@@ -667,7 +667,7 @@ int cmd_tcpclient(void)
         else
             Timer4 = 500;
         while (Timer4)
-            ProcessWeb(0);
+            { ProcessWeb(0); NetYield(); }
         tcp_client_disarm(state); /* the command is over: data after it must not land in the array, which may be a LOCAL */
         return 1;
     }
@@ -708,7 +708,7 @@ int cmd_tcpclient(void)
         state->buffer_len = 0;
         Timer4 = timeout;
         while (!state->buffer_len && Timer4)
-            ProcessWeb(0);
+            { ProcessWeb(0); NetYield(); }
         if (!Timer4)
         {
             tcp_client_disarm(state); /* the reply may still be coming */
@@ -717,7 +717,7 @@ int cmd_tcpclient(void)
         else
             Timer4 = 500;
         while (Timer4)
-            ProcessWeb(0);
+            { ProcessWeb(0); NetYield(); }
         tcp_client_disarm(state); /* the command is over: data after it must not land in the array, which may be a LOCAL */
         return 1;
     }
@@ -778,7 +778,7 @@ int cmd_tcpclient(void)
                 if (!Timer4 || (inflight <= INFLIGHT_CAP && space >= 512))
                     break;
                 altcp_output((struct altcp_pcb *)state->tcp_pcb);
-                ProcessWeb(0);
+                { ProcessWeb(0); NetYield(); }
             }
             if (!Timer4)
                 break;
@@ -792,19 +792,19 @@ int cmd_tcpclient(void)
             {
                 sent += n;
                 altcp_output((struct altcp_pcb *)state->tcp_pcb);
-                ProcessWeb(0);
+                { ProcessWeb(0); NetYield(); }
             }
             else if (err == ERR_MEM)
             {
                 /* momentarily out of pbufs — drain and retry the same segment */
                 altcp_output((struct altcp_pcb *)state->tcp_pcb);
-                ProcessWeb(0);
+                { ProcessWeb(0); NetYield(); }
             }
             else
                 error("write failed %", err);
         }
         altcp_output((struct altcp_pcb *)state->tcp_pcb);
-        ProcessWeb(0);
+        { ProcessWeb(0); NetYield(); }
         if (sent < len)
             error("Send timeout");
         return 1;

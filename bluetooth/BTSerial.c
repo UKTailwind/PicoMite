@@ -758,7 +758,7 @@ static bool sp_wait_while(sp_state_t state, uint32_t timeout_ms)
     uint64_t end = time_us_64() + (uint64_t)timeout_ms * 1000u;
     while (sp_state == state)
     {
-        CheckAbort();
+        { CheckAbort(); NetYield(); }
         if (time_us_64() > end)
             return false;
     }
@@ -926,7 +926,7 @@ void bt_serial_disconnect(void)
     uint64_t end = time_us_64() + 5000000u;
     while (sp_state != SP_NONE)
     {
-        CheckAbort();
+        { CheckAbort(); NetYield(); }
         if (time_us_64() > end)
             error("Serial device did not release the connection");
     }

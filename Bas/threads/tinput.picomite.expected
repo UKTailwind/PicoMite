@@ -1,0 +1,18 @@
+the main program's? first
+
+ok  the main program in INPUT: its line
+ok  the busy threads ran while it was typed
+ok  no interrupt was taken in INPUT, and the one that waited came after it
+a thread's two? second, 22
+
+ok  INPUT in a thread: its string
+ok  and its number
+ok  the busy threads ran while it was typed
+a thread's line? a line that is longer than five
+
+ok  LINE INPUT in a thread, another using strings of five
+with a thread drawing text? fourth
+
+ok  its line
+ok  the line typed kept its place: the print position after it
+tinput: 9 of 9 passed

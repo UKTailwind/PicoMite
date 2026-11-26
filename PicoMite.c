@@ -906,9 +906,33 @@ uint8_t PSRAMpin;
         // Note: classicread and nunchuckread are global variables declared in I2C.c
         static uint64_t lastrun = 0;
         uint64_t timenow = time_us_64();
+#ifdef USE_THREADS
+        /* A thread's stack is in use: the housekeeping runs on the main stack (Thread.c), this function called again
+           there. That call is past the time test already: the test, met again with the time just noted, sent it
+           straight back, and while only threads ran nothing here ran at all (no USB console read, so no INPUT in a
+           thread and no Ctrl-C, on a PicoMite whose console is USB). Calls nested inside it are tested as always. */
+        static int OnMain = 0;
+        if (OnMain)
+            OnMain = 0;
+        else
+        {
+            if (timenow - lastrun < 100)
+                return;
+            lastrun = timenow;
+            if (ThreadCount)
+            {
+                OnMain = 1;
+                int ran = ThreadOnMainStack(routinechecks);
+                OnMain = 0;
+                if (ran)
+                    return;
+            }
+        }
+#else
         if (timenow - lastrun < 100)
             return;
         lastrun = timenow;
+#endif
 #if defined(PICOMITEVGA) || defined(GUICONTROLS)
         /* Mouse / virtual-cursor refresh. routinechecks() runs from the
            prompt's getchar loop as well as during program execution, so
@@ -1628,7 +1652,13 @@ int __not_in_flash_func(MMInkey)(void)
                 break;
             c = MMfgetc(filenbr);
             if (c <= 0)
+            {
+#ifdef USE_THREADS
+                if (ThreadCount)
+                    ThreadPoll(); // INPUT with threads: they run meanwhile, and this takes no interrupt in it, as always
+#endif
                 continue; // keep looping if there are no chars
+            }
 
             // If the previous console line ended on CR, ignore a following LF once.
             if (filenbr == 0 && skip_console_lf)
@@ -2350,6 +2380,10 @@ int __not_in_flash_func(MMInkey)(void)
         {
             ShowCursor(1);
             c = MMInkey();
+#ifdef USE_THREADS
+            if (c == -1 && ThreadCount)
+                ThreadPoll(); // a program with threads: they run while this waits for a key (Thread.c; INPUT, INPUT$)
+#endif
         } while (c == -1);
         ShowCursor(0);
         return c;
@@ -2457,6 +2491,18 @@ int __not_in_flash_func(MMInkey)(void)
         InkeyTimer++;
         PauseTimer++;
         IntPauseTimer++;
+#ifdef USE_THREADS
+        if (ThreadSliceLeft && --ThreadSliceLeft == 0)
+        { // the running thread's time slice is up: the statement tail lets the next run (Thread.c). Nothing with no thread
+            ThreadSliceLeft = ThreadSliceLen;
+            IntReady.tick |= INT_TICK_SLICE;
+        }
+        if (ThreadWakeMs && (int)((unsigned int)mSecTimer - ThreadWakeMs) >= 0)
+        { // a sleeping thread's PAUSE has ended: likewise
+            ThreadWakeMs = 0;
+            IntReady.tick |= INT_TICK_SLICE;
+        }
+#endif
         ds18b20Timer++;
         GPSTimer++;
         I2CTimer++;
@@ -4539,6 +4585,12 @@ uint32_t testPSRAM(void)
 #endif
         if (setjmp(mark) != 0)
         {
+#ifdef USE_THREADS
+            THREAD_LANDING();   // first: a longjmp from a thread's own stack left SP in PSP (Thread.h)
+            ThreadsStopped();   // where each thread was, then they end: this is the main stack now (Thread.c)
+            ThreadsEnd();
+            ThreadsStoppedShow();
+#endif
             // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
             ConsoleRedirect = 0; // LIST ALL #n etc cut short: the prompt is the console's (SerialPutchar's Ctrl-C jumps here directly)
             FlashLoad = 0;

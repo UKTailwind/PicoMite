@@ -1,0 +1,12 @@
+keys?
+
+ok  main program busy: the keys, in order
+more?
+
+ok  main program in PAUSE: the keys, in order
+last?
+
+ok  with a thread inside a FUNCTION: the keys, in order
+ok  every key's routine ran in the main program
+ok  the threads ran meanwhile
+tkey: 5 of 5 passed

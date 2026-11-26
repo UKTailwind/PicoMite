@@ -150,6 +150,14 @@
         if (!vactive_cmdlist_posted)
         {
             v_scanline = (v_scanline + 1) % MODE_V_TOTAL_LINES;
+#ifdef USE_THREADS
+            if (v_scanline == 0)
+            { // a frame starts: the threads' frame waits (Thread.c)
+                FrameCount++;
+                if (ThreadFrameWaiters)
+                    ThreadFrameDue = 1;
+            }
+#endif
         }
     }
 

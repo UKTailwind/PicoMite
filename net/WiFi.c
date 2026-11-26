@@ -272,7 +272,7 @@
                     break;
                 for (int i = 0; i < 100; i++)
                 {
-                    cyw43_arch_poll();
+                    { cyw43_arch_poll(); NetYield(); }
                     uSec(10000);
                 }
             }
@@ -591,7 +591,21 @@ static int scan_result(void *env, const cyw43_ev_scan_result_t *result)
         return 0;
 }
 /*  @endcond */
+#ifdef USE_THREADS
+static void cmd_web_body(void);
+/* WEB: the network is the running thread's for the command, so that one thread at a time is in its code and its
+   waits can let the others run (Thread.c, ThreadNetEnter; NetYield in the waits). With no thread, the command. */
 void cmd_web(void)
+{
+        if (!ThreadNetEnter(0))
+                return; // (an interrupt first: the statement runs again after it)
+        cmd_web_body();
+        ThreadNetLeave(0);
+}
+static void cmd_web_body(void)
+#else
+void cmd_web(void)
+#endif
 {
         unsigned char *tp;
         if (!startupcomplete) // the radio didn't start at boot: nothing here can reach it
@@ -727,7 +741,7 @@ void cmd_web(void)
                 Timer4 = 500;
                 while (Timer4)
                         if (startupcomplete)
-                                ProcessWeb(0);
+                                { ProcessWeb(0); NetYield(); }
                 WebScanActive = 0;
 #ifdef PICOMITEPC3
                 if (btc_changed)

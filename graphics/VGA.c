@@ -154,6 +154,11 @@
         if (line >= QVGA_VTOT)   // last scanline?
         {
             QVgaFrame++; // increment frame counter
+#ifdef USE_THREADS
+            FrameCount++; // (the threads' frame waits: Thread.c)
+            if (ThreadFrameWaiters)
+                ThreadFrameDue = 1;
+#endif
             line = 0;    // restart scanline
             tile = 0;
             tc = 0;

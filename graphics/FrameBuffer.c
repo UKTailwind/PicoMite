@@ -314,6 +314,37 @@ void closeframebuffer(char layer)
     FrameBuf = NULL;
     WriteBuf = NULL;
 }
+#ifdef USE_THREADS
+/* A thread switch: the next thread's FRAMEBUFFER WRITE target, set as FRAMEBUFFER WRITE N, F or L sets it (Thread.c,
+   ScreenLoad, only when it differs from the running one's). While FRAMEBUFFER MERGE ,R has the panel, a thread that
+   draws on N draws in F, as MERGE ,R makes the thread that starts it do. */
+void ThreadWriteTarget(unsigned char *buf)
+{
+#ifdef GUICONTROLS
+    CursorHide();
+#endif
+#ifdef PICOMITE
+    if (mergerunning && (buf == NULL || (buf != FrameBuf && buf != LayerBuf)))
+        buf = FrameBuf;
+#endif
+    if (buf != NULL && (buf == FrameBuf || buf == LayerBuf))
+    {
+        WriteBuf = buf;
+        setframebuffer();
+    }
+    else
+        restorepanel();
+}
+// FRAMEBUFFER CLOSE: not a buffer another thread writes to (Thread.c)
+static void CloseInUse(unsigned char *buf)
+{
+    int n;
+    if (ThreadCount && (n = ThreadPageInUse(buf)) >= 0)
+        error("Framebuffer in use by thread %", n);
+}
+#else
+#define CloseInUse(buf)
+#endif
 #include <stdint.h>
 #include <string.h>
 
@@ -1244,17 +1275,13 @@ void cmd_framebuffer(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"WAIT")))
     {
-        if (Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE == ST7796SP || Option.DISPLAY_TYPE == ST7796S || Option.DISPLAY_TYPE == ST7789B || Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ILI9488P)
-        {
-            while (GetLineILI9341() != 0)
-            {
-            }
-        }
+        FrameWait();
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CLOSE")))
     {
         if (checkstring(p, (unsigned char *)"F"))
         {
+            CloseInUse(FrameBuf);
 #ifdef PICOMITE
             if (mergerunning)
             {
@@ -1274,6 +1301,7 @@ void cmd_framebuffer(void)
         }
         else if (checkstring(p, (unsigned char *)"L"))
         {
+            CloseInUse(LayerBuf);
 #ifdef PICOMITE
             if (mergerunning)
             {
@@ -1292,7 +1320,11 @@ void cmd_framebuffer(void)
             LayerBuf = NULL;
         }
         else
+        {
+            CloseInUse(FrameBuf);
+            CloseInUse(LayerBuf);
             closeframebuffer('A');
+        }
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"COPY")))
     {
@@ -1450,6 +1482,24 @@ static unsigned char *shared_slot(void)
 }
 #endif
 
+#ifdef USE_THREADS
+/* A thread switch: the next thread's FRAMEBUFFER WRITE target, as FRAMEBUFFER WRITE sets it (Thread.c, ScreenLoad,
+   only when it differs from the running one's). */
+void ThreadWriteTarget(unsigned char *buf)
+{
+    CursorHide();
+    WriteBuf = buf;
+}
+// FRAMEBUFFER CLOSE: not a buffer another thread writes to (Thread.c)
+static void CloseInUse(unsigned char *buf)
+{
+    int n;
+    if (ThreadCount && buf != DisplayBuf && (n = ThreadPageInUse(buf)) >= 0)
+        error("Framebuffer in use by thread %", n);
+}
+#else
+#define CloseInUse(buf)
+#endif
 void closeframebuffer(char layer)
 {
 #ifdef PICOMITEVGA
@@ -1754,26 +1804,36 @@ void cmd_framebuffer(void)
     {
         if (checkstring(p, (unsigned char *)"F"))
         {
+            CloseInUse(FrameBuf);
             closeframebuffer('F');
         }
         else if (checkstring(p, (unsigned char *)"L"))
         {
             /* 'L' is the layer buffer and 'T' the top layer - these two were
                transposed, so each freed the other's allocation. */
+            CloseInUse(LayerBuf);
             closeframebuffer('L');
 #ifdef rp2350
         }
         else if (checkstring(p, (unsigned char *)"T"))
         {
+            CloseInUse(SecondLayer);
             closeframebuffer('T');
         }
         else if (checkstring(p, (unsigned char *)"2"))
         {
+            CloseInUse(SecondFrame);
             closeframebuffer('2');
 #endif
         }
         else
+        {
+            CloseInUse(FrameBuf);
+            CloseInUse(LayerBuf);
+            CloseInUse(SecondLayer);
+            CloseInUse(SecondFrame);
             closeframebuffer('A');
+        }
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"WRITE")))
     {
@@ -1892,15 +1952,7 @@ void cmd_framebuffer(void)
         {
             if (!checkstring(argv[2], (unsigned char *)"B"))
                 SyntaxError();
-#ifdef HDMI
-            while (v_scanline != 0)
-            {
-            }
-#else
-            while (QVgaScanLine != 0)
-            {
-            }
-#endif
+            FrameWait();
         }
         /* N is rewritten underneath the GUI cursor: erase it first, and hold
            the periodic refresh off for the whole pass so its save buffer is
@@ -1944,15 +1996,7 @@ void cmd_framebuffer(void)
         cmd_span(p);
     else if ((p = checkstring(cmdline, (unsigned char *)"WAIT")))
     {
-#ifdef HDMI
-        while (v_scanline != 0)
-        {
-        }
-#else
-        while (QVgaScanLine != 0)
-        {
-        }
-#endif
+        FrameWait();
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"COPY")))
     {
@@ -1991,15 +2035,7 @@ void cmd_framebuffer(void)
         {
             if (checkstring(argv[4], (unsigned char *)"B"))
             {
-#ifdef HDMI
-                while (v_scanline != 0)
-                {
-                }
-#else
-                while (QVgaScanLine != 0)
-                {
-                }
-#endif
+                FrameWait();
             }
             else
                 SyntaxError();

@@ -153,7 +153,7 @@ void cmd_udp(unsigned char *p)
                 Timer4 = timeout;
                 while (!state->complete && Timer4 && !(err == ERR_OK))
                     if (startupcomplete)
-                        cyw43_arch_poll();
+                        { cyw43_arch_poll(); NetYield(); }
                 web_async_check_error();
                 if (!Timer4)
                     error("Failed to convert web address");

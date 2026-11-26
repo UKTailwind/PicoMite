@@ -1186,6 +1186,7 @@ void MIPS16 cmd_psram(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CHAIN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXRAMSLOTS);
@@ -1194,6 +1195,7 @@ void MIPS16 cmd_psram(void)
         if (!(*slotmem == T_NEWLINE))
             error("RAM slot empty"); // (before the switch: the program in memory stays)
         ProgMemory = slotmem;
+        THREADS_END(); // (its threads end with the program it replaces, as CHAIN's do)
         FlashLoad = i;
         if (PrepareProgram(true))
         {
@@ -1205,6 +1207,7 @@ void MIPS16 cmd_psram(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         int i = getint(p, 0, MAXRAMSLOTS);
         unsigned char *slotmem = i ? (unsigned char *)(uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE)
                                    : (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
@@ -1821,6 +1824,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CHAIN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXFLASHSLOTS);
@@ -1831,6 +1835,7 @@ void MIPS16 cmd_flash(void)
         if (!(*slotmem == T_NEWLINE))
             error("Flash slot empty"); // (before the switch: the program in memory stays)
         ProgMemory = slotmem;
+        THREADS_END(); // (its threads end with the program it replaces, as CHAIN's do)
         FlashLoad = i;
         if (PrepareProgram(true))
         {
@@ -1842,6 +1847,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         int i = getint(p, 0, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
@@ -3497,6 +3503,7 @@ void MIPS16 cmd_save(void)
     }
     if ((p = checkstring(cmdline, (unsigned char *)"CONTEXT")) != NULL)
     {
+        THREADS_NONE(); // (the main program's state alone is saved: Thread.c)
         SaveContext();
         if (checkstring(p, (unsigned char *)"CLEAR"))
             ClearVars(0, false);
@@ -5593,6 +5600,7 @@ void MIPS16 cmd_load(void)
     p = checkstring(cmdline, (unsigned char *)"CONTEXT");
     if (p)
     {
+        THREADS_NONE(); // (it puts back the main program's stacks: Thread.c)
         if (checkstring(p, (unsigned char *)"KEEP"))
             RestoreContext(true);
         else
@@ -5649,6 +5657,7 @@ void MIPS16 cmd_load(void)
         return;
     }
 #endif
+    THREAD_MAIN_ONLY(); // (loading a program is the main program's only: Thread.c; LOAD IMAGE and the rest are any thread's)
     getcsargs(&cmdline, 5);
     CloseAudio(1);
     if (!(argc & 1) || argc == 0)
@@ -7506,6 +7515,7 @@ int check_line_length(const char *text, int *linein)
 }
 void cmd_autosave(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     unsigned char *buf, *p;
     int c, prevc = 0, crunch = false;
     int count = 0;

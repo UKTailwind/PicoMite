@@ -700,13 +700,25 @@ void fun_epoch(void)
     targ = T_INT;
 }
 
+#ifdef USE_THREADS
+uint64_t PauseStart; // the running thread's: an interrupted PAUSE goes on from it (MM_Misc.h)
+#endif
+#ifdef USE_THREADS
+/* PAUSE's wait of f microseconds, pausetoken the statement to run again if an interrupt cuts it short. CPU SLEEP's
+   too while the program has threads: a PAUSE there, as the CMM2's, so the other threads run meanwhile. */
+void PauseUs(MMFLOAT f, unsigned char *pausetoken)
+{
+    uint64_t us;
+    static uint64_t IntPauseTimer;
+#else
 void cmd_pause(void)
 {
     unsigned char *pausetoken = CmdTokenPtr; // this statement, to re-run if an interrupt cuts the pause short
     MMFLOAT f;
     uint64_t us;
-    static uint64_t PauseTimer, IntPauseTimer;
+    static uint64_t PauseStart, IntPauseTimer;
     f = getnumber(cmdline) * 1000;    // the delay in microseconds
+#endif
     if (f < 0 || f > 2147483647000.0) // up to 2147483647 ms (about 24 days), as the manual says
         StandardError(21);
     if (f < 2)
@@ -714,8 +726,8 @@ void cmd_pause(void)
 
     if (f < 1500)
     {
-        PauseTimer = time_us_64() + (uint64_t)f;
-        while (time_us_64() < PauseTimer)
+        PauseStart = time_us_64() + (uint64_t)f;
+        while (time_us_64() < PauseStart)
         {
         } // if less than 1.5mS do the pause right now
         return; // and exit straight away
@@ -728,14 +740,20 @@ void cmd_pause(void)
         // first check if we have reentered (from an interrupt) and only zero the timer if we have NOT been interrupted.
         // This means an interrupted pause will resume from where it was when interrupted
         if (!PauseInterrupted)
-            PauseTimer = time_us_64();
+            PauseStart = time_us_64();
         PauseInterrupted = false;
+#ifdef USE_THREADS
+        ThreadDoing(1); // (the list after Ctrl-C: in PAUSE)
+#endif
 
-        while (time_us_64() < us + PauseTimer)
+        while (time_us_64() < us + PauseStart)
         {
             CheckAbort();
             if (check_interrupt())
             {
+#ifdef USE_THREADS
+                ThreadDoing(0);
+#endif
                 // if there is an interrupt fake the return point to the start of this stmt
                 // and return immediately to the program processor so that it can send us off
                 // to the interrupt routine.  When the interrupt routine finishes we should reexecute
@@ -746,8 +764,15 @@ void cmd_pause(void)
                 PauseInterrupted = true;      // show that this stmt was interrupted
                 return;                       // and let the interrupt run
             }
+#ifdef USE_THREADS
+            if (ThreadCount) // the threads run meanwhile (Thread.c): back at the time, for an interrupt, or when none can run
+                ThreadSleepUntil(us + PauseStart);
+#endif
         }
         PauseInterrupted = false;
+#ifdef USE_THREADS
+        ThreadDoing(0);
+#endif
     }
     else
     {
@@ -758,6 +783,13 @@ void cmd_pause(void)
             CheckAbort();
     }
 }
+#ifdef USE_THREADS
+void cmd_pause(void)
+{
+    unsigned char *pausetoken = CmdTokenPtr;        // this statement, to re-run if an interrupt cuts the pause short
+    PauseUs(getnumber(cmdline) * 1000, pausetoken); // the delay in microseconds
+}
+#endif
 
 #ifdef rp2350
 void cmd_longString(void)
@@ -1963,6 +1995,7 @@ static void LibraryRestartClear(void)
 #endif
 void MIPS16 cmd_library(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     unsigned char *tp;
     /********************************************************************************************************************
      ******* LIBRARY SAVE **********************************************************************************************/
@@ -5520,6 +5553,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"PROFILING");
     if (tp)
     {
+        THREADS_NONE(); // (it makes and frees the main program's frame times: Thread.c, ProfileFrames)
         unsigned char *p;
         if ((p = checkstring(tp, (unsigned char *)"ON")))
         {
@@ -9641,7 +9675,13 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(ep, (unsigned char *)"STACK"))
         {
+#ifdef USE_THREADS
+            uint32_t sp;
+            READ_STACK_POINTER(sp); // (the running thread's)
+            iret = (int64_t)sp;
+#else
             iret = (int64_t)((uint32_t)__get_MSP());
+#endif
             targ = T_INT;
             return;
         }
@@ -9708,6 +9748,26 @@ void MIPS16 fun_info(void)
             strcpy((char *)sret, "Ready");
         CtoM(sret);
         targ = T_STR;
+        return;
+    }
+#endif
+#ifdef USE_THREADS
+    else if ((tp = checkstring(ep, (unsigned char *)"THREAD")))
+    { // the thread running: 0 the main program (Thread.c)
+        unsigned char *lp = checkstring(tp, (unsigned char *)"LOCK"); // THREAD LOCK k: the thread that has lock k, -1 none
+        unsigned char *ap = checkstring(tp, (unsigned char *)"ARG");  // THREAD ARG n: a thread's call asks for its arguments
+        if (ap)
+        {
+            targ = ThreadArg(getinteger(ap), &iret, &fret, (char *)sret);
+            return;
+        }
+        if (lp)
+            iret = ThreadLockOwner(getint(lp, 1, MAXLOCKS));
+        else if (*tp)
+            iret = ThreadState(getint(tp, 0, MAXTHREADS)); // 0 not running, 1 running or ready, 2 in PAUSE, 3 paused, 4 waiting
+        else
+            iret = ThreadNumber();
+        targ = T_INT;
         return;
     }
 #endif
@@ -9879,10 +9939,20 @@ void MIPS16 cmd_cpu(void)
     {
         //        	int pullup=0;
         MMFLOAT totalseconds;
+#ifdef USE_THREADS
+        unsigned char *pausetoken = CmdTokenPtr; // (this statement, to run again after an interrupt: as PAUSE's)
+#endif
         getcsargs(&p, 3);
         totalseconds = getnumber(p);
         if (totalseconds <= 0.0)
             error("Invalid period");
+#ifdef USE_THREADS
+        if (ThreadCount)
+        { // with threads a PAUSE of n seconds, as the CMM2's CPU SLEEP: the other threads run meanwhile (Thread.c)
+            PauseUs(totalseconds * 1000000, pausetoken);
+            return;
+        }
+#endif
         sleep_us(totalseconds * 1000000);
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SPEED")))
@@ -10801,14 +10871,22 @@ static void ClearI2CStatus(volatile unsigned int *status, unsigned int bit)
 
 // check if an interrupt has occured and if so, set the next command to the interrupt routine
 // will return true if interrupt detected or false if not
+#ifdef USE_THREADS
+static int IntScanOnly = 0;  // IntScan: find a source that is due, take it, and give its routine back unrun
+static char *IntScanFound;
+#endif
 int checkdetailinterrupts(void)
 {
     int i, v;
     char *intaddr;
     static char rti[4]; // the IRETURN token, then zeros: the statement has to end in this array
+#ifdef USE_THREADS
+    if (!IntScanOnly && ThreadCount && (intaddr = ThreadIntTake()) != NULL)
+        goto GotAnInterrupt; // a routine another thread found and handed to this one, its owner (Thread.c)
+#endif
     for (int i = 1; i <= MAXPID; i++)
     {
-        if (PIDchannels[i].interrupt != NULL && time_us_64() > PIDchannels[i].timenext && PIDchannels[i].active)
+        if (PIDchannels[i].interrupt != NULL && time_us_64() > PIDchannels[i].timenext && PIDchannels[i].active && INTMAY(PIDchannels[i].interrupt))
         {
             PIDchannels[i].timenext = time_us_64() + (PIDchannels[i].PIDparams->T * 1000000);
             intaddr = (char *)PIDchannels[i].interrupt;
@@ -10817,20 +10895,20 @@ int checkdetailinterrupts(void)
     }
 
     // check for an  ON KEY loc  interrupt
-    if (KeyInterrupt != NULL && Keycomplete)
+    if (KeyInterrupt != NULL && Keycomplete && INTMAY(KeyInterrupt))
     {
         Keycomplete = false;
         intaddr = KeyInterrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 
-    if (OnKeyGOSUB && kbhitConsole())
+    if (OnKeyGOSUB && kbhitConsole() && INTMAY(OnKeyGOSUB))
     {
         intaddr = (char *)OnKeyGOSUB; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 #ifndef USBKEYBOARD
-    if (OnPS2GOSUB && PS2int)
+    if (OnPS2GOSUB && PS2int && INTMAY(OnPS2GOSUB))
     {
         intaddr = (char *)OnPS2GOSUB; // set the next stmt to the interrupt location
         PS2int = false;
@@ -10850,7 +10928,7 @@ int checkdetailinterrupts(void)
             {
                 int TXlevel = pio_sm_get_tx_fifo_level(pioinuse, sm);
                 int RXlevel = pio_sm_get_rx_fifo_level(pioinuse, sm);
-                if (RXlevel && pioRXinterrupts[sm][pio])
+                if (RXlevel && pioRXinterrupts[sm][pio] && INTMAY(pioRXinterrupts[sm][pio]))
                 { // is there a character in the buffer and has an interrupt been set?
                     intaddr = pioRXinterrupts[sm][pio];
                     goto GotAnInterrupt;
@@ -10860,6 +10938,8 @@ int checkdetailinterrupts(void)
                     int full = (pioinuse->sm[sm].shiftctrl & (1 << 30)) ? 8 : 4;
                     if (TXlevel != full && pioTXlast[sm][pio] == full)
                     { // was the buffer full last time and not now and is an interrupt set?
+                        if (!INTMAY(pioTXinterrupts[sm][pio]))
+                            continue; // (its thread cannot take it now: the edge kept, Thread.c)
                         intaddr = pioTXinterrupts[sm][pio];
                         pioTXlast[sm][pio] = TXlevel;
                         goto GotAnInterrupt;
@@ -10871,7 +10951,7 @@ int checkdetailinterrupts(void)
     }
     if (DMAinterruptRX)
     {
-        if (!dma_channel_is_busy(dma_rx_chan))
+        if (!dma_channel_is_busy(dma_rx_chan) && INTMAY(DMAinterruptRX))
         {
 #ifdef rp2350
             PIO pio = (dma_rx_pio == 0 ? pio0 : (dma_rx_pio == 1 ? pio1 : pio2));
@@ -10893,7 +10973,7 @@ int checkdetailinterrupts(void)
 #else
             PIO pio = (dma_tx_pio == 0 ? pio0 : pio1);
 #endif
-            if ((pio->flevel >> (dma_tx_sm * 8) & 0xf) == 0)
+            if ((pio->flevel >> (dma_tx_sm * 8) & 0xf) == 0 && INTMAY(DMAinterruptTX))
             {
                 intaddr = (char *)DMAinterruptTX;
                 DMAinterruptTX = NULL;
@@ -10906,14 +10986,14 @@ int checkdetailinterrupts(void)
 #ifdef GUICONTROLS
     if (Ctrl != NULL)
     {
-        if (gui_int_down && GuiIntDownVector)
+        if (gui_int_down && GuiIntDownVector && INTMAY(GuiIntDownVector))
         {                               // interrupt on pen down
             intaddr = GuiIntDownVector; // get a pointer to the interrupt routine
             gui_int_down = false;
             goto GotAnInterrupt;
         }
 
-        if (gui_int_up && GuiIntUpVector)
+        if (gui_int_up && GuiIntUpVector && INTMAY(GuiIntUpVector))
         {
             intaddr = GuiIntUpVector; // get a pointer to the interrupt routine
             gui_int_up = false;
@@ -10922,32 +11002,32 @@ int checkdetailinterrupts(void)
     }
 #endif
 
-    if (COLLISIONInterrupt != NULL && CollisionFound)
+    if (COLLISIONInterrupt != NULL && CollisionFound && INTMAY(COLLISIONInterrupt))
     {
         CollisionFound = false;
         intaddr = (char *)COLLISIONInterrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if (STCollisionInterrupt != NULL && STCollisionFound)
+    if (STCollisionInterrupt != NULL && STCollisionFound && INTMAY(STCollisionInterrupt))
     {
         STCollisionFound = false;
         intaddr = (char *)STCollisionInterrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 #ifdef PICOMITEWEB
-    if (TCPreceived && TCPreceiveInterrupt)
+    if (TCPreceived && TCPreceiveInterrupt && INTMAY(TCPreceiveInterrupt))
     {
         intaddr = (char *)TCPreceiveInterrupt; // get a pointer to the interrupt routine
         TCPreceived = 0;
         goto GotAnInterrupt;
     }
-    if (MQTTComplete && MQTTInterrupt != NULL)
+    if (MQTTComplete && MQTTInterrupt != NULL && INTMAY(MQTTInterrupt))
     {
         MQTTComplete = false;
         intaddr = (char *)MQTTInterrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if (UDPreceive && UDPinterrupt != NULL)
+    if (UDPreceive && UDPinterrupt != NULL && INTMAY(UDPinterrupt))
     {
         UDPreceive = false;
         intaddr = (char *)UDPinterrupt; // set the next stmt to the interrupt location
@@ -10956,7 +11036,7 @@ int checkdetailinterrupts(void)
 #endif
     for (int i = 0; i < 6; i++)
     {
-        if (nunInterruptc[i] != NULL && nunfoundc[i])
+        if (nunInterruptc[i] != NULL && nunfoundc[i] && INTMAY(nunInterruptc[i]))
         {
             nunfoundc[i] = false;
             intaddr = nunInterruptc[i];
@@ -10965,7 +11045,7 @@ int checkdetailinterrupts(void)
     }
     if (ADCInterrupt && dmarunning)
     {
-        if (!dma_channel_is_busy(ADC_dma_chan))
+        if (!dma_channel_is_busy(ADC_dma_chan) && INTMAY(ADCInterrupt))
         {
             __compiler_memory_barrier();
             adc_run(false);
@@ -10993,38 +11073,38 @@ int checkdetailinterrupts(void)
             goto GotAnInterrupt;
         }
     }
-    if (ADCInterrupt && ADCDualBuffering)
+    if (ADCInterrupt && ADCDualBuffering && INTMAY(ADCInterrupt))
     {
         ADCDualBuffering = false;
         intaddr = ADCInterrupt;
         goto GotAnInterrupt;
     }
 
-    if ((I2C_Status & I2C_Status_Slave_Receive_Rdy))
+    if ((I2C_Status & I2C_Status_Slave_Receive_Rdy) && INTMAY(I2C_Slave_Receive_IntLine))
     {
         ClearI2CStatus(&I2C_Status, I2C_Status_Slave_Receive_Rdy); // clear completed flag
         intaddr = I2C_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if ((I2C_Status & I2C_Status_Slave_Send_Rdy))
+    if ((I2C_Status & I2C_Status_Slave_Send_Rdy) && INTMAY(I2C_Slave_Send_IntLine))
     {
         ClearI2CStatus(&I2C_Status, I2C_Status_Slave_Send_Rdy); // clear completed flag
         intaddr = I2C_Slave_Send_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if ((I2C2_Status & I2C_Status_Slave_Receive_Rdy))
+    if ((I2C2_Status & I2C_Status_Slave_Receive_Rdy) && INTMAY(I2C2_Slave_Receive_IntLine))
     {
         ClearI2CStatus(&I2C2_Status, I2C_Status_Slave_Receive_Rdy); // clear completed flag
         intaddr = I2C2_Slave_Receive_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if ((I2C2_Status & I2C_Status_Slave_Send_Rdy))
+    if ((I2C2_Status & I2C_Status_Slave_Send_Rdy) && INTMAY(I2C2_Slave_Send_IntLine))
     {
         ClearI2CStatus(&I2C2_Status, I2C_Status_Slave_Send_Rdy); // clear completed flag
         intaddr = I2C2_Slave_Send_IntLine;         // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if (WAVInterrupt != NULL && WAVcomplete)
+    if (WAVInterrupt != NULL && WAVcomplete && INTMAY(WAVInterrupt))
     {
         WAVcomplete = false;
         intaddr = WAVInterrupt; // set the next stmt to the interrupt location
@@ -11032,59 +11112,59 @@ int checkdetailinterrupts(void)
     }
 
     // interrupt routines for the serial ports
-    if (com1_interrupt != NULL && SerialRxStatus(1) >= com1_ilevel)
+    if (com1_interrupt != NULL && SerialRxStatus(1) >= com1_ilevel && INTMAY(com1_interrupt))
     {                             // do we need to interrupt?
         intaddr = com1_interrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if (com2_interrupt != NULL && SerialRxStatus(2) >= com2_ilevel)
+    if (com2_interrupt != NULL && SerialRxStatus(2) >= com2_ilevel && INTMAY(com2_interrupt))
     {                             // do we need to interrupt?
         intaddr = com2_interrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 #ifdef USBKEYBOARD
-    if (com3_interrupt != NULL && SerialRxStatus(3) >= com3_ilevel)
+    if (com3_interrupt != NULL && SerialRxStatus(3) >= com3_ilevel && INTMAY(com3_interrupt))
     {                             // do we need to interrupt?
         intaddr = com3_interrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if (com4_interrupt != NULL && SerialRxStatus(4) >= com4_ilevel)
+    if (com4_interrupt != NULL && SerialRxStatus(4) >= com4_ilevel && INTMAY(com4_interrupt))
     {                             // do we need to interrupt?
         intaddr = com4_interrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if (com5_interrupt != NULL && SerialRxStatus(5) >= com5_ilevel)
+    if (com5_interrupt != NULL && SerialRxStatus(5) >= com5_ilevel && INTMAY(com5_interrupt))
     {                             // do we need to interrupt?
         intaddr = com5_interrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
-    if (com6_interrupt != NULL && SerialRxStatus(6) >= com6_ilevel)
+    if (com6_interrupt != NULL && SerialRxStatus(6) >= com6_ilevel && INTMAY(com6_interrupt))
     {                             // do we need to interrupt?
         intaddr = com6_interrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 #endif
 #if defined(PICOMITEBTH) || defined(PICOMITEHDMIBTH)
-    if (com7_interrupt != NULL && SerialRxStatus(7) >= com7_ilevel)
+    if (com7_interrupt != NULL && SerialRxStatus(7) >= com7_ilevel && INTMAY(com7_interrupt))
     {                             // do we need to interrupt? (the Bluetooth serial device)
         intaddr = com7_interrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 #endif
-    if (IrGotMsg && IrInterrupt != NULL)
+    if (IrGotMsg && IrInterrupt != NULL && INTMAY(IrInterrupt))
     {
         IrGotMsg = false;
         intaddr = (char *)IrInterrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 
-    if (KeypadInterrupt != NULL && KeypadCheck())
+    if (KeypadInterrupt != NULL && INTMAY(KeypadInterrupt) && KeypadCheck())
     {
         intaddr = (char *)KeypadInterrupt; // set the next stmt to the interrupt location
         goto GotAnInterrupt;
     }
 
-    if (CSubInterrupt != NULL && CSubComplete)
+    if (CSubInterrupt != NULL && CSubComplete && INTMAY(CSubInterrupt))
     {
         intaddr = CSubInterrupt; // set the next stmt to the interrupt location
         CSubComplete = 0;
@@ -11106,6 +11186,8 @@ int checkdetailinterrupts(void)
             // check if interrupt occured
             if ((inttbl[i].lohi == T_HILO && v < inttbl[i].last) || (inttbl[i].lohi == T_LOHI && v > inttbl[i].last) || (inttbl[i].lohi == T_BOTH && v != inttbl[i].last))
             {
+                if (!INTMAY(inttbl[i].intp))
+                    continue;              // (its thread cannot take it now: the edge kept, Thread.c)
                 intaddr = inttbl[i].intp; // set the next stmt to the interrupt location
                 inttbl[i].last = v;       // save the new pin value
                 goto GotAnInterrupt;
@@ -11118,7 +11200,7 @@ int checkdetailinterrupts(void)
     // check if one of the tick interrupts is enabled and if it has occured
     for (i = 0; i < NBRSETTICKS; i++)
     {
-        if (TickInt[i] != NULL && TickTimer[i] > TickPeriod[i])
+        if (TickInt[i] != NULL && TickTimer[i] > TickPeriod[i] && INTMAY(TickInt[i]))
         {
             // reset for the next tick but skip any ticks completely missed
             while (TickTimer[i] > TickPeriod[i])
@@ -11136,6 +11218,15 @@ int checkdetailinterrupts(void)
 
     // an interrupt was found if we jumped to here
 GotAnInterrupt:
+#ifdef USE_THREADS
+    if (IntScanOnly)
+    { // (IntScan)
+        IntScanFound = intaddr;
+        return 0;
+    }
+    if (ThreadCount && !ThreadIntHere(intaddr))
+        return 0; // another thread's: handed to it, and it runs now; this one goes on when its turn comes round
+#endif
     g_LocalIndex++; // IRETURN will decrement this
     if (OptionErrorSkip != 0)
         SaveOptionErrorSkip = OptionErrorSkip;
@@ -11156,7 +11247,7 @@ GotAnInterrupt:
     {
         rti[0] = (cmdIRET & 0x7f) + C_BASETOKEN;
         rti[1] = (cmdIRET >> 7) + C_BASETOKEN; // tokens can be 14-bit
-        if (gosubindex >= MAXGOSUB)
+        if (gosubindex >= GosubLimit)
             error("Too many SUBs for interrupt");
         errorstack[gosubindex] = CurrentLinePtr;
         substack[gosubindex] = (unsigned char *)intaddr;  // for STATIC: the interrupt SUB is the SUB running
@@ -11183,6 +11274,18 @@ GotAnInterrupt:
     nextstmt = (unsigned char *)intaddr; // the next command will be in the interrupt routine
     return 1;
 }
+#ifdef USE_THREADS
+// The routine of a source that is due, taken but not run, or NULL: for a thread going into a wait that takes no
+// interrupt, which hands it to its thread (Thread.c, ScanForOthers). As the CMM2's IntScan.
+char *IntScan(void)
+{
+    IntScanOnly = 1;
+    IntScanFound = NULL;
+    checkdetailinterrupts();
+    IntScanOnly = 0;
+    return IntScanFound;
+}
+#endif
 int __not_in_flash_func(check_interrupt)(void)
 {
 #ifdef GUICONTROLS
@@ -11216,14 +11319,36 @@ int __not_in_flash_func(check_interrupt)(void)
     /* Cursor refresh lives in routinechecks() — it fires from the
        prompt's getchar loop too, so the cursor tracks the mouse even
        when no program is running. */
+#ifdef USE_THREADS
+    if (ThreadFrameDue)
+    { // a frame has started and a thread waits for it (the scan-out sets this, core 1): its turn first (Thread.c)
+        ThreadFrameDue = 0;
+        if (ThreadCount)
+            ThreadSchedule();
+    }
+    if ((IntReady.tick & INT_TICK_SLICE) && ThreadCount)
+    { // THREAD YIELD, or (Stage P2) the slice is up: another thread's turn, and back here when this one's comes round
+        uint32_t s = save_and_disable_interrupts();
+        IntReady.tick &= ~INT_TICK_SLICE;
+        restore_interrupts(s);
+        ThreadSchedule();
+    }
+    if (!IntReady.any && !(ThreadCount && ThreadIntWaiting()))
+        return 0; // quick exit: nothing signalled, nothing to poll, and no routine handed to this thread
+#else
     if (!IntReady.any)
         return 0; // quick exit: nothing signalled and nothing to poll
+#endif
 #ifndef PICOMITEMIN
     if (PrintScreenPending)
         PrintScreenNow(); // OPTION PRINTSCREEN: Print Screen or Ctrl-\ while the program runs (FileIO.c)
 #endif
     if (InterruptReturn != NULL || CurrentLinePtr == NULL)
         return 0; // skip if we are in an interrupt or in immediate mode
+#ifdef USE_THREADS
+    if (ThreadCount && ThreadIntWaiting())
+        return checkdetailinterrupts(); // a routine another thread handed to this one runs now (Thread.c)
+#endif
     if (IntReady.count)
     { // consume one signal; sources only ever add, so this cannot underflow
         uint32_t save = save_and_disable_interrupts();
@@ -11248,7 +11373,18 @@ void __not_in_flash_func(IntSignal)(void)
 // get the address for a MMBasic interrupt
 // this will handle a line number, a label or a subroutine
 // all areas of MMBasic that can generate an interrupt use this function
+#ifdef USE_THREADS
+static unsigned char *GetIntAddressOf(unsigned char *p);
 unsigned char *GetIntAddress(unsigned char *p)
+{ // the routine's interrupts run in the thread that set it up (Thread.c)
+    unsigned char *r = GetIntAddressOf(p);
+    ThreadIntOwn((char *)r);
+    return r;
+}
+static unsigned char *GetIntAddressOf(unsigned char *p)
+#else
+unsigned char *GetIntAddress(unsigned char *p)
+#endif
 {
     int i;
     if (isnamestartsym((uint8_t)*p))

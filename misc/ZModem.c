@@ -1134,6 +1134,7 @@ static void zbasename(char *to, const char *from)
 
 void cmd_zmodem(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     bool send = false, crunch = false;
     char *fname = NULL, *prog = NULL;
     int progsize = 0;

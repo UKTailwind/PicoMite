@@ -377,6 +377,26 @@ extern "C"
     // g_hashlist records every live local, so it must hold as many as OPTION LOCAL
     // VARIABLES can allow (not just the default MAXLOCALVARS)
 #define MAXLOCALLIST (MAXVARS - 32)
+/* The stack the running code is on, and the floor it must stay above (StackNearLimit).  USE_THREADS: a thread runs
+   on a stack of its own, so the pointer in use is read (MSP or PSP) and StackFloor is the running thread's floor,
+   heapend for the main program.  Without it, MSP and heapend as before. */
+#ifdef USE_THREADS
+#define READ_STACK_POINTER(v) __asm volatile("mov %0, sp" : "=r"(v))
+    extern uint32_t StackFloor;
+#else
+#define READ_STACK_POINTER(v) __asm volatile("MRS %0, msp" : "=r"(v))
+#define StackFloor heapend
+#endif
+    extern uint32_t heapend, stackwarn;
+#ifdef USE_THREADS
+    extern int LocalBase, LocalLimit; // the local slots the running thread may use (MMBasic.c)
+#endif
+#ifdef USE_THREADS
+    extern struct s_hash *g_hashlist, g_hashlist_main[MAXLOCALLIST]; // the running thread's, and the main program's (Commands.h)
+#else
+    extern struct s_hash g_hashlist[MAXLOCALLIST];
+#define g_hashlist_main g_hashlist
+#endif
 
     /* Token table structure */
     struct s_tokentbl
@@ -451,10 +471,18 @@ extern "C"
 #ifdef SUBPROFILE
     /* Local-variable frame tracking — see MMBasic.c */
     extern int g_localframe_base;
+    #ifdef USE_THREADS
+    extern int *g_framebase_stack, g_framebase_stack_main[MAXGOSUB];
+#else
     extern int g_framebase_stack[MAXGOSUB];
+#endif
     extern int g_framebase_sp;
     extern int g_current_sub_idx;
+    #ifdef USE_THREADS
+    extern int *g_subidx_stack, g_subidx_stack_main[MAXGOSUB];
+#else
     extern int g_subidx_stack[MAXGOSUB];
+#endif
     extern uint64_t *g_subentry_us;
 #endif
     extern uint32_t *g_perf_cmdcount;
@@ -858,6 +886,28 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
 
 #ifdef __cplusplus
 }
+#endif
+
+/* Threads (core/Thread.c, docs/Threads_PicoMite_Review.md): what the rest of the firmware calls, each nothing at all
+   without USE_THREADS (CMakeLists.txt, THREADS_VARIANTS). */
+#ifdef USE_THREADS
+#include "Thread.h"
+#define THREAD_MAIN_ONLY() ThreadMainOnly() // a command only the main program may run: RUN, CHAIN, NEW and the rest
+#define THREADS_NONE() ThreadsNone()       // a command refused while the program has a thread: ERASE, CLEAR and others
+#define THREADS_STOP() ThreadsStop()       // the program is ending: no other thread runs from here on
+#define THREADS_END() ThreadsEnd()         // the program is being replaced: its threads end with it
+#define INTMAY(r) IntMay((char *)(r))      // an interrupt source's routine: may its thread take it now (Thread.c)
+#define NetYield() do { if (ThreadCount) ThreadPoll(); } while (0) // a WEB or BLUETOOTH command's wait: the others run
+    char *IntScan(void);                   // the routine of a source that is due, without running it (MM_Misc.c)
+#else
+#define THREAD_MAIN_ONLY() do { } while (0)
+#define THREADS_NONE() do { } while (0)
+#define THREADS_STOP() do { } while (0)
+#define THREADS_END() do { } while (0)
+#define INTMAY(r) 1
+#define NetYield() do { } while (0)
+#define THREAD_HOLD_BEGIN() do { } while (0)
+#define THREAD_HOLD_END() do { } while (0)
 #endif
 
 #include "Symbols.h" // names stored as symbols in a saved program

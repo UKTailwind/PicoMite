@@ -1,0 +1,8 @@
+ok  every thread busy: 20 edges, 20 interrupts
+ok  every thread busy: every one in the main program, the pin at its new level
+ok  main program in PAUSE, two threads busy: 20 edges, 20 interrupts
+ok  main program in PAUSE, two threads busy: every one in the main program, the pin at its new level
+ok  the busy threads ran
+ok  every thread in PAUSE: 20 edges, 20 interrupts
+ok  every thread in PAUSE: every one in the main program, the pin at its new level
+tpin: 7 of 7 passed

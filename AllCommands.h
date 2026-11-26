@@ -180,6 +180,9 @@ void cmd_spi(void);
 void cmd_spi2(void);
 void cmd_xmodem(void);
 void cmd_zmodem(void);
+#ifdef USE_THREADS
+void cmd_thread(void); /* THREAD START, YIELD, EXIT and the rest: threads for a BASIC program (core/Thread.c) */
+#endif
 #ifdef LOADER
 void cmd_user(void); /* USER and USER(: a USER module's (misc/User.c) */
 void fun_user(void);
@@ -730,6 +733,9 @@ void fun_frame(void);
 #ifdef LOADER
 	{(unsigned char *)"User", T_CMD, 0, cmd_user},
 	{(unsigned char *)"SQL", T_CMD, 0, cmd_sql},
+#endif
+#ifdef USE_THREADS
+	{(unsigned char *)"Thread", T_CMD, 0, cmd_thread},
 #endif
 
 {

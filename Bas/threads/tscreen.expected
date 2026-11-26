@@ -1,0 +1,10 @@
+xok  a thread's COLOUR is not the main program's
+ok  nor its FONT
+ok  nor its print position, after its PRINT and its TEXT
+ok  the thread kept its own colours while the main program changed its own
+ok  and its font
+ok  and its print position, where its own TEXT left it
+ok  a new thread starts with its starter's colours
+ok  its font
+ok  and its print position
+tscreen: 9 of 9 passed

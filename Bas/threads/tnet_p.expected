@@ -1,0 +1,9 @@
+Connecting to 10.255.255.1 port 80
+ok  an address that does not answer: an error after the 2 s limit
+ok  the thread ran all the while
+ok  TEMPR() with no sensor
+ok  the thread ran during its conversion time
+Connecting to 10.255.255.1 port 80
+ok  a thread waiting on the network: an error after its limit
+ok  the main program ran all the while
+tnet: 6 of 6 passed

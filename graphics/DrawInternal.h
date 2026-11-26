@@ -241,4 +241,46 @@ static inline void getargaddress(unsigned char *p, long long int **ip, MMFLOAT *
     }
 }
 
+/* The wait for the top of the frame that a program asks for: FRAMEBUFFER WAIT, FRAMEBUFFER COPY ...,B and LAYER ...,B,
+   and MAP's RESET, MAXIMITE, SET and GREYSCALE.  One function, so that the threads (USE_THREADS) change one place
+   when a thread is to let the others run while it waits (the plan's Stage P4), and an upstream change to one of these
+   commands meets a call, not a loop the threads have rewritten.  Inline: each build compiles the loop it had.  The
+   firmware's own frame waits (setmode, mapreset, the GUI, merge) are not this. */
+#ifdef PICOMITEVGA
+extern volatile int QVgaScanLine;
+static inline __attribute__((always_inline)) void FrameWaitLoop(void)
+{
+#ifdef HDMI
+    while (v_scanline != 0)
+    {
+    }
+#else
+    while (QVgaScanLine != 0)
+    {
+    }
+#endif
+}
+#else
+static inline __attribute__((always_inline)) void FrameWaitLoop(void)
+{ // a panel whose scan line can be read: its refresh
+    if (Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE == ST7796SP || Option.DISPLAY_TYPE == ST7796S || Option.DISPLAY_TYPE == ST7789B || Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ILI9488P)
+    {
+        while (GetLineILI9341() != 0)
+        {
+        }
+    }
+}
+#endif
+#ifdef USE_THREADS
+static inline __attribute__((always_inline)) void FrameWait(void)
+{ // with threads the others run meanwhile, the scan-out counting the frames (Thread.c, ThreadFrameWait)
+    if (ThreadCount)
+        ThreadFrameWait();
+    else
+        FrameWaitLoop();
+}
+#else
+#define FrameWait FrameWaitLoop
+#endif
+
 #endif /* DRAWINTERNAL_H */

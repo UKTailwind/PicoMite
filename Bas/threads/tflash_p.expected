@@ -1,0 +1,5 @@
+ok  FLASH RUN in a thread is refused
+ok  FLASH CHAIN
+ok  RAM RUN
+ok  RAM CHAIN
+tflash: 4 of 4 passed

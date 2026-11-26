@@ -63,8 +63,16 @@ extern "C"
    /* 192 local entries since the local region became a stack (P6); the globals
       keep the total they had (544 + 192 = 480 + 256), so a program that lowers
       OPTION LOCAL VARIABLES to get more globals gets as many as before. */
+#if defined(USE_THREADS) && defined(PICOMITEPC3)
+   /* Threads (Peter, 26 Nov: "Up the local variable slots to 256 on the PC3"): a thread's locals are a range of the
+      local region, eight threads of LOCALS 24 take 200 slots, so it is 256 again, the split it had before P6. The
+      total is the same (no RAM): 480 globals unless a program sets OPTION LOCAL VARIABLES 192 for the 544. */
+#define MAXGLOBALVARS 480 // Configurable split
+#define MAXLOCALVARS 256
+#else
 #define MAXGLOBALVARS 544 // Configurable split
 #define MAXLOCALVARS 192
+#endif
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 
 #ifdef HDMI // RP2350 HDMI
@@ -83,7 +91,9 @@ extern "C"
       16 MB fixed map's 3 MB system top.  There is no Route B flash stream
       (RB_STREAM_FLASH_SLOTS below): this build has PSRAM, and the stream
       lives in the PSRAM reserve, which is 2.5 MB here (PSRAM_RESERVE). */
-#define FLASH_TARGET_OFFSET (1792 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required
+      during the development"): Thread.c and its hooks went 3.6 KB over 1792 KB. */
+#define FLASH_TARGET_OFFSET (1808 * 1024)
    /* 108 KB: the SRAM heap the review's budget gives with the full 153600-byte
       pool (4.2 KB of RAM margin left for the stack); the boot-time resize for
       800x600, 848x480 and 800x480 takes its pool from this, as on HDMIUSB. */
@@ -117,7 +127,9 @@ extern "C"
       1.8 KB over, the Classic ones (12.8 KB) having taken the rest.
       +16 KB (2026-11-07): the USB host's bulk-IN window and interrupt
       polling (tinyusb-patches/hcd_rp2040.patch) went 376 bytes over. */
-#define FLASH_TARGET_OFFSET (1520 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1536 * 1024)
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~5.2 KB of RAM margin left for the stack. */
    /* -12 KB (2026-10-06, bt-audio): dual-mode btstack for Bluetooth speaker
       output added ~12.6 KB of BSS (less what dropping VS1053 and PWM/SPI
@@ -149,7 +161,9 @@ extern "C"
    /* +16 KB (2026-10-10): ZMODEM SEND was 1.3 KB over. */
    /* +16 KB (2026-11-07): the USB host's bulk-IN window and interrupt polling
       (tinyusb-patches/hcd_rp2040.patch) went 696 bytes over. */
-#define FLASH_TARGET_OFFSET (1584 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1600 * 1024)
    /* 136 KB MMBasic program/variable heap (arrays, strings, max program size) —
       kept large deliberately. This is NOT the framebuffer (the 96 KB cut-down HDMI
       pool is added separately in AllMemory[]). NOTE the TLS tension: a handshake
@@ -194,7 +208,9 @@ extern "C"
       (tinyusb-patches/hcd_rp2040.patch) went 292 bytes over. */
    /* +16 KB (2026-11-24): the loader (RUN "name.app", USER modules) went 5.1 KB over. */
    /* +16 KB (2026-11-25, Peter): FRAMEBUFFER AFFINE and SPAN (Warp.c, 3.2 KB) with 1.8 KB left. */
-#define FLASH_TARGET_OFFSET (1184 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): threads Stage P4 went 1,072 bytes over. */
+#define FLASH_TARGET_OFFSET (1200 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -208,7 +224,9 @@ extern "C"
 #define MagicKey 0xDDE229A1
    /* +48 KB (2026-09-29): Route B (P1-P5) went 29.4 KB over. */
    /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 164 bytes over. */
-#define FLASH_TARGET_OFFSET (1104 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1120 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 1144 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
@@ -227,7 +245,9 @@ extern "C"
       BLIT went 3.9 KB over. */
    /* +16 KB (2026-11-23, Peter): FRAMEBUFFER WARPH and WARPV (Warp.c, 3.5 KB) went
       3,292 bytes over. Moves A: and the options on the upgrade. */
-#define FLASH_TARGET_OFFSET (1120 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1136 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
@@ -248,7 +268,9 @@ extern "C"
 #else
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
    /* +16 KB (2026-10-25): SAVE PNG (PngEncoder.c) went 1.1 KB over. */
-#define FLASH_TARGET_OFFSET (1072 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1088 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~5.5 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.5 KB of RAM margin left for the stack. */
@@ -275,7 +297,9 @@ extern "C"
       went 1.4 KB over 848 KB. */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 2.2 KB over 864 KB. */
    /* +16 KB (2026-11-25, Peter): FRAMEBUFFER AFFINE and SPAN (Warp.c, 3.3 KB) with 0.5 KB left. */
-#define FLASH_TARGET_OFFSET (896 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB, went 1.3 KB over at Stage P2. */
+#define FLASH_TARGET_OFFSET (912 * 1024)
 #define MagicKey 0x561D3FB6
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -
@@ -298,7 +322,9 @@ extern "C"
       need a step. */
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went ~1.1 KB over 816 KB. */
-#define FLASH_TARGET_OFFSET (848 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (864 * 1024)
    /* +20 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
 #define HEAP_MEMORY_SIZE (120 * 1024)
 #define MAX_PROG_SIZE (100 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
@@ -365,7 +391,9 @@ extern "C"
       BLIT went 6.0 KB over. */
    /* +16 KB (2026-11-26, Peter): the RTC's lost-time check (#164) went 160 bytes over
       1536 KB; it had been down to 48 bytes. */
-#define FLASH_TARGET_OFFSET (1552 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): threads Stage P5 went 400 bytes over. */
+#define FLASH_TARGET_OFFSET (1568 * 1024)
 #else
 #define MagicKey 0x060B6881
 #define MAXSUBFUN 256
@@ -377,7 +405,9 @@ extern "C"
 #define MAX_PROG_SIZE (88 * 1024) // (pinned: it was the heap size, and moving it moves the flash layout and A:)
    /* +16 KB (2026-09-29): 8.0 KB over (on development already, before P6). */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 3.9 KB over 1312 KB. */
-#define FLASH_TARGET_OFFSET (1328 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1344 * 1024)
 #endif
 #endif /* !PICOMITEHDMIWEB */
 
@@ -407,7 +437,9 @@ extern "C"
 #ifdef USBKEYBOARD
 #define MagicKey 0x3F42F5D6
    /* +48 KB (2026-09-29): Route B (P1-P5) went 30.7 KB over. */
-#define FLASH_TARGET_OFFSET (1184 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1200 * 1024)
    /* Was 304 KB. Reduced by 4 KB to make headroom for the BSS growth
       from the cursor module (~650 bytes for user_cursor.pixels +
       state) and the click/cursor ownership tracking. Heap and BSS
@@ -447,7 +479,9 @@ extern "C"
    /* +32 KB (2026-09-29): Route B (P1-P5) went 17.9 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 2.6 KB over. */
-#define FLASH_TARGET_OFFSET (1456 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1472 * 1024)
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~4.1 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.9 KB of RAM margin left for the stack. */
@@ -473,7 +507,9 @@ extern "C"
       about 1.7 KB was spare.
       +16 KB (2026-10-13): main went 0.9 KB over after RC1; BLUETOOTH CONNECT
       SPEAKER | SERIAL | KEYBOARD adds 0.4 KB. */
-#define FLASH_TARGET_OFFSET (1536 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1552 * 1024)
    /* +56 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.9 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4.6 KB of RAM margin left for the stack. */
@@ -491,7 +527,9 @@ extern "C"
    /* +32 KB (2026-09-29): Route B (P1-P5) went 20.4 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 5.0 KB over. */
-#define FLASH_TARGET_OFFSET (1152 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (1168 * 1024)
    /* See note above PICOUSBRP2350 HEAP_MEMORY_SIZE. */
    /* +44 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +16 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~6.0 KB of RAM margin left for the stack. */
@@ -518,7 +556,9 @@ extern "C"
    /* +16 KB (2026-09-25): symbols and their bindings (core/Symbols.c, S5/S6)
       went 2.9 KB over 928 KB. */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 3.2 KB over 944 KB. */
-#define FLASH_TARGET_OFFSET (960 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (976 * 1024)
    /* -4 KB (2026-09-07): the newlib C heap is the gap between __end__ (top of
       BSS) and __StackLimit, and TinyUSB 0.21 + CFG_TUH_TASK_QUEUE_SZ 64 pushed
       __end__ up until that gap fell well under 4096 bytes - below which
@@ -544,7 +584,9 @@ extern "C"
    /* +16 KB more (2026-09-29, Peter "A"): P6 took it 1208 bytes over 704 KB.
       The same trade again: 4 KB less program size (MAX_PROG_SIZE 112 KB), so
       the A: drive starts where RC2's did, 1188 KB, and keeps its size. */
-#define FLASH_TARGET_OFFSET (720 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (736 * 1024)
 #define MagicKey 0xAA13BB70
    /* +24 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~6.0 KB of RAM margin left for the stack. */
@@ -572,7 +614,9 @@ extern "C"
       the magic key check fails on the first boot after the upgrade and the
       board does a full clean - existing A: drives and options do not
       survive.  See [[project_flash_target_offset_alignment]]. */
-#define FLASH_TARGET_OFFSET (928 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB. */
+#define FLASH_TARGET_OFFSET (944 * 1024)
 #define MagicKey 0x956AD03D
 #endif
 #endif
@@ -593,7 +637,7 @@ extern "C"
  * Memory configuration
  * ============================================================================ */
 #if defined(PICOMITEMIN)
-#define MAX_PROG_SIZE (112 * 1024) // 4 KB less for each 16 KB step of FLASH_TARGET_OFFSET above (A: keeps RC2's start)
+#define MAX_PROG_SIZE (108 * 1024) // 4 KB less for each 16 KB step of FLASH_TARGET_OFFSET above (A: keeps RC2's start)
 #elif defined(PICOMITE) && !defined(rp2350)
 #define MAX_PROG_SIZE (120 * 1024) // Maximum program size in bytes (adjust as needed     )
 #elif !defined(MAX_PROG_SIZE)

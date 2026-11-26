@@ -1,0 +1,15 @@
+ok  one producer: all 500 messages arrived
+ok  in order
+ok  the queue is empty at the end
+ok  Put waited while the queue was full
+ok  a slow producer: all 20 arrived
+ok  Get waited while the queue was empty
+ok  and a busy thread ran meanwhile
+ok  two producers and two consumers: 2000 messages
+ok    the sum of their numbers
+ok    both consumers ended
+ok  two producers and two consumers, with yields: 2000 messages
+ok    the sum of their numbers
+ok    both consumers ended
+ok  THREAD WAIT FLAG inside THREAD HOLD, the flag already set
+tqueue: 14 of 14 passed

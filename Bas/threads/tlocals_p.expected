@@ -1,0 +1,27 @@
+ok  thread1: its locals summed
+ok  thread1: its strings and its float
+ok  thread1: its array
+ok  thread1: a FUNCTION recursing with a yield at each level
+ok  thread1: a parameter by reference
+ok  thread1: a SUB recursing, each level's locals
+ok  thread2: its locals summed
+ok  thread2: its strings and its float
+ok  thread2: its array
+ok  thread2: a FUNCTION recursing with a yield at each level
+ok  thread2: a parameter by reference
+ok  thread2: a SUB recursing, each level's locals
+ok  thread3: its locals summed
+ok  thread3: its strings and its float
+ok  thread3: its array
+ok  thread3: a FUNCTION recursing with a yield at each level
+ok  thread3: a parameter by reference
+ok  thread3: a SUB recursing, each level's locals
+ok  thread4: its locals summed
+ok  thread4: its strings and its float
+ok  thread4: its array
+ok  thread4: a FUNCTION recursing with a yield at each level
+ok  thread4: a parameter by reference
+ok  thread4: a SUB recursing, each level's locals
+ok  the main program is thread 0 again
+ok  no variable left behind
+tlocals: 26 of 26 passed

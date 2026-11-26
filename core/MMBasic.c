@@ -272,10 +272,21 @@ void __attribute__((used)) __not_in_flash_func(pcs_isr_c)(uint32_t *frame)
 
 // Core 0 runs on MSP, so SP at entry is the exception frame.  EXC_RETURN is
 // kept on the stack and popped into PC to return.  Thumb-1, for the M0+ too.
+// USE_THREADS: a thread runs on PSP, and its frame is there (EXC_RETURN bit 2).
 void __attribute__((naked, used, section(".time_critical.pcs_isr"))) pcs_isr(void)
 {
     __asm volatile(
+#ifdef USE_THREADS
         "mov r0, sp       \n"
+        "mov r1, lr       \n"
+        "movs r2, #4      \n"
+        "tst r1, r2       \n"
+        "beq 1f           \n"
+        "mrs r0, psp      \n"
+        "1:               \n"
+#else
+        "mov r0, sp       \n"
+#endif
         "push {r4, lr}    \n"
         "bl pcs_isr_c     \n"
         "pop {r4, pc}     \n");
@@ -326,13 +337,32 @@ void PcsStart(int entries)
 // unsigned char lastcmd[STRINGSIZE];                                           // used to store the last command in case it is needed by the EDIT command
 unsigned char PromptString[MAXPROMPTLEN]; // the prompt for input, an empty string means use the default
 int ProgramChanged;                       // true if the program in memory has been changed and not saved
+#ifdef USE_THREADS
+struct s_hash g_hashlist_main[MAXLOCALLIST] = {0}; // the locals in the order made: the running thread's own list
+struct s_hash *g_hashlist = g_hashlist_main;       // (Commands.h), the main program's this one
+#else
 struct s_hash g_hashlist[MAXLOCALLIST] = {0};
+#endif
 int g_hashlistpointer = 0;
 /* P6 F2: the local region (slots 0 to maxlocalvars - 1) is a stack.  Each
    local is made in the next slot up, and g_hashlist lists the live ones in
    the order they were made, each with its level: a level's locals are the
    topmost entries of that level.  g_localtop is the next slot to use. */
+#ifdef USE_THREADS
+int g_localtop = 0; // (each thread's: Thread.c)
+#else
 static int g_localtop = 0;
+#endif
+/* The part of the local region the running code may use: all of it, until a program starts a thread, which is
+   given a range of its own (USE_THREADS).  g_localtop starts at LocalBase, and the stack is full at LocalLimit.
+   Without USE_THREADS they are 0 and maxlocalvars, as before. */
+#ifdef USE_THREADS
+int LocalBase = 0;
+int LocalLimit = MAXLOCALVARS; // (maxlocalvars while no thread runs: OPTION LOCAL VARIABLES sets both)
+#else
+#define LocalBase 0
+#define LocalLimit maxlocalvars
+#endif
 
 // ---------------------------------------------------------------------------
 // Local-variable frame tracking (used by the trace cache)
@@ -343,20 +373,30 @@ static int g_localtop = 0;
 // ---------------------------------------------------------------------------
 #ifdef SUBPROFILE
 int g_localframe_base = 0;       // first hashlist index in current frame
+#ifdef USE_THREADS
+int g_framebase_stack_main[MAXGOSUB]; // saved bases, one per active level (the main program's;
+int *g_framebase_stack = g_framebase_stack_main; // the running thread's: Commands.h)
+#else
 int g_framebase_stack[MAXGOSUB]; // saved bases, one per active level
+#endif
 int g_framebase_sp = 0;          // stack pointer / current depth
 
 // Per-frame: which subfun[] index is currently executing (-1 if none).
 // Maintained by EnterLocalFrame/LeaveLocalFrame in parallel with the
 // frame-base stack.  Used by the trace cache for per-sub opt-in.
 int g_current_sub_idx = -1;
+#ifdef USE_THREADS
+int g_subidx_stack_main[MAXGOSUB];
+int *g_subidx_stack = g_subidx_stack_main;
+#else
 int g_subidx_stack[MAXGOSUB];
+#endif
 
 // Push the current frame base on entry to a new local scope (sub/fun, gosub,
 // CFunction).  Called *immediately after* g_LocalIndex++.
 void EnterLocalFrame(void)
 {
-    if (g_framebase_sp < MAXGOSUB)
+    if (g_framebase_sp < GosubLimit)
     {
         g_framebase_stack[g_framebase_sp] = g_localframe_base;
         g_subidx_stack[g_framebase_sp] = g_current_sub_idx;
@@ -1166,6 +1206,9 @@ unsigned short cmdTYPE, cmdEND_TYPE; // Structure type definition commands
 #endif
 uint32_t heapend;
 uint32_t stackwarn; // heapend + 1K: a stack below this is noted by StackNearLimit
+#ifdef USE_THREADS
+uint32_t StackFloor; // the running stack's floor: heapend for the main program, a thread's own (MMBasic.h)
+#endif
 uint32_t StackLow;  // the lowest stack noted since the last prompt, 0 for none (warned at the prompt)
 int StackLowDepth;  // g_LocalIndex when it was noted
 
@@ -1455,6 +1498,9 @@ void MIPS16 InitBasic(void)
 #endif
     SymInit();
     heapend = (uint32_t)&__heap_start + PICO_HEAP_SIZE;
+#ifdef USE_THREADS
+    StackFloor = heapend;
+#endif
     stackwarn = heapend + 1024;
     //  SInt(CommandTableSize);
     //   SIntComma(TokenTableSize);
@@ -1465,11 +1511,15 @@ void MIPS16 InitBasic(void)
 // list, and the stack goes some hundreds of bytes deeper between two of them)
 void __attribute__((noinline)) StackNearLimit(uint32_t stack)
 {
-    if (stack < heapend)
+    if (stack < StackFloor)
     {
         StackLow = 0;
-        error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)heapend);
+        error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)StackFloor);
     }
+#ifdef USE_THREADS
+    if (StackFloor != heapend)
+        return; // a thread's own stack: the prompt's warning is about the main stack's (Thread.c)
+#endif
     if (StackLow == 0 || stack < StackLow)
     {
         StackLow = stack;
@@ -1480,7 +1530,7 @@ void __attribute__((noinline)) StackNearLimit(uint32_t stack)
 static inline void TestStackOverflow(void)
 {
     uint32_t stack;
-    __asm volatile("MRS %0, msp" : "=r"(stack));
+    READ_STACK_POINTER(stack);
     if (stack < stackwarn)
         StackNearLimit(stack);
 }
@@ -3419,7 +3469,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     }
     // from now on we have a user defined sub or function (not a C routine)
 
-    if (gosubindex >= MAXGOSUB)
+    if (gosubindex >= GosubLimit)
         error("Too many nested SUB/FUN");
     errorstack[gosubindex] = CallersLinePtr;
     substack[gosubindex] = SubLinePtr;                  // for STATIC: the variables belong to this SUB/FUNCTION
@@ -5525,7 +5575,7 @@ static void MIPS16 *__not_in_flash_func(findvar_local)(unsigned char *p, int act
         vtype = (action & T_IMPLIED) ? (action & (T_NBR | T_INT | T_STR)) : DefaultType;
     }
     if ((suffix && (action & T_IMPLIED) && !(action & vtype)) || (vtype != T_INT && vtype != T_NBR) || *p == '(' ||
-        n >= MAXVARLEN || (i = g_localtop) >= maxlocalvars || g_Localvarcnt + 1 >= maxlocalvars)
+        n >= MAXVARLEN || (i = g_localtop) >= LocalLimit || g_Localvarcnt + 1 >= LocalLimit - LocalBase)
         return NULL;
 #ifdef STRUCTENABLED
     if (action & T_STRUCT)
@@ -6103,7 +6153,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // we are not declaring the variable but it may need to be created
     if (action & V_LOCAL)
     {
-        if (localifree >= maxlocalvars)
+        if (localifree >= LocalLimit)
         { // the local stack is full (P6 F2), as the hash probe's wrap-round was
             ClearVars(0, true);
             error("Too many local variables");
@@ -6373,7 +6423,7 @@ findvar_found:
     }
     else
     {
-        if (g_Localvarcnt + 1 >= maxlocalvars) // CHANGED: was MAXVARS/2
+        if (g_Localvarcnt + 1 >= LocalLimit - LocalBase) // CHANGED: was MAXVARS/2
             error("Not enough Local variable memory");
     }
     for (i = 0; i < dnbr; i++)
@@ -6953,6 +7003,9 @@ void MIPS16 error(char *msg, ...)
         enable_interrupts_pico();
     SymPreparing = 0; // (see PrepareProgram)
     ScrewUpTimer = 0;
+#ifdef USE_THREADS
+    ThreadErrorRelease(); // (the network or Bluetooth, if this thread's command had it: Thread.c)
+#endif
 #ifdef PICOMITEVGA
     // SAVE IMAGE reads the layer with the frame while it writes the rows (FileIO.c): a write error part way
     // (a full or missing drive) left it on, and every later read of a VGA/HDMI display with a layer had the layer too
@@ -7200,7 +7253,16 @@ void MIPS16 error(char *msg, ...)
         }
         else
         {
+#ifdef USE_THREADS
+            char prefix[24]; // ("[#16:65535] ")
+#else
             char prefix[16];
+#endif
+#ifdef USE_THREADS
+            if (ThreadNumber()) // a thread other than the main program: [#n:line], as the CMM2's TRACE (Thread.c)
+                snprintf(prefix, sizeof(prefix), "[#%d:%d] ", ThreadNumber(), line_num + 1);
+            else
+#endif
             snprintf(prefix, sizeof(prefix), "[%d] ", line_num + 1);
             MMPrintString(prefix);
         }
@@ -7652,7 +7714,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
         if (compact)
             top = LocalListCompact(); // (the old walk let them fall off the list)
         g_hashlistpointer = top;
-        g_localtop = top ? g_hashlist[top - 1].hash + 1 : 0;
+        g_localtop = top ? g_hashlist[top - 1].hash + 1 : LocalBase;
     }
     else
     {
@@ -7727,7 +7789,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
     g_OptionBase = 0;
     g_DimUsed = false;
     g_hashlistpointer = 0;
-    g_localtop = 0;
+    g_localtop = LocalBase;
 #ifdef SUBPROFILE
     ResetLocalFrames(); // discard all per-frame side-index state
 #endif
@@ -7737,7 +7799,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
 // copied back (above every listed local, whatever order they were made in)
 void LocalTopRestore(void)
 {
-    g_localtop = 0;
+    g_localtop = LocalBase;
     for (int k = 0; k < g_hashlistpointer; k++)
         if (g_hashlist[k].hash + 1 > g_localtop)
             g_localtop = g_hashlist[k].hash + 1;
@@ -7748,6 +7810,9 @@ void MIPS16 cmd_localvars(unsigned char *p)
         error("Variables already declared");
     int i = getint(p, 32, MAXLOCALLIST);
     maxlocalvars = i;
+#ifdef USE_THREADS
+    LocalLimit = i;
+#endif
     maxglobalvars = MAXVARS - i;
     InitVarSlots(); // the slots each side of the new split
 }
@@ -7892,6 +7957,7 @@ void MIPS16 ClearStack(void)
 void MIPS16 ClearRuntime(bool all)
 {
     int i;
+    THREADS_END(); // the program's threads end with it (Thread.c)
     /* Profiling buffers were allocated from the BASIC variable pool via
      * GetMemory().  ClearRuntime() is about to wipe that pool, so we must
      * release our references first - otherwise the pointers stay valid in
@@ -8003,6 +8069,9 @@ void MIPS16 ClearRuntime(bool all)
     { // OPTION LOCAL VARIABLES belongs to the program that set it, as OPTION EXPLICIT does
       // (not on CHAIN, whose saved variables were placed with the split in force)
         maxlocalvars = MAXLOCALVARS;
+#ifdef USE_THREADS
+        LocalLimit = MAXLOCALVARS;
+#endif
         maxglobalvars = MAXGLOBALVARS;
         ChainedProgram = false; // a new program, not a chained one (see Commands.c)
     }
@@ -8034,7 +8103,7 @@ void MIPS16 ClearRuntime(bool all)
     m_alloc(all ? M_VAR : M_LIMITED);
     VarChunkSeed(); // the first chunk of globals' records (see MMBasic.h)
     memset(cmdlinebuff, 0, sizeof(cmdlinebuff));
-    memset(datastore, 0, sizeof(struct sa_data) * MAXRESTORE);
+    memset(datastore, 0, sizeof(struct sa_data) * RestoreLimit);
     restorepointer = 0;
     g_flag = 0;
     g_varcnt = 0;
