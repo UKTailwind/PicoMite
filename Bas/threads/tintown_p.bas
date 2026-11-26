@@ -5,7 +5,7 @@
 ' SETTICK set up by the main program still run in the main program.
 Option Console Serial ' (the PicoMite: a PRINT to the screen as well can scroll it, some milliseconds on a PC3, between INPUT and the 15 ms count)
 Option Explicit
-Dim Integer tests, pass, ticks, where, wrongcol, mainticks, mainwhere, k, held
+Dim Integer tests, pass, ticks, where, wrongcol, mainticks, mainwhere, k, held, m0
 Dim a$
 Dim Float t0
 
@@ -47,11 +47,12 @@ Thread Start 2, Owner
 SetTick 15, MainTick, 3
 t0 = Timer
 Input "the main program waits for a line"; a$
+m0 = mainticks                          ' (at once: the statements below may take longer than its 15 ms)
 Print
 Check "a thread's SETTICK ran while the main program was in INPUT", ticks >= 10, 1
 Check "in the thread that set it up", where, 2
 Check "with that thread's colour", wrongcol, 0
-Check "the main program's own SETTICK waited for its INPUT to end", mainticks <= 1, 1
+Check "the main program's own SETTICK waited for its INPUT to end", m0 <= 1, 1
 Pause 100
 Check "and runs in the main program", mainwhere = 0 And mainticks >= 3, 1
 
