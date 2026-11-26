@@ -1,4 +1,4 @@
-"""threadtest.py PORT name [name ...] - run the thread tests on a PicoMite and compare each with its expected output.
+"""threadtest.py PORT[:BAUD] name [name ...] - run the thread tests on a PicoMite and compare each with its expected output.
 
 The tests are on the board's A: in A:/tt (send them by ZMODEM: pm_ymodem/tools/ymodem_test/tt.py PORTNUM 921600
 name.bas A:/tt/name.bas zmodem). The console is taken to be at 921600. name.picomite.expected is used where it exists
@@ -23,6 +23,8 @@ PicoMite's versions of some of them, sized for its memory or using its own comma
 The RP2040's (its console on USB, which echoes a typed line; a 192-slot local region; LOCALS 16 and NEST 6):
   tpack_r    eight threads of LOCALS 16 holding 15 locals each
   tintown_r  the main program's tick count taken as its INPUT ends (the prints after it take 53 ms on a VGA screen)
+  tlock_r    the wait with no limit timed against the owner's unlock (a console at 115200 with a VGA screen)
+The RP2040 runs at 115200 on PICOUSB and VGAUSB, whose USB is the host's: threadtest.py COM53:115200 ...
   stackrp.bas measures the stack as stackm.bas does, on a build without a display or SD card
 and twrite_p and tstack_p are the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's section 9), and
 StackNeed and JSON$'s nesting cap (Stage P5). tcond is the CMM2's a2db2ec (THREAD WAIT inside THREAD HOLD).
@@ -36,7 +38,8 @@ import serial
 HERE = os.path.dirname(os.path.abspath(__file__))
 ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 port, names = sys.argv[1], sys.argv[2:]
-s = serial.Serial(port, 921600, timeout=0.05)
+port, _, baud = port.partition(":")              # PORT or PORT:BAUD (921600 unless given)
+s = serial.Serial(port, int(baud or 921600), timeout=0.05)
 
 
 def run(name, limit=40):
