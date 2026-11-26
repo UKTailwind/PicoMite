@@ -1,0 +1,11 @@
+ok  main program busy, two threads busy: 60 ticks in 300 ms, one either way
+ok  main program busy, two threads busy: every one in the main program
+ok  main program busy, two threads busy: none more than 3 ms late
+ok  main program in PAUSE, two threads busy: 60 ticks in 300 ms, one either way
+ok  main program in PAUSE, two threads busy: every one in the main program
+ok  main program in PAUSE, two threads busy: none more than 3 ms late
+ok  the busy threads ran
+ok  every thread in PAUSE: 60 ticks in 300 ms, one either way
+ok  every thread in PAUSE: every one in the main program
+ok  every thread in PAUSE: none more than 3 ms late
+ttick: 10 of 10 passed

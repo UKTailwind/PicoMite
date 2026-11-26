@@ -14,15 +14,28 @@ See MMBasic.h for the licence.
    runs on the process stack, so its stack holds only its own frames and an exception's stacked registers, not the
    interrupts' handlers or the housekeeping: the guard is the deepest a command goes between two stack checks, to be
    measured (Stage P5). The CMM2's are 20 KB, 6 KB, 48 and 20. */
+#ifdef rp2350
 #define MAXTHREADS 8                                // the threads a program may start, numbered 1 to MAXTHREADS (the
                                                     // PicoMite's, Peter 26 Nov; the CMM2's is 16)
 #define THREAD_STACK (8 * 1024)                     // a thread's C stack
+#else                                               // the RP2040 (Peter, 26 Nov: "perhaps just 4 and with smaller
+#define MAXTHREADS 4                                // defaults"; provisional until it is tested there)
+#define THREAD_STACK (6 * 1024)
+#endif
 #define THREAD_GUARD (3 * 1024)                     // the part of it below the stack check's floor: error()'s print
                                                     // needs more than 1.7 KB of it (a PC3, 26 Nov; Stage P5 measures)
 #define THREAD_SIZE_MIN 6                           // THREAD SIZE's least, in K: the guard and a SUB's 2 KB to run in
+#ifdef rp2350
 #define THREAD_LOCALS 24                            // its local variable slots
+#else
+#define THREAD_LOCALS 16
+#endif
 #define THREAD_PRIORITY_MAX 10                      // THREAD PRIORITY: 1 (every thread's at RUN) to this
+#ifdef rp2350
 #define THREAD_NEST 8                               // how deep its FOR loops, DO loops and calls may each go (NEST)
+#else
+#define THREAD_NEST 6
+#endif
 #define MAXLOCKS 16                                 // THREAD LOCK's locks, numbered 1 to MAXLOCKS
 
 extern int ThreadCount;                             // the threads started and not yet ended: 0, and nothing here is active

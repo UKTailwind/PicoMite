@@ -1,0 +1,18 @@
+ok  a running thread is 1
+ok  a thread in PAUSE is 2
+ok  a number not in use is 0
+ok  the main program is thread 0, and 1
+ok  paused: it does not run
+ok  paused is 3
+ok  resumed: it runs again
+ok  stopped in a loop: it does not run, and is 0
+ok  the thread inside a FUNCTION had run
+ok  stopped inside a FUNCTION
+ok  stopped in a PAUSE
+ok  the heap is as it was
+ok  and the on-chip heap
+ok  no variable left behind
+ok  THREAD PAUSE of a thread not running is refused
+ok  THREAD SIZE: a FUNCTION twelve deep in a thread
+ok  THREAD SLICE 10: both threads ran
+tstop: 17 of 17 passed

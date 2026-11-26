@@ -664,6 +664,9 @@ static void ThreadMain(void) {
 void ThreadSchedule(void) {
     struct s_thread *to;
     if(Cur == NULL || Held()) return;
+    if(Cur->pending != NULL) return;                                // (the PicoMite's: an interrupt another thread handed
+                                                                    // to this one runs first, from this same statement tail;
+                                                                    // switching on would put it a whole round late: ttick)
     to = NextReady();
     if(to != Cur) ThreadSwitchTo(to);
 }
@@ -883,7 +886,7 @@ static void ScanForOthers(void) {
     char *r;
     struct s_thread *o;
     if(!IntReady.any || Held()) return;
-    if((r = NULL) == NULL) return;                                  // (check_interrupt's scan on its own: Stage P4b)
+    if((r = IntScan()) == NULL) return;                             // (MM_Misc.c: found and taken, not run)
     o = IntOwnerOf(r);
     o->pending = r;
     if(o->state == T_SLEEP || o->state == T_WAIT) o->state = T_READY;

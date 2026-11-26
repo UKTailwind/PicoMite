@@ -21,15 +21,28 @@ s = serial.Serial(port, 921600, timeout=0.05)
 
 
 def run(name, limit=40):
+    """RUN the test; with name.in beside this script, its lines are typed (a key at a time, as the CMM2's
+    threadcheck.py does) at each prompt that ends in '?'."""
+    keys = []
+    inp = os.path.join(HERE, name + ".in")
+    if os.path.exists(inp):
+        keys = [l for l in open(inp, encoding="latin-1").read().replace("\r", "").split("\n") if l]
     s.read(65536)
     s.write(('RUN "A:/tt/%s.bas"\r' % name).encode())
     b = ""
+    typed = 0
     end = time.time() + limit
     while time.time() < end:
         b += s.read(4096).decode("latin-1")
         c = ANSI.sub("", b).replace("\r", "")
         if re.search(r"\n> $", c):
             return c, True
+        if keys and c.count("?") > typed and c.rstrip(" ").endswith("?"):
+            time.sleep(0.2)
+            for ch in keys.pop(0):
+                s.write(ch.encode("latin-1"))
+                time.sleep(0.05)
+            typed = c.count("?")
     return ANSI.sub("", b).replace("\r", ""), False
 
 

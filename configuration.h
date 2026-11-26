@@ -295,7 +295,9 @@ extern "C"
       went 1.4 KB over 848 KB. */
    /* +16 KB (2026-10-10, Peter): ZMODEM (misc/ZModem.c, 5.4 KB) went 2.2 KB over 864 KB. */
    /* +16 KB (2026-11-25, Peter): FRAMEBUFFER AFFINE and SPAN (Warp.c, 3.3 KB) with 0.5 KB left. */
-#define FLASH_TARGET_OFFSET (896 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): Thread.c and its hooks, about 13 KB, went 1.3 KB over at Stage P2. */
+#define FLASH_TARGET_OFFSET (912 * 1024)
 #define MagicKey 0x561D3FB6
    /* -4 KB (2026-09-07): same C-heap headroom fix as the three variants
       above - see the note there. VGAUSB's newlib C heap (__StackLimit -

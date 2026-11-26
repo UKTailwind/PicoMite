@@ -2461,6 +2461,18 @@ int __not_in_flash_func(MMInkey)(void)
         InkeyTimer++;
         PauseTimer++;
         IntPauseTimer++;
+#ifdef USE_THREADS
+        if (ThreadSliceLeft && --ThreadSliceLeft == 0)
+        { // the running thread's time slice is up: the statement tail lets the next run (Thread.c). Nothing with no thread
+            ThreadSliceLeft = ThreadSliceLen;
+            IntReady.tick |= INT_TICK_SLICE;
+        }
+        if (ThreadWakeMs && (int)((unsigned int)mSecTimer - ThreadWakeMs) >= 0)
+        { // a sleeping thread's PAUSE has ended: likewise
+            ThreadWakeMs = 0;
+            IntReady.tick |= INT_TICK_SLICE;
+        }
+#endif
         ds18b20Timer++;
         GPSTimer++;
         I2CTimer++;
