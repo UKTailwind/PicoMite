@@ -4588,7 +4588,7 @@ uint32_t testPSRAM(void)
 #ifdef USE_THREADS
             THREAD_LANDING();   // first: a longjmp from a thread's own stack left SP in PSP (Thread.h)
             ThreadsStopped();   // where each thread was, then they end: this is the main stack now (Thread.c)
-            ThreadsEnd();
+            int hadthreads = ThreadsEnd();
             ThreadsStoppedShow();
 #endif
             // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
@@ -4601,6 +4601,10 @@ uint32_t testPSRAM(void)
             ProgMemory = (uint8_t *)flash_progmemory;
             ContinuePoint = nextstmt; // in case the user wants to use the continue command
             ContinueLocalIndex = g_LocalIndex; // and its level: a break in a SUB goes on in it (the prompt runs at 0)
+#ifdef USE_THREADS
+            if (hadthreads)
+                ContinuePoint = NULL; // nor a program that had threads: their stacks have gone (as the CMM2's main.c)
+#endif
             *tknbuf = 0;              // we do not want to run whatever is in the token buffer
             {
                 /* a call whose arguments were being processed (a CTRL-C in them) is gone:
