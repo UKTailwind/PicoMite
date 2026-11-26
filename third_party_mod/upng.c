@@ -119,6 +119,19 @@ struct upng_t
 	unsigned char palette[256][4]; /* R, G, B, A per entry */
 	unsigned palette_entries;
 	unsigned trns_entries;
+	/* the Huffman tables of the block being inflated, and the working arrays that build them: here in the decoder's
+	   heap block, not on the stack, where they took 5.4 KB at the deepest (inflate_huffman 2.8 KB, which calls
+	   get_tree_inflate_dynamic 1.4 KB, which calls huffman_tree_create_lengths 1.3 KB). One set serves the whole
+	   decode: a block's tables are built after the block before has ended */
+	unsigned codetree_buffer[DEFLATE_CODE_BUFFER_SIZE];		/* inflate_huffman's */
+	unsigned codetreeD_buffer[DISTANCE_BUFFER_SIZE];
+	unsigned codelengthcodetree_buffer[CODE_LENGTH_BUFFER_SIZE];
+	unsigned codelengthcode[NUM_CODE_LENGTH_CODES];	/* get_tree_inflate_dynamic's */
+	unsigned bitlen[NUM_DEFLATE_CODE_SYMBOLS];
+	unsigned bitlenD[NUM_DISTANCE_SYMBOLS];
+	unsigned tree1d[MAX_SYMBOLS];				/* huffman_tree_create_lengths's */
+	unsigned blcount[MAX_BIT_LENGTH + 1];
+	unsigned nextcode[MAX_BIT_LENGTH + 1];
 };
 
 /* the inflated data: a window of the most recent bytes, at least the 32 KB a
@@ -306,16 +319,16 @@ static void huffman_tree_init(huffman_tree *tree, unsigned *buffer, unsigned num
 /*given the code lengths (as stored in the PNG file), generate the tree as defined by Deflate. maxbitlen is the maximum bits that a code in the tree can have. return value is error.*/
 static void huffman_tree_create_lengths(upng_t *upng, huffman_tree *tree, const unsigned *bitlen)
 {
-	unsigned tree1d[MAX_SYMBOLS];
-	unsigned blcount[MAX_BIT_LENGTH + 1]; /* code lengths run 0 to 15 */
-	unsigned nextcode[MAX_BIT_LENGTH + 1];
+	unsigned *tree1d = upng->tree1d; /* (in the decoder's block: struct upng_t) */
+	unsigned *blcount = upng->blcount;
+	unsigned *nextcode = upng->nextcode;
 	unsigned bits, n, i;
 	unsigned nodefilled = 0; /*up to which node it is filled */
 	unsigned treepos = 0;	 /*position in the tree (1 of the numcodes columns) */
 
 	/* initialize local vectors */
-	memset(blcount, 0, sizeof(blcount));
-	memset(nextcode, 0, sizeof(nextcode));
+	memset(blcount, 0, sizeof(upng->blcount));
+	memset(nextcode, 0, sizeof(upng->nextcode));
 
 	/*step 1: count number of instances of each code length */
 	for (bits = 0; bits < tree->numcodes; bits++)
@@ -415,14 +428,14 @@ static unsigned huffman_decode_symbol(upng_t *upng, const huffman_tree *codetree
 /* get the tree of a deflated block with dynamic tree, the tree itself is also Huffman compressed with a known tree*/
 static void get_tree_inflate_dynamic(upng_t *upng, huffman_tree *codetree, huffman_tree *codetreeD, huffman_tree *codelengthcodetree)
 {
-	unsigned codelengthcode[NUM_CODE_LENGTH_CODES];
-	unsigned bitlen[NUM_DEFLATE_CODE_SYMBOLS];
-	unsigned bitlenD[NUM_DISTANCE_SYMBOLS];
+	unsigned *codelengthcode = upng->codelengthcode; /* (in the decoder's block: struct upng_t) */
+	unsigned *bitlen = upng->bitlen;
+	unsigned *bitlenD = upng->bitlenD;
 	unsigned n, hlit, hdist, hclen, i;
 
 	/* clear bitlen arrays */
-	memset(bitlen, 0, sizeof(bitlen));
-	memset(bitlenD, 0, sizeof(bitlenD));
+	memset(bitlen, 0, sizeof(upng->bitlen));
+	memset(bitlenD, 0, sizeof(upng->bitlenD));
 
 	hlit = read_bits(upng, 5) + 257; /*number of literal/length codes + 257. Unlike the spec, the value 257 is added to it here already */
 	hdist = read_bits(upng, 5) + 1;	 /*number of distance codes. Unlike the spec, the value 1 is added to it here already */
@@ -705,8 +718,8 @@ static inline void png_flush(upng_t *upng, png_out *out)
 /*inflate a block with dynamic of fixed Huffman tree*/
 static void inflate_huffman(upng_t *upng, png_out *out, unsigned btype)
 {
-	unsigned codetree_buffer[DEFLATE_CODE_BUFFER_SIZE];
-	unsigned codetreeD_buffer[DISTANCE_BUFFER_SIZE];
+	unsigned *codetree_buffer = upng->codetree_buffer; /* (in the decoder's block: struct upng_t) */
+	unsigned *codetreeD_buffer = upng->codetreeD_buffer;
 
 	huffman_tree codetree;
 	huffman_tree codetreeD;
@@ -720,7 +733,7 @@ static void inflate_huffman(upng_t *upng, png_out *out, unsigned btype)
 	else
 	{
 		/* dynamic trees */
-		unsigned codelengthcodetree_buffer[CODE_LENGTH_BUFFER_SIZE];
+		unsigned *codelengthcodetree_buffer = upng->codelengthcodetree_buffer;
 		huffman_tree codelengthcodetree;
 
 		huffman_tree_init(&codetree, codetree_buffer, NUM_DEFLATE_CODE_SYMBOLS, DEFLATE_CODE_BITLEN);
