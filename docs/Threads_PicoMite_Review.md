@@ -192,3 +192,20 @@ error inside an expression 3,260). The 3 KB guard holds there too.
 - PICOMIN: the 26 general tests pass, with tpack_r (its 192 local slots), tcond_p (a figure) and tbind_p naming NEST 8;
   tinput but for its TEXT (no display), tintown but for the console's echo. The RP2040 VGA build: those, and tframe_p,
   twrite_p, tscreen, tinput, tmapset_p (MODE 2: Peter) and tintown_r.
+
+## After the manual's review (26 November)
+
+- **The PNG decoder's tables are in its heap block** (Peter, through the CMM2 session: the CMM2's b794088, the same
+  text in `third_party_mod/upng.c`). LOAD PNG now goes 1,344 to 1,596 bytes below its command on a PC3, not 6,216, and
+  draws the same pixels: twelve PNGs on B:, checksummed in MODE 4 before and after, match (`Bas/threads/pngsum.bas`).
+  It is inside the 3 KB guard, as every other command measured, so **StackNeed has gone**: it had no other user. A
+  command found to go deeper than the guard can have it back.
+- Peter: "On the firmware gaps make the Picomite consistent with the cmm2":
+  - **SQL in a thread**, as the CMM2 allows it. The SQL module runs on a stack of its own, the process stack, which a
+    thread runs on too: from a thread, LoaderSqlCall took PSP and PSPLIM from under it and the PC3 faulted. A call from
+    a thread now keeps the thread's PSP and PSPLIM, makes the module's call from the main stack as the main program's is
+    made, and puts them back (`misc/Loader.c`, under USE_THREADS). `tsql_p.bas`.
+  - **USER**: no thread switch while a module's call runs, as the CMM2's usercall holds the threads.
+  - **CPU SLEEP** while the program has threads is a PAUSE of n seconds, as the CMM2's: the other threads run, and its
+    interrupts and Ctrl-C are as in a PAUSE. Without threads it is the wait it always was. `tsleep_p.bas`.
+- On COM11's PC3: the 39 thread tests pass with OPTION COMPILE OFF and ON.

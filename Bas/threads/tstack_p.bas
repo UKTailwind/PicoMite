@@ -1,8 +1,8 @@
-' tstack_p.bas - threads, Stage P5: a command that goes deeper than a thread's guard tests for its room first
-' (StackNeed: LOAD PNG), and JSON$'s nesting is capped by the stack's room, in a thread and in the main program. Too
-' small a SIZE is "Not enough stack (thread n needs SIZE k)", and SIZE k is then enough. Uses B:/ghost.png.
+' tstack_p.bas - threads, Stage P5: LOAD PNG in a thread of the smallest SIZE and two FUNCTIONs deep in the default
+' (its decoder's Huffman tables in its heap block: it goes about 1.5 KB below its command, inside the guard), and
+' JSON$'s nesting capped by the stack's room, in a thread and in the main program. Uses B:/ghost.png.
 Option Explicit
-Dim Integer tests, pass, js(1024), k, need
+Dim Integer tests, pass, js(1024), k
 Dim msg$, a$, p$
 
 Sub Check(n$, got, want)
@@ -52,23 +52,10 @@ Sub JsonIn
   msg$ = MM.ErrMsg$
 End Sub
 
-Function NeedOf%(m$)                    ' the k of "... needs SIZE k)"
-  NeedOf% = Val(Mid$(m$, Instr(m$, "SIZE ") + 5))
-End Function
-
 msg$ = "x" : Thread Start 1 Size 6, Png : Thread Wait 1
-Check "LOAD PNG in a thread of SIZE 6: not enough stack, before it starts", Instr(msg$, "Not enough stack (thread 1 needs SIZE ") = 1, 1
-need = NeedOf%(msg$)
-msg$ = "x" : Thread Start 1 Size need, Png : Thread Wait 1
-Check "and with the SIZE it names it loads", msg$ = "", 1
-msg$ = "x" : Thread Start 1, Png : Thread Wait 1
-Check "LOAD PNG in a thread of the default SIZE", msg$ = "", 1
+Check "LOAD PNG in a thread of the smallest SIZE (its decoder's tables are in its heap block)", msg$ = "", 1
 msg$ = "x" : Thread Start 1, PngDeep : Thread Wait 1
-Check "two FUNCTIONs deep in the default SIZE: not enough stack", Instr(msg$, "Not enough stack (thread 1 needs SIZE ") = 1, 1
-need = NeedOf%(msg$)
-Check "the SIZE it names is more than the default", need > 8, 1
-msg$ = "x" : Thread Start 1 Size need, PngDeep : Thread Wait 1
-Check "and with it the deep LOAD PNG works", msg$ = "", 1
+Check "and two FUNCTIONs deep in the default SIZE", msg$ = "", 1
 
 MakeJSON 10
 msg$ = "x" : Thread Start 1, JsonIn : Thread Wait 1

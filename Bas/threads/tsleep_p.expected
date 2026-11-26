@@ -1,0 +1,6 @@
+ok  CPU SLEEP 0.3 in the main program with a thread: 300 ms
+ok  the thread ran meanwhile
+ok  its SETTICK ran during it, as in a PAUSE
+ok  CPU SLEEP 0.2 in a thread: 200 ms
+ok  and the other threads ran
+tsleep: 5 of 5 passed

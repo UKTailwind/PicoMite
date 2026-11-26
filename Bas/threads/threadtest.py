@@ -26,8 +26,9 @@ The RP2040's (its console on USB, which echoes a typed line; a 192-slot local re
   tlock_r    the wait with no limit timed against the owner's unlock (a console at 115200 with a VGA screen)
 The RP2040 runs at 115200 on PICOUSB and VGAUSB, whose USB is the host's: threadtest.py COM53:115200 ...
   stackrp.bas measures the stack as stackm.bas does, on a build without a display or SD card
-and twrite_p and tstack_p are the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's section 9), and
-StackNeed and JSON$'s nesting cap (Stage P5). tcond is the CMM2's a2db2ec (THREAD WAIT inside THREAD HOLD).
+and twrite_p, tstack_p, tsql_p and tsleep_p are the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's
+section 9), LOAD PNG in a small thread and JSON$'s nesting cap (Stage P5), SQL in a thread (the PC3 and HDMIUSB, with
+the SQL module) and CPU SLEEP as a PAUSE while threads run (both as the CMM2's). tcond is the CMM2's a2db2ec (THREAD WAIT inside THREAD HOLD).
 stackm.bas and stackm2.bas measure the stack and need a measuring build (-DTHREAD_STACK_REPORT). demo_input.bas is
 the manual's balls and clock while INPUT waits, in MODE 3, and demo_net.bas WEB NTP and an HTTPS GET in a thread
 while the main program counts: things to watch, not tests.

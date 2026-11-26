@@ -703,17 +703,22 @@ void fun_epoch(void)
 #ifdef USE_THREADS
 uint64_t PauseStart; // the running thread's: an interrupted PAUSE goes on from it (MM_Misc.h)
 #endif
+#ifdef USE_THREADS
+/* PAUSE's wait of f microseconds, pausetoken the statement to run again if an interrupt cuts it short. CPU SLEEP's
+   too while the program has threads: a PAUSE there, as the CMM2's, so the other threads run meanwhile. */
+void PauseUs(MMFLOAT f, unsigned char *pausetoken)
+{
+    uint64_t us;
+    static uint64_t IntPauseTimer;
+#else
 void cmd_pause(void)
 {
     unsigned char *pausetoken = CmdTokenPtr; // this statement, to re-run if an interrupt cuts the pause short
     MMFLOAT f;
     uint64_t us;
-#ifdef USE_THREADS
-    static uint64_t IntPauseTimer;
-#else
     static uint64_t PauseStart, IntPauseTimer;
-#endif
     f = getnumber(cmdline) * 1000;    // the delay in microseconds
+#endif
     if (f < 0 || f > 2147483647000.0) // up to 2147483647 ms (about 24 days), as the manual says
         StandardError(21);
     if (f < 2)
@@ -778,6 +783,13 @@ void cmd_pause(void)
             CheckAbort();
     }
 }
+#ifdef USE_THREADS
+void cmd_pause(void)
+{
+    unsigned char *pausetoken = CmdTokenPtr;        // this statement, to re-run if an interrupt cuts the pause short
+    PauseUs(getnumber(cmdline) * 1000, pausetoken); // the delay in microseconds
+}
+#endif
 
 #ifdef rp2350
 void cmd_longString(void)
@@ -9927,10 +9939,20 @@ void MIPS16 cmd_cpu(void)
     {
         //        	int pullup=0;
         MMFLOAT totalseconds;
+#ifdef USE_THREADS
+        unsigned char *pausetoken = CmdTokenPtr; // (this statement, to run again after an interrupt: as PAUSE's)
+#endif
         getcsargs(&p, 3);
         totalseconds = getnumber(p);
         if (totalseconds <= 0.0)
             error("Invalid period");
+#ifdef USE_THREADS
+        if (ThreadCount)
+        { // with threads a PAUSE of n seconds, as the CMM2's CPU SLEEP: the other threads run meanwhile (Thread.c)
+            PauseUs(totalseconds * 1000000, pausetoken);
+            return;
+        }
+#endif
         sleep_us(totalseconds * 1000000);
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SPEED")))

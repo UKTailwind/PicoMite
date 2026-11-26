@@ -1106,26 +1106,6 @@ void ThreadsStoppedShow(void) {
     FreeMemory(b);
 }
 
-/* A command that goes deeper than the guard below the stack check's floor (Stage P5's figures: LOAD PNG) tests first
-   for the room it needs, from the stack pointer down to the hardware floor (PSPLIM): "Not enough stack (thread n
-   needs SIZE k)", not a fault part way through it. The error's own print fits in the guard. The main program's stack
-   is not tested here, as before threads. */
-void StackNeed(int bytes) {
-    uint32_t sp, room;
-    if(Cur == NULL || Cur->stack == NULL) return;
-    READ_STACK_POINTER(sp);
-    room = sp - HWFLOOR(Cur);
-#ifdef THREAD_STACK_REPORT
-    {
-        char b[64];
-        sprintf(b, "[stackneed] thread %d room %d of %d\r\n", (int)Cur->id, (int)room, Cur->stacksize);
-        MMPrintString(b);
-    }
-#endif
-    if(room < (uint32_t)bytes)
-        error("Not enough stack (thread % needs SIZE %)", (int)Cur->id, (int)((Cur->stacksize + (bytes - room) + 1023) / 1024));
-}
-
 int ThreadNumber(void) {
     return Cur == NULL ? 0 : Cur->id;
 }

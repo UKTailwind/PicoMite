@@ -898,7 +898,6 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
 #define THREADS_END() ThreadsEnd()         // the program is being replaced: its threads end with it
 #define INTMAY(r) IntMay((char *)(r))      // an interrupt source's routine: may its thread take it now (Thread.c)
 #define NetYield() do { if (ThreadCount) ThreadPoll(); } while (0) // a WEB or BLUETOOTH command's wait: the others run
-#define STACK_NEED(b) StackNeed(b) // a command that goes deeper than a thread's guard: its room first (Thread.c)
     char *IntScan(void);                   // the routine of a source that is due, without running it (MM_Misc.c)
 #else
 #define THREAD_MAIN_ONLY() do { } while (0)
@@ -907,7 +906,6 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
 #define THREADS_END() do { } while (0)
 #define INTMAY(r) 1
 #define NetYield() do { } while (0)
-#define STACK_NEED(b) do { } while (0)
 #define THREAD_HOLD_BEGIN() do { } while (0)
 #define THREAD_HOLD_END() do { } while (0)
 #endif
