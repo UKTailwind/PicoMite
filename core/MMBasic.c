@@ -348,7 +348,11 @@ int g_hashlistpointer = 0;
    local is made in the next slot up, and g_hashlist lists the live ones in
    the order they were made, each with its level: a level's locals are the
    topmost entries of that level.  g_localtop is the next slot to use. */
+#ifdef USE_THREADS
+int g_localtop = 0; // (each thread's: Thread.c)
+#else
 static int g_localtop = 0;
+#endif
 /* The part of the local region the running code may use: all of it, until a program starts a thread, which is
    given a range of its own (USE_THREADS).  g_localtop starts at LocalBase, and the stack is full at LocalLimit.
    Without USE_THREADS they are 0 and maxlocalvars, as before. */

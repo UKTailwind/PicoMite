@@ -4468,7 +4468,11 @@ static __attribute__((noinline)) void RBFn(int id, union cell *v)
    same XIP cache sets as each other (pixart 18% slower when Stream.c's -Os
    moved them). */
 #define RBSPLICETEXT __attribute__((section(".text.RBSplice")))
+#ifdef USE_THREADS
+union cell *RBSplice; // (each thread's: Thread.c saves it at a switch)
+#else
 static union cell *RBSplice;
+#endif
 extern char CMM1; // Draw.c: OPTION LEGACY
 
 RBSPLICETEXT unsigned char *RBSpliceValue(unsigned char *p, MMFLOAT *fa, long long int *ia, unsigned char **sa, int *ta)

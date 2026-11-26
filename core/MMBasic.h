@@ -389,6 +389,9 @@ extern "C"
 #endif
     extern uint32_t heapend, stackwarn;
 #ifdef USE_THREADS
+    extern int LocalBase, LocalLimit; // the local slots the running thread may use (MMBasic.c)
+#endif
+#ifdef USE_THREADS
     extern struct s_hash *g_hashlist, g_hashlist_main[MAXLOCALLIST]; // the running thread's, and the main program's (Commands.h)
 #else
     extern struct s_hash g_hashlist[MAXLOCALLIST];

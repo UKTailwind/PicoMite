@@ -23,6 +23,16 @@ that calls a FUNCTION has its own frames on the thread's C stack while the FUNCT
 each thread has a stack: ThreadSwap changes the stack pointer.
 
 In bank 2 (the linker script): nothing here is on a statement's path until a program starts a thread.
+
+PicoMite (branch threads, docs/Threads_PicoMite_Review.md): this file is the CMM2's (CMM2V1.5 78d4172) with only what
+the machine demands changed. Built only with USE_THREADS. The differences:
+- A thread other than the main program runs on the process stack (PSP, CONTROL.SPSEL); the main program, every
+  interrupt's handler and the housekeeping (routinechecks, on its own veneer) stay on the main stack (Peter, 26 Nov).
+  ThreadSwap is written for each chip: ARMv8-M with its FPU and PSPLIM (RP2350), ARMv6-M (RP2040).
+- What the CMM2 keeps in static RAM for the whole run (the routines' owners, MM.ERRMSG$'s home) is in the main
+  program's record, made from the heap with the first thread: the RP2350 builds have 1 KB of RAM to spare.
+- MMErrMsg is an array here, so a switch copies it; the stacks come from the SRAM heap (GetSRAMMemoryNull), never PSRAM.
+- The CMM2's pages are the PicoMite's FRAMEBUFFER WRITE target (Stage P4), its frame count the scan-out's (P4).
 ***************************************************************************/
 #include <stdio.h>
 #include <string.h>
@@ -32,12 +42,25 @@ In bank 2 (the linker script): nothing here is on a statement's path until a pro
 #include "Hardware_Includes.h"
 #include "Symbols.h"
 #include "Thread.h"
+#include "hardware/sync.h"
+#include "DrawInternal.h"                                          // (FrameWait)
 
-extern struct s_hash *hashlist, hashlist_main[MAXLOCALVARS];        // (MMBasic.c: the running thread's locals, in the order made)
-extern int localtop;                                                // (and the next local slot)
+extern int g_localtop, g_hashlistpointer;                             // (MMBasic.c: the next local slot, the locals' list's top)
 extern uint32_t DefinedSubFunMem;                                   // (a call whose arguments are being read)
 extern int DefinedSubFunLocalIndex;
-extern int StrTmpIndex;
+extern int g_StrTmpIndex;
+#ifndef rp2350
+#define GetSRAMMemoryNull GetMemoryNull                                    // (no PSRAM: the heap is SRAM)
+#endif
+#define TKNBUFSIZE STRINGSIZE                                       // (tknbuf's size here: MMBasic.c)
+#define MAINLOCALS GetLocalVarHashSize()                            // the local region: OPTION LOCAL VARIABLES' (MMBasic.c)
+volatile uint32_t FrameCount = 0;                                   // frames shown: to be counted by the scan-out (Stage P4)
+static inline char *ProfileSwitch(char *line) { return line; }      // OPTION PROFILING per thread: Stage P5
+#ifdef LOADER
+extern volatile int LoaderActive;                                   // (Loader.c: a loadable program is running)
+#else
+#define LoaderActive 0
+#endif
 
 #define T_FREE 0
 #define T_READY 1
@@ -60,9 +83,6 @@ struct s_targ {                                                     // one of th
 };
 #define STACK_MARK 0x54485244                                       // the word at the bottom of a thread's stack
 #define STACK_PAINT 0x5354414B                                      // the rest of it at the start, as StackPaint's (MMBasic.c)
-extern char *ProfileSwitch(char *line);                             // (MMBasic.c)
-extern uint32_t StackLowest(void);
-extern char _estack[], _ebss[];
 
 struct s_thread {
     uint32_t *sp;                                                   // its stack pointer while it is not running (ThreadSwap)
@@ -72,17 +92,17 @@ struct s_thread {
     unsigned char wkind;                                            // T_WAIT: W_LOCK, W_THREAD or W_FLAG
     int warg;                                                       // and the lock, thread or flag
     int stacksize;
-    char *stack;                                                    // its C stack (NULL: the main program's, in the DTCM)
+    char *stack;                                                    // its C stack (NULL: the main program's, the main stack)
     uint32_t floor;                                                 // the stack check's floor (StackFloor while it runs)
     int lbase, llimit;                                              // its local slots
     int16_t *syml;                                                  // its names' local bindings (SymL while it runs)
     // the interpreter's state, as ContextSave left it
     char *nextstmt, *cmdline, *CmdTokenPtr, *CurrentLinePtr;
-    int cmdtoken, ExecDepth, LocalIndex;
-    int gosubindex, forindex, doindex, hashlistpointer, localtop, Localvarcnt, StrTmpIndex, TempMemoryIsChanged;
+    int cmdtoken, ExecDepth, g_LocalIndex;
+    int gosubindex, g_forindex, g_doindex, g_hashlistpointer, g_localtop, g_Localvarcnt, g_StrTmpIndex, g_TempMemoryIsChanged;
     int OptionErrorSkip, ErrorSkipDepth, MMerrno, MMerrline;
     uint32_t DefinedSubFunMem;
-    int DefinedSubFunLocalIndex, FunReturnArrayCount;
+    int DefinedSubFunLocalIndex, g_FunReturnArrayCount;
     int NextData, restorepointer, SymTextLocals;
     char *NextDataLine;
     unsigned int screwup;                                           // EXECUTE's time left (ScrewUpTimer), stopped while it waits
@@ -96,10 +116,8 @@ struct s_thread {
     int pauseint, waitresume;                                       // PAUSE's and THREAD WAIT's state for an interrupt that
     long long pauseuntil, waitlimit;                                // cuts them short (PauseInterrupted, PauseUntil; WaitFor)
     int CurrentX, CurrentY, fcolour, bcolour, font, pixelmode;      // its print position, colours, font and PRINT @'s mode,
-    int wpage, rpage;                                               // and the pages it writes and reads (ScreenSave)
-    uint32_t wpageaddr, rpageaddr;
     jmp_buf ErrNext;
-    char errmsg[STRINGSIZE];                                        // MM.ERRMSG$
+    char errmsg[MAXERRMSG];                                         // MM.ERRMSG$ (copied: MMErrMsg is an array here)
     char *call;                                                     // the statement that calls its SUB: the name, its
                                                                     // arguments, then zeros (after the record: CallText)
     struct s_targ *args;                                            // the arguments' values, which the call asks for by
@@ -107,15 +125,15 @@ struct s_thread {
     char *tknbuf;                                                   // EXECUTE's line: a block of its own, made at its first EXECUTE
     /* Its own stacks, which the interpreter's pointers are set to while it runs (UseStacks): after the record, as
        many entries as its NEST and LOCALS give (ThreadStart). The main program's point at the interpreter's own
-       arrays (forstack_main and the rest), of their full sizes. A switch copies none of them. */
-    char **gosub, **errs, **subs;
+       arrays (g_forstack_main and the rest), of their full sizes. A switch copies none of them. */
+    unsigned char **gosub, **errs, **subs;                          // (the PicoMite's stacks: unsigned char *)
     struct s_forstack *fors;
     struct s_dostack *dos;
     int nfor, ndo, ngosub, ntemp, ndata;                            // their entries (the interpreter's limits while it runs)
     struct s_hash *locals;                                          // its locals' list (after the record: as many as its
-    int nlocals;                                                    // local slots, MAXLOCALVARS for the main program's)
-    volatile char **tmp;
-    volatile char *tmplevel;
+    int nlocals;                                                    // local slots, MAXLOCALLIST for the main program's)
+    char **tmp;
+    char *tmplevel;
     struct sa_data *data;
 };
 
@@ -127,11 +145,9 @@ int ThreadHoldDepth = INT_MAX;
 static int StackSize = THREAD_STACK, LocalSlots = THREAD_LOCALS;    // THREAD SIZE: what the next THREAD START gives
 static int NestDepth = THREAD_NEST;
 static int MainPriority = 1;                                        // the main program's, kept while it has no record
-extern volatile int LoaderActive;                                   // (Loader.c: a loadable program is running)
 static struct s_thread *Thr[MAXTHREADS + 1];                        // by number: Thr[0] the main program's, made with the first thread
 static struct s_thread *Cur = NULL;                                 // the one running (NULL: no thread has been started)
 static int Stopping = 0;                                            // the program is ending: no more switches
-static char EndErrMsg[STRINGSIZE];                                  // MM.ERRMSG$'s home once the records have gone
 extern uint64_t g_flag;                                             // (Commands.c: FLAG(n), which THREAD WAIT FLAG waits for)
 static unsigned char LockOwner[MAXLOCKS + 1];                       // THREAD LOCK k's owner, as its thread number + 1; 0 free
 static int HoldCount = 0, HoldBy = 0;                               // THREAD HOLD: its depth, and the thread that holds
@@ -141,30 +157,123 @@ static const char *const NetName[2] = {"The network", "Bluetooth"};
 volatile unsigned char ThreadFrameWaiters = 0, ThreadFrameDue = 0;
 static int Deferred = 0;                                            // IntMay said no to a source: look again (Resignal)
 #define MAXINTOWN 64
-static struct { char *routine; unsigned char id; } IntOwner[MAXINTOWN];   // which thread set each routine up
+struct s_intown { char *routine; unsigned char id; };
+static struct s_intown *IntOwner;                                   // which thread set each routine up: after the main
+                                                                    // program's record (ThreadStart), not static RAM
 static int IntOwners = 0;                                           // (none listed: the main program's)
 extern int PauseInterrupted;                                        // (MM_Misc.c: PAUSE's, each thread's: ContextSave)
-extern long long int PauseUntil;
 union cell;
+#ifdef rp2350
 extern union cell *RBSplice;                                        // (Stream.c: a spliced command's values, on its thread's stack)
+#endif
 static int WaitResume = 0;                                          // the running thread's wait was cut short by an interrupt,
 static long long WaitLimit;                                         // and goes on to this time when its statement runs again
 
 /*******************************************************************************************
  the switch
 *******************************************************************************************/
-// The registers a C function must keep (r4-r11, d8-d15) and the return address pushed on the stack in use, its pointer
-// kept in *from; then the stack pointer is 'to', and the same come back off that stack: the return is into the thread
-// that was left there. Interrupts' handlers use whichever stack is current, and none is left on one that is not: this
-// runs between two statements, not inside a handler.
-__attribute__((naked, noinline)) static void ThreadSwap(uint32_t **from, uint32_t *to) {
+/* The registers a C function must keep (r4-r11, and d8-d15 on the RP2350) and the return address pushed on the stack
+   in use, its pointer kept in *from; then the stack 'to' is taken, and the same come back off it: the return is into
+   the thread that was left there. The PicoMite's (Peter, 26 Nov): the main program runs on the main stack (MSP) as it
+   always did, every other thread on the process stack (PSP, CONTROL.SPSEL): 'lim' is the thread's PSPLIM (its stack's
+   hardware floor, the RP2350), 0 for the main program. So every interrupt's handler runs on the main stack, and a
+   thread's stack holds only its own frames and an exception's stacked registers. r3 is pushed as well: an even number
+   of words, so the main stack stays 8-byte aligned where the main program was left (ThreadRoutineChecks runs C code
+   there). PSPLIM is 0 while the stack changes: a new thread's stack may be anywhere in the heap. Between two
+   statements, never inside a handler. */
+#ifdef rp2350
+#define SWAP_WORDS 26                                               // d8-d15 (16), r3-r11 (9), lr
+__attribute__((naked, noinline)) static void ThreadSwap(uint32_t **from, uint32_t *to, uint32_t lim) {
     __asm volatile(
-        "push   {r4-r11, lr}        \n"
+        "push   {r3-r11, lr}        \n"
         "vpush  {d8-d15}            \n"
         "str    sp, [r0]            \n"
-        "mov    sp, r1              \n"
+        "movs   r3, #0              \n"
+        "msr    psplim, r3          \n"
+        "cbz    r2, 1f              \n"
+        "msr    psp, r1             \n"     /* a thread: the process stack */
+        "mrs    r3, control         \n"
+        "orr    r3, r3, #2          \n"
+        "msr    control, r3         \n"
+        "isb                        \n"
+        "msr    psplim, r2          \n"
+        "b      2f                  \n"
+        "1:                         \n"
+        "msr    msp, r1             \n"     /* the main program: the main stack */
+        "mrs    r3, control         \n"
+        "bic    r3, r3, #2          \n"
+        "msr    control, r3         \n"
+        "isb                        \n"
+        "2:                         \n"
         "vpop   {d8-d15}            \n"
-        "pop    {r4-r11, pc}        \n"
+        "pop    {r3-r11, pc}        \n"
+    );
+}
+#else
+#define SWAP_WORDS 10                                               // r8-r11 (4), r3-r7 (5), lr
+__attribute__((naked, noinline)) static void ThreadSwap(uint32_t **from, uint32_t *to, uint32_t lim) {
+    __asm volatile(
+        "push   {r3-r7, lr}         \n"
+        "mov    r4, r8              \n"
+        "mov    r5, r9              \n"
+        "mov    r6, r10             \n"
+        "mov    r7, r11             \n"
+        "push   {r4-r7}             \n"
+        "mov    r3, sp              \n"
+        "str    r3, [r0]            \n"
+        "movs   r0, #2              \n"
+        "mrs    r3, control         \n"
+        "cmp    r2, #0              \n"
+        "beq    1f                  \n"
+        "msr    psp, r1             \n"     /* a thread: the process stack */
+        "orrs   r3, r0              \n"
+        "msr    control, r3         \n"
+        "isb                        \n"
+        "b      2f                  \n"
+        "1:                         \n"
+        "msr    msp, r1             \n"     /* the main program: the main stack */
+        "bics   r3, r0              \n"
+        "msr    control, r3         \n"
+        "isb                        \n"
+        "2:                         \n"
+        "pop    {r4-r7}             \n"
+        "mov    r8, r4              \n"
+        "mov    r9, r5              \n"
+        "mov    r10, r6             \n"
+        "mov    r11, r7             \n"
+        "pop    {r3-r7, pc}         \n"
+    );
+}
+#endif
+// a thread's PSPLIM: its stack's floor, above the check word (0: the main program, which is on the main stack)
+#define HWFLOOR(t) ((t)->stack == NULL ? 0u : (((uint32_t)(t)->stack + 8 + 7) & ~7u))
+
+/* The housekeeping (routinechecks: USB, audio, the network, the GUI) run on the main stack while a thread is on its
+   own (Peter, 26 Nov: interrupts and the housekeeping on the main stack), as the Loader runs a program's services. The
+   main stack is where the main program was left (ThreadSwap, 8-byte aligned); what runs there now is below it. An
+   error or Ctrl-C in it leaves by longjmp with SPSEL clear, on the main stack: the prompt's landing as from the main
+   program. 1 if it ran it there; 0: this is the main stack already, and the caller runs it itself. */
+__attribute__((naked, noinline)) int ThreadOnMainStack(void (*fn)(void)) {
+    __asm volatile(
+        "push   {r4, lr}            \n"
+        "mrs    r4, control         \n"
+        "movs   r1, #2              \n"
+        "tst    r4, r1              \n"
+        "beq    1f                  \n"     /* on the main stack already */
+        "bics   r4, r1              \n"
+        "msr    control, r4         \n"     /* SP is MSP from here */
+        "isb                        \n"
+        "blx    r0                  \n"
+        "mrs    r4, control         \n"
+        "movs   r1, #2              \n"
+        "orrs   r4, r1              \n"
+        "msr    control, r4         \n"     /* and PSP again */
+        "isb                        \n"
+        "movs   r0, #1              \n"
+        "pop    {r4, pc}            \n"
+        "1:                         \n"
+        "movs   r0, #0              \n"
+        "pop    {r4, pc}            \n"
     );
 }
 
@@ -178,27 +287,15 @@ static void ScreenSave(struct s_thread *t) {
     t->CurrentX = CurrentX; t->CurrentY = CurrentY;
     t->fcolour = gui_fcolour; t->bcolour = gui_bcolour;
     t->font = gui_font;
-    t->pixelmode = PrintPixelMode;
-    t->wpage = WritePage; t->rpage = ReadPage;
-    t->wpageaddr = WritePageAddressExternal; t->rpageaddr = ReadPageAddressExternal;
+    t->pixelmode = PrintPixelMode;                                  // (the FRAMEBUFFER WRITE target: Stage P4)
 }
 
 static void ScreenLoad(struct s_thread *t) {
     CurrentX = t->CurrentX; CurrentY = t->CurrentY;
     gui_fcolour = t->fcolour; gui_bcolour = t->bcolour;
-    PrintPixelMode = t->pixelmode;
-    if(t->wpage != WritePage || t->rpage != ReadPage) {
-        WritePage = t->wpage; ReadPage = t->rpage;
-        WritePageAddressExternal = t->wpageaddr; ReadPageAddressExternal = t->rpageaddr;
-        if(PageTable[WritePage].address == NULL || PageTable[ReadPage].address == NULL) {   // (a page gone meanwhile:
-            WritePage = ReadPage = 0;                               // the display, as FRAMEBUFFER CLOSE leaves it)
-            WritePageAddressExternal = ReadPageAddressExternal = (uint32_t)PageTable[0].address;
-        }
-        HRes = PageTable[WritePage].xmax;                           // (as PAGE WRITE sets them)
-        VRes = PageTable[WritePage].ymax;
-    }
+    PrintPixelMode = t->pixelmode;                                  // (the FRAMEBUFFER WRITE target: Stage P4)
     if(FontTable[t->font >> 4] == NULL) t->font = (0 << 4) | 1;     // (its font's slot emptied: font 1)
-    FontMetrics(t->font);                                           // (its size from the table: LOAD FONT may have changed it)
+    if(t->font != gui_font) SetFont(t->font);                       // (its size from the table: LOAD FONT may have changed it)
 }
 
 // MODE (setmode, ltdc.c) has set the screen up again: every thread has what the thread that ran it has now
@@ -210,48 +307,37 @@ void ThreadsScreenReset(void) {
 }
 
 // a page another thread writes to or reads from (FRAMEBUFFER CLOSE refuses it, as it does the running thread's)
-int ThreadPageInUse(int page) {
-    int i;
-    if(Cur == NULL) return 0;
-    for(i = 0; i <= MAXTHREADS; i++)
-        if(Thr[i] != NULL && Thr[i] != Cur && ALIVE(Thr[i]) && (Thr[i]->wpage == page || Thr[i]->rpage == page)) return 1;
+int ThreadPageInUse(int page) {                                     // (the FRAMEBUFFER WRITE target: Stage P4)
     return 0;
 }
 
 // a 4-bit mode's framebuffer has closed (Rgb121.c): a thread that wrote to it or read from it goes back to N, as
 // the running thread does there
-void ThreadPageClosed(int page) {
-    int i;
-    if(Cur == NULL) return;
-    for(i = 0; i <= MAXTHREADS; i++)
-        if(Thr[i] != NULL && Thr[i] != Cur && ALIVE(Thr[i])) {
-            if(Thr[i]->wpage == page) Thr[i]->wpage = 0;
-            if(Thr[i]->rpage == page) Thr[i]->rpage = 0;
-        }
+void ThreadPageClosed(int page) {                                   // (the FRAMEBUFFER WRITE target: Stage P4)
 }
 
 static void ContextSave(struct s_thread *t) {
     ScreenSave(t);
     t->nextstmt = nextstmt; t->cmdline = cmdline; t->CmdTokenPtr = CmdTokenPtr; t->CurrentLinePtr = CurrentLinePtr;
-    t->cmdtoken = cmdtoken; t->ExecDepth = ExecDepth; t->LocalIndex = LocalIndex;
+    t->cmdtoken = cmdtoken; t->ExecDepth = ExecDepth; t->g_LocalIndex = g_LocalIndex;
     t->gosubindex = gosubindex;                                     // (its stacks are its own: only how full each is)
-    t->forindex = forindex;
-    t->doindex = doindex;
-    t->hashlistpointer = hashlistpointer;
-    t->localtop = localtop; t->Localvarcnt = Localvarcnt;
-    t->StrTmpIndex = StrTmpIndex; t->TempMemoryIsChanged = TempMemoryIsChanged;
+    t->g_forindex = g_forindex;
+    t->g_doindex = g_doindex;
+    t->g_hashlistpointer = g_hashlistpointer;
+    t->g_localtop = g_localtop; t->g_Localvarcnt = g_Localvarcnt;
+    t->g_StrTmpIndex = g_StrTmpIndex; t->g_TempMemoryIsChanged = g_TempMemoryIsChanged;
     t->OptionErrorSkip = OptionErrorSkip; t->ErrorSkipDepth = ErrorSkipDepth;
     t->MMerrno = MMerrno; t->MMerrline = MMerrline;
-    if(MMErrMsg != t->errmsg) {                                     // (error() points it at its own buffer)
-        strncpy(t->errmsg, MMErrMsg, STRINGSIZE - 1);
-        t->errmsg[STRINGSIZE - 1] = 0;
-    }
+    strncpy(t->errmsg, MMErrMsg, MAXERRMSG - 1);                    // (an array here: copied)
+    t->errmsg[MAXERRMSG - 1] = 0;
     memcpy(t->ErrNext, ErrNext, sizeof(jmp_buf));
     t->DefinedSubFunMem = DefinedSubFunMem; t->DefinedSubFunLocalIndex = DefinedSubFunLocalIndex;
+#ifdef rp2350
     t->splice = RBSplice;                                           // (a command that waits may be a spliced one: Stage 4)
-    t->pauseint = PauseInterrupted; t->pauseuntil = PauseUntil;     // (an interrupt may cut any thread's wait short: 4b)
+#endif
+    t->pauseint = PauseInterrupted; t->pauseuntil = PauseStart;     // (an interrupt may cut any thread's wait short: 4b)
     t->waitresume = WaitResume; t->waitlimit = WaitLimit;
-    t->FunReturnArrayCount = FunReturnArrayCount;
+    t->g_FunReturnArrayCount = g_FunReturnArrayCount;
     t->NextData = NextData; t->NextDataLine = NextDataLine; t->restorepointer = restorepointer;
     t->SymTextLocals = SymTextLocals;
     t->screwup = ScrewUpTimer;                                      // EXECUTE's second runs only while its thread does
@@ -260,29 +346,29 @@ static void ContextSave(struct s_thread *t) {
 
 // the interpreter's stacks are the main program's again: its own arrays, of their full sizes
 static void MainStacks(void) {
-    forstack = forstack_main; ForLimit = MAXFORLOOPS;
-    dostack = dostack_main; DoLimit = MAXDOLOOPS;
+    g_forstack = g_forstack_main; ForLimit = MAXFORLOOPS;
+    g_dostack = g_dostack_main; DoLimit = MAXDOLOOPS;
     gosubstack = gosubstack_main; errorstack = errorstack_main; substack = substack_main; GosubLimit = MAXGOSUB;
     datastore = datastore_main; RestoreLimit = MAXRESTORE;
-    StrTmp = StrTmp_main; StrTmpLocalIndex = StrTmpLocalIndex_main; TempLimit = MAXTEMPSTRINGS;
-    hashlist = hashlist_main;
+    g_StrTmp = g_StrTmp_main; g_StrTmpLocalIndex = g_StrTmpLocalIndex_main; TempLimit = MAXTEMPSTRINGS;
+    g_hashlist = g_hashlist_main;
 }
 
 // what the variables' code needs of a thread's state: its locals, its loops (ClearVars trims them), its temporary
 // memory, its bindings
 static void ContextLoadVars(struct s_thread *t) {
-    LocalIndex = t->LocalIndex;
-    forstack = t->fors; ForLimit = t->nfor;
-    forindex = t->forindex;
-    dostack = t->dos; DoLimit = t->ndo;
-    doindex = t->doindex;
-    hashlist = t->locals;
-    hashlistpointer = t->hashlistpointer;
-    localtop = t->localtop; Localvarcnt = t->Localvarcnt;
-    varcnt = Globalvarcnt + Localvarcnt;
+    g_LocalIndex = t->g_LocalIndex;
+    g_forstack = t->fors; ForLimit = t->nfor;
+    g_forindex = t->g_forindex;
+    g_dostack = t->dos; DoLimit = t->ndo;
+    g_doindex = t->g_doindex;
+    g_hashlist = t->locals;
+    g_hashlistpointer = t->g_hashlistpointer;
+    g_localtop = t->g_localtop; g_Localvarcnt = t->g_Localvarcnt;
+    g_varcnt = g_Globalvarcnt + g_Localvarcnt;
     LocalBase = t->lbase; LocalLimit = t->llimit;
-    StrTmp = t->tmp; StrTmpLocalIndex = t->tmplevel; TempLimit = t->ntemp;
-    StrTmpIndex = t->StrTmpIndex; TempMemoryIsChanged = t->TempMemoryIsChanged;
+    g_StrTmp = t->tmp; g_StrTmpLocalIndex = t->tmplevel; TempLimit = t->ntemp;
+    g_StrTmpIndex = t->g_StrTmpIndex; g_TempMemoryIsChanged = t->g_TempMemoryIsChanged;
     if(SymL != NULL) SymL = t->syml;
     SymTextLocals = t->SymTextLocals;
 }
@@ -294,8 +380,10 @@ static void ContextLoadVars(struct s_thread *t) {
    differ by what G moved (it happened: tests/threads/tbind.bas). So every level is given a new event of its own, and
    the globals a newer one: each sum made from here on is greater than any made before, and the levels still differ. */
 static void BindsStale(void) {
+#ifdef rp2350                                                       // (the compiled route's stamps: the RP2350's)
     int l;
     for(l = 0; l < SYM_LEVELS; l++) SymLevelGen[l] = ++SymBindEvent;
+#endif
     SymBindGlobalsChanged();
 }
 
@@ -307,14 +395,16 @@ static void ContextLoad(struct s_thread *t) {
     gosubindex = t->gosubindex;
     OptionErrorSkip = t->OptionErrorSkip; ErrorSkipDepth = t->ErrorSkipDepth;
     MMerrno = t->MMerrno; MMerrline = t->MMerrline;
-    MMErrMsg = t->errmsg;
+    strcpy(MMErrMsg, t->errmsg);
     memcpy(ErrNext, t->ErrNext, sizeof(jmp_buf));
     DefinedSubFunMem = t->DefinedSubFunMem; DefinedSubFunLocalIndex = t->DefinedSubFunLocalIndex;
+#ifdef rp2350
     RBSplice = t->splice;
-    PauseInterrupted = t->pauseint; PauseUntil = t->pauseuntil;
+#endif
+    PauseInterrupted = t->pauseint; PauseStart = t->pauseuntil;
     WaitResume = t->waitresume; WaitLimit = t->waitlimit;
     ScreenLoad(t);
-    FunReturnArrayCount = t->FunReturnArrayCount;
+    g_FunReturnArrayCount = t->g_FunReturnArrayCount;
     datastore = t->data; RestoreLimit = t->ndata;
     NextData = t->NextData; NextDataLine = t->NextDataLine; restorepointer = t->restorepointer;
     StackFloor = t->floor;                                          // (from the record, never saved: PIXEL FILL turns the
@@ -325,7 +415,7 @@ static void ContextLoad(struct s_thread *t) {
 
 // the main program's limit of local slots: the lowest any thread has taken
 static void MainLimit(void) {
-    int i, lim = MAXLOCALVARS;
+    int i, lim = MAINLOCALS;
     for(i = 1; i <= MAXTHREADS; i++)
         if(Thr[i] != NULL && ALIVE(Thr[i]) && Thr[i]->lbase < lim) lim = Thr[i]->lbase;
     Thr[0]->llimit = lim;
@@ -334,11 +424,7 @@ static void MainLimit(void) {
 
 // the last thread has ended and the main program runs on alone: nothing of this is active again
 static void ThreadsOff(void) {
-    if(MMErrMsg == Thr[0]->errmsg) {
-        strcpy(EndErrMsg, MMErrMsg);
-        MMErrMsg = EndErrMsg;
-    }
-    LocalLimit = MAXLOCALVARS;
+    LocalLimit = MAINLOCALS;                                        // (MMErrMsg is an array: it keeps its message)
     FreeMemory(Thr[0]);
     Thr[0] = Cur = NULL;
     Stopping = 0;
@@ -414,7 +500,7 @@ static void Deaf(int on) {
    asleep or not: its PAUSE loop is the idle loop, as it always was (CheckAbort, the interrupts, the GUI's work). */
 static struct s_thread *NextReady(void) {
     struct s_thread *t, *due = NULL;
-    long long now = GetuSec();
+    long long now = time_us_64();
     int i;
     for(i = 0; i <= MAXTHREADS; i++) {
         t = Thr[i];
@@ -463,7 +549,7 @@ static void ArmWake(void) {
         ThreadWakeMs = 0;
         return;
     }
-    now = GetuSec();
+    now = time_us_64();
     ms = (unsigned int)mSecTimer + (first > now ? (unsigned int)((first - now + 999) / 1000) : 0);
     ThreadWakeMs = ms ? ms : 1;
 }
@@ -499,7 +585,7 @@ static void ThreadSwitchTo(struct s_thread *to) {
     ThreadSliceLeft = ThreadSliceLen * Turn(to);                    // a whole turn for it
     ArmWake();
     Resignal();                                                     // (an interrupt held back may be this one's)
-    ThreadSwap(&from->sp, to->sp);                                  // back here when 'from' next runs
+    ThreadSwap(&from->sp, to->sp, HWFLOOR(to));                     // back here when 'from' next runs
     ThreadReap();
 }
 
@@ -516,7 +602,7 @@ __attribute__((noreturn)) static void ThreadFinish(void) {
     Cur = to;
     ThreadSliceLeft = ThreadSliceLen * Turn(to);
     ArmWake();
-    ThreadSwap(&old->sp, to->sp);
+    ThreadSwap(&old->sp, to->sp, HWFLOOR(to));
     for(;;) {}                                                      // (nothing switches to a thread that has ended)
 }
 
@@ -585,7 +671,7 @@ static int WaitFor(int kind, int arg, long long us, char *token) {
     if(InterruptReturn != NULL) error("Cannot wait in an interrupt routine");
     if(ExecDepth < ThreadHoldDepth) ThreadHoldDepth = INT_MAX;      // (a call that held has ended: as Held)
     if(HoldCount || ThreadHoldDepth != INT_MAX) error("Cannot wait while the threads are held");
-    if(!WaitResume) WaitLimit = us < 0 ? NOLIMIT : GetuSec() + us;
+    if(!WaitResume) WaitLimit = us < 0 ? NOLIMIT : time_us_64() + us;
     WaitResume = 0;
     if(Cur != NULL) {                                               // (for the list after Ctrl-C, while this one runs)
         Cur->wkind = kind;
@@ -594,7 +680,7 @@ static int WaitFor(int kind, int arg, long long us, char *token) {
     }
     for(;;) {
         if(WaitOver(kind, arg)) { ThreadDoing(0); return 1; }
-        if(GetuSec() >= WaitLimit) { ThreadDoing(0); return 0; }
+        if(time_us_64() >= WaitLimit) { ThreadDoing(0); return 0; }
         CheckAbort();
         if(check_interrupt()) {
             InterruptReturn = token;                                // this statement again after the routine
@@ -623,16 +709,13 @@ void ThreadPoll(void) {
    interrupt's count of frames: each waiter clears the flag, so of two that wait at once one could miss its frame.
    The interrupt ends the running thread's slice when a thread waits, and the waiter runs first. */
 void ThreadFrameWait(void) {
-    extern volatile uint8_t pagesetdone;
     struct s_thread *to;
     uint32_t f;
-    if(Cur == NULL || Held()) {
-        pagesetdone = 0;
-        while(!pagesetdone) CheckAbort();
+    if(1) {                                                         // (the PicoMite: until the scan-out counts frames
+        FrameWait();                                                // in FrameCount, the wait it always was: Stage P4)
         return;
     }
     f = FrameCount;
-    pagesetdone = 0;                                                // (PAGE COPY ...,D's copy waits on it still: CheckAbort)
     while(FrameCount == f) {
         CheckAbort();
         Deaf(1);
@@ -700,11 +783,11 @@ void ThreadErrorRelease(void) {
 void ThreadDelay(int ms) {
     long long t;
     if(Cur == NULL || ThreadCount == 0 || Held()) {
-        MM_Delay(ms);
+        uSec(ms * 1000);
         return;
     }
-    t = GetuSec() + (long long)ms * 1000;
-    while(GetuSec() < t) {
+    t = time_us_64() + (long long)ms * 1000;
+    while(time_us_64() < t) {
         CheckAbort();
         ThreadSleepDeaf(t);
     }
@@ -759,7 +842,7 @@ static void ScanForOthers(void) {
     char *r;
     struct s_thread *o;
     if(!IntReady.any || Held()) return;
-    if((r = IntScan()) == NULL) return;
+    if((r = NULL) == NULL) return;                                  // (check_interrupt's scan on its own: Stage P4b)
     o = IntOwnerOf(r);
     o->pending = r;
     if(o->state == T_SLEEP || o->state == T_WAIT) o->state = T_READY;
@@ -801,18 +884,9 @@ int ThreadLockOwner(int k) {
 }
 
 // the number of the program line p is in: 0 if it is not in the program
-static int LineOf(char *p) {
-    char *line, *next;
-    if(p == NULL || !InProgMemory(p)) return 0;
-    if(*p != T_NEWLINE) {
-        for(line = (char *)ProgMemory; *line == T_NEWLINE; line = next) {
-            next = NextLine(line);
-            if(p < next) break;
-        }
-        if(*line != T_NEWLINE) return 0;
-        p = line;
-    }
-    return LHDR_LINE(p);
+static int LineOf(char *p) {                                        // (the PicoMite's: as an error's line)
+    if(p == NULL || (unsigned char *)p < ProgMemory || (unsigned char *)p >= ProgMemory + MAX_PROG_SIZE) return 0;
+    return CountLines((unsigned char *)p);
 }
 
 // the list's text: printed, or kept at ListAt (to ListEnd) for the prompt's landing to print after the error's message
@@ -835,14 +909,8 @@ static void ListNumber(const char *before, int n) {
 
 // a thread's stack for THREAD LIST: the most it has used, and its size
 static void ListStack(struct s_thread *t) {
-    uint32_t *p, low, top;
-    if(t->stack == NULL) {                                          // the main program's: painted at RUN (StackPaint)
-        low = StackLowest();
-        top = (uint32_t)_estack;
-        ListNumber(", stack used at most ", (int)(top - low));
-        ListNumber(" of ", (int)(top - (uint32_t)_ebss));
-        return;
-    }
+    uint32_t *p;
+    if(t->stack == NULL) return;                                    // (the main program's, the main stack: Stage P5)
     for(p = (uint32_t *)t->stack + 1; (char *)p < t->stack + t->stacksize && *p == STACK_PAINT; p++) {}
     ListNumber(", stack used at most ", (int)(t->stack + t->stacksize - (char *)p));
     ListNumber(" of ", t->stacksize);
@@ -861,7 +929,7 @@ static void ThreadList(int withstack) {
         t = Thr[i];
         if(t == NULL || !ALIVE(t)) continue;
         if(i) ListNumber("Thread ", i); else ListText("Main program");
-        line = LineOf(t == Cur ? CurrentLinePtr : t->CurrentLinePtr);
+        line = LineOf(t == Cur ? (char *)CurrentLinePtr : t->CurrentLinePtr);
         if(line) ListNumber(": line ", line); else ListText(":");
         int sleeping = t->state == T_SLEEP || (t == Cur && t->doing == 1);
         int waiting = t->state == T_WAIT || (t == Cur && t->doing == 2);
@@ -955,9 +1023,9 @@ void ThreadStackLimits(void) {
 }
 
 static int OnMainStack(void) {
-    uint32_t sp;
-    __asm volatile("MRS %0, msp" : "=r"(sp));
-    return (sp >> 17) == (0x20000000 >> 17);                        // the DTCM: no thread's stack is there
+    uint32_t c;
+    __asm volatile("MRS %0, control" : "=r"(c));
+    return !(c & 2);                                                // (SPSEL clear: a thread's is the process stack)
 }
 
 /* The program has stopped (an error, END, Ctrl-C: the prompt's landing, main.c) or is being replaced (RUN, CHAIN:
@@ -984,31 +1052,28 @@ int ThreadsEnd(void) {
     ThreadFrameDue = 0;
     if(Cur == NULL) return 0;
     if(!OnMainStack()) error("Not allowed in a thread");
-    strncpy(EndErrMsg, MMErrMsg, STRINGSIZE - 1);
-    EndErrMsg[STRINGSIZE - 1] = 0;
     ContextSave(Cur);
     if(Cur != Thr[0]) ScreenLoad(Thr[0]);                           // (the main program's print position, colours and font)
     for(i = 0; i <= MAXTHREADS; i++) {
         if(Thr[i] == NULL) continue;
         if(ALIVE(Thr[i])) {
             ContextLoadVars(Thr[i]);
-            ClearVars(1);
-            LocalIndex = 0;
+            ClearVars(1, true);
+            g_LocalIndex = 0;
             ClearTempMemory();
         }
     }
     MainStacks();
-    LocalBase = 0; LocalLimit = MAXLOCALVARS;
-    localtop = 0; hashlistpointer = 0; Localvarcnt = 0;
-    StrTmpIndex = 0; restorepointer = 0;
-    varcnt = Globalvarcnt;
-    LocalIndex = 0; gosubindex = forindex = doindex = 0;
+    LocalBase = 0; LocalLimit = MAINLOCALS;
+    g_localtop = 0; g_hashlistpointer = 0; g_Localvarcnt = 0;
+    g_StrTmpIndex = 0; restorepointer = 0;
+    g_varcnt = g_Globalvarcnt;
+    g_LocalIndex = 0; gosubindex = g_forindex = g_doindex = 0;
     if(SymL != NULL) SymL = Thr[0]->syml;
     SymTextLocals = 0;
     StackFloor = Thr[0]->floor;
     stackwarn = Thr[0]->floor + 1024;
-    MMerrno = eno; MMerrline = eline;
-    MMErrMsg = EndErrMsg;
+    MMerrno = eno; MMerrline = eline;                               // (MMErrMsg, an array, keeps its message)
     for(i = 1; i <= MAXTHREADS; i++)
         if(Thr[i] != NULL) {
             FreeMemory(Thr[i]->stack);
@@ -1028,15 +1093,6 @@ int ThreadsEnd(void) {
 /*******************************************************************************************
  THREAD
 *******************************************************************************************/
-// the on-chip heap's free bytes: a thread's stack goes there while plenty is left for the strings and the audio
-static int OnChipFree(void) {
-    unsigned char *a;
-    int n = 0;
-    for(a = (unsigned char *)RAMBASE; a < (unsigned char *)RAMEND; a += RAMPAGESIZE)
-        if(!(MBitsGet(a) & PUSED)) n++;
-    return n * RAMPAGESIZE;
-}
-
 #define PUT(c) do { if(o >= end) error("Arguments too long for a thread"); *o++ = (c); } while(0)
 /* The statement a new thread starts with, written at out (CALLMAX bytes): its SUB's name and its arguments. Each
    argument of THREAD START (argv[4], argv[6]...) is evaluated here, in the thread that starts the new one, and kept in
@@ -1045,8 +1101,9 @@ static int OnChipFree(void) {
    values cannot be written into the call as constants: a call is read with a program line's room, 255 characters,
    and one string can be that long.) A whole array (a()) is written as its name: the new thread finds the same global
    by it, so a global it must be. The call's length; *nta the number of values kept. */
-static int CallText(char *out, struct s_targ *ta, int *nta, char *sub, int len, int argc, char **argv) {
-    char *o = out, *end = out + CALLMAX - 4, *a, *b, *s, nb[12];
+static int CallText(char *out, struct s_targ *ta, int *nta, char *sub, int len, int argc, unsigned char **argv) {
+    char *o = out, *end = out + CALLMAX - 4, *a, *b, nb[12];
+    unsigned char *s;
     const char *w;
     MMFLOAT f;
     long long int i64;
@@ -1062,7 +1119,7 @@ static int CallText(char *out, struct s_targ *ta, int *nta, char *sub, int len, 
             skipspace(b);
             if(*b == ')') {                                         // a whole array
                 findvar(a, V_FIND | V_EMPTY_OK | V_NOFIND_ERR);
-                if(VREC(VarIndex)->level != 0 || (VREC(VarIndex)->type & T_PTR))
+                if(VREC(g_VarIndex)->level != 0 || (VREC(g_VarIndex)->type & T_PTR))
                     error("Only a global array can be passed to a thread");
                 while(*a) PUT(*a++);
                 continue;
@@ -1107,7 +1164,7 @@ int ThreadArg(int n, long long int *i, MMFLOAT *f, char *s) {
 }
 
 // THREAD START n, sub [, argument ...]
-static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Priority, char *name, int argc, char **argv) {
+static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Priority, char *name, int argc, unsigned char **argv) {
     struct s_thread *t;
     char *q;
     int nfor = Nest, ndo = Nest, ngosub = Nest + 1, ntemp = 64 + 16 * Nest, ndata = Nest < MAXRESTORE ? Nest : MAXRESTORE;
@@ -1135,26 +1192,29 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
     if(Cur != NULL) ThreadReap();                                   // (a number that has just ended is free to use again;
                                                                     // with the last of them gone, Cur is NULL after it)
     if(Cur == NULL) {                                               // the first: the main program's record
-        if((t = GetMemoryNull(sizeof(struct s_thread))) == NULL) error("Not enough memory for a thread");
-        t->locals = hashlist_main; t->nlocals = MAXLOCALVARS;        // (its stacks: the interpreter's own arrays)
-        t->fors = forstack_main; t->nfor = MAXFORLOOPS;
-        t->dos = dostack_main; t->ndo = MAXDOLOOPS;
+        if((t = GetSRAMMemoryNull(sizeof(struct s_thread) + MAXINTOWN * sizeof(struct s_intown))) == NULL)
+            error("Not enough memory for a thread");
+        IntOwner = (struct s_intown *)(t + 1);                      // (in the heap, not static RAM: the PicoMite's)
+        IntOwners = 0;
+        t->locals = g_hashlist_main; t->nlocals = MAXLOCALLIST;     // (its stacks: the interpreter's own arrays)
+        t->fors = g_forstack_main; t->nfor = MAXFORLOOPS;
+        t->dos = g_dostack_main; t->ndo = MAXDOLOOPS;
         t->gosub = gosubstack_main; t->errs = errorstack_main; t->subs = substack_main; t->ngosub = MAXGOSUB;
-        t->tmp = StrTmp_main; t->tmplevel = StrTmpLocalIndex_main; t->ntemp = MAXTEMPSTRINGS;
+        t->tmp = g_StrTmp_main; t->tmplevel = g_StrTmpLocalIndex_main; t->ntemp = MAXTEMPSTRINGS;
         t->data = datastore_main; t->ndata = MAXRESTORE;
         t->prio = MainPriority;
         t->state = T_READY;
         t->id = 0;
         t->floor = StackFloor;
-        t->llimit = MAXLOCALVARS;
+        t->llimit = MAINLOCALS;
         t->syml = SymL;
         Thr[0] = Cur = t;
         Stopping = 0;
     }
 
     // its local slots: the highest range free, above everything the main program has in use
-    maintop = (Cur == Thr[0]) ? localtop : Thr[0]->localtop;
-    for(base = (MAXLOCALVARS - LocalSlots) & ~15; base >= maintop; base -= 16) {
+    maintop = (Cur == Thr[0]) ? g_localtop : Thr[0]->g_localtop;
+    for(base = (MAINLOCALS - LocalSlots) & ~15; base >= maintop; base -= 16) {
         for(i = 1; i <= MAXTHREADS; i++)
             if(Thr[i] != NULL && base < Thr[i]->llimit && base + LocalSlots > Thr[i]->lbase) break;
         if(i > MAXTHREADS) break;
@@ -1166,14 +1226,13 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
 
     // its stack and its record, with its names' bindings after it
     bindings = SymL != NULL ? SymCanonCount * sizeof(int16_t) : 0;
-    stack = (OnChipFree() >= StackSize + 96 * 1024) ? GetInternalMemoryNull(StackSize) : NULL;
-    if(stack == NULL) stack = GetMemoryNull(StackSize);
+    stack = GetSRAMMemoryNull(StackSize);                           // (SRAM: PSRAM cannot be read while the flash is written)
     /* After the record, in the order of their alignment: its arguments (8-byte values), its FOR and DO stacks, its DATA
        saves, its GOSUB stack's three lists, its temporary memory's list, its locals' list, its names' bindings, the
        temporary memory's levels, its call and its arguments' strings. NEST gives the stacks' entries: a FOR, a DO and
        a SUB, FUNCTION or GOSUB each that deep (one more call for an interrupt routine), 64 + 16 a level of temporary
        memory, and as many DATA saves. */
-    t = stack != NULL ? GetMemoryNull(sizeof(struct s_thread) + nta * sizeof(struct s_targ)
+    t = stack != NULL ? GetSRAMMemoryNull(sizeof(struct s_thread) + nta * sizeof(struct s_targ)
                                       + (nfor + 1) * sizeof(struct s_forstack) + ndo * sizeof(struct s_dostack)
                                       + ndata * sizeof(struct sa_data) + 3 * ngosub * sizeof(char *) + ntemp * sizeof(char *)
                                       + LocalSlots * sizeof(struct s_hash) + bindings + ntemp + calllen + 4 + strbytes) : NULL;
@@ -1189,13 +1248,13 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
     *(uint32_t *)stack = STACK_MARK;
     for(sp = (uint32_t *)stack + 1; (char *)sp < stack + StackSize - 128; sp++) *sp = STACK_PAINT;   // (THREAD LIST's depth)
     t->floor = (uint32_t)stack + THREAD_GUARD;
-    t->lbase = t->localtop = base;
+    t->lbase = t->g_localtop = base;
     t->llimit = base + LocalSlots;
     t->fors = (struct s_forstack *)((struct s_targ *)(t + 1) + nta); t->nfor = nfor;
     t->dos = (struct s_dostack *)(t->fors + nfor + 1); t->ndo = ndo;
     t->data = (struct sa_data *)(t->dos + ndo); t->ndata = ndata;
-    t->gosub = (char **)(t->data + ndata); t->errs = t->gosub + ngosub; t->subs = t->errs + ngosub; t->ngosub = ngosub;
-    t->tmp = (volatile char **)(t->subs + ngosub); t->ntemp = ntemp;
+    t->gosub = (unsigned char **)(t->data + ndata); t->errs = t->gosub + ngosub; t->subs = t->errs + ngosub; t->ngosub = ngosub;
+    t->tmp = (char **)(t->subs + ngosub); t->ntemp = ntemp;
     t->locals = (struct s_hash *)(t->tmp + ntemp); t->nlocals = LocalSlots;
     t->prio = Priority;
     q = (char *)(t->locals + LocalSlots);
@@ -1203,7 +1262,7 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
         t->syml = (int16_t *)q;
         memset(t->syml, 0xFF, bindings);                            // (-1: no name has a local)
     }
-    t->tmplevel = (volatile char *)(q + bindings);
+    t->tmplevel = (char *)(q + bindings);
     t->CurrentLinePtr = CurrentLinePtr;                             // its SUB's call is reported at this line
     t->NextDataLine = (char *)ProgMemory;
     ScreenSave(t);                                                  // (the print position, colours and font of its starter)
@@ -1222,9 +1281,9 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
 
     // its stack as ThreadSwap leaves one: d8-d15, r4-r11, then where to go on, ThreadMain, with the stack 8-byte aligned
     // there as a function's is on entry
-    sp = (uint32_t *)(((uint32_t)stack + StackSize) & ~7u) - 25;
-    memset(sp, 0, 24 * sizeof(uint32_t));
-    sp[24] = (uint32_t)ThreadMain;
+    sp = (uint32_t *)(((uint32_t)stack + StackSize) & ~7u) - SWAP_WORDS;
+    memset(sp, 0, (SWAP_WORDS - 1) * sizeof(uint32_t));
+    sp[SWAP_WORDS - 1] = (uint32_t)ThreadMain;
     t->sp = sp;
 
     Thr[n] = t;
@@ -1235,18 +1294,17 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
 
 // the statement tail is to call ThreadSchedule (check_interrupt): THREAD YIELD, and a thread that has paused itself
 static void AskSwitch(void) {
-    uint32_t primask = __get_PRIMASK();
-    __disable_irq();
+    uint32_t s = save_and_disable_interrupts();
     IntReady.tick |= INT_TICK_SLICE;
-    __set_PRIMASK(primask);
+    restore_interrupts(s);
 }
 
 // the running thread ends here, whatever SUBs and FUNCTIONs it is in: its locals at every level, its loops and its
 // temporary memory go, and the next thread runs
 __attribute__((noreturn)) static void ThreadEndNow(void) {
-    ClearVars(1);
-    LocalIndex = 0;
-    gosubindex = forindex = doindex = 0;
+    ClearVars(1, true);
+    g_LocalIndex = 0;
+    gosubindex = g_forindex = g_doindex = 0;
     ClearTempMemory();
     ThreadFinish();
 }
@@ -1259,8 +1317,8 @@ static void ThreadStop(int n) {
     if(t == Cur) ThreadEndNow();
     ContextSave(Cur);
     ContextLoadVars(t);
-    ClearVars(1);
-    LocalIndex = 0;
+    ClearVars(1, true);
+    g_LocalIndex = 0;
     ClearTempMemory();
     ContextLoad(Cur);
     if(t->state == T_WAIT && t->wkind == W_FRAME) ThreadFrameWaiters--;
@@ -1283,7 +1341,7 @@ static struct s_thread *Named(char *p) {
 static int OptionValue(char **pp, int lo, int hi) {
     MMFLOAT f;
     long long int i;
-    char *s;
+    unsigned char *s;
     int ty = T_NBR | T_INT;
     *pp = evaluate(*pp, &f, &i, &s, &ty, true);                    // (true: it may be followed by SIZE or LOCALS)
     if(ty & T_NBR) i = FloatToInt64(f);
@@ -1301,11 +1359,11 @@ static char *StartOptions(char *p, int *n, int *size, int *slots, int *nest, int
         if(*p == 0) return p;
         if(!gotsize && (q = checkstring(p, "SIZE")) != NULL) {
             p = q;
-            *size = OptionValue(&p, 12, 512) * 1024;                  // (12: the guard and 6 KB to run in)
+            *size = OptionValue(&p, THREAD_SIZE_MIN, 512) * 1024;     // (the guard and room to run in)
             gotsize = 1;
         } else if(!gotslots && (q = checkstring(p, "LOCALS")) != NULL) {
             p = q;
-            *slots = OptionValue(&p, 8, MAXLOCALVARS / 2) + 1;            // (+1: findvar keeps one slot free: m locals)
+            *slots = OptionValue(&p, 8, MAINLOCALS / 2) + 1;          // (+1: findvar keeps one slot free: m locals)
             gotslots = 1;
         } else if(!gotnest && (q = checkstring(p, "NEST")) != NULL) {
             p = q;
@@ -1321,7 +1379,7 @@ static char *StartOptions(char *p, int *n, int *size, int *slots, int *nest, int
 }
 
 // THREAD LOCK's and THREAD WAIT's time limit, in milliseconds: as microseconds, -1 for none
-static long long TimeLimit(int argc, char **argv) {
+static long long TimeLimit(int argc, unsigned char **argv) {
     MMFLOAT ms;
     if(argc != 3) return -1;
     ms = getnumber(argv[2]);
@@ -1330,7 +1388,7 @@ static long long TimeLimit(int argc, char **argv) {
 }
 
 void cmd_thread(void) {
-    char *p, *q, *token = CmdTokenPtr;                              // (this statement, to run again after an interrupt)
+    unsigned char *p, *q, *token = CmdTokenPtr;                     // (this statement, to run again after an interrupt)
     int k, me = ThreadNumber();
     if((p = checkstring(cmdline, "YIELD")) != NULL) {               // (first: the one a loop is made of)
         checkend(p);
@@ -1410,8 +1468,8 @@ void cmd_thread(void) {
     } else if((p = checkstring(cmdline, "SIZE")) != NULL) {
         getargs(&p, 5, ",");
         if(!(argc == 1 || argc == 3 || argc == 5)) error("Syntax");
-        if(*argv[0]) StackSize = getint(argv[0], 12, 512) * 1024;   // (12: the guard and 6 KB to run in)
-        if(argc >= 3 && *argv[2]) LocalSlots = getint(argv[2], 8, MAXLOCALVARS / 2) + 1;   // (as THREAD START's LOCALS: m locals)
+        if(*argv[0]) StackSize = getint(argv[0], THREAD_SIZE_MIN, 512) * 1024;   // (the guard and room to run in)
+        if(argc >= 3 && *argv[2]) LocalSlots = getint(argv[2], 8, MAINLOCALS / 2) + 1;   // (as THREAD START's LOCALS: m locals)
         if(argc == 5) NestDepth = getint(argv[4], 4, MAXGOSUB);     // (as its NEST)
     } else
         error("Syntax");

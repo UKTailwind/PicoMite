@@ -10,12 +10,17 @@ See MMBasic.h for the licence.
 #ifndef THREAD_H
 #define THREAD_H
 
+/* The PicoMite's (branch threads, docs/Threads_PicoMite_Review.md; Peter, 26 Nov: SIZE 8, LOCALS 24, NEST 8). A thread
+   runs on the process stack, so its stack holds only its own frames and an exception's stacked registers, not the
+   interrupts' handlers or the housekeeping: the guard is the deepest a command goes between two stack checks, to be
+   measured (Stage P5). The CMM2's are 20 KB, 6 KB, 48 and 20. */
 #define MAXTHREADS 16                               // the threads a program may start, numbered 1 to MAXTHREADS
-#define THREAD_STACK (20 * 1024)                    // a thread's C stack
-#define THREAD_GUARD (6 * 1024)                     // the part of it below the stack check's floor (Stage 0's figures)
-#define THREAD_LOCALS 48                            // its local variable slots
+#define THREAD_STACK (8 * 1024)                     // a thread's C stack
+#define THREAD_GUARD (2 * 1024)                     // the part of it below the stack check's floor (provisional: P5)
+#define THREAD_SIZE_MIN 4                           // THREAD SIZE's least, in K: the guard and room to run in
+#define THREAD_LOCALS 24                            // its local variable slots
 #define THREAD_PRIORITY_MAX 10                      // THREAD PRIORITY: 1 (every thread's at RUN) to this
-#define THREAD_NEST 20                              // how deep its FOR loops, DO loops and calls may each go (NEST)
+#define THREAD_NEST 8                               // how deep its FOR loops, DO loops and calls may each go (NEST)
 #define MAXLOCKS 16                                 // THREAD LOCK's locks, numbered 1 to MAXLOCKS
 
 extern int ThreadCount;                             // the threads started and not yet ended: 0, and nothing here is active
@@ -69,5 +74,36 @@ void ThreadMainOnly(void);                          // an error in any thread bu
 void ThreadsNone(void);                             // an error while the program has a thread
 char *ThreadTokenBuffer(void);                      // EXECUTE's line: tknbuf for the main program, a thread's own
 void ThreadStackLimits(void);                       // the stack check's limits as the running thread's (after PIXEL FILL)
+int ThreadOnMainStack(void (*fn)(void));            // fn run on the main stack if a thread's is in use: 1; 0 it is not
+
+/* The prompt's landing after an error or Ctrl-C (PicoMite.c), first thing: a longjmp made while a thread ran on the
+   process stack wrote its stack pointer to PSP, and clearing SPSEL alone would bring back the main stack's old value,
+   below live frames. So the value is moved: read SP, clear SPSEL, write it to MSP (and PSPLIM off, the RP2350). */
+#ifdef rp2350
+#define THREAD_LANDING() __asm volatile(                \
+    "mrs    r0, control \n"                             \
+    "tst    r0, #2      \n"                             \
+    "beq    1f          \n"                             \
+    "mov    r1, sp      \n"                             \
+    "bic    r0, r0, #2  \n"                             \
+    "msr    control, r0 \n"                             \
+    "isb                \n"                             \
+    "mov    sp, r1      \n"                             \
+    "movs   r0, #0      \n"                             \
+    "msr    psplim, r0  \n"                             \
+    "1:                 \n" ::: "r0", "r1", "memory")
+#else
+#define THREAD_LANDING() __asm volatile(                \
+    "mrs    r0, control \n"                             \
+    "movs   r2, #2      \n"                             \
+    "tst    r0, r2      \n"                             \
+    "beq    1f          \n"                             \
+    "mov    r1, sp      \n"                             \
+    "bics   r0, r2      \n"                             \
+    "msr    control, r0 \n"                             \
+    "isb                \n"                             \
+    "mov    sp, r1      \n"                             \
+    "1:                 \n" ::: "r0", "r1", "r2", "memory")
+#endif
 
 #endif

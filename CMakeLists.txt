@@ -713,6 +713,9 @@ if(USES_LOADER)
 endif()
 
 if(USES_THREADS)
+	target_sources(PicoMite PRIVATE core/Thread.c)
+	# the CMM2's file, as copied: its text is char *, the PicoMite's unsigned char *
+	set_source_files_properties(core/Thread.c PROPERTIES COMPILE_OPTIONS -Wno-pointer-sign)
 	target_compile_definitions(PicoMite PRIVATE USE_THREADS)
 endif()
 
