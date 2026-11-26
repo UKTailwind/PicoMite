@@ -96,13 +96,24 @@ static err_t tcp_client_sent(void *arg, struct altcp_pcb *tpcb, u16_t len)
 
 static void tcp_client_err(void *arg, err_t err)
 {
+    /* lwIP frees the pcb after this callback, whatever the code: drop our
+       reference for every error, ERR_ABRT too, so nothing closes it again.
+       ERR_ABRT is not only an abort of our own (tcp_client_close takes this
+       callback off before it closes or aborts).  The TLS layer gives it when
+       the server closes a connection that has finished its handshake but
+       passed no data up yet, and then frees the pcb: the pointer kept here
+       was closed again by WEB CLOSE TCP CLIENT, the next WEB OPEN or RUN, on
+       freed memory (a hard fault in altcp_poll on the Colour Maximite 2).
+       With connected false a later REQUEST stops with "No connection".
+       Issue #166. */
+    TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
+    if (state)
+    {
+        state->tcp_pcb = NULL;
+        state->connected = false;
+    }
     if (err != ERR_ABRT)
     {
-        /* lwIP has already aborted the pcb. Drop our reference so the next
-           command starting up doesn't try to reuse a dead pcb. */
-        TCP_CLIENT_T *state = (TCP_CLIENT_T *)arg;
-        if (state)
-            state->tcp_pcb = NULL;
         /* Include the err_t code for diagnosis. For TLS connections this is
            usually ERR_ABRT (above, silently ignored) or ERR_CLSD/ERR_RST
            when the server reset us mid-handshake; in either case a
