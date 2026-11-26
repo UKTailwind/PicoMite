@@ -154,6 +154,7 @@ extern volatile unsigned int I2C2_Status; // status flags
 extern bool I2C_enabled;                  // I2C enable marker
 extern bool I2C2_enabled;                 // I2C2 enable marker
 extern bool noRTC, noI2C;
+extern bool RTCtimeNotSet;
 
 /* ==============================================================================================================
  * GLOBAL VARIABLES - Interrupts

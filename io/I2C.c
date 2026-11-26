@@ -94,6 +94,7 @@ char *I2C2_Slave_Send_IntLine;       // pointer to the slave send interrupt line
 char *I2C2_Slave_Receive_IntLine;    // pointer to the slave receive interrupt line number
 static unsigned int I2C2_Slave_Addr; // slave address
 bool noRTC = false, noI2C = false;
+bool RTCtimeNotSet = false; // the last RTC read found a time the RTC has lost (not taken): see RtcGetTime
 extern void SaveToBuffer(void);
 extern void CompareToBuffer(void);
 extern void DrawPixelMEM(int x1, int y1, int c);
@@ -1036,6 +1037,7 @@ void RtcGetTime(int noerror)
 {
   char buff[16]; // the time registers (7 bytes); routinechecks calls this daily at the prompt, where temporary memory is not freed
   clocktimer = (1000 * 60 * 60); // a read that fails is retried in an hour
+  RTCtimeNotSet = false;
 
   // Detect which RTC is connected
   if (!RtcDetect())
@@ -1052,6 +1054,19 @@ void RtcGetTime(int noerror)
   // Decode time using active RTC configuration
   int year, month, day, hour, minute, second;
   RtcDecodeTime(buff, &year, &month, &day, &hour, &minute, &second);
+
+  /* A time the RTC has lost is not taken (#164).  An RTC whose backup battery has failed starts again from its
+     reset values (01-01-00 on a DS3231 or DS1307) and, taken as it was, set the clock to 2000 at boot and put it
+     over a good time from DATE$/TIME$ or WEB NTP at the daily read.  Lost: a year before 2018, or bit 7 of the
+     seconds register set (DS1307 CH, the oscillator halted; PCF8563 VL, the clock's integrity lost; always 0 on a
+     DS3231 or RV-3028), which RTC SETTIME clears.  The Pico's clock is kept and the read tried again in an hour.
+     Nothing is said here: the background read must not stop a running program, and the boot read is before the
+     console is ready.  RTC GETTIME, RTC SETTIME, OPTION RTC AUTO ENABLE and the boot message look at the flag. */
+  if ((buff[active_rtc->reg_seconds] & 0x80) || year < 2018)
+  {
+    RTCtimeNotSet = true;
+    return;
+  }
 
   set_time_epoch(get_epoch(year, month, day, hour, minute, second), true); // milliseconds start at 0
   clocktimer = RTC_REREAD_MS; // the Pico's clock keeps good time: read the RTC again in a day
@@ -1126,6 +1141,8 @@ void MIPS16 cmd_rtc(void)
         MMPrintString("\r\n");
       }
     }
+    else if (RTCtimeNotSet)
+      error("RTC time not set");
     return;
   }
 
@@ -1180,6 +1197,8 @@ void MIPS16 cmd_rtc(void)
       StandardError(30);
 
     RtcGetTime(0);
+    if (RTCtimeNotSet) // a year before 2018 was written
+      error("RTC time not set");
     return;
   }
 

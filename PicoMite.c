@@ -4460,6 +4460,8 @@ uint32_t testPSRAM(void)
             SaveOptions();
             MMPrintString("RTC not found, OPTION RTC AUTO disabled\r\n");
         }
+        if (RTCtimeNotSet) // the boot read found a time the RTC has lost: not taken (#164)
+            MMPrintString("RTC time not set\r\n");
         if (noI2C)
         {
             noI2C = 0;

@@ -7550,6 +7550,8 @@ void MIPS16 cmd_option(void)
             Option.RTC = true;
             SaveOptions();
             RtcGetTime(0);
+            if (RTCtimeNotSet) // the RTC is there (the option stays on) but has lost its time (#164)
+                error("RTC time not set");
             return;
         }
         if (checkstring(tp, (unsigned char *)"DISABLE"))
