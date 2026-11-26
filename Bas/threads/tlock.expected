@@ -1,0 +1,18 @@
+ok  no lock: counts are lost
+ok  THREAD LOCK: every count is there
+ok  the lock is free afterwards
+ok  THREAD HOLD: every count is there
+ok  MM.INFO(THREAD LOCK k) is the owner
+ok  a lock in use: the time limit is an error
+ok  after 50 ms
+ok  with no limit it waits for the owner
+ok  the main program has it
+ok  interrupts ran while it waited
+ok  a lock whose owner has ended is free
+ok  a lock whose owner is stopped is free
+ok  and can be taken
+ok  a lock taken twice is refused
+ok  UNLOCK of a lock not held is refused
+ok  RELEASE with no HOLD is refused
+ok  a wait inside a hold is refused
+tlock: 17 of 17 passed

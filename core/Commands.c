@@ -2514,6 +2514,7 @@ static void ListPins(void)
 }
 void MIPS16 cmd_list(void)
 {
+	THREAD_MAIN_ONLY(); // (it takes the console, and pages it: Thread.c)
 	unsigned char *p;
 	int i, j, k, m, step;
 	if ((p = checkstring(cmdline, (unsigned char *)"ALL")))

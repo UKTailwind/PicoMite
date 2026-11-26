@@ -1,0 +1,12 @@
+ok  equal priorities share equally
+ok  priority 5 beside 1: five slices to one
+ok  changed over while they run: one to five
+ok  THREAD START n PRIORITY 3: three to one
+ok  the main program at priority 4: the thread has a fifth, not a half
+ok  a lock's holder has its waiter's turn: its work takes less than half the time
+ok  PRIORITY 0 is refused
+ok  PRIORITY 11 is refused
+ok  THREAD PRIORITY of a thread that is not running is refused
+ok  THREAD PRIORITY 0, 11 is refused
+tprio: 10 of 10 passed
+

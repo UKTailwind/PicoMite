@@ -1,0 +1,16 @@
+ok  THREAD WAIT n: back when the thread has ended
+ok  after its 120 ms
+ok  a thread that is not running: no wait
+ok  with a limit of 50 ms: back then
+ok  the thread still running
+ok  producer and consumer: twenty items
+ok  their sum
+ok  THREAD WAIT FLAG with a limit: back after 40 ms
+ok  the flag still 0
+ok  the main program waits for a flag an interrupt sets
+ok  and is back at the fifth tick
+ok  a thread waits
+ok  a thread that waits is 4
+ok  and goes on when the flag is set
+ok  THREAD WAIT 0 is refused
+twait: 15 of 15 passed

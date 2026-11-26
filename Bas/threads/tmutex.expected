@@ -1,0 +1,16 @@
+ok  four threads through one SUB with a mutex: every deposit is there
+ok  a try of a free mutex takes it
+ok  a try of one in use is the error, at once
+ok  a mutex kept across a PAUSE: the one that wants it waits for it
+ok  and a thread that does not runs meanwhile
+ok  Enter and Leave: a thread takes its own mutex again
+ok  and it is free at the end
+ok  two busy threads: every count is there
+ok  and both had a share
+ok  with THREAD YIELD after the unlock they take turns
+ok  a thread's own routine runs inside its locked statements
+ok  where the mutex is the thread's already
+ok  and inside its hold
+ok  a routine takes a free mutex
+ok  but cannot wait for one
+tmutex: 15 of 15 passed

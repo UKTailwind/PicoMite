@@ -1,0 +1,7 @@
+[33] Error "the list"
+Error : the list
+Main program: line 33, running, priority 2
+Thread 1: line 10, in PAUSE, priority 1 (7 while its lock is waited for)
+Thread 2: line 16, waiting for lock 1 (thread 1 has it), priority 7
+Thread 3: line 22, in PAUSE, priority 3
+Thread 4: line 22, in PAUSE

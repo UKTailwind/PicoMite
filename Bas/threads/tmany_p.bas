@@ -27,12 +27,14 @@ End Sub
 
 For i = 1 To 8 : Thread Start i, Brief : Next ' (the PicoMite: a full round first, as each thread's local slots take
 Do While c < 8 : Thread Yield : Loop          ' their variables' records the first time they are used, for good)
+For i = 1 To 8 : Thread Wait i : Next ' (the PicoMite: each one ended, not only counted - one switched out after its Inc is still running)
 Thread Yield
 c = 0
 h0 = MM.Info(Heap) : i0 = MM.Info(Heap) : v0 = MM.Info(VarCnt)
 For r = 1 To 50
   For i = 1 To 8 : Thread Start i, Brief : Next ' (eight a round: the PicoMite's most)
   Do While c < 8 * r : Thread Yield : Loop
+  For i = 1 To 8 : Thread Wait i : Next ' (as above)
 Next
 Thread Yield
 h1 = MM.Info(Heap) : i1 = MM.Info(Heap)

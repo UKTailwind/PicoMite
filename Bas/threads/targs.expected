@@ -1,0 +1,13 @@
+ok  four integers, the largest and the smallest among them
+ok  six floats, each bit for bit
+ok  240 more, of every size
+ok  five strings: quotes, every byte from 1 to 255, zero bytes, empty
+ok  an integer for a float, a float for an integer, an expression
+ok  every SUB ran
+ok  by value: the integer it came from is unchanged
+ok  and the string
+ok  evaluated when THREAD START runs, each thread its own
+ok  a global array is the thread's to fill
+ok  a SUB's own array is refused
+ok  and no thread was started
+targs: 12 of 12 passed
