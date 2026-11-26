@@ -1,0 +1,20 @@
+ok  the queue: all 500 messages, in order
+ok    and it is empty at the end
+ok  two producers and two consumers: 2000 messages, sum right
+ok  two producers and two consumers, with yields: 2000 messages, sum right
+ok  the other threads ran during the wait
+ok    another thread held and released meanwhile
+ok    the wait lasted until the flag was set
+ok    and after it they did not, until THREAD RELEASE
+ok  two holds: still held after one RELEASE
+ok    and free after the second
+ok  a time limit: back after 50 ms
+ok    held again, and the flag still 0
+ok  a flag already set: no other thread ran
+ok  THREAD WAIT n in a hold: the thread ran to its end
+ok    held again afterwards
+ok  SETTICK's routine ran during the wait
+ok    held again after the wait
+ok  PAUSE inside a hold: it pauses, and no other thread runs
+ok  THREAD LOCK of a lock in use, inside a hold, is refused
+tcond: 19 of 19 passed

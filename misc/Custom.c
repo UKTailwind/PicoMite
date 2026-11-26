@@ -3125,6 +3125,8 @@ static void *json_arena_head = NULL; // newest block; its first word -> previous
 static unsigned char *json_arena_cur = NULL;
 static unsigned char *json_arena_end = NULL;
 
+#define JSON_STACK_LEVEL 128   // the stack a level of nesting may take in cJSON's parser (104 bytes measured, a PC3)
+#define JSON_STACK_RESERVE 512 // the parse's own frames below JSON$'s, besides the levels
 static void json_arena_reset(void)
 {
         void *b = json_arena_head;
@@ -3222,10 +3224,24 @@ void fun_json(void)
         cJSON_Hooks json_hooks = {json_malloc_hook, json_free_hook};
         cJSON_InitHooks(&json_hooks);
         json_arena_reset(); // ensure a clean arena (frees any stragglers from an aborted call)
+        { /* the parser recurses once for each level of nesting, about 104 bytes a level (a PC3, threads Stage P5):
+             as many levels as the stack has room for above its floor, and no more than cJSON's own limit */
+                extern int cJSON_nesting_limit, cJSON_too_deep;
+                uint32_t sp;
+                READ_STACK_POINTER(sp);
+                int room = (int)sp - (int)StackFloor - JSON_STACK_RESERVE;
+                cJSON_nesting_limit = room > 0 ? room / JSON_STACK_LEVEL : 0;
+                if (cJSON_nesting_limit > CJSON_NESTING_LIMIT)
+                        cJSON_nesting_limit = CJSON_NESTING_LIMIT;
+                cJSON_too_deep = 0;
+        }
         cJSON *parse = cJSON_Parse(json_string);
         if (parse == NULL)
         {
+                extern int cJSON_nesting_limit, cJSON_too_deep;
                 json_arena_reset(); // a failed parse still allocated partial nodes (free hook is a no-op)
+                if (cJSON_too_deep)
+                        error("JSON nested more than % deep: no stack for more", cJSON_nesting_limit);
                 error("Invalid JSON data");
         }
         root = parse;

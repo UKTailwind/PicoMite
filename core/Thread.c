@@ -50,6 +50,9 @@ extern int g_localtop, g_hashlistpointer;                             // (MMBasi
 extern uint32_t DefinedSubFunMem;                                   // (a call whose arguments are being read)
 extern int DefinedSubFunLocalIndex;
 extern int g_StrTmpIndex;
+#ifdef SUBPROFILE
+extern uint64_t *g_subchild_us;                                     // (OPTION PROFILING's frame times: MMBasic.c)
+#endif
 #ifndef rp2350
 #define GetSRAMMemoryNull GetMemoryNull                                    // (no PSRAM: the heap is SRAM)
 #endif
@@ -137,6 +140,12 @@ struct s_thread {
     char **tmp;
     char *tmplevel;
     struct sa_data *data;
+#ifdef SUBPROFILE
+    int *fbstack, *fbsubidx;                                        // OPTION PROFILING's frames (MMBasic.c, EnterLocalFrame):
+    uint64_t *fbentry, *fbchild;                                    // its own, their times (NULL while profiling is off),
+    int fbsp, fbbase, fbcur;                                        // how deep, the frame and the SUB it is in, and when it
+    uint64_t fbout;                                                 // was last switched out (ProfileFrames)
+#endif
 };
 
 int ThreadCount = 0;
@@ -363,6 +372,10 @@ int ThreadPageInUse(unsigned char *buf) {
 
 static void ContextSave(struct s_thread *t) {
     ScreenSave(t);
+#ifdef SUBPROFILE
+    t->fbsp = g_framebase_sp; t->fbbase = g_localframe_base; t->fbcur = g_current_sub_idx;
+    t->fbout = time_us_64();
+#endif
     t->nextstmt = nextstmt; t->cmdline = cmdline; t->CmdTokenPtr = CmdTokenPtr; t->CurrentLinePtr = CurrentLinePtr;
     t->cmdtoken = cmdtoken; t->ExecDepth = ExecDepth; t->g_LocalIndex = g_LocalIndex;
     t->gosubindex = gosubindex;                                     // (its stacks are its own: only how full each is)
@@ -397,6 +410,11 @@ static void MainStacks(void) {
     datastore = datastore_main; RestoreLimit = MAXRESTORE;
     g_StrTmp = g_StrTmp_main; g_StrTmpLocalIndex = g_StrTmpLocalIndex_main; TempLimit = MAXTEMPSTRINGS;
     g_hashlist = g_hashlist_main;
+#ifdef SUBPROFILE
+    g_framebase_stack = g_framebase_stack_main; g_subidx_stack = g_subidx_stack_main;
+    if(Thr[0] != NULL) { g_subentry_us = Thr[0]->fbentry; g_subchild_us = Thr[0]->fbchild; }
+    g_framebase_sp = 0; g_localframe_base = 0; g_current_sub_idx = -1;
+#endif
 }
 
 // what the variables' code needs of a thread's state: its locals, its loops (ClearVars trims them), its temporary
@@ -432,11 +450,30 @@ static void BindsStale(void) {
     SymBindGlobalsChanged();
 }
 
+#ifdef SUBPROFILE
+/* OPTION PROFILING's frames (MMBasic.c, EnterLocalFrame) are each thread's own, and a SUB's time its own thread's: the
+   time the thread was switched out is added to the start of each SUB it is in, so that the threads that ran meanwhile
+   are not charged to them (the CMM2's ProfileSwitch does the same for its lines). */
+static void ProfileFrames(struct s_thread *t) {
+    int i;
+    g_framebase_stack = t->fbstack; g_subidx_stack = t->fbsubidx;
+    g_subentry_us = t->fbentry; g_subchild_us = t->fbchild;
+    g_framebase_sp = t->fbsp; g_localframe_base = t->fbbase; g_current_sub_idx = t->fbcur;
+    if(t->fbentry != NULL) {
+        uint64_t away = time_us_64() - t->fbout;
+        for(i = 0; i < t->fbsp; i++) t->fbentry[i] += away;
+    }
+}
+#endif
+
 static void ContextLoad(struct s_thread *t) {
     ContextLoadVars(t);
     nextstmt = t->nextstmt; cmdline = t->cmdline; CmdTokenPtr = t->CmdTokenPtr; CurrentLinePtr = t->CurrentLinePtr;
     cmdtoken = t->cmdtoken; ExecDepth = t->ExecDepth;
     gosubstack = t->gosub; errorstack = t->errs; substack = t->subs; GosubLimit = t->ngosub;
+#ifdef SUBPROFILE
+    ProfileFrames(t);
+#endif
     gosubindex = t->gosubindex;
     OptionErrorSkip = t->OptionErrorSkip; ErrorSkipDepth = t->ErrorSkipDepth;
     MMerrno = t->MMerrno; MMerrline = t->MMerrline;
@@ -478,6 +515,20 @@ static void ThreadsOff(void) {
 }
 
 // the blocks of the threads that have ended, freed by the thread that runs next (not from their own stacks)
+#ifdef THREAD_STACK_REPORT
+/* A measuring build's only (Stage P5: cmake ... -DTHREAD_STACK_REPORT): as a thread's stack is freed, the most of it
+   the thread used, so that a thread that ends at an error is measured too */
+static int StackUsed(struct s_thread *t);
+static void StackReport(struct s_thread *t) {
+    char b[64];
+    sprintf(b, "[stack] thread %d used %d of %d\r\n", (int)t->id, StackUsed(t), t->stacksize);
+    MMPrintString(b);
+}
+#define STACK_REPORT(t) StackReport(t)
+#else
+#define STACK_REPORT(t)
+#endif
+
 static void ThreadReap(void) {
     int i, any = 0;
     for(i = 1; i <= MAXTHREADS; i++)
@@ -487,6 +538,7 @@ static void ThreadReap(void) {
                 Thr[i]->state = T_FREE;                             // (not reported twice)
                 error("Thread % overflowed its stack", n);
             }
+            STACK_REPORT(Thr[i]);
             FreeMemory(Thr[i]->stack);
             if(Thr[i]->tknbuf != NULL) FreeMemory(Thr[i]->tknbuf);
             FreeMemory(Thr[i]);
@@ -962,12 +1014,17 @@ static void ListNumber(const char *before, int n) {
     ListText(b);
 }
 
+// the most of its stack a thread has used: from the top down to the deepest word its paint no longer holds
+static int StackUsed(struct s_thread *t) {
+    uint32_t *p;
+    for(p = (uint32_t *)t->stack + 1; (char *)p < t->stack + t->stacksize && *p == STACK_PAINT; p++) {}
+    return (int)(t->stack + t->stacksize - (char *)p);
+}
+
 // a thread's stack for THREAD LIST: the most it has used, and its size
 static void ListStack(struct s_thread *t) {
-    uint32_t *p;
     if(t->stack == NULL) return;                                    // (the main program's, the main stack: Stage P5)
-    for(p = (uint32_t *)t->stack + 1; (char *)p < t->stack + t->stacksize && *p == STACK_PAINT; p++) {}
-    ListNumber(", stack used at most ", (int)(t->stack + t->stacksize - (char *)p));
+    ListNumber(", stack used at most ", StackUsed(t));
     ListNumber(" of ", t->stacksize);
 }
 
@@ -1047,6 +1104,26 @@ void ThreadsStoppedShow(void) {
     ListBuf = NULL;
     MMPrintString(b);
     FreeMemory(b);
+}
+
+/* A command that goes deeper than the guard below the stack check's floor (Stage P5's figures: LOAD PNG) tests first
+   for the room it needs, from the stack pointer down to the hardware floor (PSPLIM): "Not enough stack (thread n
+   needs SIZE k)", not a fault part way through it. The error's own print fits in the guard. The main program's stack
+   is not tested here, as before threads. */
+void StackNeed(int bytes) {
+    uint32_t sp, room;
+    if(Cur == NULL || Cur->stack == NULL) return;
+    READ_STACK_POINTER(sp);
+    room = sp - HWFLOOR(Cur);
+#ifdef THREAD_STACK_REPORT
+    {
+        char b[64];
+        sprintf(b, "[stackneed] thread %d room %d of %d\r\n", (int)Cur->id, (int)room, Cur->stacksize);
+        MMPrintString(b);
+    }
+#endif
+    if(room < (uint32_t)bytes)
+        error("Not enough stack (thread % needs SIZE %)", (int)Cur->id, (int)((Cur->stacksize + (bytes - room) + 1023) / 1024));
 }
 
 int ThreadNumber(void) {
@@ -1131,6 +1208,7 @@ int ThreadsEnd(void) {
     MMerrno = eno; MMerrline = eline;                               // (MMErrMsg, an array, keeps its message)
     for(i = 1; i <= MAXTHREADS; i++)
         if(Thr[i] != NULL) {
+            STACK_REPORT(Thr[i]);
             FreeMemory(Thr[i]->stack);
             if(Thr[i]->tknbuf != NULL) FreeMemory(Thr[i]->tknbuf);
             FreeMemory(Thr[i]);
@@ -1260,6 +1338,10 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
         t->gosub = gosubstack_main; t->errs = errorstack_main; t->subs = substack_main; t->ngosub = MAXGOSUB;
         t->tmp = g_StrTmp_main; t->tmplevel = g_StrTmpLocalIndex_main; t->ntemp = MAXTEMPSTRINGS;
         t->data = datastore_main; t->ndata = MAXRESTORE;
+#ifdef SUBPROFILE
+        t->fbstack = g_framebase_stack_main; t->fbsubidx = g_subidx_stack_main;
+        t->fbentry = g_subentry_us; t->fbchild = g_subchild_us;
+#endif
         t->prio = MainPriority;
         t->state = T_READY;
         t->id = 0;
@@ -1287,6 +1369,12 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
 
     // its stack and its record, with its names' bindings after it
     bindings = SymL != NULL ? SymCanonCount * sizeof(int16_t) : 0;
+#ifdef SUBPROFILE
+    int fbn = g_perf_subtime_us != NULL ? ngosub : 0;               // (OPTION PROFILING's frames' times: only while it is on)
+#define FRAMEBYTES (2 * fbn * sizeof(uint64_t) + 2 * ngosub * sizeof(int))
+#else
+#define FRAMEBYTES 0
+#endif
     stack = GetSRAMMemoryNull(StackSize);                           // (SRAM: PSRAM cannot be read while the flash is written)
     /* After the record, in the order of their alignment: its arguments (8-byte values), its FOR and DO stacks, its DATA
        saves, its GOSUB stack's three lists, its temporary memory's list, its locals' list, its names' bindings, the
@@ -1296,7 +1384,8 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
     t = stack != NULL ? GetSRAMMemoryNull(sizeof(struct s_thread) + nta * sizeof(struct s_targ)
                                       + (nfor + 1) * sizeof(struct s_forstack) + ndo * sizeof(struct s_dostack)
                                       + ndata * sizeof(struct sa_data) + 3 * ngosub * sizeof(char *) + ntemp * sizeof(char *)
-                                      + LocalSlots * sizeof(struct s_hash) + bindings + ntemp + calllen + 4 + strbytes) : NULL;
+                                      + LocalSlots * sizeof(struct s_hash) + bindings + ntemp + calllen + 4 + strbytes
+                                      + FRAMEBYTES) : NULL;
     if(t == NULL) {
         if(stack != NULL) FreeMemory(stack);
         if(ThreadCount == 0) ThreadsOff();
@@ -1311,11 +1400,23 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
     t->floor = (uint32_t)stack + THREAD_GUARD;
     t->lbase = t->g_localtop = base;
     t->llimit = base + LocalSlots;
+#ifdef SUBPROFILE
+    t->fbentry = fbn ? (uint64_t *)((struct s_targ *)(t + 1) + nta) : NULL;
+    t->fbchild = fbn ? t->fbentry + fbn : NULL;
+    t->fors = (struct s_forstack *)((uint64_t *)((struct s_targ *)(t + 1) + nta) + 2 * fbn); t->nfor = nfor;
+#else
     t->fors = (struct s_forstack *)((struct s_targ *)(t + 1) + nta); t->nfor = nfor;
+#endif
     t->dos = (struct s_dostack *)(t->fors + nfor + 1); t->ndo = ndo;
     t->data = (struct sa_data *)(t->dos + ndo); t->ndata = ndata;
     t->gosub = (unsigned char **)(t->data + ndata); t->errs = t->gosub + ngosub; t->subs = t->errs + ngosub; t->ngosub = ngosub;
+#ifdef SUBPROFILE
+    t->fbstack = (int *)(t->subs + ngosub); t->fbsubidx = t->fbstack + ngosub;
+    t->fbcur = -1;                                                  // (in no SUB: GetMemory zeroed the rest)
+    t->tmp = (char **)(t->fbsubidx + ngosub); t->ntemp = ntemp;
+#else
     t->tmp = (char **)(t->subs + ngosub); t->ntemp = ntemp;
+#endif
     t->locals = (struct s_hash *)(t->tmp + ntemp); t->nlocals = LocalSlots;
     t->prio = Priority;
     q = (char *)(t->locals + LocalSlots);
@@ -1503,7 +1604,24 @@ void cmd_thread(void) {
         if(!(argc == 1 || argc == 3)) error("Syntax");
         k = (kind == W_FLAG) ? getint(argv[0], 0, 63) : getint(argv[0], 1, MAXTHREADS);
         if(kind == W_THREAD && k == me) error("A thread cannot wait for itself");
+        /* Inside THREAD HOLD the hold is let go while the thread waits, and taken again when the wait ends, as a
+           condition variable's wait lets go of its mutex: the test that found the queue empty, the flag's clearing and
+           the start of the wait are one step, and the statements after the wait run held again (a Back Shed user's
+           request, 26 Nov 2026; the CMM2's a2db2ec). Only THREAD HOLD's own hold: one made by C code that runs BASIC
+           (ThreadHoldDepth) still refuses the wait, and so does an interrupt routine. A wait that ends at once keeps the
+           hold throughout. On an interrupt for this thread WaitFor returns with the statement to run again after the
+           routine: the hold is taken again here first, so the routine runs held, and the statement lets it go again. */
+        int held = 0;
+        if(HoldCount && ThreadHoldDepth == INT_MAX && InterruptReturn == NULL && !WaitOver(kind, k)) {
+            held = HoldCount;
+            HoldCount = 0;
+            Resignal();                                             // (the other threads' interrupts held back)
+        }
         WaitFor(kind, k, TimeLimit(argc, argv), token);             // (at its time limit the program looks for itself)
+        if(held) {
+            HoldCount = held;
+            HoldBy = me;
+        }
     } else if((p = checkstring(cmdline, "LIST")) != NULL) {
         checkend(p);
         ThreadList(1);

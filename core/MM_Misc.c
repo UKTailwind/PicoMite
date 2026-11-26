@@ -5541,6 +5541,7 @@ void MIPS16 cmd_option(void)
     tp = checkstring(cmdline, (unsigned char *)"PROFILING");
     if (tp)
     {
+        THREADS_NONE(); // (it makes and frees the main program's frame times: Thread.c, ProfileFrames)
         unsigned char *p;
         if ((p = checkstring(tp, (unsigned char *)"ON")))
         {

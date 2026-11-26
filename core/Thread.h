@@ -85,6 +85,7 @@ void ThreadDoing(int d);                            // PAUSE's loop: 1 in it, 0 
 int ThreadsEnd(void);                               // the program has stopped or is being replaced: 1 if it had threads
 void ThreadsStop(void);                             // END: no other thread runs from here on
 int ThreadNumber(void);                             // the running thread's number: 0 the main program
+void StackNeed(int bytes);                          // a command that goes deeper than the guard: its room, or the error
 void ThreadMainOnly(void);                          // an error in any thread but the main program
 void ThreadsNone(void);                             // an error while the program has a thread
 char *ThreadTokenBuffer(void);                      // EXECUTE's line: tknbuf for the main program, a thread's own

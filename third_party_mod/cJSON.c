@@ -102,6 +102,12 @@ typedef struct
 } error;
 static error global_error = {NULL, 0};
 
+/* The PicoMite's: how deep the arrays and objects may nest in this parse, and whether a parse stopped there. JSON$
+   (misc/Custom.c) sets the limit from the room on the stack before each parse, as each level of nesting is a
+   level of recursion here: a deep document is then an error, not a stack overrun. */
+int cJSON_nesting_limit = CJSON_NESTING_LIMIT;
+int cJSON_too_deep = 0;
+
 CJSON_PUBLIC(const char *)
 cJSON_GetErrorPtr(void)
 {
@@ -1468,8 +1474,9 @@ static cJSON_bool parse_array(cJSON *const item, parse_buffer *const input_buffe
     cJSON *head = NULL; /* head of the linked list */
     cJSON *current_item = NULL;
 
-    if (input_buffer->depth >= CJSON_NESTING_LIMIT)
+    if (input_buffer->depth >= cJSON_nesting_limit)
     {
+        cJSON_too_deep = 1;
         return false; /* to deeply nested */
     }
     input_buffer->depth++;
@@ -1628,8 +1635,9 @@ static cJSON_bool parse_object(cJSON *const item, parse_buffer *const input_buff
     cJSON *head = NULL; /* linked list head */
     cJSON *current_item = NULL;
 
-    if (input_buffer->depth >= CJSON_NESTING_LIMIT)
+    if (input_buffer->depth >= cJSON_nesting_limit)
     {
+        cJSON_too_deep = 1;
         return false; /* to deeply nested */
     }
     input_buffer->depth++;

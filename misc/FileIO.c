@@ -5580,9 +5580,12 @@ void LoadPNG(unsigned char *p)
         Display_Refresh();
 }
 #endif
+/* LOAD PNG's depth below its command: 6,216 bytes, the most of the twelve PNGs tried on a PC3 (threads Stage P5,
+   Bas/threads/stackm2.bas: the decoder and its inflate), and room to spare. A thread's LOAD PNG tests for it first
+   (StackNeed), so too small a SIZE is an error, not a fault part way through. */
+#define PNG_STACK_NEED (7 * 1024)
 void MIPS16 cmd_load(void)
 {
-    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     int oldfont = PromptFont;
     int autorun = false, crunch = false;
     unsigned char *p;
@@ -5643,10 +5646,12 @@ void MIPS16 cmd_load(void)
     if (p)
     {
         CheckDisplay();
+        STACK_NEED(PNG_STACK_NEED); // (in a thread: its stack's room first, Thread.c)
         LoadPNG(p);
         return;
     }
 #endif
+    THREAD_MAIN_ONLY(); // (loading a program is the main program's only: Thread.c; LOAD IMAGE and the rest are any thread's)
     getcsargs(&cmdline, 5);
     CloseAudio(1);
     if (!(argc & 1) || argc == 0)

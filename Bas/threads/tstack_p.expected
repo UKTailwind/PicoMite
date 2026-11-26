@@ -1,0 +1,11 @@
+ok  LOAD PNG in a thread of SIZE 6: not enough stack, before it starts
+ok  and with the SIZE it names it loads
+ok  LOAD PNG in a thread of the default SIZE
+ok  two FUNCTIONs deep in the default SIZE: not enough stack
+ok  the SIZE it names is more than the default
+ok  and with it the deep LOAD PNG works
+ok  JSON$ ten deep in a thread
+ok  two hundred deep in a thread: the cap, an error
+ok  ten deep in the main program
+ok  five hundred deep in the main program: the cap, an error
+tstack: 10 of 10 passed

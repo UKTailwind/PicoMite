@@ -391,7 +391,9 @@ extern "C"
       BLIT went 6.0 KB over. */
    /* +16 KB (2026-11-26, Peter): the RTC's lost-time check (#164) went 160 bytes over
       1536 KB; it had been down to 48 bytes. */
-#define FLASH_TARGET_OFFSET (1552 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): threads Stage P5 went 400 bytes over. */
+#define FLASH_TARGET_OFFSET (1568 * 1024)
 #else
 #define MagicKey 0x060B6881
 #define MAXSUBFUN 256

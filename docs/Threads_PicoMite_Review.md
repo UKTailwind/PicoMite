@@ -133,3 +133,44 @@ each step:
   PicoMite to 8, drop the rounding". The PC3's local region is 256 with threads (480 globals: the same total, no RAM;
   OPTION LOCAL VARIABLES 192 gives a program the 544), MAXTHREADS is 8, and a thread's local slots are packed below the
   next range, where the CMM2 starts each on a multiple of 16. Eight threads of LOCALS 24 take 200 slots.
+
+## Stage P5: the stack, measured (26 November)
+
+Each figure is the most of its stack a thread used, from the top down, with the thing measured alone in thread 1 of
+SIZE 32 on a PC3 (RP2350, 315 MHz). The figures come from a measuring build: cmake with `-DTHREAD_STACK_REPORT`
+prints `[stack] thread n used x of y` as each thread's stack is freed, and `[stackneed] ... room x` where a command
+tests its room. The programs are `Bas/threads/stackm.bas` and `stackm2.bas`. A thread's stack is painted at THREAD
+START, and THREAD LIST reads the same paint.
+
+| | COMPILE OFF | COMPILE ON |
+|---|---|---|
+| A thread whose SUB does nothing | 560 | 608 |
+| A statement in its SUB (the room LOAD PNG found: 32,768 less 31,968) | about 800 | about 830 |
+| Each further SUB level | 0 | 0 |
+| Each FUNCTION level | 1,280 | 656 |
+| PRINT with Format$ and SIN (the float formatting, not the screen: the same with the console on serial only) | 3,048 | 3,080 |
+| EVAL / EXECUTE | 2,076 / 1,908 | 2,108 / 1,940 |
+| ERROR under ON ERROR SKIP / an ERROR that stops the program / an error raised inside an expression | 1,280 / 2,204 / 3,612 | 1,312 / 2,236 / 3,236 |
+| A file written and read on A: (littlefs) / on B: (FatFs) / DIR$ on B: | 2,000 / 1,720 / 1,616 | 2,032 / 1,752 / 1,648 |
+| LOAD JPG / LOAD BMP / SAVE IMAGE / SAVE PNG | 2,352 / 2,608 / 1,640 / 1,640 | 2,364 / 2,640 / 1,672 / 1,672 |
+| LOAD PNG (the deepest of twelve PNGs) | 7,008 | 7,072 |
+| JSON$: 5, 10, 15, 20 levels of nesting | 2,116, 2,452, 2,972, 3,492 | 2,008, 2,484, 3,004, 3,524 |
+| SORT / FILL / CIRCLE and TEXT / strings | 1,776 / 1,640 / 1,624 / 2,000 | 1,424 / 1,520 / 1,504 / 1,412 |
+| PLAY MODFILE's start / a TLS request (httpbin.org, the handshake in the poll) | 2,200 / 3,648 | 2,232 / 3,392 |
+
+What follows from them:
+
+- **The guard stays 3 KB.** The stack check runs at every value the evaluator reads, and stops a thread whose stack
+  pointer is below its floor (the stack's bottom plus the guard). Below a check, the ordinary commands go at most about
+  2.1 KB deeper (the TLS request, an error raised inside an expression, PRINT's float formatting), the error's print
+  included. That leaves about 0.9 KB for what was not measured.
+- **The smallest SIZE stays 6 KB**: the guard, a statement's 0.8 KB and room for an expression's evaluation. The
+  **default stays 8 KB** (Peter's): two FUNCTION levels as text, four compiled, and LOAD PNG at a thread's own level.
+- **StackNeed: LOAD PNG.** It goes 6,216 bytes below its command, more than the guard, so it tests for 7 KB of room
+  first, down to the hardware floor (PSPLIM). Too little gives "Not enough stack (thread n needs SIZE k)", and SIZE k is
+  then enough (`Bas/threads/tstack_p.bas`). Nothing else measured needs it.
+- **JSON$'s nesting is capped by the stack's room** (Peter: "yes cap the JSON nesting"), in the main program as well:
+  the parser recurses once a level, about 104 bytes, and cJSON allowed 1,000 levels. JSON$ now allows as many as the
+  room above the stack's floor holds at 128 bytes a level, after 512 for the parse itself. More is the error "JSON
+  nested more than n deep: no stack for more". On a PC3 a thread of the default SIZE allows 27 levels and the main program 117.
+- The RP2040 is still to be measured (Thumb-1: its figures may be larger), on the Pico that is now the debug probe.

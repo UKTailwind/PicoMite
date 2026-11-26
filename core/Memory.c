@@ -1863,6 +1863,19 @@ void MIPS16 cmd_memory(void)
     IntToStrPad((char *)inpbuf + strlen((char *)inpbuf), 100 - VarPercent - GeneralPercent, ' ', 2, 10);
     strcat((char *)inpbuf, "%) Free\r\n");
     MMPrintString((char *)inpbuf);
+#ifdef USE_THREADS
+    { // the program's threads, run from a program (Thread.c): their stacks and records, part of General
+        int tk, tn = ThreadMemory(&tk);
+        if (tn)
+        {
+            IntToStrPad((char *)inpbuf, tk, ' ', 4, 10);
+            strcat((char *)inpbuf, "K      ");
+            IntToStr((char *)inpbuf + strlen((char *)inpbuf), tn, 10);
+            strcat((char *)inpbuf, tn == 1 ? " Thread (its stack and the records)\r\n" : " Threads (their stacks and the records)\r\n");
+            MMPrintString((char *)inpbuf);
+        }
+    }
+#endif
 }
 
 /*

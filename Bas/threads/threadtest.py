@@ -17,7 +17,10 @@ PicoMite's versions of some of them, sized for its memory or using its own comma
   tnet_p     TEMPR() on GP0 for the CMM2's GP6 (needs the Wi-Fi joined; tnetown runs as it is)
   tpin_p     GP0 an output wired to GP1, the interrupt's pin, for the CMM2's pull-up register trick (COM11's PC3:
              "gp0 is free and you can read it on gp1 which is linked")
-and twrite_p is the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's section 9). demo_input.bas is
+  tqueue_p   the busy thread's figure 10000 for the CMM2's 50000 (a PC3 with COMPILE OFF counts about 27500)
+and twrite_p and tstack_p are the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's section 9), and
+StackNeed and JSON$'s nesting cap (Stage P5). tcond is the CMM2's a2db2ec (THREAD WAIT inside THREAD HOLD).
+stackm.bas and stackm2.bas measure the stack and need a measuring build (-DTHREAD_STACK_REPORT). demo_input.bas is
 the manual's balls and clock while INPUT waits, in MODE 3, and demo_net.bas WEB NTP and an HTTPS GET in a thread
 while the main program counts: things to watch, not tests.
 """
