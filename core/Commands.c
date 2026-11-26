@@ -2036,6 +2036,8 @@ static int countWrappedLines(const char *text, int screenWidth)
 
 void ListFilePaged(char *pp, int always_wait)
 {
+	if (CurrentLinePtr)
+		StandardError(10); // a paged listing is the prompt's: LIST ALL in a program (Peter)
 	int fnbr;
 	int page_starts[LIST_MAX_PAGES];
 	int nstarts, cur_page, list_cnt;
@@ -2141,6 +2143,8 @@ void MIPS16 ListNewLine(int *ListCnt, int all)
 
 void MIPS16 ListProgram(unsigned char *p, int all)
 {
+	if (!all && CurrentLinePtr)
+		StandardError(10); // (paged: the prompt's, as LIST's; LIBRARY LIST ALL in a program)
 	char b[STRINGSIZE];
 	char *pp;
 	int ListCnt = CurrentY / (FontTable[gui_font >> 4][1] * (gui_font & 0b1111)) + 2;
@@ -2191,6 +2195,8 @@ void MIPS16 ListProgram(unsigned char *p, int all)
 
 void ListProgramPaged(unsigned char *prog)
 {
+	if (CurrentLinePtr)
+		StandardError(10); // a paged listing is the prompt's: LIST ALL in a program (Peter)
 	char b[STRINGSIZE];
 	char *pp;
 	unsigned char *page_starts[LIST_MAX_PAGES];
