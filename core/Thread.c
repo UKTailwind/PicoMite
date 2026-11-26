@@ -39,6 +39,7 @@ the machine demands changed. Built only with USE_THREADS. The differences:
 #include <setjmp.h>
 #include <limits.h>
 #include "MMBasic_Includes.h"
+#ifdef USE_THREADS                                                  // (the whole file: a build without threads has none of it)
 #include "Hardware_Includes.h"
 #include "Symbols.h"
 #include "Thread.h"
@@ -213,6 +214,7 @@ __attribute__((naked, noinline)) static void ThreadSwap(uint32_t **from, uint32_
 #define SWAP_WORDS 10                                               // r8-r11 (4), r3-r7 (5), lr
 __attribute__((naked, noinline)) static void ThreadSwap(uint32_t **from, uint32_t *to, uint32_t lim) {
     __asm volatile(
+        ".syntax unified             \n"     /* (GCC: Thumb-1 inline asm is divided syntax) */
         "push   {r3-r7, lr}         \n"
         "mov    r4, r8              \n"
         "mov    r5, r9              \n"
@@ -248,6 +250,44 @@ __attribute__((naked, noinline)) static void ThreadSwap(uint32_t **from, uint32_
 // a thread's PSPLIM: its stack's floor, above the check word (0: the main program, which is on the main stack)
 #define HWFLOOR(t) ((t)->stack == NULL ? 0u : (((uint32_t)(t)->stack + 8 + 7) & ~7u))
 
+// THREAD_LANDING() (Thread.h): SP to MSP after a longjmp from a thread's stack; nothing if SPSEL is clear. Naked: it
+// pushes nothing, so the SP the jump restored is the caller's whichever register holds it.
+#ifdef rp2350
+__attribute__((naked, noinline)) void ThreadLanding(void) {
+    __asm volatile(
+        "mrs    r0, control          \n"
+        "tst    r0, #2               \n"
+        "beq    1f                   \n"
+        "mov    r1, sp               \n"
+        "bic    r0, r0, #2           \n"
+        "msr    control, r0          \n"
+        "isb                         \n"
+        "mov    sp, r1               \n"
+        "movs   r0, #0               \n"
+        "msr    psplim, r0           \n"
+        "1:                          \n"
+        "bx     lr                   \n"
+    );
+}
+#else
+__attribute__((naked, noinline)) void ThreadLanding(void) {
+    __asm volatile(
+        ".syntax unified             \n"     /* (GCC: Thumb-1 inline asm is divided syntax) */
+        "mrs    r0, control          \n"
+        "movs   r2, #2               \n"
+        "tst    r0, r2               \n"
+        "beq    1f                   \n"
+        "mov    r1, sp               \n"
+        "bics   r0, r2               \n"
+        "msr    control, r0          \n"
+        "isb                         \n"
+        "mov    sp, r1               \n"
+        "1:                          \n"
+        "bx     lr                   \n"
+    );
+}
+#endif
+
 /* The housekeeping (routinechecks: USB, audio, the network, the GUI) run on the main stack while a thread is on its
    own (Peter, 26 Nov: interrupts and the housekeeping on the main stack), as the Loader runs a program's services. The
    main stack is where the main program was left (ThreadSwap, 8-byte aligned); what runs there now is below it. An
@@ -255,6 +295,7 @@ __attribute__((naked, noinline)) static void ThreadSwap(uint32_t **from, uint32_
    program. 1 if it ran it there; 0: this is the main stack already, and the caller runs it itself. */
 __attribute__((naked, noinline)) int ThreadOnMainStack(void (*fn)(void)) {
     __asm volatile(
+        ".syntax unified             \n"     /* (GCC: Thumb-1 inline asm is divided syntax) */
         "push   {r4, lr}            \n"
         "mrs    r4, control         \n"
         "movs   r1, #2              \n"
@@ -886,7 +927,7 @@ int ThreadLockOwner(int k) {
 // the number of the program line p is in: 0 if it is not in the program
 static int LineOf(char *p) {                                        // (the PicoMite's: as an error's line)
     if(p == NULL || (unsigned char *)p < ProgMemory || (unsigned char *)p >= ProgMemory + MAX_PROG_SIZE) return 0;
-    return CountLines((unsigned char *)p);
+    return CountLines((unsigned char *)p) + 1;                      // (counted from 0, as error() shows it + 1)
 }
 
 // the list's text: printed, or kept at ListAt (to ListEnd) for the prompt's landing to print after the error's message
@@ -1183,7 +1224,10 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
     sub[len] = 0;
     checkend(name + len);
     if(Thr[n] != NULL && ALIVE(Thr[n])) error("Thread % is running", n);
-    if((i = FindSubFun(sub, 0)) < 0 || commandtbl_at(subfun[i]) != cmdSUB) error("$ is not a SUB", sub);
+    if((i = FindSubFun(sub, 0)) < 0 || commandtbl_at(subfun[i]) != cmdSUB) {
+        for(i = 0; sub[i]; i++) sub[i] = mytoupper(sub[i]);           // (the PicoMite keeps a name as typed; its
+        error("$ is not a SUB", sub);                               // messages give it in capitals)
+    }
     calllen = CallText(call, ta, &nta, sub, len, argc, argv);       // (an argument may call a FUNCTION, in which the
     for(i = 0; i < nta; i++)                                        // threads take their turns: the checks again after it)
         if(ta[i].type == T_STR) strbytes += (unsigned char)*ta[i].v.s + 1;
@@ -1378,6 +1422,16 @@ static char *StartOptions(char *p, int *n, int *size, int *slots, int *nest, int
     }
 }
 
+// The PicoMite's makeargs makes no empty argument before a leading separator (THREAD SIZE , 48 gives "," then "48"),
+// where the CMM2's does: it is put back, so that the CMM2's tests of argc and of *argv[0] hold (argv has room: max)
+static void LeadingEmpty(unsigned char **argv, int *n, int max) {
+    int i;
+    if(*n == 0 || *n >= max || argv[0][0] != ',' || argv[0][1] != 0) return;
+    for(i = *n; i > 0; i--) argv[i] = argv[i - 1];
+    argv[0] = (unsigned char *)"";
+    (*n)++;
+}
+
 // THREAD LOCK's and THREAD WAIT's time limit, in milliseconds: as microseconds, -1 for none
 static long long TimeLimit(int argc, unsigned char **argv) {
     MMFLOAT ms;
@@ -1467,6 +1521,7 @@ void cmd_thread(void) {
         if(ThreadSliceLeft) ThreadSliceLeft = ThreadSliceLen * Turn(Cur);
     } else if((p = checkstring(cmdline, "SIZE")) != NULL) {
         getargs(&p, 5, ",");
+        LeadingEmpty(argv, &argc, 5);
         if(!(argc == 1 || argc == 3 || argc == 5)) error("Syntax");
         if(*argv[0]) StackSize = getint(argv[0], THREAD_SIZE_MIN, 512) * 1024;   // (the guard and room to run in)
         if(argc >= 3 && *argv[2]) LocalSlots = getint(argv[2], 8, MAINLOCALS / 2) + 1;   // (as THREAD START's LOCALS: m locals)
@@ -1474,3 +1529,4 @@ void cmd_thread(void) {
     } else
         error("Syntax");
 }
+#endif /* USE_THREADS */

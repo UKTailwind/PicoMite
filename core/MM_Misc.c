@@ -1970,6 +1970,7 @@ static void LibraryRestartClear(void)
 #endif
 void MIPS16 cmd_library(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     unsigned char *tp;
     /********************************************************************************************************************
      ******* LIBRARY SAVE **********************************************************************************************/
@@ -9724,6 +9725,26 @@ void MIPS16 fun_info(void)
         return;
     }
 #endif
+#ifdef USE_THREADS
+    else if ((tp = checkstring(ep, (unsigned char *)"THREAD")))
+    { // the thread running: 0 the main program (Thread.c)
+        unsigned char *lp = checkstring(tp, (unsigned char *)"LOCK"); // THREAD LOCK k: the thread that has lock k, -1 none
+        unsigned char *ap = checkstring(tp, (unsigned char *)"ARG");  // THREAD ARG n: a thread's call asks for its arguments
+        if (ap)
+        {
+            targ = ThreadArg(getinteger(ap), &iret, &fret, (char *)sret);
+            return;
+        }
+        if (lp)
+            iret = ThreadLockOwner(getint(lp, 1, MAXLOCKS));
+        else if (*tp)
+            iret = ThreadState(getint(tp, 0, MAXTHREADS)); // 0 not running, 1 running or ready, 2 in PAUSE, 3 paused, 4 waiting
+        else
+            iret = ThreadNumber();
+        targ = T_INT;
+        return;
+    }
+#endif
     else if (checkstring(ep, (unsigned char *)"TRACK"))
     {
         if (CurrentlyPlaying == P_MP3 || CurrentlyPlaying == P_FLAC || CurrentlyPlaying == P_WAV || CurrentlyPlaying == P_MOD || CurrentlyPlaying == P_MIDI)
@@ -11229,6 +11250,15 @@ int __not_in_flash_func(check_interrupt)(void)
     /* Cursor refresh lives in routinechecks() — it fires from the
        prompt's getchar loop too, so the cursor tracks the mouse even
        when no program is running. */
+#ifdef USE_THREADS
+    if ((IntReady.tick & INT_TICK_SLICE) && ThreadCount)
+    { // THREAD YIELD, or (Stage P2) the slice is up: another thread's turn, and back here when this one's comes round
+        uint32_t s = save_and_disable_interrupts();
+        IntReady.tick &= ~INT_TICK_SLICE;
+        restore_interrupts(s);
+        ThreadSchedule();
+    }
+#endif
     if (!IntReady.any)
         return 0; // quick exit: nothing signalled and nothing to poll
 #ifndef PICOMITEMIN

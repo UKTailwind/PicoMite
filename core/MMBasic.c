@@ -1516,6 +1516,10 @@ void __attribute__((noinline)) StackNearLimit(uint32_t stack)
         StackLow = 0;
         error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)StackFloor);
     }
+#ifdef USE_THREADS
+    if (StackFloor != heapend)
+        return; // a thread's own stack: the prompt's warning is about the main stack's (Thread.c)
+#endif
     if (StackLow == 0 || stack < StackLow)
     {
         StackLow = stack;
@@ -7246,7 +7250,16 @@ void MIPS16 error(char *msg, ...)
         }
         else
         {
+#ifdef USE_THREADS
+            char prefix[24]; // ("[#16:65535] ")
+#else
             char prefix[16];
+#endif
+#ifdef USE_THREADS
+            if (ThreadNumber()) // a thread other than the main program: [#n:line], as the CMM2's TRACE (Thread.c)
+                snprintf(prefix, sizeof(prefix), "[#%d:%d] ", ThreadNumber(), line_num + 1);
+            else
+#endif
             snprintf(prefix, sizeof(prefix), "[%d] ", line_num + 1);
             MMPrintString(prefix);
         }
@@ -7941,6 +7954,7 @@ void MIPS16 ClearStack(void)
 void MIPS16 ClearRuntime(bool all)
 {
     int i;
+    THREADS_END(); // the program's threads end with it (Thread.c)
     /* Profiling buffers were allocated from the BASIC variable pool via
      * GetMemory().  ClearRuntime() is about to wipe that pool, so we must
      * release our references first - otherwise the pointers stay valid in

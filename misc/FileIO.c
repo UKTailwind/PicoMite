@@ -3492,6 +3492,7 @@ void MIPS16 cmd_save(void)
     }
     if ((p = checkstring(cmdline, (unsigned char *)"CONTEXT")) != NULL)
     {
+        THREADS_NONE(); // (the main program's state alone is saved: Thread.c)
         SaveContext();
         if (checkstring(p, (unsigned char *)"CLEAR"))
             ClearVars(0, false);
@@ -5581,6 +5582,7 @@ void LoadPNG(unsigned char *p)
 #endif
 void MIPS16 cmd_load(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     int oldfont = PromptFont;
     int autorun = false, crunch = false;
     unsigned char *p;
@@ -5588,6 +5590,7 @@ void MIPS16 cmd_load(void)
     p = checkstring(cmdline, (unsigned char *)"CONTEXT");
     if (p)
     {
+        THREADS_NONE(); // (it puts back the main program's stacks: Thread.c)
         if (checkstring(p, (unsigned char *)"KEEP"))
             RestoreContext(true);
         else
@@ -7501,6 +7504,7 @@ int check_line_length(const char *text, int *linein)
 }
 void cmd_autosave(void)
 {
+    THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
     unsigned char *buf, *p;
     int c, prevc = 0, crunch = false;
     int count = 0;

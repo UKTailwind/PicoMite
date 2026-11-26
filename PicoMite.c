@@ -909,6 +909,10 @@ uint8_t PSRAMpin;
         if (timenow - lastrun < 100)
             return;
         lastrun = timenow;
+#ifdef USE_THREADS
+        if (ThreadCount && ThreadOnMainStack(routinechecks))
+            return; // a thread's stack is in use: the housekeeping ran on the main stack (Thread.c)
+#endif
 #if defined(PICOMITEVGA) || defined(GUICONTROLS)
         /* Mouse / virtual-cursor refresh. routinechecks() runs from the
            prompt's getchar loop as well as during program execution, so
@@ -4539,6 +4543,12 @@ uint32_t testPSRAM(void)
 #endif
         if (setjmp(mark) != 0)
         {
+#ifdef USE_THREADS
+            THREAD_LANDING();   // first: a longjmp from a thread's own stack left SP in PSP (Thread.h)
+            ThreadsStopped();   // where each thread was, then they end: this is the main stack now (Thread.c)
+            ThreadsEnd();
+            ThreadsStoppedShow();
+#endif
             // we got here via a long jump which means an error or CTRL-C or the program wants to exit to the command prompt
             ConsoleRedirect = 0; // LIST ALL #n etc cut short: the prompt is the console's (SerialPutchar's Ctrl-C jumps here directly)
             FlashLoad = 0;

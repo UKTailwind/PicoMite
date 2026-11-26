@@ -3128,6 +3128,7 @@ void cmd_help(void)
 }
 void MIPS16 cmd_run(void)
 {
+	THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
 	do_run(cmdline, false);
 }
 
@@ -3165,6 +3166,7 @@ void MIPS16 cmd_continue(void)
 
 void MIPS16 cmd_new(void)
 {
+	THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
 	closeframebuffer('A');
 	checkend(cmdline);
 	ClearProgram(true);
@@ -3186,6 +3188,7 @@ void MIPS16 cmd_new(void)
 
 void MIPS16 cmd_clear(void)
 {
+	THREADS_NONE(); // (every thread's variables: Thread.c)
 	checkend(cmdline);
 	if (g_LocalIndex)
 		error("Invalid in a subroutine");
@@ -3939,6 +3942,9 @@ void __not_in_flash_func(cmd_else)(void)
 }
 void do_end(bool ecmd)
 {
+	if (ecmd)
+		THREADS_STOP(); // END, actual or implied: no other thread runs from here on (Thread.c; not an error's
+						// do_end, whose landing lists where each thread was)
 	ConsoleRedirect = 0; // a Ctrl-C in LIST ALL #n etc: what follows is for the console
 #ifdef rp2350
 	// On runtime error termination, abort steppers to a safe state.
@@ -4729,6 +4735,7 @@ void MIPS16 do_chain(unsigned char *cmdline)
 }
 void cmd_chain(void)
 {
+	THREAD_MAIN_ONLY(); // (the main program's only: Thread.c)
 	do_chain(cmdline);
 }
 
@@ -7979,6 +7986,7 @@ bool array_comp(short in[MAXDIM], short out[MAXDIM])
 
 void cmd_redim(void)
 {
+    THREADS_NONE(); // (every thread's variables: Thread.c)
 #ifdef rp2350
 	int dims[MAXDIM] = {0}, newdims[MAXDIM] = {0};
 #else
@@ -8079,6 +8087,7 @@ void cmd_redim(void)
 }
 void MIPS16 cmd_erase(void)
 {
+	THREADS_NONE(); // (every thread's variables: Thread.c)
 	int i;
 	char p[MAXVARLEN + 1];
 	getcsargs(&cmdline, (MAX_ARG_COUNT * 2) - 1); // macro must be the first executable stmt in a block
@@ -11236,6 +11245,39 @@ void execute(char *mycmd)
 			i++;
 		}
 		multi = false;
+#ifdef USE_THREADS
+		{ // A thread's line runs from a buffer of its own (Thread.c): the main program may be part way through one in
+		  // tknbuf, waiting in a FUNCTION, which is kept here while the tokeniser uses it and put back before any
+		  // statement runs. And an EXECUTE run from inside another (by a SUB that one called) keeps the outer one's
+		  // line and its timeout. As the CMM2's (tests/threads/tdata.bas).
+			unsigned char savetkn[STRINGSIZE];
+			unsigned int savescrew = ScrewUpTimer;
+			unsigned char *line = (unsigned char *)ThreadTokenBuffer();
+			memcpy(savetkn, line, STRINGSIZE);
+			if (line != tknbuf)
+				memcpy(line, tknbuf, STRINGSIZE);
+			tokenise(true); // and tokenise it (the result is in tknbuf)
+			memset(inpbuf, 0, STRINGSIZE);
+			tknbuf[strlen((char *)tknbuf)] = 0;
+			tknbuf[strlen((char *)tknbuf) + 1] = 0;
+			if (line != tknbuf)
+				for (int k = 0; k < STRINGSIZE; k++)
+				{ // the new line to the thread's buffer, the one that was in tknbuf back to it
+					unsigned char c = line[k];
+					line[k] = tknbuf[k];
+					tknbuf[k] = c;
+				}
+			if (CurrentLinePtr)
+				ttp = nextstmt; // save the globals used by commands
+			ScrewUpTimer = 1000;
+			ExecuteProgram(line); // execute the function's code
+			ScrewUpTimer = savescrew;
+			memcpy(line, savetkn, STRINGSIZE);
+			if (CurrentLinePtr)
+				nextstmt = ttp;
+			return;
+		}
+#endif
 		tokenise(true); // and tokenise it (the result is in tknbuf)
 		memset(inpbuf, 0, STRINGSIZE);
 		tknbuf[strlen((char *)tknbuf)] = 0;

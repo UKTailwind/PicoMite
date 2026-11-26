@@ -1,0 +1,9 @@
+ok  thread0: five skipped errors, each still its own after the others ran
+ok  thread0: a skip count kept across a yield, and ON ERROR CLEAR
+ok  thread1: five skipped errors, each still its own after the others ran
+ok  thread1: a skip count kept across a yield, and ON ERROR CLEAR
+ok  thread2: five skipped errors, each still its own after the others ran
+ok  thread2: a skip count kept across a yield, and ON ERROR CLEAR
+ok  thread3: five skipped errors, each still its own after the others ran
+ok  thread3: a skip count kept across a yield, and ON ERROR CLEAR
+terror: 8 of 8 passed

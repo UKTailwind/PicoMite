@@ -523,6 +523,11 @@ void SymBindInit(void)
     SymCanonOf = (uint16_t *)SymHotBlock;
     SymG = (int16_t *)(SymCanonOf + count);
     SymL = SymG + count;
+#ifdef USE_THREADS
+    memset(SymL, 0xFF, count * sizeof(int16_t)); // every name without a local (-1), not only those read so far: a
+                                                  // name first read in one thread is unbound in every other (its
+                                                  // own array, Thread.c, is made the same way; the CMM2's Stage 0)
+#endif
     SymS = SymL + count;
     SymLShadow = SymS + count;
     SymLCanon = (uint16_t *)(SymLShadow + slots);

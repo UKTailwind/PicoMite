@@ -1,0 +1,5 @@
+ok  thread0: eight strings built across yields
+ok  thread1: eight strings built across yields
+ok  thread2: eight strings built across yields
+ok  thread3: eight strings built across yields
+ttemp: 4 of 4 passed

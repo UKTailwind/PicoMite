@@ -1,0 +1,20 @@
+the main program is thread 0
+started: nothing runs until the main program yields
+main 1
+ping 1 in thread 1
+pong 1 in thread 2
+main 2
+ping 2 in thread 1
+pong 2 in thread 2
+main 3
+ping 3 in thread 1
+pong 3 in thread 2
+main 4
+ping 4 in thread 1
+pong ends
+main 5
+ping 5 in thread 1
+main 6
+main 7
+main 8
+done, in thread 0

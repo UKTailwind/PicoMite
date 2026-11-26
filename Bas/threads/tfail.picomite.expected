@@ -1,0 +1,5 @@
+the main program waits
+[#3:5] Error "this thread has failed"
+Error : this thread has failed
+Main program: line 9, ready
+Thread 3: line 5, running

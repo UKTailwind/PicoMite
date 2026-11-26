@@ -888,6 +888,21 @@ int str_equal(const unsigned char *s1, const unsigned char *s2);
 }
 #endif
 
+/* Threads (core/Thread.c, docs/Threads_PicoMite_Review.md): what the rest of the firmware calls, each nothing at all
+   without USE_THREADS (CMakeLists.txt, THREADS_VARIANTS). */
+#ifdef USE_THREADS
+#include "Thread.h"
+#define THREAD_MAIN_ONLY() ThreadMainOnly() // a command only the main program may run: RUN, CHAIN, NEW and the rest
+#define THREADS_NONE() ThreadsNone()       // a command refused while the program has a thread: ERASE, CLEAR and others
+#define THREADS_STOP() ThreadsStop()       // the program is ending: no other thread runs from here on
+#define THREADS_END() ThreadsEnd()         // the program is being replaced: its threads end with it
+#else
+#define THREAD_MAIN_ONLY() do { } while (0)
+#define THREADS_NONE() do { } while (0)
+#define THREADS_STOP() do { } while (0)
+#define THREADS_END() do { } while (0)
+#endif
+
 #include "Symbols.h" // names stored as symbols in a saved program
 #include "Stream.h"  // the compiled statement stream (Route B)
 

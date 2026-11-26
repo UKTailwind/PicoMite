@@ -16,8 +16,9 @@ See MMBasic.h for the licence.
    measured (Stage P5). The CMM2's are 20 KB, 6 KB, 48 and 20. */
 #define MAXTHREADS 16                               // the threads a program may start, numbered 1 to MAXTHREADS
 #define THREAD_STACK (8 * 1024)                     // a thread's C stack
-#define THREAD_GUARD (2 * 1024)                     // the part of it below the stack check's floor (provisional: P5)
-#define THREAD_SIZE_MIN 4                           // THREAD SIZE's least, in K: the guard and room to run in
+#define THREAD_GUARD (3 * 1024)                     // the part of it below the stack check's floor: error()'s print
+                                                    // needs more than 1.7 KB of it (a PC3, 26 Nov; Stage P5 measures)
+#define THREAD_SIZE_MIN 6                           // THREAD SIZE's least, in K: the guard and a SUB's 2 KB to run in
 #define THREAD_LOCALS 24                            // its local variable slots
 #define THREAD_PRIORITY_MAX 10                      // THREAD PRIORITY: 1 (every thread's at RUN) to this
 #define THREAD_NEST 8                               // how deep its FOR loops, DO loops and calls may each go (NEST)
@@ -78,32 +79,9 @@ int ThreadOnMainStack(void (*fn)(void));            // fn run on the main stack 
 
 /* The prompt's landing after an error or Ctrl-C (PicoMite.c), first thing: a longjmp made while a thread ran on the
    process stack wrote its stack pointer to PSP, and clearing SPSEL alone would bring back the main stack's old value,
-   below live frames. So the value is moved: read SP, clear SPSEL, write it to MSP (and PSPLIM off, the RP2350). */
-#ifdef rp2350
-#define THREAD_LANDING() __asm volatile(                \
-    "mrs    r0, control \n"                             \
-    "tst    r0, #2      \n"                             \
-    "beq    1f          \n"                             \
-    "mov    r1, sp      \n"                             \
-    "bic    r0, r0, #2  \n"                             \
-    "msr    control, r0 \n"                             \
-    "isb                \n"                             \
-    "mov    sp, r1      \n"                             \
-    "movs   r0, #0      \n"                             \
-    "msr    psplim, r0  \n"                             \
-    "1:                 \n" ::: "r0", "r1", "memory")
-#else
-#define THREAD_LANDING() __asm volatile(                \
-    "mrs    r0, control \n"                             \
-    "movs   r2, #2      \n"                             \
-    "tst    r0, r2      \n"                             \
-    "beq    1f          \n"                             \
-    "mov    r1, sp      \n"                             \
-    "bics   r0, r2      \n"                             \
-    "msr    control, r0 \n"                             \
-    "isb                \n"                             \
-    "mov    sp, r1      \n"                             \
-    "1:                 \n" ::: "r0", "r1", "r2", "memory")
-#endif
+   below live frames. So the value is moved: read SP, clear SPSEL, write it to MSP (and PSPLIM off, the RP2350). A naked
+   function (Thread.c), not inline asm: in an ordinary function on the RP2040 GCC assembles that in divided syntax. */
+void ThreadLanding(void);
+#define THREAD_LANDING() ThreadLanding()
 
 #endif

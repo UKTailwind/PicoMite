@@ -1,0 +1,7 @@
+ok  thread 1 read from the start
+ok  thread 2 read from its RESTORE
+ok  the main program's place was not moved
+ok  thread0: four EXECUTEs, each waiting in a FUNCTION
+ok  thread1: four EXECUTEs, each waiting in a FUNCTION
+ok  thread2: four EXECUTEs, each waiting in a FUNCTION
+tdata: 6 of 6 passed
