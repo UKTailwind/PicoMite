@@ -1182,6 +1182,7 @@ void MIPS16 cmd_psram(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CHAIN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXRAMSLOTS);
@@ -1191,6 +1192,7 @@ void MIPS16 cmd_psram(void)
             ProgMemory = (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
         if (!(*ProgMemory == T_NEWLINE))
             error("RAM slot empty");
+        THREADS_END(); // (its threads end with the program it replaces, as CHAIN's do)
         FlashLoad = i;
         if (PrepareProgram(true))
         {
@@ -1202,6 +1204,7 @@ void MIPS16 cmd_psram(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         int i = getint(p, 0, MAXRAMSLOTS);
         if (i)
             ProgMemory = (unsigned char *)(uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
@@ -1814,6 +1817,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CHAIN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXFLASHSLOTS);
@@ -1825,6 +1829,7 @@ void MIPS16 cmd_flash(void)
             ProgMemory = (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
         if (!(*ProgMemory == T_NEWLINE))
             error("Flash slot empty");
+        THREADS_END(); // (its threads end with the program it replaces, as CHAIN's do)
         FlashLoad = i;
         if (PrepareProgram(true))
         {
@@ -1836,6 +1841,7 @@ void MIPS16 cmd_flash(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"RUN")))
     {
+        THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         int i = getint(p, 0, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);

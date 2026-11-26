@@ -6,7 +6,7 @@
 ' or another, and the statement then used that depth's variables: two runs in eight of tlocals with OPTION COMPILE ON,
 ' and nearly every run of this, 25 Nov 2026. A switch now makes every older stamp stale: BindsStale, Src/Thread.c.)
 Option Explicit
-Thread Size 15, 40, 8 ' (the PicoMite: thread 4's Sum% goes 7 FUNCTIONs deep, up to 1.4 KB a level and 4 locals; NEST 8 for the RP2040's 6; five fit a PC3's SRAM)
+Thread Size 15, 40, 8 ' (the PicoMite: thread 4's Sum% goes 7 FUNCTIONs deep, up to 1.4 KB a level and 4 locals; NEST 8 for the RP2040's 6)
 Dim Integer tests, pass, go, i, bad(5), runs(5)
 
 Sub Check(n$, got, want)
@@ -45,7 +45,7 @@ End Sub
 
 go = 1
 For i = 1 To 4 : Thread Start i, Work : Next
-Thread Start 5, Stopper
+Thread Start 5 Size 6, Stopper           ' (it only pauses: the smallest SIZE, so the five fit a PC3's SRAM)
 Work
 Do While MM.Info(Thread 1) Or MM.Info(Thread 2) Or MM.Info(Thread 3) Or MM.Info(Thread 4) : Loop
 For i = 0 To 4

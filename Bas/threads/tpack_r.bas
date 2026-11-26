@@ -28,8 +28,7 @@ Sub Main10
   Local Integer m1, m2, m3, m4, m5, m6, m7, m8, m9, m10
   m1 = 111 : m10 = 999
   For i = 1 To 8 : Thread Start i, Twenty : Inc c : Next
-  Do While MM.Info(Thread 8) : Thread Yield : Loop
-  Thread Yield
+  For i = 1 To 8 : Thread Wait i : Next              ' (every thread's count in: not only the last's)
   Check "eight threads of LOCALS 16 kept their locals", ok8, 8
   Check "the main program's locals are its own", m1 + m10, 1110
 End Sub

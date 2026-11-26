@@ -208,4 +208,12 @@ error inside an expression 3,260). The 3 KB guard holds there too.
   - **USER**: no thread switch while a module's call runs, as the CMM2's usercall holds the threads.
   - **CPU SLEEP** while the program has threads is a PAUSE of n seconds, as the CMM2's: the other threads run, and its
     interrupts and Ctrl-C are as in a PAUSE. Without threads it is the wait it always was. `tsleep_p.bas`.
-- On COM11's PC3: the 39 thread tests pass with OPTION COMPILE OFF and ON.
+  - **FLASH RUN, FLASH CHAIN, RAM RUN and RAM CHAIN** are the main program's, as on the CMM2 (they were not refused
+    in a thread), and FLASH CHAIN and RAM CHAIN end the program's threads first, as CHAIN does: they only switched
+    the program, and its threads went on running SUBs of the one that had gone. `tflash_p.bas`; RAM CHAIN from the main
+    program with two threads running, tried by hand: the threads end, the globals stay, a new thread runs.
+- On COM11's PC3: the 40 thread tests pass with OPTION COMPILE OFF and ON (tpack now waits for all eight threads, as
+  tmany does: it failed one run in five; tbind_p's Stopper has the smallest SIZE, as five threads of 15 KB were at the
+  edge of a PC3's SRAM).
+- Noticed, not threads': RAM CHAIN and FLASH CHAIN to an empty slot set ProgMemory to the slot before the "slot empty"
+  error, so the error's line is shown as [LIBRARY] and the program in memory is the empty slot afterwards (main too).
