@@ -1004,6 +1004,8 @@ void MIPS16 cmd_psram(void)
         if (argc)
         {
             int i = getint(argv[0], 1, MAXRAMSLOTS);
+            if (!(argc == 1 || (argc == 3 && checkstring(argv[2], (unsigned char *)"ALL"))))
+                SyntaxError(); // (before the switch: the program in memory stays)
             ProgMemory = (uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
             SymSetProgram(ProgMemory); // list the slot's names from its own symbol table
             SymSetLibrary(ProgMemory); // (a library's names are library symbols)
@@ -1186,12 +1188,11 @@ void MIPS16 cmd_psram(void)
         if (!CurrentLinePtr)
             error("Invalid at command prompt");
         int i = getint(p, 0, MAXRAMSLOTS);
-        if (i)
-            ProgMemory = (unsigned char *)(PSRAMblock + ((i - 1) * MAX_PROG_SIZE));
-        else
-            ProgMemory = (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
-        if (!(*ProgMemory == T_NEWLINE))
-            error("RAM slot empty");
+        unsigned char *slotmem = i ? (unsigned char *)(PSRAMblock + ((i - 1) * MAX_PROG_SIZE))
+                                   : (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
+        if (!(*slotmem == T_NEWLINE))
+            error("RAM slot empty"); // (before the switch: the program in memory stays)
+        ProgMemory = slotmem;
         THREADS_END(); // (its threads end with the program it replaces, as CHAIN's do)
         FlashLoad = i;
         if (PrepareProgram(true))
@@ -1206,12 +1207,11 @@ void MIPS16 cmd_psram(void)
     {
         THREAD_MAIN_ONLY(); // (a thread cannot replace the program: Thread.c)
         int i = getint(p, 0, MAXRAMSLOTS);
-        if (i)
-            ProgMemory = (unsigned char *)(uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
-        else
-            ProgMemory = (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
-        if (!(*ProgMemory == T_NEWLINE))
-            error("RAM slot empty");
+        unsigned char *slotmem = i ? (unsigned char *)(uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE)
+                                   : (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
+        if (!(*slotmem == T_NEWLINE))
+            error("RAM slot empty"); // (before the switch: the program in memory stays)
+        ProgMemory = slotmem;
         ClearRuntime(true);
         FlashLoad = i;
         if (PrepareProgram(true))
@@ -1569,12 +1569,15 @@ void MIPS16 cmd_flash(void)
                 StandardErrorParam(25, MAXFLASHSLOTS);
             if (ConsoleRedirect && argc == 1)
                 error("ALL needed with #n"); // the paged listing would print PRESS ANY KEY to #n and wait
-            ProgMemory = (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
-            if ((unsigned char)*ProgMemory != T_NEWLINE)
+            unsigned char *slotmem = (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
+            if (!(argc == 1 || (argc == 3 && checkstring(argv[2], (unsigned char *)"ALL"))))
+                SyntaxError(); // (before the switch: the program in memory stays)
+            if ((unsigned char)*slotmem != T_NEWLINE)
             {
                 ConsoleRedirect = 0;
-                return;
+                return; // (an empty slot: nothing listed, and the program in memory stays)
             }
+            ProgMemory = slotmem;
             SymSetProgram(ProgMemory); // list the slot's names from its own symbol table
             SymSetLibrary(ProgMemory); // (a library's names are library symbols)
             if (!ConsoleRedirect && Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
@@ -1823,12 +1826,11 @@ void MIPS16 cmd_flash(void)
         int i = getint(p, 0, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
-        if (i)
-            ProgMemory = (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
-        else
-            ProgMemory = (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
-        if (!(*ProgMemory == T_NEWLINE))
-            error("Flash slot empty");
+        unsigned char *slotmem = i ? (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE)
+                                   : (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
+        if (!(*slotmem == T_NEWLINE))
+            error("Flash slot empty"); // (before the switch: the program in memory stays)
+        ProgMemory = slotmem;
         THREADS_END(); // (its threads end with the program it replaces, as CHAIN's do)
         FlashLoad = i;
         if (PrepareProgram(true))
@@ -1845,12 +1847,11 @@ void MIPS16 cmd_flash(void)
         int i = getint(p, 0, MAXFLASHSLOTS);
         if (Option.LIBRARY_FLASH_SIZE == MAX_PROG_SIZE && i == MAXFLASHSLOTS)
             StandardErrorParam(25, MAXFLASHSLOTS);
-        if (i)
-            ProgMemory = (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
-        else
-            ProgMemory = (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
-        if (!(*ProgMemory == T_NEWLINE))
-            error("Flash slot empty");
+        unsigned char *slotmem = i ? (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE)
+                                   : (unsigned char *)(flash_target_contents + MAXFLASHSLOTS * MAX_PROG_SIZE);
+        if (!(*slotmem == T_NEWLINE))
+            error("Flash slot empty"); // (before the switch: the program in memory stays)
+        ProgMemory = slotmem;
         ClearRuntime(true);
         FlashLoad = i;
         if (PrepareProgram(true))
