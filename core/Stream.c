@@ -4251,7 +4251,7 @@ static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union
     unsigned char *def = subfun[idx], *callers = CurrentLinePtr;
     const uint16_t *pp = pc + 3;
     // what would stop DefinedSubFun before it starts sends the call there
-    if (gosubindex >= MAXGOSUB || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
+    if (gosubindex >= GosubLimit || ((pc[2] >> 8) && DefaultType != T_INT && DefaultType != T_NBR))
         return 0;
     RBCode++;
     if (g_option_profiling)
@@ -4312,7 +4312,7 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
     __asm volatile("MRS %0, msp" : "=r"(stack));
     if (stack < stackwarn)
         StackNearLimit(stack);
-    if (gosubindex >= MAXGOSUB)
+    if (gosubindex >= GosubLimit)
         return 0; // (the same at every call of the statement: only its first can find it so)
     if ((pc[2] >> 8) && RBDefaultBad(pc[2] >> 8))
         error("OPTION DEFAULT changed by a FUNCTION in this statement"); // (the record's guard held at its start)
@@ -4749,7 +4749,7 @@ static __attribute__((noinline)) void RBForPush(void *vptr, int vartype)
             g_forindex--;
             break;
         }
-    if (g_forindex == MAXFORLOOPS)
+    if (g_forindex == ForLimit)
         error("Too many nested FOR loops");
     g_forstack[g_forindex].var = vptr;
     g_forstack[g_forindex].vartype = vartype; // the loop variable's type
@@ -4800,7 +4800,7 @@ static __attribute__((noinline)) void RBDoPush(unsigned char *doptr, unsigned ch
             g_doindex--;
             break;
         }
-    if (g_doindex == MAXDOLOOPS)
+    if (g_doindex == DoLimit)
         error("Too many nested DO or WHILE loops");
     ds = &g_dostack[g_doindex];
     ds->evalptr = evalptr;

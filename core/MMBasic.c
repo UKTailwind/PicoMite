@@ -326,7 +326,12 @@ void PcsStart(int entries)
 // unsigned char lastcmd[STRINGSIZE];                                           // used to store the last command in case it is needed by the EDIT command
 unsigned char PromptString[MAXPROMPTLEN]; // the prompt for input, an empty string means use the default
 int ProgramChanged;                       // true if the program in memory has been changed and not saved
+#ifdef USE_THREADS
+struct s_hash g_hashlist_main[MAXLOCALLIST] = {0}; // the locals in the order made: the running thread's own list
+struct s_hash *g_hashlist = g_hashlist_main;       // (Commands.h), the main program's this one
+#else
 struct s_hash g_hashlist[MAXLOCALLIST] = {0};
+#endif
 int g_hashlistpointer = 0;
 /* P6 F2: the local region (slots 0 to maxlocalvars - 1) is a stack.  Each
    local is made in the next slot up, and g_hashlist lists the live ones in
@@ -343,20 +348,30 @@ static int g_localtop = 0;
 // ---------------------------------------------------------------------------
 #ifdef SUBPROFILE
 int g_localframe_base = 0;       // first hashlist index in current frame
+#ifdef USE_THREADS
+int g_framebase_stack_main[MAXGOSUB]; // saved bases, one per active level (the main program's;
+int *g_framebase_stack = g_framebase_stack_main; // the running thread's: Commands.h)
+#else
 int g_framebase_stack[MAXGOSUB]; // saved bases, one per active level
+#endif
 int g_framebase_sp = 0;          // stack pointer / current depth
 
 // Per-frame: which subfun[] index is currently executing (-1 if none).
 // Maintained by EnterLocalFrame/LeaveLocalFrame in parallel with the
 // frame-base stack.  Used by the trace cache for per-sub opt-in.
 int g_current_sub_idx = -1;
+#ifdef USE_THREADS
+int g_subidx_stack_main[MAXGOSUB];
+int *g_subidx_stack = g_subidx_stack_main;
+#else
 int g_subidx_stack[MAXGOSUB];
+#endif
 
 // Push the current frame base on entry to a new local scope (sub/fun, gosub,
 // CFunction).  Called *immediately after* g_LocalIndex++.
 void EnterLocalFrame(void)
 {
-    if (g_framebase_sp < MAXGOSUB)
+    if (g_framebase_sp < GosubLimit)
     {
         g_framebase_stack[g_framebase_sp] = g_localframe_base;
         g_subidx_stack[g_framebase_sp] = g_current_sub_idx;
@@ -3419,7 +3434,7 @@ void MIPS16 __not_in_flash_func(DefinedSubFun)(int isfun, unsigned char *cmd, in
     }
     // from now on we have a user defined sub or function (not a C routine)
 
-    if (gosubindex >= MAXGOSUB)
+    if (gosubindex >= GosubLimit)
         error("Too many nested SUB/FUN");
     errorstack[gosubindex] = CallersLinePtr;
     substack[gosubindex] = SubLinePtr;                  // for STATIC: the variables belong to this SUB/FUNCTION
@@ -8034,7 +8049,7 @@ void MIPS16 ClearRuntime(bool all)
     m_alloc(all ? M_VAR : M_LIMITED);
     VarChunkSeed(); // the first chunk of globals' records (see MMBasic.h)
     memset(cmdlinebuff, 0, sizeof(cmdlinebuff));
-    memset(datastore, 0, sizeof(struct sa_data) * MAXRESTORE);
+    memset(datastore, 0, sizeof(struct sa_data) * RestoreLimit);
     restorepointer = 0;
     g_flag = 0;
     g_varcnt = 0;

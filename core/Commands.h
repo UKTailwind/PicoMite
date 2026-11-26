@@ -51,7 +51,21 @@ extern unsigned char topicbuff[STRINGSIZE];
 extern unsigned char messagebuff[STRINGSIZE];
 extern unsigned char addressbuff[20];
 
+/* USE_THREADS: the interpreter's stacks are the running thread's own (docs/Threads_PicoMite_Review.md).  Each name
+   points at its arrays, and ForLimit and the rest are how many entries it has.  The main program's are the *_main
+   arrays, of the sizes they always were, and with no thread nothing else is ever pointed at.  Without USE_THREADS
+   the names are those arrays and the limits the constants, as before: the code is the same. */
+#ifdef USE_THREADS
+extern struct s_forstack *g_forstack, g_forstack_main[MAXFORLOOPS + 1];
+extern int ForLimit, DoLimit, GosubLimit, RestoreLimit;
+#else
 extern struct s_forstack g_forstack[MAXFORLOOPS + 1];
+#define g_forstack_main g_forstack
+#define ForLimit MAXFORLOOPS
+#define DoLimit MAXDOLOOPS
+#define GosubLimit MAXGOSUB
+#define RestoreLimit MAXRESTORE
+#endif
 extern int g_forindex;
 unsigned char *ForFindNext(unsigned char *p, unsigned char *vname, int vlen, unsigned char *errmsg);
 extern unsigned char cmdlinebuff[STRINGSIZE];
@@ -93,7 +107,12 @@ typedef struct s_dostack
     } fast_limit;
 } dostackval;
 
+#ifdef USE_THREADS
+extern struct s_dostack *g_dostack, g_dostack_main[MAXDOLOOPS];
+#else
 extern struct s_dostack g_dostack[MAXDOLOOPS];
+#define g_dostack_main g_dostack
+#endif
 extern int g_doindex;
 #define DOFAST_UNTRIED 0 // s_dostack.fast_state
 #define DOFAST_ON 1
@@ -101,9 +120,17 @@ extern int g_doindex;
 unsigned char *DoFindLoop(unsigned char *p, CommandToken dotoken, unsigned char *errmsg);
 void DoFastForget(int slot);
 
+#ifdef USE_THREADS
+extern unsigned char **gosubstack, **errorstack, **substack;
+extern unsigned char *gosubstack_main[MAXGOSUB], *errorstack_main[MAXGOSUB], *substack_main[MAXGOSUB];
+#else
 extern unsigned char *gosubstack[MAXGOSUB];
 extern unsigned char *errorstack[MAXGOSUB];
 extern unsigned char *substack[MAXGOSUB];
+#define gosubstack_main gosubstack
+#define errorstack_main errorstack
+#define substack_main substack
+#endif
 extern int gosubindex;
 extern unsigned char g_DimUsed;
 
@@ -146,7 +173,12 @@ struct sa_data
 extern void SaveContext(void);
 extern void RestoreContext(bool keep);
 extern void do_end(bool ecmd);
+#ifdef USE_THREADS
+extern struct sa_data *datastore, datastore_main[MAXRESTORE];
+#else
 extern struct sa_data datastore[MAXRESTORE];
+#define datastore_main datastore
+#endif
 extern int restorepointer;
 extern unsigned short *frame, *outframe;
 extern bool framecursor;

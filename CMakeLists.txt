@@ -273,6 +273,31 @@ set(LOADER_VARIANTS
 	HDMIUSB
 )
 
+# BASIC threads, THREAD START and the rest (docs/Threads_PicoMite_Review.md): every
+# build if it fits, the RP2350 ones if not. A build left out of this list compiles
+# none of the threads' code (USE_THREADS) and is as it was without them.
+# WEBRP2350 is left out for now: 48 bytes of flash were left before Stage P0, and P0's
+# first step alone overran it by 680. It comes back with a 16 KB FLASH_TARGET_OFFSET step.
+set(THREADS_VARIANTS
+	PICO
+	PICOMIN
+	PICOUSB
+	VGA
+	VGAUSB
+	WEB
+	PICORP2350
+	PICOUSBRP2350
+	VGARP2350
+	VGAUSBRP2350
+	PICOBTRP2350
+	PICOBTHRP2350
+	HDMI
+	HDMIUSB
+	HDMIWEB
+	HDMIBTH
+	PC3
+)
+
 set(VGA_PIO_VARIANTS
 	VGA
 	VGAUSB
@@ -355,6 +380,7 @@ compile_is_in(USES_USB_HOST ${USB_HOST_VARIANTS})
 compile_is_in(USES_UPNG ${UPNG_VARIANTS})
 compile_is_in(USES_RAYCASTER ${RAYCASTER_VARIANTS})
 compile_is_in(USES_LOADER ${LOADER_VARIANTS})
+compile_is_in(USES_THREADS ${THREADS_VARIANTS})
 compile_is_in(USES_VGA_PIO ${VGA_PIO_VARIANTS})
 compile_is_in(IS_VGA ${VGA_VARIANTS})
 compile_is_in(IS_HDMI ${HDMI_VARIANTS})
@@ -685,6 +711,10 @@ endif()
 if(USES_LOADER)
 	target_sources(PicoMite PRIVATE misc/Loader.c misc/User.c misc/LoaderNet.c misc/SQL.c)
 	target_compile_definitions(PicoMite PRIVATE LOADER)
+endif()
+
+if(USES_THREADS)
+	target_compile_definitions(PicoMite PRIVATE USE_THREADS)
 endif()
 
 if(USES_SUBPROFILE)

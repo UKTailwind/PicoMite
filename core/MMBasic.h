@@ -377,6 +377,12 @@ extern "C"
     // g_hashlist records every live local, so it must hold as many as OPTION LOCAL
     // VARIABLES can allow (not just the default MAXLOCALVARS)
 #define MAXLOCALLIST (MAXVARS - 32)
+#ifdef USE_THREADS
+    extern struct s_hash *g_hashlist, g_hashlist_main[MAXLOCALLIST]; // the running thread's, and the main program's (Commands.h)
+#else
+    extern struct s_hash g_hashlist[MAXLOCALLIST];
+#define g_hashlist_main g_hashlist
+#endif
 
     /* Token table structure */
     struct s_tokentbl
@@ -451,10 +457,18 @@ extern "C"
 #ifdef SUBPROFILE
     /* Local-variable frame tracking — see MMBasic.c */
     extern int g_localframe_base;
+    #ifdef USE_THREADS
+    extern int *g_framebase_stack, g_framebase_stack_main[MAXGOSUB];
+#else
     extern int g_framebase_stack[MAXGOSUB];
+#endif
     extern int g_framebase_sp;
     extern int g_current_sub_idx;
+    #ifdef USE_THREADS
+    extern int *g_subidx_stack, g_subidx_stack_main[MAXGOSUB];
+#else
     extern int g_subidx_stack[MAXGOSUB];
+#endif
     extern uint64_t *g_subentry_us;
 #endif
     extern uint32_t *g_perf_cmdcount;

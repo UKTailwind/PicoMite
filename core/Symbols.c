@@ -323,7 +323,6 @@ _Static_assert(SYM_LEVELS > MAXGOSUB + 8, "SYM_LEVELS must exceed the SUB and GO
 #define SymLocalEvent(slot) // (the RP2040 has no compiled records to tell)
 #endif
 static uint16_t *SymCanonHead = NULL; // hash chain heads
-extern struct s_hash g_hashlist[MAXLOCALLIST]; // (as MMBasic.c defines it)
 extern int g_hashlistpointer;
 int GetLocalVarHashSize(void);
 static unsigned int SymCanonMask, SymNCanon;
@@ -731,8 +730,6 @@ static unsigned char *symsrc;  // the source being saved (SymBegin's src), for S
 static int symblksize, symentries, symnametop, symoverflow, symshort, symnamebytes;
 static uint16_t symtop[SYM_NSHORT]; // the entries that get short symbols, most used first
 
-extern char *g_StrTmp[MAXTEMPSTRINGS];
-extern char g_StrTmpLocalIndex[MAXTEMPSTRINGS];
 extern int g_StrTmpIndex;
 
 #define SYMHEADS ((uint16_t *)symblk)
@@ -763,7 +760,7 @@ int SymBegin(unsigned char *src)
     symsrc = src;
     if (!SymEnabled)
         return false;
-    for (int i = 0; i < 3 && symblk == NULL && g_StrTmpIndex < MAXTEMPSTRINGS; i++)
+    for (int i = 0; i < 3 && symblk == NULL && g_StrTmpIndex < TempLimit; i++)
     {
         symblk = GetMemoryNull(sizes[i]);
         symblksize = sizes[i];

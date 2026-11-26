@@ -11156,7 +11156,7 @@ GotAnInterrupt:
     {
         rti[0] = (cmdIRET & 0x7f) + C_BASETOKEN;
         rti[1] = (cmdIRET >> 7) + C_BASETOKEN; // tokens can be 14-bit
-        if (gosubindex >= MAXGOSUB)
+        if (gosubindex >= GosubLimit)
             error("Too many SUBs for interrupt");
         errorstack[gosubindex] = CurrentLinePtr;
         substack[gosubindex] = (unsigned char *)intaddr;  // for STATIC: the interrupt SUB is the SUB running

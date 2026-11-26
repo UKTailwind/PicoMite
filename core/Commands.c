@@ -216,7 +216,13 @@ volatile bool Keycomplete = false;
 int keyselect = 0;
 extern volatile unsigned int ScrewUpTimer;
 int SaveNextData = 0;
+#ifdef USE_THREADS
+struct sa_data datastore_main[MAXRESTORE];
+struct sa_data *datastore = datastore_main;
+int RestoreLimit = MAXRESTORE;
+#else
 struct sa_data datastore[MAXRESTORE];
+#endif
 int restorepointer = 0;
 uint64_t g_flag = 0;
 const uint8_t i2clist[] = {
@@ -599,6 +605,30 @@ const uint8_t i2clist[] = {
 	0,
 	0,
 };
+/* USE_THREADS: these stacks are the running thread's own, and the names point at its arrays (Commands.h).  The main
+   program's are the *_main arrays below, of the sizes they always were. */
+#ifdef USE_THREADS
+// stack to keep track of nested FOR/NEXT loops
+struct s_forstack g_forstack_main[MAXFORLOOPS + 1];
+struct s_forstack *g_forstack = g_forstack_main;
+int ForLimit = MAXFORLOOPS;
+int g_forindex;
+
+// stack to keep track of nested DO/LOOP loops
+struct s_dostack g_dostack_main[MAXDOLOOPS];
+struct s_dostack *g_dostack = g_dostack_main;
+int DoLimit = MAXDOLOOPS;
+int g_doindex; // counts the number of nested DO/LOOP loops
+
+// stack to keep track of GOSUBs, SUBs and FUNCTIONs; substack is the SUB/FUNCTION definition (its subfun[] token)
+// each frame is running, NULL for a GOSUB: STATIC names its variable after the innermost one
+unsigned char *gosubstack_main[MAXGOSUB], *errorstack_main[MAXGOSUB], *substack_main[MAXGOSUB];
+unsigned char **gosubstack = gosubstack_main;
+unsigned char **errorstack = errorstack_main;
+unsigned char **substack = substack_main;
+int GosubLimit = MAXGOSUB;
+int gosubindex;
+#else
 // stack to keep track of nested FOR/NEXT loops
 struct s_forstack g_forstack[MAXFORLOOPS + 1];
 int g_forindex;
@@ -614,6 +644,7 @@ unsigned char *errorstack[MAXGOSUB];
 // for a GOSUB: STATIC names its variable after the innermost one
 unsigned char *substack[MAXGOSUB];
 int gosubindex;
+#endif
 
 unsigned char g_DimUsed = false; // used to catch OPTION BASE after DIM has been used
 
@@ -4295,12 +4326,9 @@ void cmd_end(void)
 }
 extern unsigned int mmap[HEAP_MEMORY_SIZE / PAGESIZE / PAGESPERWORD];
 extern unsigned int psmap[PSMAPWORDS];
-extern struct s_hash g_hashlist[MAXLOCALLIST];
 extern int g_hashlistpointer;
 extern int g_StrTmpIndex;
 extern bool g_TempMemoryIsChanged;
-extern char *g_StrTmp[MAXTEMPSTRINGS];			// used to track temporary string space on the heap
-extern char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalIndex for each temporary string space on the heap
 #if defined(rp2350)
 /* Everything SaveContext writes below goes into the 384 KB at the base of the
    2 MB PSRAM reserve, immediately under RAM slot 1, and nothing checked that it
@@ -4311,7 +4339,7 @@ extern char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalInde
    the copies below. */
 #define CONTEXT_BYTES 0x60000 // (the 384 KB under RAM slot 1)
 #define CONTEXT_FIXED_BYTES(heap) (sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) +   \
-								   sizeof(g_StrTmp) + sizeof(g_StrTmpLocalIndex) +           \
+								   sizeof(g_StrTmp_main) + sizeof(g_StrTmpLocalIndex_main) +           \
 								   sizeof(g_LocalIndex) + sizeof(g_OptionBase) +             \
 								   sizeof(g_DimUsed) + sizeof(g_varcnt) +                    \
 								   sizeof(g_Globalvarcnt) + sizeof(g_Localvarcnt) +          \
@@ -4320,7 +4348,7 @@ extern char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalInde
 								   sizeof(struct s_forstack) * MAXFORLOOPS +                 \
 								   sizeof(struct s_dostack) * MAXDOLOOPS +                   \
 								   sizeof(g_slotrec) + sizeof(g_varmem) +                    \
-								   sizeof(g_hashlist) +                                      \
+								   sizeof(g_hashlist_main) +                                      \
 								   ((heap) + 256) + sizeof(mmap) + sizeof(psmap))
 _Static_assert(CONTEXT_FIXED_BYTES(HEAP_MEMORY_SIZE) <= CONTEXT_BYTES,
 			   "the SaveContext image no longer fits below the RAM slots");
@@ -4380,10 +4408,10 @@ void SaveContext(void)
 		p += sizeof(g_StrTmpIndex);
 		memcpy(p, &g_TempMemoryIsChanged, sizeof(g_TempMemoryIsChanged));
 		p += sizeof(g_TempMemoryIsChanged);
-		memcpy(p, (void *)g_StrTmp, sizeof(g_StrTmp));
-		p += sizeof(g_StrTmp);
-		memcpy(p, (void *)g_StrTmpLocalIndex, sizeof(g_StrTmpLocalIndex));
-		p += sizeof(g_StrTmpLocalIndex);
+		memcpy(p, (void *)g_StrTmp, sizeof(g_StrTmp_main));
+		p += sizeof(g_StrTmp_main);
+		memcpy(p, (void *)g_StrTmpLocalIndex, sizeof(g_StrTmpLocalIndex_main));
+		p += sizeof(g_StrTmpLocalIndex_main);
 		memcpy(p, &g_LocalIndex, sizeof(g_LocalIndex));
 		p += sizeof(g_LocalIndex);
 		memcpy(p, &g_OptionBase, sizeof(g_OptionBase));
@@ -4410,8 +4438,8 @@ void SaveContext(void)
 		p += sizeof(g_slotrec);
 		memcpy(p, &g_varmem, sizeof(g_varmem));
 		p += sizeof(g_varmem);
-		memcpy(p, g_hashlist, sizeof(g_hashlist));
-		p += sizeof(g_hashlist);
+		memcpy(p, g_hashlist, sizeof(g_hashlist_main));
+		p += sizeof(g_hashlist_main);
 		memcpy(p, MMHeap, heap_memory_size + 256);
 		p += heap_memory_size + 256;
 		memcpy(p, mmap, sizeof(mmap));
@@ -4428,10 +4456,10 @@ void SaveContext(void)
 		FSerror = lfs_stat(&lfs, "/.vars", &lfsinfo);
 		if (lfsinfo.type == LFS_TYPE_REG)
 			lfs_remove(&lfs, "/.vars");
-		int sizeneeded = sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) + sizeof(g_StrTmp) + sizeof(g_StrTmpLocalIndex) +
+		int sizeneeded = sizeof(g_StrTmpIndex) + sizeof(g_TempMemoryIsChanged) + sizeof(g_StrTmp_main) + sizeof(g_StrTmpLocalIndex_main) +
 						 sizeof(g_LocalIndex) + sizeof(g_OptionBase) + sizeof(g_DimUsed) + sizeof(g_varcnt) + sizeof(g_Globalvarcnt) + sizeof(g_Localvarcnt) +
 						 sizeof(g_hashlistpointer) + sizeof(g_forindex) + sizeof(g_doindex) + sizeof(struct s_forstack) * MAXFORLOOPS + sizeof(struct s_dostack) * MAXDOLOOPS +
-						 sizeof(g_slotrec) + sizeof(g_varmem) + sizeof(g_hashlist) + heap_memory_size + 256 + sizeof(mmap);
+						 sizeof(g_slotrec) + sizeof(g_varmem) + sizeof(g_hashlist_main) + heap_memory_size + 256 + sizeof(mmap);
 		if (sizeneeded >= Option.FlashSize - FlashStoreStart - lfs_fs_size(&lfs) * 4096)
 			error("Not enough free space on A: drive: % needed", sizeneeded);
 		lfs_file_open(&lfs, &lfs_file, ".vars", LFS_O_RDWR | LFS_O_CREAT);
@@ -4441,8 +4469,8 @@ void SaveContext(void)
 		//		lfs_setattr(&lfs, ".vars", 'A', &dt,   4);
 		lfs_file_write(&lfs, &lfs_file, &g_StrTmpIndex, sizeof(g_StrTmpIndex));
 		lfs_file_write(&lfs, &lfs_file, &g_TempMemoryIsChanged, sizeof(g_TempMemoryIsChanged));
-		lfs_file_write(&lfs, &lfs_file, (void *)g_StrTmp, sizeof(g_StrTmp));
-		lfs_file_write(&lfs, &lfs_file, (void *)g_StrTmpLocalIndex, sizeof(g_StrTmpLocalIndex));
+		lfs_file_write(&lfs, &lfs_file, (void *)g_StrTmp, sizeof(g_StrTmp_main));
+		lfs_file_write(&lfs, &lfs_file, (void *)g_StrTmpLocalIndex, sizeof(g_StrTmpLocalIndex_main));
 		lfs_file_write(&lfs, &lfs_file, &g_LocalIndex, sizeof(g_LocalIndex));
 		lfs_file_write(&lfs, &lfs_file, &g_OptionBase, sizeof(g_OptionBase));
 		lfs_file_write(&lfs, &lfs_file, &g_DimUsed, sizeof(g_DimUsed));
@@ -4456,7 +4484,7 @@ void SaveContext(void)
 		lfs_file_write(&lfs, &lfs_file, g_dostack, sizeof(struct s_dostack) * MAXDOLOOPS);
 		lfs_file_write(&lfs, &lfs_file, g_slotrec, sizeof(g_slotrec));
 		lfs_file_write(&lfs, &lfs_file, &g_varmem, sizeof(g_varmem));
-		lfs_file_write(&lfs, &lfs_file, g_hashlist, sizeof(g_hashlist));
+		lfs_file_write(&lfs, &lfs_file, g_hashlist, sizeof(g_hashlist_main));
 		lfs_file_write(&lfs, &lfs_file, MMHeap, heap_memory_size + 256);
 		lfs_file_write(&lfs, &lfs_file, mmap, sizeof(mmap));
 		lfs_file_close(&lfs, &lfs_file);
@@ -4477,10 +4505,10 @@ void RestoreContext(bool keep)
 		p += sizeof(g_StrTmpIndex);
 		memcpy(&g_TempMemoryIsChanged, p, sizeof(g_TempMemoryIsChanged));
 		p += sizeof(g_TempMemoryIsChanged);
-		memcpy((void *)g_StrTmp, p, sizeof(g_StrTmp));
-		p += sizeof(g_StrTmp);
-		memcpy((void *)g_StrTmpLocalIndex, p, sizeof(g_StrTmpLocalIndex));
-		p += sizeof(g_StrTmpLocalIndex);
+		memcpy((void *)g_StrTmp, p, sizeof(g_StrTmp_main));
+		p += sizeof(g_StrTmp_main);
+		memcpy((void *)g_StrTmpLocalIndex, p, sizeof(g_StrTmpLocalIndex_main));
+		p += sizeof(g_StrTmpLocalIndex_main);
 		memcpy(&g_LocalIndex, p, sizeof(g_LocalIndex));
 		p += sizeof(g_LocalIndex);
 		memcpy(&g_OptionBase, p, sizeof(g_OptionBase));
@@ -4507,8 +4535,8 @@ void RestoreContext(bool keep)
 		p += sizeof(g_slotrec);
 		memcpy(&g_varmem, p, sizeof(g_varmem));
 		p += sizeof(g_varmem);
-		memcpy(g_hashlist, p, sizeof(g_hashlist));
-		p += sizeof(g_hashlist);
+		memcpy(g_hashlist, p, sizeof(g_hashlist_main));
+		p += sizeof(g_hashlist_main);
 		memcpy(MMHeap, p, heap_memory_size + 256);
 		p += heap_memory_size + 256;
 		memcpy(mmap, p, sizeof(mmap));
@@ -4532,8 +4560,8 @@ void RestoreContext(bool keep)
 		lfs_file_open(&lfs, &lfs_file, "/.vars", LFS_O_RDONLY);
 		lfs_file_read(&lfs, &lfs_file, &g_StrTmpIndex, sizeof(g_StrTmpIndex));
 		lfs_file_read(&lfs, &lfs_file, &g_TempMemoryIsChanged, sizeof(g_TempMemoryIsChanged));
-		lfs_file_read(&lfs, &lfs_file, (void *)g_StrTmp, sizeof(g_StrTmp));
-		lfs_file_read(&lfs, &lfs_file, (void *)g_StrTmpLocalIndex, sizeof(g_StrTmpLocalIndex));
+		lfs_file_read(&lfs, &lfs_file, (void *)g_StrTmp, sizeof(g_StrTmp_main));
+		lfs_file_read(&lfs, &lfs_file, (void *)g_StrTmpLocalIndex, sizeof(g_StrTmpLocalIndex_main));
 		lfs_file_read(&lfs, &lfs_file, &g_LocalIndex, sizeof(g_LocalIndex));
 		lfs_file_read(&lfs, &lfs_file, &g_OptionBase, sizeof(g_OptionBase));
 		lfs_file_read(&lfs, &lfs_file, &g_DimUsed, sizeof(g_DimUsed));
@@ -4547,7 +4575,7 @@ void RestoreContext(bool keep)
 		lfs_file_read(&lfs, &lfs_file, g_dostack, sizeof(struct s_dostack) * MAXDOLOOPS);
 		lfs_file_read(&lfs, &lfs_file, g_slotrec, sizeof(g_slotrec));
 		lfs_file_read(&lfs, &lfs_file, &g_varmem, sizeof(g_varmem));
-		lfs_file_read(&lfs, &lfs_file, g_hashlist, sizeof(g_hashlist));
+		lfs_file_read(&lfs, &lfs_file, g_hashlist, sizeof(g_hashlist_main));
 		lfs_file_read(&lfs, &lfs_file, MMHeap, heap_memory_size + 256);
 		lfs_file_read(&lfs, &lfs_file, mmap, sizeof(mmap));
 		HeapHintsReset(); /* the page map was replaced wholesale */
@@ -5265,7 +5293,7 @@ void __not_in_flash_func(cmd_for)(void)
 			}
 		}
 
-		if (g_forindex == MAXFORLOOPS)
+		if (g_forindex == ForLimit)
 			error("Too many nested FOR loops");
 
 		g_forstack[g_forindex].var = vptr;			 // save the variable index
@@ -5658,7 +5686,7 @@ void MIPS16 __not_in_flash_func(cmd_do)(void)
 	}
 
 	// add our pointers to the top of the stack
-	if (g_doindex == MAXDOLOOPS)
+	if (g_doindex == DoLimit)
 		error("Too many nested DO or WHILE loops");
 	g_dostack[g_doindex].evalptr = evalp;
 	g_dostack[g_doindex].doptr = nextstmt;
@@ -5925,7 +5953,7 @@ void cmd_endcomment(void)
 
 void cmd_gosub(void)
 {
-	if (gosubindex >= MAXGOSUB)
+	if (gosubindex >= GosubLimit)
 		error("Too many nested GOSUB");
 	char *return_to = (char *)nextstmt;
 	if (isnamestartsym(*cmdline))
@@ -8099,7 +8127,7 @@ void MIPS16 cmd_read(void)
 	int vcnt, vidx, num_to_read = 0;
 	if (checkstring(cmdline, (unsigned char *)"SAVE"))
 	{
-		if (restorepointer == MAXRESTORE - 1)
+		if (restorepointer == RestoreLimit - 1)
 			error((char *)"Too many saves");
 		datastore[restorepointer].SaveNextDataLine = NextDataLine;
 		datastore[restorepointer].SaveNextData = NextData;
@@ -8636,7 +8664,7 @@ void cmd_on(void)
 		if (*argv[1] == ss[1])
 		{
 			// this is a GOSUB, same as a GOTO but we need to first push the return pointer
-			if (gosubindex >= MAXGOSUB)
+			if (gosubindex >= GosubLimit)
 				error("Too many nested GOSUB");
 			errorstack[gosubindex] = CurrentLinePtr;
 			substack[gosubindex] = NULL; // a GOSUB runs in the SUB it was called from

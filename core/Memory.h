@@ -118,6 +118,19 @@ struct s_ctrl
 extern unsigned char *strtmp[];    // Track temporary string space on the heap
 extern int TempMemoryTop;          // Last index used for allocating temp memory
 extern bool g_TempMemoryIsChanged; // Prevent unnecessary scanning of strtmp[]
+/* The temporary memory's list (Memory.c).  USE_THREADS: the running thread's own, as the stacks of Commands.h, and
+   TempLimit is how many entries it has; the main program's are the *_main arrays. */
+#ifdef USE_THREADS
+extern char **g_StrTmp, *g_StrTmp_main[MAXTEMPSTRINGS];
+extern char *g_StrTmpLocalIndex, g_StrTmpLocalIndex_main[MAXTEMPSTRINGS];
+extern int TempLimit;
+#else
+extern char *g_StrTmp[MAXTEMPSTRINGS];          // used to track temporary string space on the heap
+extern char g_StrTmpLocalIndex[MAXTEMPSTRINGS]; // used to track the g_LocalIndex for each temporary string space on the heap
+#define g_StrTmp_main g_StrTmp
+#define g_StrTmpLocalIndex_main g_StrTmpLocalIndex
+#define TempLimit MAXTEMPSTRINGS
+#endif
 
 /* ============================================================================
  * External variables - Heap memory
