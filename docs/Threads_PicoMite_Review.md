@@ -117,3 +117,15 @@ each step:
    housekeeping on the main stack; defaults SIZE 4 KB, LOCALS 16, NEST 8, sixteen threads (to be measured);
    loadable programs, SQL and USER modules from the main program only; OPTION NOCHECK keeps the slice test; the
    FRAMEBUFFER WRITE target each thread's own.
+
+## Decisions, 26 November (Peter)
+
+- Plan decision 2: threads run on the process stack (PSP); interrupts and the housekeeping stay on the main stack.
+- Plan decision 3: THREAD START's defaults SIZE 8 KB, LOCALS 24, NEST 8; sixteen threads. (The plan proposed SIZE 4,
+  LOCALS 16.) Still to be checked against Stage P5's measurements.
+- Plan decisions 4 and 5 as proposed: loadable programs, SQL and USER modules from the main program only; OPTION
+  NOCHECK keeps the slice test while a thread runs.
+- Plan decision 6: each thread has its own FRAMEBUFFER WRITE target.
+- Thread.c is copied from the CMM2's head (78d4172) now, not from a b5 tag; FLASH_TARGET_OFFSET goes up wherever the
+  development needs it. WEBRP2350's went up on main (0dc2553), where #164 had taken it 160 bytes over.
+- RP2040 testing only once everything is proven on the RP2350, on the Pico that is now the debug probe.
