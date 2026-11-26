@@ -1006,6 +1006,8 @@ void MIPS16 cmd_psram(void)
             int i = getint(argv[0], 1, MAXRAMSLOTS);
             if (!(argc == 1 || (argc == 3 && checkstring(argv[2], (unsigned char *)"ALL"))))
                 SyntaxError(); // (before the switch: the program in memory stays)
+            if (argc == 1 && CurrentLinePtr)
+                StandardError(10); // a paged listing is the prompt's: ALL in a program (Peter)
             ProgMemory = (uint8_t *)PSRAMblock + ((i - 1) * MAX_PROG_SIZE);
             SymSetProgram(ProgMemory); // list the slot's names from its own symbol table
             SymSetLibrary(ProgMemory); // (a library's names are library symbols)
@@ -1569,6 +1571,8 @@ void MIPS16 cmd_flash(void)
             unsigned char *slotmem = (unsigned char *)(flash_target_contents + (i - 1) * MAX_PROG_SIZE);
             if (!(argc == 1 || (argc == 3 && checkstring(argv[2], (unsigned char *)"ALL"))))
                 SyntaxError(); // (before the switch: the program in memory stays)
+            if (argc == 1 && CurrentLinePtr)
+                StandardError(10); // a paged listing is the prompt's: ALL in a program (Peter)
             if ((unsigned char)*slotmem != T_NEWLINE)
             {
                 ConsoleRedirect = 0;
