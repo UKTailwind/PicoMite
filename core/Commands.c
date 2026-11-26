@@ -2439,10 +2439,11 @@ static int ListPinNo(int gp)
 #endif
 	return codemap(gp);
 }
-/* LIST PINS [#n]: each GP pin, its physical pin and its use, as MM.INFO(PIN) gives it.  This was a tokenised BASIC
+/* LIST PINS [ALL] [#n]: each GP pin, its physical pin and its use, as MM.INFO(PIN) gives it.  This was a tokenised BASIC
    program (If MM.DISPLAY Then CLS; If MM.WIDTH <= 40 Then FONT 7; a PRINT for each pin, with a "Press any key to
-   continue" every MM.HEIGHT - 3 lines) and prints the same; sent to #n it leaves the screen alone and is not paged. */
-static void ListPins(void)
+   continue" every MM.HEIGHT - 3 lines) and prints the same; sent to #n it leaves the screen alone and is not paged,
+   and with ALL it is not paged either. */
+static void ListPins(int all)
 {
 	char s[STRINGSIZE];
 	int maxgp, lines;
@@ -2477,7 +2478,7 @@ static void ListPins(void)
 		PinStatusText(pin, s);
 		MMPrintString(s);
 		MMPrintString("\r\n");
-		if (!ConsoleRedirect && lines > 0 && gp % lines == 0 && gp != 0)
+		if (!all && !ConsoleRedirect && lines > 0 && gp % lines == 0 && gp != 0)
 		{
 			MMPrintString("Press any key to continue");
 			while (MMInkey() == -1)
@@ -2531,12 +2532,21 @@ void MIPS16 cmd_list(void)
 		int64_t *dest = NULL;
 		char *buff = NULL;
 		int j = 0;
+		int all = 0;
+		unsigned char *q;
+		if ((q = checkstring(p, (unsigned char *)"ALL")))
+		{ // LIST VARIABLES ALL: not paged
+			all = 1;
+			p = q;
+		}
 		getcsargs(&p, 1);
 		if (argc)
 		{
 			j = (parseintegerarray(argv[0], &dest, 1, 1, NULL, true, NULL) - 1) * 8;
 			dest[0] = 0;
 		}
+		if (!all && dest == NULL && CurrentLinePtr)
+			StandardError(10); // a paged listing is the prompt's: LIST VARIABLES ALL in a program (Peter)
 		for (int i = 0; i < MAXVARS; i++)
 		{
 #ifdef STRUCTENABLED
@@ -2668,7 +2678,7 @@ void MIPS16 cmd_list(void)
 			{
 				MMPrintString(c[i]);
 				if (Option.DISPLAY_CONSOLE)
-					ListNewLine(&ListCnt, 0);
+					ListNewLine(&ListCnt, all);
 				else
 					MMPrintString("\r\n");
 			}
@@ -2817,9 +2827,18 @@ void MIPS16 cmd_list(void)
 #endif
 	else if ((p = checkstring(cmdline, (unsigned char *)"PINS")))
 	{
-		p = OutputRedirect(p); // LIST PINS #n
+		int all = 0;
+		unsigned char *q;
+		if ((q = checkstring(p, (unsigned char *)"ALL")))
+		{ // LIST PINS ALL: not paged
+			all = 1;
+			p = q;
+		}
+		p = OutputRedirect(p); // LIST PINS [ALL] [#n]
 		checkend(p);
-		ListPins();
+		if (!all && !ConsoleRedirect && CurrentLinePtr)
+			StandardError(10); // a paged listing is the prompt's: LIST PINS ALL in a program (Peter)
+		ListPins(all);
 		ConsoleRedirect = 0;
 		return;
 	}
@@ -2833,6 +2852,9 @@ void MIPS16 cmd_list(void)
 	}
 	else if ((p = checkstring(cmdline, (unsigned char *)"COMMANDS")))
 	{
+		int all = checkstring(p, (unsigned char *)"ALL") != NULL; // LIST COMMANDS ALL: not paged
+		if (!all && CurrentLinePtr)
+			StandardError(10); // a paged listing is the prompt's: LIST COMMANDS ALL in a program (Peter)
 		int ListCnt = 2;
 		step = Option.DISPLAY_CONSOLE ? HRes / gui_font_width / 20 : 5;
 		if (Option.DISPLAY_CONSOLE && (SPIREAD || Option.NoScroll))
@@ -2867,7 +2889,7 @@ void MIPS16 cmd_list(void)
 				}
 			}
 			if (Option.DISPLAY_CONSOLE)
-				ListNewLine(&ListCnt, 0);
+				ListNewLine(&ListCnt, all);
 			else
 				MMPrintString("\r\n");
 		}
@@ -2877,6 +2899,9 @@ void MIPS16 cmd_list(void)
 	}
 	else if ((p = checkstring(cmdline, (unsigned char *)"FUNCTIONS")))
 	{
+		int all = checkstring(p, (unsigned char *)"ALL") != NULL; // LIST FUNCTIONS ALL: not paged
+		if (!all && CurrentLinePtr)
+			StandardError(10); // a paged listing is the prompt's: LIST FUNCTIONS ALL in a program (Peter)
 		m = 0;
 		int ListCnt = 2;
 		step = Option.DISPLAY_CONSOLE ? HRes / gui_font_width / 20 : 5;
@@ -2934,7 +2959,7 @@ void MIPS16 cmd_list(void)
 				}
 			}
 			if (Option.DISPLAY_CONSOLE)
-				ListNewLine(&ListCnt, 0);
+				ListNewLine(&ListCnt, all);
 			else
 				MMPrintString("\r\n");
 		}
