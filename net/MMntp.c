@@ -193,7 +193,7 @@ void cmd_ntp(unsigned char *tp)
             Timer4 = timeout;
             while (!state->complete && Timer4 && !(err == ERR_OK))
                 if (startupcomplete)
-                    cyw43_arch_poll();
+                    { cyw43_arch_poll(); NetYield(); }
             web_async_check_error();
             if (!Timer4)
                 error("Failed to convert web address");
@@ -221,7 +221,7 @@ void cmd_ntp(unsigned char *tp)
     while (!state->complete)
     {
         if (startupcomplete)
-            cyw43_arch_poll();
+            { cyw43_arch_poll(); NetYield(); }
         web_async_check_error();
         if (!Timer4)
         {

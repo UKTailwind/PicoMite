@@ -7003,6 +7003,9 @@ void MIPS16 error(char *msg, ...)
         enable_interrupts_pico();
     SymPreparing = 0; // (see PrepareProgram)
     ScrewUpTimer = 0;
+#ifdef USE_THREADS
+    ThreadErrorRelease(); // (the network or Bluetooth, if this thread's command had it: Thread.c)
+#endif
 #ifdef PICOMITEVGA
     // SAVE IMAGE reads the layer with the frame while it writes the rows (FileIO.c): a write error part way
     // (a full or missing drive) left it on, and every later read of a VGA/HDMI display with a layer had the layer too

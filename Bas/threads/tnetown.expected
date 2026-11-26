@@ -1,0 +1,9 @@
+Connecting to 10.255.255.1 port 80
+ok  the main program's WEB command before any thread: as before
+Connecting to 10.255.255.1 port 80
+ok  a thread's WEB command: as before
+ok  then the main program's is refused
+ok  and another thread's
+Connecting to 10.255.255.1 port 80
+ok  when the thread has ended the network is free
+tnetown: 5 of 5 passed

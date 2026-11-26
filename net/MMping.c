@@ -154,7 +154,7 @@ void cmd_ping(unsigned char *tp)
             Timer4 = 5000;
             while (!state->dnsdone && Timer4)
                 if (startupcomplete)
-                    cyw43_arch_poll();
+                    { cyw43_arch_poll(); NetYield(); }
             web_async_check_error();
             if (!Timer4)
                 error("Failed to convert web address");
@@ -178,7 +178,7 @@ void cmd_ping(unsigned char *tp)
         while (!state->gotreply && Timer4)
         {
             if (startupcomplete)
-                cyw43_arch_poll();
+                { cyw43_arch_poll(); NetYield(); }
             web_async_check_error();
         }
         if (state->gotreply)
@@ -197,7 +197,7 @@ void cmd_ping(unsigned char *tp)
             Timer4 = 250;
             while (Timer4)
                 if (startupcomplete)
-                    cyw43_arch_poll();
+                    { cyw43_arch_poll(); NetYield(); }
         }
     }
     raw_remove(ping_pcb);

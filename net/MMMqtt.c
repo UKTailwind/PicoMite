@@ -213,7 +213,7 @@ void mqtt_example_init(ip_addr_t *mqtt_ip, int port)
   Timer4 = 5000;
   while (Timer4 && mqtt_client->conn_state != MQTT_CONNECTED)
     if (startupcomplete)
-      cyw43_arch_poll();
+      { cyw43_arch_poll(); NetYield(); }
   if (Timer4 == 0)
   {
     /* conn_state tells us where the handshake stalled:
@@ -322,7 +322,7 @@ int cmd_mqtt(void)
       Timer4 = timeout;
       while (!mqtt_dns.complete && Timer4 && !(err == ERR_OK))
         if (startupcomplete)
-          cyw43_arch_poll();
+          { cyw43_arch_poll(); NetYield(); }
       if (!Timer4)
         error("Failed to convert web address");
       mqtt_dns.complete = 0;
@@ -364,7 +364,7 @@ int cmd_mqtt(void)
     mqtt_sub_unsub(mqtt_client, mqtt_subs.topic, qos, mqtt_submessage_cb, &mqtt_subs, 1);
     while (Timer4 && !mqtt_subs.complete)
       if (startupcomplete)
-        cyw43_arch_poll();
+        { cyw43_arch_poll(); NetYield(); }
     if (Timer4 == 0)
       error("Failed to subscribe to $", mqtt_subs.topic);
     return 1;
@@ -378,7 +378,7 @@ int cmd_mqtt(void)
     mqtt_sub_unsub(mqtt_client, mqtt_subs.topic, 0, mqtt_unsubmessage_cb, &mqtt_subs, 0);
     while (Timer4 && !mqtt_subs.complete)
       if (startupcomplete)
-        cyw43_arch_poll();
+        { cyw43_arch_poll(); NetYield(); }
     if (Timer4 == 0)
       error("Failed to unsubscribe to $", mqtt_subs.topic);
     return 1;

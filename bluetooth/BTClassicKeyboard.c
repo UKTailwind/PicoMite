@@ -687,7 +687,7 @@ static bool ck_wait_not_connecting(uint32_t timeout_ms)
     uint64_t end = time_us_64() + (uint64_t)timeout_ms * 1000u;
     while (ck_state == CK_CONNECTING)
     {
-        CheckAbort();
+        { CheckAbort(); NetYield(); }
         if (time_us_64() > end)
             return false;
     }

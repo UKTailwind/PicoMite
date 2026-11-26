@@ -14,8 +14,12 @@ PicoMite's versions of some of them, sized for its memory or using its own comma
   tlock_p, tintown_p OPTION CONSOLE SERIAL: on a PC3 PRINT also scrolls the HDMI screen, which upsets the timings
   tframe_p   FRAMEBUFFER CREATE and FRAMEBUFFER COPY F, N, B for the CMM2's PAGE COPY 0 TO 1, B (MODE 2)
   tmapset_p  MODE 2 and MODE 3, the PicoMite's modes with a colour map, for the CMM2's MODE 7,4 and MODE 1,8
+  tnet_p     TEMPR() on GP0 for the CMM2's GP6 (needs the Wi-Fi joined; tnetown runs as it is)
+  tpin_p     GP0 an output wired to GP1, the interrupt's pin, for the CMM2's pull-up register trick (COM11's PC3:
+             "gp0 is free and you can read it on gp1 which is linked")
 and twrite_p is the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's section 9). demo_input.bas is
-the manual's balls and clock while INPUT waits, in MODE 3: something to watch, not one of the tests.
+the manual's balls and clock while INPUT waits, in MODE 3, and demo_net.bas WEB NTP and an HTTPS GET in a thread
+while the main program counts: things to watch, not tests.
 """
 import difflib, os, re, sys, time
 import serial
