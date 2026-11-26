@@ -208,7 +208,9 @@ extern "C"
       (tinyusb-patches/hcd_rp2040.patch) went 292 bytes over. */
    /* +16 KB (2026-11-24): the loader (RUN "name.app", USER modules) went 5.1 KB over. */
    /* +16 KB (2026-11-25, Peter): FRAMEBUFFER AFFINE and SPAN (Warp.c, 3.2 KB) with 1.8 KB left. */
-#define FLASH_TARGET_OFFSET (1184 * 1024)
+   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required during the
+      development"): threads Stage P4 went 1,072 bytes over. */
+#define FLASH_TARGET_OFFSET (1200 * 1024)
    /* -4 KB (2026-09-29): the 64 more global slots (MAXGLOBALVARS 544) put the
       C heap 872 bytes past the end of RAM. */
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */

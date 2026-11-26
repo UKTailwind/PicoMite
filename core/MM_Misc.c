@@ -11297,6 +11297,12 @@ int __not_in_flash_func(check_interrupt)(void)
        prompt's getchar loop too, so the cursor tracks the mouse even
        when no program is running. */
 #ifdef USE_THREADS
+    if (ThreadFrameDue)
+    { // a frame has started and a thread waits for it (the scan-out sets this, core 1): its turn first (Thread.c)
+        ThreadFrameDue = 0;
+        if (ThreadCount)
+            ThreadSchedule();
+    }
     if ((IntReady.tick & INT_TICK_SLICE) && ThreadCount)
     { // THREAD YIELD, or (Stage P2) the slice is up: another thread's turn, and back here when this one's comes round
         uint32_t s = save_and_disable_interrupts();

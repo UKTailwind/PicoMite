@@ -1,0 +1,9 @@
+ok  MODE 7,4: thirty MAP SETs in thirty frames, no thread
+ok  MODE 7,4: the main program's thirty in thirty frames while a thread sets colours too
+ok  MODE 7,4: the thread's thirty
+ok  MODE 7,4: the busy thread ran meanwhile
+ok  MODE 1,8: thirty MAP SETs in thirty frames, no thread
+ok  MODE 1,8: the main program's thirty in thirty frames while a thread sets colours too
+ok  MODE 1,8: the thread's thirty
+ok  MODE 1,8: the busy thread ran meanwhile
+tmapset: 8 of 8 passed

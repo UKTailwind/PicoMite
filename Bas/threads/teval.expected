@@ -1,0 +1,4 @@
+ok  EXECUTE in the main program: every line right
+ok  EVAL in the thread: every value right
+ok  the thread ran
+teval: 3 of 3 passed

@@ -117,6 +117,7 @@ struct s_thread {
     int pauseint, waitresume;                                       // PAUSE's and THREAD WAIT's state for an interrupt that
     long long pauseuntil, waitlimit;                                // cuts them short (PauseInterrupted, PauseUntil; WaitFor)
     int CurrentX, CurrentY, fcolour, bcolour, font, pixelmode;      // its print position, colours, font and PRINT @'s mode,
+    unsigned char *writebuf;                                        // and its FRAMEBUFFER WRITE target (WriteBuf: ScreenSave)
     jmp_buf ErrNext;
     char errmsg[MAXERRMSG];                                         // MM.ERRMSG$ (copied: MMErrMsg is an array here)
     char *call;                                                     // the statement that calls its SUB: the name, its
@@ -318,8 +319,8 @@ __attribute__((naked, noinline)) int ThreadOnMainStack(void (*fn)(void)) {
     );
 }
 
-/* Each thread has its own print position, colours, font, PRINT @'s pixel mode and write and read pages: what PRINT,
-   COLOUR, FONT, PAGE WRITE and FRAMEBUFFER WRITE leave for the next statement. A thread starts with those of the
+/* Each thread has its own print position, colours, font, PRINT @'s pixel mode and FRAMEBUFFER WRITE target: what
+   PRINT, COLOUR, FONT and FRAMEBUFFER WRITE leave for the next statement. A thread starts with those of the
    thread that started it, and MODE gives every thread the new mode's (ThreadsScreenReset). One for the whole
    program, as they were until Stage 4, a thread's TEXT moved the place the main program's INPUT was echoing its
    line at, and one thread's COLOUR was the next thread's PRINT's (Peter, 25 Nov 2026: "Each thread will need to
@@ -328,13 +329,15 @@ static void ScreenSave(struct s_thread *t) {
     t->CurrentX = CurrentX; t->CurrentY = CurrentY;
     t->fcolour = gui_fcolour; t->bcolour = gui_bcolour;
     t->font = gui_font;
-    t->pixelmode = PrintPixelMode;                                  // (the FRAMEBUFFER WRITE target: Stage P4)
+    t->pixelmode = PrintPixelMode;
+    t->writebuf = (unsigned char *)WriteBuf;                        // (N, F, L, T or 2: which buffer it draws in)
 }
 
 static void ScreenLoad(struct s_thread *t) {
     CurrentX = t->CurrentX; CurrentY = t->CurrentY;
     gui_fcolour = t->fcolour; gui_bcolour = t->bcolour;
-    PrintPixelMode = t->pixelmode;                                  // (the FRAMEBUFFER WRITE target: Stage P4)
+    PrintPixelMode = t->pixelmode;
+    if(t->writebuf != WriteBuf) ThreadWriteTarget(t->writebuf);     // (only when it differs: FrameBuffer.c)
     if(FontTable[t->font >> 4] == NULL) t->font = (0 << 4) | 1;     // (its font's slot emptied: font 1)
     if(t->font != gui_font) SetFont(t->font);                       // (its size from the table: LOAD FONT may have changed it)
 }
@@ -347,14 +350,15 @@ void ThreadsScreenReset(void) {
         if(Thr[i] != NULL && ALIVE(Thr[i])) ScreenSave(Thr[i]);
 }
 
-// a page another thread writes to or reads from (FRAMEBUFFER CLOSE refuses it, as it does the running thread's)
-int ThreadPageInUse(int page) {                                     // (the FRAMEBUFFER WRITE target: Stage P4)
-    return 0;
-}
-
-// a 4-bit mode's framebuffer has closed (Rgb121.c): a thread that wrote to it or read from it goes back to N, as
-// the running thread does there
-void ThreadPageClosed(int page) {                                   // (the FRAMEBUFFER WRITE target: Stage P4)
+/* The thread, other than the running one, that writes to the buffer buf (its FRAMEBUFFER WRITE target), or -1. FRAMEBUFFER
+   CLOSE refuses to free a buffer another thread draws in (the plan's section 9, Peter's decision 6, 26 Nov 2026); the
+   running thread's own goes back to N there, as it always did. */
+int ThreadPageInUse(unsigned char *buf) {
+    int i;
+    if(Cur == NULL || buf == NULL) return -1;
+    for(i = 0; i <= MAXTHREADS; i++)
+        if(Thr[i] != NULL && Thr[i] != Cur && ALIVE(Thr[i]) && Thr[i]->writebuf == buf) return i;
+    return -1;
 }
 
 static void ContextSave(struct s_thread *t) {
@@ -755,10 +759,17 @@ void ThreadPoll(void) {
 void ThreadFrameWait(void) {
     struct s_thread *to;
     uint32_t f;
-    if(1) {                                                         // (the PicoMite: until the scan-out counts frames
-        FrameWait();                                                // in FrameCount, the wait it always was: Stage P4)
+#ifdef PICOMITEVGA
+    if(Cur == NULL || Held()) {                                     // (the PicoMite's: the loop it always was, DrawInternal.h)
+        FrameWaitLoop();
         return;
     }
+#else
+    if(1) {                                                         // (a panel: no frame interrupt counts its refreshes;
+        FrameWaitLoop();                                            // the wait as it was, holding the threads)
+        return;
+    }
+#endif
     f = FrameCount;
     while(FrameCount == f) {
         CheckAbort();

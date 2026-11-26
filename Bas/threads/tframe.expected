@@ -1,0 +1,7 @@
+ok  a frame is between 10 and 25 ms
+ok  thread 1 had every frame of thirty
+ok  and thread 2
+ok  the busy thread ran meanwhile
+ok  the main program's PAGE COPY ...,B: thirty copies in thirty frames
+ok  the busy thread ran meanwhile
+tframe: 6 of 6 passed

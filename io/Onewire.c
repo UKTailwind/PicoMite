@@ -212,13 +212,21 @@ void fun_ds18b20(void)
 	{
 		// the TIMR command has not used
 		Init_ds18b20(pin, 1); // the default is 10 bits
+#ifdef USE_THREADS
+		ThreadDelay(timeout / 1000); // and 200mS conversion (the other threads run meanwhile: Thread.c)
+#else
 		uSec(timeout);		  // and 200mS conversion
+#endif
 	}
 	else
 	{
 		// the TIMR command has been used
 		while (ds18b20Timer < ds18b20Timers[pin])
+#ifdef USE_THREADS
+			ThreadDelay(10); // wait for the conversion (and the other threads run: Thread.c)
+#else
 			; // wait for the conversion
+#endif
 		ds18b20Timers[pin] = 0;
 	}
 

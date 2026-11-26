@@ -1632,7 +1632,13 @@ int __not_in_flash_func(MMInkey)(void)
                 break;
             c = MMfgetc(filenbr);
             if (c <= 0)
+            {
+#ifdef USE_THREADS
+                if (ThreadCount)
+                    ThreadPoll(); // INPUT with threads: they run meanwhile, and this takes no interrupt in it, as always
+#endif
                 continue; // keep looping if there are no chars
+            }
 
             // If the previous console line ended on CR, ignore a following LF once.
             if (filenbr == 0 && skip_console_lf)
@@ -2354,6 +2360,10 @@ int __not_in_flash_func(MMInkey)(void)
         {
             ShowCursor(1);
             c = MMInkey();
+#ifdef USE_THREADS
+            if (c == -1 && ThreadCount)
+                ThreadPoll(); // a program with threads: they run while this waits for a key (Thread.c; INPUT, INPUT$)
+#endif
         } while (c == -1);
         ShowCursor(0);
         return c;

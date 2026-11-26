@@ -5024,6 +5024,9 @@ void setmode(int mode, bool clear)
     }
 
     clearrepeat();
+#ifdef USE_THREADS
+    ThreadsScreenReset(); // every thread has the new mode's screen state (Thread.c)
+#endif
 }
 
 void cmd_mode(void)

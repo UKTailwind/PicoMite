@@ -1,0 +1,11 @@
+ok  a thread's pixels are in its own buffer, F
+ok  and the main program's in N, at the same places
+ok  F has the thread's
+ok  N has the main program's
+ok  FRAMEBUFFER CLOSE F is refused while thread 1 writes to it
+ok  and so is FRAMEBUFFER CLOSE
+ok  a thread starts with its starter's target (L)
+ok  and its FRAMEBUFFER WRITE N is its own
+ok  it drew in N
+ok  FRAMEBUFFER CLOSE F once the thread has ended
+twrite: 10 of 10 passed

@@ -4975,7 +4975,15 @@ void cmd_input(void)
 		SyntaxError();
 	;								 // no variable to input to
 	*inpbuf = 0;					 // start with an empty buffer
+#ifdef USE_THREADS
+	{ // (a line of its own while it waits: another thread's EVAL or EXECUTE writes inpbuf meanwhile, Thread.c)
+		unsigned char *line = GetTempStrMemory();
+		MMgetline(fnbr, (char *)line);
+		memcpy(inpbuf, line, STRINGSIZE);
+	}
+#else
 	MMgetline(fnbr, (char *)inpbuf); // get the line
+#endif
 	p = inpbuf;
 
 	// step through the variables listed for the input statement
@@ -8546,7 +8554,15 @@ void cmd_lineinput(void)
 #endif
 	if (!(linp_vtype & T_STR))
 		StandardError(6);
+#ifdef USE_THREADS
+	{ // (as INPUT's: a line of its own while it waits, Thread.c)
+		unsigned char *line = GetTempStrMemory();
+		MMgetline(fnbr, (char *)line);
+		memcpy(inpbuf, line, STRINGSIZE);
+	}
+#else
 	MMgetline(fnbr, (char *)inpbuf); // get the input line
+#endif
 	if (strlen((char *)inpbuf) > linp_size)
 		error("String too long");
 	strcpy((char *)vp, (char *)inpbuf);

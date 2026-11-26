@@ -5,11 +5,17 @@ name.bas A:/tt/name.bas zmodem). The console is taken to be at 921600. name.pico
 (the PicoMite's own: an error is "[#n:line] ..." then "Error : ...", where the CMM2 has "Error in thread n, line m: ...").
 
 The tests are the Colour Maximite 2's (CMM2V1.5 78d4172, tests/threads), copied as they are; the *_p.bas ones are the
-PicoMite's versions of two of them, sized for its memory:
+PicoMite's versions of some of them, sized for its memory or using its own commands and modes:
   tlocals_p  OPTION LOCAL VARIABLES 400 and THREAD SIZE 12, 48: four threads of the CMM2's default 48 locals, and its
-             recursion six levels deep (about 830 bytes a level) - a PC3's local region is 192 slots
-  tmany_p    THREAD SIZE 6, 8 (ten at once in a PC3's 108 KB of SRAM and 192 local slots); MM.INFO(HEAP) for the
+             recursion six levels deep (about 830 bytes a level) - a PC3's local region is 256 slots
+  tmany_p    THREAD SIZE 6, 8 (ten at once in a PC3's 108 KB of SRAM and 256 local slots); MM.INFO(HEAP) for the
              CMM2's HEAPI; a full round first, as each local slot range takes its variables' records once, for good
+  tbind_p, tstop_p   THREAD SIZE for the PicoMite's stacks and local slots
+  tlock_p, tintown_p OPTION CONSOLE SERIAL: on a PC3 PRINT also scrolls the HDMI screen, which upsets the timings
+  tframe_p   FRAMEBUFFER CREATE and FRAMEBUFFER COPY F, N, B for the CMM2's PAGE COPY 0 TO 1, B (MODE 2)
+  tmapset_p  MODE 2 and MODE 3, the PicoMite's modes with a colour map, for the CMM2's MODE 7,4 and MODE 1,8
+and twrite_p is the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's section 9). demo_input.bas is
+the manual's balls and clock while INPUT waits, in MODE 3: something to watch, not one of the tests.
 """
 import difflib, os, re, sys, time
 import serial
@@ -21,8 +27,8 @@ s = serial.Serial(port, 921600, timeout=0.05)
 
 
 def run(name, limit=40):
-    """RUN the test; with name.in beside this script, its lines are typed (a key at a time, as the CMM2's
-    threadcheck.py does) at each prompt that ends in '?'."""
+    """RUN the test; with name.in beside this script, its lines are typed (a key at a time, then Enter, as
+    the CMM2's threadcheck.py does) at each prompt that ends in '?'."""
     keys = []
     inp = os.path.join(HERE, name + ".in")
     if os.path.exists(inp):
@@ -39,7 +45,7 @@ def run(name, limit=40):
             return c, True
         if keys and c.count("?") > typed and c.rstrip(" ").endswith("?"):
             time.sleep(0.2)
-            for ch in keys.pop(0):
+            for ch in keys.pop(0) + chr(13):   # (Enter after each line, as the CMM2's runner types it)
                 s.write(ch.encode("latin-1"))
                 time.sleep(0.05)
             typed = c.count("?")

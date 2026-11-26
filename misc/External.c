@@ -626,6 +626,10 @@ void __not_in_flash_func(cmd_sync)(void)
     {
         while (time_us_64() < endtime)
         {
+#ifdef USE_THREADS
+            if (ThreadCount && endtime - time_us_64() > 2000)
+                ThreadSleepDeaf(endtime - 2000); // the other threads run until 2 ms before the time (Thread.c)
+#endif
             if (synctime - time_us_64() > 2000)
                 CheckAbort();
         }
@@ -5698,6 +5702,11 @@ void MIPS16 cmd_adc(void)
         if (!ADCInterrupt)
         {
             while (dma_channel_is_busy(ADC_dma_chan))
+#ifdef USE_THREADS
+                if (ThreadCount)
+                    ThreadPoll(); // (the other threads run while it samples: Thread.c)
+                else
+#endif
                 tight_loop_contents();
             __compiler_memory_barrier();
             adc_run(false);

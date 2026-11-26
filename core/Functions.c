@@ -1424,6 +1424,10 @@ void fun_eval(void)
 	multi = false;
 	tokenise(true); // and tokenise it (the result is in tknbuf)
 	strcpy((char *)st, (char *)(tknbuf + 2 + sizeof(CommandToken)));
+#ifdef USE_THREADS
+	strcpy((char *)tknbuf, (char *)temp_tknbuf); // put back now: a FUNCTION in the expression may let another thread run,
+												 // which may be part way through a line in tknbuf (an EXECUTE's: Thread.c)
+#endif
 	t = T_NOTYPE;
 	evaluate(st, &fret, &iret, &s, &t, false); // get the value and type of the argument
 	if (t & T_STR)
@@ -1432,7 +1436,9 @@ void fun_eval(void)
 		sret = st;
 	}
 	targ = t;
+#ifndef USE_THREADS
 	strcpy((char *)tknbuf, (char *)temp_tknbuf); // restore the saved token buffer
+#endif
 }
 
 void fun_errno(void)

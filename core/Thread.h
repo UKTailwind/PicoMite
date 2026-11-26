@@ -59,8 +59,8 @@ int ThreadIntHere(char *routine);                   // check_interrupt: 1 run it
 char *ThreadIntTake(void);                          // check_interrupt: one handed to the running thread, or NULL
 int ThreadIntWaiting(void);                         // ... is there one
 void ThreadsScreenReset(void);                      // MODE: every thread has the new mode's screen state
-int ThreadPageInUse(int page);                      // another thread writes to or reads from the page
-void ThreadPageClosed(int page);                    // a 4-bit mode's framebuffer has closed
+int ThreadPageInUse(unsigned char *buf);            // FRAMEBUFFER CLOSE: the other thread that writes to buf, or -1
+void ThreadWriteTarget(unsigned char *buf);         // a switch: the thread's FRAMEBUFFER WRITE target (FrameBuffer.c)
 int ThreadNetEnter(int k);                          // WEB (k 0), BLUETOOTH (k 1): it is this thread's for the command (0:
 void ThreadNetLeave(int k);                         // an interrupt is due first, the statement runs again after it)
 void ThreadErrorRelease(void);                      // error(): what the running thread held for its command is let go
