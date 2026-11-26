@@ -18,6 +18,12 @@ PicoMite's versions of some of them, sized for its memory or using its own comma
   tpin_p     GP0 an output wired to GP1, the interrupt's pin, for the CMM2's pull-up register trick (COM11's PC3:
              "gp0 is free and you can read it on gp1 which is linked")
   tqueue_p   the busy thread's figure 10000 for the CMM2's 50000 (a PC3 with COMPILE OFF counts about 27500)
+  tcond_p    the other threads' spins over 2000 for the CMM2's 10000 (an RP2040 counts about 6300)
+  tmapset_p  MODE 2 only, which every VGA and HDMI build has (Peter); tmapset3_p is its MODE 3, for the RP2350's
+The RP2040's (its console on USB, which echoes a typed line; a 192-slot local region; LOCALS 16 and NEST 6):
+  tpack_r    eight threads of LOCALS 16 holding 15 locals each
+  tintown_r  the main program's tick count taken as its INPUT ends (the prints after it take 53 ms on a VGA screen)
+  stackrp.bas measures the stack as stackm.bas does, on a build without a display or SD card
 and twrite_p and tstack_p are the PicoMite's own: each thread's FRAMEBUFFER WRITE target (the plan's section 9), and
 StackNeed and JSON$'s nesting cap (Stage P5). tcond is the CMM2's a2db2ec (THREAD WAIT inside THREAD HOLD).
 stackm.bas and stackm2.bas measure the stack and need a measuring build (-DTHREAD_STACK_REPORT). demo_input.bas is

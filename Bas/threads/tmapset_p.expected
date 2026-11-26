@@ -2,8 +2,4 @@ ok  MODE 2: thirty MAP SETs in thirty frames, no thread
 ok  MODE 2: the main program's thirty in thirty frames while a thread sets colours too
 ok  MODE 2: the thread's thirty
 ok  MODE 2: the busy thread ran meanwhile
-ok  MODE 3: thirty MAP SETs in thirty frames, no thread
-ok  MODE 3: the main program's thirty in thirty frames while a thread sets colours too
-ok  MODE 3: the thread's thirty
-ok  MODE 3: the busy thread ran meanwhile
-tmapset: 8 of 8 passed
+tmapset: 4 of 4 passed

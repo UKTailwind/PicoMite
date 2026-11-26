@@ -174,3 +174,21 @@ What follows from them:
   room above the stack's floor holds at 128 bytes a level, after 512 for the parse itself. More is the error "JSON
   nested more than n deep: no stack for more". On a PC3 a thread of the default SIZE allows 27 levels and the main program 117.
 - The RP2040 is still to be measured (Thumb-1: its figures may be larger), on the Pico that is now the debug probe.
+
+## The RP2040 (26 November)
+
+On the Pico that had been the PC3's debug probe, with PICOMIN and then the RP2040 VGA build (both with the console on
+USB). Measured with `Bas/threads/stackrp.bas` on a measuring PICOMIN: a FUNCTION level is 1,416 bytes as text (1,280
+on a PC3), the rest within a few per cent of the PC3's (PRINT with Format$ 3,064, a file on A: 2,016 to 2,400, an
+error inside an expression 3,260). The 3 KB guard holds there too.
+
+- **Found by the RP2040's tests, a fault on every build:** routinechecks' 100 microsecond time test came before the
+  hook that runs it on the main stack, and the call made there met the test again with the time just noted, so while
+  only threads ran none of the housekeeping ran (no USB console read, so no INPUT in a thread and no Ctrl-C; no USB
+  host). The PC3's tests did not show it: its console is a UART, read by its interrupt. Fixed: the call on the main
+  stack is past the test.
+- Peter, after the first run: **the RP2040's MAXTHREADS 8 and SIZE 8 KB, as the RP2350's** (it had 4 and 6 KB: two
+  FUNCTION levels did not fit). LOCALS 16 and NEST 6 stay.
+- PICOMIN: the 26 general tests pass, with tpack_r (its 192 local slots), tcond_p (a figure) and tbind_p naming NEST 8;
+  tinput but for its TEXT (no display), tintown but for the console's echo. The RP2040 VGA build: those, and tframe_p,
+  twrite_p, tscreen, tinput, tmapset_p (MODE 2: Peter) and tintown_r.

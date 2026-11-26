@@ -906,12 +906,32 @@ uint8_t PSRAMpin;
         // Note: classicread and nunchuckread are global variables declared in I2C.c
         static uint64_t lastrun = 0;
         uint64_t timenow = time_us_64();
+#ifdef USE_THREADS
+        /* A thread's stack is in use: the housekeeping runs on the main stack (Thread.c), this function called again
+           there. That call is past the time test already: the test, met again with the time just noted, sent it
+           straight back, and while only threads ran nothing here ran at all (no USB console read, so no INPUT in a
+           thread and no Ctrl-C, on a PicoMite whose console is USB). Calls nested inside it are tested as always. */
+        static int OnMain = 0;
+        if (OnMain)
+            OnMain = 0;
+        else
+        {
+            if (timenow - lastrun < 100)
+                return;
+            lastrun = timenow;
+            if (ThreadCount)
+            {
+                OnMain = 1;
+                int ran = ThreadOnMainStack(routinechecks);
+                OnMain = 0;
+                if (ran)
+                    return;
+            }
+        }
+#else
         if (timenow - lastrun < 100)
             return;
         lastrun = timenow;
-#ifdef USE_THREADS
-        if (ThreadCount && ThreadOnMainStack(routinechecks))
-            return; // a thread's stack is in use: the housekeeping ran on the main stack (Thread.c)
 #endif
 #if defined(PICOMITEVGA) || defined(GUICONTROLS)
         /* Mouse / virtual-cursor refresh. routinechecks() runs from the

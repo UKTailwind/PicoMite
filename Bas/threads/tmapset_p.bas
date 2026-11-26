@@ -1,6 +1,7 @@
-' tmapset_p.bas - threads: MAP SET's wait for the frame's end (the PicoMite's version of tmapset.bas: MODE 2 and
-' MODE 3, the HDMI and VGA modes with a colour map, and MODE 1 back at the end). Each MAP SET takes one frame, with no
-' thread and with two threads setting colours at once while a third is busy, and the busy thread runs meanwhile.
+' tmapset_p.bas - threads: MAP SET's wait for the frame's end (the PicoMite's version of tmapset.bas: MODE 2, the mode
+' with a colour map that every VGA and HDMI build has, the RP2040's included, and MODE 1 back at the end; MODE 3 is
+' tmapset3_p.bas). Each MAP SET takes one frame, with no thread and with two threads setting colours at once while a
+' third is busy, and the busy thread runs meanwhile.
 Option Explicit
 Dim Integer tests, pass, busy, spins, i, n1
 Dim Float t0, t1, one
@@ -61,7 +62,5 @@ End Sub
 
 Mode 2
 Try "MODE 2"
-Mode 3
-Try "MODE 3"
 Mode 1
 Print "tmapset:"; pass; " of"; tests; " passed"
