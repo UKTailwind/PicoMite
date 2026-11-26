@@ -70,6 +70,13 @@ is where the main program was switched out, below the frame `setjmp` saved. The 
 read SP, clear SPSEL, ISB, write it to MSP. Until then an interrupt stacks its frame on PSP, which now points into
 the main stack below live frames, and that is harmless.
 
+The CMM2 does not have this fault (checked 26 November, CMM2V1.5 `threads`): its threads never use PSP.
+`ThreadSwap` (`Src/Thread.c` 160) moves MSP itself to the thread's stack, so `longjmp` restores MSP and the landing
+is on the main stack, which `ThreadsEnd` checks (DTCM). The CMM2 runs with SPSEL set only in its Loader, whose
+services run on the program's PSP; it keeps `error()` from leaving one by rule (each error-raising call is inside
+`ld_try`, whose `setjmp` and `longjmp` are both on PSP, and Ctrl-C is left to the program). The PicoMite's Loader is
+safe by construction: `ld_veneer` clears SPSEL before any service runs.
+
 ## 4. What exists, and what is new
 
 - The Loader's process-stack call (`misc/Loader.c` 1251-1338) is ARMv8-M only (`msr psplim`, d8-d15 saved) and
