@@ -176,6 +176,12 @@ err_t tcp_server_send_data(void *arg, struct tcp_pcb *tpcb, int pcb)
         {
                 return tcp_server_close(state, pcb); // ERR_ABRT if it had to abort the pcb
         }
+        /* tcp_write only queues.  Left there, the data went with the next segment to arrive or lwIP's timer, so
+           a sender that waits for its acknowledgement got about one chunk every half second (#165).  Inside this
+           pcb's own input processing (the 404 reply in tcp_server_recv) tcp_output does nothing and lwIP sends
+           when it has finished.  Telnet is left to its own flush. */
+        if (pcb != state->telnet_pcb_no)
+                tcp_output(tpcb);
         return ERR_OK;
 }
 err_t tcp_server_recv(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err, int pcb)
@@ -496,13 +502,12 @@ static bool tcp_server_open(void *arg)
    lost a 59 KB WEB TRANSMIT FILE part way most times (#157).
    Returns 1 when it gave up: the connection, and file fn if not 0, are then
    closed, and the caller must not use either again (#158). */
-int checksent(void *arg, int fn, int pcb)
-{
-        TCP_SERVER_T *state = (TCP_SERVER_T *)arg;
+static int waitacked(TCP_SERVER_T *state, int fn, int pcb, int upto)
+{ // as checksent, for the first upto bytes sent (sent_len counts the client's acknowledgements)
         int last = state->sent_len[pcb];
         uint64_t limit = time_us_64() + 5000000;
 
-        while (state->sent_len[pcb] != state->total_sent[pcb] && pcb_live(state->client_pcb[pcb]))
+        while (state->sent_len[pcb] < upto && pcb_live(state->client_pcb[pcb]))
         { // (stops if the connection goes: nothing more will be acknowledged)
                 if (state->sent_len[pcb] != last)
                 {
@@ -521,6 +526,13 @@ int checksent(void *arg, int fn, int pcb)
         }
         return 0;
 }
+int checksent(void *arg, int fn, int pcb)
+{
+        TCP_SERVER_T *state = (TCP_SERVER_T *)arg;
+        return waitacked(state, fn, pcb, state->total_sent[pcb]);
+}
+/* WEB TRANSMIT FILE of a large file: chunks in flight at once (see the loop) */
+#define TRANSMIT_RING 4
 const char httpheaders[] = "HTTP/1.1 200 OK\r\nServer:CPi\r\nConnection:close\r\nContent-type:";
 const char httptail[] = "\r\nContent-Length:";
 const char httpend[] = "\r\n\r\n";
@@ -625,24 +637,40 @@ void cmd_transmit(unsigned char *cmd)
                         }
                         else
                         {
-                                char *pBuf = GetTempMainMemory(TCP_MSS);
-                                while (1)
+                                /* A ring of TRANSMIT_RING chunk buffers.  Each chunk goes to lwIP without a copy and
+                                   its buffer is filled again only once the client has acknowledged it, so several
+                                   are in flight at once.  Waiting for each chunk's acknowledgement before reading
+                                   the next held the file to one chunk a round trip plus the client's delayed
+                                   acknowledgement (40 to 200 ms) for a lone segment (#165).  Not copied as on the
+                                   Colour Maximite 2: lwIP's copies come from the C heap here (MEM_LIBC_MALLOC),
+                                   12.7 KB in all on an RP2040 WebMite, and a full send buffer (TCP_SND_BUF, 11,680
+                                   bytes) would leave malloc to panic.  total_sent and sent_len now run from the
+                                   header to the end of the file. */
+                                char *pBuf = GetTempMainMemory(TCP_MSS * TRANSMIT_RING);
+                                int ringend[TRANSMIT_RING] = {0}; // where in the stream each buffer's chunk ends
+                                int slot = 0;
+                                while (pcb_live(state->client_pcb[pcb]))
                                 {
                                         if (
                                             ((filesource[fn] == FLASHFILE) && (lfs_file_tell(&lfs, FileTable[fn].lfsptr) == lfs_file_size(&lfs, FileTable[fn].lfsptr))) ||
                                             ((filesource[fn] != FLASHFILE) && f_eof(FileTable[fn].fptr)))
                                                 break;
-                                        FileGetData(fn, pBuf, TCP_MSS, &n_read);
+                                        if (waitacked(state, fn, pcb, ringend[slot]))
+                                                return; // timed out: the file and the connection are closed already (#158)
+                                        char *chunk = pBuf + slot * TCP_MSS;
+                                        FileGetData(fn, chunk, TCP_MSS, &n_read);
+                                        if (n_read == 0)
+                                                break; // (a read error: no more will come)
                                         state->to_send[pcb] = n_read;
-                                        state->buffer_sent[pcb] = (unsigned char *)pBuf;
+                                        state->buffer_sent[pcb] = (unsigned char *)chunk;
                                         state->total_sent[pcb] += n_read;
+                                        ringend[slot] = state->total_sent[pcb];
                                         // DEBUG_printf("sending file content to pcb %d\r\n",pcb);
                                         tcp_server_send_data(state, state->client_pcb[pcb], pcb);
-                                        if (checksent(state, fn, pcb))
-                                                return; // timed out: the file and the connection are closed already (#158)
-                                        state->total_sent[pcb] = 0;
-                                        state->sent_len[pcb] = 0;
+                                        slot = (slot + 1) % TRANSMIT_RING;
                                 }
+                                if (checksent(state, fn, pcb))
+                                        return; // timed out: the file and the connection are closed already (#158)
                         }
                         tcp_server_close(state, pcb);
                         //                {if(startupcomplete)ProcessWeb(0);}
