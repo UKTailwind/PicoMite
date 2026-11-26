@@ -129,3 +129,7 @@ each step:
 - Thread.c is copied from the CMM2's head (78d4172) now, not from a b5 tag; FLASH_TARGET_OFFSET goes up wherever the
   development needs it. WEBRP2350's went up on main (0dc2553), where #164 had taken it 160 bytes over.
 - RP2040 testing only once everything is proven on the RP2350, on the Pico that is now the debug probe.
+- Later the same day (Peter): "Up the local variable slots to 256 on the PC3, reduce the maximum threads on the
+  PicoMite to 8, drop the rounding". The PC3's local region is 256 with threads (480 globals: the same total, no RAM;
+  OPTION LOCAL VARIABLES 192 gives a program the 544), MAXTHREADS is 8, and a thread's local slots are packed below the
+  next range, where the CMM2 starts each on a multiple of 16. Eight threads of LOCALS 24 take 200 slots.

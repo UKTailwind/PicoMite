@@ -1256,12 +1256,15 @@ static void ThreadStart(int n, int StackSize, int LocalSlots, int Nest, int Prio
         Stopping = 0;
     }
 
-    // its local slots: the highest range free, above everything the main program has in use
+    // its local slots: the highest range free, above everything the main program has in use. Packed (the PicoMite's,
+    // Peter 26 Nov: "drop the rounding"; the CMM2 starts each range on a multiple of 16): below a range it meets
     maintop = (Cur == Thr[0]) ? g_localtop : Thr[0]->g_localtop;
-    for(base = (MAINLOCALS - LocalSlots) & ~15; base >= maintop; base -= 16) {
+    base = MAINLOCALS - LocalSlots;
+    while(base >= maintop) {
         for(i = 1; i <= MAXTHREADS; i++)
             if(Thr[i] != NULL && base < Thr[i]->llimit && base + LocalSlots > Thr[i]->lbase) break;
         if(i > MAXTHREADS) break;
+        base = Thr[i]->lbase - LocalSlots;                          // (the next try: just below the range it met)
     }
     if(base < maintop) {
         if(ThreadCount == 0) ThreadsOff();

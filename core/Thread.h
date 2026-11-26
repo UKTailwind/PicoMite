@@ -14,7 +14,8 @@ See MMBasic.h for the licence.
    runs on the process stack, so its stack holds only its own frames and an exception's stacked registers, not the
    interrupts' handlers or the housekeeping: the guard is the deepest a command goes between two stack checks, to be
    measured (Stage P5). The CMM2's are 20 KB, 6 KB, 48 and 20. */
-#define MAXTHREADS 16                               // the threads a program may start, numbered 1 to MAXTHREADS
+#define MAXTHREADS 8                                // the threads a program may start, numbered 1 to MAXTHREADS (the
+                                                    // PicoMite's, Peter 26 Nov; the CMM2's is 16)
 #define THREAD_STACK (8 * 1024)                     // a thread's C stack
 #define THREAD_GUARD (3 * 1024)                     // the part of it below the stack check's floor: error()'s print
                                                     // needs more than 1.7 KB of it (a PC3, 26 Nov; Stage P5 measures)

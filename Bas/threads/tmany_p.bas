@@ -1,7 +1,7 @@
 ' tmany.bas - threads, Stage 1: ten threads started and ended fifty times. Their memory and their numbers come back.
 ' Then what THREAD refuses.
 Option Explicit
-Thread Size 6, 8 ' (the PicoMite: ten at once in a PC3's 108 KB of SRAM and its 192 local slots)
+Thread Size 6, 8 ' (the PicoMite: eight at once, its most, in a PC3's 108 KB of SRAM)
 Dim Integer tests, pass, i, r, c, h0, h1, i0, i1, v0
 
 Sub Check(n$, got, want)
@@ -25,18 +25,18 @@ Sub Idle
   Do : Thread Yield : Loop
 End Sub
 
-For i = 1 To 10 : Thread Start i, Brief : Next ' (the PicoMite: a full round first, as each thread's local slots take
-Do While c < 10 : Thread Yield : Loop          ' their variables' records the first time they are used, for good)
+For i = 1 To 8 : Thread Start i, Brief : Next ' (the PicoMite: a full round first, as each thread's local slots take
+Do While c < 8 : Thread Yield : Loop          ' their variables' records the first time they are used, for good)
 Thread Yield
 c = 0
 h0 = MM.Info(Heap) : i0 = MM.Info(Heap) : v0 = MM.Info(VarCnt)
 For r = 1 To 50
-  For i = 1 To 10 : Thread Start i, Brief : Next
-  Do While c < 10 * r : Thread Yield : Loop
+  For i = 1 To 8 : Thread Start i, Brief : Next ' (eight a round: the PicoMite's most)
+  Do While c < 8 * r : Thread Yield : Loop
 Next
 Thread Yield
 h1 = MM.Info(Heap) : i1 = MM.Info(Heap)
-Check "500 threads ran to their end", c, 500
+Check "400 threads ran to their end", c, 400
 Check "the heap is as it was", h1 - h0, 0
 Check "and the on-chip heap", i1 - i0, 0
 Check "no variable left behind", MM.Info(VarCnt) - v0, 0

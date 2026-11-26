@@ -63,8 +63,16 @@ extern "C"
    /* 192 local entries since the local region became a stack (P6); the globals
       keep the total they had (544 + 192 = 480 + 256), so a program that lowers
       OPTION LOCAL VARIABLES to get more globals gets as many as before. */
+#if defined(USE_THREADS) && defined(PICOMITEPC3)
+   /* Threads (Peter, 26 Nov: "Up the local variable slots to 256 on the PC3"): a thread's locals are a range of the
+      local region, eight threads of LOCALS 24 take 200 slots, so it is 256 again, the split it had before P6. The
+      total is the same (no RAM): 480 globals unless a program sets OPTION LOCAL VARIABLES 192 for the 544. */
+#define MAXGLOBALVARS 480 // Configurable split
+#define MAXLOCALVARS 256
+#else
 #define MAXGLOBALVARS 544 // Configurable split
 #define MAXLOCALVARS 192
+#endif
 #define MAXVARS (MAXGLOBALVARS + MAXLOCALVARS)
 
 #ifdef HDMI // RP2350 HDMI
