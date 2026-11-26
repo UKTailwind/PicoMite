@@ -97,7 +97,9 @@ extern "C"
    /* 108 KB: the SRAM heap the review's budget gives with the full 153600-byte
       pool (4.2 KB of RAM margin left for the stack); the boot-time resize for
       800x600, 848x480 and 800x480 takes its pool from this, as on HDMIUSB. */
-#define HEAP_MEMORY_SIZE (108 * 1024)
+   /* -4 KB (2026-11-26, Peter): threads left 568 bytes of RAM margin for the stack, 4.6 KB now. MAX_PROG_SIZE (in the PSRAM)
+      is unchanged. */
+#define HEAP_MEMORY_SIZE (104 * 1024)
 #define MAX_PROG_SIZE (256 * 1024) // (Peter, 2026-10-11; the 2.5 MB PSRAM reserve and the dropped flash stream are what allow it)
 #define MagicKey 0x7C3A11E2
 #elif defined(PICOMITEHDMIBTH)
@@ -176,7 +178,9 @@ extern "C"
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.4 KB of RAM margin left for the stack. */
    /* +4 KB heap and +4 KB program (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4 KB of RAM margin left for the stack.  The larger program size moves the flash layout and A:. */
-#define HEAP_MEMORY_SIZE (208 * 1024)
+   /* -4 KB (2026-11-26, Peter): threads left 840 bytes of RAM margin for the stack, 4.8 KB now (a stack margin, not the TLS tension
+      above: the C heap between BSS and the stack gains the 4 KB). MAX_PROG_SIZE is pinned. */
+#define HEAP_MEMORY_SIZE (204 * 1024)
 #define MAX_PROG_SIZE (156 * 1024) // (144 KB until 2026-10-01, 152 KB until 2026-10-02: each larger heap took 4 KB more of program; each move moved the flash layout and A:)
    /* Bumped 0x57EB1A44 -> 0x57EB1A45 when the factory default resolution
       changed from 1024x600 to 640x480@315000 so existing devices pick up
@@ -216,7 +220,8 @@ extern "C"
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.7 KB of RAM margin left for the stack. */
    /* +4 KB heap and +4 KB program (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4 KB of RAM margin left for the stack.  The larger program size moves the flash layout and A:. */
-#define HEAP_MEMORY_SIZE (212 * 1024)
+   /* -4 KB (2026-11-26, Peter): threads left 1,140 bytes of RAM margin for the stack (5.1 KB now). MAX_PROG_SIZE is pinned. */
+#define HEAP_MEMORY_SIZE (208 * 1024)
 #define MAX_PROG_SIZE (152 * 1024) // (148 KB until 2026-10-02; moving it moves the flash layout and A:)
 #define MagicKey 0xDD897EB9
 #endif
@@ -232,7 +237,8 @@ extern "C"
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~3.4 KB of RAM margin left for the stack. */
    /* +4 KB heap and +4 KB program (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~4 KB of RAM margin left for the stack.  The larger program size moves the flash layout and A:. */
-#define HEAP_MEMORY_SIZE (220 * 1024)
+   /* -4 KB (2026-11-26, Peter): threads left 1,324 bytes of RAM margin for the stack (5.3 KB now). MAX_PROG_SIZE is pinned. */
+#define HEAP_MEMORY_SIZE (216 * 1024)
 #define MAX_PROG_SIZE (160 * 1024) // (156 KB until 2026-10-02; moving it moves the flash layout and A:)
 #endif
 #else // rp2350 VGA
@@ -460,7 +466,8 @@ extern "C"
    /* +40 KB (2026-10-01): the variable table's records moved into the heap (compact-vars); ~4 KB of RAM margin left for the stack. */
    /* +20 KB (2026-10-02): the SUB/FUNCTION table's RAM (funtbl) given to the heap by the name index; ~2.9 KB of RAM margin left for the stack. */
    /* +4 KB (2026-10-02, Peter): libgcc's complex arithmetic left RAM; ~3.6 KB of RAM margin left for the stack. */
-#define HEAP_MEMORY_SIZE (360 * 1024)
+   /* -4 KB (2026-11-26, Peter): threads left 596 bytes of RAM margin for the stack (4.6 KB now). MAX_PROG_SIZE is pinned. */
+#define HEAP_MEMORY_SIZE (356 * 1024)
 #define MAX_PROG_SIZE (208 * 1024) // (see RB_STREAM_SLOTS)
 #elif defined(PICOMITEBT)
    /* PICOMITEBT replaces USB CDC console with BLE Nordic UART Service over
