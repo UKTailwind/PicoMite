@@ -4285,7 +4285,6 @@ static __attribute__((noinline)) int RBCallSub(const uint16_t *pc, int np, union
 // parameters.  The body runs in a nested ExecuteProgram, as DefinedSubFun
 // runs it.  Returns 0, before anything has happened, if DefinedSubFun must
 // do it.  In flash, as RBCallSub.
-extern uint32_t stackwarn;           // MMBasic.c: 1K above the stack's floor
 void StackNearLimit(uint32_t stack); // MMBasic.c: the overflow error, or a note for the prompt's warning
 // RC_GUARD's check for a record's FUNCTION calls (see RBFinish), and RBCallFun's:
 // OPTION DEFAULT is not what they need (bit 0: a number, 1: float, 2: integer);
@@ -4309,7 +4308,7 @@ static __attribute__((noinline)) int RBCallFun(const uint16_t *pc, int np, union
     uint32_t stack;
     // TestStackOverflow (MMBasic.c), which the text path's evaluator makes at every
     // value: a recursion through compiled calls never reaches it
-    __asm volatile("MRS %0, msp" : "=r"(stack));
+    READ_STACK_POINTER(stack);
     if (stack < stackwarn)
         StackNearLimit(stack);
     if (gosubindex >= GosubLimit)

@@ -377,6 +377,17 @@ extern "C"
     // g_hashlist records every live local, so it must hold as many as OPTION LOCAL
     // VARIABLES can allow (not just the default MAXLOCALVARS)
 #define MAXLOCALLIST (MAXVARS - 32)
+/* The stack the running code is on, and the floor it must stay above (StackNearLimit).  USE_THREADS: a thread runs
+   on a stack of its own, so the pointer in use is read (MSP or PSP) and StackFloor is the running thread's floor,
+   heapend for the main program.  Without it, MSP and heapend as before. */
+#ifdef USE_THREADS
+#define READ_STACK_POINTER(v) __asm volatile("mov %0, sp" : "=r"(v))
+    extern uint32_t StackFloor;
+#else
+#define READ_STACK_POINTER(v) __asm volatile("MRS %0, msp" : "=r"(v))
+#define StackFloor heapend
+#endif
+    extern uint32_t heapend, stackwarn;
 #ifdef USE_THREADS
     extern struct s_hash *g_hashlist, g_hashlist_main[MAXLOCALLIST]; // the running thread's, and the main program's (Commands.h)
 #else

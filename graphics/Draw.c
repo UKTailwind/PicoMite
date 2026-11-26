@@ -4064,9 +4064,7 @@ void cmd_map(void)
         StandardError(40);
     if ((p = checkstring(cmdline, (unsigned char *)"RESET")))
     {
-        while (QVgaScanLine != 0)
-        {
-        }
+        FrameWait();
         for (int i = 0; i < 16; i++)
             remap[i] = RGB121map[i];
         for (int i = 0; i < 16; i++)
@@ -4075,9 +4073,7 @@ void cmd_map(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"MAXIMITE")))
     {
-        while (QVgaScanLine != 0)
-        {
-        }
+        FrameWait();
         for (int i = 0; i < 16; i++)
             remap[i] = CMM1map[i];
         for (int i = 0; i < 16; i++)
@@ -4086,9 +4082,7 @@ void cmd_map(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SET")))
     {
-        while (QVgaScanLine != 0)
-        {
-        }
+        FrameWait();
         for (int i = 0; i < 16; i++)
             map16[i] = RGB121(remap[i]);
         CommitMapRGB();
@@ -4823,9 +4817,7 @@ void cmd_map(void)
     }
     else if (checkstring(cmdline, (unsigned char *)"GRAYSCALE") || checkstring(cmdline, (unsigned char *)"GREYSCALE"))
     {
-        while (v_scanline != 0)
-        {
-        }
+        FrameWait();
         for (int i = 1; i <= 32; i++)
         {
             int j = i * 8 - (8 - i / 4 + 1);
@@ -4849,9 +4841,7 @@ void cmd_map(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"MAXIMITE")))
     {
-        while (v_scanline != 0)
-        {
-        }
+        FrameWait();
         for (int i = 0; i < 16; i++)
             map256[i] = remap256[i] = RGB555(CMM1map[i]);
         for (int i = 0; i < 16; i++)
@@ -4863,9 +4853,7 @@ void cmd_map(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"SET")))
     {
-        while (v_scanline != 0)
-        {
-        }
+        FrameWait();
         for (int i = 0; i < 256; i++)
             map256[i] = remap256[i];
         for (int i = 0; i < 16; i++)

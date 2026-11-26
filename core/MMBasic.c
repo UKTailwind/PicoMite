@@ -272,10 +272,21 @@ void __attribute__((used)) __not_in_flash_func(pcs_isr_c)(uint32_t *frame)
 
 // Core 0 runs on MSP, so SP at entry is the exception frame.  EXC_RETURN is
 // kept on the stack and popped into PC to return.  Thumb-1, for the M0+ too.
+// USE_THREADS: a thread runs on PSP, and its frame is there (EXC_RETURN bit 2).
 void __attribute__((naked, used, section(".time_critical.pcs_isr"))) pcs_isr(void)
 {
     __asm volatile(
+#ifdef USE_THREADS
         "mov r0, sp       \n"
+        "mov r1, lr       \n"
+        "movs r2, #4      \n"
+        "tst r1, r2       \n"
+        "beq 1f           \n"
+        "mrs r0, psp      \n"
+        "1:               \n"
+#else
+        "mov r0, sp       \n"
+#endif
         "push {r4, lr}    \n"
         "bl pcs_isr_c     \n"
         "pop {r4, pc}     \n");
@@ -338,6 +349,16 @@ int g_hashlistpointer = 0;
    the order they were made, each with its level: a level's locals are the
    topmost entries of that level.  g_localtop is the next slot to use. */
 static int g_localtop = 0;
+/* The part of the local region the running code may use: all of it, until a program starts a thread, which is
+   given a range of its own (USE_THREADS).  g_localtop starts at LocalBase, and the stack is full at LocalLimit.
+   Without USE_THREADS they are 0 and maxlocalvars, as before. */
+#ifdef USE_THREADS
+int LocalBase = 0;
+int LocalLimit = MAXLOCALVARS; // (maxlocalvars while no thread runs: OPTION LOCAL VARIABLES sets both)
+#else
+#define LocalBase 0
+#define LocalLimit maxlocalvars
+#endif
 
 // ---------------------------------------------------------------------------
 // Local-variable frame tracking (used by the trace cache)
@@ -1181,6 +1202,9 @@ unsigned short cmdTYPE, cmdEND_TYPE; // Structure type definition commands
 #endif
 uint32_t heapend;
 uint32_t stackwarn; // heapend + 1K: a stack below this is noted by StackNearLimit
+#ifdef USE_THREADS
+uint32_t StackFloor; // the running stack's floor: heapend for the main program, a thread's own (MMBasic.h)
+#endif
 uint32_t StackLow;  // the lowest stack noted since the last prompt, 0 for none (warned at the prompt)
 int StackLowDepth;  // g_LocalIndex when it was noted
 
@@ -1470,6 +1494,9 @@ void MIPS16 InitBasic(void)
 #endif
     SymInit();
     heapend = (uint32_t)&__heap_start + PICO_HEAP_SIZE;
+#ifdef USE_THREADS
+    StackFloor = heapend;
+#endif
     stackwarn = heapend + 1024;
     //  SInt(CommandTableSize);
     //   SIntComma(TokenTableSize);
@@ -1480,10 +1507,10 @@ void MIPS16 InitBasic(void)
 // list, and the stack goes some hundreds of bytes deeper between two of them)
 void __attribute__((noinline)) StackNearLimit(uint32_t stack)
 {
-    if (stack < heapend)
+    if (stack < StackFloor)
     {
         StackLow = 0;
-        error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)heapend);
+        error("Stack overflow, at depth %, stack \\, heap \\", g_LocalIndex, (int64_t)stack, (int64_t)StackFloor);
     }
     if (StackLow == 0 || stack < StackLow)
     {
@@ -1495,7 +1522,7 @@ void __attribute__((noinline)) StackNearLimit(uint32_t stack)
 static inline void TestStackOverflow(void)
 {
     uint32_t stack;
-    __asm volatile("MRS %0, msp" : "=r"(stack));
+    READ_STACK_POINTER(stack);
     if (stack < stackwarn)
         StackNearLimit(stack);
 }
@@ -5540,7 +5567,7 @@ static void MIPS16 *__not_in_flash_func(findvar_local)(unsigned char *p, int act
         vtype = (action & T_IMPLIED) ? (action & (T_NBR | T_INT | T_STR)) : DefaultType;
     }
     if ((suffix && (action & T_IMPLIED) && !(action & vtype)) || (vtype != T_INT && vtype != T_NBR) || *p == '(' ||
-        n >= MAXVARLEN || (i = g_localtop) >= maxlocalvars || g_Localvarcnt + 1 >= maxlocalvars)
+        n >= MAXVARLEN || (i = g_localtop) >= LocalLimit || g_Localvarcnt + 1 >= LocalLimit - LocalBase)
         return NULL;
 #ifdef STRUCTENABLED
     if (action & T_STRUCT)
@@ -6118,7 +6145,7 @@ void MIPS16 __not_in_flash_func (*findvar)(unsigned char *p, int action)
     // we are not declaring the variable but it may need to be created
     if (action & V_LOCAL)
     {
-        if (localifree >= maxlocalvars)
+        if (localifree >= LocalLimit)
         { // the local stack is full (P6 F2), as the hash probe's wrap-round was
             ClearVars(0, true);
             error("Too many local variables");
@@ -6388,7 +6415,7 @@ findvar_found:
     }
     else
     {
-        if (g_Localvarcnt + 1 >= maxlocalvars) // CHANGED: was MAXVARS/2
+        if (g_Localvarcnt + 1 >= LocalLimit - LocalBase) // CHANGED: was MAXVARS/2
             error("Not enough Local variable memory");
     }
     for (i = 0; i < dnbr; i++)
@@ -7667,7 +7694,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
         if (compact)
             top = LocalListCompact(); // (the old walk let them fall off the list)
         g_hashlistpointer = top;
-        g_localtop = top ? g_hashlist[top - 1].hash + 1 : 0;
+        g_localtop = top ? g_hashlist[top - 1].hash + 1 : LocalBase;
     }
     else
     {
@@ -7742,7 +7769,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
     g_OptionBase = 0;
     g_DimUsed = false;
     g_hashlistpointer = 0;
-    g_localtop = 0;
+    g_localtop = LocalBase;
 #ifdef SUBPROFILE
     ResetLocalFrames(); // discard all per-frame side-index state
 #endif
@@ -7752,7 +7779,7 @@ void MIPS32 __not_in_flash_func(ClearVars)(int level, bool all)
 // copied back (above every listed local, whatever order they were made in)
 void LocalTopRestore(void)
 {
-    g_localtop = 0;
+    g_localtop = LocalBase;
     for (int k = 0; k < g_hashlistpointer; k++)
         if (g_hashlist[k].hash + 1 > g_localtop)
             g_localtop = g_hashlist[k].hash + 1;
@@ -7763,6 +7790,9 @@ void MIPS16 cmd_localvars(unsigned char *p)
         error("Variables already declared");
     int i = getint(p, 32, MAXLOCALLIST);
     maxlocalvars = i;
+#ifdef USE_THREADS
+    LocalLimit = i;
+#endif
     maxglobalvars = MAXVARS - i;
     InitVarSlots(); // the slots each side of the new split
 }
@@ -8018,6 +8048,9 @@ void MIPS16 ClearRuntime(bool all)
     { // OPTION LOCAL VARIABLES belongs to the program that set it, as OPTION EXPLICIT does
       // (not on CHAIN, whose saved variables were placed with the split in force)
         maxlocalvars = MAXLOCALVARS;
+#ifdef USE_THREADS
+        LocalLimit = MAXLOCALVARS;
+#endif
         maxglobalvars = MAXGLOBALVARS;
         ChainedProgram = false; // a new program, not a chained one (see Commands.c)
     }

@@ -276,8 +276,6 @@ set(LOADER_VARIANTS
 # BASIC threads, THREAD START and the rest (docs/Threads_PicoMite_Review.md): every
 # build if it fits, the RP2350 ones if not. A build left out of this list compiles
 # none of the threads' code (USE_THREADS) and is as it was without them.
-# WEBRP2350 is left out for now: 48 bytes of flash were left before Stage P0, and P0's
-# first step alone overran it by 680. It comes back with a 16 KB FLASH_TARGET_OFFSET step.
 set(THREADS_VARIANTS
 	PICO
 	PICOMIN
@@ -289,6 +287,7 @@ set(THREADS_VARIANTS
 	PICOUSBRP2350
 	VGARP2350
 	VGAUSBRP2350
+	WEBRP2350
 	PICOBTRP2350
 	PICOBTHRP2350
 	HDMI

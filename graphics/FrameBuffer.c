@@ -1244,12 +1244,7 @@ void cmd_framebuffer(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"WAIT")))
     {
-        if (Option.DISPLAY_TYPE == ILI9341 || Option.DISPLAY_TYPE == ST7796SP || Option.DISPLAY_TYPE == ST7796S || Option.DISPLAY_TYPE == ST7789B || Option.DISPLAY_TYPE == ILI9488 || Option.DISPLAY_TYPE == ILI9488P)
-        {
-            while (GetLineILI9341() != 0)
-            {
-            }
-        }
+        FrameWait();
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"CLOSE")))
     {
@@ -1892,15 +1887,7 @@ void cmd_framebuffer(void)
         {
             if (!checkstring(argv[2], (unsigned char *)"B"))
                 SyntaxError();
-#ifdef HDMI
-            while (v_scanline != 0)
-            {
-            }
-#else
-            while (QVgaScanLine != 0)
-            {
-            }
-#endif
+            FrameWait();
         }
         /* N is rewritten underneath the GUI cursor: erase it first, and hold
            the periodic refresh off for the whole pass so its save buffer is
@@ -1944,15 +1931,7 @@ void cmd_framebuffer(void)
         cmd_span(p);
     else if ((p = checkstring(cmdline, (unsigned char *)"WAIT")))
     {
-#ifdef HDMI
-        while (v_scanline != 0)
-        {
-        }
-#else
-        while (QVgaScanLine != 0)
-        {
-        }
-#endif
+        FrameWait();
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"COPY")))
     {
@@ -1991,15 +1970,7 @@ void cmd_framebuffer(void)
         {
             if (checkstring(argv[4], (unsigned char *)"B"))
             {
-#ifdef HDMI
-                while (v_scanline != 0)
-                {
-                }
-#else
-                while (QVgaScanLine != 0)
-                {
-                }
-#endif
+                FrameWait();
             }
             else
                 SyntaxError();

@@ -700,12 +700,19 @@ void fun_epoch(void)
     targ = T_INT;
 }
 
+#ifdef USE_THREADS
+uint64_t PauseStart; // the running thread's: an interrupted PAUSE goes on from it (MM_Misc.h)
+#endif
 void cmd_pause(void)
 {
     unsigned char *pausetoken = CmdTokenPtr; // this statement, to re-run if an interrupt cuts the pause short
     MMFLOAT f;
     uint64_t us;
-    static uint64_t PauseTimer, IntPauseTimer;
+#ifdef USE_THREADS
+    static uint64_t IntPauseTimer;
+#else
+    static uint64_t PauseStart, IntPauseTimer;
+#endif
     f = getnumber(cmdline) * 1000;    // the delay in microseconds
     if (f < 0 || f > 2147483647000.0) // up to 2147483647 ms (about 24 days), as the manual says
         StandardError(21);
@@ -714,8 +721,8 @@ void cmd_pause(void)
 
     if (f < 1500)
     {
-        PauseTimer = time_us_64() + (uint64_t)f;
-        while (time_us_64() < PauseTimer)
+        PauseStart = time_us_64() + (uint64_t)f;
+        while (time_us_64() < PauseStart)
         {
         } // if less than 1.5mS do the pause right now
         return; // and exit straight away
@@ -728,10 +735,10 @@ void cmd_pause(void)
         // first check if we have reentered (from an interrupt) and only zero the timer if we have NOT been interrupted.
         // This means an interrupted pause will resume from where it was when interrupted
         if (!PauseInterrupted)
-            PauseTimer = time_us_64();
+            PauseStart = time_us_64();
         PauseInterrupted = false;
 
-        while (time_us_64() < us + PauseTimer)
+        while (time_us_64() < us + PauseStart)
         {
             CheckAbort();
             if (check_interrupt())
@@ -9641,7 +9648,13 @@ void MIPS16 fun_info(void)
         }
         else if (checkstring(ep, (unsigned char *)"STACK"))
         {
+#ifdef USE_THREADS
+            uint32_t sp;
+            READ_STACK_POINTER(sp); // (the running thread's)
+            iret = (int64_t)sp;
+#else
             iret = (int64_t)((uint32_t)__get_MSP());
+#endif
             targ = T_INT;
             return;
         }

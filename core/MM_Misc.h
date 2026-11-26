@@ -77,6 +77,10 @@ extern int PauseInterrupted;
    .poll   armed sources without a signal of their own (INT_POLL_ bits) */
 #define INT_POLL_SCAN 1 // scan every statement while such a source is armed
 #define INT_POLL_PINS 2 // interrupt pins are armed: scan when one has latched an edge
+#define INT_TICK_SLICE 1 // .tick: the running thread's time slice is up, or a thread asked to give way
+#ifdef USE_THREADS
+extern uint64_t PauseStart; // PAUSE's start: the running thread's (cmd_pause; PauseTimer is the ms counter)
+#endif
 typedef union
 {
    uint32_t any;
@@ -84,7 +88,7 @@ typedef union
    {
       uint16_t count;
       uint8_t poll;
-      uint8_t spare;
+      uint8_t tick; // USE_THREADS: INT_TICK_ bits from the 1 ms tick (the threads' time slice); otherwise 0
    };
 } IntReady_t;
 extern volatile IntReady_t IntReady;
