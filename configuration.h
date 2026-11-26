@@ -363,9 +363,8 @@ extern "C"
    /* +48 KB (2026-09-29): Route B (P1-P6) went 37.4 KB over. */
    /* +16 KB (2026-10-04): Route B's items 5, 7 and 8 and VAL, CHOICE, MM.INFO and
       BLIT went 6.0 KB over. */
-   /* +16 KB (2026-11-26, branch threads; Peter: "increase flash offsets as required
-      during the development"): 160 bytes over at main's eebcb7b (#164), and the
-      threads' Stage P0 a further 650. */
+   /* +16 KB (2026-11-26, Peter): the RTC's lost-time check (#164) went 160 bytes over
+      1536 KB; it had been down to 48 bytes. */
 #define FLASH_TARGET_OFFSET (1552 * 1024)
 #else
 #define MagicKey 0x060B6881
