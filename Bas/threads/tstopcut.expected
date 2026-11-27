@@ -1,0 +1,5 @@
+ok  a routine stopped the thread whose turn it cut
+ok  the main program's PAUSE 300 ended on time
+ok  the ticks went on
+ok  and thread 3 ran afterwards
+tstopcut: 4 of 4 passed

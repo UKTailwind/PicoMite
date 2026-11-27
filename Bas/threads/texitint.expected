@@ -1,0 +1,9 @@
+ok  THREAD EXIT in an interrupt routine is refused
+ok  and THREAD STOP of the routine's own thread
+ok  the thread ended by its flag
+ok  afterwards the main program's interrupt runs
+ok  another thread runs
+ok  PAUSE lets the others run
+ok  a routine stopped another thread
+ok  and THREAD WAIT waits
+texitint: 8 of 8 passed

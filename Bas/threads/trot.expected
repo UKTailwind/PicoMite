@@ -1,0 +1,7 @@
+ok  SETTICK 1 in thread 1: the main program's PAUSE 500 ends on time
+ok    and each busy thread has at least a third of the busiest one's count
+ok  SETTICK 2 in thread 1: the main program's PAUSE 500 ends on time
+ok    and each busy thread has at least a third of the busiest one's count
+ok  SETTICK 50 in thread 1: the main program's PAUSE 500 ends on time
+ok    and each busy thread has at least a third of the busiest one's count
+trot: 6 of 6 passed

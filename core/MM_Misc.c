@@ -1976,6 +1976,10 @@ void cmd_ireturn(void)
     strcpy(MMErrMsg, SaveErrorMessage);
     MMerrno = Saveerrno;
     MMerrline = Saveerrline;
+#ifdef USE_THREADS
+    if (ThreadCount)
+        ThreadIntDone(); // (a routine handed out of turn: back to the thread it cut, #167)
+#endif
 }
 
 /* How many source files one LIBRARY LOAD may concatenate.  Only bounds the

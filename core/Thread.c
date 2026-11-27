@@ -162,6 +162,11 @@ static int Stopping = 0;                                            // the progr
 extern uint64_t g_flag;                                             // (Commands.c: FLAG(n), which THREAD WAIT FLAG waits for)
 static unsigned char LockOwner[MAXLOCKS + 1];                       // THREAD LOCK k's owner, as its thread number + 1; 0 free
 static int HoldCount = 0, HoldBy = 0;                               // THREAD HOLD: its depth, and the thread that holds
+static void AskSwitch(void);
+static int RotLast = 0;                                             // the thread the rotation last chose (NextReady)
+static struct s_thread *Handed = NULL;                              // switched to for its interrupt routine alone, and
+static struct s_thread *GiveBack = NULL, *GiveBackTo = NULL;        // the thread whose turn that cut: it has the rest of
+static int GiveBackLeft = 0;                                        // it (GiveBackLeft ticks) when the routine ends (#167)
 static int NetOwner[2], NetBusy[2];                                 // [0] the network, [1] Bluetooth: the thread it belongs to
                                                                     // and the thread in a command of it, + 1; 0 none
 static const char *const NetName[2] = {"The network", "Bluetooth"};
@@ -512,6 +517,8 @@ static void ThreadsOff(void) {
     Stopping = 0;
     ThreadSliceLeft = 0;
     ThreadWakeMs = 0;
+    RotLast = 0;
+    Handed = GiveBack = GiveBackTo = NULL;
 }
 
 // the blocks of the threads that have ended, freed by the thread that runs next (not from their own stacks)
@@ -593,8 +600,12 @@ static void Deaf(int on) {
 
 /* The thread to run next, made ready if it was asleep: a thread another handed an interrupt to; else the
    sleeping thread whose PAUSE ended first, so that a timed thread is on time among busy ones; else the next ready one
-   in number order after the one running (which is itself the last tried). With none of those it is the main program,
-   asleep or not: its PAUSE loop is the idle loop, as it always was (CheckAbort, the interrupts, the GUI's work). */
+   in number order after the one the rotation chose last (RotLast). With none of those it is the main program,
+   asleep or not: its PAUSE loop is the idle loop, as it always was (CheckAbort, the interrupts, the GUI's work).
+   The rotation counts from its own last choice, not from the thread running: a thread picked out of turn (an
+   interrupt handed to it, its PAUSE over) used to restart the rotation after itself, so with a fast SETTICK in one
+   thread beside busy ones the threads after the busy one, the main program among them, got no turn at all (#167,
+   the CMM2's e69d266). */
 static struct s_thread *NextReady(void) {
     struct s_thread *t, *due = NULL;
     long long now = time_us_64();
@@ -605,6 +616,11 @@ static struct s_thread *NextReady(void) {
             t->state = T_READY;
             return t;
         }
+    }
+    if(GiveBack != NULL && Handed == NULL) {                        // a routine handed out of turn has ended: the thread it
+        t = GiveBack;                                               // cut short has the rest of its turn (ThreadSwitchTo)
+        GiveBack = NULL;
+        if(t != Cur && ALIVE(t) && !t->paused && t->state == T_READY) return t;
     }
     for(i = 0; i <= MAXTHREADS; i++) {
         t = Thr[i];
@@ -621,11 +637,11 @@ static struct s_thread *NextReady(void) {
         return due;
     }
     for(i = 1; i <= MAXTHREADS + 1; i++) {
-        t = Thr[(Cur->id + i) % (MAXTHREADS + 1)];
+        t = Thr[(RotLast + i) % (MAXTHREADS + 1)];
         if(t == NULL || t->paused) continue;
-        if(t->state == T_READY) return t;
-        if(t->state == T_WAIT && WaitOver(t->wkind, t->warg)) {     // what it waited for is so: its statement goes on
-            t->state = T_READY;
+        if(t->state == T_READY || (t->state == T_WAIT && WaitOver(t->wkind, t->warg))) {   // (a wait that is over: its
+            t->state = T_READY;                                                            // statement goes on)
+            RotLast = t->id;
             return t;
         }
     }
@@ -679,7 +695,9 @@ static void ThreadSwitchTo(struct s_thread *to) {
     ContextSave(from);
     ContextLoad(to);
     Cur = to;
-    ThreadSliceLeft = ThreadSliceLen * Turn(to);                    // a whole turn for it
+    if(to == GiveBackTo && GiveBackLeft > 0) ThreadSliceLeft = GiveBackLeft;   // the rest of a turn a routine cut short
+    else ThreadSliceLeft = ThreadSliceLen * Turn(to);               // a whole turn for it
+    GiveBackTo = NULL;
     ArmWake();
     Resignal();                                                     // (an interrupt held back may be this one's)
     ThreadSwap(&from->sp, to->sp, HWFLOOR(to));                     // back here when 'from' next runs
@@ -962,8 +980,23 @@ int ThreadIntHere(char *routine) {
     if(o == Cur) return 1;
     o->pending = routine;                                           // (IntMay: it can take it, and this can switch)
     o->state = T_READY;                                             // (out of its PAUSE or wait, which looks again)
+    if(Handed == NULL && ThreadSliceLeft > 0) {                     // this thread's turn is cut for o's routine: it has the
+        GiveBack = GiveBackTo = Cur;                                // rest of it when the routine ends (ThreadIntDone)
+        GiveBackLeft = ThreadSliceLeft;
+        Handed = o;
+    }
     ThreadSwitchTo(o);
     return 0;
+}
+
+/* IRETURN, the end of every interrupt routine: if this thread was switched to for the routine alone (ThreadIntHere),
+   the statement tail switches back to the thread whose turn it cut, which has the rest of its turn. Without this the
+   routine's thread had a whole new turn each time, and with a SETTICK of 1 or 2 ms in one thread beside busy ones the
+   others had a statement a tick (#167). */
+void ThreadIntDone(void) {
+    if(Cur == NULL || Cur != Handed) return;
+    Handed = NULL;
+    if(GiveBack != NULL) AskSwitch();
 }
 
 char *ThreadIntTake(void) {
@@ -1200,6 +1233,8 @@ int ThreadsEnd(void) {
     Stopping = 0;
     ThreadSliceLeft = 0;
     ThreadWakeMs = 0;
+    RotLast = 0;                                                    // (as ThreadsOff: a program stopped in a routine handed
+    Handed = GiveBack = GiveBackTo = NULL;                          // out of turn must not leave them on freed records, #167)
     return 1;
 }
 
@@ -1456,7 +1491,10 @@ __attribute__((noreturn)) static void ThreadEndNow(void) {
 static void ThreadStop(int n) {
     struct s_thread *t = Thr[n];
     if(t == NULL || !ALIVE(t)) return;                              // (not running: nothing to stop)
-    if(t == Cur) ThreadEndNow();
+    if(t == Cur) {
+        if(InterruptReturn != NULL) error("Invalid in an interrupt routine");   // (as THREAD EXIT: below, #167)
+        ThreadEndNow();
+    }
     ContextSave(Cur);
     ContextLoadVars(t);
     ClearVars(1, true);
@@ -1465,7 +1503,8 @@ static void ThreadStop(int n) {
     ContextLoad(Cur);
     if(t->state == T_WAIT && t->wkind == W_FRAME) ThreadFrameWaiters--;
     t->state = T_DONE;
-    ThreadCount--;
+    if(t == GiveBack || t == GiveBackTo) GiveBack = GiveBackTo = NULL;   // (a routine stopped the thread whose turn it cut:
+    ThreadCount--;                                                  // its record is freed below, and nobody has the rest)
     Disown(n);
     ThreadReap();
 }
@@ -1608,7 +1647,10 @@ void cmd_thread(void) {
     } else if((p = checkstring(cmdline, "EXIT")) != NULL) {
         checkend(p);
         if(Cur == NULL || Cur->id == 0) error("Not in a thread");
-        ThreadEndNow();
+        if(InterruptReturn != NULL) error("Invalid in an interrupt routine");   // a routine's thread does not end under
+        ThreadEndNow();                                             // it: the routine's InterruptReturn would go on to the
+                                                                    // next thread, and no switch or interrupt come again
+                                                                    // (#167). A routine sets a flag its thread's loop tests
     } else if((p = checkstring(cmdline, "STOP")) != NULL) {
         ThreadStop(getint(p, 1, MAXTHREADS));
     } else if((p = checkstring(cmdline, "PAUSE")) != NULL) {
