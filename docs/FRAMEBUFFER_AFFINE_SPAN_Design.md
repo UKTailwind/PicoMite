@@ -1,7 +1,8 @@
 # FRAMEBUFFER AFFINE and SPAN: a turned and scaled row copy, and a per-row window
 
 *25 November 2026. Built the same day on the PicoMite (graphics/Warp.c) and agreed by Peter (section 15): sections 12
-and 14 give what was measured and tested. It covers the VGA and HDMI builds; the Colour Maximite 2 is section 13. The pictures
+and 14 give what was measured and tested. It covers the VGA and HDMI builds; the Colour Maximite 2, as built on 26
+November, is section 13. The pictures
 were made by a model of the rules below (tools/affine_span_model.py); scenes 5 to 7 of Bas/warp_demo.bas show the same
 on the firmware.*
 
@@ -182,7 +183,7 @@ Ways to a larger world, none of them in this design:
   from the tile. It costs a second lookup for each pixel and its own code. It is the natural second step once
   the first has been measured.
 - **An image in memory** (the PC3's PSRAM has the room). Reads from PSRAM out of order are slow (section 12).
-- **The CMM2's world framebuffer** is already larger than the screen (section 13).
+- **The CMM2's world framebuffer** is already larger than the screen, and AFFINE reads it there (section 13.2).
 
 ## 7. SPAN: syntax
 
@@ -350,12 +351,137 @@ day, which gave every build 60 to 88 bytes back):
 
 ## 13. The Colour Maximite 2
 
-For the CMM2 session to confirm; none of this has been checked against its sources.
-- The same two commands in its FRAMEBUFFER, and PAGE forms written with TO as PAGE WARPH is.
-- Its pages and its world framebuffer can be larger than the screen, so AFFINE's source and destination would
-  differ in size, as its WARP's do. That lifts the limit of section 6 there.
-- 12 and 32-bit pixels, and the doubled rows, as its WARP handles them.
-- The name: FRAMEBUFFER WINDOW is taken there (section 2).
+**As built on 26 November 2026** (CMM2 v8-dev 3724869, Src/Warp.c, beside its WARPH and WARPV), from this design and
+the PicoMite's core. Sections 3, 4, 7 and 8 hold there as written; this section gives what differs.
+
+### 13.1 The commands and their buffers
+
+- **FRAMEBUFFER AFFINE and FRAMEBUFFER SPAN**, with the arguments of sections 3 and 7.
+- **PAGE AFFINE and PAGE SPAN**, with page numbers, written as PAGE WARPH is:
+
+  ```
+  PAGE AFFINE from TO to, u%(), v%(), du%(), dv%() [, step] [, first] [, left] [, width] [, edge] [, transparent]
+  PAGE SPAN from TO to, left%(), right%() [, step] [, first] [, fill] [, transparent] [, outside]
+  ```
+
+  A comma can stand for TO, as in PAGE COPY.
+- **The buffers are WARPH's:**
+  - the 4-bit depth: the PicoMite's letters N, L, F, 2 and T, one not created refused with FRAMEBUFFER WRITE's message;
+  - the 8, 12, 16 and 32-bit depths: N (the display, page 0) and F (the CMM2's own framebuffer, the "world");
+  - the PAGE form: page numbers, in every depth but 1 bit.
+- **The 1-bit depth** has neither command. Its message is `Invalid for this screen mode`, where the PicoMite's MODE 1
+  gives `Not available in mode 1`. The other messages of section 10 are the same; PAGE AFFINE with one page for both
+  gives `Same page`.
+- **The name:** FRAMEBUFFER WINDOW is the CMM2's (section 2), and SPAN does not clash with it.
+
+### 13.2 A source and a destination of different sizes
+
+The CMM2's F can be larger than the screen (up to 4096 x 2048; 1600 x 1200 on a Generation 1), and PAGE RESIZE makes
+pages smaller. Both commands take two buffers of different sizes.
+
+- **AFFINE:** the places (sx, sy) wrap at the source's width and height, or are outside the source there (`edge`).
+  The bands, the limit of `step`, `first`, `left` and the default `width` are the destination's. So a framebuffer
+  larger than the screen is a larger map: this lifts the limit of section 6 with no new command. A floor from a
+  1024 x 1024 framebuffer is the SNES's map size.
+- **SPAN:** a pixel is copied from the same place in the source. If the source is the smaller, a pixel whose place it
+  does not have is left as it is: it is neither copied nor filled. This rule is the CMM2 session's, as section 8
+  does not cover the case. It was put to Peter on 26 November, and he has not asked for another.
+- WARPH and WARPV refuse a band that is not all in the source. AFFINE and SPAN do not: no value is an error
+  (sections 4 and 8).
+
+### 13.3 The pixels
+
+- **4 and 8 bits:** as the PicoMite. `transparent` is a pixel value (0 to 15, or 0 to 255).
+- **16 bits:** RGB565, where the PicoMite's MODE 4 is RGB555. `transparent` is a colour.
+- **12 bits (Peter, for WARP):** the source pixels whose alpha is 0 are the transparent ones. The argument only turns
+  this on; its value is not used.
+- **32 bits:** `transparent` is a colour, compared without the pixel's alpha, as PIXEL( and FILL do.
+- **`edge` and `fill`:** -1, or a colour stored as the pixel that BOX would draw with it.
+- **Pages that store each row twice:** the first copy is read and both are written.
+- **Long commands:** the routine checks (audio, USB) run every 16 rows, as in the page copies.
+- **The GUI cursor** is taken off the pages first and put back after, in the depths that draw it into them.
+
+### 13.4 Implementation
+
+- **Where:** Src/Warp.c, entered through the one call that WARPH and WARPV use (WarpCommand), from cmd_framebuffer,
+  the 4-bit FRAMEBUFFER and cmd_page. All of it is in the .extra section at the end of the code, so no other code
+  moved.
+- **The core** is the PicoMite's (span_run, affine_run, aff_row for each depth), with a fourth row function for 32
+  bits, the source's and the destination's sizes kept apart, and a mask for the bits that `transparent` is compared
+  with. The file's core compiles on a PC (WARP_HOST_TEST), as the PicoMite's does.
+- **WARP's command** now shares its handling of the buffers, `edge`, `transparent` and the cursor with the two new
+  commands. warp_fill fills whole bytes in the 4-bit depth, as section 12 gives for the PicoMite.
+- **A source's limit:** below 32768 pixels each way, so that a place in 1/65536 of a pixel fits 32 bits. The largest
+  page is 4096 x 2048.
+
+### 13.5 Time, measured on a Generation 1 at 400 MHz
+
+The PAGE form, page 1 to page 0, ms for one call (26 November; the 4-bit column is the PicoMite's MODE 2 on the CMM2):
+
+| | 320x240, 4 bits | 320x240, 8 bits | 320x240, 16 bits | 800x600, 8 bits | 800x600, 16 bits | 800x600, 12 bits |
+|---|---|---|---|---|---|---|
+| PAGE COPY, for comparison | 0.10 | 0.35 | 2.5 | 4.0 | 25.8 | 115 |
+| AFFINE, the whole screen as it is | 4.9 | 4.4 | 3.5 | 16.8 | 45.2 | 557 |
+| AFFINE, turned 30 degrees, 1.5 times the size | 4.9 | 4.4 | 3.3 | 17.1 | 36.4 | 568 |
+| AFFINE, turned 30 degrees, half the size (wrapping) | 4.9 | 4.4 | 10.6 | 102 | 247 | 585 |
+| AFFINE, a quarter turn | 4.9 | 4.4 | 19.4 | 54.5 | 215 | 585 |
+| AFFINE, the half-size turn with an edge colour | 1.8 | 1.8 | 3.2 | 11.4 | 48.2 | 177 |
+| AFFINE, the half-size turn, wrapping, with a transparent colour | 6.8 | 4.4 | 10.6 | 102 | 247 | 585 |
+| AFFINE, a floor from 3/8 of the way down (149 rows; 374 at 800x600) | 3.3 | 3.0 | 4.4 | 16.8 | 31.9 | 353 |
+| the floor's six MATH statements | 0.40 | 0.40 | 0.40 | 0.77 | 0.79 | 0.89 |
+| AFFINE, a 69x69 window, edge -1, transparent | 0.44 | 0.42 | 0.39 | 0.25 | 0.27 | 0.30 |
+| SPAN, every row whole | 0.22 | 0.50 | 1.8 | 4.4 | 26.9 | 144 |
+| SPAN, a circle | 0.32 | 0.50 | 1.2 | 2.6 | 16.6 | 90 |
+| SPAN, a circle, the rest filled | 0.45 | 0.65 | 1.6 | 3.0 | 21.6 | 108 |
+| SPAN, all but the circle | 0.43 | 0.59 | 1.3 | 2.4 | 14.4 | 72 |
+| SPAN, a circle, a transparent colour | 1.9 | 1.6 | 1.4 | 4.1 | 19.2 | 304 |
+| SPAN on one page, only the fill | 0.21 | 0.42 | 0.88 | 0.58 | 5.0 | 18.3 |
+
+- **320x240 in 4 and 8 bits** is the PC3's MODE 2 again: 4.4 to 4.9 ms for a whole screen at any angle and size, and
+  about 3 ms for a floor. The manual's turn-and-zoom example runs at 74.8 frames a second in MODE 7 (a 75 Hz mode).
+- **In 16 bits, and at 800x600,** the time depends on how far apart in the source one pixel's place is from the next,
+  as it does in the PC3's PSRAM modes: a picture read nearly in order costs little more than a copy, and one shrunk
+  or turned a long way costs several times as much. Which memory each of these pages is in was not looked into.
+- **800x600 in 12 bits** is slow in every case on a Generation 1 (PAGE COPY itself takes 115 ms there).
+- Nothing was tuned: this is the first measurement.
+
+### 13.6 Testing, as done
+
+- **PC:** tests/host/affine_host.c in the CMM2 tree: the core against a pixel-by-pixel model in 128-bit arithmetic,
+  written from sections 4 and 8 with 13.2 and 13.3 added (two sizes, the four depths, the 12-bit alpha, doubled
+  rows). Every byte of the destination is compared. 300,000 random cases under the address and undefined-behaviour
+  sanitizers, none wrong; 17 faults put into a copy of the code were all caught.
+- **Board, a Generation 1:**
+  - tests/cmm2/affinen.bas: the model of Bas/bench/affine_test.bas in 13 configurations (800x600, 320x240 and
+    320x200; 4, 8, 12 and 16 bits; the PAGE form, F to N with F the screen's size and 1.25 times it, and N to a
+    larger F), 50 cases each checked at 50 pixels, none wrong. An exact quarter turn, a window on a larger world,
+    and 22 error tests.
+  - tests/picomite/affine.bas: Bas/bench/affine_test.bas itself under OPTION PICOMITE VGA, in MODE 2 and 3: passed.
+  - The two WARP tests print what they printed before.
+  - The examples of the CMM2 manual's AFFINE and SPAN entries, run as printed.
+- **The 32-bit depth** is tested on the PC only: a Generation 1 does not have it, and no other board was used.
+- **MODE 4 and 5 of affine_test.bas** do not run on the CMM2: they need FRAMEBUFFER CREATE 2 and COPY, which its 8
+  and 16-bit FRAMEBUFFER does not have (as for warp_test.bas).
+- **Bas/warp_demo.bas** runs unchanged under OPTION PICOMITE VGA at 640x480: 59.6 to 59.9 frames a second in each of
+  its eight scenes (a 60 Hz mode).
+
+### 13.7 Found by the demo: MAP SET on the CMM2
+
+Peter saw a band of wrong pixels across the screen, a few lines high, in the demo's lake (scene 2), which sets its
+colours with MAP SET for every frame. It was the CMM2's MAP SET, and not the new commands.
+
+- **Cause:** in the CMM2's 4-bit depth the display is merged from the buffers by an interrupt at each frame's end.
+  MAP SET waited for the frame's end and loaded the 256 colours after that interrupt, which is after the blanking:
+  screen lines 25 to 29 of 480 were being drawn while the colour table was written.
+- **Fix (CMM2 v8-dev 217b350):** the interrupt loads the colours first, while the frame is blanked. Peter watched the
+  demo again: "perfect now".
+- The PicoMite is not affected: this is the CMM2's merge.
+
+### 13.8 Documented, and not done
+
+- **Documented:** the CMM2 User Manual's source (the FRAMEBUFFER and PAGE entries, each new FRAMEBUFFER entry with an
+  example, and the chapters Video Modes and Pages and Game Playing Features) and the help entries.
+- **Not done:** the manual's PDF and the release notes, which wait for the next beta.
 
 ## 14. Testing, as done
 
