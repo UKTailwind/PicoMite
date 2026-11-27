@@ -1079,6 +1079,7 @@ void MIPS16 cmd_psram(void)
     }
     else if ((p = checkstring(cmdline, (unsigned char *)"FILE LOAD")))
     {
+        THREADS_NONE(); // (its loader clears the runtime, which ends every thread: Thread.c)
         int overwrite = 0;
         getcsargs(&p, 5);
         if (!(argc == 3 || argc == 5))
@@ -7039,6 +7040,7 @@ static int MIPS16 FilesEntry(fentry *fe, char *ts, char *outbuff, int *ListCnt)
 
 void MIPS16 cmd_files(void)
 {
+    THREAD_MAIN_ONLY(); // (in a program it empties the heap for its list, and a thread's stack is in the heap: Thread.c)
     int waste = 0, t = FatFSFileSystem + 1;
     unsigned char cmdbuffer[STRINGSIZE] = {0};
     unsigned char *cmdbuf = cmdbuffer;
