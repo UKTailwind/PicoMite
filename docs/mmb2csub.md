@@ -479,8 +479,9 @@ strings; `STATIC`s, which the wrapper keeps for you; recursion; `IF`/`FOR`/`DO`/
 ATAN2 ASIN ACOS POWER INT FIX ABS SGN RND TIMER`, `LEFT$ RIGHT$ MID$ UCASE$
 LCASE$ CHR$ SPACE$ STRING$ INSTR STR$ VAL LEN ASC`, `RGB` (including the
 colour names), `MM.HRES` and `MM.VRES`, `PRINT`, and the drawing statements
-`PIXEL`, `LINE`, `BOX`, `CIRCLE` and `TRIANGLE`; and `PIN(n)` and `PIN(n) = v`
-for reading and driving a pin.
+`PIXEL`, `LINE`, `BOX`, `CIRCLE` and `TRIANGLE`; `PIN(n)` and `PIN(n) = v`
+for reading and driving a pin; and `THREAD YIELD`, which lets the program's
+other threads run.
 
 `RGB` of a colour name, or of three literal components, costs nothing at all:
 the translator works it out where it stands and it becomes a constant.
@@ -520,6 +521,14 @@ interpreter's error there: a read gives 0 and a write does nothing. Check the mo
 `PIN(TEMP)` and `PIN(BOOTSEL)` do not convert. They are keywords rather than
 pin numbers and the firmware handles them before any pin exists; leave them in
 BASIC.
+
+`THREAD YIELD` is the one `THREAD` command that converts, because of A.3: a
+CSUB is a single statement and the threads take turns between statements, so
+while it runs every other thread waits. A `THREAD YIELD` in the routine's main
+loop becomes a call to the firmware's `CSubYield`, and the other threads have
+their turns there; with no thread ready it returns at once, and in a program
+without threads it does nothing. Needs firmware V8.00.00b5. Any other `THREAD`
+command is refused.
 
 **Not yet:** string *arrays* as parameters; `INPUT`; `ON ERROR`; interrupt
 handlers; file I/O; user-defined `TYPE`s; `MAP`; `SETPIN`; and the graphics
@@ -729,7 +738,8 @@ differences.
 - **The CMM2 has no `/* */` block comment yet,** so the original routine is
   kept with an apostrophe on each line instead.
 - **Firmware:** the CMM2's PicoMite-layout CallTable (MMBasic 6.00.00b7, from
-  16 October 2026).
+  16 October 2026). `THREAD YIELD` needs the CMM2's 8.00.00b6 or later, which
+  has `CSubYield` at the same offset, 0x1C0.
 
 `solar_eclipse.bas` converts the same way as in §9: `sefunc` and the 18 routines
 it carries make a 26 KB blob, 37 KB for the M0+. With the five DIMs of §9 and
@@ -859,6 +869,15 @@ The interpreter checks the break key *between* statements, and your routine is
 now a single statement. The tool puts a break check inside every loop, so
 `Ctrl-C` still works — without it a long CSUB makes the board stop answering.
 The check costs a counter increment per iteration and fires once every 1024.
+
+Threads switch between statements too, so while a CSUB runs every other
+thread of the program waits, however long that is. Put a `THREAD YIELD` in the
+routine (section 4) and they have their turns there. Each turn is one time
+slice, 1 ms by default, so how often you yield is how much time they get: the
+chess program in `Bas/threads/chess` yields every 128 nodes of its search,
+about every 16 ms, and its clock thread puts `THREAD HOLD` and `THREAD
+RELEASE` round each redraw, so that the redraw is done in one turn instead of
+a millisecond every 16.
 
 Two smaller consequences: a profiler cannot see inside a CSUB, so convert
 before you profile again rather than after; and a run-time fault has no line

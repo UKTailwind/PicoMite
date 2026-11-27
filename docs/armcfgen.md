@@ -733,7 +733,7 @@ BASIC still raises all of those.
 |---|---|---|
 | `PinVal` | 0x1B8 | `MMFLOAT PinVal(int pin)` — `PIN(n)` |
 | `PinPut` | 0x1BC | `void PinPut(int pin, int val)` — `PIN(n) = v` |
-| `ExtCurrentConfig` | 0x1C0 | `volatile int *` — what `SETPIN` made each pin (`EXT_DIG_IN`, `EXT_ANA_IN` …), indexed by pin number |
+| `ExtCurrentConfig` | 0x48 | `volatile int *` — what `SETPIN` made each pin (`EXT_DIG_IN`, `EXT_ANA_IN` …), indexed by pin number (the slot under Pins and PIO) |
 
 The lower-level `ExtSet`, `ExtInp`, `ExtCfg`, `PinRead` and `PinSetBit` are
 also available (see Console, formatting and program control above) and bypass
@@ -848,3 +848,21 @@ the arguments yourself if you need MMBasic's error.
 
 > Slots `0x84`+ assume current firmware. The framebuffer/maths group at
 > `0xDC`–`0x100` was added later; older firmware stops at `PIOExecute` (0xD8).
+
+### Threads
+
+Added in V8.00.00b5. A CSUB is a single statement, and the program's threads
+take turns between statements, so while a CSUB runs every other thread waits.
+`CSubYield` lets them have their turns in the middle of it, as `INPUT` does
+while it waits for a key, and returns when this thread's turn comes round: at
+once if no other thread is ready, or in a program without threads. It does
+nothing inside `THREAD HOLD` or in an interrupt routine. Each turn is one time
+slice (1 ms by default), so call it about as often as that from a long loop.
+mmb2csub calls it for a `THREAD YIELD` in a routine that it converts.
+
+| Name | Offset | Prototype / use |
+|---|---|---|
+| `CSubYield` | 0x1C0 | `void CSubYield(void)` — the other threads have their turns |
+
+On firmware before V8.00.00b5 the slot is past the end of the table: a CSUB
+that calls it must not be run there.

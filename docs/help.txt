@@ -15162,6 +15162,10 @@ THREAD YIELD
 Gives up the rest of the running thread's time slice: the next thread that can
 run does. It has no effect when there is no thread. It is an error in an
 interrupt routine.
+A CSUB is a single statement, so every other thread waits until it returns. A
+CSUB can give the others their turns by calling CSubYield (offset 0x1C0 in the
+call table, V8.00.00b5 and later); mmb2csub calls it for a THREAD YIELD in a
+routine that it converts.
 
 ~TILE
 TILE x, y [,foreground]  [,background] [,nbr_tiles_wide] [,nbr_tiles_high]
