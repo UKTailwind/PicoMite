@@ -1439,8 +1439,8 @@ void fun_LGetStr(void)
     p = (char *)sret + 1;
     *sret = nbr;
     while (nbr--)
-        *p++ = *s++;
-    *p = 0;
+        *p++ = *s++; // (no terminating zero: the string is length-prefixed, and at 255 characters it
+                     // would land one byte past the 256-byte temporary string, #162)
     targ = T_STR;
 }
 void fun_linputstr(void)

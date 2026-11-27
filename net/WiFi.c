@@ -682,7 +682,9 @@ void cmd_web(void)
                 }
                 else
                 {
-                        if (cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA) < 0)
+                        // rejoin unless joined: CYW43_LINK_DOWN is 0, so '< 0' missed a link that was down but had
+                        // not failed (#163, as the CMM2 since 18 Nov)
+                        if (cyw43_wifi_link_status(&cyw43_state, CYW43_ITF_STA) != CYW43_LINK_JOIN || !WIFIconnected)
                         {
                                 WebConnect();
                         }
