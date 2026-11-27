@@ -15019,7 +15019,9 @@ THREAD EXIT
 Ends the thread that runs it, wherever it is: in a loop, a SUB or a FUNCTION.
 Its local variables and memory are freed, and its locks and ownership of the
 network are given up. It is an error in the main program ("Not in a thread"),
-which ends with END.
+which ends with END, and in an interrupt routine ("Invalid in an interrupt
+routine"): a routine that wants its thread to end sets a flag that the
+thread's loop tests.
 
 ~THREAD HOLD
 THREAD HOLD
@@ -15133,7 +15135,8 @@ not the command prompt.
 THREAD STOP n
 
 Ends thread 'n' where it stands, as THREAD EXIT would. Nothing happens if 'n'
-is not running. A thread may stop itself.
+is not running. A thread may stop itself, but not from an interrupt routine
+("Invalid in an interrupt routine"); a routine may stop another thread.
 
 ~THREAD WAIT
 THREAD WAIT n [, timeout]
