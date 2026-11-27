@@ -822,6 +822,19 @@ void ThreadPoll(void) {
     Deaf(0);
 }
 
+/* THREAD YIELD in a CSUB: the CallTable's 0x1C0, which mmb2csub calls for THREAD YIELD in a routine it compiles. A
+   CSUB runs whole inside its one statement, and the threads switch between statements, so a long compiled routine
+   held every other thread for as long as it ran (the chess program's search held its clock thread for a whole
+   depth). This is ThreadPoll, the call INPUT's wait makes from C in the middle of its statement: the other threads
+   have their turns, and the CSUB goes on when this thread's comes round, at once if no other is ready; this thread
+   takes no interrupt meanwhile (Deaf). Nothing without threads, inside THREAD HOLD (ThreadPoll), or in an interrupt
+   routine, which runs to its end before any other thread runs: there it returns, where the BASIC statement is
+   refused, so that a CSUB with a THREAD YIELD in it may still be called from a routine. */
+void CSubYield(void) {
+    if(ThreadCount == 0 || InterruptReturn != NULL) return;
+    ThreadPoll();
+}
+
 /* FRAMEBUFFER WAIT, PAGE COPY ...,B and the others that wait for a frame's start. With no thread it is the wait it
    always was, on the flag the LTDC's interrupt sets. With threads the others run meanwhile, and the wait is on that
    interrupt's count of frames: each waiter clears the flag, so of two that wait at once one could miss its frame.

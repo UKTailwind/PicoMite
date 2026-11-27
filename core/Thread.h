@@ -45,6 +45,7 @@ extern volatile uint32_t FrameCount;                // frames shown: counted by 
 extern volatile unsigned char ThreadFrameWaiters;   // threads waiting for the next one, which that interrupt wakes by
 extern volatile unsigned char ThreadFrameDue;       // this and IntSignal
 void ThreadPoll(void);                              // a wait loop found nothing yet: the other threads have their turns
+void CSubYield(void);                               // THREAD YIELD from a CSUB (the CallTable's 0x1C0): ThreadPoll
 void ThreadFrameWait(void);                         // to the start of the next frame
 void ThreadSleepDeaf(long long t);                  // to the microsecond clock's t, with no interrupt taken (SYNC)
 /* Stage 4b: an interrupt routine runs in the thread that set it up (ThreadIntOwn, from GetIntAddress). IntScan asks

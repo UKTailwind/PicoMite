@@ -39,6 +39,12 @@
  *          STRING$, split out of their fun_ wrappers so the interpreter and a
  *          CSUB share one implementation. An MMBasic string is a LENGTH BYTE
  *          followed by the data, not a C string.
+ *  v2.4.0  CSubYield (0x1C0, firmware V8.00.00b5 and later): THREAD YIELD from a CSUB.
+ *          A CSUB runs whole within its statement, so a long one held every other
+ *          BASIC thread until it returned; CSubYield() lets them run and returns
+ *          when this thread's turn comes round (at once if none is ready, or in a
+ *          program without threads). mmb2csub emits it for THREAD YIELD. Calling it
+ *          on older firmware jumps through a slot past the table's end: do not.
  *
  ******************************************************************************************/
 #include <stdint.h>	 /* option_s and the vector prototypes use int8_t/uint16_t/... */
@@ -230,6 +236,7 @@
 // or unconfigured does nothing. Branch on ExtCurrentConfig[] if that matters.
 #define Vector_PinVal (*(unsigned int *)(BaseAddress + 0x1B8))
 #define Vector_PinPut (*(unsigned int *)(BaseAddress + 0x1BC))
+#define Vector_CSubYield (*(unsigned int *)(BaseAddress + 0x1C0)) // THREAD YIELD (V8.00.00b5 on)
 
 // Macros to call each function.
 #define uSec(a) ((void (*)(unsigned long long))Vector_uSec)(a)
@@ -262,6 +269,7 @@
 #define gui_bcolour (*(int *)Vector_gui_bcolour)
 #define PinVal(a) ((MMFLOAT(*)(int))Vector_PinVal)(a)
 #define PinPut(a, b) ((void (*)(int, int))Vector_PinPut)(a, b)
+#define CSubYield() ((void (*)(void))Vector_CSubYield)()
 #define VRes (*(unsigned int *)Vector_VRes)
 #define SoftReset(SOFT_RESET) ((void (*)(void))Vector_SoftReset)()
 #define error(a) ((void (*)(char *))Vector_error)(a)

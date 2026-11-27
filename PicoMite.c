@@ -475,6 +475,9 @@ uint8_t PSRAMpin;
        address is not fixed: CSUBs find it at run time through vector-table slot 7
        (PicoCFunctions.h), filled at the top of main(), and MM.INFO(CALLTABLE)
        reports it. */
+#ifndef USE_THREADS
+    static void CSubYield(void) {} // (a build without threads: THREAD YIELD in a CSUB has nothing to yield to)
+#endif
     const void *const CallTable[] __attribute__((section(".text.calltable"))) = {
         (void *)uSecFunc,           // 0x00
         (void *)putConsole,         // 0x04
@@ -619,6 +622,9 @@ uint8_t PSRAMpin;
         // BASIC; watching or driving one in a tight loop is what a CSUB is for.
         (void *)PinVal, // 0x1b8 MMFLOAT PinVal(int pin)        PIN(n)
         (void *)PinPut, // 0x1bc void PinPut(int pin, int val)  PIN(n) = v
+        // THREAD YIELD in a CSUB (mmb2csub emits it): a long compiled routine lets the other threads run, as
+        // INPUT's wait does, and goes on when its own turn comes round (core/Thread.c). V8.00.00b5 and later.
+        (void *)CSubYield, // 0x1c0 void CSubYield(void)
     };
 #ifdef rp2350
     // once a frig to place the call table at 0x1000023C as in earlier releases; the
