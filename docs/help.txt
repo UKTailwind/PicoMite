@@ -12965,6 +12965,12 @@ the program when it runs.  If 'cmdline'$ is not supplied then an empty string
 value is passed to MM.CMDLINE$..  Notes:
 -         Both 'file$' and 'cmdline$' may be supplied as string expressions.
 -         Use FLASH RUN n to run a program stored in a Flash Slot.
+-         On the PicoMitePC3, and on the PicoMiteHDMIUSB with its PSRAM
+enabled, a file whose name ends .app is a loadable program, such as
+MicroPython or Doom: RUN loads it into the PSRAM and runs it, passes cmdline$
+to it, and carries on with the next statement when it ends. The PicoMite App
+User Guide (PicoMite_App_User_Guide.pdf) describes the programs that come with
+the firmware.
 
 ~SAVE
 SAVE file$
